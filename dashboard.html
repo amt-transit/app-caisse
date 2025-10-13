@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Saisie de Caisse</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Comfortaa:wght@400;700&display=swap" rel="stylesheet">
+
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <h1>Tableau de Bord</h1>
+
+    <nav class="navigation">
+        <a href="index.html">Saisie</a>
+        <a href="dashboard.html" class="active">Tableau de Bord</a>
+    </nav>
+
+    <div class="dashboard-container">
+    
+    <div id="grandTotals" class="totals-container">
+        <div class="total-card">
+            <h3>Chiffre d'Affaires Total (Période)</h3>
+            <p id="grandTotalPrix">0 CFA</p>
+        </div>
+        <div class="total-card">
+            <h3>Opérations Totales (Période)</h3>
+            <p id="grandTotalCount">0</p>
+        </div>
+    </div>
+
+    <div class="filter-container">
+        <h3>Filtrer par Période</h3>
+        <div class="filter-fields">
+            <label for="startDate">Du :</label>
+            <input type="date" id="startDate">
+            <label for="endDate">Au :</label>
+            <input type="date" id="endDate">
+            <button id="clearFilterBtn">Réinitialiser</button>
+        </div>
+    </div>
+   <div id="grandTotals" class="totals-container">
+    <div class="total-card">
+        <h3>Chiffre d'Affaires Total (Période)</h3>
+        <p id="grandTotalPrix">0 CFA</p>
+    </div>
+    <div class="total-card">
+        <h3>Opérations Totales (Période)</h3>
+        <p id="grandTotalCount">0</p>
+    </div>
+    <div class="total-card">
+        <h3>Reste Total (Période)</h3>
+        <p id="grandTotalReste">0 CFA</p>
+    </div>
+</div> 
+    <h2>Récapitulatif par Jour</h2>
+    <table id="summaryTable">
+        <thead>
+            <tr>
+                <th>Date</th>
+                <th>Nombre d'Opérations</th>
+                <th>Total des Prix</th>
+            </tr>
+        </thead>
+        <tbody id="summaryTableBody">
+            </tbody>
+    </table>
+
+    <h2 style="margin-top: 30px;">Récapitulatif par Agent</h2>
+    <table id="agentSummaryTable">
+        <thead>
+            <tr>
+                <th>Agent</th>
+                <th>Nombre d'Opérations</th>
+                <th>Chiffre d'Affaires</th>
+            </tr>
+        </thead>
+        <tbody id="agentSummaryTableBody">
+            </tbody>
+    </table>
+
+</div>
+
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+
+    <script>
+      //
+      // COLLEZ VOTRE OBJET "firebaseConfig" PERSONNEL ICI
+      // Your web app's Firebase configuration
+  const firebaseConfig = {
+    apiKey: "AIzaSyD29tyKA-PcrHZeKeRcJXgkZKN_VLredTo",
+    authDomain: "caisse-amt-transit.firebaseapp.com",
+    projectId: "caisse-amt-transit",
+    storageBucket: "caisse-amt-transit.firebasestorage.app",
+    messagingSenderId: "315772207767",
+    appId: "1:315772207767:web:bccee1cfa07fb484549fd2"
+  };
+
+      // Initialiser Firebase
+      firebase.initializeApp(firebaseConfig);
+      const db = firebase.firestore(); // On initialise la connexion à la base de données
+    </script>
+
+    <script src="dashboard.js"></script>
+</body>
+</body>
+</body>
+</html>

@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Saisie de Caisse</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Comfortaa:wght@400;700&display=swap" rel="stylesheet">
+
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <h1>Saisie de Caisse</h1>
+<h1>Saisie de Caisse</h1>
+
+<nav class="navigation">
+    <a href="index.html" class="active">Saisie</a>
+    <a href="dashboard.html">Tableau de Bord</a>
+</nav>
+
+<form id="caisseForm">
+...
+    <form id="caisseForm">
+        <div class="form-grid">
+            <input type="date" id="date" required>
+
+            <input type="text" id="reference" placeholder="Référence / Client" required list="referenceList">
+            <datalist id="referenceList">
+                </datalist>
+
+            <div class="prix-container">
+                <input type="number" id="prix" placeholder="Prix">
+                <span class="cfa-label">CFA</span>
+            </div>
+
+            <input type="number" id="montantParis" placeholder="Montant Paris">
+            <input type="number" id="montantAbidjan" placeholder="Montant Abidjan">
+
+            <select id="agentMobileMoney">
+                <option value="">-- Agent Mobile Money --</option>
+                <option value="Aziz OM">Aziz OM</option>
+                <option value="Aziz Sys">Aziz Sys</option>
+                <option value="Aziz Wave">Aziz Wave</option>
+                <option value="JB OM">JB OM</option>
+                <option value="JB Sys">JB Sys</option>
+                <option value="JB Wave">JB Wave</option>
+            </select>
+
+            <input type="number" id="reste" placeholder="Reste" readonly>
+
+            <select id="commune">
+                <option value="">-- Commune --</option>
+                <option value="Abobo">Abobo</option>
+                <option value="Anyama">Anyama</option>
+                <option value="Autres Communes">Autres Communes</option>
+                <option value="Cocody">Cocody</option>
+                <option value="Entrepôt">Entrepôt</option>
+                <option value="Yopougon">Yopougon</option>
+            </select>
+
+            <select id="agent">
+                <option value="">-- Agent --</option>
+                <option value="Adboul Paris">Adboul Paris</option>
+                <option value="Ali Paris">Ali Paris</option>
+                <option value="Autres Paris">Autres Paris</option>
+                <option value="AZIZ">AZIZ</option>
+                <option value="Bakary Paris">Bakary Paris</option>
+                <option value="Cesar">Cesar</option>
+                <option value="Cheick Paris">Cheick Paris</option>
+                <option value="Constant">Constant</option>
+                <option value="Coulibaly Traoré Mah">Coulibaly Traoré Mah</option>
+                <option value="Demba Paris">Demba Paris</option>
+                <option value="Drissa Paris">Drissa Paris</option>
+                <option value="Fatim Paris">Fatim Paris</option>
+                <option value="Hamza">Hamza</option>
+                <option value="JB">JB</option>
+                <option value="Julien">Julien</option>
+                <option value="Kady Paris">Kady Paris</option>
+                <option value="Maley">Maley</option>
+                <option value="Males">Males</option>
+                <option value="Mohamed Paris">Mohamed Paris</option>
+                <option value="Moussa Paris">Moussa Paris</option>
+                <option value="Salif">Salif</option>
+                <option value="Samba">Samba</option>
+                <option value="Touré">Touré</option>
+            </select>
+        </div>
+        <button type="submit">Ajouter l'entrée</button>
+    </form>
+
+    <table id="caisseTable">
+        <thead>
+            <tr>
+                <th>Date</th>
+                <th>Référence / Client</th>
+                <th>Prix</th>
+                <th>Montant Paris</th>
+                <th>Montant Abidjan</th>
+                <th>Agent MM</th>
+                <th>Reste</th>
+                <th>Commune</th>
+                <th>Agent</th>
+                <th>Action</th>
+            </tr>
+        </thead>
+        <tbody id="tableBody">
+            </tbody>
+...
+    <tbody id="tableBody">
+        </tbody>
+</table>
+...
+    </table>
+
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+
+    <script>
+      // COLLEZ VOTRE OBJET "firebaseConfig" PERSONNEL ICI
+      //
+      // Your web app's Firebase configuration
+  const firebaseConfig = {
+    apiKey: "AIzaSyD29tyKA-PcrHZeKeRcJXgkZKN_VLredTo",
+    authDomain: "caisse-amt-transit.firebaseapp.com",
+    projectId: "caisse-amt-transit",
+    storageBucket: "caisse-amt-transit.firebasestorage.app",
+    messagingSenderId: "315772207767",
+    appId: "1:315772207767:web:bccee1cfa07fb484549fd2"
+  };
+
+      // Initialiser Firebase
+      firebase.initializeApp(firebaseConfig);
+      const db = firebase.firestore(); // On initialise la connexion à la base de données
+    </script>
+
+    <script src="script.js"></script>
+</body>
+</body>
+</html>
