@@ -1,39 +1,74 @@
 document.addEventListener('DOMContentLoaded', async () => {
-    // Vérification que Firebase est bien chargé et initialisé
     if (typeof firebase === 'undefined' || typeof db === 'undefined') {
-        alert("Erreur critique: La connexion à la base de données a échoué. Vérifiez les balises script dans votre HTML et votre connexion internet.");
+        alert("Erreur: La connexion à la base de données a échoué.");
         return;
     }
-    
-    // --- SÉLECTIONS ET CONFIGURATION ---
+
+    // --- CONFIGURATION ET SÉLECTIONS DU DOM ---
     const transactionsCollection = db.collection("transactions");
     let referenceDB = {};
     try {
         referenceDB = await fetch('references.json').then(res => res.json());
     } catch (error) {
-        console.error("Impossible de charger le fichier references.json", error);
+        console.error("Erreur critique: Impossible de charger le fichier references.json.", error);
+        alert("Attention : le fichier des références n'a pas pu être chargé.");
     }
 
-    const caisseForm = document.getElementById('caisseForm');
-    const tableBody = document.getElementById('tableBody');
+    const addEntryBtn = document.getElementById('addEntryBtn');
+    const saveDayBtn = document.getElementById('saveDayBtn');
+    const dailyTableBody = document.getElementById('dailyTableBody');
+    const formContainer = document.getElementById('caisseForm');
     const prixInput = document.getElementById('prix');
     const montantParisInput = document.getElementById('montantParis');
     const montantAbidjanInput = document.getElementById('montantAbidjan');
     const resteInput = document.getElementById('reste');
     const referenceInput = document.getElementById('reference');
     const referenceList = document.getElementById('referenceList');
+    
+    const dailyTotalPrixEl = document.getElementById('dailyTotalPrix');
+    const dailyTotalPercuEl = document.getElementById('dailyTotalPercu');
+    const dailyTotalResteEl = document.getElementById('dailyTotalReste');
 
-    // --- ÉCOUTEUR EN TEMPS RÉEL ---
-    transactionsCollection.orderBy("date", "desc").onSnapshot(snapshot => {
-        const transactions = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        renderTable(transactions);
-    }, error => {
-        console.error("Erreur de l'écouteur Firestore: ", error);
-    });
+    let dailyTransactions = JSON.parse(localStorage.getItem('dailyTransactions')) || [];
 
-    // --- GESTION DES ÉVÉNEMENTS ---
-    caisseForm.addEventListener('submit', (event) => {
-        event.preventDefault();
+    // --- FONCTIONS ---
+    function saveDailyToLocalStorage() {
+        localStorage.setItem('dailyTransactions', JSON.stringify(dailyTransactions));
+    }
+
+    function updateDailySummary() {
+        const totalPrix = dailyTransactions.reduce((sum, t) => sum + t.prix, 0);
+        const totalParis = dailyTransactions.reduce((sum, t) => sum + t.montantParis, 0);
+        const totalAbidjan = dailyTransactions.reduce((sum, t) => sum + t.montantAbidjan, 0);
+        const totalPercu = totalParis + totalAbidjan;
+        const totalReste = dailyTransactions.reduce((sum, t) => sum + t.reste, 0);
+
+        dailyTotalPrixEl.textContent = formatCFA(totalPrix);
+        dailyTotalPercuEl.textContent = formatCFA(totalPercu);
+        dailyTotalResteEl.textContent = formatCFA(totalReste);
+
+        dailyTotalResteEl.className = totalReste < 0 ? 'reste-negatif' : 'reste-positif';
+    }
+
+    function renderDailyTable() {
+        dailyTableBody.innerHTML = '';
+        dailyTransactions.forEach((data, index) => {
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td data-label="Référence / Client">${data.reference}</td>
+                <td data-label="Prix">${formatCFA(data.prix)}</td>
+                <td data-label="Reste" class="${data.reste < 0 ? 'reste-negatif' : 'reste-positif'}">${formatCFA(data.reste)}</td>
+                <td data-label="Action"><button class="deleteBtn" data-index="${index}">X</button></td>
+            `;
+            dailyTableBody.appendChild(row);
+        });
+
+        document.getElementById('dailyCount').textContent = dailyTransactions.length;
+        updateDailySummary();
+    }
+
+    // --- ÉVÉNEMENTS ---
+    addEntryBtn.addEventListener('click', () => {
         const newData = {
             date: document.getElementById('date').value,
             reference: referenceInput.value,
@@ -51,19 +86,49 @@ document.addEventListener('DOMContentLoaded', async () => {
             return;
         }
 
-        transactionsCollection.add(newData).then(() => {
-            caisseForm.reset();
-            resteInput.className = '';
-            document.getElementById('date').focus();
-        }).catch(err => console.error("Erreur lors de l'ajout des données: ", err));
+        dailyTransactions.push(newData);
+        saveDailyToLocalStorage();
+        renderDailyTable();
+        
+        formContainer.querySelectorAll('input, select').forEach(el => {
+            if(el.type !== 'date') el.value = '';
+        });
+        resteInput.className = '';
+        referenceInput.focus();
     });
 
-    tableBody.addEventListener('click', (event) => {
+    saveDayBtn.addEventListener('click', () => {
+        if (dailyTransactions.length === 0) {
+            alert("Aucune opération à enregistrer.");
+            return;
+        }
+        if (!confirm(`Voulez-vous vraiment enregistrer les ${dailyTransactions.length} opérations de la journée ? Cette action est irréversible.`)) {
+            return;
+        }
+
+        const batch = db.batch();
+        dailyTransactions.forEach(transac => {
+            const docRef = transactionsCollection.doc();
+            batch.set(docRef, transac);
+        });
+
+        batch.commit().then(() => {
+            alert(`${dailyTransactions.length} opérations ont été enregistrées avec succès dans l'historique !`);
+            dailyTransactions = [];
+            saveDailyToLocalStorage();
+            renderDailyTable();
+        }).catch(err => {
+            console.error("Erreur lors de l'enregistrement en batch : ", err);
+            alert("Une erreur est survenue. Veuillez vérifier votre connexion et réessayer.");
+        });
+    });
+
+    dailyTableBody.addEventListener('click', (event) => {
         if (event.target.classList.contains('deleteBtn')) {
-            const docId = event.target.getAttribute('data-id');
-            if (confirm("Confirmer la suppression de cette entrée ?")) {
-                transactionsCollection.doc(docId).delete();
-            }
+            const index = parseInt(event.target.getAttribute('data-index'), 10);
+            dailyTransactions.splice(index, 1);
+            saveDailyToLocalStorage();
+            renderDailyTable();
         }
     });
 
@@ -79,61 +144,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     montantParisInput.addEventListener('input', calculateAndStyleReste);
     montantAbidjanInput.addEventListener('input', calculateAndStyleReste);
 
-    // --- FONCTIONS D'AFFICHAGE ET UTILITAIRES ---
-    
-    function renderTable(transactions) {
-        tableBody.innerHTML = '';
-        if (transactions.length === 0) return;
-
-        let currentSubtotals = { prix: 0, montantParis: 0, montantAbidjan: 0, reste: 0 };
-        let currentDate = transactions[0].date;
-
-        transactions.forEach((data) => {
-            if (data.date !== currentDate) {
-                insertSubtotalRow(currentDate, currentSubtotals);
-                currentDate = data.date;
-                currentSubtotals = { prix: 0, montantParis: 0, montantAbidjan: 0, reste: 0 };
-            }
-            currentSubtotals.prix += data.prix;
-            currentSubtotals.montantParis += data.montantParis;
-            currentSubtotals.montantAbidjan += data.montantAbidjan;
-            currentSubtotals.reste += data.reste;
-            insertDataRow(data);
-        });
-        insertSubtotalRow(currentDate, currentSubtotals);
-    }
-    
-    function insertDataRow(data) {
-        const newRow = document.createElement('tr');
-        const reste_class = data.reste < 0 ? 'reste-negatif' : 'reste-positif';
-        newRow.innerHTML = `
-            <td data-label="Date">${data.date}</td>
-            <td data-label="Référence / Client">${data.reference}</td>
-            <td data-label="Prix">${formatCFA(data.prix)}</td>
-            <td data-label="Montant Paris">${formatCFA(data.montantParis)}</td>
-            <td data-label="Montant Abidjan">${formatCFA(data.montantAbidjan)}</td>
-            <td data-label="Agent MM"><span class="tag ${textToClassName(data.agentMobileMoney)}">${data.agentMobileMoney || ''}</span></td>
-            <td data-label="Reste" class="${reste_class}">${formatCFA(data.reste)}</td>
-            <td data-label="Commune"><span class="tag ${textToClassName(data.commune)}">${data.commune || ''}</span></td>
-            <td data-label="Agent"><span class="tag ${textToClassName(data.agent)}">${data.agent || ''}</span></td>
-            <td data-label="Action"><button class="deleteBtn" data-id="${data.id}">Suppr.</button></td>`;
-        tableBody.appendChild(newRow);
-    }
-
-    function insertSubtotalRow(date, totals) {
-        const subtotalRow = document.createElement('tr');
-        subtotalRow.className = 'subtotal-row';
-        subtotalRow.innerHTML = `
-            <td colspan="2">TOTAL DU ${date}</td>
-            <td>${formatCFA(totals.prix)}</td>
-            <td>${formatCFA(totals.montantParis)}</td>
-            <td>${formatCFA(totals.montantAbidjan)}</td>
-            <td></td>
-            <td>${formatCFA(totals.reste)}</td>
-            <td colspan="3"></td>`;
-        tableBody.appendChild(subtotalRow);
-    }
-
+    // --- FONCTIONS UTILITAIRES ---
     function calculateAndStyleReste() {
         const prix = parseFloat(prixInput.value) || 0;
         const montantParis = parseFloat(montantParisInput.value) || 0;
@@ -149,10 +160,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     function textToClassName(text) {
         if (!text) return '';
-        // LIGNE CORRIGÉE ICI : \u0300 au lieu de \u0e00
         return text.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, '-');
     }
-
+    
     function populateDatalist() {
         for (const ref in referenceDB) {
             const option = document.createElement('option');
@@ -162,5 +172,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     // --- INITIALISATION ---
+    renderDailyTable();
     populateDatalist();
 });

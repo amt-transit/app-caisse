@@ -1,6 +1,8 @@
 document.addEventListener('DOMContentLoaded', () => {
+    // Il n'y a PAS de lignes "import" ici.
+    
     if (typeof firebase === 'undefined' || typeof db === 'undefined') {
-        alert("Erreur: La connexion à la base de données a échoué.");
+        alert("Erreur: La connexion à la base de données a échoué. Vérifiez les balises script dans votre HTML.");
         return;
     }
     
@@ -10,7 +12,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const agentSummaryTableBody = document.getElementById('agentSummaryTableBody');
     const grandTotalPrixEl = document.getElementById('grandTotalPrix');
     const grandTotalCountEl = document.getElementById('grandTotalCount');
-    const grandTotalResteEl = document.getElementById('grandTotalReste'); // NOUVEL ÉLÉMENT
+    const grandTotalResteEl = document.getElementById('grandTotalReste');
     const startDateInput = document.getElementById('startDate');
     const endDateInput = document.getElementById('endDate');
     const clearFilterBtn = document.getElementById('clearFilterBtn');
@@ -34,21 +36,17 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // --- FONCTIONS DE GÉNÉRATION ---
-
     function updateGrandTotals(transactions) {
         const totalPrix = transactions.reduce((sum, t) => sum + t.prix, 0);
         const totalCount = transactions.length;
-        const totalReste = transactions.reduce((sum, t) => sum + t.reste, 0); // NOUVEAU CALCUL
+        const totalReste = transactions.reduce((sum, t) => sum + t.reste, 0);
 
         grandTotalPrixEl.textContent = formatCFA(totalPrix);
         grandTotalCountEl.textContent = totalCount;
-        grandTotalResteEl.textContent = formatCFA(totalReste); // NOUVEL AFFICHAGE
-
-        // On met à jour la couleur du Reste Total
+        grandTotalResteEl.textContent = formatCFA(totalReste);
         grandTotalResteEl.className = totalReste < 0 ? 'reste-negatif' : 'reste-positif';
     }
 
-    // (La fonction generateDailySummary reste la même)
     function generateDailySummary(transactions) {
         summaryTableBody.innerHTML = '';
         if (transactions.length === 0) {
@@ -69,7 +67,6 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // (La fonction generateAgentSummary reste la même)
     function generateAgentSummary(transactions) {
         agentSummaryTableBody.innerHTML = '';
         if (transactions.length === 0) {
