@@ -10,8 +10,10 @@
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-
-    <h1>Tableau de Bord</h1>
+    <header class="app-header">
+        <img src="LOGOAMT.png" alt="Logo de l'entreprise" class="app-logo">
+        <h1>Tableau de Bord</h1>
+    </header>
 
     <nav class="navigation">
         <a href="index.html">Saisie</a>
@@ -20,7 +22,6 @@
     </nav>
 
     <div class="dashboard-container">
-    
         <div id="grandTotals" class="totals-container">
             <div class="total-card">
                 <h3>Chiffre d'Affaires Total (Période)</h3>
@@ -34,8 +35,7 @@
                 <h3>Reste Total (Période)</h3>
                 <p id="grandTotalReste">0 CFA</p>
             </div>
-        </div> 
-
+        </div>
         <div class="filter-container">
             <h3>Filtrer par Période</h3>
             <div class="filter-fields">
@@ -46,52 +46,30 @@
                 <button id="clearFilterBtn">Réinitialiser</button>
             </div>
         </div>
-        
         <h2>Récapitulatif par Jour</h2>
         <table id="summaryTable">
             <thead>
-                <tr>
-                    <th>Date</th>
-                    <th>Nombre d'Opérations</th>
-                    <th>Total des Prix</th>
-                </tr>
+                <tr><th>Date</th><th>Nombre d'Opérations</th><th>Total des Prix</th></tr>
             </thead>
-            <tbody id="summaryTableBody">
-            </tbody>
+            <tbody id="summaryTableBody"></tbody>
         </table>
-
         <h2 style="margin-top: 30px;">Récapitulatif par Agent</h2>
         <table id="agentSummaryTable">
             <thead>
-                <tr>
-                    <th>Agent</th>
-                    <th>Nombre d'Opérations</th>
-                    <th>Chiffre d'Affaires</th>
-                </tr>
+                <tr><th>Agent</th><th>Nombre d'Opérations</th><th>Chiffre d'Affaires</th></tr>
             </thead>
-            <tbody id="agentSummaryTableBody">
-            </tbody>
+            <tbody id="agentSummaryTableBody"></tbody>
         </table>
-
     </div>
 
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
     <script>
-      const firebaseConfig = {
-        apiKey: "AIzaSyD29tyKA-PcrHZeKeRcJXgkZKN_VLredTo",
-        authDomain: "caisse-amt-transit.firebaseapp.com",
-        projectId: "caisse-amt-transit",
-        storageBucket: "caisse-amt-transit.appspot.com",
-        messagingSenderId: "315772207767",
-        appId: "1:315772207767:web:bccee1cfa07fb484549fd2"
-      };
-
-      // Initialiser Firebase ET créer la variable "db"
+      // COLLEZ VOTRE firebaseConfig PERSONNEL ICI
+      const firebaseConfig = { /* ... */ };
       firebase.initializeApp(firebaseConfig);
       const db = firebase.firestore();
     </script>
-    
     <script src="dashboard.js"></script>
 </body>
 </html>

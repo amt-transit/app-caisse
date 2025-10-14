@@ -10,29 +10,23 @@ document.addEventListener('DOMContentLoaded', () => {
     transactionsCollection.orderBy("date", "desc").onSnapshot(snapshot => {
         const transactions = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         renderTable(transactions);
-    }, error => {
-        console.error("Erreur de l'écouteur Firestore: ", error);
-    });
+    }, error => console.error("Erreur Firestore: ", error));
 
     tableBody.addEventListener('click', (event) => {
         if (event.target.classList.contains('deleteBtn')) {
             const docId = event.target.getAttribute('data-id');
-            if (confirm("Confirmer la suppression définitive de cette entrée de l'historique ?")) {
+            if (confirm("Confirmer la suppression définitive de cette entrée ?")) {
                 transactionsCollection.doc(docId).delete();
             }
         }
     });
 
     function renderTable(transactions) {
+        tableBody.innerHTML = '<tr><td colspan="10">Aucun historique trouvé.</td></tr>';
+        if (transactions.length === 0) return;
         tableBody.innerHTML = '';
-        if (transactions.length === 0) {
-            tableBody.innerHTML = '<tr><td colspan="10">Aucun historique trouvé.</td></tr>';
-            return;
-        }
-
         let currentSubtotals = { prix: 0, montantParis: 0, montantAbidjan: 0, reste: 0 };
         let currentDate = transactions[0].date;
-
         transactions.forEach((data) => {
             if (data.date !== currentDate) {
                 insertSubtotalRow(currentDate, currentSubtotals);
@@ -53,7 +47,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const reste_class = data.reste < 0 ? 'reste-negatif' : 'reste-positif';
         newRow.innerHTML = `
             <td data-label="Date">${data.date}</td>
-            <td data-label="Référence / Client">${data.reference}</td>
+            <td data-label="Référence">${data.reference}</td>
             <td data-label="Prix">${formatCFA(data.prix)}</td>
             <td data-label="Montant Paris">${formatCFA(data.montantParis)}</td>
             <td data-label="Montant Abidjan">${formatCFA(data.montantAbidjan)}</td>
@@ -69,12 +63,12 @@ document.addEventListener('DOMContentLoaded', () => {
         const subtotalRow = document.createElement('tr');
         subtotalRow.className = 'subtotal-row';
         subtotalRow.innerHTML = `
-            <td colspan="2">TOTAL DU ${date}</td>
-            <td>${formatCFA(totals.prix)}</td>
-            <td>${formatCFA(totals.montantParis)}</td>
-            <td>${formatCFA(totals.montantAbidjan)}</td>
+            <td data-label="Total du" colspan="2">TOTAL DU ${date}</td>
+            <td data-label="Total Prix">${formatCFA(totals.prix)}</td>
+            <td data-label="Total Paris">${formatCFA(totals.montantParis)}</td>
+            <td data-label="Total Abidjan">${formatCFA(totals.montantAbidjan)}</td>
             <td></td>
-            <td>${formatCFA(totals.reste)}</td>
+            <td data-label="Total Reste">${formatCFA(totals.reste)}</td>
             <td colspan="3"></td>`;
         tableBody.appendChild(subtotalRow);
     }
