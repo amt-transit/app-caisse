@@ -73,6 +73,8 @@ td button.deleteBtn {
 #reste.reste-negatif, td.reste-negatif, #dailyTotalReste.reste-negatif, #grandTotalReste.reste-negatif { color: #dc3545; font-weight: bold; }
 #reste.reste-positif, td.reste-positif, #dailyTotalReste.reste-positif, #grandTotalReste.reste-positif { color: #191970; font-weight: bold; }
 .subtotal-row td { font-weight: bold; background-color: #f0f2f5; border-top: 2px solid #343a40; border-bottom: 2px solid #343a40; color: #343a40; }
+
+/* --- STYLE PAGE HISTORIQUE --- */
 .page-history #caisseTable { font-size: 10px; }
 .page-history .subtotal-row td { font-size: 12px; background-color: #343a40; color: #ffffff; border-top: 2px solid #000; border-bottom: 2px solid #000; }
 
@@ -83,7 +85,6 @@ td button.deleteBtn {
 .total-card h3 { margin-top: 0; font-size: 16px; color: #6c757d; }
 .total-card p { margin-bottom: 0; font-size: 28px; font-weight: bold; color: #343a40; }
 .filter-container { background-color: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 30px; border: 1px solid #dee2e6; }
-.filter-container h3 { margin-top: 0; margin-bottom: 10px; font-size: 18px; }
 .filter-fields { display: flex; align-items: center; gap: 15px; flex-wrap: wrap; }
 .filter-fields label { font-weight: bold; }
 .filter-fields input[type="date"] { padding: 8px; }
@@ -93,7 +94,4 @@ td button.deleteBtn {
 .summary-item h4 { margin-top: 0; margin-bottom: 5px; font-size: 14px; color: #6c757d; font-weight: normal; }
 .summary-item span { font-size: 18px; font-weight: bold; }
 
-/*
-   NOTE : LE BLOC @media A ÉTÉ VOLONTAIREMENT SUPPRIMÉ POUR PERMETTRE LE ZOOM SUR TÉLÉPHONE.
-   SI VOUS VOULEZ REVENIR À L'AFFICHAGE EN CARTES, IL FAUDRA LE REMETTRE.
-*/
+/* Il n'y a plus de bloc @media, car nous avons désactivé le mode responsive. */

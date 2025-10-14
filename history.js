@@ -22,78 +22,70 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // =====================================================================
-    //          FONCTION RENDERTABLE ENTIÈREMENT RÉÉCRITE
+    //          FONCTION RENDERTABLE CORRIGÉE (LOGIQUE SIMPLIFIÉE)
     // =====================================================================
     function renderTable(transactions) {
-        tableBody.innerHTML = '';
+        tableBody.innerHTML = ''; // On vide le tbody principal
         if (transactions.length === 0) {
             tableBody.innerHTML = '<tr><td colspan="10">Aucun historique trouvé.</td></tr>';
             return;
         }
 
-        // 1. On regroupe toutes les transactions par date
-        const groupedByDate = transactions.reduce((groups, item) => {
-            const date = item.date;
-            if (!groups[date]) {
-                groups[date] = [];
+        let currentSubtotals = { prix: 0, montantParis: 0, montantAbidjan: 0, reste: 0 };
+        let currentDate = transactions[0].date;
+
+        transactions.forEach((data) => {
+            // Si la date change, on insère la ligne de total pour le jour précédent
+            if (data.date !== currentDate) {
+                insertSubtotalRow(currentDate, currentSubtotals);
+                // On réinitialise pour le nouveau jour
+                currentDate = data.date;
+                currentSubtotals = { prix: 0, montantParis: 0, montantAbidjan: 0, reste: 0 };
             }
-            groups[date].push(item);
-            return groups;
-        }, {});
-
-        // 2. Pour chaque groupe (chaque jour), on crée un <tbody> qui sera notre "carte"
-        const sortedDates = Object.keys(groupedByDate).sort((a, b) => new Date(b) - new Date(a));
-
-        sortedDates.forEach(date => {
-            const dailyTransactions = groupedByDate[date];
             
-            // On crée un <tbody> pour le jour
-            const dailyGroupBody = document.createElement('tbody');
-            dailyGroupBody.className = 'daily-group'; // Classe pour le style de la carte
-
-            // 3. On calcule les sous-totaux pour ce jour
-            const subtotals = dailyTransactions.reduce((totals, t) => {
-                totals.prix += t.prix;
-                totals.montantParis += t.montantParis;
-                totals.montantAbidjan += t.montantAbidjan;
-                totals.reste += t.reste;
-                return totals;
-            }, { prix: 0, montantParis: 0, montantAbidjan: 0, reste: 0 });
-
-            // 4. On ajoute chaque ligne de transaction au <tbody>
-            dailyTransactions.forEach(data => {
-                const dataRow = document.createElement('tr');
-                const reste_class = data.reste < 0 ? 'reste-negatif' : 'reste-positif';
-                dataRow.innerHTML = `
-                    <td data-label="Date">${data.date}</td>
-                    <td data-label="Référence">${data.reference}</td>
-                    <td data-label="Prix">${formatCFA(data.prix)}</td>
-                    <td data-label="Montant Paris">${formatCFA(data.montantParis)}</td>
-                    <td data-label="Montant Abidjan">${formatCFA(data.montantAbidjan)}</td>
-                    <td data-label="Agent MM"><span class="tag ${textToClassName(data.agentMobileMoney)}">${data.agentMobileMoney || ''}</span></td>
-                    <td data-label="Reste" class="${reste_class}">${formatCFA(data.reste)}</td>
-                    <td data-label="Commune"><span class="tag ${textToClassName(data.commune)}">${data.commune || ''}</span></td>
-                    <td data-label="Agent"><span class="tag ${textToClassName(data.agent)}">${data.agent || ''}</span></td>
-                    <td data-label="Action"><button class="deleteBtn" data-id="${data.id}">Suppr.</button></td>`;
-                dailyGroupBody.appendChild(dataRow);
-            });
-
-            // 5. On ajoute la ligne de sous-total À LA FIN du même <tbody>
-            const subtotalRow = document.createElement('tr');
-            subtotalRow.className = 'subtotal-row';
-            subtotalRow.innerHTML = `
-                <td data-label="Total du" colspan="2">TOTAL DU ${date}</td>
-                <td data-label="Total Prix">${formatCFA(subtotals.prix)}</td>
-                <td data-label="Total Paris">${formatCFA(subtotals.montantParis)}</td>
-                <td data-label="Total Abidjan">${formatCFA(subtotals.montantAbidjan)}</td>
-                <td></td>
-                <td data-label="Total Reste">${formatCFA(subtotals.reste)}</td>
-                <td colspan="3"></td>`;
-            dailyGroupBody.appendChild(subtotalRow);
-
-            // 6. On ajoute le groupe complet (le <tbody>) au tableau principal
-            tableBody.appendChild(dailyGroupBody);
+            // On ajoute les montants de la transaction actuelle aux totaux du jour
+            currentSubtotals.prix += data.prix;
+            currentSubtotals.montantParis += data.montantParis;
+            currentSubtotals.montantAbidjan += data.montantAbidjan;
+            currentSubtotals.reste += data.reste;
+            
+            // On insère la ligne de données
+            insertDataRow(data);
         });
+
+        // À la fin de la boucle, on insère la ligne de total pour le tout dernier jour
+        insertSubtotalRow(currentDate, currentSubtotals);
+    }
+
+    function insertDataRow(data) {
+        const newRow = document.createElement('tr'); // Crée une ligne <tr>
+        const reste_class = data.reste < 0 ? 'reste-negatif' : 'reste-positif';
+        newRow.innerHTML = `
+            <td>${data.date}</td>
+            <td>${data.reference}</td>
+            <td>${formatCFA(data.prix)}</td>
+            <td>${formatCFA(data.montantParis)}</td>
+            <td>${formatCFA(data.montantAbidjan)}</td>
+            <td><span class="tag ${textToClassName(data.agentMobileMoney)}">${data.agentMobileMoney || ''}</span></td>
+            <td class="${reste_class}">${formatCFA(data.reste)}</td>
+            <td><span class="tag ${textToClassName(data.commune)}">${data.commune || ''}</span></td>
+            <td><span class="tag ${textToClassName(data.agent)}">${data.agent || ''}</span></td>
+            <td><button class="deleteBtn" data-id="${data.id}">Suppr.</button></td>`;
+        tableBody.appendChild(newRow); // Ajoute la ligne <tr> au tbody principal
+    }
+
+    function insertSubtotalRow(date, totals) {
+        const subtotalRow = document.createElement('tr'); // Crée une ligne de total <tr>
+        subtotalRow.className = 'subtotal-row';
+        subtotalRow.innerHTML = `
+            <td colspan="2">TOTAL DU ${date}</td>
+            <td>${formatCFA(totals.prix)}</td>
+            <td>${formatCFA(totals.montantParis)}</td>
+            <td>${formatCFA(totals.montantAbidjan)}</td>
+            <td></td>
+            <td>${formatCFA(totals.reste)}</td>
+            <td colspan="3"></td>`;
+        tableBody.appendChild(subtotalRow); // Ajoute la ligne de total <tr> au tbody principal
     }
 
     // Les fonctions utilitaires ne changent pas
