@@ -25,8 +25,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     const referenceInput = document.getElementById('reference');
     const referenceList = document.getElementById('referenceList');
     
+    // NOUVEAUX ÉLÉMENTS POUR LE RÉCAPITULATIF
     const dailyTotalPrixEl = document.getElementById('dailyTotalPrix');
-    const dailyTotalPercuEl = document.getElementById('dailyTotalPercu');
+    const dailyTotalEspecesEl = document.getElementById('dailyTotalEspeces');
+    const dailyTotalMobileMoneyEl = document.getElementById('dailyTotalMobileMoney');
     const dailyTotalResteEl = document.getElementById('dailyTotalReste');
 
     let dailyTransactions = JSON.parse(localStorage.getItem('dailyTransactions')) || [];
@@ -36,15 +38,31 @@ document.addEventListener('DOMContentLoaded', async () => {
         localStorage.setItem('dailyTransactions', JSON.stringify(dailyTransactions));
     }
 
+    // =====================================================================
+    //          FONCTION DE MISE À JOUR DES TOTAUX (MODIFIÉE)
+    // =====================================================================
     function updateDailySummary() {
-        const totalPrix = dailyTransactions.reduce((sum, t) => sum + t.prix, 0);
-        const totalParis = dailyTransactions.reduce((sum, t) => sum + t.montantParis, 0);
-        const totalAbidjan = dailyTransactions.reduce((sum, t) => sum + t.montantAbidjan, 0);
-        const totalPercu = totalParis + totalAbidjan;
-        const totalReste = dailyTransactions.reduce((sum, t) => sum + t.reste, 0);
+        let totalPrix = 0;
+        let totalEspeces = 0;
+        let totalMobileMoney = 0;
+
+        dailyTransactions.forEach(t => {
+            totalPrix += t.prix;
+            const paiementTotal = t.montantParis + t.montantAbidjan;
+
+            // On vérifie si un agent mobile money a été sélectionné pour cette transaction
+            if (t.agentMobileMoney && t.agentMobileMoney !== '') {
+                totalMobileMoney += paiementTotal;
+            } else {
+                totalEspeces += paiementTotal;
+            }
+        });
+
+        const totalReste = (totalEspeces + totalMobileMoney) - totalPrix;
 
         dailyTotalPrixEl.textContent = formatCFA(totalPrix);
-        dailyTotalPercuEl.textContent = formatCFA(totalPercu);
+        dailyTotalEspecesEl.textContent = formatCFA(totalEspeces);
+        dailyTotalMobileMoneyEl.textContent = formatCFA(totalMobileMoney);
         dailyTotalResteEl.textContent = formatCFA(totalReste);
 
         dailyTotalResteEl.className = totalReste < 0 ? 'reste-negatif' : 'reste-positif';
@@ -75,7 +93,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             prix: parseFloat(prixInput.value) || 0,
             montantParis: parseFloat(montantParisInput.value) || 0,
             montantAbidjan: parseFloat(montantAbidjanInput.value) || 0,
-            reste: parseFloat(resteInput.value) || 0,
+            reste: 0, // Le reste sera recalculé
             agentMobileMoney: document.getElementById('agentMobileMoney').value,
             commune: document.getElementById('commune').value,
             agent: document.getElementById('agent').value
@@ -86,17 +104,36 @@ document.addEventListener('DOMContentLoaded', async () => {
             return;
         }
 
-        dailyTransactions.push(newData);
+        const existingIndex = dailyTransactions.findIndex(t => t.reference === newData.reference);
+
+        if (existingIndex > -1) {
+            const existingTransaction = dailyTransactions[existingIndex];
+            existingTransaction.montantParis += newData.montantParis;
+            existingTransaction.montantAbidjan += newData.montantAbidjan;
+            // On s'assure que si un paiement est fait par mobile money, l'info est conservée
+            if (newData.agentMobileMoney) {
+                existingTransaction.agentMobileMoney = newData.agentMobileMoney;
+            }
+            const totalPercuPourLigne = existingTransaction.montantParis + existingTransaction.montantAbidjan;
+            existingTransaction.reste = totalPercuPourLigne - existingTransaction.prix;
+        } else {
+            const totalPercuPourLigne = newData.montantParis + newData.montantAbidjan;
+            newData.reste = totalPercuPourLigne - newData.prix;
+            dailyTransactions.push(newData);
+        }
+
         saveDailyToLocalStorage();
         renderDailyTable();
         
         formContainer.querySelectorAll('input, select').forEach(el => {
-            if(el.type !== 'date') el.value = '';
+            if (el.type !== 'date') el.value = '';
         });
         resteInput.className = '';
         referenceInput.focus();
     });
 
+    // Le reste des fonctions (saveDayBtn, dailyTableBody.click, etc.) ne changent pas
+    // ... (Assurez-vous que le reste de votre code est bien là)
     saveDayBtn.addEventListener('click', () => {
         if (dailyTransactions.length === 0) {
             alert("Aucune opération à enregistrer.");
@@ -144,7 +181,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     montantParisInput.addEventListener('input', calculateAndStyleReste);
     montantAbidjanInput.addEventListener('input', calculateAndStyleReste);
 
-    // --- FONCTIONS UTILITAIRES ---
     function calculateAndStyleReste() {
         const prix = parseFloat(prixInput.value) || 0;
         const montantParis = parseFloat(montantParisInput.value) || 0;
