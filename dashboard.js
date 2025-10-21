@@ -105,7 +105,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         const containerData = {};
 
         transactions.forEach(t => {
-            const containerName = conteneurDB[t.reference] || "Non spécifié";
+            const containerName = t.conteneur || conteneurDB[t.reference] || "Non spécifié";
 
             if (!containerData[containerName]) {
                 containerData[containerName] = {

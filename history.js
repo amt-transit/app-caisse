@@ -63,6 +63,7 @@ document.addEventListener('DOMContentLoaded', () => {
         newRow.innerHTML = `
             <td>${data.date}</td>
             <td>${data.reference}</td>
+            <td>${data.conteneur || ''}</td>
             <td>${formatCFA(data.prix)}</td>
             <td>${formatCFA(data.montantParis)}</td>
             <td>${formatCFA(data.montantAbidjan)}</td>
@@ -78,7 +79,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const subtotalRow = document.createElement('tr'); // Crée une ligne de total <tr>
         subtotalRow.className = 'subtotal-row';
         subtotalRow.innerHTML = `
-            <td colspan="2">TOTAL DU ${date}</td>
+            <td colspan="3">TOTAL DU ${date}</td>
             <td>${formatCFA(totals.prix)}</td>
             <td>${formatCFA(totals.montantParis)}</td>
             <td>${formatCFA(totals.montantAbidjan)}</td>
