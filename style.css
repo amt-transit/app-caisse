@@ -70,9 +70,9 @@ td button.deleteBtn {
     font-size: 12px; font-weight: bold; display: inline-block;
 }
 .perc {
-    font-size: 0.9em;
-    color: #6c757d;
-    font-weight: normal;
+    font-size: 1em;
+    color: #f13607;
+    font-weight: bold;
 }
 .abobo{background-color:#dc3545}.anyama{background-color:#ffc107;color:#333}.autres-communes{background-color:#6c757d}.cocody{background-color:#007bff}.entrepot{background-color:#6f42c1}.yopougon{background-color:#28a745}.adboul-paris{background-color:#FF6347}.ali-paris{background-color:#4682B4}.autres-paris{background-color:#999999}.aziz{background-color:#8A2BE2}.bakary-paris{background-color:#5F9EA0}.cesar{background-color:#D2691E}.cheick-paris{background-color:#6495ED}.constant{background-color:#DC143C}.coulibaly-traore-mah{background-color:#008B8B}.demba-paris{background-color:#B8860B}.drissa-paris{background-color:#006400}.fatim-paris{background-color:#FF8C00}.hamza{background-color:#8B008B}.jb{background-color:#556B2F}.julien{background-color:#FF1493}.kady-paris{background-color:#483D8B}.maley{background-color:#2F4F4F}.males{background-color:#00CED1}.mohamed-paris{background-color:#9400D3}.moussa-paris{background-color:#191970}.salif{background-color:#CD5C5C}.samba{background-color:#20B2AA}.toure{background-color:#6A5ACD}.aziz-om{background-color:#343a40}.aziz-wave{background-color:#495057}.aziz-sys{background-color:#6c757d}.jb-om{background-color:#9c27b0}.jb-wave{background-color:#673ab7}.jb-sys{background-color:#3f51b5}
 #reste.reste-negatif, td.reste-negatif, #dailyTotalReste.reste-negatif, #grandTotalReste.reste-negatif { color: #dc3545; font-weight: bold; }

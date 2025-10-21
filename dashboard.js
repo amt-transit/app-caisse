@@ -97,63 +97,75 @@ document.addEventListener('DOMContentLoaded', async () => {
         updateDashboard();
     });
 
-    // AJOUTER CETTE NOUVELLE FONCTION
+   // REMPLACEZ VOTRE ANCIENNE FONCTION 'generateContainerSummary' PAR CELLE-CI :
 
-  function generateContainerSummary(transactions, conteneurDB) {
-    containerSummaryTableBody.innerHTML = '<tr><td colspan="5">Aucune donnée de conteneur.</td></tr>';
-    const containerData = {};
+    function generateContainerSummary(transactions, conteneurDB) {
+        // MODIFICATION 1 : Augmentation du 'colspan' pour la nouvelle colonne
+        containerSummaryTableBody.innerHTML = '<tr><td colspan="6">Aucune donnée de conteneur.</td></tr>';
+        const containerData = {};
 
-    transactions.forEach(t => {
-            // C'EST LA LIGNE MAGIQUE :
-            // On cherche à quelle conteneur appartient la référence t.reference
-      const containerName = conteneurDB[t.reference] || "Non spécifié";
+        transactions.forEach(t => {
+            const containerName = conteneurDB[t.reference] || "Non spécifié";
 
-      if (!containerData[containerName]) {
-        containerData[containerName] = {
-          totalPrix: 0, // CA
-          totalParis: 0,
-          totalAbidjan: 0,
-          totalReste: 0
-        };
-      }
-      const data = containerData[containerName];
-      data.totalPrix += t.prix;
-      data.totalParis += t.montantParis;
-      data.totalAbidjan += t.montantAbidjan;
-            // Le "Reste" est la somme de (Paris + Abidjan) - Prix
-      data.totalReste += (t.montantParis + t.montantAbidjan - t.prix);
-    });
+            if (!containerData[containerName]) {
+                containerData[containerName] = {
+                    totalPrix: 0, // CA
+                    totalParis: 0,
+                    totalAbidjan: 0,
+                    totalReste: 0
+                };
+            }
+            const data = containerData[containerName];
+            data.totalPrix += t.prix;
+            data.totalParis += t.montantParis;
+            data.totalAbidjan += t.montantAbidjan;
+            data.totalReste += (t.montantParis + t.montantAbidjan - t.prix);
+        });
 
-    const sortedContainers = Object.keys(containerData).sort();
+        // MODIFICATION 2 : Tri numérique décroissant (ex: D20, D19, D18...)
+        const sortedContainers = Object.keys(containerData).sort((a, b) => {
+            // Extrait les nombres des noms de conteneurs (ex: "D35" -> 35)
+            const numA = parseInt(a.replace(/[^0-9]/g, ''), 10) || 0;
+            const numB = parseInt(b.replace(/[^0-9]/g, ''), 10) || 0;
+            // Trie du plus grand au plus petit
+            return numB - numA;
+        });
         
         if (sortedContainers.length === 0 || (sortedContainers.length === 1 && sortedContainers[0] === "Non spécifié")) {
              return; // On garde le message "Aucune donnée"
         }
 
-    containerSummaryTableBody.innerHTML = ''; // On vide le tableau
+        containerSummaryTableBody.innerHTML = ''; // On vide le tableau
 
-    sortedContainers.forEach(container => {
-            if (container === "Non spécifié") return; // On n'affiche pas les transactions "Non spécifié"
+        sortedContainers.forEach(container => {
+            if (container === "Non spécifié") return; 
 
-      const data = containerData[container];
-      const ca = data.totalPrix; // Chiffre d'Affaires
+            const data = containerData[container];
+            const ca = data.totalPrix; 
 
             // Calcul des pourcentages
-      const percParis = ca > 0 ? (data.totalParis / ca) * 100 : 0;
-      const percAbidjan = ca > 0 ? (data.totalAbidjan / ca) * 100 : 0;
-      const percReste = ca > 0 ? (data.totalReste / ca) * 100 : 0;
+            const percParis = ca > 0 ? (data.totalParis / ca) * 100 : 0;
+            const percAbidjan = ca > 0 ? (data.totalAbidjan / ca) * 100 : 0;
+            const percReste = ca > 0 ? (data.totalReste / ca) * 100 : 0;
             
-      const row = document.createElement('tr');
-      row.innerHTML = `
-        <td data-label="Conteneur">${container}</td>
-        <td data-label="CA">${formatCFA(ca)}</td>
-        <td data-label="Total Paris">${formatCFA(data.totalParis)} <span class="perc">(${percParis.toFixed(1)}%)</span></td>
-        <td data-label="Total Abidjan">${formatCFA(data.totalAbidjan)} <span class="perc">(${percAbidjan.toFixed(1)}%)</span></td>
-        <td data-label="Total Reste" class="${data.totalReste < 0 ? 'reste-negatif' : 'reste-positif'}">${formatCFA(data.totalReste)} <span class="perc">(${percReste.toFixed(1)}%)</span></td>
-        `;
-      containerSummaryTableBody.appendChild(row);
-    });
-  }
+            // MODIFICATION 3 : Calcul de la nouvelle colonne "Total Perçu"
+            const totalPercu = data.totalParis + data.totalAbidjan;
+            const percPercu = ca > 0 ? (totalPercu / ca) * 100 : 0;
+            
+            const row = document.createElement('tr');
+            
+            // MODIFICATION 4 : Ajout de la nouvelle cellule (<td>) dans le HTML
+            row.innerHTML = `
+                <td data-label="Conteneur">${container}</td>
+                <td data-label="CA">${formatCFA(ca)}</td>
+                <td data-label="Total Paris">${formatCFA(data.totalParis)} <span class="perc">(${percParis.toFixed(1)}%)</span></td>
+                <td data-label="Total Abidjan">${formatCFA(data.totalAbidjan)} <span class="perc">(${percAbidjan.toFixed(1)}%)</span></td>
+                <td data-label="Total Perçu">${formatCFA(totalPercu)} <span class="perc">(${percPercu.toFixed(1)}%)</span></td>
+                <td data-label="Total Reste" class="${data.totalReste < 0 ? 'reste-negatif' : 'reste-positif'}">${formatCFA(data.totalReste)} <span class="perc">(${percReste.toFixed(1)}%)</span></td>
+            `;
+            containerSummaryTableBody.appendChild(row);
+        });
+    }
     function formatCFA(number) {
         return new Intl.NumberFormat('fr-CI', { style: 'currency', currency: 'XOF' }).format(number);
     }
