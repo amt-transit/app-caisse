@@ -1,12 +1,21 @@
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
     if (typeof firebase === 'undefined' || typeof db === 'undefined') {
         alert("Erreur: La connexion à la base de données a échoué.");
         return;
+    }
+    // NOUVEAU BLOC : Charger le fichier conteneurs.json
+    let conteneurDB = {};
+    try {
+        conteneurDB = await fetch('conteneurs.json').then(res => res.json());
+    } catch (error) {
+        console.error("Erreur critique: Impossible de charger conteneurs.json.", error);
+        alert("Attention: Le fichier conteneurs.json est manquant ou invalide. Le récapitulatif par conteneur sera vide.");
     }
     
     const transactionsCollection = db.collection("transactions");
     const summaryTableBody = document.getElementById('summaryTableBody');
     const agentSummaryTableBody = document.getElementById('agentSummaryTableBody');
+    const containerSummaryTableBody = document.getElementById('containerSummaryTableBody');
     const grandTotalPrixEl = document.getElementById('grandTotalPrix');
     const grandTotalCountEl = document.getElementById('grandTotalCount');
     const grandTotalResteEl = document.getElementById('grandTotalReste');
@@ -27,6 +36,7 @@ document.addEventListener('DOMContentLoaded', () => {
         updateGrandTotals(filteredTransactions);
         generateDailySummary(filteredTransactions);
         generateAgentSummary(filteredTransactions);
+        generateContainerSummary(filteredTransactions, conteneurDB);
     }
 
     function updateGrandTotals(transactions) {
@@ -87,6 +97,63 @@ document.addEventListener('DOMContentLoaded', () => {
         updateDashboard();
     });
 
+    // AJOUTER CETTE NOUVELLE FONCTION
+
+  function generateContainerSummary(transactions, conteneurDB) {
+    containerSummaryTableBody.innerHTML = '<tr><td colspan="5">Aucune donnée de conteneur.</td></tr>';
+    const containerData = {};
+
+    transactions.forEach(t => {
+            // C'EST LA LIGNE MAGIQUE :
+            // On cherche à quelle conteneur appartient la référence t.reference
+      const containerName = conteneurDB[t.reference] || "Non spécifié";
+
+      if (!containerData[containerName]) {
+        containerData[containerName] = {
+          totalPrix: 0, // CA
+          totalParis: 0,
+          totalAbidjan: 0,
+          totalReste: 0
+        };
+      }
+      const data = containerData[containerName];
+      data.totalPrix += t.prix;
+      data.totalParis += t.montantParis;
+      data.totalAbidjan += t.montantAbidjan;
+            // Le "Reste" est la somme de (Paris + Abidjan) - Prix
+      data.totalReste += (t.montantParis + t.montantAbidjan - t.prix);
+    });
+
+    const sortedContainers = Object.keys(containerData).sort();
+        
+        if (sortedContainers.length === 0 || (sortedContainers.length === 1 && sortedContainers[0] === "Non spécifié")) {
+             return; // On garde le message "Aucune donnée"
+        }
+
+    containerSummaryTableBody.innerHTML = ''; // On vide le tableau
+
+    sortedContainers.forEach(container => {
+            if (container === "Non spécifié") return; // On n'affiche pas les transactions "Non spécifié"
+
+      const data = containerData[container];
+      const ca = data.totalPrix; // Chiffre d'Affaires
+
+            // Calcul des pourcentages
+      const percParis = ca > 0 ? (data.totalParis / ca) * 100 : 0;
+      const percAbidjan = ca > 0 ? (data.totalAbidjan / ca) * 100 : 0;
+      const percReste = ca > 0 ? (data.totalReste / ca) * 100 : 0;
+            
+      const row = document.createElement('tr');
+      row.innerHTML = `
+        <td data-label="Conteneur">${container}</td>
+        <td data-label="CA">${formatCFA(ca)}</td>
+        <td data-label="Total Paris">${formatCFA(data.totalParis)} <span class="perc">(${percParis.toFixed(1)}%)</span></td>
+        <td data-label="Total Abidjan">${formatCFA(data.totalAbidjan)} <span class="perc">(${percAbidjan.toFixed(1)}%)</span></td>
+        <td data-label="Total Reste" class="${data.totalReste < 0 ? 'reste-negatif' : 'reste-positif'}">${formatCFA(data.totalReste)} <span class="perc">(${percReste.toFixed(1)}%)</span></td>
+        `;
+      containerSummaryTableBody.appendChild(row);
+    });
+  }
     function formatCFA(number) {
         return new Intl.NumberFormat('fr-CI', { style: 'currency', currency: 'XOF' }).format(number);
     }

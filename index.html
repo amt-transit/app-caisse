@@ -8,6 +8,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Comfortaa:wght@400;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
+    <link rel="icon" type="image/png" href="favicon.png">
 </head>
 <body>
     <header class="app-header">
@@ -77,23 +78,23 @@
     <div class="daily-summary">
         <div class="summary-item">
             <h4>Total des Prix</h4>
-            <span id="dailyTotalPrix">0 F CFA</span>
+            <span id="dailyTotalPrix">0 F CFA</span>
         </div>
         <div class="summary-item">
             <h4>Total Abidjan (Espèces)</h4>
-            <span id="dailyTotalAbidjanEspeces">0 F CFA</span>
+            <span id="dailyTotalAbidjanEspeces">0 F CFA</span>
         </div>
         <div class="summary-item">
             <h4>Total Paris</h4>
-            <span id="dailyTotalParis">0 F CFA</span>
+            <span id="dailyTotalParis">0 F CFA</span>
         </div>
         <div class="summary-item">
             <h4>Total Mobile Money</h4>
-            <span id="dailyTotalMobileMoney">0 F CFA</span>
+            <span id="dailyTotalMobileMoney">0 F CFA</span>
         </div>
         <div class="summary-item">
             <h4>Reste Total</h4>
-            <span id="dailyTotalReste">0 F CFA</span>
+            <span id="dailyTotalReste">0 F CFA</span>
         </div>
     </div>
 
@@ -114,5 +115,6 @@
       firebase.initializeApp(firebaseConfig);
       const db = firebase.firestore();
     </script>
+    <script src="script.js"></script>
 </body>
 </html>

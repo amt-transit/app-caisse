@@ -8,6 +8,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Comfortaa:wght@400;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
+    <link rel="icon" type="image/png" href="favicon.png">
 </head>
 <body>
     <header class="app-header">
@@ -22,6 +23,7 @@
     </nav>
 
     <div class="dashboard-container">
+        
         <div id="grandTotals" class="totals-container">
             <div class="total-card">
                 <h3>Chiffre d'Affaires Total (Période)</h3>
@@ -35,50 +37,68 @@
                 <h3>Reste Total (Période)</h3>
                 <p id="grandTotalReste">0 CFA</p>
             </div>
-        </div>
-        <div class="filter-container">
-            <h3>Filtrer par Période</h3>
-            <div class="filter-fields">
-                <label for="startDate">Du :</label>
-                <input type="date" id="startDate">
-                <label for="endDate">Au :</label>
-                <input type="date" id="endDate">
-                <button id="clearFilterBtn">Réinitialiser</button>
+            <div class="filter-container">
+                <h3>Filtrer par Période</h3>
+                <div class="filter-fields">
+                    <label for="startDate">Du :</label>
+                    <input type="date" id="startDate">
+                    <label for="endDate">Au :</label>
+                    <input type="date" id="endDate">
+                    <button id="clearFilterBtn">Réinitialiser</button>
+                </div>
             </div>
-        </div>
+        </div> <h2 style="margin-top: 30px;">Récapitulatif par Conteneur</h2>
+        <table id="containerSummaryTable">
+            <thead>
+                <tr>
+                    <th>Conteneur</th>
+                    <th>Chiffre d'Affaires (CA)</th>
+                    <th>Total Paris</th>
+                    <th>Total Abidjan</th>
+                    <th>Total Reste</th>
+                </tr>
+            </thead>
+            <tbody id="containerSummaryTableBody"></tbody>
+        </table>
+
         <h2>Récapitulatif par Jour</h2>
         <table id="summaryTable">
             <thead>
-                <tr><th>Date</th><th>Nombre d'Opérations</th><th>Total des Prix</th></tr>
+                <tr>
+                    <th>Date</th>
+                    <th>Nombre d'Opérations</th>
+                    <th>Total des Prix</th>
+                </tr>
             </thead>
             <tbody id="summaryTableBody"></tbody>
         </table>
+
         <h2 style="margin-top: 30px;">Récapitulatif par Agent</h2>
         <table id="agentSummaryTable">
             <thead>
-                <tr><th>Agent</th><th>Nombre d'Opérations</th><th>Chiffre d'Affaires</th></tr>
+                <tr>
+                    <th>Agent</th>
+                    <th>Nombre d'Opérations</th>
+                    <th>Chiffre d'Affaires</th>
+                </tr>
             </thead>
             <tbody id="agentSummaryTableBody"></tbody>
         </table>
-    </div>
 
-    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    </div> <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
     <script>
-      
-      const firebaseConfig = {
-        apiKey: "AIzaSy...",
-        authDomain: "caisse-amt-transit.firebaseapp.com",
-        projectId: "caisse-amt-transit",
-        storageBucket: "caisse-amt-transit.appspot.com",
-        messagingSenderId: "...",
-        appId: "..."
-      };
-
-      // Initialiser Firebase ET créer la variable "db"
-      firebase.initializeApp(firebaseConfig);
-      const db = firebase.firestore();
+        const firebaseConfig = {
+            apiKey: "AIzaSy...",
+            authDomain: "caisse-amt-transit.firebaseapp.com",
+            projectId: "caisse-amt-transit",
+            storageBucket: "caisse-amt-transit.appspot.com",
+            messagingSenderId: "...",
+            appId: "..."
+        };
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
     </script>
-<script src="dashboard.js"></script>
+    <script src="dashboard.js"></script>
 </body>
 </html>

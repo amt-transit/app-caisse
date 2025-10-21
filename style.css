@@ -69,6 +69,11 @@ td button.deleteBtn {
     color: white; padding: 4px 8px; border-radius: 12px;
     font-size: 12px; font-weight: bold; display: inline-block;
 }
+.perc {
+    font-size: 0.9em;
+    color: #6c757d;
+    font-weight: normal;
+}
 .abobo{background-color:#dc3545}.anyama{background-color:#ffc107;color:#333}.autres-communes{background-color:#6c757d}.cocody{background-color:#007bff}.entrepot{background-color:#6f42c1}.yopougon{background-color:#28a745}.adboul-paris{background-color:#FF6347}.ali-paris{background-color:#4682B4}.autres-paris{background-color:#999999}.aziz{background-color:#8A2BE2}.bakary-paris{background-color:#5F9EA0}.cesar{background-color:#D2691E}.cheick-paris{background-color:#6495ED}.constant{background-color:#DC143C}.coulibaly-traore-mah{background-color:#008B8B}.demba-paris{background-color:#B8860B}.drissa-paris{background-color:#006400}.fatim-paris{background-color:#FF8C00}.hamza{background-color:#8B008B}.jb{background-color:#556B2F}.julien{background-color:#FF1493}.kady-paris{background-color:#483D8B}.maley{background-color:#2F4F4F}.males{background-color:#00CED1}.mohamed-paris{background-color:#9400D3}.moussa-paris{background-color:#191970}.salif{background-color:#CD5C5C}.samba{background-color:#20B2AA}.toure{background-color:#6A5ACD}.aziz-om{background-color:#343a40}.aziz-wave{background-color:#495057}.aziz-sys{background-color:#6c757d}.jb-om{background-color:#9c27b0}.jb-wave{background-color:#673ab7}.jb-sys{background-color:#3f51b5}
 #reste.reste-negatif, td.reste-negatif, #dailyTotalReste.reste-negatif, #grandTotalReste.reste-negatif { color: #dc3545; font-weight: bold; }
 #reste.reste-positif, td.reste-positif, #dailyTotalReste.reste-positif, #grandTotalReste.reste-positif { color: #191970; font-weight: bold; }
@@ -84,10 +89,10 @@ td button.deleteBtn {
 .total-card { flex-grow: 1; background-color: #f8f9fa; border-radius: 8px; padding: 20px; text-align: center; border: 1px solid #dee2e6; }
 .total-card h3 { margin-top: 0; font-size: 16px; color: #6c757d; }
 .total-card p { margin-bottom: 0; font-size: 28px; font-weight: bold; color: #343a40; }
-.filter-container { background-color: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 30px; border: 1px solid #dee2e6; }
+.filter-container { background-color: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: px; border: 1px solid #dee2e6; flex-grow: 1 }
 .filter-fields { display: flex; align-items: center; gap: 15px; flex-wrap: wrap; }
 .filter-fields label { font-weight: bold; }
-.filter-fields input[type="date"] { padding: 8px; }
+.filter-fields input[type="date"] { padding: 8px; width: auto; }
 .filter-fields button { padding: 8px 15px; border: 1px solid #ccc; background-color: #fff; border-radius: 6px; cursor: pointer; }
 .daily-summary { display: flex; justify-content: space-around; gap: 15px; margin-top: 25px; padding: 20px; background-color: #fff; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); flex-wrap: wrap; }
 .summary-item { text-align: center; flex-grow: 1; }
