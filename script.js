@@ -12,6 +12,14 @@ document.addEventListener('DOMContentLoaded', async () => {
         console.error("Erreur critique: Impossible de charger le fichier references.json.", error);
     }
 
+    // INITIALISATION DE CHOICES.JS POUR LE CHAMP AGENT
+    const agentSelectElement = document.getElementById('agent');
+    const agentChoices = new Choices(agentSelectElement, {
+        removeItemButton: true, // Ajoute un 'X' pour supprimer un agent
+        placeholder: true,
+        searchPlaceholderValue: 'Rechercher un agent...',
+    });
+
     const addEntryBtn = document.getElementById('addEntryBtn');
     const saveDayBtn = document.getElementById('saveDayBtn');
     const dailyTableBody = document.getElementById('dailyTableBody');
@@ -73,12 +81,17 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     addEntryBtn.addEventListener('click', () => {
+        // LECTURE MODIFIÉE POUR CHOICES.JS
+        const selectedAgents = agentChoices.getValue(true); // 'true' = juste les valeurs
+        const agentString = selectedAgents.join(', '); 
+
         const newData = {
             date: document.getElementById('date').value, reference: referenceInput.value,
             prix: parseFloat(prixInput.value) || 0, montantParis: parseFloat(montantParisInput.value) || 0,
             montantAbidjan: parseFloat(montantAbidjanInput.value) || 0, reste: 0,
             agentMobileMoney: document.getElementById('agentMobileMoney').value,
-            commune: document.getElementById('commune').value, agent: document.getElementById('agent').value
+            commune: document.getElementById('commune').value, 
+            agent: agentString // Utilise la nouvelle chaîne de caractères
         };
         if (!newData.date || !newData.reference) return alert("Veuillez remplir au moins la date et la référence.");
 
@@ -95,9 +108,15 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
         saveDailyToLocalStorage();
         renderDailyTable();
+        
+        // RÉINITIALISATION MODIFIÉE POUR CHOICES.JS
         formContainer.querySelectorAll('input, select').forEach(el => {
-            if(el.type !== 'date') el.value = '';
+            if (el.type !== 'date' && el.id !== 'agent') { // On exclut 'agent'
+                el.value = '';
+            }
         });
+        agentChoices.clearStore(); // On vide le champ 'agent'
+
         resteInput.className = '';
         referenceInput.focus();
     });
@@ -113,12 +132,30 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const docRef = query.docs[0].ref;
                 const oldData = query.docs[0].data();
                 const updatedData = {
-                    montantParis: oldData.montantParis + transac.montantParis,
-                    montantAbidjan: oldData.montantAbidjan + transac.montantAbidjan,
-                    reste: oldData.reste + transac.montantParis + transac.montantAbidjan,
-                    lastPaymentDate: transac.date,
+                    montantParis: (oldData.montantParis || 0) + transac.montantParis,
+                    montantAbidjan: (oldData.montantAbidjan || 0) + transac.montantAbidjan,
+                    reste: (oldData.reste || 0) + transac.montantParis + transac.montantAbidjan,
+                    
+                    // On met à jour la date seulement si elle est fournie (pour les paiements)
+                    date: transac.date || oldData.date, 
+                    
+                    // On met à jour l'agent seulement s'il est fourni
+                    agent: transac.agent || oldData.agent || '',
+                    
+                    // On gère les autres champs
                     agentMobileMoney: transac.agentMobileMoney || oldData.agentMobileMoney || '',
+                    commune: transac.commune || oldData.commune || '',
+                    
+                    // On garde le conteneur et le prix d'origine
+                    conteneur: oldData.conteneur || '', 
+                    prix: oldData.prix || transac.prix, // Garde l'ancien prix
                 };
+                
+                // Si la date d'origine était vide et qu'on en fournit une, on la met à jour
+                if (!oldData.date && transac.date) {
+                    updatedData.date = transac.date;
+                }
+
                 batch.update(docRef, updatedData);
             } else {
                 const docRef = transactionsCollection.doc();
@@ -146,19 +183,33 @@ document.addEventListener('DOMContentLoaded', async () => {
         const refValue = referenceInput.value;
         montantParisInput.placeholder = 'Montant Paris';
         montantAbidjanInput.placeholder = 'Montant Abidjan';
+        
+        // On vide le prix et le reste au cas où la référence n'est pas trouvée
+        prixInput.value = '';
+        resteInput.value = '';
+        resteInput.className = '';
+        
         if (referenceDB[refValue]) {
             prixInput.value = referenceDB[refValue];
             calculateAndStyleReste();
         }
+        
         const query = await transactionsCollection.where("reference", "==", refValue).get();
         if (!query.empty) {
             const lastTransaction = query.docs[0].data();
+            
+            // On remplit toujours le prix de la base de données
+            prixInput.value = lastTransaction.prix;
+            
             if (lastTransaction.reste < 0) {
-                prixInput.value = lastTransaction.prix;
                 resteInput.value = lastTransaction.reste;
                 resteInput.className = 'reste-negatif';
                 montantParisInput.placeholder = `Solde: ${formatCFA(lastTransaction.reste)}`;
                 montantAbidjanInput.placeholder = `Solde: ${formatCFA(lastTransaction.reste)}`;
+            } else {
+                // S'il n'y a pas de reste, on affiche 0
+                resteInput.value = lastTransaction.reste;
+                resteInput.className = 'reste-positif';
             }
         }
     });

@@ -58,10 +58,22 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function insertDataRow(data) {
-        const newRow = document.createElement('tr'); // Crée une ligne <tr>
+        const newRow = document.createElement('tr');
         const reste_class = data.reste < 0 ? 'reste-negatif' : 'reste-positif';
+
+        // NOUVELLE LOGIQUE POUR AFFICHER LES TAGS AGENTS
+        const agentString = data.agent || "";
+        const agents = agentString.split(',')
+                                .map(a => a.trim())
+                                .filter(a => a.length > 0);
+        
+        // Crée un tag HTML pour chaque agent et les sépare par un espace
+        const agentTagsHTML = agents.map(agent => 
+            `<span class="tag ${textToClassName(agent)}">${agent}</span>`
+        ).join(' '); 
+
         newRow.innerHTML = `
-            <td>${data.date}</td>
+            <td>${data.date || 'En attente'}</td>
             <td>${data.reference}</td>
             <td>${data.conteneur || ''}</td>
             <td>${formatCFA(data.prix)}</td>
@@ -70,16 +82,16 @@ document.addEventListener('DOMContentLoaded', () => {
             <td><span class="tag ${textToClassName(data.agentMobileMoney)}">${data.agentMobileMoney || ''}</span></td>
             <td class="${reste_class}">${formatCFA(data.reste)}</td>
             <td><span class="tag ${textToClassName(data.commune)}">${data.commune || ''}</span></td>
-            <td><span class="tag ${textToClassName(data.agent)}">${data.agent || ''}</span></td>
-            <td><button class="deleteBtn" data-id="${data.id}">Suppr.</button></td>`;
-        tableBody.appendChild(newRow); // Ajoute la ligne <tr> au tbody principal
+            <td>${agentTagsHTML}</td> <td><button class="deleteBtn" data-id="${data.id}">Suppr.</button></td>`;
+        tableBody.appendChild(newRow);
     }
 
     function insertSubtotalRow(date, totals) {
         const subtotalRow = document.createElement('tr'); // Crée une ligne de total <tr>
         subtotalRow.className = 'subtotal-row';
         subtotalRow.innerHTML = `
-            <td colspan="3">TOTAL DU ${date}</td>
+            <td>${date || 'TOTAL EN ATTENTE'}</td>
+            <td colspan="2" style="text-align: right;">TOTAL</td>
             <td>${formatCFA(totals.prix)}</td>
             <td>${formatCFA(totals.montantParis)}</td>
             <td>${formatCFA(totals.montantAbidjan)}</td>

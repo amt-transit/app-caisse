@@ -80,7 +80,11 @@ td button.deleteBtn {
 .subtotal-row td { font-weight: bold; background-color: #f0f2f5; border-top: 2px solid #343a40; border-bottom: 2px solid #343a40; color: #343a40; }
 
 /* --- STYLE PAGE HISTORIQUE --- */
-.page-history #caisseTable { font-size: 10px; }
+.page-history #caisseTable th,
+.page-history #caisseTable td {
+    padding-top: 1px;
+    padding-bottom: 1px;
+}
 .page-history .subtotal-row td { font-size: 12px; background-color: #343a40; color: #ffffff; border-top: 2px solid #000; border-bottom: 2px solid #000; }
 
 /* --- STYLES DES PAGES --- */

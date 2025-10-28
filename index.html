@@ -8,6 +8,9 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Comfortaa:wght@400;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
+    
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/choices.js/public/assets/styles/choices.min.css"/>
+    
     <link rel="icon" type="image/png" href="favicon.png">
 </head>
 <body>
@@ -33,19 +36,16 @@
             </div>
             <input type="number" id="montantParis" placeholder="Montant Paris">
             <input type="number" id="montantAbidjan" placeholder="Montant Abidjan">
-            <select id="agentMobileMoney">
-                <option value="">-- Agent Mobile Money --</option>
-                <option value="Aziz OM">Aziz OM</option><option value="Aziz Sys">Aziz Sys</option><option value="Aziz Wave">Aziz Wave</option>
-                <option value="JB OM">JB OM</option><option value="JB Sys">JB Sys</option><option value="JB Wave">JB Wave</option>
-            </select>
+            <input type="text" id="agentMobileMoney" placeholder="Agent Mobile Money">
             <input type="number" id="reste" placeholder="Reste" readonly>
             <select id="commune">
                 <option value="">-- Commune --</option>
                 <option value="Abobo">Abobo</option><option value="Anyama">Anyama</option><option value="Autres Communes">Autres Communes</option>
                 <option value="Cocody">Cocody</option><option value="Entrepôt">Entrepôt</option><option value="Yopougon">Yopougon</option>
             </select>
+            
             <select id="agent">
-                <option value="">-- Agent --</option>
+                <option value="">-- Choisir un ou plusieurs agents --</option>
                 <option value="Adboul Paris">Adboul Paris</option><option value="Ali Paris">Ali Paris</option><option value="Autres Paris">Autres Paris</option>
                 <option value="AZIZ">AZIZ</option><option value="Bakary Paris">Bakary Paris</option><option value="Cesar">Cesar</option>
                 <option value="Cheick Paris">Cheick Paris</option><option value="Constant">Constant</option><option value="Coulibaly Traoré Mah">Coulibaly Traoré Mah</option>
@@ -101,20 +101,23 @@
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
     <script>
-      // Votre configuration personnelle et unique
-      const firebaseConfig = {
-        apiKey: "AIzaSyA255n3XWDRKaYZ9kwOYkfovf5lRexoCA4",
-        authDomain: "caisse-amt-perso.firebaseapp.com",
-        projectId: "caisse-amt-perso",
-        storageBucket: "caisse-amt-perso.firebasestorage.app",
-        messagingSenderId: "682789156997",
-        appId: "1:682789156997:web:9ce3303120851d37be91ec"
-    };
+        // Votre configuration personnelle et unique
+        const firebaseConfig = {
+            apiKey: "AIzaSyA255n3XWDRKaYZ9kwOYkfovf5lRexoCA4",
+            authDomain: "caisse-amt-perso.firebaseapp.com",
+            projectId: "caisse-amt-perso",
+            storageBucket: "caisse-amt-perso.firebasestorage.app",
+            messagingSenderId: "682789156997",
+            appId: "1:682789156997:web:9ce3303120851d37be91ec"
+        };
 
-      // Initialiser Firebase ET créer la variable "db"
-      firebase.initializeApp(firebaseConfig);
-      const db = firebase.firestore();
+        // Initialiser Firebase ET créer la variable "db"
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
     </script>
+    
+    <script src="https://cdn.jsdelivr.net/npm/choices.js/public/assets/scripts/choices.min.js"></script>
+
     <script src="script.js"></script>
 </body>
 </html>

@@ -61,6 +61,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         const sortedDates = Object.keys(dailyData).sort((a, b) => new Date(b) - new Date(a));
         summaryTableBody.innerHTML = '';
         sortedDates.forEach(date => {
+            if (!date) return; // Ignore le groupe des dates vides
             const data = dailyData[date];
             summaryTableBody.innerHTML += `<tr><td data-label="Date">${date}</td><td data-label="Nb Op.">${data.count}</td><td data-label="Total Prix">${formatCFA(data.totalPrix)}</td></tr>`;
         });
@@ -68,16 +69,49 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     function generateAgentSummary(transactions) {
         agentSummaryTableBody.innerHTML = '<tr><td colspan="3">Aucune donnée pour cette période.</td></tr>';
-        if (transactions.length === 0) return;
+        
         const agentData = {};
+
         transactions.forEach(t => {
-            const agentName = t.agent || "Non spécifié";
-            if (!agentData[agentName]) agentData[agentName] = { count: 0, totalPrix: 0 };
-            agentData[agentName].count++;
-            const totalPaiement = t.montantParis + t.montantAbidjan; // On se base sur le paiement
-            agentData[agentName].totalPrix += totalPaiement;
+            const agentString = t.agent || "";
+            // Si aucun agent n'est spécifié, on ignore cette transaction
+            if (!agentString) return; 
+
+            // Sépare la chaîne "Kady Paris, Julien" en tableau ["Kady Paris", "Julien"]
+            const agents = agentString.split(',')
+                                    .map(a => a.trim()) // Nettoie les espaces
+                                    .filter(a => a.length > 0); // Retire les chaînes vides
+            
+            if (agents.length === 0) return;
+
+            // Boucle sur chaque agent trouvé pour cette transaction
+            agents.forEach(agentName => {
+                // Initialise l'agent s'il n'existe pas
+                if (!agentData[agentName]) {
+                    agentData[agentName] = { count: 0, totalPrix: 0 };
+                }
+                
+                // Incrémente le compteur d'opérations pour cet agent
+                agentData[agentName].count++;
+
+                // C'EST ICI LA LOGIQUE DE DISPATCH :
+                if (agentName.endsWith('Paris')) {
+                    // Si l'agent finit par "Paris", on lui attribue le montantParis
+                    agentData[agentName].totalPrix += (t.montantParis || 0);
+                } else {
+                    // Sinon, on lui attribue le montantAbidjan
+                    agentData[agentName].totalPrix += (t.montantAbidjan || 0);
+                }
+            });
         });
+
+        // Le tri et l'affichage restent identiques à avant
         const sortedAgents = Object.keys(agentData).sort((a, b) => agentData[b].totalPrix - agentData[a].totalPrix);
+        
+        if (Object.keys(agentData).length === 0) {
+             return; // Garde le message "Aucune donnée"
+        }
+
         agentSummaryTableBody.innerHTML = '';
         sortedAgents.forEach(agent => {
             const data = agentData[agent];
