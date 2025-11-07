@@ -12,15 +12,24 @@ document.addEventListener('DOMContentLoaded', async () => {
         console.error("Erreur critique: Impossible de charger le fichier references.json.", error);
     }
 
-    // INITIALISATION DE CHOICES.JS POUR LE CHAMP AGENT
+    // INITIALISATION DE CHOICES.JS CORRIGÉE
     const agentSelectElement = document.getElementById('agent');
     const agentChoices = new Choices(agentSelectElement, {
-        removeItemButton: true, // Ajoute un 'X' pour supprimer un agent
+        // J'AI RETIRÉ 'multiple: true' (qui causait l'erreur)
+        // J'ai aussi retiré 'allowHTML' qui n'est pas nécessaire ici
+        removeItemButton: true, 
         placeholder: true,
         searchPlaceholderValue: 'Rechercher un agent...',
     });
 
     const addEntryBtn = document.getElementById('addEntryBtn');
+    // ... (le reste de vos variables) ...
+    
+    // ... (le reste de votre fichier 'script.js' est correct) ...
+    // La logique 'addEntryBtn.addEventListener' que vous aviez est bonne
+    // et fonctionnera une fois ce bloc corrigé.
+    // Voici la suite du fichier :
+
     const saveDayBtn = document.getElementById('saveDayBtn');
     const dailyTableBody = document.getElementById('dailyTableBody');
     const formContainer = document.getElementById('caisseForm');
@@ -136,22 +145,14 @@ document.addEventListener('DOMContentLoaded', async () => {
                     montantAbidjan: (oldData.montantAbidjan || 0) + transac.montantAbidjan,
                     reste: (oldData.reste || 0) + transac.montantParis + transac.montantAbidjan,
                     
-                    // On met à jour la date seulement si elle est fournie (pour les paiements)
                     date: transac.date || oldData.date, 
-                    
-                    // On met à jour l'agent seulement s'il est fourni
                     agent: transac.agent || oldData.agent || '',
-                    
-                    // On gère les autres champs
                     agentMobileMoney: transac.agentMobileMoney || oldData.agentMobileMoney || '',
                     commune: transac.commune || oldData.commune || '',
-                    
-                    // On garde le conteneur et le prix d'origine
                     conteneur: oldData.conteneur || '', 
-                    prix: oldData.prix || transac.prix, // Garde l'ancien prix
+                    prix: oldData.prix || transac.prix, 
                 };
                 
-                // Si la date d'origine était vide et qu'on en fournit une, on la met à jour
                 if (!oldData.date && transac.date) {
                     updatedData.date = transac.date;
                 }
@@ -184,7 +185,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         montantParisInput.placeholder = 'Montant Paris';
         montantAbidjanInput.placeholder = 'Montant Abidjan';
         
-        // On vide le prix et le reste au cas où la référence n'est pas trouvée
         prixInput.value = '';
         resteInput.value = '';
         resteInput.className = '';
@@ -198,7 +198,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (!query.empty) {
             const lastTransaction = query.docs[0].data();
             
-            // On remplit toujours le prix de la base de données
             prixInput.value = lastTransaction.prix;
             
             if (lastTransaction.reste < 0) {
@@ -207,7 +206,6 @@ document.addEventListener('DOMContentLoaded', async () => {
                 montantParisInput.placeholder = `Solde: ${formatCFA(lastTransaction.reste)}`;
                 montantAbidjanInput.placeholder = `Solde: ${formatCFA(lastTransaction.reste)}`;
             } else {
-                // S'il n'y a pas de reste, on affiche 0
                 resteInput.value = lastTransaction.reste;
                 resteInput.className = 'reste-positif';
             }
