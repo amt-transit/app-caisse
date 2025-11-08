@@ -10,7 +10,8 @@
     <link rel="icon" type="image/png" href="favicon.png">
 </head>
 
-<body class="page-history" style="display:none"> <header class="app-header">
+<body class="page-history" style="display:none"> 
+    <header class="app-header">
         <img src="LOGOAMT.png" alt="Logo de l'entreprise" class="app-logo">
         <h1>Historique des Opérations</h1> <button id="logoutBtn" style="position: absolute; right: 20px; padding: 8px 15px; cursor: pointer;">Déconnexion</button>
     </header>
@@ -18,7 +19,10 @@
     <nav class="navigation">
         <a href="index.html">Saisie</a>
         <a href="dashboard.html" id="nav-dashboard">Tableau de Bord</a>
-        <a href="history.html" class="active">Historique</a> <a href="expenses.html" id="nav-expenses">Dépenses</a>
+        <a href="history.html" class="active">Historique</a> 
+        <a href="expenses.html" id="nav-expenses">Dépenses</a>
+        <a href="other-income.html" id="nav-other-income">Autres Entrées</a>
+        <a href="bank.html" id="nav-bank">Banque</a>
     </nav>
 
     <div class="history-controls">
@@ -27,7 +31,7 @@
             <input type="text" id="containerSearch" placeholder="Filtre Conteneur exact (ex: D20)">
         </div>
         <div class="checkbox-container">
-            <input type="checkbox" id="showDeletedCheckbox">
+            <input type="checkbox" id="showDeletedCheckbox" style="width: auto;">
             <label for="showDeletedCheckbox">Afficher les éléments supprimés</label>
         </div>
     </div>
@@ -40,28 +44,26 @@
                 <th>Reste</th><th>Commune</th><th>Agent</th><th>Action</th>
             </tr>
         </thead>
-        <tbody id="tableBody"></tbody>
-    </table>
+        <tbody id="tableBody"></tbody> </table>
 
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script> <script>
-      // Votre configuration personnelle et unique
-      const firebaseConfig = {
-        apiKey: "AIzaSyA255n3XWDRKaYZ9kwOYkfovf5lRexoCA4",
-        authDomain: "caisse-amt-perso.firebaseapp.com",
-        projectId: "caisse-amt-perso",
-        storageBucket: "caisse-amt-perso.firebasestorage.app",
-        messagingSenderId: "682789156997",
-        appId: "1:682789156997:web:9ce3303120851d37be91ec"
-    };
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script> 
+    <script>
+        // Votre configuration personnelle et unique
+        const firebaseConfig = {
+            apiKey: "AIzaSyA255n3XWDRKaYZ9kwOYkfovf5lRexoCA4",
+            authDomain: "caisse-amt-perso.firebaseapp.com",
+            projectId: "caisse-amt-perso",
+            storageBucket: "caisse-amt-perso.firebasestorage.app",
+            messagingSenderId: "682789156997",
+            appId: "1:682789156997:web:9ce3303120851d37be91ec"
+        };
     
-
-      // Initialiser Firebase ET créer la variable "db"
-      firebase.initializeApp(firebaseConfig);
-      const db = firebase.firestore();
-      // Logique de déconnexion
-        // (Doit être après la config, mais avant le garde)
+        // Initialiser Firebase ET créer la variable "db"
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
+        // Logique de déconnexion
         document.getElementById('logoutBtn').addEventListener('click', () => {
             if (confirm("Voulez-vous vous déconnecter ?")) {
                 firebase.auth().signOut();
@@ -70,5 +72,4 @@
     </script>
     <script src="auth-guard.js"></script>
     <script src="history.js"></script>
-</body style="display:none;">
-</html>
+</body> </html>
