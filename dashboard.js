@@ -13,50 +13,80 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
     
     const transactionsCollection = db.collection("transactions");
+    const expensesCollection = db.collection("expenses"); // NOUVELLE COLLECTION
     const summaryTableBody = document.getElementById('summaryTableBody');
     const agentSummaryTableBody = document.getElementById('agentSummaryTableBody');
     const containerSummaryTableBody = document.getElementById('containerSummaryTableBody');
+    const monthlyExpensesTableBody = document.getElementById('monthlyExpensesTableBody');
     const grandTotalPrixEl = document.getElementById('grandTotalPrix');
     const grandTotalCountEl = document.getElementById('grandTotalCount');
+    const grandTotalDepensesEl = document.getElementById('grandTotalDepenses');
+    const grandTotalBeneficeEl = document.getElementById('grandTotalBenefice');
     const grandTotalResteEl = document.getElementById('grandTotalReste');
     const startDateInput = document.getElementById('startDate');
     const endDateInput = document.getElementById('endDate');
     const clearFilterBtn = document.getElementById('clearFilterBtn');
 
     let allTransactions = [];
+    let allExpenses = []; // NOUVEAU
 
+    // MISE À JOUR : 'updateDashboard' filtre maintenant les 2 listes
     function updateDashboard() {
         const startDate = startDateInput.value;
         const endDate = endDateInput.value;
+
         const filteredTransactions = allTransactions.filter(transac => {
             if (startDate && transac.date < startDate) return false;
             if (endDate && transac.date > endDate) return false;
             return true;
         });
-        updateGrandTotals(filteredTransactions);
+        
+        // NOUVEAU : Filtrer les dépenses
+        const filteredExpenses = allExpenses.filter(expense => {
+            if (startDate && expense.date < startDate) return false;
+            if (endDate && expense.date > endDate) return false;
+            return true;
+        });
+
+        // MISE À JOUR : Passer les dépenses aux fonctions
+        updateGrandTotals(filteredTransactions, filteredExpenses);
         generateDailySummary(filteredTransactions);
         generateAgentSummary(filteredTransactions);
-        generateContainerSummary(filteredTransactions, conteneurDB);
+        generateContainerSummary(filteredTransactions, filteredExpenses, conteneurDB);
+        generateMonthlyExpenseSummary(filteredExpenses); // NOUVEAU
     }
 
-    function updateGrandTotals(transactions) {
-        const totalPrix = transactions.reduce((sum, t) => sum + t.prix, 0);
+    // MISE À JOUR : Accepte 'transactions' ET 'expenses'
+    function updateGrandTotals(transactions, expenses) {
+        const totalPrix = transactions.reduce((sum, t) => sum + (t.prix || 0), 0);
         const totalCount = transactions.length;
-        const totalReste = transactions.reduce((sum, t) => sum + t.reste, 0);
+        
+        // NOUVEAU : Calcul des dépenses
+        const totalDepenses = expenses.reduce((sum, e) => sum + (e.montant || 0), 0);
+        // NOUVEAU : Calcul du bénéfice
+        const totalBenefice = totalPrix - totalDepenses; 
+
         grandTotalPrixEl.textContent = formatCFA(totalPrix);
         grandTotalCountEl.textContent = totalCount;
+        grandTotalDepensesEl.textContent = formatCFA(totalDepenses);
+        grandTotalBeneficeEl.textContent = formatCFA(totalBenefice);
+        grandTotalBeneficeEl.className = totalBenefice < 0 ? 'reste-negatif' : 'reste-positif';
+
+        // Note: Le "Reste" (dettes clients) est séparé du bénéfice
+        const totalReste = transactions.reduce((sum, t) => sum + (t.reste || 0), 0);
         grandTotalResteEl.textContent = formatCFA(totalReste);
         grandTotalResteEl.className = totalReste < 0 ? 'reste-negatif' : 'reste-positif';
     }
 
     function generateDailySummary(transactions) {
+        // CORRECTION : Colspan est 3 pour ce tableau
         summaryTableBody.innerHTML = '<tr><td colspan="3">Aucune donnée pour cette période.</td></tr>';
         if (transactions.length === 0) return;
         const dailyData = {};
         transactions.forEach(t => {
             if (!dailyData[t.date]) dailyData[t.date] = { count: 0, totalPrix: 0 };
             dailyData[t.date].count++;
-            dailyData[t.date].totalPrix += t.prix;
+            dailyData[t.date].totalPrix += (t.prix || 0);
         });
         const sortedDates = Object.keys(dailyData).sort((a, b) => new Date(b) - new Date(a));
         summaryTableBody.innerHTML = '';
@@ -74,42 +104,33 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         transactions.forEach(t => {
             const agentString = t.agent || "";
-            // Si aucun agent n'est spécifié, on ignore cette transaction
             if (!agentString) return; 
 
-            // Sépare la chaîne "Kady Paris, Julien" en tableau ["Kady Paris", "Julien"]
             const agents = agentString.split(',')
-                                    .map(a => a.trim()) // Nettoie les espaces
-                                    .filter(a => a.length > 0); // Retire les chaînes vides
+                                    .map(a => a.trim()) 
+                                    .filter(a => a.length > 0); 
             
             if (agents.length === 0) return;
 
-            // Boucle sur chaque agent trouvé pour cette transaction
             agents.forEach(agentName => {
-                // Initialise l'agent s'il n'existe pas
                 if (!agentData[agentName]) {
                     agentData[agentName] = { count: 0, totalPrix: 0 };
                 }
                 
-                // Incrémente le compteur d'opérations pour cet agent
                 agentData[agentName].count++;
 
-                // C'EST ICI LA LOGIQUE DE DISPATCH :
                 if (agentName.endsWith('Paris')) {
-                    // Si l'agent finit par "Paris", on lui attribue le montantParis
                     agentData[agentName].totalPrix += (t.montantParis || 0);
                 } else {
-                    // Sinon, on lui attribue le montantAbidjan
                     agentData[agentName].totalPrix += (t.montantAbidjan || 0);
                 }
             });
         });
 
-        // Le tri et l'affichage restent identiques à avant
         const sortedAgents = Object.keys(agentData).sort((a, b) => agentData[b].totalPrix - agentData[a].totalPrix);
         
         if (Object.keys(agentData).length === 0) {
-             return; // Garde le message "Aucune donnée"
+             return; 
         }
 
         agentSummaryTableBody.innerHTML = '';
@@ -119,10 +140,117 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     }
 
+    // MISE À JOUR : Accepte 'transactions' ET 'expenses'
+    function generateContainerSummary(transactions, expenses, conteneurDB) {
+        // MISE À JOUR : Colspan est 8 (6 + 2 nouvelles colonnes)
+        containerSummaryTableBody.innerHTML = '<tr><td colspan="8">Aucune donnée de conteneur.</td></tr>';
+        
+        // Étape 1 : Agréger les revenus par conteneur
+        const containerData = {};
+        transactions.forEach(t => {
+            const containerName = t.conteneur || conteneurDB[t.reference] || "Non spécifié";
+            if (!containerData[containerName]) {
+                containerData[containerName] = { totalPrix: 0, totalParis: 0, totalAbidjan: 0, totalReste: 0 };
+            }
+            const data = containerData[containerName];
+            data.totalPrix += (t.prix || 0);
+            data.totalParis += (t.montantParis || 0);
+            data.totalAbidjan += (t.montantAbidjan || 0);
+            data.totalReste += (t.reste || 0); // Utiliser le reste calculé
+        });
+
+        // NOUVEAU : Étape 2 : Agréger les dépenses par conteneur
+        const containerExpenses = {};
+        expenses.forEach(e => {
+            if (e.type === 'Conteneur' && e.conteneur) {
+                const cName = e.conteneur;
+                if (!containerExpenses[cName]) containerExpenses[cName] = 0;
+                containerExpenses[cName] += (e.montant || 0);
+            }
+        });
+
+        // Tri (ne change pas)
+        const sortedContainers = Object.keys(containerData).sort((a, b) => {
+             const numA = parseInt(a.replace(/[^0-9]/g, ''), 10) || 0;
+             const numB = parseInt(b.replace(/[^0-9]/g, ''), 10) || 0;
+             return numB - numA;
+        });
+
+        if (sortedContainers.length === 0 || (sortedContainers.length === 1 && sortedContainers[0] === "Non spécifié")) {
+             return;
+        }
+        containerSummaryTableBody.innerHTML = '';
+
+        // Étape 3 : Afficher les résultats
+        sortedContainers.forEach(container => {
+            if (container === "Non spécifié") return; 
+
+            const data = containerData[container];
+            const ca = data.totalPrix; 
+            
+            // NOUVEAU : Calculs des dépenses et bénéfice
+            const totalDepenseConteneur = containerExpenses[container] || 0;
+            const beneficeConteneur = ca - totalDepenseConteneur;
+
+            const percParis = ca > 0 ? (data.totalParis / ca) * 100 : 0;
+            const percAbidjan = ca > 0 ? (data.totalAbidjan / ca) * 100 : 0;
+            const percReste = ca > 0 ? (data.totalReste / ca) * 100 : 0;
+            const totalPercu = data.totalParis + data.totalAbidjan;
+            const percPercu = ca > 0 ? (totalPercu / ca) * 100 : 0;
+
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td data-label="Conteneur">${container}</td>
+                <td data-label="CA">${formatCFA(ca)}</td>
+                <td data-label="Total Paris">${formatCFA(data.totalParis)} <span class="perc">(${percParis.toFixed(1)}%)</span></td>
+                <td data-label="Total Abidjan">${formatCFA(data.totalAbidjan)} <span class="perc">(${percAbidjan.toFixed(1)}%)</span></td>
+                <td data-label="Total Perçu">${formatCFA(totalPercu)} <span class="perc">(${percPercu.toFixed(1)}%)</span></td>
+                <td data-label="Total Reste" class="${data.totalReste < 0 ? 'reste-negatif' : 'reste-positif'}">${formatCFA(data.totalReste)} <span class="perc">(${percReste.toFixed(1)}%)</span></td>
+                
+                <td data-label="Dépenses">${formatCFA(totalDepenseConteneur)}</td>
+                <td data-label="Bénéfice" class="${beneficeConteneur < 0 ? 'reste-negatif' : 'reste-positif'}">${formatCFA(beneficeConteneur)}</td>
+            `;
+            containerSummaryTableBody.appendChild(row);
+        });
+    }
+
+    // NOUVELLE FONCTION : Pour la table des dépenses mensuelles
+    function generateMonthlyExpenseSummary(expenses) {
+        monthlyExpensesTableBody.innerHTML = '';
+        let hasMonthly = false;
+
+        // On trie par date la plus récente en premier
+        const sortedExpenses = expenses.sort((a, b) => new Date(b.date) - new Date(a.date));
+
+        sortedExpenses.forEach(e => {
+            if (e.type === 'Mensuelle') {
+                hasMonthly = true;
+                monthlyExpensesTableBody.innerHTML += `
+                    <tr>
+                        <td>${e.date}</td>
+                        <td>${e.description}</td>
+                        <td>${formatCFA(e.montant)}</td>
+                    </tr>
+                `;
+            }
+        });
+
+        if (!hasMonthly) {
+            monthlyExpensesTableBody.innerHTML = '<tr><td colspan="3">Aucune dépense mensuelle pour cette période.</td></tr>';
+        }
+    }
+
+    // MISE À JOUR : Écouter les deux collections
     transactionsCollection.onSnapshot(snapshot => {
         allTransactions = snapshot.docs.map(doc => doc.data());
-        updateDashboard();
-    }, error => console.error("Erreur Firestore: ", error));
+        updateDashboard(); // Mettre à jour
+    }, error => console.error("Erreur Firestore (transactions): ", error));
+
+    // NOUVEAU : Écouter la collection des dépenses
+    expensesCollection.onSnapshot(snapshot => {
+        allExpenses = snapshot.docs.map(doc => doc.data());
+        updateDashboard(); // Mettre à jour
+    }, error => console.error("Erreur Firestore (expenses): ", error));
 
     startDateInput.addEventListener('change', updateDashboard);
     endDateInput.addEventListener('change', updateDashboard);
@@ -131,75 +259,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         updateDashboard();
     });
 
-   // REMPLACEZ VOTRE ANCIENNE FONCTION 'generateContainerSummary' PAR CELLE-CI :
-
-    function generateContainerSummary(transactions, conteneurDB) {
-        // MODIFICATION 1 : Augmentation du 'colspan' pour la nouvelle colonne
-        containerSummaryTableBody.innerHTML = '<tr><td colspan="6">Aucune donnée de conteneur.</td></tr>';
-        const containerData = {};
-
-        transactions.forEach(t => {
-            const containerName = t.conteneur || conteneurDB[t.reference] || "Non spécifié";
-
-            if (!containerData[containerName]) {
-                containerData[containerName] = {
-                    totalPrix: 0, // CA
-                    totalParis: 0,
-                    totalAbidjan: 0,
-                    totalReste: 0
-                };
-            }
-            const data = containerData[containerName];
-            data.totalPrix += t.prix;
-            data.totalParis += t.montantParis;
-            data.totalAbidjan += t.montantAbidjan;
-            data.totalReste += (t.montantParis + t.montantAbidjan - t.prix);
-        });
-
-        // MODIFICATION 2 : Tri numérique décroissant (ex: D20, D19, D18...)
-        const sortedContainers = Object.keys(containerData).sort((a, b) => {
-            // Extrait les nombres des noms de conteneurs (ex: "D35" -> 35)
-            const numA = parseInt(a.replace(/[^0-9]/g, ''), 10) || 0;
-            const numB = parseInt(b.replace(/[^0-9]/g, ''), 10) || 0;
-            // Trie du plus grand au plus petit
-            return numB - numA;
-        });
-        
-        if (sortedContainers.length === 0 || (sortedContainers.length === 1 && sortedContainers[0] === "Non spécifié")) {
-             return; // On garde le message "Aucune donnée"
-        }
-
-        containerSummaryTableBody.innerHTML = ''; // On vide le tableau
-
-        sortedContainers.forEach(container => {
-            if (container === "Non spécifié") return; 
-
-            const data = containerData[container];
-            const ca = data.totalPrix; 
-
-            // Calcul des pourcentages
-            const percParis = ca > 0 ? (data.totalParis / ca) * 100 : 0;
-            const percAbidjan = ca > 0 ? (data.totalAbidjan / ca) * 100 : 0;
-            const percReste = ca > 0 ? (data.totalReste / ca) * 100 : 0;
-            
-            // MODIFICATION 3 : Calcul de la nouvelle colonne "Total Perçu"
-            const totalPercu = data.totalParis + data.totalAbidjan;
-            const percPercu = ca > 0 ? (totalPercu / ca) * 100 : 0;
-            
-            const row = document.createElement('tr');
-            
-            // MODIFICATION 4 : Ajout de la nouvelle cellule (<td>) dans le HTML
-            row.innerHTML = `
-                <td data-label="Conteneur">${container}</td>
-                <td data-label="CA">${formatCFA(ca)}</td>
-                <td data-label="Total Paris">${formatCFA(data.totalParis)} <span class="perc">(${percParis.toFixed(1)}%)</span></td>
-                <td data-label="Total Abidjan">${formatCFA(data.totalAbidjan)} <span class="perc">(${percAbidjan.toFixed(1)}%)</span></td>
-                <td data-label="Total Perçu">${formatCFA(totalPercu)} <span class="perc">(${percPercu.toFixed(1)}%)</span></td>
-                <td data-label="Total Reste" class="${data.totalReste < 0 ? 'reste-negatif' : 'reste-positif'}">${formatCFA(data.totalReste)} <span class="perc">(${percReste.toFixed(1)}%)</span></td>
-            `;
-            containerSummaryTableBody.appendChild(row);
-        });
-    }
     function formatCFA(number) {
         return new Intl.NumberFormat('fr-CI', { style: 'currency', currency: 'XOF' }).format(number);
     }

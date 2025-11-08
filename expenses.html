@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=1000">
+    <title>Dépenses - Caisse</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Comfortaa:wght@400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+    <link rel="icon" type="image/png" href="favicon.png">
+</head>
+<body style="display:none"> <header class="app-header">
+        <img src="logoAMT.png" alt="Logo de l'entreprise" class="app-logo">
+        <h1>Gestion des Dépenses</h1>
+        <button id="logoutBtn" style="position: absolute; right: 20px; padding: 8px 15px; cursor: pointer;">Déconnexion</button>
+    </header>
+
+    <nav class="navigation">
+        <a href="index.html">Saisie</a>
+        <a href="dashboard.html" id="nav-dashboard">Tableau de Bord</a>
+        <a href="history.html">Historique</a>
+        <a href="expenses.html" id="nav-expenses" class="active">Dépenses</a> </nav>
+
+    <div id="caisseForm">
+        <div class="form-grid">
+            <input type="date" id="expenseDate" required>
+            <input type="text" id="expenseDesc" placeholder="Description (ex: Douane, Loyer...)" required>
+            <div class="prix-container">
+                <input type="number" id="expenseAmount" placeholder="Montant de la dépense">
+                <span class="cfa-label">CFA</span>
+            </div>
+            <select id="expenseType">
+                <option value="Mensuelle">Dépense Mensuelle</option>
+                <option value="Conteneur">Dépense de Conteneur</option>
+            </select>
+            <input type="text" id="expenseContainer" placeholder="Nom du Conteneur (ex: D35)" style="display:none;">
+        </div>
+        <div class="form-buttons">
+            <button id="addExpenseBtn" class="primary">Enregistrer la Dépense</button>
+        </div>
+    </div>
+
+    <h2>Historique des Dépenses</h2>
+    <table id="expenseTable">
+        <thead>
+            <tr>
+                <th>Date</th>
+                <th>Description</th>
+                <th>Montant</th>
+                <th>Type</th>
+                <th>Conteneur</th>
+                <th>Action</th>
+            </tr>
+        </thead>
+        <tbody id="expenseTableBody"></tbody>
+    </table>
+
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+    <script>
+        const firebaseConfig = {
+        apiKey: "AIzaSyA255n3XWDRKaYZ9kwOYkfovf5lRexoCA4",
+        authDomain: "caisse-amt-perso.firebaseapp.com",
+        projectId: "caisse-amt-perso",
+        storageBucket: "caisse-amt-perso.firebasestorage.app",
+        messagingSenderId: "682789156997",
+        appId: "1:682789156997:web:9ce3303120851d37be91ec"
+        };
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
+
+        // Logique de déconnexion
+        document.getElementById('logoutBtn').addEventListener('click', () => {
+            if (confirm("Voulez-vous vous déconnecter ?")) {
+                firebase.auth().signOut();
+            }
+        });
+    </script>
+    <script src="auth-guard.js"></script> <script src="expenses.js"></script> </body>
+</html>

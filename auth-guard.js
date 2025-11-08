@@ -36,8 +36,10 @@ firebase.auth().onAuthStateChanged(async (user) => {
         
         // Cacher le lien "Tableau de Bord" si ce n'est pas un admin
         const navDashboard = document.getElementById('nav-dashboard');
+        const navExpenses = document.getElementById('nav-expenses'); // NOUVEAU
         if (navDashboard && (userRole === 'saisie_full' || userRole === 'saisie_limited')) {
             navDashboard.style.display = 'none';
+            if (navExpenses) navExpenses.style.display = 'none'; // NOUVEAU
         }
 
         // Si tout est OK, on affiche enfin la page

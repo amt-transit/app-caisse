@@ -20,6 +20,7 @@
         <a href="index.html">Saisie</a>
         <a href="dashboard.html" id="nav-dashboard">Tableau de Bord</a>
         <a href="history.html">Historique</a>
+        <a href="expenses.html" id="nav-expenses">Dépenses</a> </nav>
     </nav>
 
     <div class="dashboard-container">
@@ -32,6 +33,14 @@
             <div class="total-card">
                 <h3>Opérations Totales (Période)</h3>
                 <p id="grandTotalCount">0</p>
+            </div>
+            <div class="total-card">
+                <h3>Dépenses Totales (Période)</h3>
+                <p id="grandTotalDepenses">0 CFA</p>
+            </div>
+            <div class="total-card">
+                <h3>BÉNÉFICE TOTAL (Période)</h3>
+                <p id="grandTotalBenefice">0 CFA</p>
             </div>
             <div class="total-card">
                 <h3>Reste Total (Période)</h3>
@@ -57,11 +66,24 @@
                     <th>Total Abidjan</th>
                     <th>Total Perçu (P+A)</th>
                     <th>Total Reste</th>
+                    <th>Total Dépenses</th> 
+                    <th>BÉNÉFICE Conteneur</th>
                 </tr>
             </thead>
             <tbody id="containerSummaryTableBody"></tbody>
         </table>
 
+        <h2 style="margin-top: 30px;">Récapitulatif des Dépenses Mensuelles</h2>
+        <table id="monthlyExpensesTable">
+            <thead>
+                <tr>
+                    <th>Date</th>
+                    <th>Description</th>
+                    <th>Montant</th>
+                </tr>
+            </thead>
+            <tbody id="monthlyExpensesTableBody"></tbody>
+        </table>
         <h2>Récapitulatif par Jour</h2>
         <table id="summaryTable">
             <thead>
