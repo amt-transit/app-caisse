@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 // auth-guard.js (Mis à jour)
 
 firebase.auth().onAuthStateChanged(async (user) => {
