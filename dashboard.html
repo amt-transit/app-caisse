@@ -4,133 +4,108 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=1000">
     <title>Tableau de Bord - Caisse</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Comfortaa:wght@400;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
     <link rel="icon" type="image/png" href="favicon.png">
-</head>
+    </head>
 <body style="display:none">
     <header class="app-header">
-        <img src="LOGOAMT.png" alt="Logo de l'entreprise" class="app-logo">
+        <img src="LOGOAMT.png" alt="Logo" class="app-logo">
         <h1>Tableau de Bord</h1> <button id="logoutBtn" style="position: absolute; right: 20px; padding: 8px 15px; cursor: pointer;">Déconnexion</button>
     </header>
 
     <nav class="navigation">
         <a href="index.html">Saisie</a>
-        <a href="dashboard.html" id="nav-dashboard">Tableau de Bord</a>
+        <a href="dashboard.html" id="nav-dashboard" class="active">Tableau de Bord</a>
         <a href="history.html">Historique</a>
-        <a href="expenses.html" id="nav-expenses">Dépenses</a> </nav>
+        <a href="expenses.html" id="nav-expenses">Dépenses</a>
+        <a href="other-income.html" id="nav-other-income">Autres Entrées</a>
+        <a href="bank.html" id="nav-bank">Banque</a>
     </nav>
 
     <div class="dashboard-container">
         
         <div id="grandTotals" class="totals-container">
             <div class="total-card">
-                <h3>Chiffre d'Affaires Total (Période)</h3>
+                <h3>Chiffre d'Affaires (Ventes)</h3>
                 <p id="grandTotalPrix">0 CFA</p>
             </div>
             <div class="total-card">
-                <h3>Opérations Totales (Période)</h3>
-                <p id="grandTotalCount">0</p>
+                <h3>+ Autres Entrées</h3>
+                <p id="grandTotalOtherIncome">0 CFA</p>
             </div>
             <div class="total-card">
-                <h3>Dépenses Totales (Période)</h3>
+                <h3>- Dépenses Totales</h3>
                 <p id="grandTotalDepenses">0 CFA</p>
             </div>
             <div class="total-card">
-                <h3>BÉNÉFICE TOTAL (Période)</h3>
+                <h3>= BÉNÉFICE TOTAL</h3>
                 <p id="grandTotalBenefice">0 CFA</p>
             </div>
+            
             <div class="total-card">
-                <h3>Reste Total (Période)</h3>
+                <h3>Total Ventes Perçues (P+A)</h3>
+                <p id="grandTotalPercu">0 CFA</p>
+            </div>
+            <div class="total-card">
+                <h3>+ Retraits Banque</h3>
+                <p id="grandTotalRetraits">0 CFA</p>
+            </div>
+            <div class="total-card">
+                <h3>- Dépôts Banque</h3>
+                <p id="grandTotalDepots">0 CFA</p>
+            </div>
+             <div class="total-card">
+                <h3>= TOTAL CAISSE (Trésorerie)</h3>
+                <p id="grandTotalCaisse">0 CFA</p>
+            </div>
+
+            <div class="total-card">
+                <h3>Opérations Totales</h3>
+                <p id="grandTotalCount">0</p>
+            </div>
+            <div class="total-card">
+                <h3>Dettes Clients (Reste Total)</h3>
                 <p id="grandTotalReste">0 CFA</p>
             </div>
-            <div class="filter-container">
+            <div class="filter-container" style="flex-grow: 2;">
                 <h3>Filtrer par Période</h3>
                 <div class="filter-fields">
-                    <label for="startDate">Du :</label>
-                    <input type="date" id="startDate">
-                    <label for="endDate">Au :</label>
-                    <input type="date" id="endDate">
+                    <label for="startDate">Du :</label> <input type="date" id="startDate">
+                    <label for="endDate">Au :</label> <input type="date" id="endDate">
                     <button id="clearFilterBtn">Réinitialiser</button>
                 </div>
             </div>
-        </div> <h2 style="margin-top: 30px;">Récapitulatif par Conteneur</h2>
-        <table id="containerSummaryTable">
-            <thead>
-                <tr>
-                    <th>Conteneur</th>
-                    <th>Chiffre d'Affaires (CA)</th>
-                    <th>Total Paris</th>
-                    <th>Total Abidjan</th>
-                    <th>Total Perçu (P+A)</th>
-                    <th>Total Reste</th>
-                    <th>Total Dépenses</th> 
-                    <th>BÉNÉFICE Conteneur</th>
-                </tr>
-            </thead>
-            <tbody id="containerSummaryTableBody"></tbody>
-        </table>
+        </div> 
+        
+        <h2 style="margin-top: 30px;">Récapitulatif par Conteneur</h2>
+        <table id="containerSummaryTable">...</table>
 
-        <h2 style="margin-top: 30px;">Récapitulatif des Dépenses Mensuelles</h2>
-        <table id="monthlyExpensesTable">
+        <h2 style="margin-top: 30px;">Récapitulatif des Mouvements de Banque</h2>
+        <table id="bankMovementsTable">
             <thead>
                 <tr>
                     <th>Date</th>
                     <th>Description</th>
+                    <th>Type</th>
                     <th>Montant</th>
                 </tr>
             </thead>
-            <tbody id="monthlyExpensesTableBody"></tbody>
+            <tbody id="bankMovementsTableBody"></tbody>
         </table>
-        <h2>Récapitulatif par Jour</h2>
-        <table id="summaryTable">
-            <thead>
-                <tr>
-                    <th>Date</th>
-                    <th>Nombre d'Opérations</th>
-                    <th>Total des Prix</th>
-                </tr>
-            </thead>
-            <tbody id="summaryTableBody"></tbody>
-        </table>
+        
+        <h2 style="margin-top: 30px;">Récapitulatif des Dépenses Mensuelles</h2>
+        <table id="monthlyExpensesTable">...</table>
+        
+        <h2>Récapitulatif par Jour (Ventes)</h2>
+        <table id="summaryTable">...</table>
 
         <h2 style="margin-top: 30px;">Récapitulatif par Agent</h2>
-        <table id="agentSummaryTable">
-            <thead>
-                <tr>
-                    <th>Agent</th>
-                    <th>Nombre d'Opérations</th>
-                    <th>Chiffre d'Affaires</th>
-                </tr>
-            </thead>
-            <tbody id="agentSummaryTableBody"></tbody>
-        </table>
+        <table id="agentSummaryTable">...</table>
 
-    </div> <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
-    <script>
-        const firebaseConfig = {
-        apiKey: "AIzaSyA255n3XWDRKaYZ9kwOYkfovf5lRexoCA4",
-        authDomain: "caisse-amt-perso.firebaseapp.com",
-        projectId: "caisse-amt-perso",
-        storageBucket: "caisse-amt-perso.firebasestorage.app",
-        messagingSenderId: "682789156997",
-        appId: "1:682789156997:web:9ce3303120851d37be91ec"
-    };
-        firebase.initializeApp(firebaseConfig);
-        const db = firebase.firestore();
-        // Logique de déconnexion
-        // (Doit être après la config, mais avant le garde)
-        document.getElementById('logoutBtn').addEventListener('click', () => {
-            if (confirm("Voulez-vous vous déconnecter ?")) {
-                firebase.auth().signOut();
-            }
-        });
-    </script>
+    </div> 
+    
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="auth-guard.js"></script>
     <script src="dashboard.js"></script>
-</body style="display:none">
+</body>
 </html>

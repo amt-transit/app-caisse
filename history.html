@@ -18,12 +18,18 @@
     <nav class="navigation">
         <a href="index.html">Saisie</a>
         <a href="dashboard.html" id="nav-dashboard">Tableau de Bord</a>
-        <a href="history.html" class="active">Historique</a>
-        <a href="expenses.html" id="nav-expenses">Dépenses</a> </nav>
+        <a href="history.html" class="active">Historique</a> <a href="expenses.html" id="nav-expenses">Dépenses</a>
     </nav>
-    <div style="text-align: center; margin-bottom: 20px; background: #fff; padding: 10px; border-radius: 8px;">
-        <input type="checkbox" id="showDeletedCheckbox" style="width: auto;">
-        <label for="showDeletedCheckbox">Afficher les éléments supprimés</label>
+
+    <div class="history-controls">
+        <div class="filter-grid">
+            <input type="text" id="masterSearch" placeholder="Rechercher (Réf, Agent, Commune, MM...)">
+            <input type="text" id="containerSearch" placeholder="Filtre Conteneur exact (ex: D20)">
+        </div>
+        <div class="checkbox-container">
+            <input type="checkbox" id="showDeletedCheckbox">
+            <label for="showDeletedCheckbox">Afficher les éléments supprimés</label>
+        </div>
     </div>
 
     <table id="caisseTable">

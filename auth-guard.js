@@ -1,14 +1,10 @@
-// auth-guard.js (Mis à jour)
-
 firebase.auth().onAuthStateChanged(async (user) => {
     
-    // CAS 1 : L'utilisateur n'est PAS connecté
     if (!user) {
         window.location.href = 'login.html';
         return;
     }
 
-    // CAS 2 : L'utilisateur EST connecté
     try {
         const userDocRef = firebase.firestore().collection('users').doc(user.uid);
         const userDoc = await userDocRef.get();
@@ -17,32 +13,39 @@ firebase.auth().onAuthStateChanged(async (user) => {
             throw new Error("Rôle non défini pour cet utilisateur.");
         }
 
-        const userRole = userDoc.data().role; // 'admin', 'saisie_full' ou 'saisie_limited'
-        
-        // Stocker le rôle pour un accès facile par les autres scripts
+        const userRole = userDoc.data().role; 
         sessionStorage.setItem('userRole', userRole);
 
         // --- GESTION DES ACCÈS ---
         const currentPage = window.location.pathname;
 
-        // Si un compte "saisie" (complet OU limité) essaie d'accéder au Tableau de Bord
-        if ((userRole === 'saisie_full' || userRole === 'saisie_limited') && currentPage.includes('dashboard.html')) {
-            alert("Accès refusé. Vous n'avez pas les droits pour cette page.");
-            window.location.href = 'index.html'; // On le renvoie à la saisie
-            return;
+        // Si ce n'est PAS un admin, bloquer l'accès au Dashboard, Dépenses, et autres
+        if (userRole !== 'admin') {
+            const isRestrictedPage = currentPage.includes('dashboard.html') || 
+                                     currentPage.includes('expenses.html') ||
+                                     currentPage.includes('other-income.html') ||
+                                     currentPage.includes('bank.html');
+
+            if (isRestrictedPage) {
+                alert("Accès refusé. Vous n'avez pas les droits pour cette page.");
+                window.location.href = 'index.html'; 
+                return;
+            }
         }
 
-        // --- GESTION DE L'INTERFACE ---
-        
-        // Cacher le lien "Tableau de Bord" si ce n'est pas un admin
+        // --- GESTION DE L'INTERFACE (Cacher les liens) ---
         const navDashboard = document.getElementById('nav-dashboard');
-        const navExpenses = document.getElementById('nav-expenses'); // NOUVEAU
-        if (navDashboard && (userRole === 'saisie_full' || userRole === 'saisie_limited')) {
-            navDashboard.style.display = 'none';
-            if (navExpenses) navExpenses.style.display = 'none'; // NOUVEAU
+        const navExpenses = document.getElementById('nav-expenses');
+        const navOtherIncome = document.getElementById('nav-other-income'); // NOUVEAU
+        const navBank = document.getElementById('nav-bank'); // NOUVEAU
+
+        if (userRole !== 'admin') {
+            if (navDashboard) navDashboard.style.display = 'none';
+            if (navExpenses) navExpenses.style.display = 'none';
+            if (navOtherIncome) navOtherIncome.style.display = 'none'; // NOUVEAU
+            if (navBank) navBank.style.display = 'none'; // NOUVEAU
         }
 
-        // Si tout est OK, on affiche enfin la page
         document.body.style.display = 'block';
 
     } catch (error) {

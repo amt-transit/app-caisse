@@ -48,53 +48,26 @@ document.addEventListener('DOMContentLoaded', () => {
             .catch(err => console.error("Erreur ajout dépense: ", err));
     });
 
-    // FONCTION 'fetchExpenses' (qui était dans le mauvais fichier)
+    // NOUVELLE LOGIQUE DANS expenses.js
     function fetchExpenses() {
         if (unsubscribeExpenses) {
             unsubscribeExpenses();
         }
-
-        let query = expensesCollection; 
+        let query = expensesCollection;
         
-        if (!showDeletedCheckbox.checked) {
-            query = query.where("isDeleted", "!=", true)
-                         .orderBy("isDeleted"); // 1. Tri obligatoire
+        if (showDeletedCheckbox.checked) {
+            // Case cochée : AFFICHER UNIQUEMENT LES SUPPRIMÉS
+            query = query.where("isDeleted", "==", true).orderBy("isDeleted");
+        } else {
+            // Case décochée (défaut) : AFFICHER UNIQUEMENT LES NON-SUPPRIMÉS
+            query = query.where("isDeleted", "!=", true).orderBy("isDeleted");
         }
+        
+        query = query.orderBy("date", "desc"); // Tri secondaire
 
-        // 2. On ajoute le tri par date
-        query = query.orderBy("date", "desc");
-
+        // ... (le reste de la fonction onSnapshot est inchangé) ...
         unsubscribeExpenses = query.onSnapshot(snapshot => {
-            expenseTableBody.innerHTML = ''; 
-            if (snapshot.empty) {
-                expenseTableBody.innerHTML = '<tr><td colspan="6">Aucune dépense enregistrée.</td></tr>';
-                return;
-            }
-
-            snapshot.forEach(doc => {
-                const expense = doc.data();
-                const row = document.createElement('tr');
-                
-                if (expense.isDeleted === true) {
-                    row.classList.add('deleted-row');
-                }
-                
-                let deleteButtonHTML = '';
-                // L'admin est le seul à voir cette page, donc pas besoin de 'userRole' ici
-                if (expense.isDeleted !== true) {
-                    deleteButtonHTML = `<button class="deleteBtn" data-id="${doc.id}">Suppr.</button>`;
-                }
-
-                row.innerHTML = `
-                    <td>${expense.date}</td>
-                    <td>${expense.description}</td>
-                    <td>${formatCFA(expense.montant)}</td>
-                    <td>${expense.type}</td>
-                    <td>${expense.conteneur || 'N/A'}</td>
-                    <td>${deleteButtonHTML}</td>
-                `;
-                expenseTableBody.appendChild(row);
-            });
+            // ... (le reste de votre code)
         }, error => console.error("Erreur lecture dépenses: ", error));
     }
     
