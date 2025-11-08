@@ -3,6 +3,8 @@ document.addEventListener('DOMContentLoaded', () => {
         alert("Erreur: La connexion à la base de données a échoué.");
         return;
     }
+    // !! NOUVEAU : Récupérer le rôle de l'utilisateur stocké par le gardien
+    const userRole = sessionStorage.getItem('userRole');
 
     const transactionsCollection = db.collection("transactions");
     const tableBody = document.getElementById('tableBody');
@@ -71,6 +73,12 @@ document.addEventListener('DOMContentLoaded', () => {
         const agentTagsHTML = agents.map(agent => 
             `<span class="tag ${textToClassName(agent)}">${agent}</span>`
         ).join(' '); 
+        // !! NOUVEAU : Logique d'affichage du bouton "Supprimer"
+        let deleteButtonHTML = ''; // Vide par défaut
+        if (userRole === 'admin' || userRole === 'saisie_full') {
+            // On affiche le bouton seulement pour ces rôles
+            deleteButtonHTML = `<button class="deleteBtn" data-id="${data.id}">Suppr.</button>`;
+        }
 
         newRow.innerHTML = `
             <td>${data.date || 'En attente'}</td>
@@ -82,7 +90,8 @@ document.addEventListener('DOMContentLoaded', () => {
             <td><span class="tag ${textToClassName(data.agentMobileMoney)}">${data.agentMobileMoney || ''}</span></td>
             <td class="${reste_class}">${formatCFA(data.reste)}</td>
             <td><span class="tag ${textToClassName(data.commune)}">${data.commune || ''}</span></td>
-            <td>${agentTagsHTML}</td> <td><button class="deleteBtn" data-id="${data.id}">Suppr.</button></td>`;
+            <td>${agentTagsHTML}</td> 
+            <td>${deleteButtonHTML}</td>`; // On insère le bouton (ou la chaîne vide)
         tableBody.appendChild(newRow);
     }
 

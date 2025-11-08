@@ -9,14 +9,15 @@
     <link rel="stylesheet" href="style.css">
     <link rel="icon" type="image/png" href="favicon.png">
 </head>
-<body class="page-history"> <header class="app-header">
+
+<body class="page-history" style="display:none"> <header class="app-header">
         <img src="LOGOAMT.png" alt="Logo de l'entreprise" class="app-logo">
-        <h1>Historique des Opérations</h1>
+        <h1>Historique des Opérations</h1> <button id="logoutBtn" style="position: absolute; right: 20px; padding: 8px 15px; cursor: pointer;">Déconnexion</button>
     </header>
 
     <nav class="navigation">
         <a href="index.html">Saisie</a>
-        <a href="dashboard.html">Tableau de Bord</a>
+        <a href="dashboard.html" id="nav-dashboard">Tableau de Bord</a>
         <a href="history.html" class="active">Historique</a>
     </nav>
 
@@ -33,7 +34,7 @@
 
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
-    <script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script> <script>
       // Votre configuration personnelle et unique
       const firebaseConfig = {
         apiKey: "AIzaSyA255n3XWDRKaYZ9kwOYkfovf5lRexoCA4",
@@ -43,11 +44,20 @@
         messagingSenderId: "682789156997",
         appId: "1:682789156997:web:9ce3303120851d37be91ec"
     };
+    
 
       // Initialiser Firebase ET créer la variable "db"
       firebase.initializeApp(firebaseConfig);
       const db = firebase.firestore();
+      // Logique de déconnexion
+        // (Doit être après la config, mais avant le garde)
+        document.getElementById('logoutBtn').addEventListener('click', () => {
+            if (confirm("Voulez-vous vous déconnecter ?")) {
+                firebase.auth().signOut();
+            }
+        });
     </script>
+    <script src="auth-guard.js"></script>
     <script src="history.js"></script>
-</body>
+</body style="display:none;">
 </html>

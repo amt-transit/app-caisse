@@ -10,15 +10,15 @@
     <link rel="stylesheet" href="style.css">
     <link rel="icon" type="image/png" href="favicon.png">
 </head>
-<body>
+<body style="display:none">
     <header class="app-header">
         <img src="LOGOAMT.png" alt="Logo de l'entreprise" class="app-logo">
-        <h1>Tableau de Bord</h1>
+        <h1>Tableau de Bord</h1> <button id="logoutBtn" style="position: absolute; right: 20px; padding: 8px 15px; cursor: pointer;">Déconnexion</button>
     </header>
 
     <nav class="navigation">
         <a href="index.html">Saisie</a>
-        <a href="dashboard.html" class="active">Tableau de Bord</a>
+        <a href="dashboard.html" id="nav-dashboard">Tableau de Bord</a>
         <a href="history.html">Historique</a>
     </nav>
 
@@ -88,6 +88,7 @@
 
     </div> <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
     <script>
         const firebaseConfig = {
         apiKey: "AIzaSyA255n3XWDRKaYZ9kwOYkfovf5lRexoCA4",
@@ -99,7 +100,15 @@
     };
         firebase.initializeApp(firebaseConfig);
         const db = firebase.firestore();
+        // Logique de déconnexion
+        // (Doit être après la config, mais avant le garde)
+        document.getElementById('logoutBtn').addEventListener('click', () => {
+            if (confirm("Voulez-vous vous déconnecter ?")) {
+                firebase.auth().signOut();
+            }
+        });
     </script>
+    <script src="auth-guard.js"></script>
     <script src="dashboard.js"></script>
-</body>
+</body style="display:none">
 </html>
