@@ -3,80 +3,99 @@ document.addEventListener('DOMContentLoaded', () => {
         alert("Erreur: La connexion à la base de données a échoué.");
         return;
     }
-    // !! NOUVEAU : Récupérer le rôle de l'utilisateur stocké par le gardien
-    const userRole = sessionStorage.getItem('userRole');
 
+    const userRole = sessionStorage.getItem('userRole');
     const transactionsCollection = db.collection("transactions");
     const tableBody = document.getElementById('tableBody');
+    const showDeletedCheckbox = document.getElementById('showDeletedCheckbox');
+    let unsubscribeHistory = null; 
 
-    transactionsCollection.orderBy("date", "desc").onSnapshot(snapshot => {
-        const transactions = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        renderTable(transactions);
-    }, error => console.error("Erreur Firestore: ", error));
-
+    // MODIFICATION : Le bouton met à jour 'isDeleted' au lieu de supprimer
     tableBody.addEventListener('click', (event) => {
         if (event.target.classList.contains('deleteBtn')) {
             const docId = event.target.getAttribute('data-id');
-            if (confirm("Confirmer la suppression définitive de cette entrée ?")) {
-                transactionsCollection.doc(docId).delete();
+            if (confirm("Confirmer la suppression de cette entrée ? Elle sera archivée.")) {
+                transactionsCollection.doc(docId).update({ isDeleted: true }); 
             }
         }
     });
 
-    // =====================================================================
-    //          FONCTION RENDERTABLE CORRIGÉE (LOGIQUE SIMPLIFIÉE)
-    // =====================================================================
-    function renderTable(transactions) {
-        tableBody.innerHTML = ''; // On vide le tbody principal
-        if (transactions.length === 0) {
-            tableBody.innerHTML = '<tr><td colspan="10">Aucun historique trouvé.</td></tr>';
-            return;
+    // FONCTION 'fetchHistory' (qui manquait dans votre fichier)
+    function fetchHistory() {
+        if (unsubscribeHistory) {
+            unsubscribeHistory();
         }
 
+        let query = transactionsCollection; // Commence par la collection de base
+
+        // Si la case n'est PAS cochée, on filtre
+        if (!showDeletedCheckbox.checked) {
+            query = query.where("isDeleted", "!=", true)
+                         .orderBy("isDeleted"); // 1. Tri obligatoire
+        }
+        
+        // 2. On ajoute le tri par date
+        query = query.orderBy("date", "desc"); 
+
+        unsubscribeHistory = query.onSnapshot(snapshot => {
+            const transactions = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            renderTable(transactions);
+        }, error => console.error("Erreur Firestore: ", error));
+    }
+
+    // On écoute les changements sur la case à cocher
+    showDeletedCheckbox.addEventListener('change', fetchHistory);
+    
+    // On lance le premier chargement
+    fetchHistory();
+
+
+    // ... (La fonction renderTable) ...
+    function renderTable(transactions) {
+        tableBody.innerHTML = ''; 
+        if (transactions.length === 0) {
+            tableBody.innerHTML = '<tr><td colspan="11">Aucun historique trouvé.</td></tr>'; // Colspan 11
+            return;
+        }
         let currentSubtotals = { prix: 0, montantParis: 0, montantAbidjan: 0, reste: 0 };
-        let currentDate = transactions[0].date;
+        let currentDate = transactions.find(t => t.date)?.date; 
 
         transactions.forEach((data) => {
-            // Si la date change, on insère la ligne de total pour le jour précédent
-            if (data.date !== currentDate) {
+            if (data.date !== currentDate && data.date) {
                 insertSubtotalRow(currentDate, currentSubtotals);
-                // On réinitialise pour le nouveau jour
                 currentDate = data.date;
                 currentSubtotals = { prix: 0, montantParis: 0, montantAbidjan: 0, reste: 0 };
             }
             
-            // On ajoute les montants de la transaction actuelle aux totaux du jour
-            currentSubtotals.prix += data.prix;
-            currentSubtotals.montantParis += data.montantParis;
-            currentSubtotals.montantAbidjan += data.montantAbidjan;
-            currentSubtotals.reste += data.reste;
-            
-            // On insère la ligne de données
+            if (data.isDeleted !== true) {
+                currentSubtotals.prix += (data.prix || 0);
+                currentSubtotals.montantParis += (data.montantParis || 0);
+                currentSubtotals.montantAbidjan += (data.montantAbidjan || 0);
+                currentSubtotals.reste += (data.reste || 0);
+            }
             insertDataRow(data);
         });
-
-        // À la fin de la boucle, on insère la ligne de total pour le tout dernier jour
         insertSubtotalRow(currentDate, currentSubtotals);
     }
 
     function insertDataRow(data) {
         const newRow = document.createElement('tr');
+        if (data.isDeleted === true) {
+            newRow.classList.add('deleted-row');
+        }
+        
         const reste_class = data.reste < 0 ? 'reste-negatif' : 'reste-positif';
-
-        // NOUVELLE LOGIQUE POUR AFFICHER LES TAGS AGENTS
         const agentString = data.agent || "";
         const agents = agentString.split(',')
                                 .map(a => a.trim())
                                 .filter(a => a.length > 0);
         
-        // Crée un tag HTML pour chaque agent et les sépare par un espace
         const agentTagsHTML = agents.map(agent => 
             `<span class="tag ${textToClassName(agent)}">${agent}</span>`
         ).join(' '); 
-        // !! NOUVEAU : Logique d'affichage du bouton "Supprimer"
-        let deleteButtonHTML = ''; // Vide par défaut
-        if (userRole === 'admin' || userRole === 'saisie_full') {
-            // On affiche le bouton seulement pour ces rôles
+
+        let deleteButtonHTML = '';
+        if ((userRole === 'admin' || userRole === 'saisie_full') && data.isDeleted !== true) {
             deleteButtonHTML = `<button class="deleteBtn" data-id="${data.id}">Suppr.</button>`;
         }
 
@@ -90,13 +109,13 @@ document.addEventListener('DOMContentLoaded', () => {
             <td><span class="tag ${textToClassName(data.agentMobileMoney)}">${data.agentMobileMoney || ''}</span></td>
             <td class="${reste_class}">${formatCFA(data.reste)}</td>
             <td><span class="tag ${textToClassName(data.commune)}">${data.commune || ''}</span></td>
-            <td>${agentTagsHTML}</td> 
-            <td>${deleteButtonHTML}</td>`; // On insère le bouton (ou la chaîne vide)
+            <td>${agentTagsHTML}</td>
+            <td>${deleteButtonHTML}</td>`;
         tableBody.appendChild(newRow);
     }
 
     function insertSubtotalRow(date, totals) {
-        const subtotalRow = document.createElement('tr'); // Crée une ligne de total <tr>
+        const subtotalRow = document.createElement('tr');
         subtotalRow.className = 'subtotal-row';
         subtotalRow.innerHTML = `
             <td>${date || 'TOTAL EN ATTENTE'}</td>
@@ -107,12 +126,11 @@ document.addEventListener('DOMContentLoaded', () => {
             <td></td>
             <td>${formatCFA(totals.reste)}</td>
             <td colspan="3"></td>`;
-        tableBody.appendChild(subtotalRow); // Ajoute la ligne de total <tr> au tbody principal
+        tableBody.appendChild(subtotalRow);
     }
 
-    // Les fonctions utilitaires ne changent pas
     function formatCFA(number) {
-        return new Intl.NumberFormat('fr-CI', { style: 'currency', currency: 'XOF' }).format(number);
+        return new Intl.NumberFormat('fr-CI', { style: 'currency', currency: 'XOF' }).format(number || 0);
     }
     function textToClassName(text) {
         if (!text) return '';

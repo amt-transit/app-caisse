@@ -241,15 +241,25 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     // MISE À JOUR : Écouter les deux collections
-    transactionsCollection.onSnapshot(snapshot => {
-        allTransactions = snapshot.docs.map(doc => doc.data());
-        updateDashboard(); // Mettre à jour
+    
+    // MODIFIÉ : Ajout de .orderBy("isDeleted") en premier
+    transactionsCollection
+        .where("isDeleted", "!=", true)
+        .orderBy("isDeleted") // 1. Tri obligatoire sur le champ du filtre
+        .orderBy("date", "desc") // 2. Puis tri par date
+        .onSnapshot(snapshot => {
+            allTransactions = snapshot.docs.map(doc => doc.data());
+            updateDashboard(); 
     }, error => console.error("Erreur Firestore (transactions): ", error));
 
-    // NOUVEAU : Écouter la collection des dépenses
-    expensesCollection.onSnapshot(snapshot => {
-        allExpenses = snapshot.docs.map(doc => doc.data());
-        updateDashboard(); // Mettre à jour
+    // MODIFIÉ : Ajout de .orderBy("isDeleted") en premier
+    expensesCollection
+        .where("isDeleted", "!=", true)
+        .orderBy("isDeleted") // 1. Tri obligatoire sur le champ du filtre
+        .orderBy("date", "desc") // 2. Puis tri par date
+        .onSnapshot(snapshot => {
+            allExpenses = snapshot.docs.map(doc => doc.data());
+            updateDashboard(); 
     }, error => console.error("Erreur Firestore (expenses): ", error));
 
     startDateInput.addEventListener('change', updateDashboard);

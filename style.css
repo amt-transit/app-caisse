@@ -104,3 +104,14 @@ td button.deleteBtn {
 .summary-item span { font-size: 18px; font-weight: bold; }
 
 /* Il n'y a plus de bloc @media, car nous avons désactivé le mode responsive. */
+/* --- STYLE POUR SUPPRESSION DOUCE --- */
+.deleted-row td {
+    background-color: #fafafa !important; /* gris très clair */
+    text-decoration: line-through;
+    color: #9e9e9e; /* texte gris */
+}
+
+/* Cache le bouton "Suppr." si la ligne est déjà supprimée */
+.deleted-row .deleteBtn {
+    display: none;
+}
