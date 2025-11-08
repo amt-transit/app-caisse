@@ -15,21 +15,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     // INITIALISATION DE CHOICES.JS CORRIGÉE
     const agentSelectElement = document.getElementById('agent');
     const agentChoices = new Choices(agentSelectElement, {
-        // J'AI RETIRÉ 'multiple: true' (qui causait l'erreur)
-        // J'ai aussi retiré 'allowHTML' qui n'est pas nécessaire ici
         removeItemButton: true, 
         placeholder: true,
         searchPlaceholderValue: 'Rechercher un agent...',
     });
 
     const addEntryBtn = document.getElementById('addEntryBtn');
-    // ... (le reste de vos variables) ...
-    
-    // ... (le reste de votre fichier 'script.js' est correct) ...
-    // La logique 'addEntryBtn.addEventListener' que vous aviez est bonne
-    // et fonctionnera une fois ce bloc corrigé.
-    // Voici la suite du fichier :
-
     const saveDayBtn = document.getElementById('saveDayBtn');
     const dailyTableBody = document.getElementById('dailyTableBody');
     const formContainer = document.getElementById('caisseForm');
@@ -55,12 +46,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     function updateDailySummary() {
         let totalPrix = 0, totalAbidjanEspeces = 0, totalParis = 0, totalMobileMoney = 0;
         dailyTransactions.forEach(t => {
-            totalPrix += t.prix;
+            totalPrix += (t.prix || 0);
             if (t.agentMobileMoney && t.agentMobileMoney !== '') {
-                totalMobileMoney += (t.montantParis + t.montantAbidjan);
+                totalMobileMoney += (t.montantParis || 0) + (t.montantAbidjan || 0);
             } else {
-                totalAbidjanEspeces += t.montantAbidjan;
-                totalParis += t.montantParis;
+                totalAbidjanEspeces += (t.montantAbidjan || 0);
+                totalParis += (t.montantParis || 0);
             }
         });
         const totalPercu = totalAbidjanEspeces + totalParis + totalMobileMoney;
@@ -90,8 +81,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     addEntryBtn.addEventListener('click', () => {
-        // LECTURE MODIFIÉE POUR CHOICES.JS
-        const selectedAgents = agentChoices.getValue(true); // 'true' = juste les valeurs
+        const selectedAgents = agentChoices.getValue(true); 
         const agentString = selectedAgents.join(', '); 
 
         const newData = {
@@ -100,7 +90,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             montantAbidjan: parseFloat(montantAbidjanInput.value) || 0, reste: 0,
             agentMobileMoney: document.getElementById('agentMobileMoney').value,
             commune: document.getElementById('commune').value, 
-            agent: agentString // Utilise la nouvelle chaîne de caractères
+            agent: agentString 
         };
         if (!newData.date || !newData.reference) return alert("Veuillez remplir au moins la date et la référence.");
 
@@ -118,13 +108,17 @@ document.addEventListener('DOMContentLoaded', async () => {
         saveDailyToLocalStorage();
         renderDailyTable();
         
-        // RÉINITIALISATION MODIFIÉE POUR CHOICES.JS
         formContainer.querySelectorAll('input, select').forEach(el => {
-            if (el.type !== 'date' && el.id !== 'agent') { // On exclut 'agent'
+            if (el.type !== 'date' && el.id !== 'agent') { 
                 el.value = '';
             }
         });
-        agentChoices.clearStore(); // On vide le champ 'agent'
+        
+        // ==== CORRECTION ====
+        // Remplace 'clearStore()' (qui supprime les options)
+        // par 'setValue([])' (qui vide juste la sélection).
+        agentChoices.setValue([]); 
+        // ====================
 
         resteInput.className = '';
         referenceInput.focus();
@@ -226,7 +220,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     function formatCFA(number) {
-        return new Intl.NumberFormat('fr-CI', { style: 'currency', currency: 'XOF' }).format(number);
+        return new Intl.NumberFormat('fr-CI', { style: 'currency', currency: 'XOF' }).format(number || 0);
     }
 
     function textToClassName(text) {

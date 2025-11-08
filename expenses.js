@@ -65,10 +65,46 @@ document.addEventListener('DOMContentLoaded', () => {
         
         query = query.orderBy("date", "desc"); // Tri secondaire
 
-        // ... (le reste de la fonction onSnapshot est inchangé) ...
+        // ==== CORRECTION : Le bloc onSnapshot était vide ====
         unsubscribeExpenses = query.onSnapshot(snapshot => {
-            // ... (le reste de votre code)
+            expenseTableBody.innerHTML = ''; 
+            if (snapshot.empty) {
+                // S'il n'y a rien, on affiche un message
+                if (showDeletedCheckbox.checked) {
+                    expenseTableBody.innerHTML = '<tr><td colspan="6">Aucune dépense supprimée trouvée.</td></tr>';
+                } else {
+                    expenseTableBody.innerHTML = '<tr><td colspan="6">Aucune dépense enregistrée.</td></tr>';
+                }
+                return;
+            }
+
+            // Boucle pour afficher chaque dépense
+            snapshot.forEach(doc => {
+                const expense = doc.data();
+                const row = document.createElement('tr');
+                
+                if (expense.isDeleted === true) {
+                    row.classList.add('deleted-row');
+                }
+                
+                let deleteButtonHTML = '';
+                // L'admin est le seul à voir cette page, donc pas besoin de 'userRole' ici
+                if (expense.isDeleted !== true) {
+                    deleteButtonHTML = `<button class="deleteBtn" data-id="${doc.id}">Suppr.</button>`;
+                }
+
+                row.innerHTML = `
+                    <td>${expense.date}</td>
+                    <td>${expense.description}</td>
+                    <td>${formatCFA(expense.montant)}</td>
+                    <td>${expense.type}</td>
+                    <td>${expense.conteneur || 'N/A'}</td>
+                    <td>${deleteButtonHTML}</td>
+                `;
+                expenseTableBody.appendChild(row);
+            });
         }, error => console.error("Erreur lecture dépenses: ", error));
+        // ==== FIN DE LA CORRECTION ====
     }
     
     // On écoute la case à cocher
