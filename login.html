@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 <!DOCTYPE html>
 <html lang="fr">
 <head>
@@ -71,4 +72,79 @@
     </script>
     <script src="login.js"></script>
 </body>
+=======
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=1000">
+    <title>Connexion - Saisie de Caisse</title>
+    <link rel="stylesheet" href="style.css">
+    <style>
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background-color: #f0f2f5;
+        }
+        #loginBox {
+            background: #fff;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            text-align: center;
+            width: 350px;
+        }
+        #loginBox img { height: 60px; margin-bottom: 20px; }
+        #loginBox input {
+            width: 100%;
+            padding: 12px;
+            margin-bottom: 15px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            box-sizing: border-box;
+        }
+        #loginBox button {
+            width: 100%;
+            padding: 12px;
+            background-color: #1877f2;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        #loginError { color: #dc3545; margin-top: 15px; }
+    </style>
+    <link rel="icon" type="image/png" href="favicon.png">
+</head>
+<body>
+
+    <div id="loginBox">
+        <img src="logoAMT.png" alt="Logo">
+        <h2>Connexion</h2>
+        <input type="email" id="email" placeholder="Adresse e-mail" required>
+        <input type="password" id="password" placeholder="Mot de passe" required>
+        <button id="loginBtn">Se connecter</button>
+        <p id="loginError" style="display:none;"></p>
+    </div>
+
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+    <script>
+        const firebaseConfig = {
+            apiKey: "AIzaSyA255n3XWDRKaYZ9kwOYkfovf5lRexoCA4",
+            authDomain: "caisse-amt-perso.firebaseapp.com",
+            projectId: "caisse-amt-perso",
+            storageBucket: "caisse-amt-perso.firebasestorage.app",
+            messagingSenderId: "682789156997",
+            appId: "1:682789156997:web:9ce3303120851d37be91ec"
+        };
+        firebase.initializeApp(firebaseConfig);
+    </script>
+    <script src="login.js"></script>
+</body>
+>>>>>>> ae5236cb0be7515024518b58a37aa53c2e668ff3
 </html>
