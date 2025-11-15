@@ -14,7 +14,7 @@
     
     <header class="app-header">
         <img src="logoAMT.png" alt="Logo" class="app-logo">
-        <h1>Enregistrer un Arrivage</h1>
+        <h1>Gestion des Arrivages</h1>
         <button id="logoutBtn" style="position: absolute; right: 20px; padding: 8px 15px; cursor: pointer;">Déconnexion</button>
     </header>
 
@@ -28,52 +28,110 @@
         <a href="arrivages.html" id="nav-arrivages" class="active">Arrivages</a>
     </nav>
 
-    <h2>Enregistrer un seul colis</h2>
-    <div id="caisseForm">
-        <div class="form-grid">
-            <input type="date" id="arrivalDate" required>
-            <input type="text" id="arrivalConteneur" placeholder="Conteneur (ex: D35)" required>
-            <input type="text" id="arrivalRef" placeholder="Référence / Client" required>
-            <input type="text" id="arrivalNom" placeholder="Nom du Client" required>
-            <div class="prix-container">
-                <input type="number" id="arrivalPrix" placeholder="Prix du colis">
-                <span class="cfa-label">CFA</span>
+    <div class="sub-nav">
+        <a href="#panel-abidjan" class="active">Réception Abidjan</a>
+        <a href="#panel-paris">Départ Paris (Manifeste)</a>
+    </div>
+
+    <div id="panel-abidjan" class="tab-panel active">
+        <h2>Enregistrer un seul colis (Réception)</h2>
+        <div id="caisseForm">
+            <div class="form-grid" style="grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));">
+                <input type="date" id="arrivalDate" required>
+                <input type="text" id="arrivalConteneur" placeholder="Conteneur (ex: D35)" required>
+                
+                <input type="text" id="arrivalRef" placeholder="Référence / Client" required>
+                
+                <input type="text" id="arrivalNom" placeholder="Nom du Client (auto-rempli)" required> 
+                <div class="prix-container">
+                    <input type="number" id="arrivalPrix" placeholder="Prix du colis">
+                    <span class="cfa-label">CFA</span>
+                </div>
+                <input type="number" id="arrivalMontantParis" placeholder="Montant Paris (Pré-payé)">
+                <input type="number" id="arrivalMontantAbidjan" placeholder="Montant Abidjan (Pré-payé)">
+            </div>
+            <div class="form-buttons">
+                <button id="addArrivalBtn" class="primary">Enregistrer le Colis</button>
             </div>
         </div>
-        <div class="form-buttons">
-            <button id="addArrivalBtn" class="primary">Enregistrer le Colis</button>
+
+        <h2 style="margin-top: 30px;">Enregistrer en Masse (Réception via CSV)</h2>
+        <div id="caisseForm" class="bulk-upload-form">
+            <p>Importez un fichier CSV. Le <strong>Nom Client</strong> sera recherché automatiquement dans le manifeste "Départ Paris".</p>
+            <ol style="margin-left: 20px; text-align: left;">
+                <li>Remplissez les champs <strong>Date</strong> et <strong>Conteneur</strong> dans le formulaire "un seul colis" ci-dessus.</li>
+                <li>Préparez un fichier CSV avec <strong>4 colonnes</strong> (en-têtes en minuscules) :</li>
+                <li><code>reference</code>, <code>prix</code></li>
+                <li><code>montantParis</code> (optionnel, mettez 0 ou laissez vide)</li>
+                <li><code>montantAbidjan</code> (optionnel, mettez 0 ou laissez vide)</li>
+            </ol>
+            
+            <input type="file" id="csvFile" accept=".csv" style="margin-top: 15px;">
+            <button id="uploadCsvBtn" class="primary" style="margin-top: 15px; width: 100%;">Importer le Fichier CSV</button>
+            
+            <pre id="uploadLog" style="background-color: #f8f9fa; border: 1px solid #dee2e6; padding: 10px; border-radius: 6px; margin-top: 15px; display: none; text-align: left;"></pre>
         </div>
+
+        <h2 style="margin-top: 30px;">Colis Récemment Reçus (Abidjan)</h2>
+        <table id="arrivalsTable">
+            <thead>
+                <tr>
+                    <th>Date Ajout</th>
+                    <th>Référence</th>
+                    <th>Nom Client</th>
+                    <th>Conteneur</th>
+                    <th>Prix</th>
+                    <th>Reste à Payer</th>
+                </tr>
+            </thead>
+            <tbody id="arrivalsTableBody"></tbody>
+        </table>
     </div>
 
-    <h2 style="margin-top: 30px;">Enregistrer en Masse (via Fichier CSV)</h2>
-    <div id="caisseForm" class="bulk-upload-form">
-        <p>Utilisez ce formulaire pour importer plusieurs colis du <strong>même conteneur</strong> et à la <strong>même date</strong>.</p>
-        <ol style="margin-left: 20px; text-align: left;">
-            <li>Remplissez les champs <strong>Date</strong> et <strong>Conteneur</strong> dans le formulaire ci-dessus.</li>
-            <li>Préparez un fichier CSV avec 3 colonnes : <strong>reference, nom, prix</strong></li>
-            <li>Importez le fichier ci-dessous.</li>
-        </ol>
+    <div id="panel-paris" class="tab-panel">
+        <h2>Enregistrer un colis (Départ Paris)</h2>
+        <div id="caisseForm">
+            <div class="form-grid" style="grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));">
+                <input type="date" id="parisDate" required>
+                <input type="text" id="parisRef" placeholder="Référence / Client" required>
+                <input type="text" id="parisNom" placeholder="Nom du Client" required>
+            </div>
+            <div class="form-buttons">
+                <button id="addParisBtn" class="primary">Enregistrer au Manifeste</button>
+            </div>
+        </div>
         
-        <input type="file" id="csvFile" accept=".csv" style="margin-top: 15px;">
-        <button id="uploadCsvBtn" class="primary" style="margin-top: 15px; width: 100%;">Importer le Fichier CSV</button>
-        
-        <pre id="uploadLog" style="background-color: #f8f9fa; border: 1px solid #dee2e6; padding: 10px; border-radius: 6px; margin-top: 15px; display: none; text-align: left;"></pre>
-    </div>
-    <h2 style="margin-top: 30px;">Colis récemment ajoutés</h2>
-    <table id="arrivalsTable">
-        <thead>
-            <tr>
-                <th>Date Ajout</th>
-                <th>Référence</th>
-                <th>Nom Client</th>
-                <th>Conteneur</th>
-                <th>Prix</th>
-                <th>Reste à Payer</th>
-            </tr>
-        </thead>
-        <tbody id="arrivalsTableBody"></tbody>
-    </table>
+        <h2 style="margin-top: 30px;">Enregistrer en Masse (Départ Paris via CSV)</h2>
+        <div id="caisseForm" class="bulk-upload-form">
+            <p>Importez un fichier CSV pour enregistrer plusieurs colis au départ de Paris.</p>
+            <ol style="margin-left: 20px; text-align: left;">
+                <li>Votre fichier CSV doit avoir <strong>3 colonnes</strong> (en-têtes en minuscules) :</li>
+                <li><code>date</code> (format AAAA-MM-JJ)</li>
+                <li><code>reference</code></li>
+                <li><code>nom</code></li>
+            </ol>
+            
+            <input type="file" id="parisCsvFile" accept=".csv" style="margin-top: 15px;">
+            <button id="uploadParisCsvBtn" class="primary" style="margin-top: 15px; width: 100%;">Importer Fichier Manifeste</button>
+            
+            <pre id="parisUploadLog" style="background-color: #f8f9fa; border: 1px solid #dee2e6; padding: 10px; border-radius: 6px; margin-top: 15px; display: none; text-align: left;"></pre>
+        </div>
 
+        <h2 style="margin-top: 30px;">Colis en attente de réception <span id="parisPendingCount" class="tag" style="background-color: #ffc107; color: #333;">0</span></h2>
+        <table id="parisTable">
+            <thead>
+                <tr>
+                    <th>Date Départ Paris</th>
+                    <th>Référence</th>
+                    <th>Nom Client</th>
+                    <th>Statut</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+            <tbody id="parisTableBody"></tbody>
+        </table>
+    </div>
+    
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>

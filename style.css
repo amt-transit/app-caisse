@@ -31,11 +31,12 @@ h2 { text-align: center; color: #1c1e21; }
     background-color: #fff; padding: 20px; border-radius: 8px;
     box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin-bottom: 20px;
 }
-/* === AJOUTEZ CES LIGNES CI-DESSOUS === */
-#montantParis {
+/* S'applique à 'montantParis' ET 'arrivalMontantParis' */
+input[id*="montantParis"] {
     background-color: #e0f7fa; /* Bleu ciel */
 }
-#montantAbidjan {
+/* S'applique à 'montantAbidjan' ET 'arrivalMontantAbidjan' */
+input[id*="montantAbidjan"] {
     background-color: #fff3e0; /* Orange clair */
 }
 /* === FIN DE L'AJOUT === */
