@@ -161,3 +161,34 @@ td button.deleteBtn {
 .tab-panel.active {
     display: block; /* Affiché si actif */
 }
+/* ... (vos styles existants) ... */
+
+/* --- AJOUT POUR LES FILTRES DE L'HISTORIQUE --- */
+.history-controls .filter-grid {
+    display: grid;
+    gap: 15px;
+}
+.date-filter-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background-color: #fff;
+    padding: 2px 10px; /* Aligne avec le style des inputs */
+    border-radius: 6px;
+    border: 1px solid #ddd;
+}
+.date-filter-group label {
+    font-weight: bold;
+    font-size: 14px;
+}
+.date-filter-group input[type="date"] {
+    width: auto; /* Annule le 100% */
+    padding: 8px 0; /* Plus petit */
+    border: none; /* Enlève la double bordure */
+    font-family: 'Comfortaa', sans-serif; /* Garde la police */
+    font-size: 14px;
+}
+.history-controls .checkbox-container {
+    justify-self: start; 
+    padding: 10px;
+}

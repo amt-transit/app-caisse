@@ -8,18 +8,23 @@ document.addEventListener('DOMContentLoaded', () => {
     const userRole = sessionStorage.getItem('userRole');
     const transactionsCollection = db.collection("transactions");
     const tableBody = document.getElementById('tableBody');
+    
+    // NOUVEAUX ÉLÉMENTS DE FILTRE
     const showDeletedCheckbox = document.getElementById('showDeletedCheckbox');
     const masterSearchInput = document.getElementById('masterSearch');
-    const containerSearchInput = document.getElementById('containerSearch'); 
+    const containerSearchInput = document.getElementById('containerSearch');
+    const agentFilterInput = document.getElementById('agentFilter'); // NOUVEAU
+    const startDateInput = document.getElementById('startDate'); // NOUVEAU
+    const endDateInput = document.getElementById('endDate'); // NOUVEAU
 
     let unsubscribeHistory = null; 
     let allTransactions = []; 
 
-    // --- LOGIQUE DE SUPPRESSION ET MODIFICATION ---
+    // --- LOGIQUE DE SUPPRESSION / MODIFICATION ---
     tableBody.addEventListener('click', (event) => {
-        const target = event.target; // Cible du clic
+        const target = event.target;
 
-        // CAS 1 : Clic sur le bouton "Suppr." (Soft Delete)
+        // Clic sur "Suppr."
         if (target.classList.contains('deleteBtn')) {
             const docId = target.dataset.id;
             if (confirm("Confirmer la suppression de cette entrée ? Elle sera archivée.")) {
@@ -27,46 +32,31 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
 
-        // ==== NOUVEAU BLOC : Clic sur le bouton "Modif." ====
+        // Clic sur "Modif."
         if (target.classList.contains('editBtn')) {
             const docId = target.dataset.id;
             const oldPrice = parseFloat(target.dataset.prix);
             const paris = parseFloat(target.dataset.paris);
             const abidjan = parseFloat(target.dataset.abidjan);
 
-            // 1. Demander le nouveau prix à l'admin
             const newPriceStr = prompt("Entrez le nouveau PRIX pour ce colis :", oldPrice);
-
-            // 2. Vérifier si l'admin a annulé
-            if (newPriceStr === null) {
-                return; // L'utilisateur a cliqué sur "Annuler"
-            }
+            if (newPriceStr === null) return; 
 
             const newPrice = parseFloat(newPriceStr);
-
-            // 3. Valider le nouveau prix
             if (isNaN(newPrice) || newPrice <= 0) {
                 return alert("Le prix entré n'est pas valide.");
             }
 
-            // 4. Recalculer le 'reste' en fonction du nouveau prix
-            // Reste = (Total Payé) - (Nouveau Prix)
             const newReste = (paris + abidjan) - newPrice;
 
-            // 5. Mettre à jour la base de données
             if (confirm(`Confirmez-vous le nouveau prix : ${formatCFA(newPrice)} ?\nLe nouveau reste sera de : ${formatCFA(newReste)}.`)) {
                 transactionsCollection.doc(docId)
                     .update({
                         prix: newPrice,
                         reste: newReste
                     })
-                    .then(() => {
-                        alert("Modification enregistrée !");
-                    })
-                    .catch(err => {
-                        console.error("Erreur de mise à jour : ", err);
-                        alert("Une erreur est survenue.");
-                    });
+                    .then(() => alert("Modification enregistrée !"))
+                    .catch(err => alert("Une erreur est survenue."));
             }
         }
     });
@@ -76,44 +66,81 @@ document.addEventListener('DOMContentLoaded', () => {
         if (unsubscribeHistory) {
             unsubscribeHistory(); 
         }
+
         let query = transactionsCollection;
+
         if (showDeletedCheckbox.checked) {
              query = query.where("isDeleted", "==", true).orderBy("isDeleted");
         } else {
              query = query.where("isDeleted", "!=", true).orderBy("isDeleted");
         }
+        
         query = query.orderBy("date", "desc"); 
+
         unsubscribeHistory = query.onSnapshot(snapshot => {
             allTransactions = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-            applyFiltersAndRender();
+            applyFiltersAndRender(); 
         }, error => console.error("Erreur Firestore (transactions): ", error));
     }
 
     // --- ÉTAPE 2 : FILTRER ET AFFICHER (CÔTÉ CLIENT) ---
     function applyFiltersAndRender() {
+        // Récupérer toutes les valeurs de filtre
         const masterTerm = masterSearchInput.value.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
         const containerTerm = containerSearchInput.value.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+        const agentTerm = agentFilterInput.value.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+        const startDate = startDateInput.value;
+        const endDate = endDateInput.value;
+
         const filteredTransactions = allTransactions.filter(data => {
+            
+            // --- NOUVEAU: Filtre par Date ---
+            if (startDate && data.date < startDate) {
+                return false;
+            }
+            if (endDate && data.date > endDate) {
+                return false;
+            }
+
+            // --- NOUVEAU: Filtre par Agent ---
+            if (agentTerm) {
+                const agents = (data.agent || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+                if (!agents.includes(agentTerm)) {
+                    return false;
+                }
+            }
+
+            // --- Filtre Conteneur (existant) ---
             if (containerTerm) {
                 const conteneur = (data.conteneur || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-                if (conteneur !== containerTerm) return false;
+                if (conteneur !== containerTerm) {
+                    return false;
+                }
             }
+
+            // --- Filtre Recherche Générale (existant) ---
             if (masterTerm) {
                 const ref = (data.reference || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
                 const nom = (data.nom || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
                 const agentMM = (data.agentMobileMoney || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
                 const commune = (data.commune || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-                const agents = (data.agent || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-                if (!ref.includes(masterTerm) && !nom.includes(masterTerm) && !agentMM.includes(masterTerm) && !commune.includes(masterTerm) && !agents.includes(masterTerm)) {
+
+                if (!ref.includes(masterTerm) &&
+                    !nom.includes(masterTerm) &&
+                    !agentMM.includes(masterTerm) &&
+                    !commune.includes(masterTerm)) 
+                {
                     return false;
                 }
             }
+            
             return true;
         });
+        
         renderTable(filteredTransactions);
     }
 
-    // --- ÉTAPE 3 : RENDER TABLE ---
+    // --- ÉTAPE 3 : RENDER TABLE (inchangé) ---
     function renderTable(transactions) {
         tableBody.innerHTML = ''; 
         if (transactions.length === 0) {
@@ -140,12 +167,18 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // --- ÉTAPE 4 : CONNECTER LES ÉVÉNEMENTS ---
-    showDeletedCheckbox.addEventListener('change', fetchHistory); 
+    showDeletedCheckbox.addEventListener('change', fetchHistory); // Recharge depuis Firebase
+    
+    // NOUVEAU : Tous les filtres lancent 'applyFiltersAndRender'
     masterSearchInput.addEventListener('input', applyFiltersAndRender); 
     containerSearchInput.addEventListener('input', applyFiltersAndRender); 
+    agentFilterInput.addEventListener('change', applyFiltersAndRender);
+    startDateInput.addEventListener('change', applyFiltersAndRender);
+    endDateInput.addEventListener('change', applyFiltersAndRender);
+    
     fetchHistory(); // Lancement initial
 
-    // --- Fonctions utilitaires ---
+    // --- Fonctions utilitaires (inchangées) ---
     function insertDataRow(data) {
         const newRow = document.createElement('tr');
         if (data.isDeleted === true) {
@@ -157,9 +190,8 @@ document.addEventListener('DOMContentLoaded', () => {
         const agentTagsHTML = agents.map(agent => `<span class="tag ${textToClassName(agent)}">${agent}</span>`).join(' '); 
         
         let deleteButtonHTML = '';
-        let editButtonHTML = ''; // NOUVEAU
+        let editButtonHTML = ''; 
 
-        // Seul l'admin peut modifier le prix
         if (userRole === 'admin' && data.isDeleted !== true) {
             editButtonHTML = `<button class="editBtn" 
                                     data-id="${data.id}" 
@@ -187,7 +219,7 @@ document.addEventListener('DOMContentLoaded', () => {
             <td class="${reste_class}">${formatCFA(data.reste)}</td>
             <td><span class="tag ${textToClassName(data.commune)}">${data.commune || ''}</span></td>
             <td>${agentTagsHTML}</td>
-            <td style="min-width: 100px;">${editButtonHTML}${deleteButtonHTML}</td>`; // Colonne Action mise à jour
+            <td style="min-width: 100px;">${editButtonHTML}${deleteButtonHTML}</td>`;
         tableBody.appendChild(newRow);
     }
 

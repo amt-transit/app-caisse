@@ -27,16 +27,36 @@
     </nav>
 
     <div class="history-controls">
-        <div class="filter-grid">
-            <input type="text" id="masterSearch" placeholder="Rechercher (Réf, Agent, Commune, MM...)">
-            <input type="text" id="containerSearch" placeholder="Filtre Conteneur exact (ex: D20)">
+        <div class="filter-grid" style="grid-template-columns: 1fr 1fr 1fr; gap: 15px; margin-bottom: 15px;">
+            <input type="text" id="masterSearch" placeholder="Rechercher (Réf, Nom, Commune...)">
+            <input type="text" id="containerSearch" placeholder="Filtre Conteneur (ex: D20)">
+            <select id="agentFilter">
+                <option value="">-- Filtrer par Agent --</option>
+                <option value="Adboul Paris">Adboul Paris</option><option value="Ali Paris">Ali Paris</option><option value="Autres Paris">Autres Paris</option>
+                <option value="AZIZ">AZIZ</option><option value="Bakary Paris">Bakary Paris</option><option value="Cesar">Cesar</option>
+                <option value="Cheick Paris">Cheick Paris</option><option value="Constant">Constant</option><option value="Coulibaly Traoré Mah">Coulibaly Traoré Mah</option>
+                <option value="Demba Paris">Demba Paris</option><option value="Drissa Paris">Drissa Paris</option><option value="Fatim Paris">Fatim Paris</option>
+                <option value="Hamza">Hamza</option><option value="JB">JB</option><option value="Julien">Julien</option>
+                <option value="Kady Paris">Kady Paris</option><option value="Maley">Maley</option><option value="Males">Males</option>
+                <option value="Mohamed Paris">Mohamed Paris</option><option value="Moussa Paris">Moussa Paris</option><option value="Salif">Salif</option>
+                <option value="Samba">Samba</option><option value="Touré">Touré</option>
+            </select>
         </div>
-        <div class="checkbox-container">
-            <input type="checkbox" id="showDeletedCheckbox" style="width: auto;">
-            <label for="showDeletedCheckbox">Afficher les éléments supprimés</label>
+        <div class="filter-grid" style="grid-template-columns: 1fr 1fr 1fr; gap: 15px; align-items: center;">
+            <div class="date-filter-group">
+                <label for="startDate">Du:</label>
+                <input type="date" id="startDate">
+            </div>
+            <div class="date-filter-group">
+                <label for="endDate">Au:</label>
+                <input type="date" id="endDate">
+            </div>
+            <div class="checkbox-container">
+                <input type="checkbox" id="showDeletedCheckbox">
+                <label for="showDeletedCheckbox">Afficher les éléments supprimés</label>
+            </div>
         </div>
     </div>
-
     <table id="caisseTable">
         <thead>
             <tr>
@@ -45,13 +65,13 @@
                 <th>Reste</th><th>Commune</th><th>Agent</th><th>Action</th>
             </tr>
         </thead>
-        <tbody id="tableBody"></tbody> </table>
+        <tbody id="tableBody"></tbody>
+    </table>
 
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script> 
     <script>
-        // Votre configuration personnelle et unique
         const firebaseConfig = {
             apiKey: "AIzaSyA255n3XWDRKaYZ9kwOYkfovf5lRexoCA4",
             authDomain: "caisse-amt-perso.firebaseapp.com",
@@ -60,11 +80,8 @@
             messagingSenderId: "682789156997",
             appId: "1:682789156997:web:9ce3303120851d37be91ec"
         };
-    
-        // Initialiser Firebase ET créer la variable "db"
         firebase.initializeApp(firebaseConfig);
         const db = firebase.firestore();
-        // Logique de déconnexion
         document.getElementById('logoutBtn').addEventListener('click', () => {
             if (confirm("Voulez-vous vous déconnecter ?")) {
                 firebase.auth().signOut();
@@ -73,4 +90,5 @@
     </script>
     <script src="auth-guard.js"></script>
     <script src="history.js"></script>
-</body> </html>
+</body>
+</html>
