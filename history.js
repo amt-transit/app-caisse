@@ -97,7 +97,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function renderTable(transactions) {
         tableBody.innerHTML = ''; 
         if (transactions.length === 0) {
-            tableBody.innerHTML = '<tr><td colspan="11">Aucun historique trouvé (ou correspondant aux filtres).</td></tr>';
+            tableBody.innerHTML = '<tr><td colspan="12">Aucun historique trouvé (ou correspondant aux filtres).</td></tr>';
             return;
         }
         let currentSubtotals = { prix: 0, montantParis: 0, montantAbidjan: 0, reste: 0 };
@@ -148,6 +148,7 @@ document.addEventListener('DOMContentLoaded', () => {
         newRow.innerHTML = `
             <td>${data.date || 'En attente'}</td>
             <td>${data.reference}</td>
+            <td>${data.nom || ''}</td>
             <td>${data.conteneur || ''}</td>
             <td>${formatCFA(data.prix)}</td>
             <td>${formatCFA(data.montantParis)}</td>
@@ -164,7 +165,7 @@ document.addEventListener('DOMContentLoaded', () => {
         subtotalRow.className = 'subtotal-row';
         subtotalRow.innerHTML = `
             <td>${date || 'TOTAL EN ATTENTE'}</td>
-            <td colspan="2" style="text-align: right;">TOTAL</td>
+            <td colspan="3" style="text-align: right;">TOTAL</td>
             <td>${formatCFA(totals.prix)}</td>
             <td>${formatCFA(totals.montantParis)}</td>
             <td>${formatCFA(totals.montantAbidjan)}</td>

@@ -138,6 +138,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     montantParis: (oldData.montantParis || 0) + transac.montantParis,
                     montantAbidjan: (oldData.montantAbidjan || 0) + transac.montantAbidjan,
                     reste: (oldData.reste || 0) + transac.montantParis + transac.montantAbidjan,
+                    nom: oldData.nom || '',
                     
                     date: transac.date || oldData.date, 
                     agent: transac.agent || oldData.agent || '',

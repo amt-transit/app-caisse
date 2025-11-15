@@ -22,6 +22,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const containerSummaryTableBody = document.getElementById('containerSummaryTableBody');
     const monthlyExpensesTableBody = document.getElementById('monthlyExpensesTableBody');
     const bankMovementsTableBody = document.getElementById('bankMovementsTableBody'); // NOUVEAU
+    const topClientsTableBody = document.getElementById('topClientsTableBody'); // <-- AJOUTEZ CETTE LIGNE
 
     // Cartes des Totaux
     const grandTotalPrixEl = document.getElementById('grandTotalPrix');
@@ -65,11 +66,12 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         // Lancer tous les calculs
         updateGrandTotals(filteredTransactions, filteredExpenses, filteredOtherIncome, filteredBankMovements);
-        generateDailySummary(filteredTransactions);
+        generateMonthlySummary(filteredTransactions);
         generateAgentSummary(filteredTransactions);
         generateContainerSummary(filteredTransactions, filteredExpenses, conteneurDB);
         generateMonthlyExpenseSummary(filteredExpenses); 
         generateBankMovementSummary(filteredBankMovements); // NOUVEAU
+        generateTopClientsSummary(filteredTransactions); // <-- AJOUTEZ CETTE LIGNE
     }
 
     function updateGrandTotals(transactions, expenses, otherIncomes, bankMovements) {
@@ -108,22 +110,35 @@ document.addEventListener('DOMContentLoaded', async () => {
         grandTotalResteEl.className = totalReste < 0 ? 'reste-negatif' : 'reste-positif';
     }
     
-    // ... (generateDailySummary et generateAgentSummary sont OK) ...
-    function generateDailySummary(transactions) {
+    // REMPLACER "generateDailySummary" PAR CETTE NOUVELLE FONCTION
+    function generateMonthlySummary(transactions) {
         summaryTableBody.innerHTML = '<tr><td colspan="3">Aucune donnée pour cette période.</td></tr>';
         if (transactions.length === 0) return;
-        const dailyData = {};
+        
+        const monthlyData = {}; // On renomme la variable
+        
         transactions.forEach(t => {
-            if (!dailyData[t.date]) dailyData[t.date] = { count: 0, totalPrix: 0 };
-            dailyData[t.date].count++;
-            dailyData[t.date].totalPrix += (t.prix || 0);
+            // S'il n'y a pas de date, on l'ignore
+            if (!t.date) return; 
+
+            // NOUVELLE LOGIQUE : Extraire AAAA-MM
+            // "2025-11-10" devient "2025-11"
+            const monthYear = t.date.substring(0, 7); 
+            
+            if (!monthlyData[monthYear]) {
+                monthlyData[monthYear] = { count: 0, totalPrix: 0 };
+            }
+            monthlyData[monthYear].count++;
+            monthlyData[monthYear].totalPrix += (t.prix || 0);
         });
-        const sortedDates = Object.keys(dailyData).sort((a, b) => new Date(b) - new Date(a));
+        
+        // Tri par mois, du plus récent au plus ancien (ex: "2025-11" avant "2025-10")
+        const sortedMonths = Object.keys(monthlyData).sort((a, b) => b.localeCompare(a));
+        
         summaryTableBody.innerHTML = '';
-        sortedDates.forEach(date => {
-            if (!date) return; 
-            const data = dailyData[date];
-            summaryTableBody.innerHTML += `<tr><td data-label="Date">${date}</td><td data-label="Nb Op.">${data.count}</td><td data-label="Total Prix">${formatCFA(data.totalPrix)}</td></tr>`;
+        sortedMonths.forEach(month => {
+            const data = monthlyData[month];
+            summaryTableBody.innerHTML += `<tr><td data-label="Mois">${month}</td><td data-label="Nb Op.">${data.count}</td><td data-label="Total Prix">${formatCFA(data.totalPrix)}</td></tr>`;
         });
     }
 
@@ -261,7 +276,53 @@ document.addEventListener('DOMContentLoaded', async () => {
             `;
         });
     }
+    // NOUVELLE FONCTION : Pour le Top 100 Clients
+    function generateTopClientsSummary(transactions) {
+        topClientsTableBody.innerHTML = '<tr><td colspan="4">Aucune donnée client.</td></tr>';
+        const clientData = {};
 
+        // 1. Agréger les données par nom de client
+        transactions.forEach(t => {
+            const clientName = t.nom || "Client non spécifié";
+            
+            // On ignore les transactions sans nom de client
+            if (clientName === "Client non spécifié" || !clientName.trim()) {
+                return; 
+            }
+
+            if (!clientData[clientName]) {
+                clientData[clientName] = { totalPrix: 0, count: 0 };
+            }
+            
+            clientData[clientName].totalPrix += (t.prix || 0);
+            clientData[clientName].count++;
+        });
+
+        // 2. Convertir en tableau et trier
+        const sortedClients = Object.entries(clientData)
+            .map(([name, data]) => ({ name, ...data }))
+            .sort((a, b) => b.totalPrix - a.totalPrix); // Tri par CA décroissant
+
+        if (sortedClients.length === 0) {
+            return; // Garde le message "Aucune donnée"
+        }
+
+        // 3. Prendre le Top 100
+        const top100Clients = sortedClients.slice(0, 100);
+
+        // 4. Afficher dans le tableau
+        topClientsTableBody.innerHTML = ''; // Vider le tableau
+        top100Clients.forEach((client, index) => {
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td data-label="Rang"><b>#${index + 1}</b></td>
+                <td data-label="Client">${client.name}</td>
+                <td data-label="Nb. Op.">${client.count}</td>
+                <td data-label="Chiffre d'Affaires">${formatCFA(client.totalPrix)}</td>
+            `;
+            topClientsTableBody.appendChild(row);
+        });
+    }
     // MISE À JOUR : Écouter les 4 collections
     transactionsCollection.where("isDeleted", "!=", true).orderBy("isDeleted").orderBy("date", "desc").onSnapshot(snapshot => {
         allTransactions = snapshot.docs.map(doc => doc.data());
