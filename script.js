@@ -5,14 +5,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     const transactionsCollection = db.collection("transactions");
-    let referenceDB = {};
-    try {
-        referenceDB = await fetch('references.json').then(res => res.json());
-    } catch (error) {
-        console.error("Erreur critique: Impossible de charger le fichier references.json.", error);
-    }
-
-    // INITIALISATION DE CHOICES.JS CORRIGÉE
+    
+    // N'ESSAIE PLUS DE CHARGER 'references.json'
+    
     const agentSelectElement = document.getElementById('agent');
     const agentChoices = new Choices(agentSelectElement, {
         removeItemButton: true, 
@@ -39,6 +34,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     let dailyTransactions = JSON.parse(localStorage.getItem('dailyTransactions')) || [];
 
+    // --- Fonctions restaurées ---
     function saveDailyToLocalStorage() {
         localStorage.setItem('dailyTransactions', JSON.stringify(dailyTransactions));
     }
@@ -80,6 +76,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         updateDailySummary();
     }
 
+    // --- Fonction 'addEntryBtn' restaurée ---
     addEntryBtn.addEventListener('click', () => {
         const selectedAgents = agentChoices.getValue(true); 
         const agentString = selectedAgents.join(', '); 
@@ -94,36 +91,39 @@ document.addEventListener('DOMContentLoaded', async () => {
         };
         if (!newData.date || !newData.reference) return alert("Veuillez remplir au moins la date et la référence.");
 
+        // Calcul du 'reste' basé sur le prix dans le formulaire
+        newData.reste = (newData.montantParis + newData.montantAbidjan) - newData.prix;
+
         const existingIndex = dailyTransactions.findIndex(t => t.reference === newData.reference);
         if (existingIndex > -1) {
+            // Si la réf existe DÉJÀ dans la liste du jour, on cumule les paiements
             const t = dailyTransactions[existingIndex];
             t.montantParis += newData.montantParis;
             t.montantAbidjan += newData.montantAbidjan;
             if (newData.agentMobileMoney) t.agentMobileMoney = newData.agentMobileMoney;
+            // On recalcule le reste basé sur le prix initial et le total des paiements
             t.reste = (t.montantParis + t.montantAbidjan) - t.prix;
         } else {
-            newData.reste = (newData.montantParis + newData.montantAbidjan) - newData.prix;
+            // C'est un nouveau paiement pour cette journée
             dailyTransactions.push(newData);
         }
+        
         saveDailyToLocalStorage();
         renderDailyTable();
         
+        // Réinitialisation du formulaire
         formContainer.querySelectorAll('input, select').forEach(el => {
-            if (el.type !== 'date' && el.id !== 'agent') { 
+            if (el.type !== 'date' && el.id !== 'agent' && el.id !== 'commune') { 
                 el.value = '';
             }
         });
         
-        // ==== CORRECTION ====
-        // Remplace 'clearStore()' (qui supprime les options)
-        // par 'setValue([])' (qui vide juste la sélection).
-        agentChoices.setValue([]); 
-        // ====================
-
+        agentChoices.setValue([]); // Correction du bug de réinitialisation
         resteInput.className = '';
         referenceInput.focus();
     });
 
+    // --- Fonction 'saveDayBtn' (mise à jour pour 'arrivages') ---
     saveDayBtn.addEventListener('click', async () => {
         if (dailyTransactions.length === 0) return alert("Aucune opération à enregistrer.");
         if (!confirm(`Voulez-vous vraiment enregistrer les ${dailyTransactions.length} opérations ?`)) return;
@@ -131,33 +131,38 @@ document.addEventListener('DOMContentLoaded', async () => {
         const batch = db.batch();
         for (const transac of dailyTransactions) {
             const query = await transactionsCollection.where("reference", "==", transac.reference).get();
+            
             if (!query.empty) {
+                // Le colis existe (cas normal pour un paiement)
                 const docRef = query.docs[0].ref;
                 const oldData = query.docs[0].data();
+                
                 const updatedData = {
                     montantParis: (oldData.montantParis || 0) + transac.montantParis,
                     montantAbidjan: (oldData.montantAbidjan || 0) + transac.montantAbidjan,
                     reste: (oldData.reste || 0) + transac.montantParis + transac.montantAbidjan,
-                    nom: oldData.nom || '',
                     
                     date: transac.date || oldData.date, 
+                    ...( (!oldData.date && transac.date) && {date: transac.date} ),
+                    
                     agent: transac.agent || oldData.agent || '',
                     agentMobileMoney: transac.agentMobileMoney || oldData.agentMobileMoney || '',
                     commune: transac.commune || oldData.commune || '',
+                    
+                    // On préserve les données de l'arrivage
+                    nom: oldData.nom || '', 
                     conteneur: oldData.conteneur || '', 
-                    prix: oldData.prix || transac.prix, 
+                    prix: oldData.prix || 0, // Garde l'ancien prix
                 };
-                
-                if (!oldData.date && transac.date) {
-                    updatedData.date = transac.date;
-                }
 
                 batch.update(docRef, updatedData);
+                
             } else {
-                const docRef = transactionsCollection.doc();
-                batch.set(docRef, transac);
+                // Le colis n'existe pas
+                console.warn(`La référence ${transac.reference} n'existe pas. Le paiement est ignoré.`);
             }
         }
+        
         batch.commit().then(() => {
             alert(`Les opérations ont été enregistrées avec succès !`);
             dailyTransactions = [];
@@ -166,6 +171,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         }).catch(err => console.error("Erreur d'enregistrement : ", err));
     });
 
+    // --- (dailyTableBody click listener restauré) ---
     dailyTableBody.addEventListener('click', (event) => {
         if (event.target.classList.contains('deleteBtn')) {
             const index = parseInt(event.target.getAttribute('data-index'), 10);
@@ -175,6 +181,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     });
 
+    // --- LOGIQUE DE RECHERCHE DE RÉFÉRENCE (mise à jour pour 'arrivages') ---
     referenceInput.addEventListener('input', async () => {
         const refValue = referenceInput.value;
         montantParisInput.placeholder = 'Montant Paris';
@@ -184,12 +191,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         resteInput.value = '';
         resteInput.className = '';
         
-        if (referenceDB[refValue]) {
-            prixInput.value = referenceDB[refValue];
-            calculateAndStyleReste();
-        }
-        
+        // La seule source de vérité est maintenant Firestore
         const query = await transactionsCollection.where("reference", "==", refValue).get();
+        
         if (!query.empty) {
             const lastTransaction = query.docs[0].data();
             
@@ -207,6 +211,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     });
 
+    // --- (calculateAndStyleReste et formatCFA restaurés) ---
     prixInput.addEventListener('input', calculateAndStyleReste);
     montantParisInput.addEventListener('input', calculateAndStyleReste);
     montantAbidjanInput.addEventListener('input', calculateAndStyleReste);
@@ -223,20 +228,32 @@ document.addEventListener('DOMContentLoaded', async () => {
     function formatCFA(number) {
         return new Intl.NumberFormat('fr-CI', { style: 'currency', currency: 'XOF' }).format(number || 0);
     }
-
+    
     function textToClassName(text) {
         if (!text) return '';
         return text.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, '-');
     }
     
+    // --- (populateDatalist mise à jour pour 'arrivages') ---
     function populateDatalist() {
-        for (const ref in referenceDB) {
-            const option = document.createElement('option');
-            option.value = ref;
-            referenceList.appendChild(option);
-        }
+        // On ne charge que les transactions qui ne sont pas supprimées
+        transactionsCollection.where("isDeleted", "!=", true).get().then(snapshot => {
+            const references = new Set(); // Evite les doublons
+            snapshot.forEach(doc => {
+                references.add(doc.data().reference);
+            });
+            
+            referenceList.innerHTML = ''; // Vide l'ancienne liste
+            references.forEach(ref => {
+                if (ref) { 
+                    const option = document.createElement('option');
+                    option.value = ref;
+                    referenceList.appendChild(option);
+                }
+            });
+        });
     }
 
     renderDailyTable();
-    populateDatalist();
+    populateDatalist(); // Lance la nouvelle fonction
 });

@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=1000">
+    <title>Arrivages - Caisse</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Comfortaa:wght@400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+    <link rel="icon" type="image/png" href="favicon.png">
+</head>
+<body style="display:none">
+    
+    <header class="app-header">
+        <img src="logoAMT.png" alt="Logo" class="app-logo">
+        <h1>Enregistrer un Arrivage</h1>
+        <button id="logoutBtn" style="position: absolute; right: 20px; padding: 8px 15px; cursor: pointer;">Déconnexion</button>
+    </header>
+
+    <nav class="navigation">
+        <a href="index.html">Saisie</a>
+        <a href="dashboard.html" id="nav-dashboard">Tableau de Bord</a>
+        <a href="history.html">Historique</a>
+        <a href="expenses.html" id="nav-expenses">Dépenses</a>
+        <a href="other-income.html" id="nav-other-income">Autres Entrées</a>
+        <a href="bank.html" id="nav-bank">Banque</a>
+        <a href="arrivages.html" id="nav-arrivages" class="active">Arrivages</a>
+    </nav>
+
+    <h2>Enregistrer un seul colis</h2>
+    <div id="caisseForm">
+        <div class="form-grid">
+            <input type="date" id="arrivalDate" required>
+            <input type="text" id="arrivalConteneur" placeholder="Conteneur (ex: D35)" required>
+            <input type="text" id="arrivalRef" placeholder="Référence / Client" required>
+            <input type="text" id="arrivalNom" placeholder="Nom du Client" required>
+            <div class="prix-container">
+                <input type="number" id="arrivalPrix" placeholder="Prix du colis">
+                <span class="cfa-label">CFA</span>
+            </div>
+        </div>
+        <div class="form-buttons">
+            <button id="addArrivalBtn" class="primary">Enregistrer le Colis</button>
+        </div>
+    </div>
+
+    <h2 style="margin-top: 30px;">Enregistrer en Masse (via Fichier CSV)</h2>
+    <div id="caisseForm" class="bulk-upload-form">
+        <p>Utilisez ce formulaire pour importer plusieurs colis du <strong>même conteneur</strong> et à la <strong>même date</strong>.</p>
+        <ol style="margin-left: 20px; text-align: left;">
+            <li>Remplissez les champs <strong>Date</strong> et <strong>Conteneur</strong> dans le formulaire ci-dessus.</li>
+            <li>Préparez un fichier CSV avec 3 colonnes : <strong>reference, nom, prix</strong></li>
+            <li>Importez le fichier ci-dessous.</li>
+        </ol>
+        
+        <input type="file" id="csvFile" accept=".csv" style="margin-top: 15px;">
+        <button id="uploadCsvBtn" class="primary" style="margin-top: 15px; width: 100%;">Importer le Fichier CSV</button>
+        
+        <pre id="uploadLog" style="background-color: #f8f9fa; border: 1px solid #dee2e6; padding: 10px; border-radius: 6px; margin-top: 15px; display: none; text-align: left;"></pre>
+    </div>
+    <h2 style="margin-top: 30px;">Colis récemment ajoutés</h2>
+    <table id="arrivalsTable">
+        <thead>
+            <tr>
+                <th>Date Ajout</th>
+                <th>Référence</th>
+                <th>Nom Client</th>
+                <th>Conteneur</th>
+                <th>Prix</th>
+                <th>Reste à Payer</th>
+            </tr>
+        </thead>
+        <tbody id="arrivalsTableBody"></tbody>
+    </table>
+
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+    <script>
+        const firebaseConfig = {
+            apiKey: "AIzaSyA255n3XWDRKaYZ9kwOYkfovf5lRexoCA4",
+            authDomain: "caisse-amt-perso.firebaseapp.com",
+            projectId: "caisse-amt-perso",
+            storageBucket: "caisse-amt-perso.firebasestorage.app",
+            messagingSenderId: "682789156997",
+            appId: "1:682789156997:web:9ce3303120851d37be91ec"
+        };
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
+        document.getElementById('logoutBtn').addEventListener('click', () => {
+            if (confirm("Voulez-vous vous déconnecter ?")) firebase.auth().signOut();
+        });
+    </script>
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+    
+    <script src="auth-guard.js"></script>
+    <script src="arrivages.js"></script> 
+</body>
+</html>

@@ -23,6 +23,7 @@
         <a href="expenses.html" id="nav-expenses">Dépenses</a>
         <a href="other-income.html" id="nav-other-income">Autres Entrées</a>
         <a href="bank.html" id="nav-bank">Banque</a>
+        <a href="arrivages.html" id="nav-arrivages">Arrivages</a>
     </nav>
 
     <div class="dashboard-container">
@@ -78,92 +79,108 @@
             </div>
         </div> 
         
-        <h2 style="margin-top: 30px;">Récapitulatif par Conteneur</h2>
-        <table id="containerSummaryTable">
-            <thead>
-                <tr>
-                    <th>Conteneur</th>
-                    <th>Chiffre d'Affaires (CA)</th>
-                    <th>Total Paris</th>
-                    <th>Total Abidjan</th>
-                    <th>Total Perçu (P+A)</th>
-                    <th>Total Reste</th>
-                    <th>Total Dépenses</th> 
-                    <th>BÉNÉFICE Conteneur</th>
-                </tr>
-            </thead>
-            <tbody id="containerSummaryTableBody"></tbody>
-        </table>
+        <div class="sub-nav">
+            <a href="#panel-conteneurs" class="active">Par Conteneur</a>
+            <a href="#panel-clients">Top 100 Clients</a>
+            <a href="#panel-agents">Par Agent</a>
+            <a href="#panel-ventes">Ventes (par Mois)</a>
+            <a href="#panel-depenses">Dépenses (Mensuelles)</a>
+            <a href="#panel-banque">Mouvements Banque</a>
+        </div>
 
-        <h2 style="margin-top: 30px;">Récapitulatif des Mouvements de Banque</h2>
-        <table id="bankMovementsTable">
-            <thead>
-                <tr>
-                    <th>Date</th>
-                    <th>Description</th>
-                    <th>Type</th>
-                    <th>Montant</th>
-                </tr>
-            </thead>
-            <tbody id="bankMovementsTableBody"></tbody>
-        </table>
-        
-        <h2 style="margin-top: 30px;">Récapitulatif des Dépenses Mensuelles</h2>
-        <table id="monthlyExpensesTable">
-            <thead>
-                <tr>
-                    <th>Date</th>
-                    <th>Description</th>
-                    <th>Montant</th>
-                </tr>
-            </thead>
-            <tbody id="monthlyExpensesTableBody"></tbody>
-        </table>
-        
-        <h2>Récapitulatif par Mois (Ventes)</h2>
-        <table id="summaryTable">
-            <thead>
-                <tr>
-                    <th>Mois</th>
-                    <th>Nombre d'Opérations</th>
-                    <th>Total des Prix</th>
-                </tr>
-            </thead>
-            <tbody id="summaryTableBody"></tbody>
-        </table>
-
-        <h2 style="margin-top: 30px;">Récapitulatif par Agent</h2>
-        <table id="agentSummaryTable">
-            <thead>
-                <tr>
-                    <th>Agent</th>
-                    <th>Nombre d'Opérations</th>
-                    <th>Chiffre d'Affaires</th>
-                </tr>
-            </thead>
-            <tbody id="agentSummaryTableBody"></tbody>
-        </table>
-        <table id="agentSummaryTable">
-            <thead>
+        <div id="panel-conteneurs" class="tab-panel active">
+            <h2 style="margin-top: 30px;">Récapitulatif par Conteneur</h2>
+            <table id="containerSummaryTable">
+                <thead>
+                    <tr>
+                        <th>Conteneur</th>
+                        <th>Chiffre d'Affaires (CA)</th>
+                        <th>Total Paris</th>
+                        <th>Total Abidjan</th>
+                        <th>Total Perçu (P+A)</th>
+                        <th>Total Reste</th>
+                        <th>Total Dépenses</th> 
+                        <th>BÉNÉFICE Conteneur</th>
+                    </tr>
                 </thead>
-            <tbody id="agentSummaryTableBody"></tbody>
-        </table>
+                <tbody id="containerSummaryTableBody"></tbody>
+            </table>
+        </div>
 
-        <h2 style="margin-top: 30px;">Top 100 Clients</h2>
-        <table id="topClientsTable">
-            <thead>
-                <tr>
-                    <th>Rang</th>
-                    <th>Client (Nom)</th>
-                    <th>Nb. Opérations</th>
-                    <th>Chiffre d'Affaires</th>
-                </tr>
-            </thead>
-            <tbody id="topClientsTableBody"></tbody>
-        </table>
+        <div id="panel-clients" class="tab-panel">
+            <h2 style="margin-top: 30px;">Top 100 Clients</h2>
+            <table id="topClientsTable">
+                <thead>
+                    <tr>
+                        <th>Rang</th>
+                        <th>Client (Nom)</th>
+                        <th>Nb. Opérations</th>
+                        <th>Chiffre d'Affaires</th>
+                    </tr>
+                </thead>
+                <tbody id="topClientsTableBody"></tbody>
+            </table>
+        </div>
+
+        <div id="panel-agents" class="tab-panel">
+            <h2 style="margin-top: 30px;">Récapitulatif par Agent</h2>
+            <table id="agentSummaryTable">
+                <thead>
+                    <tr>
+                        <th>Agent</th>
+                        <th>Nombre d'Opérations</th>
+                        <th>Chiffre d'Affaires</th>
+                    </tr>
+                </thead>
+                <tbody id="agentSummaryTableBody"></tbody>
+            </table>
+        </div>
+
+        <div id="panel-ventes" class="tab-panel">
+            <h2>Récapitulatif par Mois (Ventes)</h2>
+            <table id="summaryTable">
+                <thead>
+                    <tr>
+                        <th>Mois</th>
+                        <th>Nombre d'Opérations</th>
+                        <th>Total des Prix</th>
+                    </tr>
+                </thead>
+                <tbody id="summaryTableBody"></tbody>
+            </table>
+        </div>
+
+        <div id="panel-depenses" class="tab-panel">
+            <h2 style="margin-top: 30px;">Récapitulatif des Dépenses Mensuelles</h2>
+            <table id="monthlyExpensesTable">
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Description</th>
+                        <th>Montant</th>
+                    </tr>
+                </thead>
+                <tbody id="monthlyExpensesTableBody"></tbody>
+            </table>
+        </div>
+
+        <div id="panel-banque" class="tab-panel">
+            <h2 style="margin-top: 30px;">Récapitulatif des Mouvements de Banque</h2>
+            <table id="bankMovementsTable">
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Description</th>
+                        <th>Type</th>
+                        <th>Montant</th>
+                    </tr>
+                </thead>
+                <tbody id="bankMovementsTableBody"></tbody>
+            </table>
+        </div>
+
     </div> 
     
-
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>

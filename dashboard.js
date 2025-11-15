@@ -2,27 +2,45 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (typeof firebase === 'undefined' || typeof db === 'undefined') {
         alert("Erreur: Connexion BDD échouée."); return;
     }
+    // ==== NOUVEAU BLOC POUR GÉRER LES ONGLETS ====
+    const tabs = document.querySelectorAll('.sub-nav a');
+    const panels = document.querySelectorAll('.tab-panel');
+
+    tabs.forEach(tab => {
+        tab.addEventListener('click', (e) => {
+            e.preventDefault(); // Empêche le saut de page
+            
+            // 1. Récupère la cible (ex: "#panel-conteneurs")
+            const targetId = tab.getAttribute('href');
+            const targetPanel = document.querySelector(targetId);
+
+            // 2. Retire 'active' de tous les onglets et panneaux
+            tabs.forEach(t => t.classList.remove('active'));
+            panels.forEach(p => p.classList.remove('active'));
+
+            // 3. Ajoute 'active' à l'onglet cliqué et au panneau cible
+            tab.classList.add('active');
+            if (targetPanel) {
+                targetPanel.classList.add('active');
+            }
+        });
+    });
     
-    let conteneurDB = {};
-    try {
-        conteneurDB = await fetch('conteneurs.json').then(res => res.json());
-    } catch (error) {
-        console.error("Erreur chargement conteneurs.json.", error);
-    }
+    // SUPPRIMÉ : Le bloc 'fetch("conteneurs.json")' a été retiré.
     
     // ÉCOUTER LES 4 COLLECTIONS
     const transactionsCollection = db.collection("transactions");
     const expensesCollection = db.collection("expenses"); 
-    const otherIncomeCollection = db.collection("other_income"); // NOUVEAU
-    const bankCollection = db.collection("bank_movements"); // NOUVEAU
+    const otherIncomeCollection = db.collection("other_income"); 
+    const bankCollection = db.collection("bank_movements"); 
 
     // Références aux éléments
     const summaryTableBody = document.getElementById('summaryTableBody');
     const agentSummaryTableBody = document.getElementById('agentSummaryTableBody');
     const containerSummaryTableBody = document.getElementById('containerSummaryTableBody');
     const monthlyExpensesTableBody = document.getElementById('monthlyExpensesTableBody');
-    const bankMovementsTableBody = document.getElementById('bankMovementsTableBody'); // NOUVEAU
-    const topClientsTableBody = document.getElementById('topClientsTableBody'); // <-- AJOUTEZ CETTE LIGNE
+    const bankMovementsTableBody = document.getElementById('bankMovementsTableBody');
+    const topClientsTableBody = document.getElementById('topClientsTableBody'); // Ajout du Top Clients
 
     // Cartes des Totaux
     const grandTotalPrixEl = document.getElementById('grandTotalPrix');
@@ -30,11 +48,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     const grandTotalDepensesEl = document.getElementById('grandTotalDepenses');
     const grandTotalBeneficeEl = document.getElementById('grandTotalBenefice');
     const grandTotalResteEl = document.getElementById('grandTotalReste');
-    const grandTotalOtherIncomeEl = document.getElementById('grandTotalOtherIncome'); // NOUVEAU
-    const grandTotalPercuEl = document.getElementById('grandTotalPercu'); // NOUVEAU
-    const grandTotalRetraitsEl = document.getElementById('grandTotalRetraits'); // NOUVEAU
-    const grandTotalDepotsEl = document.getElementById('grandTotalDepots'); // NOUVEAU
-    const grandTotalCaisseEl = document.getElementById('grandTotalCaisse'); // NOUVEAU
+    const grandTotalOtherIncomeEl = document.getElementById('grandTotalOtherIncome');
+    const grandTotalPercuEl = document.getElementById('grandTotalPercu');
+    const grandTotalRetraitsEl = document.getElementById('grandTotalRetraits');
+    const grandTotalDepotsEl = document.getElementById('grandTotalDepots');
+    const grandTotalCaisseEl = document.getElementById('grandTotalCaisse');
     
     const startDateInput = document.getElementById('startDate');
     const endDateInput = document.getElementById('endDate');
@@ -43,8 +61,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Stockage local des données
     let allTransactions = [];
     let allExpenses = []; 
-    let allOtherIncome = []; // NOUVEAU
-    let allBankMovements = []; // NOUVEAU
+    let allOtherIncome = []; 
+    let allBankMovements = []; 
 
     function filterByDate(items, startDate, endDate) {
         return items.filter(item => {
@@ -66,14 +84,15 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         // Lancer tous les calculs
         updateGrandTotals(filteredTransactions, filteredExpenses, filteredOtherIncome, filteredBankMovements);
-        generateMonthlySummary(filteredTransactions);
+        generateMonthlySummary(filteredTransactions); // Corrigé (utilise Monthly au lieu de Daily)
         generateAgentSummary(filteredTransactions);
-        generateContainerSummary(filteredTransactions, filteredExpenses, conteneurDB);
+        generateContainerSummary(filteredTransactions, filteredExpenses); // MODIFIÉ : ne passe plus conteneurDB
         generateMonthlyExpenseSummary(filteredExpenses); 
-        generateBankMovementSummary(filteredBankMovements); // NOUVEAU
-        generateTopClientsSummary(filteredTransactions); // <-- AJOUTEZ CETTE LIGNE
+        generateBankMovementSummary(filteredBankMovements);
+        generateTopClientsSummary(filteredTransactions); // Ajout du Top Clients
     }
 
+    // ... (La fonction updateGrandTotals est correcte) ...
     function updateGrandTotals(transactions, expenses, otherIncomes, bankMovements) {
         // --- Calcul Bénéfice ---
         const totalPrix = transactions.reduce((sum, t) => sum + (t.prix || 0), 0);
@@ -85,7 +104,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         const totalPercu = transactions.reduce((sum, t) => sum + (t.montantParis || 0) + (t.montantAbidjan || 0), 0);
         const totalRetraits = bankMovements.filter(m => m.type === 'Retrait').reduce((sum, m) => sum + (m.montant || 0), 0);
         const totalDepots = bankMovements.filter(m => m.type === 'Depot').reduce((sum, m) => sum + (m.montant || 0), 0);
-        // Caisse = (Ce qui est entré) - (Ce qui est sorti)
         const totalCaisse = (totalPercu + totalOtherIncome + totalRetraits) - (totalDepenses + totalDepots);
 
         // --- Dettes ---
@@ -98,43 +116,31 @@ document.addEventListener('DOMContentLoaded', async () => {
         grandTotalDepensesEl.textContent = formatCFA(totalDepenses);
         grandTotalBeneficeEl.textContent = formatCFA(totalBenefice);
         grandTotalBeneficeEl.className = totalBenefice < 0 ? 'reste-negatif' : 'reste-positif';
-        
         grandTotalPercuEl.textContent = formatCFA(totalPercu);
         grandTotalRetraitsEl.textContent = formatCFA(totalRetraits);
         grandTotalDepotsEl.textContent = formatCFA(totalDepots);
         grandTotalCaisseEl.textContent = formatCFA(totalCaisse);
         grandTotalCaisseEl.className = totalCaisse < 0 ? 'reste-negatif' : 'reste-positif';
-
         grandTotalCountEl.textContent = totalCount;
         grandTotalResteEl.textContent = formatCFA(totalReste);
         grandTotalResteEl.className = totalReste < 0 ? 'reste-negatif' : 'reste-positif';
     }
-    
-    // REMPLACER "generateDailySummary" PAR CETTE NOUVELLE FONCTION
+
+    // ... (La fonction generateMonthlySummary est correcte) ...
     function generateMonthlySummary(transactions) {
         summaryTableBody.innerHTML = '<tr><td colspan="3">Aucune donnée pour cette période.</td></tr>';
         if (transactions.length === 0) return;
-        
-        const monthlyData = {}; // On renomme la variable
-        
+        const monthlyData = {};
         transactions.forEach(t => {
-            // S'il n'y a pas de date, on l'ignore
             if (!t.date) return; 
-
-            // NOUVELLE LOGIQUE : Extraire AAAA-MM
-            // "2025-11-10" devient "2025-11"
             const monthYear = t.date.substring(0, 7); 
-            
             if (!monthlyData[monthYear]) {
                 monthlyData[monthYear] = { count: 0, totalPrix: 0 };
             }
             monthlyData[monthYear].count++;
             monthlyData[monthYear].totalPrix += (t.prix || 0);
         });
-        
-        // Tri par mois, du plus récent au plus ancien (ex: "2025-11" avant "2025-10")
         const sortedMonths = Object.keys(monthlyData).sort((a, b) => b.localeCompare(a));
-        
         summaryTableBody.innerHTML = '';
         sortedMonths.forEach(month => {
             const data = monthlyData[month];
@@ -142,6 +148,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     }
 
+    // ... (La fonction generateAgentSummary est correcte) ...
     function generateAgentSummary(transactions) {
         agentSummaryTableBody.innerHTML = '<tr><td colspan="3">Aucune donnée pour cette période.</td></tr>';
         const agentData = {};
@@ -171,12 +178,14 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     }
 
-    // ... (generateContainerSummary est OK) ...
-    function generateContainerSummary(transactions, expenses, conteneurDB) {
+    // ==== FONCTION generateContainerSummary MODIFIÉE ====
+    function generateContainerSummary(transactions, expenses) {
         containerSummaryTableBody.innerHTML = '<tr><td colspan="8">Aucune donnée de conteneur.</td></tr>';
+        
         const containerData = {};
         transactions.forEach(t => {
-            const containerName = t.conteneur || conteneurDB[t.reference] || "Non spécifié";
+            // MODIFIÉ : Utilise uniquement 't.conteneur'
+            const containerName = t.conteneur || "Non spécifié"; 
             if (!containerData[containerName]) {
                 containerData[containerName] = { totalPrix: 0, totalParis: 0, totalAbidjan: 0, totalReste: 0 };
             }
@@ -232,7 +241,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     }
 
-    // ... (generateMonthlyExpenseSummary est OK) ...
+    // ... (La fonction generateMonthlyExpenseSummary est correcte) ...
     function generateMonthlyExpenseSummary(expenses) {
         monthlyExpensesTableBody.innerHTML = '';
         let hasMonthly = false;
@@ -254,14 +263,13 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     }
 
-    // NOUVELLE FONCTION : Pour la table des mouvements bancaires
+    // ... (La fonction generateBankMovementSummary est correcte) ...
     function generateBankMovementSummary(bankMovements) {
         bankMovementsTableBody.innerHTML = '';
         if (bankMovements.length === 0) {
             bankMovementsTableBody.innerHTML = '<tr><td colspan="4">Aucun mouvement bancaire pour cette période.</td></tr>';
             return;
         }
-        
         const sortedMovements = bankMovements.sort((a, b) => new Date(b.date) - new Date(a.date));
         sortedMovements.forEach(m => {
             bankMovementsTableBody.innerHTML += `
@@ -276,42 +284,28 @@ document.addEventListener('DOMContentLoaded', async () => {
             `;
         });
     }
-    // NOUVELLE FONCTION : Pour le Top 100 Clients
+
+    // ... (La fonction generateTopClientsSummary est correcte) ...
     function generateTopClientsSummary(transactions) {
         topClientsTableBody.innerHTML = '<tr><td colspan="4">Aucune donnée client.</td></tr>';
         const clientData = {};
-
-        // 1. Agréger les données par nom de client
         transactions.forEach(t => {
             const clientName = t.nom || "Client non spécifié";
-            
-            // On ignore les transactions sans nom de client
             if (clientName === "Client non spécifié" || !clientName.trim()) {
                 return; 
             }
-
             if (!clientData[clientName]) {
                 clientData[clientName] = { totalPrix: 0, count: 0 };
             }
-            
             clientData[clientName].totalPrix += (t.prix || 0);
             clientData[clientName].count++;
         });
-
-        // 2. Convertir en tableau et trier
         const sortedClients = Object.entries(clientData)
             .map(([name, data]) => ({ name, ...data }))
-            .sort((a, b) => b.totalPrix - a.totalPrix); // Tri par CA décroissant
-
-        if (sortedClients.length === 0) {
-            return; // Garde le message "Aucune donnée"
-        }
-
-        // 3. Prendre le Top 100
+            .sort((a, b) => b.totalPrix - a.totalPrix); 
+        if (sortedClients.length === 0) return;
         const top100Clients = sortedClients.slice(0, 100);
-
-        // 4. Afficher dans le tableau
-        topClientsTableBody.innerHTML = ''; // Vider le tableau
+        topClientsTableBody.innerHTML = ''; 
         top100Clients.forEach((client, index) => {
             const row = document.createElement('tr');
             row.innerHTML = `
@@ -323,7 +317,9 @@ document.addEventListener('DOMContentLoaded', async () => {
             topClientsTableBody.appendChild(row);
         });
     }
-    // MISE À JOUR : Écouter les 4 collections
+
+
+    // --- Écouteurs Firestore ---
     transactionsCollection.where("isDeleted", "!=", true).orderBy("isDeleted").orderBy("date", "desc").onSnapshot(snapshot => {
         allTransactions = snapshot.docs.map(doc => doc.data());
         updateDashboard();
@@ -334,18 +330,15 @@ document.addEventListener('DOMContentLoaded', async () => {
         updateDashboard(); 
     }, error => console.error("Erreur Firestore (expenses): ", error));
 
-    // NOUVEAU : Écouter 'other_income'
     otherIncomeCollection.where("isDeleted", "!=", true).orderBy("isDeleted").orderBy("date", "desc").onSnapshot(snapshot => {
         allOtherIncome = snapshot.docs.map(doc => doc.data());
         updateDashboard(); 
     }, error => console.error("Erreur Firestore (other_income): ", error));
 
-    // NOUVEAU : Écouter 'bank_movements'
     bankCollection.where("isDeleted", "!=", true).orderBy("isDeleted").orderBy("date", "desc").onSnapshot(snapshot => {
         allBankMovements = snapshot.docs.map(doc => doc.data());
         updateDashboard(); 
     }, error => console.error("Erreur Firestore (bank_movements): ", error));
-
 
     // Listeners des filtres de date
     startDateInput.addEventListener('change', updateDashboard);

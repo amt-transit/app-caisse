@@ -19,12 +19,13 @@ firebase.auth().onAuthStateChanged(async (user) => {
         // --- GESTION DES ACCÈS ---
         const currentPage = window.location.pathname;
 
-        // Si ce n'est PAS un admin, bloquer l'accès au Dashboard, Dépenses, et autres
+        // Si ce n'est PAS un admin
         if (userRole !== 'admin') {
             const isRestrictedPage = currentPage.includes('dashboard.html') || 
                                      currentPage.includes('expenses.html') ||
                                      currentPage.includes('other-income.html') ||
-                                     currentPage.includes('bank.html');
+                                     currentPage.includes('bank.html') ||
+                                     currentPage.includes('arrivages.html'); // PAGE PROTÉGÉE
 
             if (isRestrictedPage) {
                 alert("Accès refusé. Vous n'avez pas les droits pour cette page.");
@@ -36,14 +37,16 @@ firebase.auth().onAuthStateChanged(async (user) => {
         // --- GESTION DE L'INTERFACE (Cacher les liens) ---
         const navDashboard = document.getElementById('nav-dashboard');
         const navExpenses = document.getElementById('nav-expenses');
-        const navOtherIncome = document.getElementById('nav-other-income'); // NOUVEAU
-        const navBank = document.getElementById('nav-bank'); // NOUVEAU
+        const navOtherIncome = document.getElementById('nav-other-income'); 
+        const navBank = document.getElementById('nav-bank'); 
+        const navArrivages = document.getElementById('nav-arrivages'); // LIEN À CACHER
 
         if (userRole !== 'admin') {
             if (navDashboard) navDashboard.style.display = 'none';
             if (navExpenses) navExpenses.style.display = 'none';
-            if (navOtherIncome) navOtherIncome.style.display = 'none'; // NOUVEAU
-            if (navBank) navBank.style.display = 'none'; // NOUVEAU
+            if (navOtherIncome) navOtherIncome.style.display = 'none';
+            if (navBank) navBank.style.display = 'none';
+            if (navArrivages) navArrivages.style.display = 'none'; // CACHER LE LIEN
         }
 
         document.body.style.display = 'block';
