@@ -13,7 +13,7 @@
 </head>
 <body style="display:none">
     <header class="app-header">
-        <img src="logoAMT.png" alt="Logo de l'entreprise" class="app-logo">
+        <img src="logoAMT.png" alt="Logo" class="app-logo">
         <h1>Saisie de Caisse</h1>
         <button id="logoutBtn" style="position: absolute; right: 20px; padding: 8px 15px; cursor: pointer;">Déconnexion</button>
     </header>
@@ -31,11 +31,12 @@
     <div id="caisseForm">
         <div class="form-grid">
             <input type="date" id="date" required>
-            <input type="text" id="reference" placeholder="Référence / Client" required list="referenceList">
+            <input type="text" id="reference" placeholder="Référence / Client (Recherche)" required list="referenceList">
             <datalist id="referenceList"></datalist>
             
-            <input type="text" id="nom" placeholder="Nom du Client (Auto ou Nouveau)">
+            <input type="text" id="nom" placeholder="Nom du Client">
             <input type="text" id="conteneur" placeholder="Conteneur (ex: D35)">
+
             <div class="prix-container">
                 <input type="number" id="prix" placeholder="Prix">
                 <span class="cfa-label">CFA</span>
@@ -73,7 +74,8 @@
         <thead>
             <tr>
                 <th>Référence</th>
-                <th>Nom</th> <th>Prix</th>
+                <th>Nom</th>
+                <th>Prix</th>
                 <th>Reste</th>
                 <th>Action</th>
             </tr>
@@ -82,26 +84,11 @@
     </table>
 
     <div class="daily-summary">
-        <div class="summary-item">
-            <h4>Total des Prix</h4>
-            <span id="dailyTotalPrix">0 F CFA</span>
-        </div>
-        <div class="summary-item">
-            <h4>Total Abidjan (Espèces)</h4>
-            <span id="dailyTotalAbidjanEspeces">0 F CFA</span>
-        </div>
-        <div class="summary-item">
-            <h4>Total Paris</h4>
-            <span id="dailyTotalParis">0 F CFA</span>
-        </div>
-        <div class="summary-item">
-            <h4>Total Mobile Money</h4>
-            <span id="dailyTotalMobileMoney">0 F CFA</span>
-        </div>
-        <div class="summary-item">
-            <h4>Reste Total</h4>
-            <span id="dailyTotalReste">0 F CFA</span>
-        </div>
+        <div class="summary-item"><h4>Total des Prix</h4><span id="dailyTotalPrix">0 F CFA</span></div>
+        <div class="summary-item"><h4>Total Abidjan (Espèces)</h4><span id="dailyTotalAbidjanEspeces">0 F CFA</span></div>
+        <div class="summary-item"><h4>Total Paris</h4><span id="dailyTotalParis">0 F CFA</span></div>
+        <div class="summary-item"><h4>Total Mobile Money</h4><span id="dailyTotalMobileMoney">0 F CFA</span></div>
+        <div class="summary-item"><h4>Reste Total</h4><span id="dailyTotalReste">0 F CFA</span></div>
     </div>
 
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
@@ -119,12 +106,9 @@
         firebase.initializeApp(firebaseConfig);
         const db = firebase.firestore();
         document.getElementById('logoutBtn').addEventListener('click', () => {
-            if (confirm("Voulez-vous vous déconnecter ?")) {
-                firebase.auth().signOut();
-            }
+            if (confirm("Voulez-vous vous déconnecter ?")) firebase.auth().signOut();
         });
     </script>
-    
     <script src="https://cdn.jsdelivr.net/npm/choices.js/public/assets/scripts/choices.min.js"></script>
     <script src="auth-guard.js"></script>
     <script src="script.js"></script>
