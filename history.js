@@ -9,30 +9,45 @@ document.addEventListener('DOMContentLoaded', () => {
     const transactionsCollection = db.collection("transactions");
     const tableBody = document.getElementById('tableBody');
     
-    // NOUVEAUX ÉLÉMENTS DE FILTRE
+    // Éléments de filtre
     const showDeletedCheckbox = document.getElementById('showDeletedCheckbox');
     const masterSearchInput = document.getElementById('masterSearch');
     const containerSearchInput = document.getElementById('containerSearch');
-    const agentFilterInput = document.getElementById('agentFilter'); // NOUVEAU
-    const startDateInput = document.getElementById('startDate'); // NOUVEAU
-    const endDateInput = document.getElementById('endDate'); // NOUVEAU
+    const agentFilterInput = document.getElementById('agentFilter');
+    const startDateInput = document.getElementById('startDate');
+    const endDateInput = document.getElementById('endDate');
+
+    // Éléments de la MODALE
+    const modal = document.getElementById('paymentHistoryModal');
+    const modalList = document.getElementById('paymentHistoryList');
+    const modalTitle = document.getElementById('modalRefTitle');
+    const closeModal = document.querySelector('.close-modal'); // Assurez-vous d'avoir ce span dans history.html
 
     let unsubscribeHistory = null; 
     let allTransactions = []; 
 
-    // --- LOGIQUE DE SUPPRESSION / MODIFICATION ---
+    // --- GESTION DE LA MODALE ---
+    // Fermer la modale
+    if (closeModal) {
+        closeModal.onclick = () => modal.style.display = "none";
+    }
+    window.onclick = (e) => { if (e.target == modal) modal.style.display = "none"; };
+
+    // --- GESTION DES CLICS SUR LE TABLEAU ---
     tableBody.addEventListener('click', (event) => {
         const target = event.target;
+        const row = target.closest('tr');
 
-        // Clic sur "Suppr."
+        // 1. Clic sur "Suppr."
         if (target.classList.contains('deleteBtn')) {
             const docId = target.dataset.id;
             if (confirm("Confirmer la suppression de cette entrée ? Elle sera archivée.")) {
                 transactionsCollection.doc(docId).update({ isDeleted: true });
             }
+            return; // Stop ici
         }
 
-        // Clic sur "Modif."
+        // 2. Clic sur "Modif."
         if (target.classList.contains('editBtn')) {
             const docId = target.dataset.id;
             const oldPrice = parseFloat(target.dataset.prix);
@@ -58,8 +73,52 @@ document.addEventListener('DOMContentLoaded', () => {
                     .then(() => alert("Modification enregistrée !"))
                     .catch(err => alert("Une erreur est survenue."));
             }
+            return; // Stop ici
+        }
+
+        // 3. Clic sur la LIGNE (pour voir les détails)
+        // Si on n'a pas cliqué sur un bouton, et que la ligne a un ID
+        if (row && row.dataset.id) {
+            // Retrouver les données de la transaction dans notre liste locale
+            const transaction = allTransactions.find(t => t.id === row.dataset.id);
+            
+            if (transaction) {
+                openPaymentModal(transaction);
+            }
         }
     });
+
+    // Fonction pour ouvrir la modale avec les détails
+    function openPaymentModal(data) {
+        modalTitle.textContent = `${data.reference} - ${data.nom || 'Client'}`;
+        modalList.innerHTML = '';
+
+        if (data.paymentHistory && data.paymentHistory.length > 0) {
+            // Afficher l'historique détaillé
+            data.paymentHistory.forEach(pay => {
+                // On ne montre que les montants > 0
+                let amounts = [];
+                if(pay.montantParis > 0) amounts.push(`<span style="color:blue">Paris: ${formatCFA(pay.montantParis)}</span>`);
+                if(pay.montantAbidjan > 0) amounts.push(`<span style="color:orange">Abidjan: ${formatCFA(pay.montantAbidjan)}</span>`);
+                
+                const li = document.createElement('li');
+                li.innerHTML = `
+                    <span style="font-weight:bold; min-width: 90px;">${pay.date}</span>
+                    <span style="flex-grow:1; margin: 0 10px;">${amounts.join(' + ')}</span>
+                    <span style="font-size:0.85em; color:#666">${pay.agent || '-'}</span>
+                `;
+                modalList.appendChild(li);
+            });
+        } else {
+            // Si pas d'historique (anciennes données), on montre le cumul actuel
+            modalList.innerHTML = `<li style="color:gray; font-style:italic; justify-content:center;">Pas de détails historiques pour cet ancien colis.</li>
+                                   <li style="justify-content: space-around;">
+                                        <span>Total Paris: <b style="color:blue">${formatCFA(data.montantParis)}</b></span>
+                                        <span>Total Abidjan: <b style="color:orange">${formatCFA(data.montantAbidjan)}</b></span>
+                                   </li>`;
+        }
+        modal.style.display = "block";
+    }
 
     // --- ÉTAPE 1 : RÉCUPÉRER LES DONNÉES DE FIREBASE ---
     function fetchHistory() {
@@ -85,7 +144,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- ÉTAPE 2 : FILTRER ET AFFICHER (CÔTÉ CLIENT) ---
     function applyFiltersAndRender() {
-        // Récupérer toutes les valeurs de filtre
         const masterTerm = masterSearchInput.value.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
         const containerTerm = containerSearchInput.value.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
         const agentTerm = agentFilterInput.value.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
@@ -94,42 +152,26 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const filteredTransactions = allTransactions.filter(data => {
             
-            // --- NOUVEAU: Filtre par Date ---
-            if (startDate && data.date < startDate) {
-                return false;
-            }
-            if (endDate && data.date > endDate) {
-                return false;
-            }
+            if (startDate && data.date < startDate) return false;
+            if (endDate && data.date > endDate) return false;
 
-            // --- NOUVEAU: Filtre par Agent ---
             if (agentTerm) {
                 const agents = (data.agent || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-                if (!agents.includes(agentTerm)) {
-                    return false;
-                }
+                if (!agents.includes(agentTerm)) return false;
             }
 
-            // --- Filtre Conteneur (existant) ---
             if (containerTerm) {
                 const conteneur = (data.conteneur || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-                if (conteneur !== containerTerm) {
-                    return false;
-                }
+                if (conteneur !== containerTerm) return false;
             }
 
-            // --- Filtre Recherche Générale (existant) ---
             if (masterTerm) {
                 const ref = (data.reference || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
                 const nom = (data.nom || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
                 const agentMM = (data.agentMobileMoney || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
                 const commune = (data.commune || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 
-                if (!ref.includes(masterTerm) &&
-                    !nom.includes(masterTerm) &&
-                    !agentMM.includes(masterTerm) &&
-                    !commune.includes(masterTerm)) 
-                {
+                if (!ref.includes(masterTerm) && !nom.includes(masterTerm) && !agentMM.includes(masterTerm) && !commune.includes(masterTerm)) {
                     return false;
                 }
             }
@@ -140,15 +182,16 @@ document.addEventListener('DOMContentLoaded', () => {
         renderTable(filteredTransactions);
     }
 
-    // --- ÉTAPE 3 : RENDER TABLE (inchangé) ---
+    // --- ÉTAPE 3 : RENDER TABLE ---
     function renderTable(transactions) {
         tableBody.innerHTML = ''; 
         if (transactions.length === 0) {
-            tableBody.innerHTML = '<tr><td colspan="12">Aucun historique trouvé (ou correspondant aux filtres).</td></tr>';
+            tableBody.innerHTML = '<tr><td colspan="12">Aucun historique trouvé.</td></tr>';
             return;
         }
         let currentSubtotals = { prix: 0, montantParis: 0, montantAbidjan: 0, reste: 0 };
         let currentDate = transactions.find(t => t.date)?.date; 
+        
         transactions.forEach((data) => {
             if (data.date !== currentDate && data.date) {
                 insertSubtotalRow(currentDate, currentSubtotals);
@@ -167,20 +210,22 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // --- ÉTAPE 4 : CONNECTER LES ÉVÉNEMENTS ---
-    showDeletedCheckbox.addEventListener('change', fetchHistory); // Recharge depuis Firebase
-    
-    // NOUVEAU : Tous les filtres lancent 'applyFiltersAndRender'
+    showDeletedCheckbox.addEventListener('change', fetchHistory); 
     masterSearchInput.addEventListener('input', applyFiltersAndRender); 
     containerSearchInput.addEventListener('input', applyFiltersAndRender); 
     agentFilterInput.addEventListener('change', applyFiltersAndRender);
     startDateInput.addEventListener('change', applyFiltersAndRender);
     endDateInput.addEventListener('change', applyFiltersAndRender);
     
-    fetchHistory(); // Lancement initial
+    fetchHistory(); 
 
-    // --- Fonctions utilitaires (inchangées) ---
+    // --- Fonctions utilitaires ---
     function insertDataRow(data) {
         const newRow = document.createElement('tr');
+        // IMPORTANT : On stocke l'ID sur la ligne pour le clic
+        newRow.dataset.id = data.id; 
+        newRow.style.cursor = "pointer"; // Change le curseur pour indiquer que c'est cliquable
+
         if (data.isDeleted === true) {
             newRow.classList.add('deleted-row');
         }
