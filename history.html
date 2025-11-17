@@ -2,7 +2,8 @@
 <html lang="fr">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=1000"> <title>Historique - Caisse</title>
+    <meta name="viewport" content="width=1000"> 
+    <title>Historique - Caisse</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Comfortaa:wght@400;700&display=swap" rel="stylesheet">
@@ -52,11 +53,12 @@
                 <input type="date" id="endDate">
             </div>
             <div class="checkbox-container">
-                <input type="checkbox" id="showDeletedCheckbox">
+                <input type="checkbox" id="showDeletedCheckbox" style="width: auto;">
                 <label for="showDeletedCheckbox">Afficher les éléments supprimés</label>
             </div>
         </div>
     </div>
+    
     <table id="caisseTable">
         <thead>
             <tr>
@@ -68,6 +70,21 @@
         <tbody id="tableBody"></tbody>
     </table>
 
+    <div id="paymentHistoryModal" class="modal">
+        <div class="modal-content">
+            <span class="close-modal">&times;</span>
+            <h2>Détails des Paiements</h2>
+            <h3 id="modalRefTitle" style="color: #0d6efd; margin-bottom: 15px;"></h3>
+            
+            <ul id="paymentHistoryList" class="history-list">
+                </ul>
+            
+            <div style="text-align: right; margin-top: 15px;">
+                <button onclick="document.getElementById('paymentHistoryModal').style.display='none'" 
+                        style="padding: 8px 16px; cursor: pointer;">Fermer</button>
+            </div>
+        </div>
+    </div>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script> 
@@ -90,5 +107,19 @@
     </script>
     <script src="auth-guard.js"></script>
     <script src="history.js"></script>
+    <div id="paymentHistoryModal" class="modal">
+        <div class="modal-content">
+            <span class="close-modal">&times;</span>
+            <h2>Détails des Paiements</h2>
+            <h3 id="modalRefTitle" style="color: #0d6efd; margin-bottom: 15px;"></h3>
+            <ul id="paymentHistoryList" class="history-list"></ul>
+            <div style="text-align: right; margin-top: 15px;">
+                <button onclick="document.getElementById('paymentHistoryModal').style.display='none'" style="padding: 8px 16px; cursor: pointer;">Fermer</button>
+            </div>
+        </div>
+    </div>
+
+    </body>
+</html>
 </body>
 </html>
