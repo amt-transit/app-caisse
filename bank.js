@@ -1,41 +1,98 @@
 document.addEventListener('DOMContentLoaded', () => {
     if (typeof firebase === 'undefined' || typeof db === 'undefined') {
-        alert("Erreur: La connexion à la base de données a échoué."); return;
+        alert("Erreur: Connexion BDD échouée."); return;
     }
 
-    const bankCollection = db.collection("bank_movements"); // Nouvelle collection
+    const bankCollection = db.collection("bank_movements");
     
-    // Formulaire
     const addBankMovementBtn = document.getElementById('addBankMovementBtn');
     const bankDate = document.getElementById('bankDate');
     const bankDesc = document.getElementById('bankDesc');
     const bankAmount = document.getElementById('bankAmount');
     const bankType = document.getElementById('bankType');
     
-    // Tableau
     const bankTableBody = document.getElementById('bankTableBody');
     const showDeletedCheckbox = document.getElementById('showDeletedCheckbox');
     let unsubscribeBank = null;
 
-    // Ajouter un mouvement
-    addBankMovementBtn.addEventListener('click', () => {
+    addBankMovementBtn.addEventListener('click', async () => {
+        const montant = parseFloat(bankAmount.value) || 0;
+        const type = bankType.value; // Depot ou Retrait
+
         const data = {
             date: bankDate.value,
             description: bankDesc.value,
-            montant: parseFloat(bankAmount.value) || 0,
-            type: bankType.value, // Depot ou Retrait
+            montant: montant,
+            type: type,
             isDeleted: false
         };
+
         if (!data.date || !data.description || data.montant <= 0) {
             return alert("Veuillez remplir tous les champs avec un montant valide.");
         }
+
+        // === SÉCURITÉ : SI C'EST UN DÉPÔT (Sortie de caisse), VÉRIFIER LE SOLDE ===
+        if (type === 'Depot') {
+            addBankMovementBtn.disabled = true;
+            addBankMovementBtn.textContent = "Vérification...";
+
+            try {
+                const soldeCaisse = await calculateAvailableBalance(db);
+                
+                if (data.montant > soldeCaisse) {
+                    alert(`ERREUR : Solde de caisse insuffisant pour ce dépôt !\n\nVotre caisse actuelle est de : ${formatCFA(soldeCaisse)}\nVous essayez de déposer : ${formatCFA(data.montant)}\n\nVeuillez vérifier vos saisies.`);
+                    addBankMovementBtn.disabled = false;
+                    addBankMovementBtn.textContent = "Enregistrer le Mouvement";
+                    return;
+                }
+            } catch (error) {
+                console.error("Erreur : ", error);
+                alert("Erreur lors de la vérification du solde.");
+                addBankMovementBtn.disabled = false;
+                addBankMovementBtn.textContent = "Enregistrer le Mouvement";
+                return;
+            }
+        }
+
+        // Enregistrement
         bankCollection.add(data).then(() => {
             bankDesc.value = '';
             bankAmount.value = '';
+            addBankMovementBtn.disabled = false;
+            addBankMovementBtn.textContent = "Enregistrer le Mouvement";
         }).catch(err => console.error(err));
     });
 
-    // Charger les données
+    // --- Fonction utilitaire (Même fonction que dans expenses.js) ---
+    async function calculateAvailableBalance(db) {
+        const transSnap = await db.collection("transactions").where("isDeleted", "!=", true).get();
+        let totalVentes = 0;
+        transSnap.forEach(doc => {
+            const d = doc.data();
+            totalVentes += (d.montantParis || 0) + (d.montantAbidjan || 0);
+        });
+
+        const incSnap = await db.collection("other_income").where("isDeleted", "!=", true).get();
+        let totalAutres = 0;
+        incSnap.forEach(doc => totalAutres += (doc.data().montant || 0));
+
+        const expSnap = await db.collection("expenses").where("isDeleted", "!=", true).get();
+        let totalDepenses = 0;
+        expSnap.forEach(doc => totalDepenses += (doc.data().montant || 0));
+
+        const bankSnap = await db.collection("bank_movements").where("isDeleted", "!=", true).get();
+        let totalRetraits = 0;
+        let totalDepots = 0;
+        bankSnap.forEach(doc => {
+            const d = doc.data();
+            if (d.type === 'Retrait') totalRetraits += (d.montant || 0);
+            if (d.type === 'Depot') totalDepots += (d.montant || 0);
+        });
+
+        return (totalVentes + totalAutres + totalRetraits) - (totalDepenses + totalDepots);
+    }
+
+    // --- Affichage (inchangé) ---
     function fetchBankMovements() {
         if (unsubscribeBank) unsubscribeBank();
         let query = bankCollection;
@@ -78,9 +135,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     
     showDeletedCheckbox.addEventListener('change', fetchBankMovements);
-    fetchBankMovements(); // Premier chargement
+    fetchBankMovements();
 
-    // Supprimer (soft delete)
     bankTableBody.addEventListener('click', (event) => {
         if (event.target.classList.contains('deleteBtn')) {
             const docId = event.target.getAttribute('data-id');
