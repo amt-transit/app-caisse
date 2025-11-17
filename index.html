@@ -8,9 +8,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Comfortaa:wght@400;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
-    
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/choices.js/public/assets/styles/choices.min.css"/>
-    
     <link rel="icon" type="image/png" href="favicon.png">
 </head>
 <body style="display:none">
@@ -35,6 +33,9 @@
             <input type="date" id="date" required>
             <input type="text" id="reference" placeholder="Référence / Client" required list="referenceList">
             <datalist id="referenceList"></datalist>
+            
+            <input type="text" id="nom" placeholder="Nom du Client (Auto ou Nouveau)">
+            <input type="text" id="conteneur" placeholder="Conteneur (ex: D35)">
             <div class="prix-container">
                 <input type="number" id="prix" placeholder="Prix">
                 <span class="cfa-label">CFA</span>
@@ -71,8 +72,8 @@
     <table id="dailyTable">
         <thead>
             <tr>
-                <th>Référence / Client</th>
-                <th>Prix</th>
+                <th>Référence</th>
+                <th>Nom</th> <th>Prix</th>
                 <th>Reste</th>
                 <th>Action</th>
             </tr>
@@ -107,7 +108,6 @@
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
     <script>
-        // Votre configuration personnelle et unique
         const firebaseConfig = {
             apiKey: "AIzaSyA255n3XWDRKaYZ9kwOYkfovf5lRexoCA4",
             authDomain: "caisse-amt-perso.firebaseapp.com",
@@ -116,12 +116,8 @@
             messagingSenderId: "682789156997",
             appId: "1:682789156997:web:9ce3303120851d37be91ec"
         };
-
-        // Initialiser Firebase ET créer la variable "db"
         firebase.initializeApp(firebaseConfig);
         const db = firebase.firestore();
-        // Logique de déconnexion
-        // (Doit être après la config, mais avant le garde)
         document.getElementById('logoutBtn').addEventListener('click', () => {
             if (confirm("Voulez-vous vous déconnecter ?")) {
                 firebase.auth().signOut();
@@ -131,7 +127,6 @@
     
     <script src="https://cdn.jsdelivr.net/npm/choices.js/public/assets/scripts/choices.min.js"></script>
     <script src="auth-guard.js"></script>
-
     <script src="script.js"></script>
 </body>
 </html>
