@@ -27,10 +27,9 @@
     </nav>
 
     <div class="dashboard-container">
-        
         <div id="grandTotals" class="totals-container">
             <div class="total-card">
-                <h3>Chiffre d'Affaires (Ventes)</h3>
+                <h3>Entrées Conteneur (Abidjan)</h3> 
                 <p id="grandTotalPrix">0 CFA</p>
             </div>
             <div class="total-card">
@@ -38,16 +37,17 @@
                 <p id="grandTotalOtherIncome">0 CFA</p>
             </div>
             <div class="total-card">
-                <h3>- Dépenses Totales</h3>
-                <p id="grandTotalDepenses">0 CFA</p>
+                <h3 class="text-red">- Dépenses Totales</h3>
+                <p id="grandTotalDepenses" class="text-red">0 CFA</p>
             </div>
             <div class="total-card">
                 <h3>= BÉNÉFICE TOTAL</h3>
                 <p id="grandTotalBenefice">0 CFA</p>
             </div>
             <div class="total-card">
-                <h3>Total Ventes Perçues (P+A)</h3>
+                <h3>Total Ventes Perçues (A)</h3>
                 <p id="grandTotalPercu">0 CFA</p>
+                <span id="grandTotalParisHidden" class="text-blue-sub">Dont Paris: 0 CFA</span>
             </div>
             <div class="total-card">
                 <h3>+ Retraits Banque</h3>
@@ -66,8 +66,8 @@
                 <p id="grandTotalCount">0</p>
             </div>
             <div class="total-card">
-                <h3>Dettes Clients (Reste Total)</h3>
-                <p id="grandTotalReste">0 CFA</p>
+                <h3 class="text-orange">Dettes Clients (Reste Total)</h3>
+                <p id="grandTotalReste" class="text-orange">0 CFA</p>
             </div>
             <div class="filter-container" style="flex-grow: 2;">
                 <h3>Filtrer par Période</h3>
@@ -93,14 +93,8 @@
             <table id="containerSummaryTable">
                 <thead>
                     <tr>
-                        <th>Conteneur</th>
-                        <th>Chiffre d'Affaires (CA)</th>
-                        <th>Total Paris</th>
-                        <th>Total Abidjan</th>
-                        <th>Total Perçu (P+A)</th>
-                        <th>Total Reste</th>
-                        <th>Total Dépenses</th> 
-                        <th>BÉNÉFICE Conteneur</th>
+                        <th>Conteneur</th><th>Chiffre d'Affaires (CA)</th><th>Total Paris</th><th>Total Abidjan</th>
+                        <th>Total Perçu (P+A)</th><th>Total Reste</th><th>Total Dépenses</th><th>BÉNÉFICE Conteneur</th>
                     </tr>
                 </thead>
                 <tbody id="containerSummaryTableBody"></tbody>
@@ -110,14 +104,7 @@
         <div id="panel-clients" class="tab-panel">
             <h2 style="margin-top: 30px;">Top 100 Clients</h2>
             <table id="topClientsTable">
-                <thead>
-                    <tr>
-                        <th>Rang</th>
-                        <th>Client (Nom)</th>
-                        <th>Nb. Opérations</th>
-                        <th>Chiffre d'Affaires</th>
-                    </tr>
-                </thead>
+                <thead><tr><th>Rang</th><th>Client (Nom)</th><th>Nb. Opérations</th><th>Chiffre d'Affaires</th></tr></thead>
                 <tbody id="topClientsTableBody"></tbody>
             </table>
         </div>
@@ -125,13 +112,7 @@
         <div id="panel-agents" class="tab-panel">
             <h2 style="margin-top: 30px;">Récapitulatif par Agent</h2>
             <table id="agentSummaryTable">
-                <thead>
-                    <tr>
-                        <th>Agent</th>
-                        <th>Nombre d'Opérations</th>
-                        <th>Chiffre d'Affaires</th>
-                    </tr>
-                </thead>
+                <thead><tr><th>Agent</th><th>Nombre d'Opérations</th><th>Chiffre d'Affaires</th></tr></thead>
                 <tbody id="agentSummaryTableBody"></tbody>
             </table>
         </div>
@@ -139,13 +120,7 @@
         <div id="panel-ventes" class="tab-panel">
             <h2>Récapitulatif par Mois (Ventes)</h2>
             <table id="summaryTable">
-                <thead>
-                    <tr>
-                        <th>Mois</th>
-                        <th>Nombre d'Opérations</th>
-                        <th>Total des Prix</th>
-                    </tr>
-                </thead>
+                <thead><tr><th>Mois</th><th>Nombre d'Opérations</th><th>Total des Prix</th></tr></thead>
                 <tbody id="summaryTableBody"></tbody>
             </table>
         </div>
@@ -153,13 +128,7 @@
         <div id="panel-depenses" class="tab-panel">
             <h2 style="margin-top: 30px;">Récapitulatif des Dépenses Mensuelles</h2>
             <table id="monthlyExpensesTable">
-                <thead>
-                    <tr>
-                        <th>Date</th>
-                        <th>Description</th>
-                        <th>Montant</th>
-                    </tr>
-                </thead>
+                <thead><tr><th>Date</th><th>Description</th><th>Montant</th></tr></thead>
                 <tbody id="monthlyExpensesTableBody"></tbody>
             </table>
         </div>
@@ -167,14 +136,7 @@
         <div id="panel-banque" class="tab-panel">
             <h2 style="margin-top: 30px;">Récapitulatif des Mouvements de Banque</h2>
             <table id="bankMovementsTable">
-                <thead>
-                    <tr>
-                        <th>Date</th>
-                        <th>Description</th>
-                        <th>Type</th>
-                        <th>Montant</th>
-                    </tr>
-                </thead>
+                <thead><tr><th>Date</th><th>Description</th><th>Type</th><th>Montant</th></tr></thead>
                 <tbody id="bankMovementsTableBody"></tbody>
             </table>
         </div>
@@ -196,9 +158,7 @@
         firebase.initializeApp(firebaseConfig);
         const db = firebase.firestore();
         document.getElementById('logoutBtn').addEventListener('click', () => {
-            if (confirm("Voulez-vous vous déconnecter ?")) {
-                firebase.auth().signOut();
-            }
+            if (confirm("Voulez-vous vous déconnecter ?")) firebase.auth().signOut();
         });
     </script>
     <script src="auth-guard.js"></script>

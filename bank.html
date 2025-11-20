@@ -3,16 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=1000">
-    <title>Mouvements Banque - Caisse</title>
+    <title>Banque - Caisse</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Comfortaa:wght@400;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
     <link rel="icon" type="image/png" href="favicon.png">
-    </head>
-    
+</head>
 <body style="display:none">
-    
     <header class="app-header">
         <img src="logoAMT.png" alt="Logo" class="app-logo">
         <h1>Mouvements de Banque</h1>
@@ -32,7 +30,7 @@
     <div id="caisseForm">
         <div class="form-grid">
             <input type="date" id="bankDate" required>
-            <input type="text" id="bankDesc" placeholder="Description (ex: Dépôt SIB, Retrait...)">
+            <input type="text" id="bankDesc" placeholder="Description..." required>
             <div class="prix-container">
                 <input type="number" id="bankAmount" placeholder="Montant">
                 <span class="cfa-label">CFA</span>
@@ -47,22 +45,26 @@
         </div>
     </div>
 
-    <div style="text-align: center; margin: 20px 0; background: #fff; padding: 10px; border-radius: 8px;">
-        <input type="checkbox" id="showDeletedCheckbox" style="width: auto;">
-        <label for="showDeletedCheckbox">Afficher les éléments supprimés</label>
+    <div id="caisseForm" style="margin-top: 20px; border-top: 2px solid #eee;">
+        <h3>Importer Mouvements Banque (CSV)</h3>
+        <p>Format CSV : <code>date, description, type, montant</code></p>
+        <input type="file" id="csvFile" accept=".csv">
+        <button id="uploadCsvBtn" class="primary" style="margin-top: 10px;">Importer CSV</button>
     </div>
 
-    <h2>Historique des Mouvements de Banque</h2>
+    <div class="history-controls">
+        <div class="search-bar-container">
+            <input type="text" id="bankSearch" placeholder="Rechercher..." style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px;">
+        </div>
+        <div class="checkbox-container" style="margin-top: 10px;">
+            <input type="checkbox" id="showDeletedCheckbox" style="width: auto;">
+            <label for="showDeletedCheckbox">Afficher les éléments supprimés</label>
+        </div>
+    </div>
+
+    <h2>Historique des Mouvements</h2>
     <table id="bankTable">
-        <thead>
-            <tr>
-                <th>Date</th>
-                <th>Description</th>
-                <th>Type</th>
-                <th>Montant</th>
-                <th>Action</th>
-            </tr>
-        </thead>
+        <thead><tr><th>Date</th><th>Description</th><th>Type</th><th>Montant</th><th>Action</th></tr></thead>
         <tbody id="bankTableBody"></tbody>
     </table>
 
@@ -71,12 +73,12 @@
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
     <script>
         const firebaseConfig = {
-        apiKey: "AIzaSyA255n3XWDRKaYZ9kwOYkfovf5lRexoCA4",
-        authDomain: "caisse-amt-perso.firebaseapp.com",
-        projectId: "caisse-amt-perso",
-        storageBucket: "caisse-amt-perso.firebasestorage.app",
-        messagingSenderId: "682789156997",
-        appId: "1:682789156997:web:9ce3303120851d37be91ec"
+            apiKey: "AIzaSyA255n3XWDRKaYZ9kwOYkfovf5lRexoCA4",
+            authDomain: "caisse-amt-perso.firebaseapp.com",
+            projectId: "caisse-amt-perso",
+            storageBucket: "caisse-amt-perso.firebasestorage.app",
+            messagingSenderId: "682789156997",
+            appId: "1:682789156997:web:9ce3303120851d37be91ec"
         };
         firebase.initializeApp(firebaseConfig);
         const db = firebase.firestore();
@@ -84,6 +86,7 @@
             if (confirm("Voulez-vous vous déconnecter ?")) firebase.auth().signOut();
         });
     </script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
     <script src="auth-guard.js"></script>
     <script src="bank.js"></script> 
 </body>

@@ -6,24 +6,25 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     const transactionsCollection = db.collection("transactions");
     
-    // N'ESSAIE PLUS DE CHARGER 'references.json'
-    
     const agentSelectElement = document.getElementById('agent');
     const agentChoices = new Choices(agentSelectElement, {
-        removeItemButton: true, 
-        placeholder: true,
-        searchPlaceholderValue: 'Rechercher un agent...',
+        removeItemButton: true, placeholder: true, searchPlaceholderValue: 'Rechercher un agent...',
     });
 
     const addEntryBtn = document.getElementById('addEntryBtn');
     const saveDayBtn = document.getElementById('saveDayBtn');
     const dailyTableBody = document.getElementById('dailyTableBody');
     const formContainer = document.getElementById('caisseForm');
+    
+    const referenceInput = document.getElementById('reference'); 
+    const nomInput = document.getElementById('nom');
+    const conteneurInput = document.getElementById('conteneur');
     const prixInput = document.getElementById('prix');
     const montantParisInput = document.getElementById('montantParis');
     const montantAbidjanInput = document.getElementById('montantAbidjan');
+    const agentMobileMoneyInput = document.getElementById('agentMobileMoney');
     const resteInput = document.getElementById('reste');
-    const referenceInput = document.getElementById('reference');
+    const communeInput = document.getElementById('commune');
     const referenceList = document.getElementById('referenceList');
     
     const dailyTotalPrixEl = document.getElementById('dailyTotalPrix');
@@ -34,9 +35,25 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     let dailyTransactions = JSON.parse(localStorage.getItem('dailyTransactions')) || [];
 
-    // --- Fonctions restaurées ---
+    // --- FONCTIONS UTILITAIRES ---
     function saveDailyToLocalStorage() {
         localStorage.setItem('dailyTransactions', JSON.stringify(dailyTransactions));
+    }
+    function formatCFA(number) {
+        return new Intl.NumberFormat('fr-CI', { style: 'currency', currency: 'XOF' }).format(number || 0);
+    }
+    function textToClassName(text) {
+        if (!text) return '';
+        return text.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, '-');
+    }
+    
+    function calculateAndStyleReste() {
+        const prix = parseFloat(prixInput.value) || 0;
+        const paris = parseFloat(montantParisInput.value) || 0;
+        const abidjan = parseFloat(montantAbidjanInput.value) || 0;
+        const reste = (paris + abidjan) - prix;
+        resteInput.value = reste;
+        resteInput.className = reste > 0 ? 'reste-positif' : 'reste-negatif';
     }
 
     function updateDailySummary() {
@@ -65,75 +82,125 @@ document.addEventListener('DOMContentLoaded', async () => {
         dailyTransactions.forEach((data, index) => {
             const row = document.createElement('tr');
             row.innerHTML = `
-                <td data-label="Référence / Client">${data.reference}</td>
-                <td data-label="Prix">${formatCFA(data.prix)}</td>
-                <td data-label="Reste" class="${data.reste < 0 ? 'reste-negatif' : 'reste-positif'}">${formatCFA(data.reste)}</td>
-                <td data-label="Action"><button class="deleteBtn" data-index="${index}">X</button></td>
+                <td>${data.reference}</td>
+                <td>${data.nom || '-'}</td>
+                <td>${formatCFA(data.prix)}</td>
+                <td class="${data.reste < 0 ? 'reste-negatif' : 'reste-positif'}">${formatCFA(data.reste)}</td>
+                <td><button class="deleteBtn" data-index="${index}">X</button></td>
             `;
             dailyTableBody.appendChild(row);
         });
         document.getElementById('dailyCount').textContent = dailyTransactions.length;
         updateDailySummary();
     }
+    
+    function populateDatalist() {
+        transactionsCollection.where("isDeleted", "!=", true).limit(500).get().then(snapshot => {
+            const references = new Set(); 
+            snapshot.forEach(doc => {
+                const d = doc.data();
+                if (d.reference) {
+                    let opt = document.createElement('option');
+                    opt.value = d.reference;
+                    referenceList.appendChild(opt);
+                }
+                if (d.nom) {
+                    let opt = document.createElement('option');
+                    opt.value = d.nom;
+                    referenceList.appendChild(opt);
+                }
+            });
+        });
+    }
+    
+    // --- VIDER LES CHAMPS (Nouvelle fonction) ---
+    function clearDisplayFields() {
+        prixInput.value = '';
+        conteneurInput.value = '';
+        resteInput.value = '';
+        resteInput.className = '';
+        montantParisInput.placeholder = 'Montant Paris';
+        montantAbidjanInput.placeholder = 'Montant Abidjan';
+    }
 
-    // --- Fonction 'addEntryBtn' restaurée ---
+    // --- AJOUTER À LA LISTE ---
     addEntryBtn.addEventListener('click', () => {
         const selectedAgents = agentChoices.getValue(true); 
         const agentString = selectedAgents.join(', '); 
 
         const newData = {
-            date: document.getElementById('date').value, reference: referenceInput.value,
-            prix: parseFloat(prixInput.value) || 0, montantParis: parseFloat(montantParisInput.value) || 0,
-            montantAbidjan: parseFloat(montantAbidjanInput.value) || 0, reste: 0,
-            agentMobileMoney: document.getElementById('agentMobileMoney').value,
-            commune: document.getElementById('commune').value, 
-            agent: agentString 
+            date: document.getElementById('date').value,
+            reference: referenceInput.value.trim(),
+            nom: nomInput.value.trim(),
+            conteneur: conteneurInput.value.trim().toUpperCase(),
+            prix: parseFloat(prixInput.value) || 0,
+            montantParis: parseFloat(montantParisInput.value) || 0,
+            montantAbidjan: parseFloat(montantAbidjanInput.value) || 0,
+            agentMobileMoney: agentMobileMoneyInput.value,
+            commune: communeInput.value, 
+            agent: agentString,
+            reste: 0
         };
-        if (!newData.date || !newData.reference) return alert("Veuillez remplir au moins la date et la référence.");
 
-        // Calcul du 'reste' basé sur le prix dans le formulaire
-        newData.reste = (newData.montantParis + newData.montantAbidjan) - newData.prix;
+        if (!newData.date || !newData.reference) return alert("Remplissez la date et la référence/nom.");
+        if (newData.prix <= 0) return alert("Prix invalide.");
 
+        // Calcul du reste
+        const totalPaye = newData.montantParis + newData.montantAbidjan;
+        if (totalPaye > newData.prix) {
+             return alert(`IMPOSSIBLE : Le montant payé (${formatCFA(totalPaye)}) dépasse le prix (${formatCFA(newData.prix)}).`);
+        }
+        newData.reste = totalPaye - newData.prix;
+
+        // Vérification doublons liste du jour
         const existingIndex = dailyTransactions.findIndex(t => t.reference === newData.reference);
         if (existingIndex > -1) {
-            // Si la réf existe DÉJÀ dans la liste du jour, on cumule les paiements
             const t = dailyTransactions[existingIndex];
+            
+            const nouveauTotal = t.montantParis + t.montantAbidjan + newData.montantParis + newData.montantAbidjan;
+            if (nouveauTotal > t.prix) {
+                return alert("IMPOSSIBLE : Le cumul des paiements dépasserait le prix du colis.");
+            }
+
             t.montantParis += newData.montantParis;
             t.montantAbidjan += newData.montantAbidjan;
             if (newData.agentMobileMoney) t.agentMobileMoney = newData.agentMobileMoney;
-            // On recalcule le reste basé sur le prix initial et le total des paiements
             t.reste = (t.montantParis + t.montantAbidjan) - t.prix;
         } else {
-            // C'est un nouveau paiement pour cette journée
             dailyTransactions.push(newData);
         }
         
         saveDailyToLocalStorage();
         renderDailyTable();
         
-        // Réinitialisation du formulaire
         formContainer.querySelectorAll('input, select').forEach(el => {
-            if (el.type !== 'date' && el.id !== 'agent' && el.id !== 'commune') { 
-                el.value = '';
-            }
+            if (el.type !== 'date' && el.id !== 'agent' && el.id !== 'commune') el.value = '';
         });
-        
-        agentChoices.setValue([]); // Correction du bug de réinitialisation
+        agentChoices.setValue([]); 
         resteInput.className = '';
         referenceInput.focus();
     });
 
-    // --- Fonction 'saveDayBtn' (mise à jour pour 'arrivages') ---
+    // --- ENREGISTRER DANS FIREBASE ---
     saveDayBtn.addEventListener('click', async () => {
-        if (dailyTransactions.length === 0) return alert("Aucune opération à enregistrer.");
-        if (!confirm(`Voulez-vous vraiment enregistrer les ${dailyTransactions.length} opérations ?`)) return;
+        if (dailyTransactions.length === 0) return alert("Rien à enregistrer.");
+        if (!confirm(`Enregistrer les ${dailyTransactions.length} opérations ?`)) return;
 
         const batch = db.batch();
+        
         for (const transac of dailyTransactions) {
             const query = await transactionsCollection.where("reference", "==", transac.reference).get();
             
+            const paymentEntry = {
+                date: transac.date,
+                montantParis: transac.montantParis,
+                montantAbidjan: transac.montantAbidjan,
+                agent: transac.agent,
+                agentMobileMoney: transac.agentMobileMoney
+            };
+
             if (!query.empty) {
-                // Le colis existe (cas normal pour un paiement)
+                // Mise à jour
                 const docRef = query.docs[0].ref;
                 const oldData = query.docs[0].data();
                 
@@ -141,37 +208,42 @@ document.addEventListener('DOMContentLoaded', async () => {
                     montantParis: (oldData.montantParis || 0) + transac.montantParis,
                     montantAbidjan: (oldData.montantAbidjan || 0) + transac.montantAbidjan,
                     reste: (oldData.reste || 0) + transac.montantParis + transac.montantAbidjan,
-                    
-                    date: transac.date || oldData.date, 
-                    ...( (!oldData.date && transac.date) && {date: transac.date} ),
-                    
+                    date: transac.date || oldData.date,
                     agent: transac.agent || oldData.agent || '',
                     agentMobileMoney: transac.agentMobileMoney || oldData.agentMobileMoney || '',
                     commune: transac.commune || oldData.commune || '',
                     
-                    // On préserve les données de l'arrivage
-                    nom: oldData.nom || '', 
-                    conteneur: oldData.conteneur || '', 
-                    prix: oldData.prix || 0, // Garde l'ancien prix
-                };
+                    // ==== CORRECTION : MISE À JOUR DU NOM SI MANQUANT ====
+                    // Si le colis n'avait pas de nom (import sans nom) et que le livreur en a mis un
+                    nom: oldData.nom || transac.nom || '', 
+                    
+                    // Pareil pour le conteneur, au cas où
+                    conteneur: oldData.conteneur || transac.conteneur || '',
 
+                    paymentHistory: firebase.firestore.FieldValue.arrayUnion(paymentEntry)
+                };
                 batch.update(docRef, updatedData);
-                
             } else {
-                // Le colis n'existe pas
-                console.warn(`La référence ${transac.reference} n'existe pas. Le paiement est ignoré.`);
+                // Création
+                const docRef = transactionsCollection.doc();
+                const newData = {
+                    ...transac,
+                    isDeleted: false,
+                    paymentHistory: [paymentEntry]
+                };
+                batch.set(docRef, newData);
             }
         }
         
         batch.commit().then(() => {
-            alert(`Les opérations ont été enregistrées avec succès !`);
+            alert(`Succès ! Tout a été enregistré.`);
             dailyTransactions = [];
             saveDailyToLocalStorage();
             renderDailyTable();
-        }).catch(err => console.error("Erreur d'enregistrement : ", err));
+        }).catch(err => console.error("Erreur : ", err));
     });
 
-    // --- (dailyTableBody click listener restauré) ---
+    // 3. BOUTON SUPPRIMER (LIGNE)
     dailyTableBody.addEventListener('click', (event) => {
         if (event.target.classList.contains('deleteBtn')) {
             const index = parseInt(event.target.getAttribute('data-index'), 10);
@@ -181,79 +253,62 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     });
 
-    // --- LOGIQUE DE RECHERCHE DE RÉFÉRENCE (mise à jour pour 'arrivages') ---
+    // --- RECHERCHE INTELLIGENTE (REF) ---
     referenceInput.addEventListener('input', async () => {
-        const refValue = referenceInput.value;
-        montantParisInput.placeholder = 'Montant Paris';
-        montantAbidjanInput.placeholder = 'Montant Abidjan';
-        
-        prixInput.value = '';
-        resteInput.value = '';
-        resteInput.className = '';
-        
-        // La seule source de vérité est maintenant Firestore
+        const refValue = referenceInput.value.trim();
+        if (!refValue) { clearDisplayFields(); nomInput.value=''; return; } // Vide tout si effacé
+
         const query = await transactionsCollection.where("reference", "==", refValue).get();
         
         if (!query.empty) {
-            const lastTransaction = query.docs[0].data();
-            
-            prixInput.value = lastTransaction.prix;
-            
-            if (lastTransaction.reste < 0) {
-                resteInput.value = lastTransaction.reste;
-                resteInput.className = 'reste-negatif';
-                montantParisInput.placeholder = `Solde: ${formatCFA(lastTransaction.reste)}`;
-                montantAbidjanInput.placeholder = `Solde: ${formatCFA(lastTransaction.reste)}`;
-            } else {
-                resteInput.value = lastTransaction.reste;
-                resteInput.className = 'reste-positif';
-            }
+            const data = query.docs[0].data();
+            fillFormWithData(data);
+        } else {
+             clearDisplayFields();
+             // On laisse la saisie du nom libre pour une création
         }
     });
 
-    // --- (calculateAndStyleReste et formatCFA restaurés) ---
+    // --- RECHERCHE INTELLIGENTE (NOM) ---
+    nomInput.addEventListener('input', async () => {
+        const nomValue = nomInput.value.trim();
+        if (!nomValue) { clearDisplayFields(); referenceInput.value=''; return; } // Vide tout si effacé
+
+        const query = await transactionsCollection.where("nom", "==", nomValue).get();
+        if (!query.empty) {
+            // On prend le premier (attention aux homonymes)
+            const data = query.docs[0].data();
+            referenceInput.value = data.reference;
+            fillFormWithData(data);
+        } else {
+            clearDisplayFields();
+        }
+    });
+
+    function fillFormWithData(data) {
+        prixInput.value = data.prix;
+        conteneurInput.value = data.conteneur || '';
+        // On ne remplace pas le nom/ref s'ils sont déjà là
+        
+        if (data.reste < 0) {
+            resteInput.value = data.reste;
+            resteInput.className = 'reste-negatif';
+            montantParisInput.placeholder = `Reste: ${formatCFA(Math.abs(data.reste))}`;
+            montantAbidjanInput.placeholder = `Reste: ${formatCFA(Math.abs(data.reste))}`;
+        } else {
+            resteInput.value = 0;
+            resteInput.className = 'reste-positif';
+            montantParisInput.placeholder = "Soldé";
+            montantAbidjanInput.placeholder = "Soldé";
+        }
+    }
+
+    // 5. CALCUL AUTOMATIQUE
     prixInput.addEventListener('input', calculateAndStyleReste);
     montantParisInput.addEventListener('input', calculateAndStyleReste);
     montantAbidjanInput.addEventListener('input', calculateAndStyleReste);
 
-    function calculateAndStyleReste() {
-        const prix = parseFloat(prixInput.value) || 0;
-        const montantParis = parseFloat(montantParisInput.value) || 0;
-        const montantAbidjan = parseFloat(montantAbidjanInput.value) || 0;
-        const reste = (montantParis + montantAbidjan) - prix;
-        resteInput.value = reste;
-        resteInput.className = reste < 0 ? 'reste-negatif' : 'reste-positif';
-    }
-
-    function formatCFA(number) {
-        return new Intl.NumberFormat('fr-CI', { style: 'currency', currency: 'XOF' }).format(number || 0);
-    }
-    
-    function textToClassName(text) {
-        if (!text) return '';
-        return text.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, '-');
-    }
-    
-    // --- (populateDatalist mise à jour pour 'arrivages') ---
-    function populateDatalist() {
-        // On ne charge que les transactions qui ne sont pas supprimées
-        transactionsCollection.where("isDeleted", "!=", true).get().then(snapshot => {
-            const references = new Set(); // Evite les doublons
-            snapshot.forEach(doc => {
-                references.add(doc.data().reference);
-            });
-            
-            referenceList.innerHTML = ''; // Vide l'ancienne liste
-            references.forEach(ref => {
-                if (ref) { 
-                    const option = document.createElement('option');
-                    option.value = ref;
-                    referenceList.appendChild(option);
-                }
-            });
-        });
-    }
-
+    // --- INITIALISATION ---
     renderDailyTable();
-    populateDatalist(); // Lance la nouvelle fonction
+    populateDatalist(); 
 });

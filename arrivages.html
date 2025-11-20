@@ -39,9 +39,7 @@
             <div class="form-grid" style="grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));">
                 <input type="date" id="arrivalDate" required>
                 <input type="text" id="arrivalConteneur" placeholder="Conteneur (ex: D35)" required>
-                
                 <input type="text" id="arrivalRef" placeholder="Référence / Client" required>
-                
                 <input type="text" id="arrivalNom" placeholder="Nom du Client (auto-rempli)" required> 
                 <div class="prix-container">
                     <input type="number" id="arrivalPrix" placeholder="Prix du colis">
@@ -57,13 +55,12 @@
 
         <h2 style="margin-top: 30px;">Enregistrer en Masse (Réception via CSV)</h2>
         <div id="caisseForm" class="bulk-upload-form">
-            <p>Importez un fichier CSV. Le <strong>Nom Client</strong> sera recherché automatiquement dans le manifeste "Départ Paris".</p>
+            <p>Importez un fichier CSV. Les champs "Date" et "Conteneur" ci-dessus sont utilisés. Si le <strong>Nom</strong> manque dans le CSV, il sera recherché dans le manifeste Paris.</p>
             <ol style="margin-left: 20px; text-align: left;">
                 <li>Remplissez les champs <strong>Date</strong> et <strong>Conteneur</strong> dans le formulaire "un seul colis" ci-dessus.</li>
-                <li>Préparez un fichier CSV avec <strong>4 colonnes</strong> (en-têtes en minuscules) :</li>
-                <li><code>reference</code>, <code>prix</code></li>
-                <li><code>montantParis</code> (optionnel, mettez 0 ou laissez vide)</li>
-                <li><code>montantAbidjan</code> (optionnel, mettez 0 ou laissez vide)</li>
+                <li>Préparez un fichier CSV avec <strong>5 colonnes</strong> (en-têtes en minuscules) :</li>
+                <li><code>reference</code>, <code>nom</code> (optionnel), <code>prix</code></li>
+                <li><code>montantParis</code> (optionnel), <code>montantAbidjan</code> (optionnel)</li>
             </ol>
             
             <input type="file" id="csvFile" accept=".csv" style="margin-top: 15px;">
@@ -71,8 +68,27 @@
             
             <pre id="uploadLog" style="background-color: #f8f9fa; border: 1px solid #dee2e6; padding: 10px; border-radius: 6px; margin-top: 15px; display: none; text-align: left;"></pre>
         </div>
+        
+        <div style="margin-top: 20px; text-align: center;">
+            <button id="syncParisBtn" style="background-color: #6f42c1; color: white; padding: 10px 20px; border: none; border-radius: 6px; cursor: pointer; font-weight: bold;">
+                🔄 Synchroniser Noms & Nettoyer Manifeste
+            </button>
+            <p style="font-size: 0.8em; color: #666; margin-top: 5px;">
+                Cliquez ici après avoir importé une liste "Départ Paris" pour mettre à jour les noms manquants dans l'historique.
+            </p>
+        </div>
 
-        <h2 style="margin-top: 30px;">Colis Récemment Reçus (Abidjan)</h2>
+        <h2 style="margin-top: 30px;">
+            Colis Récemment Reçus (Abidjan) 
+            <span id="abidjanCount" class="tag" style="background-color: #28a745; font-size: 0.8em;">0</span>
+        </h2>
+        
+        <div class="history-controls" style="margin-bottom: 15px;">
+            <div class="search-bar-container">
+                <input type="text" id="abidjanSearch" placeholder="Rechercher (Réf, Nom, Conteneur...)" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px;">
+            </div>
+        </div>
+
         <table id="arrivalsTable">
             <thead>
                 <tr>
@@ -117,7 +133,17 @@
             <pre id="parisUploadLog" style="background-color: #f8f9fa; border: 1px solid #dee2e6; padding: 10px; border-radius: 6px; margin-top: 15px; display: none; text-align: left;"></pre>
         </div>
 
-        <h2 style="margin-top: 30px;">Colis en attente de réception <span id="parisPendingCount" class="tag" style="background-color: #ffc107; color: #333;">0</span></h2>
+        <h2 style="margin-top: 30px;">
+            Colis en attente de réception 
+            <span id="parisCount" class="tag" style="background-color: #ffc107; color: #333; font-size: 0.8em;">0</span>
+        </h2>
+        
+        <div class="history-controls" style="margin-bottom: 15px;">
+            <div class="search-bar-container">
+                <input type="text" id="parisSearch" placeholder="Rechercher (Réf, Nom...)" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px;">
+            </div>
+        </div>
+
         <table id="parisTable">
             <thead>
                 <tr>
@@ -152,7 +178,6 @@
     </script>
     
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
-    
     <script src="auth-guard.js"></script>
     <script src="arrivages.js"></script> 
 </body>
