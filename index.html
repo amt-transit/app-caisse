@@ -13,7 +13,7 @@
 </head>
 <body style="display:none">
     <header class="app-header">
-        <img src="logoAMT.png" alt="Logo de l'entreprise" class="app-logo">
+        <img src="logoAMT.png" alt="Logo" class="app-logo">
         <h1>Saisie de Caisse</h1>
         <button id="logoutBtn" style="position: absolute; right: 20px; padding: 8px 15px; cursor: pointer;">Déconnexion</button>
     </header>
@@ -106,9 +106,7 @@
         firebase.initializeApp(firebaseConfig);
         const db = firebase.firestore();
         document.getElementById('logoutBtn').addEventListener('click', () => {
-            if (confirm("Voulez-vous vous déconnecter ?")) {
-                firebase.auth().signOut();
-            }
+            if (confirm("Voulez-vous vous déconnecter ?")) firebase.auth().signOut();
         });
     </script>
     <script src="https://cdn.jsdelivr.net/npm/choices.js/public/assets/scripts/choices.min.js"></script>
