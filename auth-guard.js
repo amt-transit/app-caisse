@@ -26,6 +26,7 @@ firebase.auth().onAuthStateChanged(async (user) => {
                                      currentPage.includes('other-income.html') ||
                                      currentPage.includes('bank.html') ||
                                      currentPage.includes('arrivages.html'); // PAGE PROTÉGÉE
+                                     currentPage.includes('clients.html'); // AJOUTER ICI
 
             if (isRestrictedPage) {
                 alert("Accès refusé. Vous n'avez pas les droits pour cette page.");
@@ -47,6 +48,8 @@ firebase.auth().onAuthStateChanged(async (user) => {
             if (navOtherIncome) navOtherIncome.style.display = 'none';
             if (navBank) navBank.style.display = 'none';
             if (navArrivages) navArrivages.style.display = 'none'; // CACHER LE LIEN
+            const navClients = document.getElementById('nav-clients'); // AJOUTER ICI
+            if (navClients) navClients.style.display = 'none'; // AJOUTER ICI
         }
 
         document.body.style.display = 'block';

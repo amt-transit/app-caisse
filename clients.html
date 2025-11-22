@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=1000">
+    <title>Fiche Client - Caisse</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Comfortaa:wght@400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+    <link rel="icon" type="image/png" href="favicon.png">
+    <style>
+        /* Styles spécifiques pour la fiche client */
+        .client-card {
+            background: white; padding: 20px; border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin-bottom: 20px;
+            display: none; /* Caché par défaut */
+        }
+        .client-header { border-bottom: 2px solid #f0f2f5; padding-bottom: 15px; margin-bottom: 15px; }
+        .client-header h2 { margin: 0; color: #1877f2; font-size: 24px; text-align: left;}
+        
+        .stats-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; margin-bottom: 20px; }
+        .stat-box { background: #f8f9fa; padding: 15px; border-radius: 6px; text-align: center; border: 1px solid #dee2e6; }
+        .stat-box h4 { margin: 0 0 5px 0; color: #666; font-size: 12px; }
+        .stat-box span { font-size: 18px; font-weight: bold; color: #333; }
+
+        .section-title { font-size: 16px; font-weight: bold; margin-bottom: 10px; color: #444; border-left: 4px solid #1877f2; padding-left: 10px; }
+    </style>
+</head>
+<body style="display:none">
+    
+    <header class="app-header">
+        <img src="logoAMT.png" alt="Logo" class="app-logo">
+        <h1>Fichier Clients</h1>
+        <button id="logoutBtn" style="position: absolute; right: 20px; padding: 8px 15px; cursor: pointer;">Déconnexion</button>
+    </header>
+
+    <nav class="navigation">
+        <a href="index.html">Saisie</a>
+        <a href="dashboard.html" id="nav-dashboard">Tableau de Bord</a>
+        <a href="history.html">Historique</a>
+        <a href="expenses.html" id="nav-expenses">Dépenses</a>
+        <a href="other-income.html" id="nav-other-income">Autres Entrées</a>
+        <a href="bank.html" id="nav-bank">Banque</a>
+        <a href="arrivages.html" id="nav-arrivages">Arrivages</a>
+        <a href="clients.html" id="nav-clients" class="active">Clients</a> </nav>
+
+    <div class="dashboard-container" style="text-align: center; margin-bottom: 20px;">
+        <h3>Rechercher un Client (Expéditeur)</h3>
+        <div class="search-bar-container" style="max-width: 500px; margin: 0 auto;">
+            <input type="text" id="clientSearch" placeholder="Nom du client..." list="clientsList" style="width: 100%; padding: 12px; border: 2px solid #1877f2; border-radius: 8px;">
+            <datalist id="clientsList"></datalist>
+        </div>
+    </div>
+
+    <div id="clientProfile" class="client-card">
+        <div class="client-header">
+            <h2 id="profileName">Nom du Client</h2>
+        </div>
+
+        <div class="stats-grid">
+            <div class="stat-box">
+                <h4>Total Dépensé (Est.)</h4>
+                <span id="profileTotalSpent">0 CFA</span>
+            </div>
+            <div class="stat-box">
+                <h4>Nombre d'Envois</h4>
+                <span id="profileShipmentCount">0</span>
+            </div>
+            <div class="stat-box">
+                <h4>Dernier Envoi</h4>
+                <span id="profileLastDate">-</span>
+            </div>
+        </div>
+
+        <div style="display: flex; gap: 20px; flex-wrap: wrap;">
+            <div style="flex: 1; min-width: 300px;">
+                <div class="section-title">Destinataires Fréquents</div>
+                <table id="recipientsTable">
+                    <thead>
+                        <tr>
+                            <th>Nom Destinataire</th>
+                            <th>Adresse (Dernière connue)</th>
+                            <th>Fréquence</th>
+                        </tr>
+                    </thead>
+                    <tbody id="recipientsTableBody"></tbody>
+                </table>
+            </div>
+
+            <div style="flex: 1; min-width: 300px;">
+                <div class="section-title">Historique des Colis (Paris & Abidjan)</div>
+                <table id="shipmentsTable">
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>Réf</th>
+                            <th>Type</th>
+                            <th>Destinataire</th>
+                        </tr>
+                    </thead>
+                    <tbody id="shipmentsTableBody"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+    <script>
+        const firebaseConfig = {
+            apiKey: "AIzaSyA255n3XWDRKaYZ9kwOYkfovf5lRexoCA4",
+            authDomain: "caisse-amt-perso.firebaseapp.com",
+            projectId: "caisse-amt-perso",
+            storageBucket: "caisse-amt-perso.firebasestorage.app",
+            messagingSenderId: "682789156997",
+            appId: "1:682789156997:web:9ce3303120851d37be91ec"
+        };
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
+        document.getElementById('logoutBtn').addEventListener('click', () => {
+            if (confirm("Voulez-vous vous déconnecter ?")) firebase.auth().signOut();
+        });
+    </script>
+    <script src="auth-guard.js"></script>
+    <script src="clients.js"></script> 
+</body>
+</html>

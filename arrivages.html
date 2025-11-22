@@ -26,6 +26,7 @@
         <a href="other-income.html" id="nav-other-income">Autres Entrées</a>
         <a href="bank.html" id="nav-bank">Banque</a>
         <a href="arrivages.html" id="nav-arrivages" class="active">Arrivages</a>
+        <a href="clients.html" id="nav-clients">Clients</a>
     </nav>
 
     <div class="sub-nav">
@@ -55,26 +56,23 @@
 
         <h2 style="margin-top: 30px;">Enregistrer en Masse (Réception via CSV)</h2>
         <div id="caisseForm" class="bulk-upload-form">
-            <p>Importez un fichier CSV. Les champs "Date" et "Conteneur" ci-dessus sont utilisés. Si le <strong>Nom</strong> manque dans le CSV, il sera recherché dans le manifeste Paris.</p>
+            <p>Importez un fichier CSV (5 colonnes). Le <strong>Nom Client</strong> sera recherché automatiquement dans le manifeste "Départ Paris".</p>
             <ol style="margin-left: 20px; text-align: left;">
-                <li>Remplissez les champs <strong>Date</strong> et <strong>Conteneur</strong> dans le formulaire "un seul colis" ci-dessus.</li>
-                <li>Préparez un fichier CSV avec <strong>5 colonnes</strong> (en-têtes en minuscules) :</li>
-                <li><code>reference</code>, <code>nom</code> (optionnel), <code>prix</code></li>
-                <li><code>montantParis</code> (optionnel), <code>montantAbidjan</code> (optionnel)</li>
+                <li>Remplissez les champs <strong>Date</strong> et <strong>Conteneur</strong> ci-dessus.</li>
+                <li>CSV : <code>reference</code>, <code>prix</code>, <code>nom</code> (optionnel), <code>montantParis</code>, <code>montantAbidjan</code></li>
             </ol>
             
             <input type="file" id="csvFile" accept=".csv" style="margin-top: 15px;">
             <button id="uploadCsvBtn" class="primary" style="margin-top: 15px; width: 100%;">Importer le Fichier CSV</button>
-            
             <pre id="uploadLog" style="background-color: #f8f9fa; border: 1px solid #dee2e6; padding: 10px; border-radius: 6px; margin-top: 15px; display: none; text-align: left;"></pre>
         </div>
-        
+
         <div style="margin-top: 20px; text-align: center;">
             <button id="syncParisBtn" style="background-color: #6f42c1; color: white; padding: 10px 20px; border: none; border-radius: 6px; cursor: pointer; font-weight: bold;">
                 🔄 Synchroniser Noms & Nettoyer Manifeste
             </button>
             <p style="font-size: 0.8em; color: #666; margin-top: 5px;">
-                Cliquez ici après avoir importé une liste "Départ Paris" pour mettre à jour les noms manquants dans l'historique.
+                Cliquez ici après avoir importé une liste "Départ Paris" pour mettre à jour les noms manquants.
             </p>
         </div>
 
@@ -82,24 +80,13 @@
             Colis Récemment Reçus (Abidjan) 
             <span id="abidjanCount" class="tag" style="background-color: #28a745; font-size: 0.8em;">0</span>
         </h2>
-        
         <div class="history-controls" style="margin-bottom: 15px;">
             <div class="search-bar-container">
                 <input type="text" id="abidjanSearch" placeholder="Rechercher (Réf, Nom, Conteneur...)" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px;">
             </div>
         </div>
-
         <table id="arrivalsTable">
-            <thead>
-                <tr>
-                    <th>Date Ajout</th>
-                    <th>Référence</th>
-                    <th>Nom Client</th>
-                    <th>Conteneur</th>
-                    <th>Prix</th>
-                    <th>Reste à Payer</th>
-                </tr>
-            </thead>
+            <thead><tr><th>Date Ajout</th><th>Référence</th><th>Nom Client</th><th>Conteneur</th><th>Prix</th><th>Reste à Payer</th></tr></thead>
             <tbody id="arrivalsTableBody"></tbody>
         </table>
     </div>
@@ -117,43 +104,29 @@
             </div>
         </div>
         
-        <h2 style="margin-top: 30px;">Enregistrer en Masse (Départ Paris via CSV)</h2>
+        <h2 style="margin-top: 30px;">Enregistrer en Masse (Fichier Complet Paris)</h2>
         <div id="caisseForm" class="bulk-upload-form">
-            <p>Importez un fichier CSV pour enregistrer plusieurs colis au départ de Paris.</p>
-            <ol style="margin-left: 20px; text-align: left;">
-                <li>Votre fichier CSV doit avoir <strong>3 colonnes</strong> (en-têtes en minuscules) :</li>
-                <li><code>date</code> (format AAAA-MM-JJ)</li>
-                <li><code>reference</code></li>
-                <li><code>nom</code></li>
-            </ol>
+            <p>Importez le fichier <strong>complet</strong> reçu de Paris (format point-virgule <code>;</code>).</p>
+            <ul style="margin-left: 20px; text-align: left; font-size: 0.9em; color: #666;">
+                <li>Le système convertira automatiquement les <strong>€ en CFA</strong> (x 656).</li>
+                <li>Colonnes requises : <code>DATE DU TRANSFERT</code>, <code>REFERENCE</code>, <code>EXPEDITEUR</code>, <code>PRIX</code>, <code>MONTANT PAYER</code>.</li>
+            </ul>
             
             <input type="file" id="parisCsvFile" accept=".csv" style="margin-top: 15px;">
-            <button id="uploadParisCsvBtn" class="primary" style="margin-top: 15px; width: 100%;">Importer Fichier Manifeste</button>
-            
+            <button id="uploadParisCsvBtn" class="primary" style="margin-top: 15px; width: 100%;">Importer Fichier Complet</button>
             <pre id="parisUploadLog" style="background-color: #f8f9fa; border: 1px solid #dee2e6; padding: 10px; border-radius: 6px; margin-top: 15px; display: none; text-align: left;"></pre>
         </div>
-
         <h2 style="margin-top: 30px;">
             Colis en attente de réception 
             <span id="parisCount" class="tag" style="background-color: #ffc107; color: #333; font-size: 0.8em;">0</span>
         </h2>
-        
         <div class="history-controls" style="margin-bottom: 15px;">
             <div class="search-bar-container">
                 <input type="text" id="parisSearch" placeholder="Rechercher (Réf, Nom...)" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px;">
             </div>
         </div>
-
         <table id="parisTable">
-            <thead>
-                <tr>
-                    <th>Date Départ Paris</th>
-                    <th>Référence</th>
-                    <th>Nom Client</th>
-                    <th>Statut</th>
-                    <th>Action</th>
-                </tr>
-            </thead>
+            <thead><tr><th>Date Départ Paris</th><th>Référence</th><th>Nom Client</th><th>Statut</th><th>Action</th></tr></thead>
             <tbody id="parisTableBody"></tbody>
         </table>
     </div>

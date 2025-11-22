@@ -60,7 +60,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // PANNEAU 1 : LOGIQUE DE RÉCEPTION ABIDJAN
     // ====================================================
 
-    // 1. Auto-remplissage du Nom
+    // 1. Auto-remplissage du Nom (et Prix/Payé si dispo)
     if (arrivalRef) {
         arrivalRef.addEventListener('blur', async () => { 
             const refValue = arrivalRef.value.trim();
@@ -73,12 +73,24 @@ document.addEventListener('DOMContentLoaded', () => {
                 return;
             }
 
-            const query = await parisManifestCollection.where("reference", "==", refValue).get();
+            const query = await parisManifestCollection
+                                    .where("reference", "==", refValue)
+                                    .where("status", "==", "pending")
+                                    .get();
             
             if (!query.empty) {
                 const manifestData = query.docs[0].data();
                 arrivalNom.value = manifestData.nomClient;
                 arrivalNom.style.backgroundColor = "#e0f7fa"; 
+                
+                if (manifestData.prixCFA) {
+                    arrivalPrix.value = manifestData.prixCFA;
+                    arrivalPrix.style.backgroundColor = "#e0f7fa";
+                }
+                if (manifestData.montantParisCFA) {
+                    arrivalMontantParis.value = manifestData.montantParisCFA;
+                    arrivalMontantParis.style.backgroundColor = "#e0f7fa";
+                }
             }
         });
     }
@@ -107,24 +119,22 @@ document.addEventListener('DOMContentLoaded', () => {
 
             transactionsCollection.add(data).then(() => {
                 alert("Colis ajouté !");
-                removeFromParisManifest(data.reference); // Nettoyage du manifeste
-                
+                removeFromParisManifest(data.reference); 
                 arrivalRef.value = ''; arrivalNom.value = ''; arrivalPrix.value = '';
                 arrivalMontantParis.value = ''; arrivalMontantAbidjan.value = '';
-                arrivalNom.style.backgroundColor = ""; arrivalRef.focus();
+                arrivalNom.style.backgroundColor = ""; arrivalPrix.style.backgroundColor = ""; arrivalMontantParis.style.backgroundColor = "";
+                arrivalRef.focus();
             }).catch(err => console.error(err));
         });
     }
 
-    // 3. Ajout en masse CSV (5 colonnes + Nom intelligent)
+    // 3. Ajout en masse CSV (Abidjan - 5 colonnes)
     if (uploadCsvBtn) {
         uploadCsvBtn.addEventListener('click', () => {
             const commonDate = arrivalDate.value;
             const commonConteneur = arrivalConteneur.value.trim().toUpperCase();
             
-            if (!commonDate || !commonConteneur) {
-                return alert("Veuillez d'abord remplir les champs 'Date' et 'Conteneur' en haut de la page.");
-            }
+            if (!commonDate || !commonConteneur) return alert("Remplissez Date et Conteneur en haut.");
             if (!csvFile.files.length) return alert("Sélectionnez un fichier.");
             
             uploadLog.style.display = 'block'; uploadLog.textContent = 'Lecture...';
@@ -133,13 +143,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 header: true, skipEmptyLines: true,
                 complete: async (results) => {
                     const rows = results.data;
-                    uploadLog.textContent += `\n${rows.length} lignes trouvées... Traitement...`;
-
                     const batch = db.batch();
-                    let count = 0;
-                    let skippedEntriesLog = "";
-                    
-                    const refsToRemoveFromParis = []; // Liste pour nettoyage
+                    let count = 0; let log = "";
+                    const refsToRemove = [];
 
                     for (const row of rows) {
                         const ref = row.reference ? row.reference.trim() : '';
@@ -148,144 +154,82 @@ document.addEventListener('DOMContentLoaded', () => {
                         const mParis = parseFloat(row.montantParis)||0; 
                         const mAbidjan = parseFloat(row.montantAbidjan)||0;
 
-                        // Validation minimale (REF et PRIX obligatoires)
                         if (!ref || prix <= 0) {
-                            skippedEntriesLog += `\nIgnoré (Données): ${ref} (Prix invalide ou Réf manquante)`;
-                            continue;
+                            log += `\nIgnoré (Données): ${ref}`; continue;
                         }
 
-                        // RECHERCHE NOM INTELLIGENTE
-                        // Si le nom est vide dans le CSV, on le cherche dans Paris
                         if (!nom) {
-                            const manifestQuery = await parisManifestCollection.where("reference", "==", ref).get();
-                            if (!manifestQuery.empty) {
-                                nom = manifestQuery.docs[0].data().nomClient; // Trouvé !
-                            }
-                            // Si toujours vide, on continue quand même (nom = "")
+                            const q = await parisManifestCollection.where("reference", "==", ref).get();
+                            if (!q.empty) nom = q.docs[0].data().nomClient;
                         }
 
-                        // Doublon
                         const check = await transactionsCollection.where("reference", "==", ref).get();
-                        if (!check.empty) {
-                            skippedEntriesLog += `\nIgnoré (Existe déjà): ${ref}`;
-                            continue;
-                        }
+                        if (!check.empty) { log += `\nDoublon: ${ref}`; continue; }
 
-                        // Ajout
                         const docRef = transactionsCollection.doc();
                         batch.set(docRef, {
-                            date: commonDate, reference: ref, nom: nom, conteneur: commonConteneur,
+                            date: commonDate, reference: ref, nom: nom || "", conteneur: commonConteneur,
                             prix: prix, montantParis: mParis, montantAbidjan: mAbidjan,
                             reste: (mParis + mAbidjan) - prix, isDeleted: false, agent: '', agentMobileMoney: '', commune: ''
                         });
-                        
-                        refsToRemoveFromParis.push(ref);
+                        refsToRemove.push(ref);
                         count++;
                     }
-
                     if (count > 0) {
                         await batch.commit();
-                        // Nettoyage après succès
-                        refsToRemoveFromParis.forEach(ref => removeFromParisManifest(ref));
-                        uploadLog.textContent += `\n🎉 SUCCÈS : ${count} colis ajoutés !`;
+                        refsToRemove.forEach(r => removeFromParisManifest(r));
+                        uploadLog.textContent = `Succès: ${count} ajoutés.\n${log}`;
                     } else {
-                        uploadLog.textContent += `\nRésultat : Aucun nouveau colis à ajouter.`;
+                        uploadLog.textContent = `Aucun ajout.\n${log}`;
                     }
-                    
-                    if (skippedEntriesLog) uploadLog.textContent += `\n--- Journal ---${skippedEntriesLog}`;
-                    
                     csvFile.value = '';
                 }
             });
         });
     }
     
-    // 4. SYNCHRONISATION MANUELLE (Version Débogage)
+    // 4. Synchronisation Manuelle
     if (syncParisBtn) {
         syncParisBtn.addEventListener('click', async () => {
             if (!confirm("Lancer la synchronisation ?")) return;
-            
             const originalText = syncParisBtn.textContent;
-            syncParisBtn.disabled = true; 
-            syncParisBtn.textContent = "Récupération du manifeste...";
+            syncParisBtn.disabled = true; syncParisBtn.textContent = "Analyse...";
             
             try {
-                // 1. Récupérer tout le manifeste Paris
                 const parisSnap = await parisManifestCollection.get();
-                
-                if (parisSnap.empty) {
-                    alert("Le manifeste 'Départ Paris' est VIDE. Rien à synchroniser.");
-                    return;
-                }
-
-                console.log(`Manifeste Paris : ${parisSnap.size} colis trouvés.`);
-                syncParisBtn.textContent = `Analyse de ${parisSnap.size} colis...`;
+                if (parisSnap.empty) { alert("Manifeste vide."); return; }
 
                 const batch = db.batch();
-                let updatedCount = 0;
-                let cleanedCount = 0;
-                let batchCount = 0;
+                let updated = 0, cleaned = 0, bCount = 0;
 
-                // 2. Parcourir chaque colis de Paris
-                for (const docParis of parisSnap.docs) {
-                    const pData = docParis.data();
-                    const refParis = pData.reference;
-                    const nomParis = pData.nomClient;
-
-                    // Nettoyage pour comparaison
-                    const cleanRef = refParis.trim();
-
-                    // 3. Chercher si ce colis existe dans les Transactions (Reçus)
-                    const transSnap = await transactionsCollection.where("reference", "==", cleanRef).get();
+                for (const docP of parisSnap.docs) {
+                    const pData = docP.data();
+                    const ref = pData.reference.trim();
+                    const transSnap = await transactionsCollection.where("reference", "==", ref).get();
 
                     if (!transSnap.empty) {
-                        // LE COLIS EST DÉJÀ REÇU !
-                        const docTrans = transSnap.docs[0];
-                        const tData = docTrans.data();
-
-                        console.log(`Trouvé : ${cleanRef} (Reçu). Vérification du nom...`);
-
-                        // A. Mise à jour du nom si manquant
-                        if (!tData.nom || tData.nom.trim() === "") {
-                            console.log(` -> Nom manquant. Ajout de : ${nomParis}`);
-                            batch.update(docTrans.ref, { nom: nomParis });
-                            updatedCount++;
-                            batchCount++;
+                        const docT = transSnap.docs[0];
+                        // Mise à jour nom si manquant
+                        if (!docT.data().nom || docT.data().nom.trim() === "") {
+                            batch.update(docT.ref, { nom: pData.nomClient });
+                            updated++; bCount++;
                         }
+                        // Suppression du manifeste
+                        batch.delete(docP.ref);
+                        cleaned++; bCount++;
 
-                        // B. Suppression du manifeste Paris
-                        console.log(` -> Suppression du manifeste Paris.`);
-                        batch.delete(docParis.ref);
-                        cleanedCount++;
-                        batchCount++;
-
-                        // Gestion limite batch
-                        if (batchCount >= 400) {
-                            await batch.commit();
-                            batchCount = 0;
-                            // Note : idéalement recréer batch, ici on simplifie pour le debug
-                        }
+                        if (bCount >= 400) { await batch.commit(); bCount = 0; }
                     }
                 }
+                if (bCount > 0) await batch.commit();
+                alert(`Terminé !\nNoms mis à jour: ${updated}\nColis nettoyés: ${cleaned}`);
 
-                // 4. Valider les changements restants
-                if (batchCount > 0) {
-                    await batch.commit();
-                }
-
-                alert(`Synchronisation terminée !\n\n- Colis analysés : ${parisSnap.size}\n- Noms mis à jour : ${updatedCount}\n- Colis nettoyés du manifeste : ${cleanedCount}`);
-
-            } catch (err) {
-                console.error("Erreur sync :", err);
-                alert(`Une erreur est survenue : ${err.message}`);
-            } finally {
-                syncParisBtn.disabled = false;
-                syncParisBtn.textContent = originalText;
-            }
+            } catch (e) { console.error(e); alert("Erreur sync."); } 
+            finally { syncParisBtn.disabled = false; syncParisBtn.textContent = originalText; }
         });
     }
 
-    // 5. AFFICHAGE ABIDJAN
+    // 5. Affichage Abidjan
     transactionsCollection.orderBy("date", "desc").onSnapshot(snapshot => {
         allArrivals = snapshot.docs.map(doc => doc.data());
         renderAbidjanTable();
@@ -293,29 +237,18 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function renderAbidjanTable() {
         const term = abidjanSearchInput ? abidjanSearchInput.value.toLowerCase().trim() : "";
-        const filtered = allArrivals.filter(item => {
+        const filtered = allArrivals.filter(i => {
             if (!term) return true;
-            return (item.reference || "").toLowerCase().includes(term) ||
-                   (item.nom || "").toLowerCase().includes(term) ||
-                   (item.conteneur || "").toLowerCase().includes(term);
+            return (i.reference||"").toLowerCase().includes(term) || (i.nom||"").toLowerCase().includes(term) || (i.conteneur||"").toLowerCase().includes(term);
         });
-
         if (abidjanCountEl) abidjanCountEl.textContent = filtered.length;
         const toShow = term ? filtered : filtered.slice(0, 20);
-
+        
         arrivalsTableBody.innerHTML = '';
-        if (toShow.length === 0) {
-            arrivalsTableBody.innerHTML = '<tr><td colspan="6">Aucun résultat.</td></tr>';
-            return;
-        }
-        toShow.forEach(item => {
-            const row = document.createElement('tr');
-            row.innerHTML = `
-                <td>${item.date}</td><td>${item.reference}</td><td>${item.nom}</td>
-                <td>${item.conteneur}</td><td>${formatCFA(item.prix)}</td>
-                <td class="${(item.reste || 0) < 0 ? 'reste-negatif' : 'reste-positif'}">${formatCFA(item.reste)}</td>
-            `;
-            arrivalsTableBody.appendChild(row);
+        if (toShow.length === 0) { arrivalsTableBody.innerHTML = '<tr><td colspan="6">Aucun résultat.</td></tr>'; return; }
+        
+        toShow.forEach(i => {
+            arrivalsTableBody.innerHTML += `<tr><td>${i.date}</td><td>${i.reference}</td><td>${i.nom}</td><td>${i.conteneur}</td><td>${formatCFA(i.prix)}</td><td class="${(i.reste||0)<0?'reste-negatif':'reste-positif'}">${formatCFA(i.reste)}</td></tr>`;
         });
     }
     if(abidjanSearchInput) abidjanSearchInput.addEventListener('input', renderAbidjanTable);
@@ -325,7 +258,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // PANNEAU 2 : LOGIQUE DÉPART PARIS
     // ====================================================
 
-    // Ajout manuel Paris
+    // 1. Ajout manuel Paris
     if (addParisBtn) {
         addParisBtn.addEventListener('click', async () => {
             const data = {
@@ -343,39 +276,80 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // Import CSV Paris
+    // 2. Import CSV Paris (FICHIER COMPLET AVEC ; OU ,)
     if (uploadParisCsvBtn) {
         uploadParisCsvBtn.addEventListener('click', () => {
             if (!parisCsvFile.files.length) return alert("Sélectionnez un fichier.");
             parisUploadLog.style.display = 'block'; parisUploadLog.textContent = 'Lecture...';
 
             Papa.parse(parisCsvFile.files[0], {
-                header: true, skipEmptyLines: true,
+                header: true, 
+                skipEmptyLines: true,
+                // Pas de délimiteur forcé -> Auto-détection (, ou ;)
                 complete: async (results) => {
+                    const rows = results.data;
                     const batch = db.batch();
-                    let count = 0; let log = "";
-                    for (const row of results.data) {
-                        const date = row.date?.trim(); const ref = row.reference?.trim(); const nom = row.nom?.trim();
-                        if (!date || !ref || !nom) { log += `\nIgnoré: ${ref}`; continue; }
+                    let count = 0, log = "";
+                    const TAUX = 655.957;
+
+                    for (const row of rows) {
+                        // 1. Conversion de date (JJ/MM/AAAA -> AAAA-MM-JJ)
+                        let dateRaw = row["DATE DU TRANSFERT"];
+                        if (dateRaw && dateRaw.includes('/')) {
+                            const parts = dateRaw.split('/');
+                            if (parts.length === 3) dateRaw = `${parts[2]}-${parts[1]}-${parts[0]}`;
+                        }
+
+                        const ref = row["REFERENCE"]?.trim();
+                        const exp = row["EXPEDITEUR"]?.trim();
+                        
+                        if (!dateRaw || !ref) { log += `\nIgnoré (Données): ${ref}`; continue; }
 
                         const check = await parisManifestCollection.where("reference", "==", ref).get();
-                        if (!check.empty) { log += `\nDoublon: ${ref}`; continue; }
+                        if (!check.empty) { log += `\nIgnoré (Existe): ${ref}`; continue; }
+
+                        // 2. Conversion des montants
+                        const prixE = parseFloat((row["PRIX"]||"0").replace(',','.'));
+                        const payeE = parseFloat((row["MONTANT PAYER"]||"0").replace(',','.'));
+                        
+                        // 3. Récupération des infos supplémentaires
+                        const dest = row["DESTINATEUR"]?.trim() || "";
+                        const typeColis = row["TYPE COLIS"]?.trim() || "";
+                        const adresse = row["ADRESSES"]?.trim() || "";
+                        const qte = parseInt(row["QUANTITE"]) || 1;
 
                         const docRef = parisManifestCollection.doc();
                         batch.set(docRef, {
-                            dateParis: date, reference: ref, nomClient: nom,
-                            status: "pending", dateArrivee: "", conteneurArrivee: ""
+                            dateParis: dateRaw, 
+                            reference: ref, 
+                            nomClient: exp,
+                            nomDestinataire: dest,
+                            adresseDestinataire: adresse,
+                            typeColis: typeColis,
+                            quantite: qte,
+                            
+                            prixOriginalEuro: prixE,
+                            prixCFA: Math.round(prixE * TAUX),
+                            montantParisCFA: Math.round(payeE * TAUX),
+                            
+                            status: "pending", 
+                            dateArrivee: "", 
+                            conteneurArrivee: ""
                         });
                         count++;
                     }
                     if (count > 0) await batch.commit();
-                    parisUploadLog.textContent = `Ajoutés: ${count}\n${log}`; parisCsvFile.value = '';
+                    parisUploadLog.textContent = `Succès: ${count} ajoutés.\n${log}`;
+                    parisCsvFile.value = '';
+                },
+                error: (err) => {
+                    parisUploadLog.textContent = `Erreur : ${err.message}`;
                 }
             });
         });
     }
 
-    // Affichage Paris
+    // 3. Affichage Paris
     parisManifestCollection.where("status", "==", "pending").orderBy("dateParis", "desc").onSnapshot(snap => {
         allParisManifest = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         renderParisTable();
@@ -383,30 +357,22 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function renderParisTable() {
         const term = parisSearchInput ? parisSearchInput.value.toLowerCase().trim() : "";
-        const filtered = allParisManifest.filter(item => {
+        const filtered = allParisManifest.filter(i => {
             if (!term) return true;
-            return (item.reference || "").toLowerCase().includes(term) ||
-                   (item.nomClient || "").toLowerCase().includes(term);
+            return (i.reference||"").toLowerCase().includes(term) || (i.nomClient||"").toLowerCase().includes(term);
         });
-
         if (parisCountEl) parisCountEl.textContent = filtered.length;
+        
         parisTableBody.innerHTML = '';
-        if (filtered.length === 0) {
-            parisTableBody.innerHTML = '<tr><td colspan="5">Aucun colis en attente.</td></tr>'; return;
-        }
-        filtered.forEach(item => {
-            const row = document.createElement('tr');
-            row.innerHTML = `
-                <td>${item.dateParis}</td><td>${item.reference}</td><td>${item.nomClient}</td>
-                <td><span class="tag" style="background:#ffc107;color:#333">En attente</span></td>
-                <td><button class="deleteBtn" data-id="${item.id}">Annuler</button></td>
-            `;
-            parisTableBody.appendChild(row);
+        if (filtered.length === 0) { parisTableBody.innerHTML = '<tr><td colspan="5">Aucun colis.</td></tr>'; return; }
+        
+        filtered.forEach(i => {
+            parisTableBody.innerHTML += `<tr><td>${i.dateParis}</td><td>${i.reference}</td><td>${i.nomClient}</td><td><span class="tag" style="background:#ffc107;color:#333">En attente</span></td><td><button class="deleteBtn" data-id="${i.id}">Annuler</button></td></tr>`;
         });
     }
     if(parisSearchInput) parisSearchInput.addEventListener('input', renderParisTable);
 
-    // Suppression Paris
+    // Suppression
     if (parisTableBody) {
         parisTableBody.addEventListener('click', (e) => {
             if (e.target.classList.contains('deleteBtn')) {
@@ -415,15 +381,13 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // Utilitaire
-    async function removeFromParisManifest(reference) {
-        try {
-            const query = await parisManifestCollection.where("reference", "==", reference).get();
-            if (!query.empty) {
-                await query.docs[0].ref.delete();
-                console.log(`Colis ${reference} retiré du manifeste.`);
-            }
-        } catch (err) { console.error(err); }
+    async function removeFromParisManifest(ref) {
+        const q = await parisManifestCollection.where("reference", "==", ref).get();
+        if (!q.empty) await q.docs[0].ref.delete();
+    }
+
+    async function updateParisManifest(reference, conteneur, dateArrivee) {
+        await removeFromParisManifest(reference); // On supprime quand c'est reçu
     }
 
     function formatCFA(n) { return new Intl.NumberFormat('fr-CI', { style: 'currency', currency: 'XOF' }).format(n || 0); }
