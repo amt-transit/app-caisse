@@ -1,16 +1,13 @@
 document.addEventListener('DOMContentLoaded', async () => {
     if (typeof firebase === 'undefined' || typeof db === 'undefined') {
-        alert("Erreur: La connexion à la base de données a échoué.");
-        return;
+        alert("Erreur: La connexion à la base de données a échoué."); return;
     }
 
     const transactionsCollection = db.collection("transactions");
     
     const agentSelectElement = document.getElementById('agent');
     const agentChoices = new Choices(agentSelectElement, {
-        removeItemButton: true, 
-        placeholder: true,
-        searchPlaceholderValue: 'Rechercher un agent...',
+        removeItemButton: true, placeholder: true, searchPlaceholderValue: 'Rechercher un agent...',
     });
 
     const addEntryBtn = document.getElementById('addEntryBtn');
@@ -25,6 +22,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const montantParisInput = document.getElementById('montantParis');
     const montantAbidjanInput = document.getElementById('montantAbidjan');
     const agentMobileMoneyInput = document.getElementById('agentMobileMoney');
+    const modePaiementInput = document.getElementById('modePaiement'); // NOUVEAU
     const resteInput = document.getElementById('reste');
     const communeInput = document.getElementById('commune');
     const referenceList = document.getElementById('referenceList');
@@ -37,17 +35,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     let dailyTransactions = JSON.parse(localStorage.getItem('dailyTransactions')) || [];
 
-    // --- FONCTIONS UTILITAIRES ---
-    function saveDailyToLocalStorage() {
-        localStorage.setItem('dailyTransactions', JSON.stringify(dailyTransactions));
-    }
-    function formatCFA(number) {
-        return new Intl.NumberFormat('fr-CI', { style: 'currency', currency: 'XOF' }).format(number || 0);
-    }
-    function textToClassName(text) {
-        if (!text) return '';
-        return text.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, '-');
-    }
+    function saveDailyToLocalStorage() { localStorage.setItem('dailyTransactions', JSON.stringify(dailyTransactions)); }
+    function formatCFA(n) { return new Intl.NumberFormat('fr-CI', { style: 'currency', currency: 'XOF' }).format(n || 0); }
+    function textToClassName(t) { return t ? t.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, '-') : ''; }
     
     function calculateAndStyleReste() {
         const prix = parseFloat(prixInput.value) || 0;
@@ -87,7 +77,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 <td>${data.reference}</td>
                 <td>${data.nom || '-'}</td>
                 <td>${formatCFA(data.prix)}</td>
-                <td class="${data.reste < 0 ? 'reste-negatif' : 'reste-positif'}">${formatCFA(data.reste)}</td>
+                <td>${data.modePaiement}</td> <td class="${data.reste < 0 ? 'reste-negatif' : 'reste-positif'}">${formatCFA(data.reste)}</td>
                 <td><button class="deleteBtn" data-index="${index}">X</button></td>
             `;
             dailyTableBody.appendChild(row);
@@ -106,27 +96,27 @@ document.addEventListener('DOMContentLoaded', async () => {
                     opt.value = d.reference;
                     referenceList.appendChild(opt);
                 }
+                if (d.nom) {
+                    let opt = document.createElement('option');
+                    opt.value = d.nom;
+                    referenceList.appendChild(opt);
+                }
             });
         });
     }
     
     function clearDisplayFields() {
-        prixInput.value = '';
-        conteneurInput.value = '';
-        resteInput.value = '';
-        resteInput.className = '';
+        prixInput.value = ''; conteneurInput.value = '';
+        resteInput.value = ''; resteInput.className = '';
         montantParisInput.placeholder = 'Montant Paris';
         montantAbidjanInput.placeholder = 'Montant Abidjan';
     }
 
     function fillFormWithData(data) {
         prixInput.value = data.prix;
-        // On ne remplace le nom/ref que s'ils sont vides
         if(!nomInput.value) nomInput.value = data.nom || '';
         if(!referenceInput.value) referenceInput.value = data.reference || '';
-        
         conteneurInput.value = data.conteneur || '';
-        
         if (data.reste < 0) {
             resteInput.value = data.reste;
             resteInput.className = 'reste-negatif';
@@ -140,7 +130,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     }
 
-    // --- AJOUTER À LA LISTE ---
+    // --- AJOUTER ---
     addEntryBtn.addEventListener('click', () => {
         const selectedAgents = agentChoices.getValue(true); 
         const agentString = selectedAgents.join(', '); 
@@ -154,6 +144,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             montantParis: parseFloat(montantParisInput.value) || 0,
             montantAbidjan: parseFloat(montantAbidjanInput.value) || 0,
             agentMobileMoney: agentMobileMoneyInput.value,
+            modePaiement: modePaiementInput.value, // NOUVEAU
             commune: communeInput.value, 
             agent: agentString,
             reste: 0
@@ -163,21 +154,19 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (newData.prix <= 0) return alert("Prix invalide.");
 
         const totalPaye = newData.montantParis + newData.montantAbidjan;
-        if (totalPaye > newData.prix) {
-             return alert(`IMPOSSIBLE : Le montant payé (${formatCFA(totalPaye)}) dépasse le prix (${formatCFA(newData.prix)}).`);
-        }
+        if (totalPaye > newData.prix) return alert(`IMPOSSIBLE : Trop perçu.`);
         newData.reste = totalPaye - newData.prix;
 
         const existingIndex = dailyTransactions.findIndex(t => t.reference === newData.reference);
         if (existingIndex > -1) {
             const t = dailyTransactions[existingIndex];
             const nouveauTotal = t.montantParis + t.montantAbidjan + newData.montantParis + newData.montantAbidjan;
-            if (nouveauTotal > t.prix) {
-                return alert("IMPOSSIBLE : Le cumul des paiements dépasserait le prix du colis.");
-            }
+            if (nouveauTotal > t.prix) return alert("IMPOSSIBLE : Cumul trop élevé.");
+            
             t.montantParis += newData.montantParis;
             t.montantAbidjan += newData.montantAbidjan;
             if (newData.agentMobileMoney) t.agentMobileMoney = newData.agentMobileMoney;
+            t.modePaiement = newData.modePaiement; // Met à jour le dernier mode
             t.reste = (t.montantParis + t.montantAbidjan) - t.prix;
         } else {
             dailyTransactions.push(newData);
@@ -188,13 +177,14 @@ document.addEventListener('DOMContentLoaded', async () => {
         
         formContainer.querySelectorAll('input, select').forEach(el => {
             if (el.type !== 'date' && el.id !== 'agent' && el.id !== 'commune') el.value = '';
+            if (el.id === 'modePaiement') el.value = 'Espèce'; // Reset à Espèce
         });
         agentChoices.setValue([]); 
         resteInput.className = '';
         referenceInput.focus();
     });
 
-    // --- ENREGISTRER DANS FIREBASE ---
+    // --- ENREGISTRER ---
     saveDayBtn.addEventListener('click', async () => {
         if (dailyTransactions.length === 0) return alert("Rien à enregistrer.");
         if (!confirm(`Enregistrer les ${dailyTransactions.length} opérations ?`)) return;
@@ -209,13 +199,13 @@ document.addEventListener('DOMContentLoaded', async () => {
                 montantParis: transac.montantParis,
                 montantAbidjan: transac.montantAbidjan,
                 agent: transac.agent,
+                modePaiement: transac.modePaiement, // NOUVEAU
                 agentMobileMoney: transac.agentMobileMoney
             };
 
             if (!query.empty) {
                 const docRef = query.docs[0].ref;
                 const oldData = query.docs[0].data();
-                
                 const updatedData = {
                     montantParis: (oldData.montantParis || 0) + transac.montantParis,
                     montantAbidjan: (oldData.montantAbidjan || 0) + transac.montantAbidjan,
@@ -223,8 +213,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                     date: transac.date || oldData.date,
                     agent: transac.agent || oldData.agent || '',
                     agentMobileMoney: transac.agentMobileMoney || oldData.agentMobileMoney || '',
+                    modePaiement: transac.modePaiement, // Met à jour le dernier mode
                     commune: transac.commune || oldData.commune || '',
-                    // MISE À JOUR DU NOM ET CONTENEUR SI MODIFIÉS
                     nom: oldData.nom || transac.nom || '', 
                     conteneur: oldData.conteneur || transac.conteneur || '',
                     paymentHistory: firebase.firestore.FieldValue.arrayUnion(paymentEntry)
@@ -242,7 +232,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
         
         batch.commit().then(() => {
-            alert(`Succès ! Tout a été enregistré.`);
+            alert(`Succès !`);
             dailyTransactions = [];
             saveDailyToLocalStorage();
             renderDailyTable();
@@ -258,64 +248,30 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     });
 
-    // --- RECHERCHE INTELLIGENTE (REF) ---
     referenceInput.addEventListener('input', async () => {
         const refValue = referenceInput.value.trim();
-        
-        if (!refValue) {
-            clearDisplayFields();
-            nomInput.value = ''; 
-            return;
-        }
-
+        if (!refValue) { clearDisplayFields(); nomInput.value = ''; return; }
         const query = await transactionsCollection.where("reference", "==", refValue).get();
-        
-        if (!query.empty) {
-            const data = query.docs[0].data();
-            fillFormWithData(data);
-        } else {
-            // Pas trouvé : On vide pour laisser la place à une nouvelle saisie
-            // MAIS on ne vide PAS la référence qu'on vient de taper !
-            clearDisplayFields();
-        }
+        if (!query.empty) { fillFormWithData(query.docs[0].data()); } 
+        else { clearDisplayFields(); }
     });
 
-    // --- RECHERCHE INTELLIGENTE (NOM) ---
     nomInput.addEventListener('input', async () => {
         const nomValue = nomInput.value.trim();
         const refValue = referenceInput.value.trim();
-
-        // ==== CORRECTION ICI ====
-        // Si une référence est déjà remplie (donc un colis chargé),
-        // on suppose que l'utilisateur veut juste AJOUTER/MODIFIER le nom.
-        // Donc on NE LANCE PAS la recherche et on N'EFFACE PAS.
-        if (refValue) {
-            return; 
-        }
-        // ========================
-
-        if (!nomValue) {
-            clearDisplayFields();
-            referenceInput.value = ''; 
-            return;
-        }
-
+        if (refValue) return; 
+        if (!nomValue) { clearDisplayFields(); referenceInput.value=''; return; }
         const query = await transactionsCollection.where("nom", "==", nomValue).get();
         if (!query.empty) {
             const data = query.docs[0].data();
             referenceInput.value = data.reference;
             fillFormWithData(data);
-        } else {
-            clearDisplayFields();
-        }
+        } else { clearDisplayFields(); }
     });
 
-    // 5. CALCUL AUTOMATIQUE
     prixInput.addEventListener('input', calculateAndStyleReste);
     montantParisInput.addEventListener('input', calculateAndStyleReste);
     montantAbidjanInput.addEventListener('input', calculateAndStyleReste);
-
-    // --- INITIALISATION ---
     renderDailyTable();
     populateDatalist(); 
 });

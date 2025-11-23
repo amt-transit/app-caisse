@@ -60,7 +60,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // PANNEAU 1 : LOGIQUE DE RÉCEPTION ABIDJAN
     // ====================================================
 
-    // 1. Auto-remplissage du Nom (et Prix/Payé si dispo)
+    // 1. Auto-remplissage du Nom
     if (arrivalRef) {
         arrivalRef.addEventListener('blur', async () => { 
             const refValue = arrivalRef.value.trim();
@@ -111,7 +111,7 @@ document.addEventListener('DOMContentLoaded', () => {
             };
 
             if (!data.date || !data.reference || !data.nom || !data.conteneur || data.prix <= 0) {
-                return alert("Champs manquants.");
+                return alert("Veuillez remplir Date, Conteneur, Référence, Nom et Prix.");
             }
             
             const check = await transactionsCollection.where("reference", "==", data.reference).get();
@@ -188,7 +188,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
     
-    // 4. Synchronisation Manuelle
+    // 4. Synchronisation
     if (syncParisBtn) {
         syncParisBtn.addEventListener('click', async () => {
             if (!confirm("Lancer la synchronisation ?")) return;
@@ -209,27 +209,24 @@ document.addEventListener('DOMContentLoaded', () => {
 
                     if (!transSnap.empty) {
                         const docT = transSnap.docs[0];
-                        // Mise à jour nom si manquant
                         if (!docT.data().nom || docT.data().nom.trim() === "") {
                             batch.update(docT.ref, { nom: pData.nomClient });
                             updated++; bCount++;
                         }
-                        // Suppression du manifeste
                         batch.delete(docP.ref);
                         cleaned++; bCount++;
-
                         if (bCount >= 400) { await batch.commit(); bCount = 0; }
                     }
                 }
                 if (bCount > 0) await batch.commit();
                 alert(`Terminé !\nNoms mis à jour: ${updated}\nColis nettoyés: ${cleaned}`);
-
             } catch (e) { console.error(e); alert("Erreur sync."); } 
             finally { syncParisBtn.disabled = false; syncParisBtn.textContent = originalText; }
         });
     }
 
-    // 5. Affichage Abidjan
+    // --- AFFICHAGE ABIDJAN ---
+    // On récupère tout (pour avoir le total)
     transactionsCollection.orderBy("date", "desc").onSnapshot(snapshot => {
         allArrivals = snapshot.docs.map(doc => doc.data());
         renderAbidjanTable();
@@ -237,18 +234,33 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function renderAbidjanTable() {
         const term = abidjanSearchInput ? abidjanSearchInput.value.toLowerCase().trim() : "";
-        const filtered = allArrivals.filter(i => {
+        
+        const filtered = allArrivals.filter(item => {
             if (!term) return true;
-            return (i.reference||"").toLowerCase().includes(term) || (i.nom||"").toLowerCase().includes(term) || (i.conteneur||"").toLowerCase().includes(term);
+            return (item.reference || "").toLowerCase().includes(term) ||
+                   (item.nom || "").toLowerCase().includes(term) ||
+                   (item.conteneur || "").toLowerCase().includes(term);
         });
+
+        // Mise à jour du compteur (Affiche le nombre total trouvé)
         if (abidjanCountEl) abidjanCountEl.textContent = filtered.length;
-        const toShow = term ? filtered : filtered.slice(0, 20);
-        
+
+        // === OPTIMISATION : On ne prend que les 50 premiers pour l'affichage ===
+        const toShow = filtered.slice(0, 50);
+
         arrivalsTableBody.innerHTML = '';
-        if (toShow.length === 0) { arrivalsTableBody.innerHTML = '<tr><td colspan="6">Aucun résultat.</td></tr>'; return; }
-        
-        toShow.forEach(i => {
-            arrivalsTableBody.innerHTML += `<tr><td>${i.date}</td><td>${i.reference}</td><td>${i.nom}</td><td>${i.conteneur}</td><td>${formatCFA(i.prix)}</td><td class="${(i.reste||0)<0?'reste-negatif':'reste-positif'}">${formatCFA(i.reste)}</td></tr>`;
+        if (toShow.length === 0) {
+            arrivalsTableBody.innerHTML = '<tr><td colspan="6">Aucun résultat.</td></tr>';
+            return;
+        }
+        toShow.forEach(item => {
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td>${item.date}</td><td>${item.reference}</td><td>${item.nom}</td>
+                <td>${item.conteneur}</td><td>${formatCFA(item.prix)}</td>
+                <td class="${(item.reste || 0) < 0 ? 'reste-negatif' : 'reste-positif'}">${formatCFA(item.reste)}</td>
+            `;
+            arrivalsTableBody.appendChild(row);
         });
     }
     if(abidjanSearchInput) abidjanSearchInput.addEventListener('input', renderAbidjanTable);
@@ -266,26 +278,20 @@ document.addEventListener('DOMContentLoaded', () => {
                 status: "pending", dateArrivee: "", conteneurArrivee: ""
             };
             if (!data.dateParis || !data.reference || !data.nomClient) return alert("Champs manquants.");
-            
             const check = await parisManifestCollection.where("reference", "==", data.reference).get();
             if (!check.empty) return alert("Déjà dans le manifeste.");
-            
-            parisManifestCollection.add(data).then(() => {
-                parisRef.value = ''; parisNom.value = ''; parisRef.focus();
-            });
+            parisManifestCollection.add(data).then(() => { parisRef.value = ''; parisNom.value = ''; parisRef.focus(); });
         });
     }
 
-    // 2. Import CSV Paris (FICHIER COMPLET AVEC ; OU ,)
+    // 2. Import CSV Paris (Fichier Complet)
     if (uploadParisCsvBtn) {
         uploadParisCsvBtn.addEventListener('click', () => {
             if (!parisCsvFile.files.length) return alert("Sélectionnez un fichier.");
             parisUploadLog.style.display = 'block'; parisUploadLog.textContent = 'Lecture...';
 
             Papa.parse(parisCsvFile.files[0], {
-                header: true, 
-                skipEmptyLines: true,
-                // Pas de délimiteur forcé -> Auto-détection (, ou ;)
+                header: true, skipEmptyLines: true, delimiter: ";", // Point-virgule
                 complete: async (results) => {
                     const rows = results.data;
                     const batch = db.batch();
@@ -293,57 +299,33 @@ document.addEventListener('DOMContentLoaded', () => {
                     const TAUX = 655.957;
 
                     for (const row of rows) {
-                        // 1. Conversion de date (JJ/MM/AAAA -> AAAA-MM-JJ)
-                        let dateRaw = row["DATE DU TRANSFERT"];
-                        if (dateRaw && dateRaw.includes('/')) {
-                            const parts = dateRaw.split('/');
-                            if (parts.length === 3) dateRaw = `${parts[2]}-${parts[1]}-${parts[0]}`;
-                        }
-
+                        const date = row["DATE DU TRANSFERT"];
                         const ref = row["REFERENCE"]?.trim();
                         const exp = row["EXPEDITEUR"]?.trim();
-                        
-                        if (!dateRaw || !ref) { log += `\nIgnoré (Données): ${ref}`; continue; }
+                        if (!date || !ref) { log += `\nIgnoré (Données): ${ref}`; continue; }
 
                         const check = await parisManifestCollection.where("reference", "==", ref).get();
                         if (!check.empty) { log += `\nIgnoré (Existe): ${ref}`; continue; }
 
-                        // 2. Conversion des montants
                         const prixE = parseFloat((row["PRIX"]||"0").replace(',','.'));
                         const payeE = parseFloat((row["MONTANT PAYER"]||"0").replace(',','.'));
-                        
-                        // 3. Récupération des infos supplémentaires
                         const dest = row["DESTINATEUR"]?.trim() || "";
                         const typeColis = row["TYPE COLIS"]?.trim() || "";
                         const adresse = row["ADRESSES"]?.trim() || "";
                         const qte = parseInt(row["QUANTITE"]) || 1;
-
+                        
                         const docRef = parisManifestCollection.doc();
                         batch.set(docRef, {
-                            dateParis: dateRaw, 
-                            reference: ref, 
-                            nomClient: exp,
-                            nomDestinataire: dest,
-                            adresseDestinataire: adresse,
-                            typeColis: typeColis,
-                            quantite: qte,
-                            
-                            prixOriginalEuro: prixE,
-                            prixCFA: Math.round(prixE * TAUX),
-                            montantParisCFA: Math.round(payeE * TAUX),
-                            
-                            status: "pending", 
-                            dateArrivee: "", 
-                            conteneurArrivee: ""
+                            dateParis: date, reference: ref, nomClient: exp,
+                            nomDestinataire: dest, adresseDestinataire: adresse, typeColis: typeColis, quantite: qte,
+                            prixOriginalEuro: prixE, prixCFA: Math.round(prixE * TAUX), montantParisCFA: Math.round(payeE * TAUX),
+                            status: "pending", dateArrivee: "", conteneurArrivee: ""
                         });
                         count++;
                     }
                     if (count > 0) await batch.commit();
                     parisUploadLog.textContent = `Succès: ${count} ajoutés.\n${log}`;
                     parisCsvFile.value = '';
-                },
-                error: (err) => {
-                    parisUploadLog.textContent = `Erreur : ${err.message}`;
                 }
             });
         });
@@ -361,12 +343,16 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!term) return true;
             return (i.reference||"").toLowerCase().includes(term) || (i.nomClient||"").toLowerCase().includes(term);
         });
+
         if (parisCountEl) parisCountEl.textContent = filtered.length;
         
-        parisTableBody.innerHTML = '';
-        if (filtered.length === 0) { parisTableBody.innerHTML = '<tr><td colspan="5">Aucun colis.</td></tr>'; return; }
+        // === OPTIMISATION : On ne prend que les 50 premiers ===
+        const toShow = filtered.slice(0, 50);
         
-        filtered.forEach(i => {
+        parisTableBody.innerHTML = '';
+        if (toShow.length === 0) { parisTableBody.innerHTML = '<tr><td colspan="5">Aucun colis.</td></tr>'; return; }
+        
+        toShow.forEach(i => {
             parisTableBody.innerHTML += `<tr><td>${i.dateParis}</td><td>${i.reference}</td><td>${i.nomClient}</td><td><span class="tag" style="background:#ffc107;color:#333">En attente</span></td><td><button class="deleteBtn" data-id="${i.id}">Annuler</button></td></tr>`;
         });
     }
@@ -384,10 +370,6 @@ document.addEventListener('DOMContentLoaded', () => {
     async function removeFromParisManifest(ref) {
         const q = await parisManifestCollection.where("reference", "==", ref).get();
         if (!q.empty) await q.docs[0].ref.delete();
-    }
-
-    async function updateParisManifest(reference, conteneur, dateArrivee) {
-        await removeFromParisManifest(reference); // On supprime quand c'est reçu
     }
 
     function formatCFA(n) { return new Intl.NumberFormat('fr-CI', { style: 'currency', currency: 'XOF' }).format(n || 0); }

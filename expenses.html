@@ -3,10 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=1000">
-    <title>Dépenses & Budget</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Comfortaa:wght@400;700&display=swap" rel="stylesheet">
+    <title>Dépenses - Caisse</title>
     <link rel="stylesheet" href="style.css">
     <link rel="icon" type="image/png" href="favicon.png">
 </head>
@@ -25,6 +22,7 @@
         <a href="other-income.html" id="nav-other-income">Autres Entrées</a>
         <a href="bank.html" id="nav-bank">Banque</a>
         <a href="arrivages.html" id="nav-arrivages">Arrivages</a>
+        <a href="clients.html" id="nav-clients">Clients</a>
     </nav>
 
     <div class="dashboard-container" style="margin-bottom: 20px; background-color: #e3f2fd; border: 1px solid #bbdefb;">
@@ -38,17 +36,23 @@
     <div id="caisseForm">
         <div class="form-grid">
             <input type="date" id="expenseDate" required>
-            
             <select id="actionType" style="font-weight: bold; color: #1565c0;">
                 <option value="Depense">🔴 Enregistrer une Dépense</option>
-                </select>
-
+            </select>
             <input type="text" id="expenseDesc" placeholder="Description (ex: Facture CIE...)" required>
             <div class="prix-container">
                 <input type="number" id="expenseAmount" placeholder="Montant">
                 <span class="cfa-label">CFA</span>
             </div>
             
+            <select id="expenseMode">
+                <option value="Espèce" selected>Espèce</option>
+                <option value="Chèque">Chèque</option>
+                <option value="OM">Orange Money</option>
+                <option value="Wave">Wave</option>
+                <option value="Virement">Virement</option>
+            </select>
+
             <select id="expenseType">
                 <option value="Mensuelle">Dépense Mensuelle</option>
                 <option value="Conteneur">Dépense de Conteneur</option>
@@ -62,13 +66,14 @@
 
     <div id="csvImportBlock" style="margin-top: 20px; border-top: 2px solid #eee; display: none;">
         <h3>Importer des Dépenses (CSV)</h3>
+        <p>Format CSV : <code>date, description, montant, type, conteneur</code></p>
         <input type="file" id="csvFile" accept=".csv">
         <button id="uploadCsvBtn" class="primary" style="margin-top: 10px;">Importer CSV</button>
     </div>
 
     <div class="history-controls">
         <div class="search-bar-container">
-            <input type="text" id="expenseSearch" placeholder="Rechercher..." style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px;">
+            <input type="text" id="expenseSearch" placeholder="Rechercher dans les dépenses..." style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px;">
         </div>
         <div class="checkbox-container" style="margin-top: 10px;">
             <input type="checkbox" id="showDeletedCheckbox" style="width: auto;">
@@ -80,7 +85,7 @@
     <table id="expenseTable">
         <thead>
             <tr>
-                <th>Date</th><th>Description</th><th>Type</th><th>Montant</th><th>Conteneur</th><th>Action</th>
+                <th>Date</th><th>Description</th><th>Montant</th><th>Type</th><th>Mode</th><th>Conteneur</th><th>Action</th>
             </tr>
         </thead>
         <tbody id="expenseTableBody"></tbody>

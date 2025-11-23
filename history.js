@@ -71,7 +71,18 @@ document.addEventListener('DOMContentLoaded', () => {
                 if(pay.montantParis > 0) amounts.push(`<span style="color:blue">Paris: ${formatCFA(pay.montantParis)}</span>`);
                 if(pay.montantAbidjan > 0) amounts.push(`<span style="color:orange">Abidjan: ${formatCFA(pay.montantAbidjan)}</span>`);
                 const li = document.createElement('li');
-                li.innerHTML = `<span style="font-weight:bold; min-width:90px;">${pay.date}</span><span style="flex-grow:1; margin:0 10px;">${amounts.join(' + ')}</span><span style="font-size:0.85em; color:#666">${pay.agent || '-'}</span>`;
+                // On prépare le badge du mode de paiement (s'il existe)
+                const modeBadge = pay.modePaiement ? `<span class="tag" style="background:#6c757d; font-size:10px; margin-right:5px;">${pay.modePaiement}</span>` : '';
+
+                // On l'ajoute dans la ligne HTML
+                li.innerHTML = `
+                    <span style="font-weight:bold; min-width: 90px;">${pay.date}</span>
+                    <span style="flex-grow:1; margin: 0 10px;">
+                        ${modeBadge} 
+                        ${amounts.join(' + ')}
+                    </span>
+                    <span style="font-size:0.85em; color:#666">${pay.agent || '-'}</span>
+                `;
                 modalList.appendChild(li);
             });
         } else {
