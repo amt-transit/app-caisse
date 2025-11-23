@@ -1,20 +1,18 @@
 document.addEventListener('DOMContentLoaded', () => {
     if (typeof firebase === 'undefined' || typeof db === 'undefined') {
-        alert("Erreur: La connexion à la base de données a échoué."); return;
+        alert("Erreur: Connexion échouée."); return;
     }
 
     const userRole = sessionStorage.getItem('userRole');
     const transactionsCollection = db.collection("transactions");
     const tableBody = document.getElementById('tableBody');
     
-    // Éléments de filtre
     const showDeletedCheckbox = document.getElementById('showDeletedCheckbox');
-    const smartSearchInput = document.getElementById('smartSearch'); // NOUVEAU CHAMP UNIQUE
+    const smartSearchInput = document.getElementById('smartSearch');
     const agentFilterInput = document.getElementById('agentFilter');
     const startDateInput = document.getElementById('startDate');
     const endDateInput = document.getElementById('endDate');
 
-    // Modale
     const modal = document.getElementById('paymentHistoryModal');
     const modalList = document.getElementById('paymentHistoryList');
     const modalTitle = document.getElementById('modalRefTitle');
@@ -23,23 +21,18 @@ document.addEventListener('DOMContentLoaded', () => {
     let unsubscribeHistory = null; 
     let allTransactions = []; 
 
-    // --- GESTION MODALE ---
     if (closeModal) closeModal.onclick = () => modal.style.display = "none";
     window.onclick = (e) => { if (e.target == modal) modal.style.display = "none"; };
 
-    // --- GESTION DES CLICS TABLEAU ---
+    // --- GESTION CLICS TABLEAU ---
     tableBody.addEventListener('click', (event) => {
         const target = event.target;
         const row = target.closest('tr');
 
-        // Supprimer
         if (target.classList.contains('deleteBtn')) {
-            if (confirm("Confirmer la suppression ?")) {
-                transactionsCollection.doc(target.dataset.id).update({ isDeleted: true });
-            }
+            if (confirm("Supprimer ?")) transactionsCollection.doc(target.dataset.id).update({ isDeleted: true });
             return;
         }
-        // Modifier
         if (target.classList.contains('editBtn')) {
             const oldPrice = parseFloat(target.dataset.prix);
             const newPriceStr = prompt("Nouveau PRIX :", oldPrice);
@@ -55,7 +48,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 .then(() => alert("Modifié !")).catch(() => alert("Erreur."));
             return;
         }
-        // Ouvrir Modale
         if (row && row.dataset.id) {
             const transaction = allTransactions.find(t => t.id === row.dataset.id);
             if (transaction) openPaymentModal(transaction);
@@ -70,81 +62,93 @@ document.addEventListener('DOMContentLoaded', () => {
                 let amounts = [];
                 if(pay.montantParis > 0) amounts.push(`<span style="color:blue">Paris: ${formatCFA(pay.montantParis)}</span>`);
                 if(pay.montantAbidjan > 0) amounts.push(`<span style="color:orange">Abidjan: ${formatCFA(pay.montantAbidjan)}</span>`);
-                const li = document.createElement('li');
-                // On prépare le badge du mode de paiement (s'il existe)
+                
                 const modeBadge = pay.modePaiement ? `<span class="tag" style="background:#6c757d; font-size:10px; margin-right:5px;">${pay.modePaiement}</span>` : '';
-
-                // On l'ajoute dans la ligne HTML
-                li.innerHTML = `
-                    <span style="font-weight:bold; min-width: 90px;">${pay.date}</span>
-                    <span style="flex-grow:1; margin: 0 10px;">
-                        ${modeBadge} 
-                        ${amounts.join(' + ')}
-                    </span>
-                    <span style="font-size:0.85em; color:#666">${pay.agent || '-'}</span>
-                `;
+                const li = document.createElement('li');
+                li.innerHTML = `<span style="font-weight:bold; min-width:90px;">${pay.date}</span><span style="flex-grow:1; margin:0 10px;">${modeBadge} ${amounts.join(' + ')}</span><span style="font-size:0.85em; color:#666">${pay.agent || '-'}</span>`;
                 modalList.appendChild(li);
             });
         } else {
-            modalList.innerHTML = `<li style="color:gray; font-style:italic; justify-content:center;">Pas de détails historiques.</li><li style="justify-content: space-around;"><span>Total Paris: <b style="color:blue">${formatCFA(data.montantParis)}</b></span><span>Total Abidjan: <b style="color:orange">${formatCFA(data.montantAbidjan)}</b></span></li>`;
+            modalList.innerHTML = `<li style="color:gray; font-style:italic; justify-content:center;">Pas de détails.</li><li style="justify-content: space-around;"><span>Total P: ${formatCFA(data.montantParis)}</span><span>Total A: ${formatCFA(data.montantAbidjan)}</span></li>`;
         }
         modal.style.display = "block";
     }
 
-    // --- RÉCUPÉRATION DONNÉES ---
+    // --- CHARGEMENT OPTIMISÉ ---
     function fetchHistory() {
         if (unsubscribeHistory) unsubscribeHistory();
+        
         let query = transactionsCollection;
-        if (showDeletedCheckbox.checked) {
-             query = query.where("isDeleted", "==", true).orderBy("isDeleted");
-        } else {
-             query = query.where("isDeleted", "!=", true).orderBy("isDeleted");
+
+        // Si on a des filtres, on charge tout pour filtrer (ou on pourrait optimiser la requête Firebase)
+        // Pour l'instant, on charge tout si un filtre est actif, sinon juste aujourd'hui.
+        
+        const isFiltering = startDateInput.value || endDateInput.value || smartSearchInput.value || agentFilterInput.value;
+
+        if (!isFiltering) {
+            // PAR DÉFAUT : SEULEMENT AUJOURD'HUI
+            const today = new Date().toISOString().split('T')[0];
+            query = query.where("date", "==", today);
         }
-        query = query.orderBy("date", "desc"); 
+
+        if (showDeletedCheckbox.checked) {
+             // Si on veut voir les supprimés, on charge tout (pour simplifier, car on ne peut pas combiner trop de where)
+             // Attention : cela peut être lourd si beaucoup de supprimés.
+             query = transactionsCollection.where("isDeleted", "==", true).orderBy("isDeleted").orderBy("date", "desc");
+        } else {
+             // Cas normal : Non supprimés
+             if (!isFiltering) {
+                // Optimisation : filtre sur isDeleted + date du jour
+                // Nécessite index composite : isDeleted ASC, date ASC
+                query = query.where("isDeleted", "!=", true).orderBy("isDeleted");
+             } else {
+                // Si on filtre, on charge tout le "non supprimé" et on filtre en JS
+                query = query.where("isDeleted", "!=", true).orderBy("isDeleted").orderBy("date", "desc");
+             }
+        }
+        
+        // Si on n'a pas ajouté de orderBy date (cas non filtré avec where date), on l'ajoute pour le tri
+        // query = query.orderBy("date", "desc"); 
 
         unsubscribeHistory = query.onSnapshot(snapshot => {
             allTransactions = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
             applyFiltersAndRender(); 
-        }, error => console.error("Erreur Firestore: ", error));
+        }, error => {
+            console.error("Erreur Firestore: ", error);
+            // Fallback si erreur d'index : on charge tout
+            // alert("Erreur d'index. Vérifiez la console.");
+        });
     }
 
-    // --- FILTRAGE INTELLIGENT (C'EST ICI QUE ÇA SE PASSE) ---
+    // --- FILTRAGE CLIENT ---
     function applyFiltersAndRender() {
-        // 1. Nettoyage du terme de recherche
         const searchTerm = smartSearchInput.value.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
         const agentTerm = agentFilterInput.value.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
         const startDate = startDateInput.value;
         const endDate = endDateInput.value;
 
+        // Si on est en mode "Défaut" (pas de filtres dans les inputs), allTransactions ne contient QUE aujourd'hui.
+        // Si on a rempli un input, on relance fetchHistory pour tout charger, PUIS on filtre ici.
+        
         const filteredTransactions = allTransactions.filter(data => {
-            // Filtres Date & Agent (inchangés)
             if (startDate && data.date < startDate) return false;
             if (endDate && data.date > endDate) return false;
+            
             if (agentTerm) {
                 const agents = (data.agent || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
                 if (!agents.includes(agentTerm)) return false;
             }
 
-            // === LOGIQUE DE RECHERCHE INTELLIGENTE ===
             if (searchTerm) {
                 const ref = (data.reference || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
                 const nom = (data.nom || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
                 const conteneur = (data.conteneur || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
                 
-                // Cas 1 : Recherche par "Terminaison" (ex: "D43")
-                // Si le terme est court (ex: 3 lettres) et commence par "D" suivi de chiffres, on priorise la fin de la référence
-                const isTerminaison = /^d\d+$/.test(searchTerm); // Regex: commence par d, suivi de chiffres
-                
+                const isTerminaison = /^d\d+$/.test(searchTerm);
                 if (isTerminaison) {
-                    // Si ça ressemble à une terminaison, on cherche SI la réf finit par ça OU si le conteneur est ça
-                    if (!ref.endsWith(searchTerm) && !conteneur.includes(searchTerm)) {
-                        return false;
-                    }
+                    if (!ref.endsWith(searchTerm) && !conteneur.includes(searchTerm)) return false;
                 } else {
-                    // Cas 2 : Recherche Standard (Nom, Réf complète, Conteneur)
-                    if (!ref.includes(searchTerm) && !nom.includes(searchTerm) && !conteneur.includes(searchTerm)) {
-                        return false;
-                    }
+                    if (!ref.includes(searchTerm) && !nom.includes(searchTerm) && !conteneur.includes(searchTerm)) return false;
                 }
             }
             return true;
@@ -156,11 +160,21 @@ document.addEventListener('DOMContentLoaded', () => {
     function renderTable(transactions) {
         tableBody.innerHTML = ''; 
         if (transactions.length === 0) {
-            tableBody.innerHTML = '<tr><td colspan="12">Aucun résultat.</td></tr>';
+            // Message différent selon le contexte
+            const isFiltering = startDateInput.value || endDateInput.value || smartSearchInput.value || agentFilterInput.value;
+            if (!isFiltering) {
+                tableBody.innerHTML = '<tr><td colspan="12" style="text-align:center; padding: 20px;">Aucune opération aujourd\'hui.<br><small>Utilisez les filtres pour voir l\'historique complet.</small></td></tr>';
+            } else {
+                tableBody.innerHTML = '<tr><td colspan="12">Aucun résultat pour cette recherche.</td></tr>';
+            }
             return;
         }
+        
+        // Tri JS pour être sûr (si le tri Firestore a sauté)
+        transactions.sort((a, b) => new Date(b.date) - new Date(a.date));
+
         let currentSubtotals = { prix: 0, montantParis: 0, montantAbidjan: 0, reste: 0 };
-        let currentDate = transactions.find(t => t.date)?.date; 
+        let currentDate = transactions[0]?.date; 
         
         transactions.forEach((data) => {
             if (data.date !== currentDate && data.date) {
@@ -179,27 +193,57 @@ document.addEventListener('DOMContentLoaded', () => {
         insertSubtotalRow(currentDate, currentSubtotals);
     }
 
-    // Listeners
-    showDeletedCheckbox.addEventListener('change', fetchHistory); 
-    smartSearchInput.addEventListener('input', applyFiltersAndRender); // Écoute la frappe
-    agentFilterInput.addEventListener('change', applyFiltersAndRender);
-    startDateInput.addEventListener('change', applyFiltersAndRender);
-    endDateInput.addEventListener('change', applyFiltersAndRender);
+    // --- ÉVÉNEMENTS DE FILTRE ---
+    // Quand on change un filtre, on doit peut-être RECHARGER les données (si on passe de "Aujourd'hui" à "Tout")
     
-    fetchHistory(); 
+    function handleFilterChange() {
+        // Est-ce qu'on a besoin de charger tout l'historique ?
+        const needFullHistory = startDateInput.value || endDateInput.value || smartSearchInput.value || agentFilterInput.value || showDeletedCheckbox.checked;
+        
+        // Si on a besoin de tout l'historique ET qu'on ne l'a pas encore (allTransactions est petit ou vide, ou contient juste aujourd'hui)
+        // Optimisation simple : On relance fetchHistory à chaque changement majeur de mode
+        
+        fetchHistory(); 
+    }
 
-    // Utilitaires
+    // On utilise 'change' pour date/select et 'input' avec debounce pour texte si on veut, 
+    // mais ici 'change' sur fetchHistory est lourd.
+    // Mieux : fetchHistory charge TOUT une fois qu'on commence à filtrer.
+    
+    let hasLoadedFullHistory = false;
+
+    const triggerFilter = () => {
+        const isFiltering = startDateInput.value || endDateInput.value || smartSearchInput.value || agentFilterInput.value;
+        
+        if (isFiltering && !hasLoadedFullHistory) {
+            // Premier filtre : on charge tout
+            hasLoadedFullHistory = true;
+            fetchHistory(); // Va charger tout et appliquer le filtre
+        } else {
+            // Déjà chargé, on filtre juste localement
+            applyFiltersAndRender();
+        }
+    };
+
+    showDeletedCheckbox.addEventListener('change', fetchHistory); // Lui il recharge forcément
+    
+    smartSearchInput.addEventListener('input', triggerFilter);
+    agentFilterInput.addEventListener('change', triggerFilter);
+    startDateInput.addEventListener('change', triggerFilter);
+    endDateInput.addEventListener('change', triggerFilter);
+    
+    fetchHistory(); // Lancement initial (Aujourd'hui seulement)
+
+    // --- UTILITAIRES ---
     function insertDataRow(data) {
         const newRow = document.createElement('tr');
         newRow.dataset.id = data.id; 
         newRow.style.cursor = "pointer";
         if (data.isDeleted === true) newRow.classList.add('deleted-row');
-        
         const reste_class = (data.reste || 0) < 0 ? 'reste-negatif' : 'reste-positif';
         const agentString = data.agent || "";
         const agents = agentString.split(',').map(a => a.trim()).filter(a => a.length > 0);
         const agentTagsHTML = agents.map(agent => `<span class="tag ${textToClassName(agent)}">${agent}</span>`).join(' '); 
-        
         let btns = '';
         if (userRole === 'admin' && data.isDeleted !== true) {
             btns += `<button class="editBtn" data-id="${data.id}" data-prix="${data.prix||0}" data-paris="${data.montantParis||0}" data-abidjan="${data.montantAbidjan||0}" style="background-color:#007bff; margin-right:5px;">Modif.</button>`;
@@ -207,14 +251,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if ((userRole === 'admin' || userRole === 'saisie_full') && data.isDeleted !== true) {
             btns += `<button class="deleteBtn" data-id="${data.id}">Suppr.</button>`;
         }
-        
-        newRow.innerHTML = `
-            <td>${data.date || 'En attente'}</td><td>${data.reference}</td><td>${data.nom || ''}</td><td>${data.conteneur || ''}</td>
-            <td>${formatCFA(data.prix)}</td><td>${formatCFA(data.montantParis)}</td><td>${formatCFA(data.montantAbidjan)}</td>
-            <td><span class="tag ${textToClassName(data.agentMobileMoney)}">${data.agentMobileMoney || ''}</span></td>
-            <td class="${reste_class}">${formatCFA(data.reste)}</td>
-            <td><span class="tag ${textToClassName(data.commune)}">${data.commune || ''}</span></td>
-            <td>${agentTagsHTML}</td><td style="min-width: 100px;">${btns}</td>`;
+        newRow.innerHTML = `<td>${data.date || 'En attente'}</td><td>${data.reference}</td><td>${data.nom || ''}</td><td>${data.conteneur || ''}</td><td>${formatCFA(data.prix)}</td><td>${formatCFA(data.montantParis)}</td><td>${formatCFA(data.montantAbidjan)}</td><td><span class="tag ${textToClassName(data.agentMobileMoney)}">${data.agentMobileMoney || ''}</span></td><td class="${reste_class}">${formatCFA(data.reste)}</td><td><span class="tag ${textToClassName(data.commune)}">${data.commune || ''}</span></td><td>${agentTagsHTML}</td><td style="min-width: 100px;">${btns}</td>`;
         tableBody.appendChild(newRow);
     }
 
@@ -224,7 +261,6 @@ document.addEventListener('DOMContentLoaded', () => {
         subtotalRow.innerHTML = `<td>${date || 'TOTAL'}</td><td colspan="3" style="text-align: right;">TOTAL</td><td>${formatCFA(totals.prix)}</td><td>${formatCFA(totals.montantParis)}</td><td>${formatCFA(totals.montantAbidjan)}</td><td></td><td>${formatCFA(totals.reste)}</td><td colspan="3"></td>`;
         tableBody.appendChild(subtotalRow);
     }
-    
     function formatCFA(n) { return new Intl.NumberFormat('fr-CI', { style: 'currency', currency: 'XOF' }).format(n || 0); }
     function textToClassName(t) { return t ? t.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, '-') : ''; }
 });
