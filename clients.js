@@ -8,7 +8,21 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     const clientSearchInput = document.getElementById('clientSearch');
     const clientsList = document.getElementById('clientsList');
+    
+    // Conteneurs
     const clientProfile = document.getElementById('clientProfile');
+    const topClientsContainer = document.getElementById('topClientsContainer');
+    const topClientsTableBody = document.getElementById('topClientsTableBody');
+    const closeProfileBtn = document.getElementById('closeProfileBtn');
+
+    // Filtres Top 100
+    const yearFilter = document.getElementById('yearFilter');
+    const periodFilter = document.getElementById('periodFilter');
+    const sortFilter = document.getElementById('sortFilter');
+
+    // Boutons Export
+    const exportExcelBtn = document.getElementById('exportExcelBtn');
+    const exportPdfBtn = document.getElementById('exportPdfBtn');
 
     // Éléments du profil
     const profileName = document.getElementById('profileName');
@@ -19,26 +33,24 @@ document.addEventListener('DOMContentLoaded', async () => {
     const shipmentsTableBody = document.getElementById('shipmentsTableBody');
 
     let allClientNames = new Set();
+    let allTransactionsCache = [];
+    let allParisManifestCache = [];
 
-    // 1. CHARGEMENT DES NOMS POUR LA RECHERCHE
-    // On récupère les noms depuis Paris Manifest (plus fiable pour les expéditeurs)
-    // et Transactions pour compléter.
-    async function loadClientNames() {
-        // Depuis Paris (Source principale)
-        const parisSnap = await parisManifestCollection.limit(1000).get(); // Limite pour perf
-        parisSnap.forEach(doc => {
-            const name = doc.data().nomClient;
-            if (name) allClientNames.add(name.trim());
-        });
+    // 1. CHARGEMENT DES DONNÉES (Une seule fois pour optimiser)
+    async function loadData() {
+        topClientsTableBody.innerHTML = '<tr><td colspan="4">Chargement des données...</td></tr>';
+        
+        // Charger les noms pour l'autocomplete
+        const parisSnap = await parisManifestCollection.get();
+        allParisManifestCache = parisSnap.docs.map(doc => doc.data());
+        
+        const transSnap = await transactionsCollection.where("isDeleted", "!=", true).get();
+        allTransactionsCache = transSnap.docs.map(doc => doc.data());
 
-        // Depuis Abidjan
-        const abidjanSnap = await transactionsCollection.limit(1000).get();
-        abidjanSnap.forEach(doc => {
-            const name = doc.data().nom;
-            if (name) allClientNames.add(name.trim());
-        });
+        // Remplir la liste des noms
+        allParisManifestCache.forEach(d => { if(d.nomClient) allClientNames.add(d.nomClient.trim()); });
+        allTransactionsCache.forEach(d => { if(d.nom) allClientNames.add(d.nom.trim()); });
 
-        // Remplir le datalist
         const sortedNames = Array.from(allClientNames).sort();
         clientsList.innerHTML = '';
         sortedNames.forEach(name => {
@@ -46,123 +58,197 @@ document.addEventListener('DOMContentLoaded', async () => {
             option.value = name;
             clientsList.appendChild(option);
         });
+
+        // Lancer le calcul du Top 100
+        calculateTop100();
     }
 
-    loadClientNames();
+    // 2. CALCUL ET AFFICHAGE DU TOP 100
+    function calculateTop100() {
+        const selectedYear = yearFilter.value;
+        const selectedPeriod = periodFilter.value; // 'all', 'S1', 'S2'
+        const selectedSort = sortFilter.value; // 'total' ou 'count'
 
-    // 2. DÉTECTION DE LA SÉLECTION DU CLIENT
-    clientSearchInput.addEventListener('change', async () => {
-        const selectedClient = clientSearchInput.value.trim();
-        if (!selectedClient) {
-            clientProfile.style.display = 'none';
+        const clientStats = {};
+
+        // Fonction utilitaire pour vérifier la date
+        function isDateInPeriod(dateStr) {
+            if (!dateStr) return false;
+            if (!selectedYear) return true; // Si pas d'année sélectionnée, on prend tout
+            
+            // dateStr est "AAAA-MM-JJ"
+            const year = dateStr.substring(0, 4);
+            const month = parseInt(dateStr.substring(5, 7));
+
+            if (year !== selectedYear) return false;
+
+            if (selectedPeriod === 'S1') return month <= 6;
+            if (selectedPeriod === 'S2') return month >= 7;
+            
+            return true; // 'all'
+        }
+
+        // A. Traitement Transactions (Reçus)
+        allTransactionsCache.forEach(data => {
+            if (!isDateInPeriod(data.date)) return;
+
+            const name = (data.nom || "Client Inconnu").trim().toUpperCase();
+            if (name === "CLIENT INCONNU" || name === "") return;
+
+            if (!clientStats[name]) clientStats[name] = { count: 0, total: 0, nameStr: data.nom }; // nameStr pour l'affichage propre
+            
+            clientStats[name].total += (data.prix || 0);
+            clientStats[name].count++;
+        });
+
+        // B. Traitement Manifeste (En Route)
+        allParisManifestCache.forEach(data => {
+            if (!isDateInPeriod(data.dateParis)) return;
+
+            const name = (data.nomClient || "Client Inconnu").trim().toUpperCase();
+            if (name === "CLIENT INCONNU" || name === "") return;
+
+            if (!clientStats[name]) clientStats[name] = { count: 0, total: 0, nameStr: data.nomClient };
+
+            clientStats[name].total += (data.prixCFA || 0);
+            clientStats[name].count++;
+        });
+
+        // C. Tri
+        const sortedClients = Object.values(clientStats).sort((a, b) => {
+            if (selectedSort === 'count') {
+                return b.count - a.count; // Tri par nombre
+            }
+            return b.total - a.total; // Tri par CA (défaut)
+        });
+
+        // D. Affichage (Top 100)
+        const top100 = sortedClients.slice(0, 100);
+
+        topClientsTableBody.innerHTML = '';
+        if (top100.length === 0) {
+            topClientsTableBody.innerHTML = '<tr><td colspan="4">Aucune donnée pour cette période.</td></tr>';
             return;
         }
 
-        await generateClientReport(selectedClient);
+        top100.forEach((client, index) => {
+            let rank = `#${index + 1}`;
+            if (index === 0) rank = "🥇"; if (index === 1) rank = "🥈"; if (index === 2) rank = "🥉";
+
+            const row = document.createElement('tr');
+            row.addEventListener('click', () => {
+                clientSearchInput.value = client.nameStr;
+                showProfileView(client.nameStr);
+            });
+
+            row.innerHTML = `
+                <td><b>${rank}</b></td>
+                <td>${client.nameStr}</td>
+                <td><span class="tag" style="background:#17a2b8;">${client.count} envois</span></td>
+                <td>${formatCFA(client.total)}</td>
+            `;
+            topClientsTableBody.appendChild(row);
+        });
+    }
+
+    // Listeners sur les filtres
+    yearFilter.addEventListener('change', calculateTop100);
+    periodFilter.addEventListener('change', calculateTop100);
+    sortFilter.addEventListener('change', calculateTop100);
+
+    // Lancement initial
+    loadData();
+
+    // 3. GESTION DE L'AFFICHAGE (Recherche)
+    clientSearchInput.addEventListener('change', () => {
+        const selectedClient = clientSearchInput.value.trim();
+        if (selectedClient) showProfileView(selectedClient);
+        else showTopView();
     });
 
-    // 3. GÉNÉRATION DU RAPPORT
-    async function generateClientReport(clientName) {
+    closeProfileBtn.addEventListener('click', () => {
+        clientSearchInput.value = '';
+        showTopView();
+    });
+
+    function showProfileView(clientName) {
+        topClientsContainer.style.display = 'none';
         clientProfile.style.display = 'block';
-        profileName.textContent = "Chargement...";
+        generateClientReport(clientName);
+    }
 
-        // A. Récupérer les données de Paris (Contient Destinataire et Adresse !)
-        const parisQuery = await parisManifestCollection.where("nomClient", "==", clientName).get();
-        const parisData = parisQuery.docs.map(doc => doc.data());
+    function showTopView() {
+        clientProfile.style.display = 'none';
+        topClientsContainer.style.display = 'block';
+    }
 
-        // B. Récupérer les données d'Abidjan (Contient Paiements)
-        const abidjanQuery = await transactionsCollection.where("nom", "==", clientName).get();
-        const abidjanData = abidjanQuery.docs.map(doc => doc.data());
+    // 4. GÉNÉRATION DU RAPPORT INDIVIDUEL (inchangé, mais utilise les caches si possible ?)
+    // Pour la fiche individuelle, on refait une requête spécifique pour être sûr d'avoir tout l'historique
+    // (ou on pourrait filtrer les caches, mais une requête directe est plus sûre pour l'exhaustivité si on a limité les caches)
+    async function generateClientReport(clientName) {
+        profileName.textContent = "Chargement de " + clientName + "...";
 
-        // C. Calculs
+        // On peut filtrer nos caches locaux c'est plus rapide !
+        const parisData = allParisManifestCache.filter(d => (d.nomClient||"").trim().toUpperCase() === clientName.toUpperCase());
+        const abidjanData = allTransactionsCache.filter(d => (d.nom||"").trim().toUpperCase() === clientName.toUpperCase());
+
         let totalSpent = 0;
         let shipments = [];
-        let recipientsMap = {}; // Pour compter les fréquences
+        let recipientsMap = {}; 
 
-        // Traitement des données Paris (Source riche)
         parisData.forEach(item => {
             totalSpent += (item.prixCFA || 0);
-            
-            // Analyse des Destinataires
             const dest = item.nomDestinataire || "Non spécifié";
             const addr = item.adresseDestinataire || "";
-            
-            if (!recipientsMap[dest]) {
-                recipientsMap[dest] = { count: 0, address: addr };
-            }
+            if (!recipientsMap[dest]) recipientsMap[dest] = { count: 0, address: addr };
             recipientsMap[dest].count++;
-            // On met à jour l'adresse si on en trouve une plus récente/remplie
             if (addr && !recipientsMap[dest].address) recipientsMap[dest].address = addr;
-
-            shipments.push({
-                date: item.dateParis,
-                ref: item.reference,
-                type: item.typeColis || "Colis",
-                dest: dest,
-                source: "Paris"
-            });
+            shipments.push({ date: item.dateParis, ref: item.reference, type: item.typeColis || "Colis", dest: dest, source: "En route (Paris)" });
         });
 
-        // Traitement des données Abidjan (Complément)
         abidjanData.forEach(item => {
-            // On évite les doublons si la réf est déjà venue de Paris
             if (!shipments.find(s => s.ref === item.reference)) {
                 totalSpent += (item.prix || 0);
-                shipments.push({
-                    date: item.date,
-                    ref: item.reference,
-                    type: "Colis",
-                    dest: "-", // Souvent pas de destinataire dans la saisie Abidjan
-                    source: "Abidjan"
-                });
+                shipments.push({ date: item.date, ref: item.reference, type: "Colis", dest: "-", source: "Reçu (Abidjan)" });
             }
         });
 
-        // Trier les envois par date décroissante
         shipments.sort((a, b) => new Date(b.date) - new Date(a.date));
 
-        // D. Affichage des Infos Générales
         profileName.textContent = clientName;
         profileTotalSpent.textContent = formatCFA(totalSpent);
         profileShipmentCount.textContent = shipments.length;
         profileLastDate.textContent = shipments.length > 0 ? shipments[0].date : "-";
 
-        // E. Affichage des Destinataires Fréquents
-        // Convertir map en tableau et trier
-        const sortedRecipients = Object.entries(recipientsMap)
-            .map(([name, data]) => ({ name, ...data }))
-            .sort((a, b) => b.count - a.count);
+        const sortedRecipients = Object.entries(recipientsMap).map(([name, data]) => ({ name, ...data })).sort((a, b) => b.count - a.count);
 
         recipientsTableBody.innerHTML = '';
-        if (sortedRecipients.length === 0) {
-            recipientsTableBody.innerHTML = '<tr><td colspan="3">Aucun destinataire trouvé.</td></tr>';
-        }
+        if (sortedRecipients.length === 0) recipientsTableBody.innerHTML = '<tr><td colspan="3">Aucun destinataire trouvé.</td></tr>';
         sortedRecipients.forEach(r => {
-            // On ignore les "Non spécifié" s'ils sont seuls
             if (r.name === "Non spécifié" && sortedRecipients.length > 1) return;
-
-            recipientsTableBody.innerHTML += `
-                <tr>
-                    <td><b>${r.name}</b></td>
-                    <td style="font-size:0.9em; color:#666;">${r.address || '-'}</td>
-                    <td><span class="tag" style="background:#28a745;">${r.count} fois</span></td>
-                </tr>
-            `;
+            recipientsTableBody.innerHTML += `<tr><td><b>${r.name}</b></td><td style="font-size:0.9em; color:#666;">${r.address || '-'}</td><td><span class="tag" style="background:#28a745;">${r.count} fois</span></td></tr>`;
         });
 
-        // F. Affichage de l'Historique
         shipmentsTableBody.innerHTML = '';
         shipments.forEach(s => {
-            shipmentsTableBody.innerHTML += `
-                <tr>
-                    <td>${s.date}</td>
-                    <td>${s.ref}</td>
-                    <td>${s.type}</td>
-                    <td>${s.dest}</td>
-                </tr>
-            `;
+            shipmentsTableBody.innerHTML += `<tr><td>${s.date}</td><td>${s.ref}</td><td>${s.type}</td><td>${s.dest}</td></tr>`;
         });
     }
+
+    // 5. EXPORTATION
+    exportExcelBtn.addEventListener('click', () => {
+        const table = document.getElementById('topClientsTable');
+        const wb = XLSX.utils.table_to_book(table, {sheet: "Top Clients"});
+        XLSX.writeFile(wb, 'Top_Clients_AMT.xlsx');
+    });
+
+    exportPdfBtn.addEventListener('click', () => {
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF();
+        doc.text("Top Clients - AMT Caisse", 14, 15);
+        doc.autoTable({ html: '#topClientsTable', startY: 25 });
+        doc.save('Top_Clients_AMT.pdf');
+    });
 
     function formatCFA(n) {
         return new Intl.NumberFormat('fr-CI', { style: 'currency', currency: 'XOF' }).format(n || 0);

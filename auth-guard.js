@@ -16,47 +16,63 @@ firebase.auth().onAuthStateChanged(async (user) => {
         const userRole = userDoc.data().role; 
         sessionStorage.setItem('userRole', userRole);
 
-        // --- GESTION DES ACCÈS ---
         const currentPage = window.location.pathname;
 
-        // Si ce n'est PAS un admin
-        if (userRole !== 'admin') {
-            const isRestrictedPage = currentPage.includes('dashboard.html') || 
-                                     currentPage.includes('expenses.html') ||
-                                     currentPage.includes('other-income.html') ||
-                                     currentPage.includes('bank.html') ||
-                                     currentPage.includes('arrivages.html'); // PAGE PROTÉGÉE
-                                     currentPage.includes('clients.html'); // AJOUTER ICI
-
-            if (isRestrictedPage) {
-                alert("Accès refusé. Vous n'avez pas les droits pour cette page.");
+        // --- GESTION DES INTERDICTIONS ---
+        
+        // 1. SI C'EST UN "SAISIE_FULL"
+        if (userRole === 'saisie_full') {
+            // Il n'a PAS le droit au Dashboard, ni à la Banque, ni aux Arrivages
+            if (currentPage.includes('dashboard.html') || 
+                currentPage.includes('bank.html') || 
+                currentPage.includes('arrivages.html')) {
+                alert("Accès refusé.");
                 window.location.href = 'index.html'; 
                 return;
             }
+            // Il a le droit à : index.html, expenses.html, other-income.html, history.html
         }
 
-        // --- GESTION DE L'INTERFACE (Cacher les liens) ---
+        // 2. SI C'EST UN "SAISIE_LIMITED" (Si vous l'utilisez encore)
+        if (userRole === 'saisie_limited') {
+            // Droit uniquement à Saisie et Historique
+            if (!currentPage.includes('index.html') && !currentPage.includes('history.html')) {
+                 alert("Accès refusé.");
+                 window.location.href = 'index.html';
+                 return;
+            }
+        }
+
+        // --- GESTION DE L'INTERFACE (CACHER LES LIENS) ---
         const navDashboard = document.getElementById('nav-dashboard');
         const navExpenses = document.getElementById('nav-expenses');
         const navOtherIncome = document.getElementById('nav-other-income'); 
         const navBank = document.getElementById('nav-bank'); 
-        const navArrivages = document.getElementById('nav-arrivages'); // LIEN À CACHER
+        const navArrivages = document.getElementById('nav-arrivages');
 
-        if (userRole !== 'admin') {
+        // Admin voit tout.
+        
+        // Saisie Full ne voit pas Dashboard, Banque, Arrivages
+        if (userRole === 'saisie_full') {
+            if (navDashboard) navDashboard.style.display = 'none';
+            if (navBank) navBank.style.display = 'none';
+            if (navArrivages) navArrivages.style.display = 'none';
+            // Il VOIT Expenses et Other Income
+        }
+
+        // Saisie Limited ne voit que Saisie et Historique
+        if (userRole === 'saisie_limited') {
             if (navDashboard) navDashboard.style.display = 'none';
             if (navExpenses) navExpenses.style.display = 'none';
             if (navOtherIncome) navOtherIncome.style.display = 'none';
             if (navBank) navBank.style.display = 'none';
-            if (navArrivages) navArrivages.style.display = 'none'; // CACHER LE LIEN
-            const navClients = document.getElementById('nav-clients'); // AJOUTER ICI
-            if (navClients) navClients.style.display = 'none'; // AJOUTER ICI
+            if (navArrivages) navArrivages.style.display = 'none';
         }
 
         document.body.style.display = 'block';
 
     } catch (error) {
-        console.error("Erreur d'authentification ou de rôle :", error);
-        alert(error.message);
+        console.error("Erreur auth :", error);
         firebase.auth().signOut();
         window.location.href = 'login.html';
     }

@@ -9,12 +9,17 @@
     <link href="https://fonts.googleapis.com/css2?family=Comfortaa:wght@400;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
     <link rel="icon" type="image/png" href="favicon.png">
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.29/jspdf.plugin.autotable.min.js"></script>
+
     <style>
-        /* Styles spécifiques pour la fiche client */
+        /* Styles spécifiques */
         .client-card {
             background: white; padding: 20px; border-radius: 8px;
             box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin-bottom: 20px;
-            display: none; /* Caché par défaut */
+            display: none; 
         }
         .client-header { border-bottom: 2px solid #f0f2f5; padding-bottom: 15px; margin-bottom: 15px; }
         .client-header h2 { margin: 0; color: #1877f2; font-size: 24px; text-align: left;}
@@ -25,6 +30,20 @@
         .stat-box span { font-size: 18px; font-weight: bold; color: #333; }
 
         .section-title { font-size: 16px; font-weight: bold; margin-bottom: 10px; color: #444; border-left: 4px solid #1877f2; padding-left: 10px; }
+        
+        #topClientsContainer { margin-top: 30px; }
+        #topClientsTable tbody tr { cursor: pointer; transition: background-color 0.2s; }
+        #topClientsTable tbody tr:hover { background-color: #e3f2fd; }
+
+        .export-buttons { text-align: right; margin-bottom: 10px; }
+        .btn-excel { background-color: #217346; color: white; border: none; padding: 8px 15px; border-radius: 4px; cursor: pointer; font-weight: bold; margin-right: 5px; }
+        .btn-pdf { background-color: #d32f2f; color: white; border: none; padding: 8px 15px; border-radius: 4px; cursor: pointer; font-weight: bold; }
+
+        /* Style des filtres Clients */
+        .clients-filters {
+            display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); 
+            gap: 10px; margin-bottom: 20px; background: #fff; padding: 15px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
     </style>
 </head>
 <body style="display:none">
@@ -43,7 +62,8 @@
         <a href="other-income.html" id="nav-other-income">Autres Entrées</a>
         <a href="bank.html" id="nav-bank">Banque</a>
         <a href="arrivages.html" id="nav-arrivages">Arrivages</a>
-        <a href="clients.html" id="nav-clients" class="active">Clients</a> </nav>
+        <a href="clients.html" id="nav-clients" class="active">Clients</a>
+    </nav>
 
     <div class="dashboard-container" style="text-align: center; margin-bottom: 20px;">
         <h3>Rechercher un Client (Expéditeur)</h3>
@@ -52,10 +72,49 @@
             <datalist id="clientsList"></datalist>
         </div>
     </div>
+    
+    <div id="topClientsContainer">
+        <h2 style="text-align: center; color: #1877f2;">🏆 Top Clients & Statistiques</h2>
+        
+        <div class="clients-filters">
+            <select id="yearFilter">
+                <option value="">-- Toutes les Années --</option>
+                <option value="2024">2024</option>
+                <option value="2025">2025</option>
+                <option value="2026">2026</option>
+            </select>
+            <select id="periodFilter">
+                <option value="all">Toute l'année</option>
+                <option value="S1">Semestre 1 (Jan - Juin)</option>
+                <option value="S2">Semestre 2 (Juil - Déc)</option>
+            </select>
+            <select id="sortFilter">
+                <option value="total">Trier par : Chiffre d'Affaires</option>
+                <option value="count">Trier par : Nombre d'Envois</option>
+            </select>
+        </div>
+        <div class="export-buttons">
+            <button id="exportExcelBtn" class="btn-excel">📄 Exporter Excel</button>
+            <button id="exportPdfBtn" class="btn-pdf">📑 Exporter PDF</button>
+        </div>
+
+        <table id="topClientsTable">
+            <thead>
+                <tr>
+                    <th>Rang</th>
+                    <th>Nom de l'Expéditeur</th>
+                    <th>Nombre d'Envois</th>
+                    <th>Total Dépensé (CFA)</th>
+                </tr>
+            </thead>
+            <tbody id="topClientsTableBody"></tbody>
+        </table>
+    </div>
 
     <div id="clientProfile" class="client-card">
         <div class="client-header">
             <h2 id="profileName">Nom du Client</h2>
+            <button id="closeProfileBtn" style="float:right; padding:5px 10px; cursor:pointer; background:#6c757d; color:white; border:none; border-radius:4px;">Fermer / Retour</button>
         </div>
 
         <div class="stats-grid">
@@ -77,28 +136,14 @@
             <div style="flex: 1; min-width: 300px;">
                 <div class="section-title">Destinataires Fréquents</div>
                 <table id="recipientsTable">
-                    <thead>
-                        <tr>
-                            <th>Nom Destinataire</th>
-                            <th>Adresse (Dernière connue)</th>
-                            <th>Fréquence</th>
-                        </tr>
-                    </thead>
+                    <thead><tr><th>Nom Destinataire</th><th>Adresse</th><th>Fréquence</th></tr></thead>
                     <tbody id="recipientsTableBody"></tbody>
                 </table>
             </div>
-
             <div style="flex: 1; min-width: 300px;">
-                <div class="section-title">Historique des Colis (Paris & Abidjan)</div>
+                <div class="section-title">Historique des Colis</div>
                 <table id="shipmentsTable">
-                    <thead>
-                        <tr>
-                            <th>Date</th>
-                            <th>Réf</th>
-                            <th>Type</th>
-                            <th>Destinataire</th>
-                        </tr>
-                    </thead>
+                    <thead><tr><th>Date</th><th>Réf</th><th>Type</th><th>Destinataire</th></tr></thead>
                     <tbody id="shipmentsTableBody"></tbody>
                 </table>
             </div>

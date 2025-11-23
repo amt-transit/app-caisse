@@ -25,7 +25,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const grandTotalRetraitsEl = document.getElementById('grandTotalRetraits');
     const grandTotalDepotsEl = document.getElementById('grandTotalDepots');
     const grandTotalCaisseEl = document.getElementById('grandTotalCaisse');
-    const grandTotalParisHiddenEl = document.getElementById('grandTotalParisHidden'); // NOUVEAU
+    const grandTotalParisHiddenEl = document.getElementById('grandTotalParisHidden');
     
     const startDateInput = document.getElementById('startDate');
     const endDateInput = document.getElementById('endDate');
@@ -58,6 +58,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     function updateDashboard() {
         const startDate = startDateInput.value;
         const endDate = endDateInput.value;
+
+        // Filtrer les 4 listes par date
         const filteredTransactions = filterByDate(allTransactions, startDate, endDate);
         const filteredExpenses = filterByDate(allExpenses, startDate, endDate);
         const filteredOtherIncome = filterByDate(allOtherIncome, startDate, endDate);
@@ -75,23 +77,31 @@ document.addEventListener('DOMContentLoaded', async () => {
     function updateGrandTotals(transactions, expenses, otherIncomes, bankMovements) {
         // 1. Ventes ABIDJAN (Entrées Conteneur)
         const totalEntreesAbidjan = transactions.reduce((sum, t) => sum + (t.montantAbidjan || 0), 0);
-        // 2. Ventes PARIS
         const totalEntreesParis = transactions.reduce((sum, t) => sum + (t.montantParis || 0), 0);
 
+        // 2. Autres Entrées
         const totalOtherIncome = otherIncomes.reduce((sum, i) => sum + (i.montant || 0), 0);
-        const totalDepenses = expenses.reduce((sum, e) => sum + (e.montant || 0), 0);
 
-        // 3. BÉNÉFICE = (Abidjan + Autres) - Dépenses
+        // 3. Dépenses (CORRIGÉ : On exclut les 'Allocations')
+        const realExpenses = expenses.filter(e => e.action !== 'Allocation');
+        const totalDepenses = realExpenses.reduce((sum, e) => sum + (e.montant || 0), 0);
+
+        // 4. BÉNÉFICE = (Abidjan + Autres) - Dépenses Réelles
         const totalBenefice = (totalEntreesAbidjan + totalOtherIncome) - totalDepenses; 
 
-        // 4. CAISSE
+        // 5. CAISSE (Trésorerie Globale)
+        // Caisse = Tout ce qui est entré - Tout ce qui est sorti
+        // Note : L'Allocation n'est pas une sortie (c'est interne), donc on utilise 'totalDepenses' (les vraies sorties)
         const totalRetraits = bankMovements.filter(m => m.type === 'Retrait').reduce((sum, m) => sum + (m.montant || 0), 0);
         const totalDepots = bankMovements.filter(m => m.type === 'Depot').reduce((sum, m) => sum + (m.montant || 0), 0);
+        
         const totalCaisse = (totalEntreesAbidjan + totalOtherIncome + totalRetraits) - (totalDepenses + totalDepots);
         
+        // Dettes
         const totalReste = transactions.reduce((sum, t) => sum + (t.reste || 0), 0);
         const totalCount = transactions.length;
 
+        // --- AFFICHAGE ---
         grandTotalPrixEl.textContent = formatCFA(totalEntreesAbidjan);
         grandTotalOtherIncomeEl.textContent = formatCFA(totalOtherIncome);
         grandTotalDepensesEl.textContent = formatCFA(totalDepenses);
@@ -114,8 +124,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         grandTotalResteEl.textContent = formatCFA(totalReste);
     }
 
-    // ... (Les fonctions generate... sont inchangées, elles sont correctes dans votre version actuelle) ...
-    // (Je les inclus pour être complet)
     function generateMonthlySummary(transactions) {
         summaryTableBody.innerHTML = '<tr><td colspan="3">Aucune donnée pour cette période.</td></tr>';
         if (transactions.length === 0) return;
@@ -134,6 +142,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             summaryTableBody.innerHTML += `<tr><td data-label="Mois">${month}</td><td data-label="Nb Op.">${data.count}</td><td data-label="Total Prix">${formatCFA(data.totalPrix)}</td></tr>`;
         });
     }
+
     function generateAgentSummary(transactions) {
         agentSummaryTableBody.innerHTML = '<tr><td colspan="3">Aucune donnée pour cette période.</td></tr>';
         const agentData = {};
@@ -160,6 +169,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             agentSummaryTableBody.innerHTML += `<tr><td data-label="Agent">${agent}</td><td data-label="Nb Op.">${data.count}</td><td data-label="Chiffre d'Affaires">${formatCFA(data.totalPrix)}</td></tr>`;
         });
     }
+
     function generateContainerSummary(transactions, expenses) {
         containerSummaryTableBody.innerHTML = '<tr><td colspan="8">Aucune donnée de conteneur.</td></tr>';
         const containerData = {};
@@ -172,19 +182,23 @@ document.addEventListener('DOMContentLoaded', async () => {
             data.totalAbidjan += (t.montantAbidjan || 0);
             data.totalReste += (t.reste || 0);
         });
+        
         const containerExpenses = {};
         expenses.forEach(e => {
-            if (e.type === 'Conteneur' && e.conteneur) {
+            // On exclut les allocations ici aussi, même si elles sont de type 'Budget' donc pas 'Conteneur'
+            if (e.action !== 'Allocation' && e.type === 'Conteneur' && e.conteneur) {
                 const cName = e.conteneur;
                 if (!containerExpenses[cName]) containerExpenses[cName] = 0;
                 containerExpenses[cName] += (e.montant || 0);
             }
         });
+
         const sortedContainers = Object.keys(containerData).sort((a, b) => {
              const numA = parseInt(a.replace(/[^0-9]/g, ''), 10) || 0;
              const numB = parseInt(b.replace(/[^0-9]/g, ''), 10) || 0;
              return numB - numA;
         });
+
         if (sortedContainers.length === 0 || (sortedContainers.length === 1 && sortedContainers[0] === "Non spécifié")) return;
         containerSummaryTableBody.innerHTML = '';
         sortedContainers.forEach(container => {
@@ -212,18 +226,21 @@ document.addEventListener('DOMContentLoaded', async () => {
             containerSummaryTableBody.appendChild(row);
         });
     }
+
     function generateMonthlyExpenseSummary(expenses) {
         monthlyExpensesTableBody.innerHTML = '';
         let hasMonthly = false;
         const sortedExpenses = expenses.sort((a, b) => new Date(b.date) - new Date(a.date));
         sortedExpenses.forEach(e => {
-            if (e.type === 'Mensuelle') {
+            // On n'affiche que les Dépenses Mensuelles (pas les allocations)
+            if (e.action !== 'Allocation' && e.type === 'Mensuelle') {
                 hasMonthly = true;
                 monthlyExpensesTableBody.innerHTML += `<tr><td>${e.date}</td><td>${e.description}</td><td>${formatCFA(e.montant)}</td></tr>`;
             }
         });
         if (!hasMonthly) monthlyExpensesTableBody.innerHTML = '<tr><td colspan="3">Aucune dépense mensuelle pour cette période.</td></tr>';
     }
+
     function generateBankMovementSummary(bankMovements) {
         bankMovementsTableBody.innerHTML = '';
         if (bankMovements.length === 0) {
@@ -235,6 +252,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             bankMovementsTableBody.innerHTML += `<tr><td>${m.date}</td><td>${m.description}</td><td>${m.type}</td><td class="${m.type === 'Depot' ? 'reste-negatif' : 'reste-positif'}">${m.type === 'Depot' ? '-' : '+'} ${formatCFA(m.montant)}</td></tr>`;
         });
     }
+
     function generateTopClientsSummary(transactions) {
         topClientsTableBody.innerHTML = '<tr><td colspan="4">Aucune donnée client.</td></tr>';
         const clientData = {};
@@ -256,18 +274,22 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     }
 
+    // Listeners Firestore (avec filtres de suppression)
     transactionsCollection.where("isDeleted", "!=", true).orderBy("isDeleted").orderBy("date", "desc").onSnapshot(snapshot => {
         allTransactions = snapshot.docs.map(doc => doc.data());
         updateDashboard();
     }, error => console.error("Erreur Firestore (transactions): ", error));
+
     expensesCollection.where("isDeleted", "!=", true).orderBy("isDeleted").orderBy("date", "desc").onSnapshot(snapshot => {
         allExpenses = snapshot.docs.map(doc => doc.data());
         updateDashboard(); 
     }, error => console.error("Erreur Firestore (expenses): ", error));
+
     otherIncomeCollection.where("isDeleted", "!=", true).orderBy("isDeleted").orderBy("date", "desc").onSnapshot(snapshot => {
         allOtherIncome = snapshot.docs.map(doc => doc.data());
         updateDashboard(); 
     }, error => console.error("Erreur Firestore (other_income): ", error));
+
     bankCollection.where("isDeleted", "!=", true).orderBy("isDeleted").orderBy("date", "desc").onSnapshot(snapshot => {
         allBankMovements = snapshot.docs.map(doc => doc.data());
         updateDashboard(); 

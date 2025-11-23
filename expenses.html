@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=1000">
-    <title>Dépenses - Caisse</title>
+    <title>Dépenses & Budget</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Comfortaa:wght@400;700&display=swap" rel="stylesheet">
@@ -25,17 +25,30 @@
         <a href="other-income.html" id="nav-other-income">Autres Entrées</a>
         <a href="bank.html" id="nav-bank">Banque</a>
         <a href="arrivages.html" id="nav-arrivages">Arrivages</a>
-        <a href="clients.html" id="nav-clients">Clients</a>
     </nav>
+
+    <div class="dashboard-container" style="margin-bottom: 20px; background-color: #e3f2fd; border: 1px solid #bbdefb;">
+        <div style="text-align: center;">
+            <h3 style="margin-top: 0; color: #1565c0;">BUDGET MENSUEL DISPONIBLE</h3>
+            <p id="budgetDisplay" style="font-size: 32px; font-weight: bold; color: #0d47a1; margin: 10px 0;">Calcul...</p>
+            <p style="font-size: 0.9em; color: #555;">Ce montant diminue à chaque dépense.</p>
+        </div>
+    </div>
 
     <div id="caisseForm">
         <div class="form-grid">
             <input type="date" id="expenseDate" required>
-            <input type="text" id="expenseDesc" placeholder="Description (ex: Douane, Loyer...)" required>
+            
+            <select id="actionType" style="font-weight: bold; color: #1565c0;">
+                <option value="Depense">🔴 Enregistrer une Dépense</option>
+                </select>
+
+            <input type="text" id="expenseDesc" placeholder="Description (ex: Facture CIE...)" required>
             <div class="prix-container">
                 <input type="number" id="expenseAmount" placeholder="Montant">
                 <span class="cfa-label">CFA</span>
             </div>
+            
             <select id="expenseType">
                 <option value="Mensuelle">Dépense Mensuelle</option>
                 <option value="Conteneur">Dépense de Conteneur</option>
@@ -43,21 +56,19 @@
             <input type="text" id="expenseContainer" placeholder="Nom du Conteneur (ex: D35)" style="display:none;">
         </div>
         <div class="form-buttons">
-            <button id="addExpenseBtn" class="primary">Enregistrer la Dépense</button>
+            <button id="addExpenseBtn" class="primary">Valider</button>
         </div>
     </div>
 
-    <div id="caisseForm" style="margin-top: 20px; border-top: 2px solid #eee;">
+    <div id="csvImportBlock" style="margin-top: 20px; border-top: 2px solid #eee; display: none;">
         <h3>Importer des Dépenses (CSV)</h3>
-        <p>Format CSV : <code>date, description, montant, type, conteneur</code></p>
         <input type="file" id="csvFile" accept=".csv">
         <button id="uploadCsvBtn" class="primary" style="margin-top: 10px;">Importer CSV</button>
-        <pre id="uploadLog" style="background:#f8f9fa; padding:10px; display:none; margin-top:10px;"></pre>
     </div>
 
     <div class="history-controls">
         <div class="search-bar-container">
-            <input type="text" id="expenseSearch" placeholder="Rechercher dans les dépenses..." style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px;">
+            <input type="text" id="expenseSearch" placeholder="Rechercher..." style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px;">
         </div>
         <div class="checkbox-container" style="margin-top: 10px;">
             <input type="checkbox" id="showDeletedCheckbox" style="width: auto;">
@@ -65,11 +76,11 @@
         </div>
     </div>
 
-    <h2>Historique des Dépenses</h2>
+    <h2>Historique des Opérations</h2>
     <table id="expenseTable">
         <thead>
             <tr>
-                <th>Date</th><th>Description</th><th>Montant</th><th>Type</th><th>Conteneur</th><th>Action</th>
+                <th>Date</th><th>Description</th><th>Type</th><th>Montant</th><th>Conteneur</th><th>Action</th>
             </tr>
         </thead>
         <tbody id="expenseTableBody"></tbody>
