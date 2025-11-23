@@ -75,44 +75,59 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     function updateGrandTotals(transactions, expenses, otherIncomes, bankMovements) {
-        // 1. Ventes ABIDJAN (Entrées Conteneur)
+        // --- 1. VENTES & BÉNÉFICE ---
         const totalEntreesAbidjan = transactions.reduce((sum, t) => sum + (t.montantAbidjan || 0), 0);
         const totalEntreesParis = transactions.reduce((sum, t) => sum + (t.montantParis || 0), 0);
-
-        // 2. Autres Entrées
         const totalOtherIncome = otherIncomes.reduce((sum, i) => sum + (i.montant || 0), 0);
-
-        // 3. Dépenses (CORRIGÉ : On exclut les 'Allocations')
+        // On exclut les allocations du calcul des dépenses
         const realExpenses = expenses.filter(e => e.action !== 'Allocation');
         const totalDepenses = realExpenses.reduce((sum, e) => sum + (e.montant || 0), 0);
-
-        // 4. BÉNÉFICE = (Abidjan + Autres) - Dépenses Réelles
         const totalBenefice = (totalEntreesAbidjan + totalOtherIncome) - totalDepenses; 
 
-        // 5. CAISSE (Trésorerie Globale)
-        // Caisse = Tout ce qui est entré - Tout ce qui est sorti
-        // Note : L'Allocation n'est pas une sortie (c'est interne), donc on utilise 'totalDepenses' (les vraies sorties)
+        // --- 2. ANALYSE FINE DE LA TRÉSORERIE ---
+        
+        // A. Calcul des Chèques en Coffre (Non déposés)
+        // On doit parcourir l'historique des paiements de chaque transaction
+        let totalChequesEnCoffre = 0;
+        let totalVentesCash = 0; // Espèces, OM, Wave...
+
+        transactions.forEach(t => {
+            if (t.paymentHistory) {
+                t.paymentHistory.forEach(pay => {
+                    // Si c'est un chèque ET qu'il est 'Pending'
+                    if (pay.modePaiement === 'Chèque' && pay.checkStatus === 'Pending') {
+                        totalChequesEnCoffre += (pay.montantAbidjan || 0);
+                    } else if (pay.modePaiement !== 'Chèque') {
+                        // Si ce n'est pas un chèque, c'est du cash dispo
+                        totalVentesCash += (pay.montantAbidjan || 0);
+                    }
+                });
+            } else {
+                // Anciennes données (sans historique détaillé) -> Considérées comme Cash
+                totalVentesCash += (t.montantAbidjan || 0);
+            }
+        });
+
+        // B. Calcul de la Caisse Disponible (Cash)
+        // Caisse = (Ventes Cash + Autres) - (Dépenses Cash)
+        // Note : On suppose que les dépenses sortent de la caisse espèces.
+        // Note 2 : Les mouvements banques (Retraits) ajoutent du cash. Les Dépôts enlèvent du cash.
+        
         const totalRetraits = bankMovements.filter(m => m.type === 'Retrait').reduce((sum, m) => sum + (m.montant || 0), 0);
         const totalDepots = bankMovements.filter(m => m.type === 'Depot').reduce((sum, m) => sum + (m.montant || 0), 0);
         
-        const totalCaisse = (totalEntreesAbidjan + totalOtherIncome + totalRetraits) - (totalDepenses + totalDepots);
-        
-        // Dettes
-        const totalReste = transactions.reduce((sum, t) => sum + (t.reste || 0), 0);
-        const totalCount = transactions.length;
+        const totalCaisse = (totalVentesCash + totalOtherIncome + totalRetraits) - (totalDepenses + totalDepots);
+
 
         // --- AFFICHAGE ---
         grandTotalPrixEl.textContent = formatCFA(totalEntreesAbidjan);
         grandTotalOtherIncomeEl.textContent = formatCFA(totalOtherIncome);
         grandTotalDepensesEl.textContent = formatCFA(totalDepenses);
-        
         grandTotalBeneficeEl.textContent = formatCFA(totalBenefice);
         grandTotalBeneficeEl.className = totalBenefice < 0 ? 'reste-negatif' : 'reste-positif';
         
         document.getElementById('grandTotalPercu').textContent = formatCFA(totalEntreesAbidjan);
-        if(grandTotalParisHiddenEl) {
-            grandTotalParisHiddenEl.textContent = `Total Ventes Perçues (P): ${formatCFA(totalEntreesParis)}`;
-        }
+        if(grandTotalParisHiddenEl) grandTotalParisHiddenEl.textContent = `Total Ventes Perçues (P): ${formatCFA(totalEntreesParis)}`;
 
         grandTotalRetraitsEl.textContent = formatCFA(totalRetraits);
         grandTotalDepotsEl.textContent = formatCFA(totalDepots);
@@ -120,10 +135,14 @@ document.addEventListener('DOMContentLoaded', async () => {
         grandTotalCaisseEl.textContent = formatCFA(totalCaisse);
         grandTotalCaisseEl.className = totalCaisse < 0 ? 'reste-negatif' : 'reste-positif';
 
-        grandTotalCountEl.textContent = totalCount;
-        grandTotalResteEl.textContent = formatCFA(totalReste);
-    }
+        // NOUVEAU : Affichage Chèques
+        const chequeEl = document.getElementById('grandTotalCheques');
+        if(chequeEl) chequeEl.textContent = formatCFA(totalChequesEnCoffre);
 
+        grandTotalCountEl.textContent = transactions.length;
+        grandTotalResteEl.textContent = formatCFA(transactions.reduce((sum, t) => sum + (t.reste || 0), 0));
+    }
+    
     function generateMonthlySummary(transactions) {
         summaryTableBody.innerHTML = '<tr><td colspan="3">Aucune donnée pour cette période.</td></tr>';
         if (transactions.length === 0) return;

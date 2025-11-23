@@ -29,9 +29,13 @@
     </nav>
 
     <div id="caisseForm">
+        <div class="form-buttons" style="margin-bottom: 20px;">
+            <button id="openCheckDepositBtn" style="background-color: #6f42c1; color: white;">🏦 Faire une Remise de Chèques</button>
+        </div>
+
         <div class="form-grid">
             <input type="date" id="bankDate" required>
-            <input type="text" id="bankDesc" placeholder="Description..." required>
+            <input type="text" id="bankDesc" placeholder="Description (ex: Dépôt SIB, Retrait...)" required>
             <div class="prix-container">
                 <input type="number" id="bankAmount" placeholder="Montant">
                 <span class="cfa-label">CFA</span>
@@ -49,8 +53,10 @@
     <div id="caisseForm" style="margin-top: 20px; border-top: 2px solid #eee;">
         <h3>Importer Mouvements Banque (CSV)</h3>
         <p>Format CSV : <code>date, description, type, montant</code></p>
+        <p><small>Type doit être "Depot" ou "Retrait"</small></p>
         <input type="file" id="csvFile" accept=".csv">
         <button id="uploadCsvBtn" class="primary" style="margin-top: 10px;">Importer CSV</button>
+        <pre id="uploadLog" style="background:#f8f9fa; padding:10px; display:none; margin-top:10px;"></pre>
     </div>
 
     <div class="history-controls">
@@ -68,6 +74,34 @@
         <thead><tr><th>Date</th><th>Description</th><th>Type</th><th>Montant</th><th>Action</th></tr></thead>
         <tbody id="bankTableBody"></tbody>
     </table>
+
+    <div id="checkDepositModal" class="modal">
+        <div class="modal-content" style="max-width: 600px;">
+            <span class="close-modal" onclick="document.getElementById('checkDepositModal').style.display='none'">&times;</span>
+            <h2 style="color: #6f42c1;">Remise de Chèques</h2>
+            <p>Sélectionnez les chèques à déposer en banque :</p>
+            
+            <div style="max-height: 300px; overflow-y: auto; margin-bottom: 20px; border: 1px solid #ddd; padding: 10px;">
+                <table style="width: 100%;">
+                    <thead>
+                        <tr>
+                            <th>Sélection</th>
+                            <th>Date</th>
+                            <th>Client</th>
+                            <th>Montant</th>
+                        </tr>
+                    </thead>
+                    <tbody id="pendingChecksBody"></tbody>
+                </table>
+            </div>
+
+            <div style="text-align: right; font-weight: bold; margin-bottom: 10px;">
+                Total à déposer : <span id="totalDepositAmount" style="color: #6f42c1;">0 F CFA</span>
+            </div>
+
+            <button id="confirmDepositBtn" class="primary" style="width: 100%; background-color: #6f42c1;">Valider le Dépôt</button>
+        </div>
+    </div>
 
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>

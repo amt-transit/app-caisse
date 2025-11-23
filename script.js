@@ -184,7 +184,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         referenceInput.focus();
     });
 
-    // --- ENREGISTRER ---
+    // --- ENREGISTRER DANS FIREBASE ---
     saveDayBtn.addEventListener('click', async () => {
         if (dailyTransactions.length === 0) return alert("Rien à enregistrer.");
         if (!confirm(`Enregistrer les ${dailyTransactions.length} opérations ?`)) return;
@@ -194,18 +194,26 @@ document.addEventListener('DOMContentLoaded', async () => {
         for (const transac of dailyTransactions) {
             const query = await transactionsCollection.where("reference", "==", transac.reference).get();
             
+            // Préparation des données du paiement
+            const isCheck = (transac.modePaiement === 'Chèque');
+            
             const paymentEntry = {
                 date: transac.date,
                 montantParis: transac.montantParis,
                 montantAbidjan: transac.montantAbidjan,
                 agent: transac.agent,
-                modePaiement: transac.modePaiement, // NOUVEAU
-                agentMobileMoney: transac.agentMobileMoney
+                modePaiement: transac.modePaiement,
+                agentMobileMoney: transac.agentMobileMoney,
+                // Si c'est un chèque, on note qu'il est "En coffre" (Pending)
+                // Sinon (Espèce/OM...), c'est considéré comme "Encaissé" (Cleared)
+                checkStatus: isCheck ? 'Pending' : 'Cleared' 
             };
 
             if (!query.empty) {
+                // Mise à jour
                 const docRef = query.docs[0].ref;
                 const oldData = query.docs[0].data();
+                
                 const updatedData = {
                     montantParis: (oldData.montantParis || 0) + transac.montantParis,
                     montantAbidjan: (oldData.montantAbidjan || 0) + transac.montantAbidjan,
@@ -213,7 +221,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     date: transac.date || oldData.date,
                     agent: transac.agent || oldData.agent || '',
                     agentMobileMoney: transac.agentMobileMoney || oldData.agentMobileMoney || '',
-                    modePaiement: transac.modePaiement, // Met à jour le dernier mode
+                    modePaiement: transac.modePaiement,
                     commune: transac.commune || oldData.commune || '',
                     nom: oldData.nom || transac.nom || '', 
                     conteneur: oldData.conteneur || transac.conteneur || '',
@@ -221,6 +229,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 };
                 batch.update(docRef, updatedData);
             } else {
+                // Création
                 const docRef = transactionsCollection.doc();
                 const newData = {
                     ...transac,
@@ -232,13 +241,13 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
         
         batch.commit().then(() => {
-            alert(`Succès !`);
+            alert(`Enregistré avec succès ! Les chèques sont maintenant "En coffre".`);
             dailyTransactions = [];
             saveDailyToLocalStorage();
             renderDailyTable();
         }).catch(err => console.error("Erreur : ", err));
     });
-
+    
     dailyTableBody.addEventListener('click', (event) => {
         if (event.target.classList.contains('deleteBtn')) {
             const index = parseInt(event.target.getAttribute('data-index'), 10);
