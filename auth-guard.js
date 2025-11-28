@@ -18,28 +18,42 @@ firebase.auth().onAuthStateChanged(async (user) => {
 
         const currentPage = window.location.pathname;
 
-        // --- GESTION DES INTERDICTIONS ---
+        // --- GESTION DES ACCÈS ---
         
-        // 1. SI C'EST UN "SAISIE_FULL"
+        // SUPER ADMIN : Accès TOTAL + Page Admin
+        if (userRole === 'super_admin') {
+            document.body.style.display = 'block';
+            return; // Il a le droit à tout, on arrête les vérifs
+        }
+
+        // Si quelqu'un d'autre essaie d'aller sur le panel admin
+        if (currentPage.includes('admin-panel.html')) {
+            alert("Accès réservé au Super Admin.");
+            window.location.href = 'index.html';
+            return;
+        }
+
+        // ADMIN CLASSIQUE : Tout sauf Admin Panel
+        if (userRole === 'admin') {
+            document.body.style.display = 'block';
+            return;
+        }
+
+        // SAISIE FULL
         if (userRole === 'saisie_full') {
-            // Il n'a PAS le droit au Dashboard, ni à la Banque, ni aux Arrivages
             if (currentPage.includes('dashboard.html') || 
                 currentPage.includes('bank.html') || 
                 currentPage.includes('arrivages.html')) {
                 alert("Accès refusé.");
-                window.location.href = 'index.html'; 
-                return;
+                window.location.href = 'index.html'; return;
             }
-            // Il a le droit à : index.html, expenses.html, other-income.html, history.html
         }
 
-        // 2. SI C'EST UN "SAISIE_LIMITED" (Si vous l'utilisez encore)
+        // SAISIE LIMITED
         if (userRole === 'saisie_limited') {
-            // Droit uniquement à Saisie et Historique
             if (!currentPage.includes('index.html') && !currentPage.includes('history.html')) {
                  alert("Accès refusé.");
-                 window.location.href = 'index.html';
-                 return;
+                 window.location.href = 'index.html'; return;
             }
         }
 
@@ -49,18 +63,17 @@ firebase.auth().onAuthStateChanged(async (user) => {
         const navOtherIncome = document.getElementById('nav-other-income'); 
         const navBank = document.getElementById('nav-bank'); 
         const navArrivages = document.getElementById('nav-arrivages');
+        const navAdmin = document.getElementById('nav-admin'); // Nouveau lien
 
-        // Admin voit tout.
-        
-        // Saisie Full ne voit pas Dashboard, Banque, Arrivages
+        // Cacher le lien Admin Panel pour tout le monde sauf Super Admin
+        if (navAdmin && userRole !== 'super_admin') navAdmin.style.display = 'none';
+
         if (userRole === 'saisie_full') {
             if (navDashboard) navDashboard.style.display = 'none';
             if (navBank) navBank.style.display = 'none';
             if (navArrivages) navArrivages.style.display = 'none';
-            // Il VOIT Expenses et Other Income
         }
 
-        // Saisie Limited ne voit que Saisie et Historique
         if (userRole === 'saisie_limited') {
             if (navDashboard) navDashboard.style.display = 'none';
             if (navExpenses) navExpenses.style.display = 'none';

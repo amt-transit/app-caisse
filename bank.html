@@ -26,6 +26,7 @@
         <a href="bank.html" id="nav-bank" class="active">Banque</a>
         <a href="arrivages.html" id="nav-arrivages">Arrivages</a>
         <a href="clients.html" id="nav-clients">Clients</a>
+        <a href="admin-panel.html" id="nav-admin" style="background-color: #6f42c1; color: white;">ADMIN</a>
     </nav>
 
     <div id="caisseForm">
@@ -48,15 +49,6 @@
         <div class="form-buttons">
             <button id="addBankMovementBtn" class="primary">Enregistrer le Mouvement</button>
         </div>
-    </div>
-
-    <div id="caisseForm" style="margin-top: 20px; border-top: 2px solid #eee;">
-        <h3>Importer Mouvements Banque (CSV)</h3>
-        <p>Format CSV : <code>date, description, type, montant</code></p>
-        <p><small>Type doit être "Depot" ou "Retrait"</small></p>
-        <input type="file" id="csvFile" accept=".csv">
-        <button id="uploadCsvBtn" class="primary" style="margin-top: 10px;">Importer CSV</button>
-        <pre id="uploadLog" style="background:#f8f9fa; padding:10px; display:none; margin-top:10px;"></pre>
     </div>
 
     <div class="history-controls">

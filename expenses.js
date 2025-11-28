@@ -87,32 +87,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }).catch(err => console.error(err));
     });
 
-    // 2. IMPORT CSV
-    if (uploadCsvBtn) {
-        uploadCsvBtn.addEventListener('click', () => {
-            if (!csvFile.files.length) return alert("Sélectionnez un fichier.");
-            Papa.parse(csvFile.files[0], {
-                header: true, skipEmptyLines: true,
-                complete: async (results) => {
-                    const batch = db.batch();
-                    let count = 0;
-                    results.data.forEach(row => {
-                        const date = row.date?.trim(); const desc = row.description?.trim(); const montant = parseFloat(row.montant);
-                        const type = row.type?.trim() || 'Mensuelle'; const conteneur = row.conteneur?.trim() || '';
-                        if (date && desc && !isNaN(montant)) {
-                            const docRef = expensesCollection.doc();
-                            batch.set(docRef, { date, description: desc, montant, type, conteneur, action: 'Depense', isDeleted: false, mode: 'Espèce' });
-                            count++;
-                        }
-                    });
-                    if (count > 0) await batch.commit();
-                    alert(`Succès : ${count} dépenses importées.`);
-                    csvFile.value = '';
-                }
-            });
-        });
-    }
-
+    
     // 3. AFFICHAGE
     function fetchExpenses() {
         if (unsubscribeExpenses) unsubscribeExpenses();

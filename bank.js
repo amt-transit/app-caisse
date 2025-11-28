@@ -73,42 +73,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }).catch(err => console.error(err));
     });
 
-    // 2. IMPORT CSV
-    if (uploadCsvBtn) {
-        uploadCsvBtn.addEventListener('click', () => {
-            if (!csvFile.files.length) return alert("Sélectionnez un fichier.");
-            
-            uploadLog.style.display = 'block';
-            uploadLog.textContent = 'Lecture...';
-
-            Papa.parse(csvFile.files[0], {
-                header: true, skipEmptyLines: true,
-                complete: async (results) => {
-                    const batch = db.batch();
-                    let count = 0;
-                    
-                    results.data.forEach(row => {
-                        const date = row.date?.trim();
-                        const desc = row.description?.trim();
-                        const type = row.type?.trim(); // "Depot" ou "Retrait"
-                        const montant = parseFloat(row.montant);
-
-                        if (date && desc && type && !isNaN(montant)) {
-                            const docRef = bankCollection.doc();
-                            batch.set(docRef, {
-                                date, description: desc, type, montant, isDeleted: false
-                            });
-                            count++;
-                        }
-                    });
-
-                    if (count > 0) await batch.commit();
-                    uploadLog.textContent = `Succès : ${count} mouvements importés.`;
-                    csvFile.value = '';
-                }
-            });
-        });
-    }
 
     // 3. AFFICHAGE & RECHERCHE
     function fetchBankMovements() {

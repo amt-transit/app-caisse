@@ -27,6 +27,7 @@
         <a href="bank.html" id="nav-bank">Banque</a>
         <a href="arrivages.html" id="nav-arrivages" class="active">Arrivages</a>
         <a href="clients.html" id="nav-clients">Clients</a>
+        <a href="admin-panel.html" id="nav-admin" style="background-color: #6f42c1; color: white;">ADMIN</a>
     </nav>
 
     <div class="sub-nav">
@@ -52,19 +53,6 @@
             <div class="form-buttons">
                 <button id="addArrivalBtn" class="primary">Enregistrer le Colis</button>
             </div>
-        </div>
-
-        <h2 style="margin-top: 30px;">Enregistrer en Masse (Réception via CSV)</h2>
-        <div id="caisseForm" class="bulk-upload-form">
-            <p>Importez un fichier CSV (5 colonnes). Le <strong>Nom Client</strong> sera recherché automatiquement dans le manifeste "Départ Paris".</p>
-            <ol style="margin-left: 20px; text-align: left;">
-                <li>Remplissez les champs <strong>Date</strong> et <strong>Conteneur</strong> ci-dessus.</li>
-                <li>CSV : <code>reference</code>, <code>prix</code>, <code>nom</code> (optionnel), <code>montantParis</code>, <code>montantAbidjan</code></li>
-            </ol>
-            
-            <input type="file" id="csvFile" accept=".csv" style="margin-top: 15px;">
-            <button id="uploadCsvBtn" class="primary" style="margin-top: 15px; width: 100%;">Importer le Fichier CSV</button>
-            <pre id="uploadLog" style="background-color: #f8f9fa; border: 1px solid #dee2e6; padding: 10px; border-radius: 6px; margin-top: 15px; display: none; text-align: left;"></pre>
         </div>
 
         <div style="margin-top: 20px; text-align: center;">
@@ -104,18 +92,6 @@
             </div>
         </div>
         
-        <h2 style="margin-top: 30px;">Enregistrer en Masse (Fichier Complet Paris)</h2>
-        <div id="caisseForm" class="bulk-upload-form">
-            <p>Importez le fichier <strong>complet</strong> reçu de Paris (format point-virgule <code>;</code>).</p>
-            <ul style="margin-left: 20px; text-align: left; font-size: 0.9em; color: #666;">
-                <li>Le système convertira automatiquement les <strong>€ en CFA</strong> (x 656).</li>
-                <li>Colonnes requises : <code>DATE DU TRANSFERT</code>, <code>REFERENCE</code>, <code>EXPEDITEUR</code>, <code>PRIX</code>, <code>MONTANT PAYER</code>.</li>
-            </ul>
-            
-            <input type="file" id="parisCsvFile" accept=".csv" style="margin-top: 15px;">
-            <button id="uploadParisCsvBtn" class="primary" style="margin-top: 15px; width: 100%;">Importer Fichier Complet</button>
-            <pre id="parisUploadLog" style="background-color: #f8f9fa; border: 1px solid #dee2e6; padding: 10px; border-radius: 6px; margin-top: 15px; display: none; text-align: left;"></pre>
-        </div>
         <h2 style="margin-top: 30px;">
             Colis en attente de réception 
             <span id="parisCount" class="tag" style="background-color: #ffc107; color: #333; font-size: 0.8em;">0</span>
