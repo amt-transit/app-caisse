@@ -1,9 +1,11 @@
 document.addEventListener('DOMContentLoaded', async () => {
     const usersList = document.getElementById('usersList');
     const createUserBtn = document.getElementById('createUserBtn');
-    const newEmail = document.getElementById('newEmail');
+    const newUsername = document.getElementById('newUsername'); // ID Modifié
     const newPassword = document.getElementById('newPassword');
     const newRole = document.getElementById('newRole');
+
+    const DOMAIN_SUFFIX = "@amt.local"; // Le même que dans login.js
 
     // --- GESTION UTILISATEURS ---
     db.collection('users').onSnapshot(snapshot => {
@@ -12,37 +14,51 @@ document.addEventListener('DOMContentLoaded', async () => {
             const data = doc.data();
             const div = document.createElement('div');
             div.className = 'user-card';
+            
+            // NETTOYAGE DU NOM POUR L'AFFICHAGE
+            // On prend l'email stocké et on enlève "@amt.local"
+            let displayUser = data.email || "Inconnu";
+            displayUser = displayUser.replace(DOMAIN_SUFFIX, ""); 
+            
             div.innerHTML = `
-                <span><b>ID:</b> ${doc.id}</span>
-                <span class="role-badge role-${data.role}">${data.role.toUpperCase()}</span>
-                <button onclick="resetPassword('${doc.id}')" style="font-size:11px; padding:2px 5px;">📧 Reset MDP</button>
-                <button onclick="deleteUser('${doc.id}')" style="font-size:11px; padding:2px 5px; background:red; color:white;">Supprimer</button>
+                <div style="flex-grow: 1;">
+                    <span style="font-size: 14px; font-weight: bold; color: #333;">${displayUser}</span>
+                    <br>
+                    <small style="color: #888; font-size: 10px;">Rôle: ${data.role}</small>
+                </div>
+                
+                <div style="display: flex; gap: 5px; align-items: center;">
+                    <button onclick="deleteUser('${doc.id}')" style="font-size:11px; padding:4px 8px; background:red; color:white;">X</button>
+                </div>
             `;
             usersList.appendChild(div);
         });
     });
 
     createUserBtn.addEventListener('click', () => {
-        const email = newEmail.value;
+        const username = newUsername.value.trim(); // "Salif"
         const password = newPassword.value;
         const role = newRole.value;
 
-        if (!email || !password) return alert("Email et mot de passe requis.");
+        if (!username || !password) return alert("Nom et mot de passe requis.");
+
+        // CRÉATION DE L'EMAIL TECHNIQUE
+        const emailTechnique = username + DOMAIN_SUFFIX; // "Salif@amt.local"
 
         const secondaryApp = firebase.initializeApp(firebaseConfig, "Secondary");
 
-        secondaryApp.auth().createUserWithEmailAndPassword(email, password)
+        secondaryApp.auth().createUserWithEmailAndPassword(emailTechnique, password)
             .then((userCred) => {
                 return db.collection('users').doc(userCred.user.uid).set({
                     role: role,
-                    email: email 
+                    email: emailTechnique // On stocke l'email complet
                 });
             })
             .then(() => {
-                alert(`Utilisateur créé avec succès !\nRôle : ${role}`);
+                alert(`Utilisateur "${username}" créé avec succès !`);
                 secondaryApp.auth().signOut(); 
                 secondaryApp.delete(); 
-                newEmail.value = ''; newPassword.value = '';
+                newUsername.value = ''; newPassword.value = '';
             })
             .catch((error) => {
                 console.error(error);
@@ -51,21 +67,11 @@ document.addEventListener('DOMContentLoaded', async () => {
             });
     });
 
-    window.resetPassword = (uid) => {
-        const email = prompt("Entrez l'email de l'utilisateur pour envoyer le lien de réinitialisation :");
-        if (email) {
-            firebase.auth().sendPasswordResetEmail(email)
-                .then(() => alert("Email envoyé !"))
-                .catch(e => alert(e.message));
-        }
-    };
-
     window.deleteUser = (uid) => {
-        if(confirm("Attention : Cela supprimera le rôle dans la base. Voulez-vous continuer ?")) {
+        if(confirm("Supprimer cet utilisateur ? (Il faudra le recréer)")) {
             db.collection('users').doc(uid).delete();
         }
     };
-
 
     // --- GESTION IMPORTS CENTRALISÉS ---
     const importType = document.getElementById('importType');
