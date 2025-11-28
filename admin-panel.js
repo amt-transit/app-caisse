@@ -35,36 +35,68 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     });
 
+    // 2. Créer un utilisateur (VERSION NOM D'UTILISATEUR)
     createUserBtn.addEventListener('click', () => {
-        const username = newUsername.value.trim(); // "Salif"
-        const password = newPassword.value;
+        // On récupère le NOM, pas l'email
+        const username = document.getElementById('newUsername').value.trim();
+        const password = document.getElementById('newPassword').value.trim();
         const role = newRole.value;
 
-        if (!username || !password) return alert("Nom et mot de passe requis.");
+        if (!username || !password) return alert("Nom d'utilisateur et mot de passe requis.");
 
-        // CRÉATION DE L'EMAIL TECHNIQUE
-        const emailTechnique = username + DOMAIN_SUFFIX; // "Salif@amt.local"
+        // ON CRÉE L'EMAIL TECHNIQUE AUTOMATIQUEMENT
+        // On enlève les espaces et met en minuscule pour l'email
+        const cleanUsername = username.toLowerCase().replace(/\s+/g, '');
+        const emailTechnique = `${cleanUsername}@amt.local`;
 
+        // ASTUCE : Initialiser une 2ème app Firebase temporaire
         const secondaryApp = firebase.initializeApp(firebaseConfig, "Secondary");
 
         secondaryApp.auth().createUserWithEmailAndPassword(emailTechnique, password)
             .then((userCred) => {
+                // On stocke le "Vrai Nom" (username) dans la base pour l'affichage
                 return db.collection('users').doc(userCred.user.uid).set({
                     role: role,
-                    email: emailTechnique // On stocke l'email complet
+                    email: emailTechnique, // On garde l'email technique
+                    displayName: username  // On garde le joli nom "Salif"
                 });
             })
             .then(() => {
-                alert(`Utilisateur "${username}" créé avec succès !`);
+                alert(`Utilisateur "${username}" créé avec succès !\nLogin : ${username}\nMot de passe : ${password}`);
                 secondaryApp.auth().signOut(); 
                 secondaryApp.delete(); 
-                newUsername.value = ''; newPassword.value = '';
+                document.getElementById('newUsername').value = ''; 
+                document.getElementById('newPassword').value = '';
             })
             .catch((error) => {
                 console.error(error);
                 alert("Erreur : " + error.message);
                 secondaryApp.delete();
             });
+    });
+
+    // ... (Affichage de la liste - Mise à jour) ...
+    db.collection('users').onSnapshot(snapshot => {
+        usersList.innerHTML = '';
+        snapshot.forEach(doc => {
+            const data = doc.data();
+            // On affiche le "displayName" s'il existe, sinon on nettoie l'email
+            let nomAffichable = data.displayName;
+            if (!nomAffichable && data.email) {
+                nomAffichable = data.email.replace('@amt.local', '');
+            }
+            
+            const div = document.createElement('div');
+            div.className = 'user-card';
+            div.innerHTML = `
+                <div style="flex-grow: 1;">
+                    <span style="font-size: 14px; font-weight: bold; color: #333;">${nomAffichable || 'Inconnu'}</span>
+                    <br>
+                    <small style="color: #888; font-size: 10px;">Rôle: ${data.role}</small>
+                </div>
+                `;
+            usersList.appendChild(div);
+        });
     });
 
     window.deleteUser = (uid) => {
