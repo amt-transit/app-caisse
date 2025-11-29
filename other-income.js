@@ -4,6 +4,9 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     const userRole = sessionStorage.getItem('userRole');
+    // CORRECTION : On récupère le nom de l'utilisateur
+    const currentUserName = sessionStorage.getItem('userName') || 'Inconnu';
+
     const incomeCollection = db.collection("other_income"); 
     
     const addIncomeBtn = document.getElementById('addIncomeBtn');
@@ -13,33 +16,32 @@ document.addEventListener('DOMContentLoaded', () => {
     
     const incomeTableBody = document.getElementById('incomeTableBody');
     const showDeletedCheckbox = document.getElementById('showDeletedCheckbox');
-    
     const incomeSearchInput = document.getElementById('incomeSearch');
-    const uploadCsvBtn = document.getElementById('uploadCsvBtn');
-    const csvFile = document.getElementById('csvFile');
 
     let unsubscribeIncome = null;
     let allIncome = [];
 
-    // 1. AJOUT MANUEL
+    // 1. AJOUT MANUEL (AVEC AUTEUR)
     addIncomeBtn.addEventListener('click', () => {
         const data = {
             date: incomeDate.value,
-            description: incomeDesc.value,
+            // AJOUT DU NOM DE L'AUTEUR
+            description: `${incomeDesc.value} (${currentUserName})`,
             montant: parseFloat(incomeAmount.value) || 0,
             isDeleted: false
         };
-        if (!data.date || !data.description || data.montant <= 0) {
+        
+        if (!data.date || !incomeDesc.value || data.montant <= 0) {
             return alert("Veuillez remplir la date, la description et un montant valide.");
         }
+        
         incomeCollection.add(data).then(() => {
             incomeDesc.value = '';
             incomeAmount.value = '';
         }).catch(err => console.error(err));
     });
 
-
-    // 3. AFFICHAGE & RECHERCHE
+    // 2. AFFICHAGE & RECHERCHE
     function fetchIncome() {
         if (unsubscribeIncome) unsubscribeIncome();
         let query = incomeCollection;
@@ -96,7 +98,7 @@ document.addEventListener('DOMContentLoaded', () => {
     
     fetchIncome();
 
-    // 4. SUPPRESSION
+    // 3. SUPPRESSION
     incomeTableBody.addEventListener('click', (event) => {
         if (event.target.classList.contains('deleteBtn')) {
             const docId = event.target.getAttribute('data-id');

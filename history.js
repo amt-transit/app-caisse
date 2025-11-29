@@ -234,16 +234,21 @@ document.addEventListener('DOMContentLoaded', () => {
     
     fetchHistory(); // Lancement initial (Aujourd'hui seulement)
 
-    // --- UTILITAIRES ---
     function insertDataRow(data) {
         const newRow = document.createElement('tr');
         newRow.dataset.id = data.id; 
         newRow.style.cursor = "pointer";
         if (data.isDeleted === true) newRow.classList.add('deleted-row');
+        
         const reste_class = (data.reste || 0) < 0 ? 'reste-negatif' : 'reste-positif';
         const agentString = data.agent || "";
         const agents = agentString.split(',').map(a => a.trim()).filter(a => a.length > 0);
         const agentTagsHTML = agents.map(agent => `<span class="tag ${textToClassName(agent)}">${agent}</span>`).join(' '); 
+        
+        // ==== CORRECTION : CRÉATION DE L'AFFICHAGE AUTEUR ====
+        const auteurHTML = data.saisiPar ? `<div class="saisi-par">✍️ ${data.saisiPar}</div>` : '';
+        // ====================================================
+
         let btns = '';
         if (userRole === 'admin' && data.isDeleted !== true) {
             btns += `<button class="editBtn" data-id="${data.id}" data-prix="${data.prix||0}" data-paris="${data.montantParis||0}" data-abidjan="${data.montantAbidjan||0}" style="background-color:#007bff; margin-right:5px;">Modif.</button>`;
@@ -251,14 +256,37 @@ document.addEventListener('DOMContentLoaded', () => {
         if ((userRole === 'admin' || userRole === 'saisie_full') && data.isDeleted !== true) {
             btns += `<button class="deleteBtn" data-id="${data.id}">Suppr.</button>`;
         }
-        newRow.innerHTML = `<td>${data.date || 'En attente'}</td><td>${data.reference}</td><td>${data.nom || ''}</td><td>${data.conteneur || ''}</td><td>${formatCFA(data.prix)}</td><td>${formatCFA(data.montantParis)}</td><td>${formatCFA(data.montantAbidjan)}</td><td><span class="tag ${textToClassName(data.agentMobileMoney)}">${data.agentMobileMoney || ''}</span></td><td class="${reste_class}">${formatCFA(data.reste)}</td><td><span class="tag ${textToClassName(data.commune)}">${data.commune || ''}</span></td><td>${agentTagsHTML}</td><td style="min-width: 100px;">${btns}</td>`;
+        
+        newRow.innerHTML = `
+            <td>${data.date || 'En attente'}</td>
+            <td>${data.reference}</td>
+            <td>${data.nom || ''}</td>
+            <td>${data.conteneur || ''}</td>
+            <td>${formatCFA(data.prix)}</td>
+            <td>${formatCFA(data.montantParis)}</td>
+            <td>${formatCFA(data.montantAbidjan)}</td>
+            <td><span class="tag ${textToClassName(data.agentMobileMoney)}">${data.agentMobileMoney || ''}</span></td>
+            <td class="${reste_class}">${formatCFA(data.reste)}</td>
+            <td><span class="tag ${textToClassName(data.commune)}">${data.commune || ''}</span></td>
+            
+            <td>${agentTagsHTML} ${auteurHTML}</td>
+            
+            <td style="min-width: 100px;">${btns}</td>`;
         tableBody.appendChild(newRow);
     }
 
     function insertSubtotalRow(date, totals) {
         const subtotalRow = document.createElement('tr');
         subtotalRow.className = 'subtotal-row';
-        subtotalRow.innerHTML = `<td>${date || 'TOTAL'}</td><td colspan="3" style="text-align: right;">TOTAL</td><td>${formatCFA(totals.prix)}</td><td>${formatCFA(totals.montantParis)}</td><td>${formatCFA(totals.montantAbidjan)}</td><td></td><td>${formatCFA(totals.reste)}</td><td colspan="3"></td>`;
+        subtotalRow.innerHTML = `
+            <td>${date || 'TOTAL'}</td>
+            <td colspan="4" style="text-align: right;">TOTAL</td> 
+            <td>${formatCFA(totals.prix)}</td>
+            <td>${formatCFA(totals.montantParis)}</td>
+            <td>${formatCFA(totals.montantAbidjan)}</td>
+            <td></td>
+            <td>${formatCFA(totals.reste)}</td>
+            <td colspan="3"></td>`;
         tableBody.appendChild(subtotalRow);
     }
     function formatCFA(n) { return new Intl.NumberFormat('fr-CI', { style: 'currency', currency: 'XOF' }).format(n || 0); }

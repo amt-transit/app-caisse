@@ -3,6 +3,9 @@ document.addEventListener('DOMContentLoaded', () => {
         alert("Erreur: La connexion à la base de données a échoué."); return;
     }
 
+    // CORRECTION : On récupère le nom de l'utilisateur connecté
+    const currentUserName = sessionStorage.getItem('userName') || 'Inconnu';
+
     const bankCollection = db.collection("bank_movements");
     
     const addBankMovementBtn = document.getElementById('addBankMovementBtn');
@@ -38,13 +41,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const data = {
             date: bankDate.value,
-            description: bankDesc.value,
+            // AJOUT DU NOM DE L'AUTEUR
+            description: `${bankDesc.value} (${currentUserName})`,
             montant: montant,
             type: type,
             isDeleted: false
         };
 
-        if (!data.date || !data.description || data.montant <= 0) {
+        if (!data.date || !bankDesc.value || data.montant <= 0) {
             return alert("Veuillez remplir tous les champs avec un montant valide.");
         }
 
@@ -73,6 +77,42 @@ document.addEventListener('DOMContentLoaded', () => {
         }).catch(err => console.error(err));
     });
 
+    // 2. IMPORT CSV
+    if (uploadCsvBtn) {
+        uploadCsvBtn.addEventListener('click', () => {
+            if (!csvFile.files.length) return alert("Sélectionnez un fichier.");
+            
+            uploadLog.style.display = 'block';
+            uploadLog.textContent = 'Lecture...';
+
+            Papa.parse(csvFile.files[0], {
+                header: true, skipEmptyLines: true,
+                complete: async (results) => {
+                    const batch = db.batch();
+                    let count = 0;
+                    
+                    results.data.forEach(row => {
+                        const date = row.date?.trim();
+                        const desc = row.description?.trim();
+                        const type = row.type?.trim(); // "Depot" ou "Retrait"
+                        const montant = parseFloat(row.montant);
+
+                        if (date && desc && type && !isNaN(montant)) {
+                            const docRef = bankCollection.doc();
+                            batch.set(docRef, {
+                                date, description: desc, type, montant, isDeleted: false
+                            });
+                            count++;
+                        }
+                    });
+
+                    if (count > 0) await batch.commit();
+                    uploadLog.textContent = `Succès : ${count} mouvements importés.`;
+                    csvFile.value = '';
+                }
+            });
+        });
+    }
 
     // 3. AFFICHAGE & RECHERCHE
     function fetchBankMovements() {
@@ -80,10 +120,14 @@ document.addEventListener('DOMContentLoaded', () => {
         let query = bankCollection;
         
         if (showDeletedCheckbox.checked) {
+            // Si on veut voir les supprimés
             query = query.where("isDeleted", "==", true).orderBy("isDeleted");
         } else {
+            // Si on veut voir les actifs (défaut)
             query = query.where("isDeleted", "!=", true).orderBy("isDeleted");
         }
+        
+        // Ensuite on trie par date
         query = query.orderBy("date", "desc");
 
         unsubscribeBank = query.onSnapshot(snapshot => {
@@ -223,7 +267,7 @@ document.addEventListener('DOMContentLoaded', () => {
             
             batch.set(bankRef, {
                 date: new Date().toISOString().split('T')[0],
-                description: `Remise de ${selectedChecks.length} chèques`,
+                description: `Remise de ${selectedChecks.length} chèques (${currentUserName})`, // Auteur ajouté ici aussi
                 montant: totalAmount,
                 type: 'Depot',
                 isDeleted: false,
@@ -272,7 +316,10 @@ document.addEventListener('DOMContentLoaded', () => {
         let totalVentes = 0;
         transSnap.forEach(doc => {
             const d = doc.data();
-            totalVentes += (d.montantParis || 0) + (d.montantAbidjan || 0);
+            // On ne compte que les Espèces pour le solde physique, mais ici on prend tout pour le solde global
+            // Si vous voulez une gestion fine "Caisse Espèces", il faudrait filtrer par modePaiement.
+            // Pour simplifier, on prend le total Abidjan.
+            totalVentes += (d.montantAbidjan || 0); 
         });
 
         const incSnap = await db.collection("other_income").where("isDeleted", "!=", true).get();

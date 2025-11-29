@@ -4,6 +4,9 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     const userRole = sessionStorage.getItem('userRole');
+    // Récupération du nom de l'utilisateur (stocké par auth-guard.js)
+    const currentUserName = sessionStorage.getItem('userName') || 'Inconnu';
+
     const expensesCollection = db.collection("expenses");
     
     const addExpenseBtn = document.getElementById('addExpenseBtn');
@@ -11,7 +14,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const expenseDesc = document.getElementById('expenseDesc');
     const expenseAmount = document.getElementById('expenseAmount');
     const expenseType = document.getElementById('expenseType');
-    const expenseMode = document.getElementById('expenseMode'); // NOUVEAU
+    const expenseMode = document.getElementById('expenseMode'); 
     const expenseContainer = document.getElementById('expenseContainer');
     const actionType = document.getElementById('actionType');
     const budgetDisplay = document.getElementById('budgetDisplay');
@@ -19,10 +22,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const expenseTableBody = document.getElementById('expenseTableBody');
     const showDeletedCheckbox = document.getElementById('showDeletedCheckbox');
     const expenseSearchInput = document.getElementById('expenseSearch');
-    
-    const csvImportBlock = document.getElementById('csvImportBlock');
-    const uploadCsvBtn = document.getElementById('uploadCsvBtn');
-    const csvFile = document.getElementById('csvFile');
 
     let unsubscribeExpenses = null; 
     let allExpenses = [];
@@ -33,7 +32,6 @@ document.addEventListener('DOMContentLoaded', () => {
             opt.value = 'Allocation'; opt.textContent = '🟢 Allouer du Budget (Ajout)';
             actionType.appendChild(opt);
         }
-        if(csvImportBlock) csvImportBlock.style.display = 'block';
     }
 
     if (actionType) {
@@ -41,7 +39,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (actionType.value === 'Allocation') {
                 expenseType.style.display = 'none';
                 expenseContainer.style.display = 'none';
-                expenseMode.style.display = 'none'; // Pas de mode pour allocation
+                expenseMode.style.display = 'none';
                 addExpenseBtn.className = 'primary'; addExpenseBtn.textContent = "Ajouter au Budget";
             } else {
                 expenseType.style.display = 'inline-block';
@@ -60,20 +58,24 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // 1. AJOUT
+    // 1. AJOUT (AVEC NOM DE L'UTILISATEUR)
     addExpenseBtn.addEventListener('click', async () => {
         const montant = parseFloat(expenseAmount.value) || 0;
         const action = actionType ? actionType.value : 'Depense'; 
 
         const data = {
-            date: expenseDate.value, description: expenseDesc.value, montant: montant,
-            action: action, type: (action === 'Depense') ? expenseType.value : 'Budget',
-            mode: (action === 'Depense') ? expenseMode.value : 'Virement', // Mode
+            date: expenseDate.value,
+            // CORRECTION : Ajout du nom de l'utilisateur dans la description
+            description: `${expenseDesc.value} (${currentUserName})`, 
+            montant: montant,
+            action: action, 
+            type: (action === 'Depense') ? expenseType.value : 'Budget',
+            mode: (action === 'Depense') ? expenseMode.value : 'Virement',
             conteneur: (expenseType.value === 'Conteneur' && action === 'Depense') ? expenseContainer.value.toUpperCase() : '',
             isDeleted: false 
         };
 
-        if (!data.date || !data.description || data.montant <= 0) return alert("Veuillez remplir les champs.");
+        if (!data.date || !expenseDesc.value || data.montant <= 0) return alert("Veuillez remplir les champs.");
 
         if (action === 'Depense') {
             const budgetActuel = calculateCurrentBudget(allExpenses);
@@ -87,7 +89,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }).catch(err => console.error(err));
     });
 
-    
     // 3. AFFICHAGE
     function fetchExpenses() {
         if (unsubscribeExpenses) unsubscribeExpenses();

@@ -4,12 +4,15 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=1000">
     <title>Dépenses - Caisse</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Comfortaa:wght@400;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
     <link rel="icon" type="image/png" href="favicon.png">
 </head>
 <body style="display:none">
     <header class="app-header">
-        <img src="LOGOAMT.png" alt="Logo" class="app-logo">
+        <img src="logoAMT.png" alt="Logo" class="app-logo">
         <h1>Gestion des Dépenses</h1>
         <button id="logoutBtn" style="position: absolute; right: 20px; padding: 8px 15px; cursor: pointer;">Déconnexion</button>
     </header>
@@ -65,13 +68,6 @@
         </div>
     </div>
 
-    <div id="csvImportBlock" style="margin-top: 20px; border-top: 2px solid #eee; display: none;">
-        <h3>Importer des Dépenses (CSV)</h3>
-        <p>Format CSV : <code>date, description, montant, type, conteneur</code></p>
-        <input type="file" id="csvFile" accept=".csv">
-        <button id="uploadCsvBtn" class="primary" style="margin-top: 10px;">Importer CSV</button>
-    </div>
-
     <div class="history-controls">
         <div class="search-bar-container">
             <input type="text" id="expenseSearch" placeholder="Rechercher dans les dépenses..." style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px;">
@@ -110,7 +106,6 @@
             if (confirm("Voulez-vous vous déconnecter ?")) firebase.auth().signOut();
         });
     </script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
     <script src="auth-guard.js"></script>
     <script src="expenses.js"></script>
 </body>

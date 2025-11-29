@@ -1,24 +1,25 @@
 document.addEventListener('DOMContentLoaded', async () => {
     if (typeof firebase === 'undefined' || typeof db === 'undefined') {
-        alert("Erreur: La connexion à la base de données a échoué."); return;
+        alert("Erreur: Connexion BDD échouée."); return;
     }
 
     const transactionsCollection = db.collection("transactions");
-    const expensesCollection = db.collection("expenses"); // Pour enregistrer les dépenses
-    const bankCollection = db.collection("bank_movements"); // Pour les chèques
+    const expensesCollection = db.collection("expenses");
+    const bankCollection = db.collection("bank_movements");
 
-    // Choices JS
+    // Récupération du nom de l'utilisateur connecté
+    const currentUserName = sessionStorage.getItem('userName') || 'Utilisateur';
+
     const agentSelectElement = document.getElementById('agent');
-    const agentChoices = new Choices(agentSelectElement, { removeItemButton: true, placeholder: true, searchPlaceholderValue: 'Rechercher un agent...' });
+    const agentChoices = new Choices(agentSelectElement, {
+        removeItemButton: true, placeholder: true, searchPlaceholderValue: 'Rechercher un agent...',
+    });
 
-    // Éléments DOM
     const addEntryBtn = document.getElementById('addEntryBtn');
     const saveDayBtn = document.getElementById('saveDayBtn');
     const dailyTableBody = document.getElementById('dailyTableBody');
-    const formContainer = document.getElementById('caisseForm'); // Le premier formulaire
+    const formContainer = document.getElementById('caisseForm');
     
-    // Champs Saisie Colis
-    const dateInput = document.getElementById('date');
     const referenceInput = document.getElementById('reference'); 
     const nomInput = document.getElementById('nom');
     const conteneurInput = document.getElementById('conteneur');
@@ -31,13 +32,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     const communeInput = document.getElementById('commune');
     const referenceList = document.getElementById('referenceList');
     
-    // Champs Saisie Dépenses (Nouveau)
+    // NOUVEAU : ÉLÉMENTS DÉPENSES LIVREUR
     const addQuickExpenseBtn = document.getElementById('addQuickExpenseBtn');
     const quickExpenseDesc = document.getElementById('quickExpenseDesc');
     const quickExpenseAmount = document.getElementById('quickExpenseAmount');
     const dailyExpensesTableBody = document.getElementById('dailyExpensesTableBody');
 
-    // Totaux
+    // TOTAUX
     const dailyTotalAbidjanEspecesEl = document.getElementById('dailyTotalAbidjanEspeces');
     const dailyTotalExpensesEl = document.getElementById('dailyTotalExpenses');
     const netToPayEl = document.getElementById('netToPay');
@@ -46,18 +47,16 @@ document.addEventListener('DOMContentLoaded', async () => {
     const dailyTotalMobileMoneyEl = document.getElementById('dailyTotalMobileMoney');
     const dailyTotalResteEl = document.getElementById('dailyTotalReste');
 
-    // Données Locales (Session en cours)
     let dailyTransactions = JSON.parse(localStorage.getItem('dailyTransactions')) || [];
     let dailyExpenses = JSON.parse(localStorage.getItem('dailyExpenses')) || [];
 
-    // --- 1. GESTION DES TRANSACTIONS (COLIS) ---
-
+    // --- 1. GESTION ENCAISSEMENTS (COLIS) ---
     addEntryBtn.addEventListener('click', () => {
         const selectedAgents = agentChoices.getValue(true); 
         const agentString = selectedAgents.join(', '); 
 
         const newData = {
-            date: dateInput.value,
+            date: document.getElementById('date').value,
             reference: referenceInput.value.trim(),
             nom: nomInput.value.trim(),
             conteneur: conteneurInput.value.trim().toUpperCase(),
@@ -105,33 +104,32 @@ document.addEventListener('DOMContentLoaded', async () => {
         referenceInput.focus();
     });
 
-    // --- 2. GESTION DES DÉPENSES (LIVREUR) ---
+    // --- 2. GESTION DÉPENSES (LIVREUR) ---
+    if (addQuickExpenseBtn) {
+        addQuickExpenseBtn.addEventListener('click', () => {
+            const date = document.getElementById('date').value;
+            const desc = quickExpenseDesc.value.trim();
+            const amount = parseFloat(quickExpenseAmount.value);
 
-    addQuickExpenseBtn.addEventListener('click', () => {
-        const date = dateInput.value;
-        const desc = quickExpenseDesc.value.trim();
-        const amount = parseFloat(quickExpenseAmount.value);
+            if (!date) return alert("Veuillez sélectionner la date en haut.");
+            if (!desc || isNaN(amount) || amount <= 0) return alert("Motif ou Montant invalide.");
 
-        if (!date) return alert("Veuillez sélectionner la date en haut.");
-        if (!desc || isNaN(amount) || amount <= 0) return alert("Motif ou Montant invalide.");
+            dailyExpenses.push({
+                date: date,
+                description: desc,
+                montant: amount
+            });
 
-        dailyExpenses.push({
-            date: date,
-            description: desc,
-            montant: amount
+            saveAllToLocalStorage();
+            renderAllTables();
+
+            quickExpenseDesc.value = '';
+            quickExpenseAmount.value = '';
+            quickExpenseDesc.focus();
         });
+    }
 
-        saveAllToLocalStorage();
-        renderAllTables();
-
-        quickExpenseDesc.value = '';
-        quickExpenseAmount.value = '';
-        quickExpenseDesc.focus();
-    });
-
-
-    // --- 3. FONCTIONS D'AFFICHAGE & CALCUL ---
-
+    // --- 3. AFFICHAGE & CALCUL ---
     function saveAllToLocalStorage() {
         localStorage.setItem('dailyTransactions', JSON.stringify(dailyTransactions));
         localStorage.setItem('dailyExpenses', JSON.stringify(dailyExpenses));
@@ -143,9 +141,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         dailyTransactions.forEach((data, index) => {
             dailyTableBody.innerHTML += `
                 <tr>
-                    <td>${data.reference}</td>
-                    <td>${data.nom || '-'}</td>
-                    <td>${formatCFA(data.prix)}</td>
+                    <td>${data.reference}</td><td>${data.nom || '-'}</td><td>${formatCFA(data.prix)}</td>
                     <td>${data.modePaiement}</td>
                     <td class="${data.reste < 0 ? 'reste-negatif' : 'reste-positif'}">${formatCFA(data.reste)}</td>
                     <td><button class="deleteBtn" onclick="removeTransaction(${index})">X</button></td>
@@ -154,188 +150,172 @@ document.addEventListener('DOMContentLoaded', async () => {
         document.getElementById('dailyCount').textContent = dailyTransactions.length;
 
         // Table Dépenses
-        dailyExpensesTableBody.innerHTML = '';
-        dailyExpenses.forEach((exp, index) => {
-            dailyExpensesTableBody.innerHTML += `
-                <tr>
-                    <td>${exp.description}</td>
-                    <td>${formatCFA(exp.montant)}</td>
-                    <td><button class="deleteBtn" onclick="removeExpense(${index})">X</button></td>
-                </tr>`;
-        });
+        if (dailyExpensesTableBody) {
+            dailyExpensesTableBody.innerHTML = '';
+            dailyExpenses.forEach((exp, index) => {
+                dailyExpensesTableBody.innerHTML += `
+                    <tr>
+                        <td>${exp.description}</td><td>${formatCFA(exp.montant)}</td>
+                        <td><button class="deleteBtn" onclick="removeExpense(${index})">X</button></td>
+                    </tr>`;
+            });
+        }
 
         updateGlobalSummary();
     }
 
-    // --- LE COEUR DU SYSTÈME : CALCUL DU NET À VERSER ---
     function updateGlobalSummary() {
-        let totalAbidjanEsp = 0; // Cash entrant
+        let totalAbidjanEsp = 0; 
         let totalParis = 0;
         let totalMM = 0;
-        let totalExpenses = 0; // Cash sortant
+        let totalExpenses = 0;
 
-        // 1. Calcul Entrées (Uniquement Espèces Abidjan comptent pour la caisse physique)
+        // Calcul Entrées
         dailyTransactions.forEach(t => {
             if (t.modePaiement === 'Espèce') {
                 totalAbidjanEsp += (t.montantAbidjan || 0);
             } else {
-                totalMM += (t.montantAbidjan || 0) + (t.montantParis || 0); // OM, Wave, Chèque...
+                totalMM += (t.montantAbidjan || 0) + (t.montantParis || 0);
             }
             totalParis += (t.montantParis || 0);
         });
 
-        // 2. Calcul Sorties (Dépenses)
+        // Calcul Sorties
         dailyExpenses.forEach(e => totalExpenses += e.montant);
 
-        // 3. Calcul Net
+        // Calcul Net
         const netToPay = totalAbidjanEsp - totalExpenses;
 
-        // 4. Affichage
-        dailyTotalAbidjanEspecesEl.textContent = formatCFA(totalAbidjanEsp);
-        dailyTotalExpensesEl.textContent = formatCFA(totalExpenses);
+        // Affichage
+        if(dailyTotalAbidjanEspecesEl) dailyTotalAbidjanEspecesEl.textContent = formatCFA(totalAbidjanEsp);
+        if(dailyTotalExpensesEl) dailyTotalExpensesEl.textContent = formatCFA(totalExpenses);
         
-        netToPayEl.textContent = formatCFA(netToPay);
-        // Couleur : Rouge si négatif (le livreur a plus dépensé qu'encaissé !!), Vert sinon
-        netToPayEl.style.color = netToPay < 0 ? '#d32f2f' : '#000'; 
+        if(netToPayEl) {
+            netToPayEl.textContent = formatCFA(netToPay);
+            netToPayEl.style.color = netToPay < 0 ? '#d32f2f' : '#000'; 
+        }
 
-        // Infos secondaires
-        dailyTotalParisEl.textContent = formatCFA(totalParis);
-        dailyTotalMobileMoneyEl.textContent = formatCFA(totalMM);
+        if(dailyTotalParisEl) dailyTotalParisEl.textContent = formatCFA(totalParis);
+        if(dailyTotalMobileMoneyEl) dailyTotalMobileMoneyEl.textContent = formatCFA(totalMM);
     }
 
-    // Fonctions globales pour les onclick dans le HTML généré
-    window.removeTransaction = (index) => {
-        dailyTransactions.splice(index, 1);
-        saveAllToLocalStorage();
-        renderAllTables();
-    };
-    window.removeExpense = (index) => {
-        dailyExpenses.splice(index, 1);
-        saveAllToLocalStorage();
-        renderAllTables();
-    };
+    // Fonctions globales pour onclick
+    window.removeTransaction = (i) => { dailyTransactions.splice(i, 1); saveAllToLocalStorage(); renderAllTables(); };
+    window.removeExpense = (i) => { dailyExpenses.splice(i, 1); saveAllToLocalStorage(); renderAllTables(); };
 
-
-    // --- 4. ENREGISTREMENT GLOBAL (FIN DE JOURNÉE) ---
+    // --- 4. ENREGISTREMENT FINAL ---
     saveDayBtn.addEventListener('click', async () => {
         if (dailyTransactions.length === 0 && dailyExpenses.length === 0) return alert("Rien à enregistrer.");
         
-        // Check ultime
         let totalEsp = 0, totalDep = 0;
         dailyTransactions.forEach(t => { if(t.modePaiement==='Espèce') totalEsp += t.montantAbidjan; });
         dailyExpenses.forEach(e => totalDep += e.montant);
         
-        if (confirm(`CONFIRMATION JOURNÉE :\n\nEncaissements Espèces : ${formatCFA(totalEsp)}\nDépenses Livreur : ${formatCFA(totalDep)}\n\nNET À VERSER : ${formatCFA(totalEsp - totalDep)}\n\nConfirmer l'enregistrement ?`)) {
-            
-            const batch = db.batch();
+        if (!confirm(`CONFIRMATION :\n\nEncaissements Espèces : ${formatCFA(totalEsp)}\nDépenses Livreur : ${formatCFA(totalDep)}\n\nNET À VERSER : ${formatCFA(totalEsp - totalDep)}\n\nEnregistrer ?`)) return;
 
-            // A. Enregistrer les Transactions
-            for (const transac of dailyTransactions) {
-                const query = await transactionsCollection.where("reference", "==", transac.reference).get();
-                
-                const isCheck = (transac.modePaiement === 'Chèque');
-                const paymentEntry = {
+        const batch = db.batch();
+
+        // A. Enregistrer Transactions
+        for (const transac of dailyTransactions) {
+            const query = await transactionsCollection.where("reference", "==", transac.reference).get();
+            
+            const isCheck = (transac.modePaiement === 'Chèque');
+            const paymentEntry = {
+                date: transac.date,
+                montantParis: transac.montantParis,
+                montantAbidjan: transac.montantAbidjan,
+                agent: transac.agent,
+                saisiPar: currentUserName,
+                modePaiement: transac.modePaiement,
+                agentMobileMoney: transac.agentMobileMoney,
+                checkStatus: isCheck ? 'Pending' : 'Cleared'
+            };
+
+            if (!query.empty) {
+                const docRef = query.docs[0].ref;
+                const oldData = query.docs[0].data();
+                batch.update(docRef, {
+                    montantParis: (oldData.montantParis||0) + transac.montantParis,
+                    montantAbidjan: (oldData.montantAbidjan||0) + transac.montantAbidjan,
+                    reste: (oldData.reste||0) + transac.montantParis + transac.montantAbidjan,
                     date: transac.date,
-                    montantParis: transac.montantParis,
-                    montantAbidjan: transac.montantAbidjan,
-                    agent: transac.agent,
-                    modePaiement: transac.modePaiement,
-                    agentMobileMoney: transac.agentMobileMoney,
-                    checkStatus: isCheck ? 'Pending' : 'Cleared'
-                };
-
-                if (!query.empty) {
-                    const docRef = query.docs[0].ref;
-                    const oldData = query.docs[0].data();
-                    batch.update(docRef, {
-                        montantParis: (oldData.montantParis||0) + transac.montantParis,
-                        montantAbidjan: (oldData.montantAbidjan||0) + transac.montantAbidjan,
-                        reste: (oldData.reste||0) + transac.montantParis + transac.montantAbidjan,
-                        date: transac.date,
-                        modePaiement: transac.modePaiement,
-                        paymentHistory: firebase.firestore.FieldValue.arrayUnion(paymentEntry)
-                    });
-                } else {
-                    const docRef = transactionsCollection.doc();
-                    batch.set(docRef, { ...transac, isDeleted: false, paymentHistory: [paymentEntry] });
-                }
-            }
-
-            // B. Enregistrer les Dépenses
-            dailyExpenses.forEach(exp => {
-                const docRef = expensesCollection.doc();
-                batch.set(docRef, {
-                    date: exp.date,
-                    description: exp.description + " (Saisie Livreur)", // On marque la source
-                    montant: exp.montant,
-                    type: "Journalière", // Type spécifique
-                    isDeleted: false,
-                    action: "Depense",
-                    conteneur: ""
+                    paymentHistory: firebase.firestore.FieldValue.arrayUnion(paymentEntry)
                 });
-            });
-
-            await batch.commit();
-            alert("Journée enregistrée et clôturée !");
-            
-            dailyTransactions = [];
-            dailyExpenses = [];
-            saveAllToLocalStorage();
-            renderAllTables();
+            } else {
+                const docRef = transactionsCollection.doc();
+                batch.set(docRef, { 
+                    ...transac, 
+                    isDeleted: false, 
+                    saisiPar: currentUserName, 
+                    paymentHistory: [paymentEntry] 
+                });
+            }
         }
+
+        // B. Enregistrer Dépenses
+        dailyExpenses.forEach(exp => {
+            const docRef = expensesCollection.doc();
+            batch.set(docRef, {
+                date: exp.date,
+                description: `${exp.description} (${currentUserName})`, // Ajout de l'auteur
+                montant: exp.montant,
+                type: "Journalière",
+                isDeleted: false,
+                action: "Depense",
+                conteneur: ""
+            });
+        });
+
+        await batch.commit();
+        alert("Journée enregistrée !");
+        
+        dailyTransactions = [];
+        dailyExpenses = [];
+        saveAllToLocalStorage();
+        renderAllTables();
     });
 
-
-    // --- RECHERCHE INTELLIGENTE ---
+    // --- RECHERCHE ---
     referenceInput.addEventListener('change', async () => { 
         const searchValue = referenceInput.value.trim();
-        if (!searchValue) return;
+        if (!searchValue) { clearDisplayFields(); nomInput.value=''; return; }
 
-        // Reset visuel
-        prixInput.value = ''; nomInput.value = ''; conteneurInput.value = '';
-        resteInput.value = ''; resteInput.className = '';
-        montantParisInput.placeholder = 'Montant Paris'; montantAbidjanInput.placeholder = 'Montant Abidjan';
-
-        // 1. Essayer par Référence
         let query = await transactionsCollection.where("reference", "==", searchValue).get();
-        
-        // 2. Si vide, essayer par Nom
-        if (query.empty) {
-            query = await transactionsCollection.where("nom", "==", searchValue).get();
-        }
+        if (query.empty) query = await transactionsCollection.where("nom", "==", searchValue).get();
 
         if (!query.empty) {
-            if (query.size > 1) {
-                alert("Plusieurs colis trouvés avec ce nom. Utilisez la référence.");
-                return;
-            }
-
-            const data = query.docs[0].data();
-            // Remplir les champs
-            referenceInput.value = data.reference; 
-            prixInput.value = data.prix;
-            nomInput.value = data.nom || '';
-            conteneurInput.value = data.conteneur || '';
-            
-            if (data.reste < 0) {
-                resteInput.value = data.reste;
-                resteInput.className = 'reste-negatif';
-                montantParisInput.placeholder = `Reste: ${formatCFA(Math.abs(data.reste))}`;
-                montantAbidjanInput.placeholder = `Reste: ${formatCFA(Math.abs(data.reste))}`;
-            } else {
-                resteInput.value = 0;
-                resteInput.className = 'reste-positif';
-                montantParisInput.placeholder = "Soldé";
-                montantAbidjanInput.placeholder = "Soldé";
-            }
-        } 
+            if (query.size > 1) return alert("Plusieurs résultats. Soyez plus précis.");
+            fillFormWithData(query.docs[0].data());
+        } else {
+            // Mode création
+        }
     });
 
-    // --- AUTRES ---
+    function clearDisplayFields() {
+        prixInput.value = ''; conteneurInput.value = ''; resteInput.value = ''; resteInput.className = '';
+        montantParisInput.placeholder = 'Montant Paris'; montantAbidjanInput.placeholder = 'Montant Abidjan';
+    }
+
+    function fillFormWithData(data) {
+        referenceInput.value = data.reference; 
+        prixInput.value = data.prix;
+        if(!nomInput.value) nomInput.value = data.nom || '';
+        conteneurInput.value = data.conteneur || '';
+        
+        if (data.reste < 0) {
+            resteInput.value = data.reste; resteInput.className = 'reste-negatif';
+            montantParisInput.placeholder = `Reste: ${formatCFA(Math.abs(data.reste))}`;
+            montantAbidjanInput.placeholder = `Reste: ${formatCFA(Math.abs(data.reste))}`;
+        } else {
+            resteInput.value = 0; resteInput.className = 'reste-positif';
+            montantParisInput.placeholder = "Soldé"; montantAbidjanInput.placeholder = "Soldé";
+        }
+    }
+
     prixInput.addEventListener('input', calculateAndStyleReste);
     montantParisInput.addEventListener('input', calculateAndStyleReste);
     montantAbidjanInput.addEventListener('input', calculateAndStyleReste);
-    
+
     function calculateAndStyleReste() {
         const prix = parseFloat(prixInput.value) || 0;
         const paris = parseFloat(montantParisInput.value) || 0;
@@ -344,6 +324,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         resteInput.value = reste;
         resteInput.className = reste > 0 ? 'reste-positif' : 'reste-negatif';
     }
+
     function formatCFA(n) { return new Intl.NumberFormat('fr-CI', { style: 'currency', currency: 'XOF' }).format(n || 0); }
     
     function populateDatalist() {
@@ -351,20 +332,18 @@ document.addEventListener('DOMContentLoaded', async () => {
             const references = new Set(); 
             snapshot.forEach(doc => {
                 const d = doc.data();
-                if (d.reference) {
-                    let opt = document.createElement('option');
-                    opt.value = d.reference;
-                    referenceList.appendChild(opt);
-                }
-                if (d.nom) {
-                    let opt = document.createElement('option');
-                    opt.value = d.nom;
-                    referenceList.appendChild(opt);
-                }
+                if (d.reference) references.add(d.reference);
+                if (d.nom) references.add(d.nom);
             });
+            if(referenceList) {
+                referenceList.innerHTML = '';
+                references.forEach(ref => {
+                    const opt = document.createElement('option'); opt.value = ref; referenceList.appendChild(opt);
+                });
+            }
         });
     }
 
     renderAllTables();
-    populateDatalist();
+    populateDatalist(); 
 });
