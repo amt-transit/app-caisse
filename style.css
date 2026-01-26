@@ -48,28 +48,28 @@ h1, h2, h3, .app-header { font-family: 'Comfortaa', sans-serif; letter-spacing: 
 .app-header {
     display: flex; align-items: center; justify-content: center; /* Centré */
     position: relative; /* Important pour le bouton déconnexion en absolute */
-    padding: 15px 30px;
+    padding: 10px 20px;
     background: linear-gradient(135deg, #1e293b 0%, #334155 100%); /* Dégradé sombre élégant */
     color: white;
     border-bottom: none;
-    margin-bottom: 15px;
+    margin-bottom: 10px;
     box-shadow: var(--shadow-lg);
     border-radius: 0 0 var(--radius) var(--radius);
 }
 .app-logo { height: 36px; margin-right: 15px; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.2)); }
 .app-header h1 { margin: 0; font-size: 22px; font-weight: 700; }
-h2 { text-align: center; color: var(--text-main); margin: 25px 0 15px 0; font-size: 20px; font-weight: 600; }
+h2 { text-align: center; color: var(--text-main); margin: 15px 0 10px 0; font-size: 18px; font-weight: 600; }
 
 /* --- NAVIGATION --- */
 .navigation {
-    display: flex; justify-content: center; gap: 8px;
-    margin-bottom: 15px; flex-wrap: wrap;
-    background: white; padding: 10px; border-radius: var(--radius);
+    display: flex; justify-content: center; gap: 5px;
+    margin-bottom: 10px; flex-wrap: wrap;
+    background: white; padding: 6px; border-radius: var(--radius);
     box-shadow: var(--shadow-sm);
     width: fit-content; margin-left: auto; margin-right: auto;
 }
 .navigation a {
-    text-decoration: none; padding: 8px 16px;
+    text-decoration: none; padding: 6px 12px;
     border-radius: 8px; color: var(--text-muted); font-weight: 600;
     background: transparent;
     transition: all 0.2s ease; font-size: 13px;
@@ -84,11 +84,11 @@ h2 { text-align: center; color: var(--text-main); margin: 25px 0 15px 0; font-si
 
 /* --- SOUS-ONGLETS --- */
 .sub-nav {
-    display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; justify-content: center;
+    display: flex; gap: 8px; margin-bottom: 15px; flex-wrap: wrap; justify-content: center;
     border-bottom: 1px solid var(--glass-border); padding-bottom: 5px;
 }
 .sub-nav a {
-    text-decoration: none; padding: 8px 20px;
+    text-decoration: none; padding: 6px 15px;
     border-radius: 20px; background: white;
     color: var(--text-muted); font-weight: 600; font-size: 13px;
     border: 1px solid var(--border-color);
@@ -103,27 +103,27 @@ h2 { text-align: center; color: var(--text-main); margin: 25px 0 15px 0; font-si
 #caisseForm {
     background: var(--glass-bg);
     border: none;
-    padding: 25px;
+    padding: 15px;
     border-radius: var(--card-radius);
     box-shadow: var(--glass-shadow);
-    margin-bottom: 25px;
+    margin-bottom: 15px;
 }
 .form-grid {
     display: grid; 
     grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-    gap: 15px;
-    margin-bottom: 20px;
+    gap: 10px;
+    margin-bottom: 15px;
 }
 input, select {
     width: 100%; 
-    padding: 10px 12px;
+    padding: 6px 10px;
     border: 1px solid var(--border-color);
     background: var(--input-bg);
     color: var(--text-main);
     border-radius: 8px; 
     font-size: 13px; 
     box-sizing: border-box;
-    height: 42px;
+    height: 36px;
     transition: border-color 0.3s, box-shadow 0.3s;
 }
 input:focus, select:focus {
@@ -137,22 +137,30 @@ input:focus, select:focus {
 input[id*="montantParis"] { background-color: #eff6ff; border-color: #bfdbfe; color: #1e40af; font-weight: 600; }
 input[id*="montantAbidjan"] { background-color: #fff7ed; border-color: #fed7aa; color: #9a3412; font-weight: 600; }
 
-.form-buttons { display: flex; gap: 12px; margin-top: 20px; }
-.form-buttons button {
-    flex-grow: 1; padding: 12px;
+.form-buttons { display: flex; gap: 8px; margin-top: 15px; }
+.form-buttons button, #addTransactionBtn, #saveDayBtn {
+    flex-grow: 1; padding: 8px;
     font-size: 14px; font-weight: bold;
     cursor: pointer; border: 1px solid var(--border-color); border-radius: 8px; 
     background: white; color: var(--text-main);
     transition: all 0.3s;
     box-shadow: var(--shadow-sm);
 }
-.form-buttons button:hover { background: #f8fafc; transform: translateY(-1px); box-shadow: var(--shadow-md); }
-.form-buttons button.primary { 
+.form-buttons button:hover, #addTransactionBtn:hover, #saveDayBtn:hover { background: #f8fafc; transform: translateY(-1px); box-shadow: var(--shadow-md); }
+
+.form-buttons button.primary, #addTransactionBtn { 
     background: linear-gradient(135deg, var(--primary) 0%, var(--primary-hover) 100%); 
     color: white; border: none; 
     box-shadow: 0 4px 6px rgba(79, 70, 229, 0.25); 
 }
-.form-buttons button.primary:hover { box-shadow: 0 6px 12px rgba(79, 70, 229, 0.35); }
+.form-buttons button.primary:hover, #addTransactionBtn:hover { box-shadow: 0 6px 12px rgba(79, 70, 229, 0.35); background: linear-gradient(135deg, var(--primary-hover) 0%, var(--primary) 100%); }
+
+#saveDayBtn {
+    background: linear-gradient(135deg, var(--success) 0%, #059669 100%);
+    color: white; border: none;
+    box-shadow: 0 4px 6px rgba(16, 185, 129, 0.25);
+}
+#saveDayBtn:hover { box-shadow: 0 6px 12px rgba(16, 185, 129, 0.35); background: linear-gradient(135deg, #059669 0%, var(--success) 100%); }
 
 .prix-container { display: flex; align-items: center; gap: 5px; }
 .prix-container input { flex-grow: 1; }
@@ -163,7 +171,7 @@ table {
     width: 100%; border-collapse: collapse; background-color: transparent;
     font-size: 13px; /* Texte tableau un peu plus grand pour la lecture */
 }
-th, td { padding: 10px 12px; text-align: left; border-bottom: 1px solid #dee2e6; color: var(--text-main); }
+th, td { padding: 6px 10px; text-align: left; border-bottom: 1px solid #dee2e6; color: var(--text-main); }
 /* En-tête collant (Sticky Header) : Reste visible au scroll */
 thead { position: sticky; top: 0; z-index: 90; background-color: #e2e8f0; color: var(--text-main); text-transform: uppercase; font-size: 11px; letter-spacing: 1px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
 tbody tr:nth-child(even) { background-color: #f8f9fa; }
@@ -179,12 +187,12 @@ td button.editBtn { background-color: #007bff; color: white; border: none; paddi
 .dashboard-container { 
     background: var(--glass-bg);
     border: none; box-shadow: var(--shadow-md);
-    padding: 20px; border-radius: var(--card-radius); 
+    padding: 15px; border-radius: var(--card-radius); 
 }
-.totals-container { display: flex; gap: 15px; margin-bottom: 25px; flex-wrap: wrap; }
+.totals-container { display: flex; gap: 10px; margin-bottom: 15px; flex-wrap: wrap; }
 .total-card { 
     flex-grow: 1; background: #fff;
-    border-radius: 12px; padding: 20px;
+    border-radius: 12px; padding: 15px;
     text-align: center; border: 1px solid var(--border-color);
     box-shadow: var(--shadow-sm);
     transition: transform 0.2s;
@@ -193,30 +201,76 @@ td button.editBtn { background-color: #007bff; color: white; border: none; paddi
 .total-card h3 { margin-top: 0; font-size: 13px; color: var(--text-muted); margin-bottom: 5px; text-transform: uppercase; }
 .total-card p { margin-bottom: 0; font-size: 24px; font-weight: 700; color: var(--text-main); }
 
+/* --- COULEURS GRANDS TOTAUX DASHBOARD --- */
+#grandTotalPrix { color: var(--primary); } /* Ventes (Indigo) */
+#grandTotalOtherIncome { color: #06b6d4; } /* Autres Entrées (Cyan) */
+#grandTotalDepenses { color: var(--danger); } /* Dépenses (Rouge) */
+#grandTotalReste { color: var(--warning); } /* Reste à payer (Orange) */
+#grandTotalRetraits { color: #8b5cf6; } /* Retraits Banque (Violet) */
+#grandTotalDepots { color: #f43f5e; } /* Dépôts Banque (Rose) */
+#grandTotalCheques { color: #64748b; } /* Chèques (Gris Slate) */
+
+.reste-positif { color: var(--success) !important; } /* Vert */
+.reste-negatif { color: var(--danger) !important; } /* Rouge */
+
 .text-red { color: var(--danger) !important; font-weight: bold; }
 .text-orange { color: var(--warning) !important; font-weight: bold; }
 .text-blue-sub { display: block; font-size: 0.75em; color: var(--primary); margin-top: 4px; font-weight: 500; }
 
 /* --- FILTRES --- */
-.filter-container { background: white; padding: 15px; border-radius: 8px; flex-grow: 1; border: 1px solid var(--border-color); box-shadow: var(--shadow-sm); }
-.filter-fields { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-.filter-fields label { font-weight: bold; font-size: 12px; color: var(--text-muted); }
-.filter-fields input[type="date"] { padding: 4px; width: auto; height: 30px; }
-.filter-fields button { padding: 4px 10px; font-size: 12px; }
+.filter-container { 
+    background: white; 
+    padding: 15px; 
+    border-radius: var(--radius); 
+    flex-grow: 1; 
+    border: 1px solid var(--border-color); 
+    box-shadow: var(--shadow-sm); 
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    flex-wrap: wrap;
+}
+.filter-fields { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.filter-fields label { 
+    font-weight: 600; font-size: 11px; color: var(--text-muted); 
+    text-transform: uppercase; letter-spacing: 0.5px; margin-right: 4px;
+}
+.filter-fields input[type="date"], 
+.filter-fields select,
+.filter-fields input[type="text"] { 
+    padding: 6px 10px; width: auto; height: 36px; 
+    border: 1px solid var(--border-color); border-radius: 6px;
+    background-color: #f8fafc; color: var(--text-main);
+    font-size: 13px; transition: all 0.2s;
+}
+.filter-fields input:focus, .filter-fields select:focus {
+    border-color: var(--primary); background-color: white;
+    box-shadow: 0 0 0 2px rgba(79, 70, 229, 0.1);
+}
+.filter-fields button { 
+    padding: 8px 16px; font-size: 12px; font-weight: 600;
+    border-radius: 6px; border: 1px solid var(--border-color);
+    background: white; color: var(--text-muted);
+    cursor: pointer; transition: all 0.2s;
+}
+.filter-fields button:hover {
+    background: #f1f5f9; color: var(--text-main); border-color: #cbd5e1;
+}
 
 .history-controls { 
     background: white;
-    padding: 15px; border-radius: 8px; 
+    padding: 15px; border-radius: var(--radius); 
     border: 1px solid var(--border-color);
     margin-bottom: 20px; box-shadow: var(--shadow-sm);
 }
-.history-controls .filter-grid { display: grid; gap: 8px; margin-bottom: 8px; } /* Grid plus serrée */
-.date-filter-group { display: flex; align-items: center; gap: 5px; background: #f8fafc; padding: 0 10px; border-radius: 6px; border: 1px solid var(--border-color); height: 38px; }
-.date-filter-group input[type="date"] { border: none; font-size: 13px; background: transparent; color: var(--text-main); outline: none; }
+.history-controls .filter-grid { display: flex; gap: 10px; margin-bottom: 10px; flex-wrap: wrap; align-items: flex-end; }
+.date-filter-group { display: flex; align-items: center; gap: 8px; background: #f8fafc; padding: 4px 10px; border-radius: 8px; border: 1px solid var(--border-color); height: 36px; }
+.date-filter-group span { font-size: 12px; color: var(--text-muted); font-weight: 600; }
+.date-filter-group input[type="date"] { border: none; font-size: 13px; background: transparent; color: var(--text-main); outline: none; padding: 0; height: auto; box-shadow: none; }
 
 .checkbox-container { justify-self: start; padding: 5px; font-size: 12px; }
 .daily-summary { 
-    display: flex; justify-content: space-around; gap: 10px; margin-top: 20px; padding: 15px; 
+    display: flex; justify-content: space-around; gap: 10px; margin-top: 15px; padding: 10px; 
     background: var(--glass-bg); border: 1px solid var(--glass-border);
     border-radius: 8px; flex-wrap: wrap; 
 }
@@ -269,7 +323,7 @@ body { min-height: 100vh; overflow-y: auto; overflow-x: hidden; }
 .chart-card {
     background: white;
     border: none; border-radius: var(--card-radius);
-    padding: 25px;
+    padding: 15px;
     box-shadow: var(--glass-shadow);
     min-height: 300px;
 }
@@ -325,7 +379,7 @@ body { min-height: 100vh; overflow-y: auto; overflow-x: hidden; }
     border: 1px solid var(--border-color) !important;
     border-radius: 8px !important;
     color: var(--text-main) !important;
-    min-height: 42px;
+    min-height: 36px;
     font-size: 13px;
 }
 .choices__input { background-color: transparent !important; color: var(--text-main) !important; margin-bottom: 0 !important; }
