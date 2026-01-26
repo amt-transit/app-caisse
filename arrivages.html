@@ -59,7 +59,7 @@
             <h3 style="margin-top: 0;">Importation CSV (Masse)</h3>
             <p style="font-size: 0.9em; color: #ccc; margin-bottom: 10px;">Remplissez la <strong>Date</strong> et le <strong>Conteneur</strong> ci-dessus, puis sélectionnez le fichier.</p>
             <p style="font-size: 0.8em; color: #aaa; margin-bottom: 10px; font-style: italic;">
-                Colonnes requises (virgule) : <code>reference, prix, nom, montantParis, montantAbidjan</code>
+                Colonnes CSV : <code>reference, restant, expéditeur, adresse, destinataire, description</code>
             </p>
             <input type="file" id="csvFile" accept=".csv" style="margin-bottom: 10px; color: var(--text-main);">
             <button id="uploadCsvBtn" style="background-color: #17a2b8; color: white; padding: 8px 15px; border: none; border-radius: 4px; cursor: pointer;">Importer CSV Abidjan</button>
@@ -85,7 +85,7 @@
             </div>
         </div>
         <table id="arrivalsTable">
-            <thead><tr><th>Date Ajout</th><th>Référence</th><th>Nom Client</th><th>Conteneur</th><th>Prix</th><th>Reste à Payer</th></tr></thead>
+            <thead><tr><th>Date</th><th>Conteneur</th><th>Référence</th><th>Restant</th><th>Expéditeur</th><th>Destinataire</th><th>Adresse</th><th>Description</th></tr></thead>
             <tbody id="arrivalsTableBody"></tbody>
         </table>
     </div>
@@ -106,7 +106,7 @@
         <div style="margin-top: 20px; padding: 15px; background: rgba(255,255,255,0.05); border: 1px solid var(--glass-border); border-radius: 8px;">
             <h3 style="margin-top: 0;">Importation Manifeste Paris (CSV)</h3>
             <p style="font-size: 0.8em; color: #aaa; margin-bottom: 10px; font-style: italic;">
-                Colonnes requises (point-virgule) : <code>DATE DU TRANSFERT; REFERENCE; EXPEDITEUR; PRIX; DESTINATEUR; TYPE COLIS; QUANTITE; MONTANT PAYER; RENSTANT A PAYER; ADRESSES</code>
+                Colonnes CSV (point-virgule) : <code>DATE DU TRANSFERT; REFERENCE; EXPEDITEUR; PRIX; DESTINATEUR</code>
             </p>
             <input type="file" id="parisCsvFile" accept=".csv" style="margin-bottom: 10px; color: var(--text-main);">
             <button id="uploadParisCsvBtn" style="background-color: #17a2b8; color: white; padding: 8px 15px; border: none; border-radius: 4px; cursor: pointer;">Importer Manifeste Paris</button>
@@ -123,7 +123,7 @@
             </div>
         </div>
         <table id="parisTable">
-            <thead><tr><th>Date Départ Paris</th><th>Référence</th><th>Nom Client</th><th>Statut</th><th>Action</th></tr></thead>
+            <thead><tr><th>Date Transfert</th><th>Référence</th><th>Expéditeur</th><th>Prix</th><th>Destinateur</th><th>Actions</th></tr></thead>
             <tbody id="parisTableBody"></tbody>
         </table>
     </div>

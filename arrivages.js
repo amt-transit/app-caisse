@@ -148,13 +148,29 @@ document.addEventListener('DOMContentLoaded', () => {
                     const refsToRemove = [];
 
                     for (const row of rows) {
-                        const ref = row.reference ? row.reference.trim() : '';
-                        let nom = row.nom ? row.nom.trim() : ''; 
-                        const prix = parseFloat(row.prix) || 0;
-                        const mParis = parseFloat(row.montantParis)||0; 
-                        const mAbidjan = parseFloat(row.montantAbidjan)||0;
+                        // NOUVELLE LOGIQUE CSV ABIDJAN : reference, restant, expéditeur, adresse, destinataire, description
+                        const ref = (row.reference || row.Reference || '').trim();
+                        const restant = parseFloat(row.restant || row.Restant || 0);
+                        let nom = (row['expéditeur'] || row['Expéditeur'] || row.nom || '').trim();
+                        const addr = (row.adresse || row.Adresse || row.adresseDestinataire || '').trim();
+                        const dest = (row.destinataire || row.Destinataire || '').trim();
+                        const desc = (row.description || row.Description || '').trim();
 
-                        if (!ref || prix <= 0) {
+                        // Logique Prix/Reste :
+                        // Si "restant" est fourni, c'est le reste à payer.
+                        // Si "prix" n'est pas fourni, on l'estime égal au restant (si impayé) ou 0 (si payé).
+                        // Pour les stats, on essaie de lire 'prix' si dispo, sinon on met 0.
+                        let prix = parseFloat(row.prix || 0);
+                        if (prix === 0 && restant > 0) prix = restant; 
+                        
+                        // LOGIQUE FINANCIÈRE :
+                        // Si Restant = 0, on considère que c'est payé à Paris (Pré-payé) pour que le CA apparaisse dans le Dashboard.
+                        let mParis = 0;
+                        if (restant === 0 && prix > 0) {
+                            mParis = prix;
+                        }
+
+                        if (!ref) {
                             log += `\nIgnoré (Données): ${ref}`; continue;
                         }
 
@@ -169,8 +185,9 @@ document.addEventListener('DOMContentLoaded', () => {
                         const docRef = transactionsCollection.doc();
                         batch.set(docRef, {
                             date: commonDate, reference: ref, nom: nom || "", conteneur: commonConteneur,
-                            prix: prix, montantParis: mParis, montantAbidjan: mAbidjan,
-                            reste: (mParis + mAbidjan) - prix, isDeleted: false, agent: '', agentMobileMoney: '', commune: ''
+                            prix: prix, montantParis: mParis, montantAbidjan: 0, 
+                            reste: restant, isDeleted: false, agent: '', agentMobileMoney: '', commune: '',
+                            description: desc, adresseDestinataire: addr, nomDestinataire: dest
                         });
                         refsToRemove.push(ref);
                         count++;
@@ -209,10 +226,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
                     if (!transSnap.empty) {
                         const docT = transSnap.docs[0];
-                        if (!docT.data().nom || docT.data().nom.trim() === "") {
-                            batch.update(docT.ref, { nom: pData.nomClient });
-                            updated++; bCount++;
-                        }
+                        const tData = docT.data();
+                        const updates = {};
+
+                        // On complète les infos manquantes depuis Paris (Nom, Adresse, Description)
+                        if (!tData.nom || tData.nom.trim() === "") updates.nom = pData.nomClient;
+                        if (!tData.adresseDestinataire && pData.adresseDestinataire) updates.adresseDestinataire = pData.adresseDestinataire;
+                        if ((!tData.description && !tData.article) && pData.typeColis) updates.description = pData.typeColis;
+
+                        if (Object.keys(updates).length > 0) { batch.update(docT.ref, updates); updated++; bCount++; }
+                        
                         batch.delete(docP.ref);
                         cleaned++; bCount++;
                         if (bCount >= 400) { await batch.commit(); bCount = 0; }
@@ -255,10 +278,22 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         toShow.forEach(item => {
             const row = document.createElement('tr');
+            // NOUVELLE LOGIQUE COLONNES : Reference, Restant, Expéditeur, Destinataire, Adresse, Description
+            // Si Restant == 0, c'est probablement payé à Paris (Vert)
+            const description = item.description || item.article || item.typeColis || item.conteneur || '';
+            const adresse = item.adresseDestinataire || item.commune || '';
+            const destinataire = item.nomDestinataire || '';
+            const isPaid = (item.reste || 0) === 0; // Si 0 pile, c'est payé (vert). Si négatif, c'est une dette (rouge).
+
             row.innerHTML = `
-                <td>${item.date}</td><td>${item.reference}</td><td>${item.nom}</td>
-                <td>${item.conteneur}</td><td>${formatCFA(item.prix)}</td>
-                <td class="${(item.reste || 0) < 0 ? 'reste-negatif' : 'reste-positif'}">${formatCFA(item.reste)}</td>
+                <td>${item.date}</td>
+                <td>${item.conteneur}</td>
+                <td>${item.reference}</td>
+                <td style="font-weight:bold; color:${isPaid ? '#28a745' : ((item.reste||0) < 0 ? '#dc3545' : '#28a745')}">${formatCFA(item.reste)}</td>
+                <td>${item.nom}</td>
+                <td>${destinataire}</td>
+                <td>${adresse}</td>
+                <td>${description}</td>
             `;
             arrivalsTableBody.appendChild(row);
         });
@@ -300,10 +335,11 @@ document.addEventListener('DOMContentLoaded', () => {
                     const TAUX = 655.957;
 
                     for (const row of rows) {
+                        // NOUVELLE LOGIQUE CSV PARIS : DATE DU TRANSFERT, REFERENCE, EXPEDITEUR, PRIX, DESTINATEUR
                         const date = row["DATE DU TRANSFERT"];
                         const ref = row["REFERENCE"]?.trim();
                         const exp = row["EXPEDITEUR"]?.trim();
-                        if (!date || !ref) { log += `\nIgnoré (Données): ${ref}`; continue; }
+                        if (!ref) { log += `\nIgnoré (Ref manquante)`; continue; }
 
                         const check = await parisManifestCollection.where("reference", "==", ref).get();
                         if (!check.empty) { log += `\nIgnoré (Existe): ${ref}`; continue; }
@@ -355,7 +391,15 @@ document.addEventListener('DOMContentLoaded', () => {
         if (toShow.length === 0) { parisTableBody.innerHTML = '<tr><td colspan="5">Aucun colis.</td></tr>'; return; }
         
         toShow.forEach(i => {
-            parisTableBody.innerHTML += `<tr><td>${i.dateParis}</td><td>${i.reference}</td><td>${i.nomClient}</td><td><span class="tag" style="background:#ffc107;color:#333">En attente</span></td><td><button class="deleteBtn" data-id="${i.id}">Annuler</button></td></tr>`;
+            // NOUVELLE LOGIQUE COLONNES : Date, Ref, Expéditeur, Prix, Destinateur
+            parisTableBody.innerHTML += `<tr>
+                <td>${i.dateParis}</td>
+                <td>${i.reference}</td>
+                <td>${i.nomClient}</td>
+                <td>${formatCFA(i.prixCFA)}</td>
+                <td>${i.nomDestinataire || '-'}</td>
+                <td><button class="deleteBtn" data-id="${i.id}">Annuler</button></td>
+            </tr>`;
         });
     }
     if(parisSearchInput) parisSearchInput.addEventListener('input', renderParisTable);

@@ -38,6 +38,18 @@ document.addEventListener('DOMContentLoaded', async () => {
     let geoChartInstance = null;
     let financeChartInstance = null;
 
+    // --- MISE À JOUR DYNAMIQUE DES EN-TÊTES (Top 100) ---
+    const topClientsTable = document.getElementById('topClientsTableBody')?.closest('table');
+    if (topClientsTable) {
+        const thead = topClientsTable.querySelector('thead tr');
+        if (thead) {
+            // On ajoute Destinataire et Adresse
+            thead.innerHTML = `
+                <th>Rang</th><th>Client (Expéditeur)</th><th>Dernier Destinataire</th><th>Adresse</th><th>Envois</th><th>C.A. Total</th>
+            `;
+        }
+    }
+
     // --- GESTION DES ONGLETS ---
     const tabs = document.querySelectorAll('.sub-nav a');
     const panels = document.querySelectorAll('.tab-panel');
@@ -116,7 +128,11 @@ document.addEventListener('DOMContentLoaded', async () => {
             const name = (data.nom || "Client Inconnu").trim().toUpperCase();
             if (name === "CLIENT INCONNU" || name === "") return;
 
-            if (!clientStats[name]) clientStats[name] = { count: 0, total: 0, nameStr: data.nom }; // nameStr pour l'affichage propre
+            if (!clientStats[name]) clientStats[name] = { count: 0, total: 0, nameStr: data.nom, lastDest: '-', lastAddr: '-' }; 
+            
+            // On récupère l'adresse si dispo dans la transaction (synchro)
+            if (data.adresseDestinataire) clientStats[name].lastAddr = data.adresseDestinataire;
+            if (data.nomDestinataire) clientStats[name].lastDest = data.nomDestinataire;
             
             clientStats[name].total += (data.prix || 0);
             clientStats[name].count++;
@@ -129,7 +145,11 @@ document.addEventListener('DOMContentLoaded', async () => {
             const name = (data.nomClient || "Client Inconnu").trim().toUpperCase();
             if (name === "CLIENT INCONNU" || name === "") return;
 
-            if (!clientStats[name]) clientStats[name] = { count: 0, total: 0, nameStr: data.nomClient };
+            if (!clientStats[name]) clientStats[name] = { count: 0, total: 0, nameStr: data.nomClient, lastDest: '-', lastAddr: '-' };
+
+            // Paris Manifeste est plus riche en infos destinataire
+            if (data.nomDestinataire) clientStats[name].lastDest = data.nomDestinataire;
+            if (data.adresseDestinataire) clientStats[name].lastAddr = data.adresseDestinataire;
 
             clientStats[name].total += (data.prixCFA || 0);
             clientStats[name].count++;
@@ -148,7 +168,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         topClientsTableBody.innerHTML = '';
         if (top100.length === 0) {
-            topClientsTableBody.innerHTML = '<tr><td colspan="4">Aucune donnée pour cette période.</td></tr>';
+            topClientsTableBody.innerHTML = '<tr><td colspan="6">Aucune donnée pour cette période.</td></tr>';
             return;
         }
 
@@ -165,6 +185,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             row.innerHTML = `
                 <td><b>${rank}</b></td>
                 <td>${client.nameStr}</td>
+                <td style="font-size:0.9em; color:#555;">${client.lastDest}</td>
+                <td style="font-size:0.9em; color:#555;">${client.lastAddr}</td>
                 <td><span class="tag" style="background:#17a2b8;">${client.count} envois</span></td>
                 <td>${formatCFA(client.total)}</td>
             `;
