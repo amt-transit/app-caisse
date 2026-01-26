@@ -316,10 +316,18 @@ document.addEventListener('DOMContentLoaded', () => {
         let totalVentes = 0;
         transSnap.forEach(doc => {
             const d = doc.data();
-            // On ne compte que les Espèces pour le solde physique, mais ici on prend tout pour le solde global
-            // Si vous voulez une gestion fine "Caisse Espèces", il faudrait filtrer par modePaiement.
-            // Pour simplifier, on prend le total Abidjan.
-            totalVentes += (d.montantAbidjan || 0); 
+            // CORRECTION : On aligne la logique sur le Dashboard.
+            // On ne compte que le CASH disponible (pas les chèques).
+            if (d.paymentHistory && d.paymentHistory.length > 0) {
+                d.paymentHistory.forEach(pay => {
+                    if (pay.modePaiement !== 'Chèque') {
+                        totalVentes += (pay.montantAbidjan || 0);
+                    }
+                });
+            } else {
+                // Fallback pour anciennes données (considérées comme cash par défaut)
+                totalVentes += (d.montantAbidjan || 0); 
+            }
         });
 
         const incSnap = await db.collection("other_income").where("isDeleted", "!=", true).get();
