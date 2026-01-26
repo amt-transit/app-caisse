@@ -13,6 +13,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.29/jspdf.plugin.autotable.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
     <style>
         /* Styles spécifiques */
@@ -44,6 +45,8 @@
             display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); 
             gap: 10px; margin-bottom: 20px; background: #fff; padding: 15px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);
         }
+        .tab-panel { display: none; }
+        .tab-panel.active { display: block; }
     </style>
 </head>
 <body style="display:none">
@@ -66,50 +69,70 @@
         <a href="admin-panel.html" id="nav-admin" style="background-color: #6f42c1; color: white;">ADMIN</a>
     </nav>
 
-    <div class="dashboard-container" style="text-align: center; margin-bottom: 20px;">
-        <h3>Rechercher un Client (Expéditeur)</h3>
-        <div class="search-bar-container" style="max-width: 500px; margin: 0 auto;">
-            <input type="text" id="clientSearch" placeholder="Nom du client..." list="clientsList" style="width: 100%; padding: 12px; border: 2px solid #1877f2; border-radius: 8px;">
-            <datalist id="clientsList"></datalist>
+    <div class="sub-nav">
+        <a href="#panel-list" class="active">Liste & Top 100</a>
+        <a href="#panel-graphs">Statistiques Globales</a>
+    </div>
+
+    <div id="panel-list" class="tab-panel active">
+        <div class="dashboard-container" style="text-align: center; margin-bottom: 20px;">
+            <h3>Rechercher un Client (Expéditeur)</h3>
+            <div class="search-bar-container" style="max-width: 500px; margin: 0 auto;">
+                <input type="text" id="clientSearch" placeholder="Nom du client..." list="clientsList" style="width: 100%; padding: 12px; border: 2px solid #1877f2; border-radius: 8px;">
+                <datalist id="clientsList"></datalist>
+            </div>
+        </div>
+        
+        <div id="topClientsContainer">
+            <h2 style="text-align: center; color: #1877f2;">🏆 Top Clients & Statistiques</h2>
+            
+            <div class="clients-filters">
+                <select id="yearFilter">
+                    <option value="">-- Toutes les Années --</option>
+                    <option value="2024">2024</option>
+                    <option value="2025">2025</option>
+                    <option value="2026">2026</option>
+                </select>
+                <select id="periodFilter">
+                    <option value="all">Toute l'année</option>
+                    <option value="S1">Semestre 1 (Jan - Juin)</option>
+                    <option value="S2">Semestre 2 (Juil - Déc)</option>
+                </select>
+                <select id="sortFilter">
+                    <option value="total">Trier par : Chiffre d'Affaires</option>
+                    <option value="count">Trier par : Nombre d'Envois</option>
+                </select>
+            </div>
+            <div class="export-buttons">
+                <button id="exportExcelBtn" class="btn-excel">📄 Exporter Excel</button>
+                <button id="exportPdfBtn" class="btn-pdf">📑 Exporter PDF</button>
+            </div>
+
+            <table id="topClientsTable">
+                <thead>
+                    <tr>
+                        <th>Rang</th>
+                        <th>Nom de l'Expéditeur</th>
+                        <th>Nombre d'Envois</th>
+                        <th>Total Dépensé (CFA)</th>
+                    </tr>
+                </thead>
+                <tbody id="topClientsTableBody"></tbody>
+            </table>
         </div>
     </div>
-    
-    <div id="topClientsContainer">
-        <h2 style="text-align: center; color: #1877f2;">🏆 Top Clients & Statistiques</h2>
-        
-        <div class="clients-filters">
-            <select id="yearFilter">
-                <option value="">-- Toutes les Années --</option>
-                <option value="2024">2024</option>
-                <option value="2025">2025</option>
-                <option value="2026">2026</option>
-            </select>
-            <select id="periodFilter">
-                <option value="all">Toute l'année</option>
-                <option value="S1">Semestre 1 (Jan - Juin)</option>
-                <option value="S2">Semestre 2 (Juil - Déc)</option>
-            </select>
-            <select id="sortFilter">
-                <option value="total">Trier par : Chiffre d'Affaires</option>
-                <option value="count">Trier par : Nombre d'Envois</option>
-            </select>
-        </div>
-        <div class="export-buttons">
-            <button id="exportExcelBtn" class="btn-excel">📄 Exporter Excel</button>
-            <button id="exportPdfBtn" class="btn-pdf">📑 Exporter PDF</button>
-        </div>
 
-        <table id="topClientsTable">
-            <thead>
-                <tr>
-                    <th>Rang</th>
-                    <th>Nom de l'Expéditeur</th>
-                    <th>Nombre d'Envois</th>
-                    <th>Total Dépensé (CFA)</th>
-                </tr>
-            </thead>
-            <tbody id="topClientsTableBody"></tbody>
-        </table>
+    <div id="panel-graphs" class="tab-panel">
+        <div class="charts-grid">
+            <div class="chart-card">
+                <h3>Répartition Géographique (Abidjan & Périphérie)</h3>
+                <canvas id="geoChart"></canvas>
+            </div>
+            <div class="chart-card">
+                <h3>Flux Financiers (Paris vs Abidjan)</h3>
+                <canvas id="financeChart"></canvas>
+            </div>
+        </div>
     </div>
 
     <div id="clientProfile" class="client-card">

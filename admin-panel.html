@@ -8,9 +8,9 @@
     <link href="https://fonts.googleapis.com/css2?family=Comfortaa:wght@400;700&display=swap" rel="stylesheet">
     <link rel="icon" type="image/png" href="favicon.png">
     <style>
-        .admin-section { background: white; padding: 20px; border-radius: 8px; margin-bottom: 20px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
-        .admin-header { border-bottom: 2px solid #eee; padding-bottom: 10px; margin-bottom: 20px; color: #6f42c1; }
-        .user-card { background: #f8f9fa; padding: 10px; border: 1px solid #ddd; margin-bottom: 5px; display: flex; justify-content: space-between; align-items: center; }
+        .admin-section { background: var(--glass-bg); backdrop-filter: blur(12px); padding: 20px; border-radius: 16px; margin-bottom: 20px; border: 1px solid var(--glass-border); box-shadow: var(--glass-shadow); color: var(--text-main); }
+        .admin-header { border-bottom: 1px solid var(--glass-border); padding-bottom: 10px; margin-bottom: 20px; color: var(--text-main); }
+        .user-card { background: rgba(255,255,255,0.05); padding: 10px; border: 1px solid var(--glass-border); margin-bottom: 5px; display: flex; justify-content: space-between; align-items: center; }
         .role-badge { padding: 3px 8px; border-radius: 4px; font-size: 12px; font-weight: bold; color: white; }
         .role-super_admin { background: #6f42c1; }
         .role-admin { background: #007bff; }
@@ -21,10 +21,10 @@
         #csvInstructions {
             margin: 15px 0;
             padding: 15px;
-            background-color: #e8f0fe; /* Bleu très clair */
-            border-left: 5px solid #1a73e8; /* Barre bleue */
+            background-color: rgba(26, 115, 232, 0.15); /* Bleu transparent */
+            border-left: 5px solid #1a73e8;
             border-radius: 4px;
-            color: #333;
+            color: var(--text-main);
             font-size: 13px;
             display: none; /* Caché par défaut */
         }
@@ -32,7 +32,7 @@
             background: #fff;
             padding: 2px 5px;
             border-radius: 3px;
-            border: 1px solid #ccc;
+            border: none;
             font-family: monospace;
             font-weight: bold;
             color: #d32f2f;
@@ -106,7 +106,7 @@
             <input type="file" id="csvFile" accept=".csv" style="display:none; margin-top: 10px;">
             <button id="startImportBtn" class="primary" style="display:none; width: 100%;">Lancer l'Importation</button>
             
-            <pre id="importLog" style="background:#f8f9fa; padding:10px; display:none; margin-top:15px;"></pre>
+            <pre id="importLog" style="background:rgba(0,0,0,0.3); color:#fff; border-radius:6px; padding:10px; display:none; margin-top:15px;"></pre>
         </div>
 
     </div>
@@ -133,5 +133,52 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
     <script src="auth-guard.js"></script>
     <script src="admin-panel.js"></script>
+
+    <!-- Script pour afficher la liste des utilisateurs avec mots de passe -->
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const usersList = document.getElementById('usersList');
+            // On vérifie si db est initialisé
+            if(usersList && typeof db !== 'undefined') {
+                // Écoute en temps réel de la collection 'users'
+                db.collection('users').onSnapshot(snapshot => {
+                    let html = '<table style="width:100%; border-collapse:collapse; margin-top:10px;">';
+                    html += '<thead style="background:rgba(255,255,255,0.1); border-bottom:1px solid var(--glass-border);"><tr><th style="padding:10px; text-align:left;">Utilisateur</th><th style="padding:10px; text-align:left;">Mot de Passe</th><th style="padding:10px; text-align:left;">Rôle</th><th style="padding:10px; text-align:left;">Action</th></tr></thead><tbody>';
+                    
+                    if(snapshot.empty) {
+                        usersList.innerHTML = '<p style="padding:10px;">Aucun utilisateur trouvé.</p>';
+                        return;
+                    }
+
+                    snapshot.forEach(doc => {
+                        const u = doc.data();
+                        // On récupère le mot de passe (champ 'password' ou 'pass')
+                        const password = u.password || u.pass || '****';
+                        const username = u.username || u.nom || u.email || '---';
+                        
+                        html += `<tr style="border-bottom:1px solid var(--glass-border);">
+                            <td style="padding:10px;"><strong>${username}</strong></td>
+                            <td style="padding:10px; font-family:monospace; color:#d63384; font-weight:bold; font-size:1.1em;">${password}</td>
+                            <td style="padding:10px;"><span class="role-badge role-${u.role}">${u.role}</span></td>
+                            <td style="padding:10px;">
+                                <button onclick="deleteUser('${doc.id}')" style="background:#dc3545; color:white; border:none; padding:5px 10px; border-radius:4px; cursor:pointer;">Supprimer</button>
+                            </td>
+                        </tr>`;
+                    });
+                    html += '</tbody></table>';
+                    usersList.innerHTML = html;
+                });
+            }
+        });
+
+        // Fonction de suppression globale
+        window.deleteUser = function(id) {
+            if(confirm("Voulez-vous vraiment supprimer cet utilisateur ?")) {
+                db.collection('users').doc(id).delete()
+                    .then(() => alert("Utilisateur supprimé."))
+                    .catch(e => alert("Erreur: " + e));
+            }
+        };
+    </script>
 </body>
 </html>

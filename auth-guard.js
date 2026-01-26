@@ -45,6 +45,9 @@ firebase.auth().onAuthStateChanged(async (user) => {
 
         // SUPER ADMIN
         if (userRole === 'super_admin') {
+            // On ré-affiche l'onglet Admin spécifiquement pour le Super Admin
+            const navAdmin = document.getElementById('nav-admin');
+            if (navAdmin) navAdmin.style.display = 'block';
             document.body.style.display = 'block';
             return;
         }

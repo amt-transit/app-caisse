@@ -189,8 +189,13 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     }
 
+    // Remplacez votre fonction generateContainerSummary actuelle par celle-ci
     function generateContainerSummary(transactions, expenses) {
-        containerSummaryTableBody.innerHTML = '<tr><td colspan="8">Aucune donnée de conteneur.</td></tr>';
+        const tbody = document.getElementById('containerSummaryTableBody');
+        tbody.innerHTML = '<tr><td colspan="8">Aucune donnée de conteneur.</td></tr>';
+        
+        // ... (Votre logique de calcul existante reste identique ici) ...
+        // Je reprends juste la partie calcul pour le contexte, ne changez pas votre logique de calcul
         const containerData = {};
         transactions.forEach(t => {
             const containerName = t.conteneur || "Non spécifié"; 
@@ -201,10 +206,9 @@ document.addEventListener('DOMContentLoaded', async () => {
             data.totalAbidjan += (t.montantAbidjan || 0);
             data.totalReste += (t.reste || 0);
         });
-        
+
         const containerExpenses = {};
         expenses.forEach(e => {
-            // On exclut les allocations ici aussi, même si elles sont de type 'Budget' donc pas 'Conteneur'
             if (e.action !== 'Allocation' && e.type === 'Conteneur' && e.conteneur) {
                 const cName = e.conteneur;
                 if (!containerExpenses[cName]) containerExpenses[cName] = 0;
@@ -213,36 +217,42 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
 
         const sortedContainers = Object.keys(containerData).sort((a, b) => {
-             const numA = parseInt(a.replace(/[^0-9]/g, ''), 10) || 0;
-             const numB = parseInt(b.replace(/[^0-9]/g, ''), 10) || 0;
-             return numB - numA;
+            const numA = parseInt(a.replace(/[^0-9]/g, ''), 10) || 0;
+            const numB = parseInt(b.replace(/[^0-9]/g, ''), 10) || 0;
+            return numB - numA;
         });
 
         if (sortedContainers.length === 0 || (sortedContainers.length === 1 && sortedContainers[0] === "Non spécifié")) return;
-        containerSummaryTableBody.innerHTML = '';
+        
+        tbody.innerHTML = '';
+        
         sortedContainers.forEach(container => {
             if (container === "Non spécifié") return; 
             const data = containerData[container];
             const ca = data.totalPrix; 
             const totalDepenseConteneur = containerExpenses[container] || 0;
             const beneficeConteneur = ca - totalDepenseConteneur;
-            const percParis = ca > 0 ? (data.totalParis / ca) * 100 : 0;
-            const percAbidjan = ca > 0 ? (data.totalAbidjan / ca) * 100 : 0;
-            const percReste = ca > 0 ? (data.totalReste / ca) * 100 : 0;
             const totalPercu = data.totalParis + data.totalAbidjan;
-            const percPercu = ca > 0 ? (totalPercu / ca) * 100 : 0;
+
             const row = document.createElement('tr');
+            
+            // --- C'EST ICI QUE ÇA CHANGE ---
+            // On ajoute l'événement onclick
+            row.onclick = () => openContainerDetails(container);
+            row.title = "Cliquez pour voir le détail des opérations";
+            // -------------------------------
+
             row.innerHTML = `
-                <td data-label="Conteneur">${container}</td>
+                <td data-label="Conteneur"><b>${container}</b></td>
                 <td data-label="CA">${formatCFA(ca)}</td>
-                <td data-label="Total Paris">${formatCFA(data.totalParis)} <span class="perc">(${percParis.toFixed(1)}%)</span></td>
-                <td data-label="Total Abidjan">${formatCFA(data.totalAbidjan)} <span class="perc">(${percAbidjan.toFixed(1)}%)</span></td>
-                <td data-label="Total Perçu">${formatCFA(totalPercu)} <span class="perc">(${percPercu.toFixed(1)}%)</span></td>
-                <td data-label="Total Reste" class="${data.totalReste < 0 ? 'reste-negatif' : 'reste-positif'}">${formatCFA(data.totalReste)} <span class="perc">(${percReste.toFixed(1)}%)</span></td>
+                <td data-label="Total Paris">${formatCFA(data.totalParis)}</td>
+                <td data-label="Total Abidjan">${formatCFA(data.totalAbidjan)}</td>
+                <td data-label="Total Perçu">${formatCFA(totalPercu)}</td>
+                <td data-label="Total Reste" class="${data.totalReste < 0 ? 'reste-negatif' : 'reste-positif'}">${formatCFA(data.totalReste)}</td>
                 <td data-label="Dépenses">${formatCFA(totalDepenseConteneur)}</td>
                 <td data-label="Bénéfice" class="${beneficeConteneur < 0 ? 'reste-negatif' : 'reste-positif'}">${formatCFA(beneficeConteneur)}</td>
             `;
-            containerSummaryTableBody.appendChild(row);
+            tbody.appendChild(row);
         });
     }
 
@@ -324,4 +334,74 @@ document.addEventListener('DOMContentLoaded', async () => {
     function formatCFA(number) {
         return new Intl.NumberFormat('fr-CI', { style: 'currency', currency: 'XOF' }).format(number || 0);
     }
+    // --- FONCTION POUR OUVRIR LE MODAL DÉTAILS CONTENEUR ---
+    function openContainerDetails(containerName) {
+        const modal = document.getElementById('containerDetailsModal');
+        const title = document.getElementById('modalContainerTitle');
+        const tbody = document.getElementById('containerDetailsTableBody');
+        
+        // Titre du Modal
+        title.textContent = `Détails Opérations : ${containerName}`;
+        
+        // Filtrer les transactions globales (allTransactions est déjà chargé en mémoire)
+        // On filtre uniquement celles qui appartiennent au conteneur cliqué
+        const details = allTransactions.filter(t => t.conteneur === containerName);
+        
+        // Trier par date (plus récent en haut)
+        details.sort((a, b) => new Date(b.date) - new Date(a.date));
+
+        tbody.innerHTML = '';
+        
+        let sumPrix = 0;
+        let sumPaye = 0;
+        let sumReste = 0;
+
+        if (details.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="6">Aucune opération trouvée pour ce conteneur.</td></tr>';
+        } else {
+            details.forEach(t => {
+                const payeTotal = (t.montantAbidjan || 0) + (t.montantParis || 0);
+                sumPrix += (t.prix || 0);
+                sumPaye += payeTotal;
+                sumReste += (t.reste || 0);
+
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>${t.date}</td>
+                    <td>${t.nom || 'Inconnu'}</td>
+                    <td>${t.article || ''}</td>
+                    <td>${formatCFA(t.prix)}</td>
+                    <td>${formatCFA(payeTotal)}</td>
+                    <td class="${t.reste < 0 ? 'reste-negatif' : 'reste-positif'}">${formatCFA(t.reste)}</td>
+                `;
+                tbody.appendChild(row);
+            });
+        }
+
+        // Mettre à jour le pied de page du tableau modal
+        document.getElementById('modalTotalPrix').textContent = formatCFA(sumPrix);
+        document.getElementById('modalTotalPaye').textContent = formatCFA(sumPaye);
+        document.getElementById('modalTotalReste').textContent = formatCFA(sumReste);
+
+        // Afficher le modal
+        modal.style.display = 'block';
+    }
+
+    // --- GESTION FERMETURE MODAL ---
+    const modalContainer = document.getElementById('containerDetailsModal');
+    const closeBtn = document.getElementById('closeContainerModal');
+
+    if(closeBtn) {
+        closeBtn.addEventListener('click', () => {
+            modalContainer.style.display = 'none';
+        });
+    }
+
+    // Fermer si on clique en dehors du contenu du modal
+    window.addEventListener('click', (event) => {
+        if (event.target == modalContainer) {
+            modalContainer.style.display = 'none';
+        }
+    });
+    
 });

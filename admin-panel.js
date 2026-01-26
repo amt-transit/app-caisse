@@ -8,30 +8,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     const DOMAIN_SUFFIX = "@amt.local"; 
 
     // --- GESTION UTILISATEURS ---
-    db.collection('users').onSnapshot(snapshot => {
-        usersList.innerHTML = '';
-        snapshot.forEach(doc => {
-            const data = doc.data();
-            let nomAffichable = data.displayName;
-            if (!nomAffichable && data.email) {
-                nomAffichable = data.email.replace(DOMAIN_SUFFIX, '');
-            }
-            
-            const div = document.createElement('div');
-            div.className = 'user-card';
-            div.innerHTML = `
-                <div style="flex-grow: 1;">
-                    <span style="font-size: 14px; font-weight: bold; color: #333;">${nomAffichable || 'Inconnu'}</span>
-                    <br>
-                    <small style="color: #888; font-size: 10px;">Rôle: ${data.role}</small>
-                </div>
-                <div style="display: flex; gap: 5px; align-items: center;">
-                    <button onclick="deleteUser('${doc.id}')" style="font-size:11px; padding:4px 8px; background:red; color:white;">X</button>
-                </div>
-            `;
-            usersList.appendChild(div);
-        });
-    });
 
     // Créer utilisateur
     createUserBtn.addEventListener('click', () => {

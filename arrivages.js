@@ -284,6 +284,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    
     // 2. Import CSV Paris (Fichier Complet)
     if (uploadParisCsvBtn) {
         uploadParisCsvBtn.addEventListener('click', () => {
@@ -309,6 +310,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                         const prixE = parseFloat((row["PRIX"]||"0").replace(',','.'));
                         const payeE = parseFloat((row["MONTANT PAYER"]||"0").replace(',','.'));
+                        const resteE = parseFloat((row["RENSTANT A PAYER"]||row["RESTANT A PAYER"]||"0").replace(',','.'));
                         const dest = row["DESTINATEUR"]?.trim() || "";
                         const typeColis = row["TYPE COLIS"]?.trim() || "";
                         const adresse = row["ADRESSES"]?.trim() || "";
@@ -318,7 +320,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         batch.set(docRef, {
                             dateParis: date, reference: ref, nomClient: exp,
                             nomDestinataire: dest, adresseDestinataire: adresse, typeColis: typeColis, quantite: qte,
-                            prixOriginalEuro: prixE, prixCFA: Math.round(prixE * TAUX), montantParisCFA: Math.round(payeE * TAUX),
+                            prixOriginalEuro: prixE, prixCFA: Math.round(prixE * TAUX), montantParisCFA: Math.round(payeE * TAUX), resteOriginalEuro: resteE,
                             status: "pending", dateArrivee: "", conteneurArrivee: ""
                         });
                         count++;

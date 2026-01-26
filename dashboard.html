@@ -148,6 +148,39 @@
         </div>
 
     </div> 
+    <div id="containerDetailsModal" class="modal">
+        <div class="modal-content modal-lg">
+            <div class="modal-header">
+                <h2 id="modalContainerTitle">Détails du Conteneur</h2>
+                <span class="close-modal" id="closeContainerModal">&times;</span>
+            </div>
+            
+            <div style="overflow-x: auto;">
+                <table id="containerDetailsTable">
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>Client</th>
+                            <th>Article/Desc</th>
+                            <th>Prix Total</th>
+                            <th>Payé (Abj+Par)</th>
+                            <th>Reste</th>
+                        </tr>
+                    </thead>
+                    <tbody id="containerDetailsTableBody">
+                        </tbody>
+                    <tfoot>
+                        <tr style="background-color: #e9ecef; font-weight: bold;">
+                            <td colspan="3">TOTAL CONTENEUR</td>
+                            <td id="modalTotalPrix">0 CFA</td>
+                            <td id="modalTotalPaye">0 CFA</td>
+                            <td id="modalTotalReste">0 CFA</td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+        </div>
+    </div>
     
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
@@ -166,6 +199,7 @@
         document.getElementById('logoutBtn').addEventListener('click', () => {
             if (confirm("Voulez-vous vous déconnecter ?")) firebase.auth().signOut();
         });
+        
     </script>
     <script src="auth-guard.js"></script>
     <script src="dashboard.js"></script>

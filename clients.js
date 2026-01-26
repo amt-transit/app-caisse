@@ -35,6 +35,26 @@ document.addEventListener('DOMContentLoaded', async () => {
     let allClientNames = new Set();
     let allTransactionsCache = [];
     let allParisManifestCache = [];
+    let geoChartInstance = null;
+    let financeChartInstance = null;
+
+    // --- GESTION DES ONGLETS ---
+    const tabs = document.querySelectorAll('.sub-nav a');
+    const panels = document.querySelectorAll('.tab-panel');
+    tabs.forEach(tab => {
+        tab.addEventListener('click', (e) => {
+            e.preventDefault();
+            const targetId = tab.getAttribute('href');
+            const targetPanel = document.querySelector(targetId);
+            tabs.forEach(t => t.classList.remove('active'));
+            panels.forEach(p => p.classList.remove('active'));
+            tab.classList.add('active');
+            if (targetPanel) targetPanel.classList.add('active');
+            
+            // Si on clique sur l'onglet graphiques, on les génère/met à jour
+            if (targetId === '#panel-graphs') generateCharts();
+        });
+    });
 
     // 1. CHARGEMENT DES DONNÉES (Une seule fois pour optimiser)
     async function loadData() {
@@ -61,6 +81,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         // Lancer le calcul du Top 100
         calculateTop100();
+        // Les graphiques seront générés au clic sur l'onglet pour ne pas ralentir le chargement initial
     }
 
     // 2. CALCUL ET AFFICHAGE DU TOP 100
@@ -232,6 +253,72 @@ document.addEventListener('DOMContentLoaded', async () => {
         shipmentsTableBody.innerHTML = '';
         shipments.forEach(s => {
             shipmentsTableBody.innerHTML += `<tr><td>${s.date}</td><td>${s.ref}</td><td>${s.type}</td><td>${s.dest}</td></tr>`;
+        });
+    }
+
+    // 6. GÉNÉRATION DES GRAPHIQUES (Déplacé depuis Dashboard)
+    function generateCharts() {
+        const geoCanvas = document.getElementById('geoChart');
+        const financeCanvas = document.getElementById('financeChart');
+        if (!geoCanvas || !financeCanvas) return;
+
+        // Utilisation des données en cache (allTransactionsCache)
+        const transactions = allTransactionsCache;
+
+        // 1. PRÉPARATION DONNÉES GÉOGRAPHIQUES (Communes)
+        const communeStats = {};
+        transactions.forEach(t => {
+            let loc = (t.commune || "").trim();
+            if (!loc && t.adresseDestinataire) {
+                const addr = t.adresseDestinataire.toLowerCase();
+                if (addr.includes('abobo')) loc = 'Abobo';
+                else if (addr.includes('cocody')) loc = 'Cocody';
+                else if (addr.includes('yopougon')) loc = 'Yopougon';
+                else if (addr.includes('koumassi')) loc = 'Koumassi';
+                else if (addr.includes('marcory')) loc = 'Marcory';
+                else if (addr.includes('port-bouet') || addr.includes('port bouet')) loc = 'Port-Bouet';
+                else if (addr.includes('adjame')) loc = 'Adjame';
+                else if (addr.includes('bingerville')) loc = 'Bingerville';
+                else if (addr.includes('anyama')) loc = 'Anyama';
+                else loc = 'Autre';
+            } else if (!loc) {
+                loc = 'Non spécifié';
+            }
+            loc = loc.charAt(0).toUpperCase() + loc.slice(1).toLowerCase();
+            if (!communeStats[loc]) communeStats[loc] = 0;
+            communeStats[loc]++;
+        });
+
+        const sortedCommunes = Object.entries(communeStats).sort((a, b) => b[1] - a[1]);
+        
+        // --- RENDU GRAPHIQUE GÉOGRAPHIQUE ---
+        if (geoChartInstance) geoChartInstance.destroy();
+        geoChartInstance = new Chart(geoCanvas, {
+            type: 'doughnut',
+            data: {
+                labels: sortedCommunes.map(i => i[0]),
+                datasets: [{
+                    data: sortedCommunes.map(i => i[1]),
+                    backgroundColor: ['#00d2ff', '#00e676', '#ff9f43', '#ff5252', '#5f27cd', '#2e86de', '#1dd1a1', '#f368e0'],
+                    borderWidth: 0
+                }]
+            },
+            options: { responsive: true, plugins: { legend: { position: 'right', labels: { color: '#333' } } } }
+        });
+
+        // 2. PRÉPARATION DONNÉES FINANCIÈRES
+        const totalParis = transactions.reduce((sum, t) => sum + (t.montantParis || 0), 0);
+        const totalAbidjan = transactions.reduce((sum, t) => sum + (t.montantAbidjan || 0), 0);
+
+        // --- RENDU GRAPHIQUE FINANCIER ---
+        if (financeChartInstance) financeChartInstance.destroy();
+        financeChartInstance = new Chart(financeCanvas, {
+            type: 'bar',
+            data: {
+                labels: ['Paris (Départ)', 'Abidjan (Arrivée)'],
+                datasets: [{ label: 'Montants Payés (CFA)', data: [totalParis, totalAbidjan], backgroundColor: ['#00d2ff', '#ff9f43'], borderRadius: 5 }]
+            },
+            options: { responsive: true, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } }
         });
     }
 
