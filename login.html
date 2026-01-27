@@ -53,7 +53,10 @@
         
         <input type="text" id="username" placeholder="Nom d'utilisateur" required>
         
-        <input type="password" id="password" placeholder="Mot de passe" required>
+        <div style="position: relative; margin-bottom: 15px;">
+            <input type="password" id="password" placeholder="Mot de passe" required style="margin-bottom: 0;">
+            <span id="toggleLoginPass" style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); cursor: pointer;">👁️</span>
+        </div>
         <button id="loginBtn">Se connecter</button>
         <p id="loginError" style="display:none;"></p>
     </div>
@@ -72,5 +75,14 @@
         firebase.initializeApp(firebaseConfig);
     </script>
     <script src="login.js"></script>
+    <script>
+        const toggleLoginPass = document.getElementById('toggleLoginPass');
+        const passwordInput = document.getElementById('password');
+        toggleLoginPass.addEventListener('click', () => {
+            const type = passwordInput.getAttribute('type') === 'password' ? 'text' : 'password';
+            passwordInput.setAttribute('type', type);
+            toggleLoginPass.textContent = type === 'password' ? '👁️' : '🙈';
+        });
+    </script>
 </body>
 </html>
