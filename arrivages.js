@@ -140,7 +140,7 @@ document.addEventListener('DOMContentLoaded', () => {
             uploadLog.style.display = 'block'; uploadLog.textContent = 'Lecture...';
 
             Papa.parse(csvFile.files[0], {
-                header: true, skipEmptyLines: true,
+                header: true, skipEmptyLines: true, delimiter: ",",
                 complete: async (results) => {
                     const rows = results.data;
                     const batch = db.batch();
@@ -327,7 +327,7 @@ document.addEventListener('DOMContentLoaded', () => {
             parisUploadLog.style.display = 'block'; parisUploadLog.textContent = 'Lecture...';
 
             Papa.parse(parisCsvFile.files[0], {
-                header: true, skipEmptyLines: true, delimiter: ";", // Point-virgule
+                header: true, skipEmptyLines: true, delimiter: ",", // Virgule
                 complete: async (results) => {
                     const rows = results.data;
                     const batch = db.batch();
