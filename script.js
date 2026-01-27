@@ -308,7 +308,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             montantAbidjanInput.placeholder = `Reste: ${formatCFA(Math.abs(data.reste))}`;
         } else {
             resteInput.value = 0; resteInput.className = 'reste-positif';
-            montantParisInput.placeholder = "Soldé"; montantAbidjanInput.placeholder = "Soldé";
+            montantParisInput.placeholder = "Soldé Paris"; montantAbidjanInput.placeholder = "Soldé Abidjan";
         }
     }
 
