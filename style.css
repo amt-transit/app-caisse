@@ -14,7 +14,7 @@
     --text-main: #0f172a; /* Slate 900 */
     --text-muted: #64748b; /* Slate 500 */
     
-    --border-color: #e2e8f0;
+    --border-color: #e3edfa;
     --radius: 12px;
     --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
     --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
@@ -391,3 +391,8 @@ body { min-height: 100vh; overflow-y: auto; overflow-x: hidden; }
 }
 .choices__item--choice { color: var(--text-main) !important; }
 .choices__item--choice.is-highlighted { background-color: #f1f5f9 !important; color: var(--primary) !important; }
+
+/* Page de Connexion */
+body.login-page {
+    background: #1e293b;
+}
