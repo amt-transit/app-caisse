@@ -72,6 +72,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         generateMonthlyExpenseSummary(filteredExpenses); 
         generateBankMovementSummary(filteredBankMovements);
         generateTopClientsSummary(filteredTransactions); 
+        generateAdvancedAnalytics(filteredTransactions, allTransactions); // Nouvelles analyses
     }
 
     function updateGrandTotals(transactions, expenses, otherIncomes, bankMovements) {
@@ -301,6 +302,114 @@ document.addEventListener('DOMContentLoaded', async () => {
             row.innerHTML = `<td data-label="Rang"><b>#${index + 1}</b></td><td data-label="Client">${client.name}</td><td data-label="Nb. Op.">${client.count}</td><td data-label="Chiffre d'Affaires">${formatCFA(client.totalPrix)}</td>`;
             topClientsTableBody.appendChild(row);
         });
+    }
+
+    // --- NOUVELLES ANALYSES STRATÉGIQUES ---
+    function generateAdvancedAnalytics(filteredTransactions, fullHistory) {
+        // 1. Création du conteneur si inexistant
+        let container = document.getElementById('analyticsContainer');
+        if (!container) {
+            const dashboards = document.querySelectorAll('.dashboard-container');
+            const lastDashboard = dashboards[dashboards.length - 1];
+            
+            container = document.createElement('div');
+            container.id = 'analyticsContainer';
+            container.className = 'dashboard-container';
+            container.style.marginTop = '20px';
+            container.innerHTML = `
+                <h2 style="margin-top:0;">📊 Analyses Stratégiques</h2>
+                <div class="charts-grid" style="grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px;">
+                    <!-- Balance Âgée -->
+                    <div class="chart-card">
+                        <h3>⏳ Balance Âgée (Dettes)</h3>
+                        <table class="table">
+                            <thead><tr><th>Ancienneté</th><th>Reste à Payer</th></tr></thead>
+                            <tbody id="agedBalanceBody"></tbody>
+                        </table>
+                    </div>
+                    
+                    <!-- Performance Logistique -->
+                    <div class="chart-card">
+                        <h3>✈️ Performance Logistique</h3>
+                        <div style="text-align:center; padding: 20px;">
+                            <div style="font-size: 12px; color: #64748b;">Délai Moyen (Paris -> Abidjan)</div>
+                            <div id="avgLeadTime" style="font-size: 32px; font-weight: bold; color: #4f46e5;">-</div>
+                            <div style="font-size: 11px; color: #64748b; margin-top:5px;">Basé sur les dates réelles</div>
+                        </div>
+                    </div>
+
+                    <!-- Clients Dormants -->
+                    <div class="chart-card" style="grid-column: span 2;">
+                        <h3>💤 Clients à Relancer (Inactifs > 3 mois)</h3>
+                        <div style="max-height: 200px; overflow-y: auto;">
+                            <table class="table">
+                                <thead><tr><th>Client</th><th>Dernier Envoi</th><th>CA Perdu Potentiel</th></tr></thead>
+                                <tbody id="dormantClientsBody"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            `;
+            if(lastDashboard && lastDashboard.parentNode) lastDashboard.parentNode.insertBefore(container, lastDashboard.nextSibling);
+            else document.body.appendChild(container);
+        }
+
+        // 2. CALCUL BALANCE ÂGÉE (Sur TOUT l'historique, pas juste le filtré)
+        const now = new Date();
+        const buckets = { '0-30 jours': 0, '31-60 jours': 0, '61-90 jours': 0, '+90 jours': 0 };
+        
+        fullHistory.forEach(t => {
+            if ((t.reste || 0) > 0 && t.date) {
+                const d = new Date(t.date);
+                const diffDays = Math.ceil(Math.abs(now - d) / (1000 * 60 * 60 * 24));
+                if (diffDays <= 30) buckets['0-30 jours'] += t.reste;
+                else if (diffDays <= 60) buckets['31-60 jours'] += t.reste;
+                else if (diffDays <= 90) buckets['61-90 jours'] += t.reste;
+                else buckets['+90 jours'] += t.reste;
+            }
+        });
+        const agedBody = document.getElementById('agedBalanceBody');
+        if(agedBody) {
+            agedBody.innerHTML = '';
+            Object.entries(buckets).forEach(([label, amount]) => {
+                const color = label.includes('+90') ? '#ef4444' : (label.includes('61') ? '#f59e0b' : '#10b981');
+                agedBody.innerHTML += `<tr><td>${label}</td><td style="font-weight:bold; color:${color}">${formatCFA(amount)}</td></tr>`;
+            });
+        }
+
+        // 3. CALCUL DÉLAI MOYEN (Sur la sélection filtrée)
+        let totalDays = 0, countLead = 0;
+        filteredTransactions.forEach(t => {
+            if (t.date && t.dateParis) {
+                const diff = (new Date(t.date) - new Date(t.dateParis)) / (1000 * 60 * 60 * 24);
+                if (diff > 0 && diff < 365) { totalDays += diff; countLead++; }
+            }
+        });
+        const leadEl = document.getElementById('avgLeadTime');
+        if(leadEl) leadEl.textContent = countLead > 0 ? `${Math.round(totalDays / countLead)} Jours` : '-';
+
+        // 4. CLIENTS DORMANTS (Sur tout l'historique)
+        const clientLast = {}, clientTotal = {};
+        fullHistory.forEach(t => {
+            const n = (t.nom||"").trim(); if(!n) return;
+            if(!clientLast[n] || t.date > clientLast[n]) clientLast[n] = t.date;
+            clientTotal[n] = (clientTotal[n]||0) + (t.prix||0);
+        });
+        const threshold = new Date(); threshold.setMonth(threshold.getMonth() - 3);
+        const thresholdStr = threshold.toISOString().split('T')[0];
+        
+        const dormants = Object.entries(clientLast)
+            .filter(([_, date]) => date < thresholdStr)
+            .map(([name, date]) => ({ name, date, total: clientTotal[name] }))
+            .sort((a, b) => b.total - a.total)
+            .slice(0, 20); // Top 20
+            
+        const dormantBody = document.getElementById('dormantClientsBody');
+        if(dormantBody) {
+            dormantBody.innerHTML = '';
+            if(dormants.length === 0) dormantBody.innerHTML = '<tr><td colspan="3">Aucun client dormant.</td></tr>';
+            else dormants.forEach(c => dormantBody.innerHTML += `<tr><td>${c.name}</td><td>${c.date}</td><td>${formatCFA(c.total)}</td></tr>`);
+        }
     }
 
     // Listeners Firestore (avec filtres de suppression)

@@ -67,7 +67,8 @@ firebase.auth().onAuthStateChanged(async (user) => {
 
         // SAISIE FULL
         if (userRole === 'saisie_full') {
-            if (currentPage.includes('dashboard.html') || 
+            if (currentPage.includes('dashboard.html') ||
+                currentPage.includes('magasinage.html') || 
                 currentPage.includes('bank.html') || 
                 currentPage.includes('arrivages.html')) {
                 alert("Accès refusé : Votre rôle (Saisie Full) ne permet pas d'accéder à cette page.");
@@ -93,6 +94,7 @@ firebase.auth().onAuthStateChanged(async (user) => {
         const navArrivages = document.getElementById('nav-arrivages');
         const navAdmin = document.getElementById('nav-admin');
         const navClients = document.getElementById('nav-clients');
+        const navMagasinage = document.getElementById('nav-magasinage');
 
         if (navAdmin && userRole !== 'super_admin') navAdmin.style.display = 'none';
 
@@ -100,6 +102,7 @@ firebase.auth().onAuthStateChanged(async (user) => {
             if (navDashboard) navDashboard.style.display = 'none';
             if (navBank) navBank.style.display = 'none';
             if (navArrivages) navArrivages.style.display = 'none';
+            if (navMagasinage) navMagasinage.style.display = 'none';
         }
 
         if (userRole === 'saisie_limited') {
@@ -109,6 +112,7 @@ firebase.auth().onAuthStateChanged(async (user) => {
             if (navBank) navBank.style.display = 'none';
             if (navArrivages) navArrivages.style.display = 'none';
             if (navClients) navClients.style.display = 'none';
+            if (navMagasinage) navMagasinage.style.display = 'none';
         }
 
         document.body.style.display = 'block';

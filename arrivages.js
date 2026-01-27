@@ -91,6 +91,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     arrivalMontantParis.value = manifestData.montantParisCFA;
                     arrivalMontantParis.style.backgroundColor = "#e0f7fa";
                 }
+                // On stocke la date de départ cachée pour le calcul du délai
+                arrivalRef.dataset.dateParis = manifestData.dateParis || "";
             }
         });
     }
@@ -107,7 +109,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 date: arrivalDate.value, reference: arrivalRef.value.trim(), nom: arrivalNom.value.trim(),
                 conteneur: arrivalConteneur.value.trim().toUpperCase(), prix: prix,
                 montantParis: montantParis, montantAbidjan: montantAbidjan, reste: reste,
-                isDeleted: false, agent: '', agentMobileMoney: '', commune: ''
+                isDeleted: false, agent: '', agentMobileMoney: '', commune: '',
+                dateParis: arrivalRef.dataset.dateParis || "" // Ajout de la date de départ
             };
 
             if (!data.date || !data.reference || !data.nom || !data.conteneur || data.prix <= 0) {
@@ -121,6 +124,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 alert("Colis ajouté !");
                 removeFromParisManifest(data.reference); 
                 arrivalRef.value = ''; arrivalNom.value = ''; arrivalPrix.value = '';
+                arrivalRef.dataset.dateParis = ''; // Reset
                 arrivalMontantParis.value = ''; arrivalMontantAbidjan.value = '';
                 arrivalNom.style.backgroundColor = ""; arrivalPrix.style.backgroundColor = ""; arrivalMontantParis.style.backgroundColor = "";
                 arrivalRef.focus();
@@ -233,6 +237,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         if (!tData.nom || tData.nom.trim() === "") updates.nom = pData.nomClient;
                         if (!tData.adresseDestinataire && pData.adresseDestinataire) updates.adresseDestinataire = pData.adresseDestinataire;
                         if ((!tData.description && !tData.article) && pData.typeColis) updates.description = pData.typeColis;
+                        if (!tData.dateParis && pData.dateParis) updates.dateParis = pData.dateParis; // Récupération date départ
 
                         if (Object.keys(updates).length > 0) { batch.update(docT.ref, updates); updated++; bCount++; }
                         
