@@ -160,27 +160,38 @@ document.addEventListener('DOMContentLoaded', () => {
                         const dest = (row.destinataire || row.Destinataire || '').trim();
                         const desc = (row.description || row.Description || '').trim();
 
-                        // Logique Prix/Reste :
-                        // Si "restant" est fourni, c'est le reste à payer.
-                        // Si "prix" n'est pas fourni, on l'estime égal au restant (si impayé) ou 0 (si payé).
-                        // Pour les stats, on essaie de lire 'prix' si dispo, sinon on met 0.
-                        let prix = parseFloat(row.prix || 0);
-                        if (prix === 0 && restant > 0) prix = restant; 
-                        
-                        // LOGIQUE FINANCIÈRE :
-                        // Si Restant = 0, on considère que c'est payé à Paris (Pré-payé) pour que le CA apparaisse dans le Dashboard.
-                        let mParis = 0;
-                        if (restant === 0 && prix > 0) {
-                            mParis = prix;
-                        }
-
                         if (!ref) {
                             log += `\nIgnoré (Données): ${ref}`; continue;
                         }
 
-                        if (!nom) {
+                        let prix = parseFloat(row.prix || 0);
+
+                        // RECUPERATION DONNEES PARIS (Si Nom manquant OU Prix manquant pour un colis soldé)
+                        let manifestData = null;
+                        if (!nom || (restant === 0 && prix === 0)) {
                             const q = await parisManifestCollection.where("reference", "==", ref).get();
-                            if (!q.empty) nom = q.docs[0].data().nomClient;
+                            if (!q.empty) manifestData = q.docs[0].data();
+                        }
+
+                        if (manifestData) {
+                            if (!nom) nom = manifestData.nomClient;
+                            // Si payé (restant 0) et prix inconnu, on récupère le prix de Paris
+                            if (restant === 0 && prix === 0 && manifestData.prixCFA) {
+                                prix = manifestData.prixCFA;
+                            }
+                        }
+
+                        // Logique Prix/Reste :
+                        if (prix === 0 && restant > 0) prix = restant; 
+                        
+                        // LOGIQUE FINANCIÈRE :
+                        // Si Restant = 0, on considère que c'est payé à Paris (Pré-payé)
+                        let mParis = 0;
+                        if (restant === 0 && prix > 0) {
+                            mParis = prix;
+                        } else if (prix > restant) {
+                            // Si le prix est supérieur au reste, la différence a été payée (Paris)
+                            mParis = prix - restant;
                         }
 
                         const check = await transactionsCollection.where("reference", "==", ref).get();
@@ -190,7 +201,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         batch.set(docRef, {
                             date: commonDate, reference: ref, nom: nom || "", conteneur: commonConteneur,
                             prix: prix, montantParis: mParis, montantAbidjan: 0, 
-                            reste: restant, isDeleted: false, agent: '', agentMobileMoney: '', commune: '',
+                            reste: mParis - prix, isDeleted: false, agent: '', agentMobileMoney: '', commune: '',
                             description: desc, adresseDestinataire: addr, nomDestinataire: dest
                         });
                         refsToRemove.push(ref);
