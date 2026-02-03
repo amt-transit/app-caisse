@@ -279,6 +279,11 @@ document.addEventListener('DOMContentLoaded', async () => {
             const beneficeConteneur = ca - totalDepenseConteneur;
             const totalPercu = data.totalParis + data.totalAbidjan;
 
+            // Calcul des pourcentages par rapport au CA
+            const percParis = ca > 0 ? ((data.totalParis / ca) * 100).toFixed(1) : "0.0";
+            const percAbidjan = ca > 0 ? ((data.totalAbidjan / ca) * 100).toFixed(1) : "0.0";
+            const percReste = ca > 0 ? ((data.totalReste / ca) * 100).toFixed(1) : "0.0";
+
             const row = document.createElement('tr');
             
             // --- C'EST ICI QUE ÇA CHANGE ---
@@ -290,10 +295,10 @@ document.addEventListener('DOMContentLoaded', async () => {
             row.innerHTML = `
                 <td data-label="Conteneur"><b>${container}</b></td>
                 <td data-label="CA">${formatCFA(ca)}</td>
-                <td data-label="Total Paris">${formatCFA(data.totalParis)}</td>
-                <td data-label="Total Abidjan">${formatCFA(data.totalAbidjan)}</td>
+                <td data-label="Total Paris">${formatCFA(data.totalParis)} <br><small style="color:#666; font-size:0.8em;">(${percParis}%)</small></td>
+                <td data-label="Total Abidjan">${formatCFA(data.totalAbidjan)} <br><small style="color:#666; font-size:0.8em;">(${percAbidjan}%)</small></td>
                 <td data-label="Total Perçu">${formatCFA(totalPercu)}</td>
-                <td data-label="Total Reste" class="${data.totalReste < 0 ? 'reste-negatif' : 'reste-positif'}">${formatCFA(data.totalReste)}</td>
+                <td data-label="Total Reste" class="${data.totalReste < 0 ? 'reste-negatif' : 'reste-positif'}">${formatCFA(data.totalReste)} <br><small style="color:#dc3545; font-size:0.8em; font-weight: bold;">(${percReste}%)</small></td>
                 <td data-label="Dépenses">${formatCFA(totalDepenseConteneur)}</td>
                 <td data-label="Bénéfice" class="${beneficeConteneur < 0 ? 'reste-negatif' : 'reste-positif'}">${formatCFA(beneficeConteneur)}</td>
             `;
