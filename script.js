@@ -111,7 +111,14 @@ document.addEventListener('DOMContentLoaded', async () => {
             const date = document.getElementById('date').value;
             const desc = quickExpenseDesc.value.trim();
             const amount = parseFloat(quickExpenseAmount.value);
-            const conteneur = quickExpenseContainer ? quickExpenseContainer.value.trim().toUpperCase() : '';
+            
+            // CORRECTION : Priorité au champ spécifique, sinon on prend le conteneur principal
+            let conteneur = '';
+            if (quickExpenseContainer && quickExpenseContainer.value.trim()) {
+                conteneur = quickExpenseContainer.value.trim().toUpperCase();
+            } else if (conteneurInput && conteneurInput.value.trim()) {
+                conteneur = conteneurInput.value.trim().toUpperCase();
+            }
 
             if (!date) return alert("Veuillez sélectionner la date en haut.");
             if (!desc || isNaN(amount) || amount <= 0) return alert("Motif ou Montant invalide.");
@@ -159,7 +166,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             dailyExpenses.forEach((exp, index) => {
                 dailyExpensesTableBody.innerHTML += `
                     <tr>
-                        <td>${exp.description} ${exp.conteneur ? '['+exp.conteneur+']' : ''}</td><td>${formatCFA(exp.montant)}</td>
+                        <td>${exp.description} ${exp.conteneur ? '<span class="tag" style="background:#64748b; font-size:10px;">'+exp.conteneur+'</span>' : ''}</td><td>${formatCFA(exp.montant)}</td>
                         <td><button class="deleteBtn" onclick="removeExpense(${index})">X</button></td>
                     </tr>`;
             });
@@ -278,11 +285,14 @@ document.addEventListener('DOMContentLoaded', async () => {
         // B. Enregistrer Dépenses
         dailyExpenses.forEach(exp => {
             const docRef = expensesCollection.doc();
+            // Si un conteneur est renseigné, on définit le type sur "Conteneur"
+            const typeDepense = exp.conteneur ? "Conteneur" : "Journalière";
+
             batch.set(docRef, {
                 date: exp.date,
                 description: `${exp.description} (${currentUserName})`, // Ajout de l'auteur
                 montant: exp.montant,
-                type: "Journalière",
+                type: typeDepense,
                 isDeleted: false,
                 action: "Depense",
                 conteneur: exp.conteneur || ""

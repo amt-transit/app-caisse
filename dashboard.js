@@ -248,14 +248,18 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         const containerExpenses = {};
         expenses.forEach(e => {
-            if (e.action !== 'Allocation' && e.type === 'Conteneur' && e.conteneur) {
+            // On inclut la dépense si elle est liée à un conteneur (peu importe le type déclaré)
+            if (e.action !== 'Allocation' && e.conteneur) {
                 const cName = e.conteneur;
                 if (!containerExpenses[cName]) containerExpenses[cName] = 0;
                 containerExpenses[cName] += (e.montant || 0);
             }
         });
 
-        const sortedContainers = Object.keys(containerData).sort((a, b) => {
+        // FUSION DES LISTES : On prend les conteneurs des Transactions ET des Dépenses
+        const allContainers = new Set([...Object.keys(containerData), ...Object.keys(containerExpenses)]);
+
+        const sortedContainers = Array.from(allContainers).sort((a, b) => {
             const numA = parseInt(a.replace(/[^0-9]/g, ''), 10) || 0;
             const numB = parseInt(b.replace(/[^0-9]/g, ''), 10) || 0;
             return numB - numA;
@@ -267,7 +271,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         
         sortedContainers.forEach(container => {
             if (container === "Non spécifié") return; 
-            const data = containerData[container];
+            
+            // On récupère les données transactionnelles (ou des zéros si le conteneur n'existe que dans les dépenses)
+            const data = containerData[container] || { totalPrix: 0, totalParis: 0, totalAbidjan: 0, totalReste: 0 };
             const ca = data.totalPrix; 
             const totalDepenseConteneur = containerExpenses[container] || 0;
             const beneficeConteneur = ca - totalDepenseConteneur;
@@ -505,35 +511,54 @@ document.addEventListener('DOMContentLoaded', async () => {
         
         // Filtrer les transactions globales (allTransactions est déjà chargé en mémoire)
         // On filtre uniquement celles qui appartiennent au conteneur cliqué
-        const details = allTransactions.filter(t => t.conteneur === containerName);
+        const transactions = allTransactions.filter(t => t.conteneur === containerName);
+        
+        // Filtrer les dépenses liées au conteneur
+        const expenses = allExpenses.filter(e => e.conteneur === containerName);
         
         // Trier par date (plus récent en haut)
-        details.sort((a, b) => new Date(b.date) - new Date(a.date));
+        const combined = [...transactions.map(t => ({...t, _type: 'transaction'})), ...expenses.map(e => ({...e, _type: 'expense'}))];
+        combined.sort((a, b) => new Date(b.date) - new Date(a.date));
 
         tbody.innerHTML = '';
         
         let sumPrix = 0;
         let sumPaye = 0;
         let sumReste = 0;
+        let sumDepenses = 0;
 
-        if (details.length === 0) {
+        if (combined.length === 0) {
             tbody.innerHTML = '<tr><td colspan="6">Aucune opération trouvée pour ce conteneur.</td></tr>';
         } else {
-            details.forEach(t => {
-                const payeTotal = (t.montantAbidjan || 0) + (t.montantParis || 0);
-                sumPrix += (t.prix || 0);
-                sumPaye += payeTotal;
-                sumReste += (t.reste || 0);
-
+            combined.forEach(item => {
                 const row = document.createElement('tr');
-                row.innerHTML = `
-                    <td>${t.date}</td>
-                    <td>${t.nom || 'Inconnu'}</td>
-                    <td>${t.article || ''}</td>
-                    <td>${formatCFA(t.prix)}</td>
-                    <td>${formatCFA(payeTotal)}</td>
-                    <td class="${t.reste < 0 ? 'reste-negatif' : 'reste-positif'}">${formatCFA(t.reste)}</td>
-                `;
+                
+                if (item._type === 'transaction') {
+                    const payeTotal = (item.montantAbidjan || 0) + (item.montantParis || 0);
+                    sumPrix += (item.prix || 0);
+                    sumPaye += payeTotal;
+                    sumReste += (item.reste || 0);
+
+                    row.innerHTML = `
+                        <td>${item.date}</td>
+                        <td>${item.nom || 'Inconnu'}</td>
+                        <td>${item.article || ''}</td>
+                        <td>${formatCFA(item.prix)}</td>
+                        <td>${formatCFA(payeTotal)}</td>
+                        <td class="${item.reste < 0 ? 'reste-negatif' : 'reste-positif'}">${formatCFA(item.reste)}</td>
+                    `;
+                } else {
+                    sumDepenses += (item.montant || 0);
+                    row.style.backgroundColor = '#fff1f2';
+                    row.style.color = '#991b1b';
+                    row.innerHTML = `
+                        <td>${item.date}</td>
+                        <td colspan="2">DÉPENSE : ${item.description}</td>
+                        <td>-</td>
+                        <td>-</td>
+                        <td>-${formatCFA(item.montant)}</td>
+                    `;
+                }
                 tbody.appendChild(row);
             });
         }
@@ -542,6 +567,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         document.getElementById('modalTotalPrix').textContent = formatCFA(sumPrix);
         document.getElementById('modalTotalPaye').textContent = formatCFA(sumPaye);
         document.getElementById('modalTotalReste').textContent = formatCFA(sumReste);
+
+        if (sumDepenses > 0) {
+            title.innerHTML = `Détails Opérations : ${containerName} <span style="font-size:0.6em; color:#dc3545; margin-left:10px;">(Dépenses: ${formatCFA(sumDepenses)})</span>`;
+        }
 
         // Afficher le modal
         modal.style.display = 'block';
