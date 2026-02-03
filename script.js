@@ -36,6 +36,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const addQuickExpenseBtn = document.getElementById('addQuickExpenseBtn');
     const quickExpenseDesc = document.getElementById('quickExpenseDesc');
     const quickExpenseAmount = document.getElementById('quickExpenseAmount');
+    const quickExpenseContainer = document.getElementById('quickExpenseContainer'); // Nouveau champ
     const dailyExpensesTableBody = document.getElementById('dailyExpensesTableBody');
 
     // TOTAUX
@@ -110,6 +111,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             const date = document.getElementById('date').value;
             const desc = quickExpenseDesc.value.trim();
             const amount = parseFloat(quickExpenseAmount.value);
+            const conteneur = quickExpenseContainer ? quickExpenseContainer.value.trim().toUpperCase() : '';
 
             if (!date) return alert("Veuillez sélectionner la date en haut.");
             if (!desc || isNaN(amount) || amount <= 0) return alert("Motif ou Montant invalide.");
@@ -117,7 +119,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             dailyExpenses.push({
                 date: date,
                 description: desc,
-                montant: amount
+                montant: amount,
+                conteneur: conteneur
             });
 
             saveAllToLocalStorage();
@@ -125,6 +128,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             quickExpenseDesc.value = '';
             quickExpenseAmount.value = '';
+            if(quickExpenseContainer) quickExpenseContainer.value = '';
             quickExpenseDesc.focus();
         });
     }
@@ -155,7 +159,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             dailyExpenses.forEach((exp, index) => {
                 dailyExpensesTableBody.innerHTML += `
                     <tr>
-                        <td>${exp.description}</td><td>${formatCFA(exp.montant)}</td>
+                        <td>${exp.description} ${exp.conteneur ? '['+exp.conteneur+']' : ''}</td><td>${formatCFA(exp.montant)}</td>
                         <td><button class="deleteBtn" onclick="removeExpense(${index})">X</button></td>
                     </tr>`;
             });
@@ -234,20 +238,39 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (!query.empty) {
                 const docRef = query.docs[0].ref;
                 const oldData = query.docs[0].data();
-                batch.update(docRef, {
-                    montantParis: (oldData.montantParis||0) + transac.montantParis,
-                    montantAbidjan: (oldData.montantAbidjan||0) + transac.montantAbidjan,
-                    reste: (oldData.reste||0) + transac.montantParis + transac.montantAbidjan,
-                    date: transac.date,
-                    paymentHistory: firebase.firestore.FieldValue.arrayUnion(paymentEntry)
-                });
+
+                // Préparation des mises à jour pour plus de clarté
+                const updates = {
+                    montantParis: (oldData.montantParis || 0) + transac.montantParis,
+                    montantAbidjan: (oldData.montantAbidjan || 0) + transac.montantAbidjan,
+                    reste: (oldData.reste || 0) + transac.montantParis + transac.montantAbidjan,
+                    paymentHistory: firebase.firestore.FieldValue.arrayUnion(paymentEntry),
+                    lastPaymentDate: transac.date, // On met à jour la date d'activité pour l'historique
+                    saisiPar: currentUserName // Mise à jour de l'auteur de la saisie
+                };
+
+                // Fusionner les agents sans doublons pour ne pas perdre d'historique
+                const oldAgents = (oldData.agent || "").split(',').map(a => a.trim()).filter(Boolean);
+                const newAgents = (transac.agent || "").split(',').map(a => a.trim()).filter(Boolean);
+                const combinedAgents = [...new Set([...oldAgents, ...newAgents])].join(', ');
+                if (combinedAgents !== oldData.agent) {
+                    updates.agent = combinedAgents;
+                }
+
+                // Mettre à jour la commune et l'agent mobile money si une nouvelle valeur est fournie
+                if (transac.commune && transac.commune !== oldData.commune) updates.commune = transac.commune;
+                if (transac.agentMobileMoney) updates.agentMobileMoney = transac.agentMobileMoney;
+                
+                // IMPORTANT: On ne met PAS à jour la date principale de la transaction (date d'arrivée)
+                batch.update(docRef, updates);
             } else {
                 const docRef = transactionsCollection.doc();
                 batch.set(docRef, { 
                     ...transac, 
                     isDeleted: false, 
                     saisiPar: currentUserName, 
-                    paymentHistory: [paymentEntry] 
+                    paymentHistory: [paymentEntry],
+                    lastPaymentDate: transac.date // Initialisation
                 });
             }
         }
@@ -262,7 +285,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 type: "Journalière",
                 isDeleted: false,
                 action: "Depense",
-                conteneur: ""
+                conteneur: exp.conteneur || ""
             });
         });
 

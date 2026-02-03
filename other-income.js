@@ -79,7 +79,7 @@ document.addEventListener('DOMContentLoaded', () => {
             
             let deleteButtonHTML = '';
             // Seul l'admin peut supprimer
-            if (userRole === 'admin' && income.isDeleted !== true) {
+            if ((userRole === 'admin' || userRole === 'super_admin') && income.isDeleted !== true) {
                 deleteButtonHTML = `<button class="deleteBtn" data-id="${income.id}">Suppr.</button>`;
             }
 

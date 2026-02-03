@@ -49,9 +49,23 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     function filterByDate(items, startDate, endDate) {
         return items.filter(item => {
-            if (startDate && item.date < startDate) return false;
-            if (endDate && item.date > endDate) return false;
-            return true;
+            // 1. Vérifier la date principale (Création/Arrivée)
+            if ((!startDate || item.date >= startDate) && (!endDate || item.date <= endDate)) return true;
+
+            // 2. Vérifier l'historique des paiements (Si un paiement a eu lieu dans la période)
+            if (item.paymentHistory && Array.isArray(item.paymentHistory)) {
+                const hasPayment = item.paymentHistory.some(p => {
+                    return (!startDate || p.date >= startDate) && (!endDate || p.date <= endDate);
+                });
+                if (hasPayment) return true;
+            }
+
+            // 3. Vérifier la date de dernière activité (Fallback)
+            if (item.lastPaymentDate) {
+                if ((!startDate || item.lastPaymentDate >= startDate) && (!endDate || item.lastPaymentDate <= endDate)) return true;
+            }
+
+            return false;
         });
     }
 
@@ -76,9 +90,28 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     function updateGrandTotals(transactions, expenses, otherIncomes, bankMovements) {
+        const startDate = startDateInput.value;
+        const endDate = endDateInput.value;
+        const isInRange = (d) => (!startDate || d >= startDate) && (!endDate || d <= endDate);
+
         // --- 1. VENTES & BÉNÉFICE ---
-        const totalEntreesAbidjan = transactions.reduce((sum, t) => sum + (t.montantAbidjan || 0), 0);
-        const totalEntreesParis = transactions.reduce((sum, t) => sum + (t.montantParis || 0), 0);
+        // Calcul précis basé sur les paiements effectifs dans la période
+        const totalEntreesAbidjan = transactions.reduce((sum, t) => {
+            if (t.paymentHistory && Array.isArray(t.paymentHistory)) {
+                const sub = t.paymentHistory.reduce((s, p) => isInRange(p.date) ? s + (p.montantAbidjan || 0) : s, 0);
+                return sum + sub;
+            }
+            return isInRange(t.date) ? sum + (t.montantAbidjan || 0) : sum;
+        }, 0);
+
+        const totalEntreesParis = transactions.reduce((sum, t) => {
+            if (t.paymentHistory && Array.isArray(t.paymentHistory)) {
+                const sub = t.paymentHistory.reduce((s, p) => isInRange(p.date) ? s + (p.montantParis || 0) : s, 0);
+                return sum + sub;
+            }
+            return isInRange(t.date) ? sum + (t.montantParis || 0) : sum;
+        }, 0);
+
         const totalOtherIncome = otherIncomes.reduce((sum, i) => sum + (i.montant || 0), 0);
         // On exclut les allocations du calcul des dépenses
         const realExpenses = expenses.filter(e => e.action !== 'Allocation');
@@ -95,6 +128,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         transactions.forEach(t => {
             if (t.paymentHistory) {
                 t.paymentHistory.forEach(pay => {
+                    // On ne prend en compte que ce qui est dans la plage de dates sélectionnée
+                    if (!isInRange(pay.date)) return;
+
                     // Si c'est un chèque ET qu'il est 'Pending'
                     if (pay.modePaiement === 'Chèque' && pay.checkStatus === 'Pending') {
                         totalChequesEnCoffre += (pay.montantAbidjan || 0);
@@ -104,8 +140,10 @@ document.addEventListener('DOMContentLoaded', async () => {
                     }
                 });
             } else {
-                // Anciennes données (sans historique détaillé) -> Considérées comme Cash
-                totalVentesCash += (t.montantAbidjan || 0);
+                // Anciennes données : on vérifie la date principale
+                if (isInRange(t.date)) {
+                    totalVentesCash += (t.montantAbidjan || 0);
+                }
             }
         });
 
@@ -284,22 +322,35 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     function generateTopClientsSummary(transactions) {
-        topClientsTableBody.innerHTML = '<tr><td colspan="4">Aucune donnée client.</td></tr>';
+        topClientsTableBody.innerHTML = '<tr><td colspan="5">Aucune donnée client.</td></tr>';
         const clientData = {};
         transactions.forEach(t => {
             const clientName = t.nom || "Client non spécifié";
             if (clientName === "Client non spécifié" || !clientName.trim()) return; 
-            if (!clientData[clientName]) clientData[clientName] = { totalPrix: 0, count: 0 };
+            if (!clientData[clientName]) clientData[clientName] = { totalPrix: 0, count: 0, destinataire: '' };
             clientData[clientName].totalPrix += (t.prix || 0);
             clientData[clientName].count++;
+            if (!clientData[clientName].destinataire && t.nomDestinataire) clientData[clientName].destinataire = t.nomDestinataire;
         });
         const sortedClients = Object.entries(clientData).map(([name, data]) => ({ name, ...data })).sort((a, b) => b.totalPrix - a.totalPrix); 
         if (sortedClients.length === 0) return;
+
+        // Mise à jour dynamique de l'en-tête pour ajouter "Destinataire"
+        const table = topClientsTableBody.closest('table');
+        if (table) {
+            const theadRow = table.querySelector('thead tr');
+            if (theadRow && theadRow.children.length === 4) {
+                const th = document.createElement('th');
+                th.textContent = 'Destinataire';
+                theadRow.insertBefore(th, theadRow.children[2]); // Insérer après Client
+            }
+        }
+
         const top100Clients = sortedClients.slice(0, 100);
         topClientsTableBody.innerHTML = ''; 
         top100Clients.forEach((client, index) => {
             const row = document.createElement('tr');
-            row.innerHTML = `<td data-label="Rang"><b>#${index + 1}</b></td><td data-label="Client">${client.name}</td><td data-label="Nb. Op.">${client.count}</td><td data-label="Chiffre d'Affaires">${formatCFA(client.totalPrix)}</td>`;
+            row.innerHTML = `<td data-label="Rang"><b>#${index + 1}</b></td><td data-label="Client">${client.name}</td><td data-label="Destinataire">${client.destinataire || '-'}</td><td data-label="Nb. Op.">${client.count}</td><td data-label="Chiffre d'Affaires">${formatCFA(client.totalPrix)}</td>`;
             topClientsTableBody.appendChild(row);
         });
     }

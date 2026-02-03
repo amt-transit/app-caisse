@@ -6,6 +6,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const transactionsCollection = db.collection("transactions");
     const parisManifestCollection = db.collection("paris_manifest");
 
+    // Récupération du nom de l'utilisateur connecté
+    const currentUserName = sessionStorage.getItem('userName') || 'Utilisateur';
+
     // --- LOGIQUE DES ONGLETS ---
     const tabs = document.querySelectorAll('.sub-nav a');
     const panels = document.querySelectorAll('.tab-panel');
@@ -110,7 +113,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 conteneur: arrivalConteneur.value.trim().toUpperCase(), prix: prix,
                 montantParis: montantParis, montantAbidjan: montantAbidjan, reste: reste,
                 isDeleted: false, agent: '', agentMobileMoney: '', commune: '',
-                dateParis: arrivalRef.dataset.dateParis || "" // Ajout de la date de départ
+                dateParis: arrivalRef.dataset.dateParis || "",
+                lastPaymentDate: arrivalDate.value, // Initialisation pour qu'il apparaisse dans l'historique
+                saisiPar: currentUserName // Auteur de la création
             };
 
             if (!data.date || !data.reference || !data.nom || !data.conteneur || data.prix <= 0) {
@@ -202,7 +207,9 @@ document.addEventListener('DOMContentLoaded', () => {
                             date: commonDate, reference: ref, nom: nom || "", conteneur: commonConteneur,
                             prix: prix, montantParis: mParis, montantAbidjan: 0, 
                             reste: mParis - prix, isDeleted: false, agent: '', agentMobileMoney: '', commune: '',
-                            description: desc, adresseDestinataire: addr, nomDestinataire: dest
+                            description: desc, adresseDestinataire: addr, nomDestinataire: dest,
+                            lastPaymentDate: commonDate, // Initialisation
+                            saisiPar: currentUserName // Auteur de l'import
                         });
                         refsToRemove.push(ref);
                         count++;

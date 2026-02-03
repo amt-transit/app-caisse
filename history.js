@@ -80,38 +80,39 @@ document.addEventListener('DOMContentLoaded', () => {
         
         let query = transactionsCollection;
 
-        // Si on a des filtres, on charge tout pour filtrer (ou on pourrait optimiser la requête Firebase)
-        // Pour l'instant, on charge tout si un filtre est actif, sinon juste aujourd'hui.
-        
         const isFiltering = startDateInput.value || endDateInput.value || smartSearchInput.value || agentFilterInput.value;
 
-        if (!isFiltering) {
-            // PAR DÉFAUT : SEULEMENT AUJOURD'HUI
-            const today = new Date().toISOString().split('T')[0];
-            query = query.where("date", "==", today);
-        }
-
         if (showDeletedCheckbox.checked) {
-             // Si on veut voir les supprimés, on charge tout (pour simplifier, car on ne peut pas combiner trop de where)
-             // Attention : cela peut être lourd si beaucoup de supprimés.
              query = transactionsCollection.where("isDeleted", "==", true).orderBy("isDeleted").orderBy("date", "desc");
         } else {
              // Cas normal : Non supprimés
              if (!isFiltering) {
-                // Optimisation : filtre sur isDeleted + date du jour
-                // Nécessite index composite : isDeleted ASC, date ASC
-                query = query.where("isDeleted", "!=", true).orderBy("isDeleted");
+                // PAR DÉFAUT : SEMAINE EN COURS
+                const curr = new Date();
+                const day = curr.getDay();
+                const diff = curr.getDate() - day + (day === 0 ? -6 : 1);
+                const monday = new Date(curr.setDate(diff));
+                const mondayStr = monday.toISOString().split('T')[0];
+
+                // On filtre par date (Inegalité). On ne peut pas filtrer isDeleted (Inegalité) en même temps.
+                // On filtrera les supprimés en JS dans le onSnapshot.
+                // CORRECTION : On filtre sur lastPaymentDate pour voir les paiements récents même sur les vieux colis
+                query = query.where("lastPaymentDate", ">=", mondayStr).orderBy("lastPaymentDate", "desc");
              } else {
                 // Si on filtre, on charge tout le "non supprimé" et on filtre en JS
                 query = query.where("isDeleted", "!=", true).orderBy("isDeleted").orderBy("date", "desc");
              }
         }
         
-        // Si on n'a pas ajouté de orderBy date (cas non filtré avec where date), on l'ajoute pour le tri
-        // query = query.orderBy("date", "desc"); 
-
         unsubscribeHistory = query.onSnapshot(snapshot => {
-            allTransactions = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            let docs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            
+            // FILTRAGE JS COMPLÉMENTAIRE (Pour le cas par défaut où on n'a pas pu filtrer isDeleted en base)
+            if (!showDeletedCheckbox.checked && !isFiltering) {
+                docs = docs.filter(d => d.isDeleted !== true);
+            }
+
+            allTransactions = docs;
             applyFiltersAndRender(); 
         }, error => {
             console.error("Erreur Firestore: ", error);
@@ -131,8 +132,30 @@ document.addEventListener('DOMContentLoaded', () => {
         // Si on a rempli un input, on relance fetchHistory pour tout charger, PUIS on filtre ici.
         
         const filteredTransactions = allTransactions.filter(data => {
-            if (startDate && data.date < startDate) return false;
-            if (endDate && data.date > endDate) return false;
+            // 1. Vérification Date (Inclusivité : Création OU Paiement dans la plage)
+            let inDateRange = false;
+            
+            // A. Date Création
+            if ((!startDate || data.date >= startDate) && (!endDate || data.date <= endDate)) {
+                inDateRange = true;
+            }
+            
+            // B. Historique Paiements
+            if (!inDateRange && data.paymentHistory && Array.isArray(data.paymentHistory)) {
+                const hasPayment = data.paymentHistory.some(p => {
+                    return (!startDate || p.date >= startDate) && (!endDate || p.date <= endDate);
+                });
+                if (hasPayment) inDateRange = true;
+            }
+
+            // C. Dernière Activité (Fallback)
+            if (!inDateRange && data.lastPaymentDate) {
+                 if ((!startDate || data.lastPaymentDate >= startDate) && (!endDate || data.lastPaymentDate <= endDate)) {
+                    inDateRange = true;
+                 }
+            }
+
+            if (!inDateRange) return false;
             
             if (agentTerm) {
                 const agents = (data.agent || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
@@ -163,7 +186,7 @@ document.addEventListener('DOMContentLoaded', () => {
             // Message différent selon le contexte
             const isFiltering = startDateInput.value || endDateInput.value || smartSearchInput.value || agentFilterInput.value;
             if (!isFiltering) {
-                tableBody.innerHTML = '<tr><td colspan="12" style="text-align:center; padding: 20px;">Aucune opération aujourd\'hui.<br><small>Utilisez les filtres pour voir l\'historique complet.</small></td></tr>';
+                tableBody.innerHTML = '<tr><td colspan="12" style="text-align:center; padding: 20px;">Aucune opération cette semaine.<br><small>Utilisez les filtres pour voir l\'historique complet.</small></td></tr>';
             } else {
                 tableBody.innerHTML = '<tr><td colspan="12">Aucun résultat pour cette recherche.</td></tr>';
             }
@@ -250,10 +273,10 @@ document.addEventListener('DOMContentLoaded', () => {
         // ====================================================
 
         let btns = '';
-        if (userRole === 'admin' && data.isDeleted !== true) {
+        if ((userRole === 'admin' || userRole === 'super_admin') && data.isDeleted !== true) {
             btns += `<button class="editBtn" data-id="${data.id}" data-prix="${data.prix||0}" data-paris="${data.montantParis||0}" data-abidjan="${data.montantAbidjan||0}" style="background-color:#007bff; margin-right:5px;">Modif.</button>`;
         }
-        if ((userRole === 'admin' || userRole === 'saisie_full') && data.isDeleted !== true) {
+        if ((userRole === 'admin' || userRole === 'super_admin' || userRole === 'saisie_full') && data.isDeleted !== true) {
             btns += `<button class="deleteBtn" data-id="${data.id}">Suppr.</button>`;
         }
         
@@ -265,7 +288,7 @@ document.addEventListener('DOMContentLoaded', () => {
             <td>${formatCFA(data.prix)}</td>
             <td>${formatCFA(data.montantParis)}</td>
             <td>${formatCFA(data.montantAbidjan)}</td>
-            <td><span class="tag ${textToClassName(data.agentMobileMoney)}">${data.agentMobileMoney || ''}</span></td>
+            <td><span class="tag mm-tag ${textToClassName(data.agentMobileMoney)}">${data.agentMobileMoney || ''}</span></td>
             <td class="${reste_class}">${formatCFA(data.reste)}</td>
             <td><span class="tag ${textToClassName(data.commune)}">${data.commune || ''}</span></td>
             
@@ -280,7 +303,7 @@ document.addEventListener('DOMContentLoaded', () => {
         subtotalRow.className = 'subtotal-row';
         subtotalRow.innerHTML = `
             <td>${date || 'TOTAL'}</td>
-            <td colspan="4" style="text-align: right;">TOTAL</td> 
+            <td colspan="3" style="text-align: right;">TOTAL</td> 
             <td>${formatCFA(totals.prix)}</td>
             <td>${formatCFA(totals.montantParis)}</td>
             <td>${formatCFA(totals.montantAbidjan)}</td>

@@ -26,7 +26,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let unsubscribeExpenses = null; 
     let allExpenses = [];
 
-    if (userRole === 'admin') {
+    if (userRole === 'admin' || userRole === 'super_admin') {
         if (actionType) {
             const opt = document.createElement('option');
             opt.value = 'Allocation'; opt.textContent = '🟢 Allouer du Budget (Ajout)';
@@ -137,7 +137,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const mode = isAlloc ? '' : (expense.mode || 'Espèce');
 
             let deleteButtonHTML = '';
-            if (userRole === 'admin' && expense.isDeleted !== true) deleteButtonHTML = `<button class="deleteBtn" data-id="${expense.id}">Suppr.</button>`;
+            if ((userRole === 'admin' || userRole === 'super_admin') && expense.isDeleted !== true) deleteButtonHTML = `<button class="deleteBtn" data-id="${expense.id}">Suppr.</button>`;
 
             row.innerHTML = `
                 <td>${expense.date}</td><td>${expense.description}</td><td class="${colorClass}"><b>${sign} ${formatCFA(expense.montant)}</b></td>
