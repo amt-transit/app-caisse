@@ -85,7 +85,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (days > 90) {
                 feeStyle = 'font-weight:bold; color:#fff; background-color:#ef4444; padding: 4px 8px; border-radius: 4px; display:inline-block;';
                 feeText = "⚠️ REBUS (Abandonné)";
-                row.style.backgroundColor = "#fff1f2";
+                row.style.backgroundColor = "#fff1f2"; 
             }
 
             row.innerHTML = `

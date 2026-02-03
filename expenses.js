@@ -148,7 +148,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     
     showDeletedCheckbox.addEventListener('change', fetchExpenses);
-    if(expenseSearchInput) expenseSearchInput.addEventListener('input', renderExpensesTable);
+    if(expenseSearchInput) expenseSearchInput.addEventListener('input', renderExpensesTable); 
     fetchExpenses();
 
     expenseTableBody.addEventListener('click', (event) => {

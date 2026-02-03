@@ -89,7 +89,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 <td>${formatCFA(income.montant)}</td>
                 <td>${deleteButtonHTML}</td>
             `;
-            incomeTableBody.appendChild(row);
+            incomeTableBody.appendChild(row); 
         });
     }
     

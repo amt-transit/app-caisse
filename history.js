@@ -299,7 +299,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function insertSubtotalRow(date, totals) {
-        const subtotalRow = document.createElement('tr');
+        const subtotalRow = document.createElement('tr'); 
         subtotalRow.className = 'subtotal-row';
         subtotalRow.innerHTML = `
             <td>${date || 'TOTAL'}</td>

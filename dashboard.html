@@ -111,7 +111,7 @@
         <div id="panel-clients" class="tab-panel">
             <h2 style="margin-top: 30px;">Top 100 Clients</h2>
             <table id="topClientsTable">
-                <thead><tr><th>Rang</th><th>Client (Nom)</th><th>Nb. Opérations</th><th>Chiffre d'Affaires</th></tr></thead>
+                <thead><tr><th>Rang</th><th>Client (Nom)</th><th>Destinataire</th><th>Nb. Opérations</th><th>Chiffre d'Affaires</th></tr></thead>
                 <tbody id="topClientsTableBody"></tbody>
             </table>
         </div>
@@ -148,7 +148,44 @@
             </table>
         </div>
 
-    </div> 
+    </div>
+
+    <!-- SECTION ANALYSES STRATÉGIQUES (Structure déplacée du JS vers HTML) -->
+    <div id="analyticsContainer" class="dashboard-container" style="margin-top: 20px;">
+        <h2 style="margin-top:0;">📊 Analyses Stratégiques</h2>
+        <div class="charts-grid" style="grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px;">
+            <!-- Balance Âgée -->
+            <div class="chart-card">
+                <h3>⏳ Balance Âgée (Dettes)</h3>
+                <table class="table">
+                    <thead><tr><th>Ancienneté</th><th>Reste à Payer</th></tr></thead>
+                    <tbody id="agedBalanceBody"></tbody>
+                </table>
+            </div>
+            
+            <!-- Performance Logistique -->
+            <div class="chart-card">
+                <h3>✈️ Performance Logistique</h3>
+                <div style="text-align:center; padding: 20px;">
+                    <div style="font-size: 12px; color: #64748b;">Délai Moyen (Paris -> Abidjan)</div>
+                    <div id="avgLeadTime" style="font-size: 32px; font-weight: bold; color: #4f46e5;">-</div>
+                    <div style="font-size: 11px; color: #64748b; margin-top:5px;">Basé sur les dates réelles</div>
+                </div>
+            </div>
+
+            <!-- Clients Dormants -->
+            <div class="chart-card" style="grid-column: span 2;">
+                <h3>💤 Clients à Relancer (Inactifs > 3 mois)</h3>
+                <div style="max-height: 200px; overflow-y: auto;">
+                    <table class="table">
+                        <thead><tr><th>Client</th><th>Dernier Envoi</th><th>CA Perdu Potentiel</th></tr></thead>
+                        <tbody id="dormantClientsBody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <div id="containerDetailsModal" class="modal">
         <div class="modal-content modal-lg">
             <div class="modal-header">
@@ -157,14 +194,15 @@
             </div>
             
             <div style="overflow-x: auto;">
-                <table id="containerDetailsTable">
+                <table id="containerDetailsTable"> 
                     <thead>
                         <tr>
                             <th>Date</th>
-                            <th>Client</th>
-                            <th>Article/Desc</th>
-                            <th>Prix Total</th>
-                            <th>Payé (Abj+Par)</th>
+                            <th>Destinataire</th>
+                            <th>REF</th>
+                            <th>Prix</th>
+                            <th>Payé ABJ</th>
+                            <th>Payé PAR</th>
                             <th>Reste</th>
                         </tr>
                     </thead>
@@ -172,10 +210,11 @@
                         </tbody>
                     <tfoot>
                         <tr style="background-color: #e9ecef; font-weight: bold;">
-                            <td colspan="3">TOTAL CONTENEUR</td>
-                            <td id="modalTotalPrix">0 CFA</td>
-                            <td id="modalTotalPaye">0 CFA</td>
-                            <td id="modalTotalReste">0 CFA</td>
+                            <th colspan="3" style="text-align:right">TOTAUX</th>
+                            <th id="modalTotalPrix">0</th>
+                            <th id="modalTotalPayeAbj">0</th>
+                            <th id="modalTotalPayePar">0</th>
+                            <th id="modalTotalReste">0</th>
                         </tr>
                     </tfoot>
                 </table>

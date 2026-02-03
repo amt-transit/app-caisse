@@ -341,17 +341,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         const sortedClients = Object.entries(clientData).map(([name, data]) => ({ name, ...data })).sort((a, b) => b.totalPrix - a.totalPrix); 
         if (sortedClients.length === 0) return;
 
-        // Mise à jour dynamique de l'en-tête pour ajouter "Destinataire"
-        const table = topClientsTableBody.closest('table');
-        if (table) {
-            const theadRow = table.querySelector('thead tr');
-            if (theadRow && theadRow.children.length === 4) {
-                const th = document.createElement('th');
-                th.textContent = 'Destinataire';
-                theadRow.insertBefore(th, theadRow.children[2]); // Insérer après Client
-            }
-        }
-
         const top100Clients = sortedClients.slice(0, 100);
         topClientsTableBody.innerHTML = ''; 
         top100Clients.forEach((client, index) => {
@@ -363,54 +352,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // --- NOUVELLES ANALYSES STRATÉGIQUES ---
     function generateAdvancedAnalytics(filteredTransactions, fullHistory) {
-        // 1. Création du conteneur si inexistant
-        let container = document.getElementById('analyticsContainer');
-        if (!container) {
-            const dashboards = document.querySelectorAll('.dashboard-container');
-            const lastDashboard = dashboards[dashboards.length - 1];
-            
-            container = document.createElement('div');
-            container.id = 'analyticsContainer';
-            container.className = 'dashboard-container';
-            container.style.marginTop = '20px';
-            container.innerHTML = `
-                <h2 style="margin-top:0;">📊 Analyses Stratégiques</h2>
-                <div class="charts-grid" style="grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px;">
-                    <!-- Balance Âgée -->
-                    <div class="chart-card">
-                        <h3>⏳ Balance Âgée (Dettes)</h3>
-                        <table class="table">
-                            <thead><tr><th>Ancienneté</th><th>Reste à Payer</th></tr></thead>
-                            <tbody id="agedBalanceBody"></tbody>
-                        </table>
-                    </div>
-                    
-                    <!-- Performance Logistique -->
-                    <div class="chart-card">
-                        <h3>✈️ Performance Logistique</h3>
-                        <div style="text-align:center; padding: 20px;">
-                            <div style="font-size: 12px; color: #64748b;">Délai Moyen (Paris -> Abidjan)</div>
-                            <div id="avgLeadTime" style="font-size: 32px; font-weight: bold; color: #4f46e5;">-</div>
-                            <div style="font-size: 11px; color: #64748b; margin-top:5px;">Basé sur les dates réelles</div>
-                        </div>
-                    </div>
-
-                    <!-- Clients Dormants -->
-                    <div class="chart-card" style="grid-column: span 2;">
-                        <h3>💤 Clients à Relancer (Inactifs > 3 mois)</h3>
-                        <div style="max-height: 200px; overflow-y: auto;">
-                            <table class="table">
-                                <thead><tr><th>Client</th><th>Dernier Envoi</th><th>CA Perdu Potentiel</th></tr></thead>
-                                <tbody id="dormantClientsBody"></tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
-            `;
-            if(lastDashboard && lastDashboard.parentNode) lastDashboard.parentNode.insertBefore(container, lastDashboard.nextSibling);
-            else document.body.appendChild(container);
-        }
-
         // 2. CALCUL BALANCE ÂGÉE (Sur TOUT l'historique, pas juste le filtré)
         const now = new Date();
         const buckets = { '0-30 jours': 0, '31-60 jours': 0, '61-90 jours': 0, '+90 jours': 0 };
@@ -500,7 +441,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     function formatCFA(number) {
         return new Intl.NumberFormat('fr-CI', { style: 'currency', currency: 'XOF' }).format(number || 0);
     }
-    // --- FONCTION POUR OUVRIR LE MODAL DÉTAILS CONTENEUR ---
+    // --- FONCTION POUR OUVRIR LE MODAL DÉTAILS CONTENEUR --- 
     function openContainerDetails(containerName) {
         const modal = document.getElementById('containerDetailsModal');
         const title = document.getElementById('modalContainerTitle');
@@ -523,28 +464,30 @@ document.addEventListener('DOMContentLoaded', async () => {
         tbody.innerHTML = '';
         
         let sumPrix = 0;
-        let sumPaye = 0;
+        let sumPayeAbj = 0;
+        let sumPayePar = 0;
         let sumReste = 0;
         let sumDepenses = 0;
 
         if (combined.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="6">Aucune opération trouvée pour ce conteneur.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="7">Aucune opération trouvée pour ce conteneur.</td></tr>';
         } else {
             combined.forEach(item => {
                 const row = document.createElement('tr');
                 
                 if (item._type === 'transaction') {
-                    const payeTotal = (item.montantAbidjan || 0) + (item.montantParis || 0);
                     sumPrix += (item.prix || 0);
-                    sumPaye += payeTotal;
+                    sumPayeAbj += (item.montantAbidjan || 0);
+                    sumPayePar += (item.montantParis || 0);
                     sumReste += (item.reste || 0);
 
                     row.innerHTML = `
                         <td>${item.date}</td>
-                        <td>${item.nom || 'Inconnu'}</td>
-                        <td>${item.article || ''}</td>
+                        <td>${item.nomDestinataire || '-'}</td>
+                        <td>${item.reference || ''}</td>
                         <td>${formatCFA(item.prix)}</td>
-                        <td>${formatCFA(payeTotal)}</td>
+                        <td>${formatCFA(item.montantAbidjan)}</td>
+                        <td>${formatCFA(item.montantParis)}</td>
                         <td class="${item.reste < 0 ? 'reste-negatif' : 'reste-positif'}">${formatCFA(item.reste)}</td>
                     `;
                 } else {
@@ -556,6 +499,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                         <td colspan="2">DÉPENSE : ${item.description}</td>
                         <td>-</td>
                         <td>-</td>
+                        <td>-</td>
                         <td>-${formatCFA(item.montant)}</td>
                     `;
                 }
@@ -564,9 +508,15 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
 
         // Mettre à jour le pied de page du tableau modal
-        document.getElementById('modalTotalPrix').textContent = formatCFA(sumPrix);
-        document.getElementById('modalTotalPaye').textContent = formatCFA(sumPaye);
-        document.getElementById('modalTotalReste').textContent = formatCFA(sumReste);
+        const elTotalPrix = document.getElementById('modalTotalPrix');
+        const elTotalPayeAbj = document.getElementById('modalTotalPayeAbj');
+        const elTotalPayePar = document.getElementById('modalTotalPayePar');
+        const elTotalReste = document.getElementById('modalTotalReste');
+
+        if(elTotalPrix) elTotalPrix.textContent = formatCFA(sumPrix);
+        if(elTotalPayeAbj) elTotalPayeAbj.textContent = formatCFA(sumPayeAbj);
+        if(elTotalPayePar) elTotalPayePar.textContent = formatCFA(sumPayePar);
+        if(elTotalReste) elTotalReste.textContent = formatCFA(sumReste);
 
         if (sumDepenses > 0) {
             title.innerHTML = `Détails Opérations : ${containerName} <span style="font-size:0.6em; color:#dc3545; margin-left:10px;">(Dépenses: ${formatCFA(sumDepenses)})</span>`;

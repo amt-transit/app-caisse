@@ -37,7 +37,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     function showError(message) {
-        loginError.textContent = message;
+        loginError.textContent = message; 
         loginError.style.display = 'block';
     }
 });

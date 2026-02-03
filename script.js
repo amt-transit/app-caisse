@@ -122,7 +122,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             if (!date) return alert("Veuillez sélectionner la date en haut.");
             if (!desc || isNaN(amount) || amount <= 0) return alert("Motif ou Montant invalide.");
-
+ 
             dailyExpenses.push({
                 date: date,
                 description: desc,

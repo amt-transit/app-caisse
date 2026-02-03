@@ -399,7 +399,7 @@ body.login-page {
     background: #1e293b;
 }
 
-/* --- MODIFICATION AGENT MM (Lisibilité) --- */
+/* --- MODIFICATION AGENT MM (Lisibilité) --- */ 
 .mm-tag {
     color: #1e293b !important; /* Texte Noir/Gris foncé */
     background-color: #f1f5f9; /* Fond Gris très clair par défaut */
