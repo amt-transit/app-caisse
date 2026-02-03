@@ -49,4 +49,25 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     };
 
+    // --- VISUALISATION JOURNAL D'AUDIT ---
+    const auditBody = document.getElementById('auditLogBody');
+    
+    if (auditBody) {
+        // Charger les 50 derniers logs
+        db.collection("audit_logs").orderBy("date", "desc").limit(50).onSnapshot(snap => {
+            auditBody.innerHTML = '';
+            if(snap.empty) {
+                auditBody.innerHTML = '<tr><td colspan="4">Aucun log.</td></tr>';
+                return;
+            }
+            snap.forEach(doc => {
+                const d = doc.data();
+                const date = d.date ? new Date(d.date).toLocaleString() : '-';
+                auditBody.innerHTML += `
+                    <tr style="border-bottom:1px solid #eee;">
+                        <td>${date}</td><td><b>${d.user}</b></td><td><span class="tag" style="background:#333;">${d.action}</span></td><td>${d.details}</td>
+                    </tr>`;
+            });
+        });
+    }
 });

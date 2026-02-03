@@ -29,7 +29,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const profileTotalSpent = document.getElementById('profileTotalSpent');
     const profileShipmentCount = document.getElementById('profileShipmentCount');
     const profileLastDate = document.getElementById('profileLastDate');
-    const recipientsTableBody = document.getElementById('recipientsTableBody');
+    const recipientsTableBody = document.getElementById('recipientsTableBody'); 
     const shipmentsTableBody = document.getElementById('shipmentsTableBody');
 
     let allClientNames = new Set();

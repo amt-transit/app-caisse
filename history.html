@@ -2,126 +2,89 @@
 <html lang="fr">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=1000"> 
+    <meta name="viewport" content="width=1000">
     <title>Historique - Caisse</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Comfortaa:wght@400;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
     <link rel="icon" type="image/png" href="favicon.png">
 </head>
-
-<body class="page-history" style="display:none"> 
+<body style="display:none">
     <header class="app-header">
-        <img src="LOGOAMT.png" alt="Logo de l'entreprise" class="app-logo">
-        <h1>Historique des Opérations</h1> <button id="logoutBtn" style="position: absolute; right: 20px; padding: 8px 15px; cursor: pointer;">Déconnexion</button>
+        <img src="LOGOAMT.png" alt="Logo" class="app-logo">
+        <h1>Historique des Opérations</h1>
+        <button class="logout-btn" style="position: absolute; right: 20px;">Déconnexion</button>
     </header>
 
     <nav class="navigation">
         <a href="index.html">Saisie</a>
         <a href="dashboard.html" id="nav-dashboard">Tableau de Bord</a>
-        <a href="history.html" class="active">Historique</a> 
+        <a href="history.html" class="active">Historique</a>
         <a href="expenses.html" id="nav-expenses">Dépenses</a>
         <a href="other-income.html" id="nav-other-income">Autres Entrées</a>
         <a href="bank.html" id="nav-bank">Banque</a>
         <a href="arrivages.html" id="nav-arrivages">Arrivages</a>
+        <a href="magasinage.html" id="nav-magasinage">Magasinage</a>
         <a href="clients.html" id="nav-clients">Clients</a>
         <a href="admin-panel.html" id="nav-admin" style="background-color: #6f42c1; color: white;">ADMIN</a>
     </nav>
 
     <div class="history-controls">
-        <div class="search-bar-container" style="margin-bottom: 15px;">
-            <input type="text" id="smartSearch" placeholder="Rechercher... (Nom, Réf complète, ou terminaison ex: 'D43')" style="width: 100%; padding: 12px; font-size: 16px; border: 2px solid #ddd; border-radius: 8px;">
-        </div>
-
-        <div class="filter-grid" style="grid-template-columns: 1fr 1fr 1fr; gap: 15px; align-items: center;">
+        <div class="filter-grid">
+            <input type="text" id="smartSearch" placeholder="Rechercher Réf, Nom, Conteneur..." style="flex-grow: 1;">
+            <div class="date-filter-group">
+                <span>Du</span> <input type="date" id="startDate"> <span>Au</span> <input type="date" id="endDate">
+            </div>
             <select id="agentFilter">
-                <option value="">-- Filtrer par Agent --</option>
-                <option value="Adboul Paris">Adboul Paris</option>
-                <option value="Ali Paris">Ali Paris</option>
-                <option value="Autres Paris">Autres Paris</option>
-                <option value="AZIZ">AZIZ</option>
-                <option value="Bakary Paris">Bakary Paris</option>
-                <option value="Cesar">Cesar</option>
-                <option value="Cheick Paris">Cheick Paris</option>
-                <option value="Constant">Constant</option>
-                <option value="Coulibaly Traoré Mah">Coulibaly Traoré Mah</option>
-                <option value="Demba Paris">Demba Paris</option>
-                <option value="Drissa Paris">Drissa Paris</option>
-                <option value="Fatim Paris">Fatim Paris</option>
-                <option value="Hamza">Hamza</option>
-                <option value="JB">JB</option>
-                <option value="Julien">Julien</option>
-                <option value="Kady Paris">Kady Paris</option>
-                <option value="Maley">Maley</option>
-                <option value="Males">Males</option>
-                <option value="Mohamed Paris">Mohamed Paris</option>
-                <option value="Moussa Paris">Moussa Paris</option>
-                <option value="Salif">Salif</option>
-                <option value="Samba">Samba</option>
-                <option value="Touré">Touré</option>
+                <option value="">-- Tous les agents --</option>
+                <option value="Adboul Paris">Adboul Paris</option><option value="Ali Paris">Ali Paris</option><option value="Autres Paris">Autres Paris</option>
+                <option value="AZIZ">AZIZ</option><option value="Bakary Paris">Bakary Paris</option><option value="Cesar">Cesar</option>
+                <option value="Cheick Paris">Cheick Paris</option><option value="Constant">Constant</option><option value="Coulibaly Traoré Mah">Coulibaly Traoré Mah</option>
+                <option value="Demba Paris">Demba Paris</option><option value="Drissa Paris">Drissa Paris</option><option value="Fatim Paris">Fatim Paris</option>
+                <option value="Hamza">Hamza</option><option value="JB">JB</option><option value="Julien">Julien</option>
+                <option value="Kady Paris">Kady Paris</option><option value="Maley">Maley</option><option value="Males">Males</option>
+                <option value="Mohamed Paris">Mohamed Paris</option><option value="Moussa Paris">Moussa Paris</option><option value="Salif">Salif</option>
+                <option value="Samba">Samba</option><option value="Touré">Touré</option>
             </select>
-            
-            <div class="date-filter-group">
-                <label for="startDate">Du:</label> <input type="date" id="startDate">
+            <div class="checkbox-container">
+                <input type="checkbox" id="showDeletedCheckbox"> <label for="showDeletedCheckbox">Afficher supprimés</label>
             </div>
-            <div class="date-filter-group">
-                <label for="endDate">Au:</label> <input type="date" id="endDate">
-            </div>
-        </div>
-
-        <div class="checkbox-container" style="margin-top: 10px;">
-            <input type="checkbox" id="showDeletedCheckbox" style="width: auto;">
-            <label for="showDeletedCheckbox">Afficher les éléments supprimés</label>
         </div>
     </div>
-    
-    <table id="caisseTable">
-        <thead>
-            <tr>
-                <th>Date</th><th>Référence / Client</th><th>Nom</th><th>Conteneur</th><th>Prix</th>
-                <th>Montant Paris</th><th>Montant Abidjan</th><th>Agent MM</th>
-                <th>Reste</th><th>Commune</th><th>Agent</th><th>Action</th>
-            </tr>
-        </thead>
-        <tbody id="tableBody"></tbody>
-    </table>
 
+    <div style="overflow-x: auto;">
+        <table id="historyTable">
+            <thead>
+                <tr>
+                    <th>Date</th><th>Réf</th><th>Nom</th><th>Conteneur</th><th>Prix</th>
+                    <th>Payé Paris</th><th>Payé Abidjan</th><th>Info Paiement</th>
+                    <th>Reste</th><th>Commune</th><th>Agent(s)</th><th>Actions</th>
+                </tr>
+            </thead>
+            <tbody id="tableBody"></tbody>
+        </table>
+    </div>
+
+    <!-- Bouton pour la pagination -->
+    <button id="loadMoreBtn" style="display:none; margin: 20px auto; padding: 10px 20px; background:#64748b; color:white; border:none; border-radius:8px; cursor:pointer;">Charger plus d'historique...</button>
+
+    <!-- Modal pour l'historique des paiements -->
     <div id="paymentHistoryModal" class="modal">
         <div class="modal-content">
-            <span class="close-modal">&times;</span>
-            <h2>Détails des Paiements</h2>
-            <h3 id="modalRefTitle" style="color: #0d6efd; margin-bottom: 15px;"></h3>
-            
-            <ul id="paymentHistoryList" class="history-list">
-                </ul>
-            
-            <div style="text-align: right; margin-top: 15px;">
-                <button onclick="document.getElementById('paymentHistoryModal').style.display='none'" 
-                        style="padding: 8px 16px; cursor: pointer;">Fermer</button>
+            <div class="modal-header">
+                <h2 id="modalRefTitle">Historique des Paiements</h2>
+                <span class="close-modal">&times;</span>
             </div>
+            <ul id="paymentHistoryList" class="history-list"></ul>
         </div>
     </div>
 
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script> 
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
     <script>
-        const firebaseConfig = {
-            apiKey: "AIzaSyA255n3XWDRKaYZ9kwOYkfovf5lRexoCA4",
-            authDomain: "caisse-amt-perso.firebaseapp.com",
-            projectId: "caisse-amt-perso",
-            storageBucket: "caisse-amt-perso.firebasestorage.app",
-            messagingSenderId: "682789156997",
-            appId: "1:682789156997:web:9ce3303120851d37be91ec" 
-        };
+        const firebaseConfig = { apiKey: "AIzaSyA255n3XWDRKaYZ9kwOYkfovf5lRexoCA4", authDomain: "caisse-amt-perso.firebaseapp.com", projectId: "caisse-amt-perso", storageBucket: "caisse-amt-perso.firebasestorage.app", messagingSenderId: "682789156997", appId: "1:682789156997:web:9ce3303120851d37be91ec" };
         firebase.initializeApp(firebaseConfig);
         const db = firebase.firestore();
-        document.getElementById('logoutBtn').addEventListener('click', () => {
-            if (confirm("Voulez-vous vous déconnecter ?")) {
-                firebase.auth().signOut();
-            }
-        });
+        document.querySelector('.logout-btn').addEventListener('click', () => { if (confirm("Voulez-vous vous déconnecter ?")) firebase.auth().signOut(); });
     </script>
     <script src="auth-guard.js"></script>
     <script src="history.js"></script>

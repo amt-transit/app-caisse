@@ -94,7 +94,7 @@ firebase.auth().onAuthStateChanged(async (user) => {
         const navArrivages = document.getElementById('nav-arrivages');
         const navAdmin = document.getElementById('nav-admin');
         const navClients = document.getElementById('nav-clients');
-        const navMagasinage = document.getElementById('nav-magasinage');
+        const navMagasinage = document.getElementById('nav-magasinage'); 
 
         if (navAdmin && userRole !== 'super_admin') navAdmin.style.display = 'none';
 

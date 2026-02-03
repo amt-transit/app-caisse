@@ -333,8 +333,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         transactions.forEach(t => {
             const clientName = t.nom || "Client non spécifié";
             if (clientName === "Client non spécifié" || !clientName.trim()) return; 
-            if (!clientData[clientName]) clientData[clientName] = { totalPrix: 0, count: 0, destinataire: '' };
+            if (!clientData[clientName]) clientData[clientName] = { totalPrix: 0, count: 0, destinataire: '', totalReste: 0 };
             clientData[clientName].totalPrix += (t.prix || 0);
+            clientData[clientName].totalReste += (t.reste || 0);
             clientData[clientName].count++;
             if (!clientData[clientName].destinataire && t.nomDestinataire) clientData[clientName].destinataire = t.nomDestinataire;
         });
@@ -344,8 +345,15 @@ document.addEventListener('DOMContentLoaded', async () => {
         const top100Clients = sortedClients.slice(0, 100);
         topClientsTableBody.innerHTML = ''; 
         top100Clients.forEach((client, index) => {
+            // Logique WhatsApp
+            const message = `Bonjour ${client.destinataire || client.name}, sauf erreur de notre part, le solde restant à payer pour vos envois est de ${formatCFA(client.totalReste)}. Merci.`;
+            const waLink = `https://wa.me/?text=${encodeURIComponent(message)}`;
+            const waBtn = client.totalReste > 0 
+                ? `<a href="${waLink}" target="_blank" style="text-decoration:none; font-size:16px;" title="Relancer sur WhatsApp">📱</a>` 
+                : '<span style="color:#ccc">✔️</span>';
+
             const row = document.createElement('tr');
-            row.innerHTML = `<td data-label="Rang"><b>#${index + 1}</b></td><td data-label="Client">${client.name}</td><td data-label="Destinataire">${client.destinataire || '-'}</td><td data-label="Nb. Op.">${client.count}</td><td data-label="Chiffre d'Affaires">${formatCFA(client.totalPrix)}</td>`;
+            row.innerHTML = `<td data-label="Rang"><b>#${index + 1}</b></td><td data-label="Client">${client.name} ${waBtn}</td><td data-label="Destinataire">${client.destinataire || '-'}</td><td data-label="Nb. Op.">${client.count}</td><td data-label="Chiffre d'Affaires">${formatCFA(client.totalPrix)}</td>`;
             topClientsTableBody.appendChild(row);
         });
     }
@@ -457,9 +465,12 @@ document.addEventListener('DOMContentLoaded', async () => {
         // Filtrer les dépenses liées au conteneur
         const expenses = allExpenses.filter(e => e.conteneur === containerName);
         
-        // Trier par date (plus récent en haut)
-        const combined = [...transactions.map(t => ({...t, _type: 'transaction'})), ...expenses.map(e => ({...e, _type: 'expense'}))];
-        combined.sort((a, b) => new Date(b.date) - new Date(a.date));
+        // Trier les transactions par date
+        const sortedTransactions = transactions.map(t => ({...t, _type: 'transaction'})).sort((a, b) => new Date(b.date) - new Date(a.date));
+        // Trier les dépenses par date
+        const sortedExpenses = expenses.map(e => ({...e, _type: 'expense'})).sort((a, b) => new Date(b.date) - new Date(a.date));
+        // Combiner : Transactions d'abord, Dépenses ensuite (en bas)
+        const combined = [...sortedTransactions, ...sortedExpenses];
 
         tbody.innerHTML = '';
         

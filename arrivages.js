@@ -4,7 +4,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     const transactionsCollection = db.collection("transactions");
-    const parisManifestCollection = db.collection("paris_manifest");
+    const parisManifestCollection = db.collection("paris_manifest"); 
 
     // Récupération du nom de l'utilisateur connecté
     const currentUserName = sessionStorage.getItem('userName') || 'Utilisateur';
@@ -308,12 +308,21 @@ document.addEventListener('DOMContentLoaded', () => {
             const destinataire = item.nomDestinataire || '';
             const isPaid = (item.reste || 0) === 0; // Si 0 pile, c'est payé (vert). Si négatif, c'est une dette (rouge).
 
+            // Logique WhatsApp (Relance Dette)
+            let waBtn = '';
+            if ((item.reste || 0) < 0) {
+                const debtAmount = Math.abs(item.reste);
+                const message = `Bonjour ${destinataire || 'Client'}, sauf erreur de notre part, le solde restant à payer pour le colis ${item.reference} est de ${formatCFA(debtAmount)}. Merci.`;
+                const waLink = `https://wa.me/?text=${encodeURIComponent(message)}`;
+                waBtn = ` <a href="${waLink}" target="_blank" style="text-decoration:none; font-size:16px; margin-left:5px;" title="Relancer sur WhatsApp">📱</a>`;
+            }
+
             row.innerHTML = `
                 <td>${item.date}</td>
                 <td>${item.conteneur}</td>
                 <td>${item.reference}</td>
                 <td style="font-weight:bold; color:${isPaid ? '#28a745' : ((item.reste||0) < 0 ? '#dc3545' : '#28a745')}">${formatCFA(item.reste)}</td>
-                <td>${item.nom}</td>
+                <td>${item.nom}${waBtn}</td>
                 <td>${destinataire}</td>
                 <td>${adresse}</td>
                 <td>${description}</td>

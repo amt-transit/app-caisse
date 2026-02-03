@@ -3,47 +3,15 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=1000">
-    <title>Super Admin - Caisse</title>
+    <title>Panneau Admin - Caisse</title>
     <link rel="stylesheet" href="style.css">
-    <link href="https://fonts.googleapis.com/css2?family=Comfortaa:wght@400;700&display=swap" rel="stylesheet">
     <link rel="icon" type="image/png" href="favicon.png">
-    <style>
-        .admin-section { background: var(--glass-bg); backdrop-filter: blur(12px); padding: 20px; border-radius: 16px; margin-bottom: 20px; border: 1px solid var(--glass-border); box-shadow: var(--glass-shadow); color: var(--text-main); }
-        .admin-header { border-bottom: 1px solid var(--glass-border); padding-bottom: 10px; margin-bottom: 20px; color: var(--text-main); }
-        .user-card { background: rgba(255,255,255,0.05); padding: 10px; border: 1px solid var(--glass-border); margin-bottom: 5px; display: flex; justify-content: space-between; align-items: center; }
-        .role-badge { padding: 3px 8px; border-radius: 4px; font-size: 12px; font-weight: bold; color: white; }
-        .role-super_admin { background: #6f42c1; }
-        .role-admin { background: #007bff; }
-        .role-saisie_full { background: #28a745; }
-        .role-saisie_limited { background: #6c757d; }
-        
-        /* Style pour la boite d'info CSV */
-        #csvInstructions {
-            margin: 15px 0;
-            padding: 15px;
-            background-color: rgba(26, 115, 232, 0.15); /* Bleu transparent */
-            border-left: 5px solid #1a73e8;
-            border-radius: 4px;
-            color: var(--text-main);
-            font-size: 13px;
-            display: none; /* Caché par défaut */
-        }
-        #csvInstructions code {
-            background: #fff;
-            padding: 2px 5px;
-            border-radius: 3px;
-            border: none;
-            font-family: monospace;
-            font-weight: bold;
-            color: #d32f2f;
-        }
-    </style>
 </head>
 <body style="display:none">
     <header class="app-header">
         <img src="LOGOAMT.png" alt="Logo" class="app-logo">
-        <h1>Espace Super Admin</h1>
-        <button id="logoutBtn" style="position: absolute; right: 20px; padding: 8px 15px; cursor: pointer;">Déconnexion</button>
+        <h1>Panneau Super Admin</h1>
+        <button class="logout-btn" style="position: absolute; right: 20px;">Déconnexion</button>
     </header>
 
     <nav class="navigation">
@@ -54,68 +22,46 @@
         <a href="other-income.html" id="nav-other-income">Autres Entrées</a>
         <a href="bank.html" id="nav-bank">Banque</a>
         <a href="arrivages.html" id="nav-arrivages">Arrivages</a>
+        <a href="magasinage.html" id="nav-magasinage">Magasinage</a>
         <a href="clients.html" id="nav-clients">Clients</a>
         <a href="admin-panel.html" id="nav-admin" class="active" style="background-color: #6f42c1; color: white;">ADMIN</a>
     </nav>
 
-    <div class="dashboard-container">
-        
-        <div class="admin-section">
-            <h2 class="admin-header">👤 Gestion des Utilisateurs</h2>
-            
-            <div id="caisseForm" style="margin-bottom: 20px;">
-                <h3>Créer un nouvel utilisateur</h3>
-                <div class="form-grid" style="grid-template-columns: 1fr 1fr 1fr;">
-                    <input type="text" id="newUsername" placeholder="Nom d'utilisateur (ex: Salif)">
-                    
-                    <input type="text" id="newPassword" placeholder="Mot de passe (ex: 123456)">
-                    
-                    <select id="newRole">
-                        <option value="saisie_limited">Saisie (Limité)</option>
-                        <option value="saisie_full">Saisie (Complet)</option>
-                        <option value="admin">Admin</option>
-                        <option value="super_admin">Super Admin</option>
-                    </select>
-                </div>
-                <div class="form-buttons">
-                    <button id="createUserBtn" class="primary" style="background-color: #6f42c1;">Créer le Compte</button>
-                </div>
+    <div class="admin-container" style="max-width: 900px; margin: 20px auto; background: white; padding: 20px; border-radius: 12px; box-shadow: var(--shadow-md);">
+        <h2>Gestion des Utilisateurs</h2>
+        <div id="createUserForm" style="margin-bottom: 20px; border-bottom: 1px solid #eee; padding-bottom: 20px;">
+            <div class="form-grid" style="grid-template-columns: 1fr 1fr 1fr 1fr;">
+                <input type="text" id="newUsername" placeholder="Nom d'utilisateur">
+                <input type="password" id="newPassword" placeholder="Mot de passe">
+                <select id="newRole">
+                    <option value="saisie_limited">Saisie Limitée</option>
+                    <option value="saisie_full">Saisie Complète</option>
+                    <option value="admin">Admin</option>
+                    <option value="super_admin">Super Admin</option>
+                </select>
+                <button id="createUserBtn" class="primary">Créer Utilisateur</button>
             </div>
-
-            <h3>Liste des utilisateurs</h3>
-            <div id="usersList"></div>
+        </div>
+        <div id="usersList">
+            <!-- La liste des utilisateurs sera chargée ici par JS -->
         </div>
 
-        <div class="admin-section">
-            <h2 class="admin-header">📂 Importation de Données (CSV)</h2>
-            
-            <label><strong>Choisir le type de données à importer :</strong></label>
-            <select id="importType" style="width: 100%; margin: 10px 0; padding: 10px;">
-                <option value="">-- Sélectionner --</option>
-                <option value="paris">Manifeste Départ Paris (Fichier Complet)</option>
-                <option value="abidjan">Réception Abidjan</option>
-                <option value="expenses">Dépenses</option>
-                <option value="bank">Mouvements Banque</option>
-                <option value="income">Autres Entrées</option>
-            </select>
-            
-            <div id="csvInstructions"></div>
-
-            <div id="dynamicInputs" style="margin: 15px 0;"></div>
-
-            <input type="file" id="csvFile" accept=".csv" style="display:none; margin-top: 10px;">
-            <button id="startImportBtn" class="primary" style="display:none; width: 100%;">Lancer l'Importation</button>
-            
-            <pre id="importLog" style="background:rgba(0,0,0,0.3); color:#fff; border-radius:6px; padding:10px; display:none; margin-top:15px;"></pre>
+        <!-- Section Journal d'Audit -->
+        <div id="auditSection" style="margin-top: 40px;">
+            <h2>🛡️ Journal d'Audit (Sécurité)</h2>
+            <div style="max-height: 300px; overflow-y: auto; background: #f8fafc; padding: 10px; border-radius: 8px; border: 1px solid var(--border-color);">
+                <table style="width:100%; font-size:12px;">
+                    <thead><tr><th>Date</th><th>Utilisateur</th><th>Action</th><th>Détails</th></tr></thead>
+                    <tbody id="auditLogBody"><tr><td colspan="4">Chargement...</td></tr></tbody>
+                </table>
+            </div>
         </div>
-
     </div>
 
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
     <script>
-        // VOTRE CONFIG
         const firebaseConfig = {
             apiKey: "AIzaSyA255n3XWDRKaYZ9kwOYkfovf5lRexoCA4",
             authDomain: "caisse-amt-perso.firebaseapp.com",
@@ -126,76 +72,11 @@
         };
         firebase.initializeApp(firebaseConfig);
         const db = firebase.firestore();
-        document.getElementById('logoutBtn').addEventListener('click', () => {
+        document.querySelector('.logout-btn').addEventListener('click', () => {
             if (confirm("Voulez-vous vous déconnecter ?")) firebase.auth().signOut();
         });
     </script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
     <script src="auth-guard.js"></script>
     <script src="admin-panel.js"></script>
-
-    <!-- Script pour afficher la liste des utilisateurs avec mots de passe -->
-    <script>
-        document.addEventListener('DOMContentLoaded', () => {
-            const usersList = document.getElementById('usersList');
-            // On vérifie si db est initialisé
-            if(usersList && typeof db !== 'undefined') {
-                // Écoute en temps réel de la collection 'users'
-                db.collection('users').onSnapshot(snapshot => {
-                    let html = '<table style="width:100%; border-collapse:collapse; margin-top:10px;">';
-                    html += '<thead style="background:rgba(255,255,255,0.1); border-bottom:1px solid var(--glass-border);"><tr><th style="padding:10px; text-align:left;">Utilisateur</th><th style="padding:10px; text-align:left;">Mot de Passe</th><th style="padding:10px; text-align:left;">Rôle</th><th style="padding:10px; text-align:left;">Action</th></tr></thead><tbody>';
-                    
-                    if(snapshot.empty) {
-                        usersList.innerHTML = '<p style="padding:10px;">Aucun utilisateur trouvé.</p>';
-                        return;
-                    }
-
-                    snapshot.forEach(doc => {
-                        const u = doc.data();
-                        // On récupère le mot de passe (champ 'password' ou 'pass')
-                        const password = u.password || u.pass || '****';
-                        const username = u.username || u.nom || u.email || '---';
-                        
-                        html += `<tr style="border-bottom:1px solid var(--glass-border);">
-                            <td style="padding:10px;"><strong>${username}</strong></td>
-                            <td style="padding:10px; font-family:monospace; color:#d63384; font-weight:bold; font-size:1.1em;">
-                                <span id="pass-mask-${doc.id}">••••••</span>
-                                <span id="pass-display-${doc.id}" style="display:none;">${password}</span>
-                                <span onclick="toggleUserPass('${doc.id}')" style="cursor:pointer; margin-left:5px; font-size:0.8em;">👁️</span>
-                            </td>
-                            <td style="padding:10px;"><span class="role-badge role-${u.role}">${u.role}</span></td>
-                            <td style="padding:10px;">
-                                <button onclick="deleteUser('${doc.id}')" style="background:#dc3545; color:white; border:none; padding:5px 10px; border-radius:4px; cursor:pointer;">Supprimer</button>
-                            </td>
-                        </tr>`;
-                    });
-                    html += '</tbody></table>';
-                    usersList.innerHTML = html;
-                });
-            }
-        });
-
-        // Fonction de suppression globale
-        window.deleteUser = function(id) {
-            if(confirm("Voulez-vous vraiment supprimer cet utilisateur ?")) {
-                db.collection('users').doc(id).delete()
-                    .then(() => alert("Utilisateur supprimé."))
-                    .catch(e => alert("Erreur: " + e));
-            }
-        };
-
-        // Fonction pour afficher/masquer le mot de passe dans la liste
-        window.toggleUserPass = function(id) {
-            const mask = document.getElementById('pass-mask-' + id);
-            const display = document.getElementById('pass-display-' + id);
-            if (mask.style.display === 'none') {
-                mask.style.display = 'inline';
-                display.style.display = 'none';
-            } else {
-                mask.style.display = 'none';
-                display.style.display = 'inline';
-            }
-        };
-    </script>
 </body>
 </html>

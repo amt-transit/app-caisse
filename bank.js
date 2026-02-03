@@ -305,7 +305,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 alert("Erreur lors de la remise.");
             } finally {
                 confirmDepositBtn.disabled = false;
-                confirmDepositBtn.textContent = "Valider le Dépôt";
+                confirmDepositBtn.textContent = "Valider le Dépôt"; 
             }
         });
     }

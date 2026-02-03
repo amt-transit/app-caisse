@@ -4,6 +4,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     const userRole = sessionStorage.getItem('userRole');
+    const currentUserName = sessionStorage.getItem('userName') || 'Utilisateur';
     const transactionsCollection = db.collection("transactions");
     const tableBody = document.getElementById('tableBody');
     
@@ -20,6 +21,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     let unsubscribeHistory = null; 
     let allTransactions = []; 
+    let lastVisibleDoc = null; // Pour la pagination
+    const PAGE_SIZE = 50;
 
     if (closeModal) closeModal.onclick = () => modal.style.display = "none";
     window.onclick = (e) => { if (e.target == modal) modal.style.display = "none"; };
@@ -30,7 +33,10 @@ document.addEventListener('DOMContentLoaded', () => {
         const row = target.closest('tr');
 
         if (target.classList.contains('deleteBtn')) {
-            if (confirm("Supprimer ?")) transactionsCollection.doc(target.dataset.id).update({ isDeleted: true });
+            if (confirm("Supprimer ?")) {
+                transactionsCollection.doc(target.dataset.id).update({ isDeleted: true });
+                logAudit("SUPPRESSION", `Transaction ${target.dataset.id} supprimée`, target.dataset.id);
+            }
             return;
         }
         if (target.classList.contains('editBtn')) {
@@ -45,7 +51,10 @@ document.addEventListener('DOMContentLoaded', () => {
             const newReste = (paris + abidjan) - newPrice;
 
             transactionsCollection.doc(target.dataset.id).update({ prix: newPrice, reste: newReste })
-                .then(() => alert("Modifié !")).catch(() => alert("Erreur."));
+                .then(() => {
+                    alert("Modifié !");
+                    logAudit("MODIFICATION", `Prix modifié de ${oldPrice} à ${newPrice}`, target.dataset.id);
+                }).catch(() => alert("Erreur."));
             return;
         }
         if (row && row.dataset.id) {
@@ -74,9 +83,32 @@ document.addEventListener('DOMContentLoaded', () => {
         modal.style.display = "block";
     }
 
+    // --- FONCTION JOURNAL D'AUDIT (SÉCURITÉ) ---
+    function logAudit(action, details, docId) {
+        db.collection("audit_logs").add({
+            date: new Date().toISOString(),
+            user: currentUserName,
+            action: action,
+            details: details,
+            targetId: docId || ''
+        }).catch(e => console.error("Audit Error:", e));
+    }
+
+    // --- BOUTON CHARGER PLUS (PAGINATION) ---
+    const loadMoreBtn = document.getElementById('loadMoreBtn');
+    if (loadMoreBtn) {
+        loadMoreBtn.onclick = () => fetchHistory(true); // true = load more
+    }
+
     // --- CHARGEMENT OPTIMISÉ ---
-    function fetchHistory() {
-        if (unsubscribeHistory) unsubscribeHistory();
+    function fetchHistory(isLoadMore = false) {
+        // Si c'est un nouveau filtre, on reset tout
+        if (!isLoadMore) {
+            if (unsubscribeHistory) unsubscribeHistory(); // Stop l'écouteur précédent s'il y en a un
+            allTransactions = [];
+            lastVisibleDoc = null;
+            tableBody.innerHTML = '';
+        }
         
         let query = transactionsCollection;
 
@@ -97,22 +129,49 @@ document.addEventListener('DOMContentLoaded', () => {
                 // On filtre par date (Inegalité). On ne peut pas filtrer isDeleted (Inegalité) en même temps.
                 // On filtrera les supprimés en JS dans le onSnapshot.
                 // CORRECTION : On filtre sur lastPaymentDate pour voir les paiements récents même sur les vieux colis
-                query = query.where("lastPaymentDate", ">=", mondayStr).orderBy("lastPaymentDate", "desc");
+                // query = query.where("lastPaymentDate", ">=", mondayStr).orderBy("lastPaymentDate", "desc");
+                
+                // PERFORMANCE : On utilise la pagination standard par date de création pour l'affichage par défaut
+                query = query.orderBy("date", "desc");
              } else {
                 // Si on filtre, on charge tout le "non supprimé" et on filtre en JS
                 query = query.where("isDeleted", "!=", true).orderBy("isDeleted").orderBy("date", "desc");
              }
         }
         
-        unsubscribeHistory = query.onSnapshot(snapshot => {
-            let docs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        // APPLICATION PAGINATION
+        if (!isFiltering) {
+            query = query.limit(PAGE_SIZE);
+            if (isLoadMore && lastVisibleDoc) {
+                query = query.startAfter(lastVisibleDoc);
+            }
+        }
+
+        // Utilisation de .get() au lieu de onSnapshot pour la pagination (Performance)
+        query.get().then(snapshot => {
+            if (!snapshot.empty) {
+                lastVisibleDoc = snapshot.docs[snapshot.docs.length - 1];
+                if (loadMoreBtn) {
+                    loadMoreBtn.style.display = isFiltering ? 'none' : 'block'; // Pas de "Charger plus" si on filtre déjà tout
+                }
+            } else {
+                if (loadMoreBtn) {
+                    loadMoreBtn.style.display = 'none';
+                }
+            }
+
+            const newDocs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
             
             // FILTRAGE JS COMPLÉMENTAIRE (Pour le cas par défaut où on n'a pas pu filtrer isDeleted en base)
             if (!showDeletedCheckbox.checked && !isFiltering) {
-                docs = docs.filter(d => d.isDeleted !== true);
+                // newDocs = newDocs.filter(d => d.isDeleted !== true); // Déjà géré par la logique d'affichage
             }
 
-            allTransactions = docs;
+            if (isLoadMore) {
+                allTransactions = [...allTransactions, ...newDocs];
+            } else {
+                allTransactions = newDocs;
+            }
             applyFiltersAndRender(); 
         }, error => {
             console.error("Erreur Firestore: ", error);
@@ -181,12 +240,14 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function renderTable(transactions) {
-        tableBody.innerHTML = ''; 
+        // tableBody.innerHTML = ''; // On ne vide pas si on ajoute, mais ici applyFiltersAndRender redessine tout le tableau filtré
+        tableBody.innerHTML = '';
+
         if (transactions.length === 0) {
             // Message différent selon le contexte
             const isFiltering = startDateInput.value || endDateInput.value || smartSearchInput.value || agentFilterInput.value;
             if (!isFiltering) {
-                tableBody.innerHTML = '<tr><td colspan="12" style="text-align:center; padding: 20px;">Aucune opération cette semaine.<br><small>Utilisez les filtres pour voir l\'historique complet.</small></td></tr>';
+                tableBody.innerHTML = '<tr><td colspan="12" style="text-align:center; padding: 20px;">Aucune donnée chargée.</td></tr>';
             } else {
                 tableBody.innerHTML = '<tr><td colspan="12">Aucun résultat pour cette recherche.</td></tr>';
             }

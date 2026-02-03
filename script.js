@@ -224,6 +224,16 @@ document.addEventListener('DOMContentLoaded', async () => {
         
         if (!confirm(`CONFIRMATION :\n\nEncaissements Espèces : ${formatCFA(totalEsp)}\nDépenses Livreur : ${formatCFA(totalDep)}\n\nNET À VERSER : ${formatCFA(totalEsp - totalDep)}\n\nEnregistrer ?`)) return;
 
+        // --- JOURNAL D'AUDIT ---
+        db.collection("audit_logs").add({
+            date: new Date().toISOString(),
+            user: currentUserName,
+            action: "VALIDATION_JOURNEE",
+            details: `Encaissements: ${dailyTransactions.length}, Dépenses: ${dailyExpenses.length}, Total Esp: ${totalEsp}`,
+            targetId: "BATCH"
+        });
+        // -----------------------
+
         const batch = db.batch();
 
         // A. Enregistrer Transactions
