@@ -163,7 +163,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         grandTotalOtherIncomeEl.textContent = formatCFA(totalOtherIncome);
         grandTotalDepensesEl.textContent = formatCFA(totalDepenses);
         grandTotalBeneficeEl.textContent = formatCFA(totalBenefice);
-        grandTotalBeneficeEl.className = totalBenefice < 0 ? 'reste-negatif' : 'reste-positif';
+        grandTotalBeneficeEl.closest('.total-card').className = 'total-card ' + (totalBenefice < 0 ? 'card-negatif' : 'card-positif');
         
         document.getElementById('grandTotalPercu').textContent = formatCFA(totalEntreesAbidjan);
         if(grandTotalParisHiddenEl) grandTotalParisHiddenEl.textContent = `Total Ventes Perçues (P): ${formatCFA(totalEntreesParis)}`;
@@ -172,7 +172,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         grandTotalDepotsEl.textContent = formatCFA(totalDepots);
         
         grandTotalCaisseEl.textContent = formatCFA(totalCaisse);
-        grandTotalCaisseEl.className = totalCaisse < 0 ? 'reste-negatif' : 'reste-positif';
+        grandTotalCaisseEl.closest('.total-card').className = 'total-card ' + (totalCaisse < 0 ? 'card-negatif' : 'card-positif');
 
         // NOUVEAU : Affichage Chèques
         const chequeEl = document.getElementById('grandTotalCheques');

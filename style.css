@@ -202,13 +202,30 @@ td button.editBtn { background-color: #007bff; color: white; border: none; paddi
 .total-card p { margin-bottom: 0; font-size: 24px; font-weight: 700; color: var(--text-main); }
 
 /* --- COULEURS GRANDS TOTAUX DASHBOARD --- */
-#grandTotalPrix { color: var(--primary); } /* Ventes (Indigo) */
-#grandTotalOtherIncome { color: #06b6d4; } /* Autres Entrées (Cyan) */
-#grandTotalDepenses { color: var(--danger); } /* Dépenses (Rouge) */
-#grandTotalReste { color: var(--warning); } /* Reste à payer (Orange) */
-#grandTotalRetraits { color: #8b5cf6; } /* Retraits Banque (Violet) */
-#grandTotalDepots { color: #f43f5e; } /* Dépôts Banque (Rose) */
-#grandTotalCheques { color: #64748b; } /* Chèques (Gris Slate) */
+/* Inversion : Background coloré, texte blanc */
+#card-prix, #card-percu { background-color: var(--primary); }
+#card-other { background-color: #06b6d4; }
+#card-depenses { background-color: var(--danger); }
+#card-reste { background-color: var(--warning); }
+#card-retraits { background-color: #8b5cf6; }
+#card-depots { background-color: #f43f5e; }
+#card-cheques { background-color: #6f42c1; }
+
+/* Texte blanc pour les cartes colorées */
+.total-card.colored-card h3,
+.total-card.colored-card p,
+.total-card.colored-card span {
+    color: #fff !important;
+}
+.total-card.colored-card { border: none; }
+
+/* Classes dynamiques pour Bénéfice et Caisse */
+.card-positif { background-color: var(--success) !important; border: none; }
+.card-negatif { background-color: var(--danger) !important; border: none; }
+.card-positif h3, .card-positif p, .card-negatif h3, .card-negatif p { color: #fff !important; }
+
+/* Ajustement layout sous-titre Paris */
+#grandTotalParisHidden { display: block; font-size: 0.75em; margin-top: 4px; font-weight: 500; }
 
 .reste-positif { color: var(--success) !important; } /* Vert */
 .reste-negatif { color: var(--danger) !important; } /* Rouge */
