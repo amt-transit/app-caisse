@@ -37,6 +37,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     let allParisManifestCache = [];
     let geoChartInstance = null;
     let financeChartInstance = null;
+    let timeChartInstance = null;
 
     // --- MISE À JOUR DYNAMIQUE DES EN-TÊTES (Top 100) ---
     const topClientsTable = document.getElementById('topClientsTableBody')?.closest('table');
@@ -282,7 +283,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     function generateCharts() {
         const geoCanvas = document.getElementById('geoChart');
         const financeCanvas = document.getElementById('financeChart');
-        if (!geoCanvas || !financeCanvas) return;
+        const timeCanvas = document.getElementById('timeChart');
+        if (!geoCanvas || !financeCanvas || !timeCanvas) return;
 
         // Utilisation des données en cache (allTransactionsCache)
         const transactions = allTransactionsCache;
@@ -341,6 +343,66 @@ document.addEventListener('DOMContentLoaded', async () => {
                 datasets: [{ label: 'Montants Payés (CFA)', data: [totalParis, totalAbidjan], backgroundColor: ['#00d2ff', '#ff9f43'], borderRadius: 5 }]
             },
             options: { responsive: true, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } }
+        });
+
+        // 3. PRÉPARATION DONNÉES TEMPORELLES (Flux Paris vs Abidjan par Mois)
+        const timeStats = {};
+        transactions.forEach(t => {
+            if (!t.date) return;
+            // On groupe par mois (YYYY-MM) pour une courbe lisible
+            const month = t.date.substring(0, 7); 
+            if (!timeStats[month]) timeStats[month] = { paris: 0, abidjan: 0 };
+            timeStats[month].paris += (t.montantParis || 0);
+            timeStats[month].abidjan += (t.montantAbidjan || 0);
+        });
+
+        const sortedMonths = Object.keys(timeStats).sort();
+
+        // --- RENDU GRAPHIQUE TEMPOREL (Courbe Lissée) ---
+        if (timeChartInstance) timeChartInstance.destroy();
+        timeChartInstance = new Chart(timeCanvas, {
+            type: 'line',
+            data: {
+                labels: sortedMonths,
+                datasets: [
+                    {
+                        label: 'Paris (Départ)',
+                        data: sortedMonths.map(m => timeStats[m].paris),
+                        borderColor: '#00d2ff',
+                        backgroundColor: 'rgba(0, 210, 255, 0.1)',
+                        tension: 0.4, // Courbe lissée
+                        pointRadius: 4, // Points visibles (Nuage)
+                        fill: true
+                    },
+                    {
+                        label: 'Abidjan (Arrivée)',
+                        data: sortedMonths.map(m => timeStats[m].abidjan),
+                        borderColor: '#ff9f43',
+                        backgroundColor: 'rgba(255, 159, 67, 0.1)',
+                        tension: 0.4, // Courbe lissée
+                        pointRadius: 4, // Points visibles (Nuage)
+                        fill: true
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                interaction: { mode: 'index', intersect: false },
+                plugins: {
+                    legend: { position: 'top' },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                let label = context.dataset.label || '';
+                                if (label) label += ': ';
+                                if (context.parsed.y !== null) label += formatCFA(context.parsed.y);
+                                return label;
+                            }
+                        }
+                    }
+                },
+                scales: { y: { beginAtZero: true } }
+            }
         });
     }
 
