@@ -279,7 +279,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                     paymentHistory: firebase.firestore.FieldValue.arrayUnion(...newPaymentEntries),
                     lastPaymentDate: baseTransac.date,
                     saisiPar: currentUserName,
-                    isDeleted: false // Réactivation automatique si le dossier était supprimé
+                    isDeleted: false, // Réactivation automatique si le dossier était supprimé
+                    modePaiement: baseTransac.modePaiement // CORRECTION : On met à jour le mode de paiement principal
                 };
 
                 // Fusion des agents

@@ -97,6 +97,7 @@
             <a href="#panel-ventes">Ventes (par Mois)</a>
             <a href="#panel-depenses">Dépenses (Mensuelles)</a>
             <a href="#panel-banque">Mouvements Banque</a>
+            <a href="#panel-impayes" style="color: #dc3545;">⚠️ Impayés</a>
         </div>
 
         <div id="panel-conteneurs" class="tab-panel active">
@@ -104,7 +105,7 @@
             <table id="containerSummaryTable">
                 <thead>
                     <tr>
-                        <th>Conteneur</th><th>Op. Totales</th><th>Chiffre d'Affaires (CA)</th><th>Total Paris</th><th>Total Abidjan</th>
+                        <th>Conteneur</th><th>Op. Totales</th><th>Non Payés</th><th>Chiffre d'Affaires (CA)</th><th>Total Paris</th><th>Total Abidjan</th>
                         <th>Total Perçu (P+A)</th><th>Total Reste</th><th>Total Dépenses</th><th>BÉNÉFICE Conteneur</th>
                     </tr>
                 </thead>
@@ -149,6 +150,25 @@
             <table id="bankMovementsTable">
                 <thead><tr><th>Date</th><th>Description</th><th>Type</th><th>Montant</th></tr></thead>
                 <tbody id="bankMovementsTableBody"></tbody>
+            </table>
+        </div>
+
+        <div id="panel-impayes" class="tab-panel">
+            <h2 style="margin-top: 30px; color: #dc3545;">Liste des Colis Impayés (Dettes)</h2>
+            <table id="unpaidTable">
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Conteneur</th>
+                        <th>Référence</th>
+                        <th>Client</th>
+                        <th>Prix Total</th>
+                        <th>Déjà Payé</th>
+                        <th>Reste à Payer</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody id="unpaidTableBody"></tbody>
             </table>
         </div>
 
@@ -261,22 +281,7 @@
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script>
-        const firebaseConfig = {
-            apiKey: "AIzaSyA255n3XWDRKaYZ9kwOYkfovf5lRexoCA4",
-            authDomain: "caisse-amt-perso.firebaseapp.com",
-            projectId: "caisse-amt-perso",
-            storageBucket: "caisse-amt-perso.firebasestorage.app",
-            messagingSenderId: "682789156997",
-            appId: "1:682789156997:web:9ce3303120851d37be91ec"
-        };
-        firebase.initializeApp(firebaseConfig);
-        const db = firebase.firestore();
-        document.getElementById('logoutBtn').addEventListener('click', () => {
-            if (confirm("Voulez-vous vous déconnecter ?")) firebase.auth().signOut();
-        });
-        
-    </script>
+    <script src="firebase-init.js"></script>
     <script src="auth-guard.js"></script>
     <script src="dashboard.js"></script>
 </body>

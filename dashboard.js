@@ -14,6 +14,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const monthlyExpensesTableBody = document.getElementById('monthlyExpensesTableBody');
     const bankMovementsTableBody = document.getElementById('bankMovementsTableBody');
     const topClientsTableBody = document.getElementById('topClientsTableBody'); 
+    const unpaidTableBody = document.getElementById('unpaidTableBody');
 
     const grandTotalPrixEl = document.getElementById('grandTotalPrix');
     const grandTotalCountEl = document.getElementById('grandTotalCount');
@@ -93,6 +94,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         generateMonthlyExpenseSummary(filteredExpenses); 
         generateBankMovementSummary(filteredBankMovements);
         generateTopClientsSummary(filteredTransactions); 
+        generateUnpaidSummary(filteredTransactions);
         generateAdvancedAnalytics(filteredTransactions, allTransactions); // Nouvelles analyses
         generateVisualCharts(allTransactions, allExpenses); // Graphiques (sur toutes les données pour voir l'évolution)
     }
@@ -257,20 +259,21 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Remplacez votre fonction generateContainerSummary actuelle par celle-ci
     function generateContainerSummary(transactions, expenses) {
         const tbody = document.getElementById('containerSummaryTableBody');
-        tbody.innerHTML = '<tr><td colspan="9">Aucune donnée de conteneur.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="10">Aucune donnée de conteneur.</td></tr>';
         
         // ... (Votre logique de calcul existante reste identique ici) ...
         // Je reprends juste la partie calcul pour le contexte, ne changez pas votre logique de calcul
         const containerData = {};
         transactions.forEach(t => {
             const containerName = (t.conteneur && t.conteneur.trim().toUpperCase()) || "Non spécifié"; 
-            if (!containerData[containerName]) containerData[containerName] = { totalPrix: 0, totalParis: 0, totalAbidjan: 0, totalReste: 0, date: t.date, count: 0 };
+            if (!containerData[containerName]) containerData[containerName] = { totalPrix: 0, totalParis: 0, totalAbidjan: 0, totalReste: 0, date: t.date, count: 0, unpaidCount: 0 };
             const data = containerData[containerName];
             data.totalPrix += (t.prix || 0);
             data.totalParis += (t.montantParis || 0);
             data.totalAbidjan += (t.montantAbidjan || 0);
             data.totalReste += (t.reste || 0);
             data.count++;
+            if ((t.reste || 0) < 0) data.unpaidCount++;
             if (t.date && t.date < data.date) data.date = t.date;
         });
 
@@ -307,12 +310,13 @@ document.addEventListener('DOMContentLoaded', async () => {
             const containers = containersByMonth[monthKey];
             
             // Calcul Totaux Mois
-            let mCA = 0, mParis = 0, mAbj = 0, mReste = 0, mDep = 0, mCount = 0;
+            let mCA = 0, mParis = 0, mAbj = 0, mReste = 0, mDep = 0, mCount = 0, mUnpaidCount = 0;
             containers.forEach(c => {
-                const d = containerData[c] || { totalPrix: 0, totalParis: 0, totalAbidjan: 0, totalReste: 0, count: 0 };
+                const d = containerData[c] || { totalPrix: 0, totalParis: 0, totalAbidjan: 0, totalReste: 0, count: 0, unpaidCount: 0 };
                 mCA += d.totalPrix; mParis += d.totalParis; mAbj += d.totalAbidjan; mReste += d.totalReste;
                 mDep += (containerExpenses[c] || 0);
                 mCount += d.count;
+                mUnpaidCount += d.unpaidCount;
             });
             const mBenef = mCA - mDep;
             const mPercu = mParis + mAbj;
@@ -333,6 +337,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             monthRow.innerHTML = `
                 <td data-label="Mois"><span style="display:inline-block; width:15px;">▶</span> ${monthLabel} (${containers.length})</td>
                 <td data-label="Op. Totales">${mCount}</td>
+                <td data-label="Non Payés" style="color:${mUnpaidCount > 0 ? '#dc3545' : '#28a745'}">${mUnpaidCount}</td>
                 <td data-label="CA">${formatCFA(mCA)}</td>
                 <td data-label="Total Paris">${formatCFA(mParis)}</td>
                 <td data-label="Total Abidjan">${formatCFA(mAbj)}</td>
@@ -362,7 +367,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             });
 
             containers.forEach(container => {
-                const data = containerData[container] || { totalPrix: 0, totalParis: 0, totalAbidjan: 0, totalReste: 0, count: 0 };
+                const data = containerData[container] || { totalPrix: 0, totalParis: 0, totalAbidjan: 0, totalReste: 0, count: 0, unpaidCount: 0 };
                 const ca = data.totalPrix; 
                 const totalDepenseConteneur = containerExpenses[container] || 0;
                 const beneficeConteneur = ca - totalDepenseConteneur;
@@ -382,6 +387,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 row.innerHTML = `
                     <td data-label="Conteneur" style="padding-left: 30px;">↳ <b>${container}</b></td>
                     <td data-label="Op. Totales">${data.count}</td>
+                    <td data-label="Non Payés" style="color:${data.unpaidCount > 0 ? '#dc3545' : '#28a745'}">${data.unpaidCount}</td>
                     <td data-label="CA">${formatCFA(ca)}</td>
                     <td data-label="Total Paris">${formatCFA(data.totalParis)} <br><small style="color:#666; font-size:0.8em;">(${percParis}%)</small></td>
                     <td data-label="Total Abidjan">${formatCFA(data.totalAbidjan)} <br><small style="color:#666; font-size:0.8em;">(${percAbidjan}%)</small></td>
@@ -449,6 +455,43 @@ document.addEventListener('DOMContentLoaded', async () => {
             const row = document.createElement('tr');
             row.innerHTML = `<td data-label="Rang"><b>#${index + 1}</b></td><td data-label="Client">${client.name} ${waBtn}</td><td data-label="Destinataire">${client.destinataire || '-'}</td><td data-label="Nb. Op.">${client.count}</td><td data-label="Chiffre d'Affaires">${formatCFA(client.totalPrix)}</td>`;
             topClientsTableBody.appendChild(row);
+        });
+    }
+
+    function generateUnpaidSummary(transactions) {
+        if (!unpaidTableBody) return;
+        unpaidTableBody.innerHTML = '<tr><td colspan="8">Aucun impayé trouvé.</td></tr>';
+        
+        // On filtre les transactions qui ont une dette (reste négatif)
+        // On exclut les très petits montants (erreurs d'arrondi < 1 CFA)
+        const unpaid = transactions.filter(t => (t.reste || 0) < -1);
+        
+        if (unpaid.length === 0) return;
+
+        // Tri par dette la plus élevée (reste le plus petit/négatif)
+        unpaid.sort((a, b) => a.reste - b.reste);
+
+        unpaidTableBody.innerHTML = '';
+        unpaid.forEach(t => {
+            const paid = (t.montantParis || 0) + (t.montantAbidjan || 0);
+            const debt = Math.abs(t.reste);
+            
+            // Message WhatsApp pré-rempli
+            const message = `Bonjour ${t.nomDestinataire || t.nom || 'Client'}, sauf erreur de notre part, le solde restant à payer pour le colis ${t.reference} (${t.conteneur || '?'}) est de ${formatCFA(debt)}. Merci.`;
+            const waLink = `https://wa.me/?text=${encodeURIComponent(message)}`;
+            
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td>${t.date}</td>
+                <td>${t.conteneur || '-'}</td>
+                <td><b>${t.reference}</b></td>
+                <td>${t.nom || '-'}</td>
+                <td>${formatCFA(t.prix)}</td>
+                <td>${formatCFA(paid)}</td>
+                <td class="reste-negatif" style="font-weight:bold;">${formatCFA(t.reste)}</td>
+                <td><a href="${waLink}" target="_blank" style="text-decoration:none; color: #25D366; font-weight:bold; border: 1px solid #25D366; padding: 2px 8px; border-radius: 4px;">📱 Relancer</a></td>
+            `;
+            unpaidTableBody.appendChild(row);
         });
     }
 

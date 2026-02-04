@@ -139,8 +139,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 // CORRECTION : On filtre sur lastPaymentDate pour voir les paiements récents même sur les vieux colis
                 // query = query.where("lastPaymentDate", ">=", mondayStr).orderBy("lastPaymentDate", "desc");
                 
-                // PERFORMANCE : On utilise la pagination standard par date de création pour l'affichage par défaut
-                query = query.orderBy("date", "desc");
+                // PERFORMANCE & CORRECTION PAGINATION :
+                // On filtre les supprimés DÈS LA REQUÊTE pour ne pas charger 50 docs vides si on a fait du nettoyage.
+                query = query.where("isDeleted", "!=", true).orderBy("isDeleted").orderBy("date", "desc");
              } else {
                 // Si on filtre, on charge tout le "non supprimé" et on filtre en JS
                 query = query.where("isDeleted", "!=", true).orderBy("isDeleted").orderBy("date", "desc");
@@ -356,19 +357,40 @@ document.addEventListener('DOMContentLoaded', () => {
         
         const displayDate = data.lastPaymentDate || data.date || 'En attente';
 
-        // LOGIQUE ICONE PAIEMENT
-        let modeIcon = '';
-        const mode = data.modePaiement || 'Espèce';
-        if (mode === 'Espèce') modeIcon = '💵';
-        else if (mode === 'Chèque') modeIcon = '✍️';
-        else if (mode === 'OM') modeIcon = '🟠';
-        else if (mode === 'Wave') modeIcon = '🔵';
-        else if (mode === 'Virement') modeIcon = '🏦';
+        // LOGIQUE ICONE PAIEMENT (MULTI-MODES)
+        let paymentDisplayHTML = '';
+        
+        const getModeIcon = (m) => {
+            if (m === 'Espèce') return '💵';
+            if (m === 'Chèque') return '✍️';
+            if (m === 'OM') return '🟠';
+            if (m === 'Wave') return '🔵';
+            if (m === 'Virement') return '🏦';
+            return '';
+        };
 
-        // Si c'est un virement ou chèque et qu'il n'y a pas d'info "Agent", on affiche le mode en toutes lettres
-        let infoPaiement = data.agentMobileMoney || '';
-        if (!infoPaiement && (mode === 'Virement' || mode === 'Chèque')) {
-            infoPaiement = mode;
+        if (data.paymentHistory && data.paymentHistory.length > 0) {
+            const seenModes = new Set();
+            data.paymentHistory.forEach(pay => {
+                const m = pay.modePaiement || 'Espèce';
+                const i = pay.agentMobileMoney || '';
+                const key = m + '|' + i;
+                
+                if (!seenModes.has(key)) {
+                    seenModes.add(key);
+                    let text = i;
+                    if (!text && (m === 'Virement' || m === 'Chèque')) text = m;
+                    
+                    paymentDisplayHTML += `<div style="margin-bottom:2px; white-space:nowrap;">${getModeIcon(m)} <span class="tag mm-tag ${textToClassName(text)}">${text}</span></div>`;
+                }
+            });
+        } else {
+            // Fallback (Anciennes données)
+            let mode = data.modePaiement || 'Espèce';
+            let info = data.agentMobileMoney || '';
+            if (!info && (mode === 'Virement' || mode === 'Chèque')) info = mode;
+            
+            paymentDisplayHTML = `<div title="${mode}">${getModeIcon(mode)} <span class="tag mm-tag ${textToClassName(info)}">${info}</span></div>`;
         }
 
         newRow.innerHTML = `
@@ -379,7 +401,7 @@ document.addEventListener('DOMContentLoaded', () => {
             <td>${formatCFA(data.prix)}</td>
             <td>${formatCFA(data.montantParis)}</td>
             <td>${formatCFA(data.montantAbidjan)}</td>
-            <td title="${mode}">${modeIcon} <span class="tag mm-tag ${textToClassName(infoPaiement)}">${infoPaiement}</span></td>
+            <td>${paymentDisplayHTML}</td>
             <td class="${reste_class}">${formatCFA(data.reste)}</td>
             <td><span class="tag ${textToClassName(data.commune)}">${data.commune || ''}</span></td>
             
