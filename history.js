@@ -34,8 +34,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (target.classList.contains('deleteBtn')) {
             if (confirm("Supprimer ?")) {
-                transactionsCollection.doc(target.dataset.id).update({ isDeleted: true });
-                logAudit("SUPPRESSION", `Transaction ${target.dataset.id} supprimée`, target.dataset.id);
+                transactionsCollection.doc(target.dataset.id).update({ isDeleted: true })
+                .then(() => {
+                    row.remove(); // Mise à jour visuelle immédiate
+                    logAudit("SUPPRESSION", `Transaction ${target.dataset.id} supprimée`, target.dataset.id);
+                });
             }
             return;
         }
@@ -53,6 +56,11 @@ document.addEventListener('DOMContentLoaded', () => {
             transactionsCollection.doc(target.dataset.id).update({ prix: newPrice, reste: newReste })
                 .then(() => {
                     alert("Modifié !");
+                    // Mise à jour visuelle immédiate
+                    target.dataset.prix = newPrice;
+                    row.children[4].textContent = formatCFA(newPrice);
+                    row.children[8].textContent = formatCFA(newReste);
+                    row.children[8].className = newReste < 0 ? 'reste-negatif' : 'reste-positif';
                     logAudit("MODIFICATION", `Prix modifié de ${oldPrice} à ${newPrice}`, target.dataset.id);
                 }).catch(() => alert("Erreur."));
             return;
@@ -255,15 +263,20 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         
         // Tri JS pour être sûr (si le tri Firestore a sauté)
-        transactions.sort((a, b) => new Date(b.date) - new Date(a.date));
+        transactions.sort((a, b) => {
+            const dateA = a.lastPaymentDate || a.date;
+            const dateB = b.lastPaymentDate || b.date;
+            return new Date(dateB) - new Date(dateA);
+        });
 
         let currentSubtotals = { prix: 0, montantParis: 0, montantAbidjan: 0, reste: 0 };
-        let currentDate = transactions[0]?.date; 
+        let currentDate = transactions[0] ? (transactions[0].lastPaymentDate || transactions[0].date) : null; 
         
         transactions.forEach((data) => {
-            if (data.date !== currentDate && data.date) {
+            const displayDate = data.lastPaymentDate || data.date;
+            if (displayDate !== currentDate && displayDate) {
                 insertSubtotalRow(currentDate, currentSubtotals);
-                currentDate = data.date;
+                currentDate = displayDate;
                 currentSubtotals = { prix: 0, montantParis: 0, montantAbidjan: 0, reste: 0 };
             }
             if (data.isDeleted !== true) {
@@ -341,15 +354,32 @@ document.addEventListener('DOMContentLoaded', () => {
             btns += `<button class="deleteBtn" data-id="${data.id}">Suppr.</button>`;
         }
         
+        const displayDate = data.lastPaymentDate || data.date || 'En attente';
+
+        // LOGIQUE ICONE PAIEMENT
+        let modeIcon = '';
+        const mode = data.modePaiement || 'Espèce';
+        if (mode === 'Espèce') modeIcon = '💵';
+        else if (mode === 'Chèque') modeIcon = '✍️';
+        else if (mode === 'OM') modeIcon = '🟠';
+        else if (mode === 'Wave') modeIcon = '🔵';
+        else if (mode === 'Virement') modeIcon = '🏦';
+
+        // Si c'est un virement ou chèque et qu'il n'y a pas d'info "Agent", on affiche le mode en toutes lettres
+        let infoPaiement = data.agentMobileMoney || '';
+        if (!infoPaiement && (mode === 'Virement' || mode === 'Chèque')) {
+            infoPaiement = mode;
+        }
+
         newRow.innerHTML = `
-            <td>${data.date || 'En attente'}</td>
+            <td>${displayDate}</td>
             <td>${data.reference}</td>
             <td>${data.nom || ''}</td>
             <td>${data.conteneur || ''}</td>
             <td>${formatCFA(data.prix)}</td>
             <td>${formatCFA(data.montantParis)}</td>
             <td>${formatCFA(data.montantAbidjan)}</td>
-            <td><span class="tag mm-tag ${textToClassName(data.agentMobileMoney)}">${data.agentMobileMoney || ''}</span></td>
+            <td title="${mode}">${modeIcon} <span class="tag mm-tag ${textToClassName(infoPaiement)}">${infoPaiement}</span></td>
             <td class="${reste_class}">${formatCFA(data.reste)}</td>
             <td><span class="tag ${textToClassName(data.commune)}">${data.commune || ''}</span></td>
             

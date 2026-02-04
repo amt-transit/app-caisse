@@ -32,7 +32,10 @@ document.addEventListener('DOMContentLoaded', () => {
     let selectedChecks = [];
 
     let unsubscribeBank = null;
+    let unsubscribeVirements = null;
     let allBankMovements = [];
+    let allVirements = [];
+    let allCombinedMovements = [];
 
     // 1. AJOUT MANUEL
     addBankMovementBtn.addEventListener('click', async () => {
@@ -117,6 +120,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // 3. AFFICHAGE & RECHERCHE
     function fetchBankMovements() {
         if (unsubscribeBank) unsubscribeBank();
+        if (unsubscribeVirements) unsubscribeVirements();
         let query = bankCollection;
         
         if (showDeletedCheckbox.checked) {
@@ -131,14 +135,67 @@ document.addEventListener('DOMContentLoaded', () => {
         query = query.orderBy("date", "desc");
 
         unsubscribeBank = query.onSnapshot(snapshot => {
-            allBankMovements = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-            renderBankTable();
+            allBankMovements = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data(), _source: 'bank' }));
+            mergeAndRender();
         }, error => console.error(error));
+
+        // B. Virements depuis Transactions
+        let transQuery = db.collection("transactions");
+        if (showDeletedCheckbox.checked) {
+             transQuery = transQuery.where("isDeleted", "==", true);
+        } else {
+             transQuery = transQuery.where("isDeleted", "!=", true);
+        }
+
+        unsubscribeVirements = transQuery.onSnapshot(snapshot => {
+            const extracted = [];
+            snapshot.docs.forEach(doc => {
+                const t = doc.data();
+                // Logique identique au Dashboard pour extraire les paiements
+                if (t.paymentHistory && t.paymentHistory.length > 0) {
+                    t.paymentHistory.forEach((pay, idx) => {
+                        if (pay.modePaiement === 'Virement') {
+                            extracted.push({
+                                id: `${doc.id}_${idx}`,
+                                date: pay.date,
+                                description: `VIREMENT REÇU: ${t.reference} - ${t.nom} (${pay.agentMobileMoney || 'N/A'})`,
+                                type: 'Depot',
+                                montant: (pay.montantAbidjan || 0) + (pay.montantParis || 0),
+                                isDeleted: t.isDeleted,
+                                _source: 'transaction',
+                                _docId: doc.id
+                            });
+                        }
+                    });
+                } else {
+                    if (t.modePaiement === 'Virement') {
+                        extracted.push({
+                            id: doc.id,
+                            date: t.date,
+                            description: `VIREMENT REÇU: ${t.reference} - ${t.nom} (${t.agentMobileMoney || 'N/A'})`,
+                            type: 'Depot',
+                            montant: (t.montantAbidjan || 0) + (t.montantParis || 0),
+                            isDeleted: t.isDeleted,
+                            _source: 'transaction',
+                            _docId: doc.id
+                        });
+                    }
+                }
+            });
+            allVirements = extracted;
+            mergeAndRender();
+        }, error => console.error(error));
+    }
+
+    function mergeAndRender() {
+        allCombinedMovements = [...allBankMovements, ...allVirements];
+        allCombinedMovements.sort((a, b) => new Date(b.date) - new Date(a.date));
+        renderBankTable();
     }
 
     function renderBankTable() {
         const term = bankSearchInput ? bankSearchInput.value.toLowerCase().trim() : "";
-        const filtered = allBankMovements.filter(item => {
+        const filtered = allCombinedMovements.filter(item => {
             if (!term) return true;
             return (item.description || "").toLowerCase().includes(term) ||
                    (item.type || "").toLowerCase().includes(term);
@@ -153,9 +210,17 @@ document.addEventListener('DOMContentLoaded', () => {
             const row = document.createElement('tr');
             if (move.isDeleted === true) row.classList.add('deleted-row');
             
+            if (move._source === 'transaction') {
+                row.style.backgroundColor = '#f3e8ff';
+            }
+            
             let deleteButtonHTML = '';
             if (move.isDeleted !== true) {
-                deleteButtonHTML = `<button class="deleteBtn" data-id="${move.id}">Suppr.</button>`;
+                if (move._source === 'transaction') {
+                    deleteButtonHTML = `<span style="font-size:0.8em; color:#666;">Via Historique</span>`;
+                } else {
+                    deleteButtonHTML = `<button class="deleteBtn" data-id="${move.id}">Suppr.</button>`;
+                }
             }
 
             row.innerHTML = `
@@ -176,10 +241,40 @@ document.addEventListener('DOMContentLoaded', () => {
     fetchBankMovements();
 
     // 4. SUPPRESSION
-    bankTableBody.addEventListener('click', (event) => {
+    bankTableBody.addEventListener('click', async (event) => {
         if (event.target.classList.contains('deleteBtn')) {
             const docId = event.target.getAttribute('data-id');
-            if (confirm("Confirmer la suppression ? Elle sera archivée.")) {
+            if (!confirm("Confirmer la suppression ? Elle sera archivée.")) return;
+
+            // LOGIQUE D'ANNULATION DE REMISE DE CHÈQUE
+            const move = allBankMovements.find(m => m.id === docId);
+            
+            if (move && move.source === 'Remise Chèques' && move.checks && move.checks.length > 0) {
+                try {
+                    const batch = db.batch();
+                    // 1. Supprimer le mouvement banque
+                    batch.update(bankCollection.doc(docId), { isDeleted: true });
+
+                    // 2. Rétablir les chèques en "Pending" (En attente)
+                    const updates = {};
+                    move.checks.forEach(c => {
+                        if(!updates[c.docId]) updates[c.docId] = [];
+                        updates[c.docId].push(c.index);
+                    });
+
+                    for (const [tid, indices] of Object.entries(updates)) {
+                        const tRef = db.collection("transactions").doc(tid);
+                        const tDoc = await tRef.get();
+                        if(tDoc.exists) {
+                            const h = tDoc.data().paymentHistory;
+                            indices.forEach(idx => { if(h[idx]) h[idx].checkStatus = 'Pending'; });
+                            batch.update(tRef, { paymentHistory: h });
+                        }
+                    }
+                    await batch.commit();
+                    alert("Mouvement supprimé et chèques rétablis en 'En attente'.");
+                } catch(e) { console.error(e); alert("Erreur lors de l'annulation."); }
+            } else {
                 bankCollection.doc(docId).update({ isDeleted: true });
             }
         }
@@ -200,7 +295,9 @@ document.addEventListener('DOMContentLoaded', () => {
                                 docId: doc.id,
                                 index: index,
                                 date: pay.date,
-                                client: data.nom || data.reference,
+                                client: data.nom || "Non spécifié",
+                                reference: data.reference || "",
+                                destinataire: data.nomDestinataire || "Non spécifié",
                                 montant: pay.montantAbidjan || pay.montantParis || 0, // Montant du chèque (Abidjan par défaut)
                                 info: pay.agentMobileMoney
                             });
@@ -221,7 +318,12 @@ document.addEventListener('DOMContentLoaded', () => {
                     tr.innerHTML = `
                         <td><input type="checkbox" class="check-select" data-amount="${chk.montant}" data-docid="${chk.docId}" data-index="${chk.index}"></td>
                         <td>${chk.date}</td>
-                        <td>${chk.client}<br><small>${chk.info || ''}</small></td>
+                        <td>
+                            <strong>${chk.reference}</strong><br>
+                            Exp: ${chk.client}<br>
+                            Dest: ${chk.destinataire}
+                            ${chk.info ? `<br><small>${chk.info}</small>` : ''}
+                        </td>
                         <td>${formatCFA(chk.montant)}</td>
                     `;
                     pendingChecksBody.appendChild(tr);
@@ -271,7 +373,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 montant: totalAmount,
                 type: 'Depot',
                 isDeleted: false,
-                source: 'Remise Chèques'
+                source: 'Remise Chèques',
+                checks: selectedChecks // Sauvegarde des chèques pour pouvoir annuler plus tard
             });
 
             // B. Mettre à jour les transactions
@@ -320,13 +423,15 @@ document.addEventListener('DOMContentLoaded', () => {
             // On ne compte que le CASH disponible (pas les chèques).
             if (d.paymentHistory && d.paymentHistory.length > 0) {
                 d.paymentHistory.forEach(pay => {
-                    if (pay.modePaiement !== 'Chèque') {
+                    if (pay.modePaiement !== 'Chèque' && pay.modePaiement !== 'Virement') {
                         totalVentes += (pay.montantAbidjan || 0);
                     }
                 });
             } else {
                 // Fallback pour anciennes données (considérées comme cash par défaut)
-                totalVentes += (d.montantAbidjan || 0); 
+                if (d.modePaiement !== 'Chèque' && d.modePaiement !== 'Virement') {
+                    totalVentes += (d.montantAbidjan || 0); 
+                }
             }
         });
 
@@ -336,7 +441,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const expSnap = await db.collection("expenses").where("isDeleted", "!=", true).get();
         let totalDepenses = 0;
-        expSnap.forEach(doc => totalDepenses += (doc.data().montant || 0));
+        expSnap.forEach(doc => {
+            const d = doc.data();
+            if (d.mode !== 'Virement' && d.mode !== 'Chèque') {
+                totalDepenses += (d.montant || 0);
+            }
+        });
 
         const bankSnap = await db.collection("bank_movements").where("isDeleted", "!=", true).get();
         let totalRetraits = 0;

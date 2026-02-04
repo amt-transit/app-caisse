@@ -273,7 +273,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- AFFICHAGE ABIDJAN ---
     // On récupère tout (pour avoir le total)
-    transactionsCollection.orderBy("date", "desc").onSnapshot(snapshot => {
+    transactionsCollection.where("isDeleted", "!=", true).orderBy("isDeleted").orderBy("date", "desc").onSnapshot(snapshot => {
         allArrivals = snapshot.docs.map(doc => doc.data());
         renderAbidjanTable();
     }, error => console.error(error));

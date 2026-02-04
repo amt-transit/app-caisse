@@ -78,7 +78,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (totalPaye > newData.prix) return alert(`IMPOSSIBLE : Trop perçu.`);
         newData.reste = totalPaye - newData.prix;
 
-        const existingIndex = dailyTransactions.findIndex(t => t.reference === newData.reference);
+        // CORRECTION : On vérifie la Référence ET le Mode de Paiement pour permettre le fractionnement
+        const existingIndex = dailyTransactions.findIndex(t => t.reference === newData.reference && t.modePaiement === newData.modePaiement);
         if (existingIndex > -1) {
             const t = dailyTransactions[existingIndex];
             const nouveauTotal = t.montantParis + t.montantAbidjan + newData.montantParis + newData.montantAbidjan;
@@ -236,58 +237,81 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         const batch = db.batch();
 
-        // A. Enregistrer Transactions
-        for (const transac of dailyTransactions) {
-            const query = await transactionsCollection.where("reference", "==", transac.reference).get();
+        // A. Enregistrer Transactions (GROUPÉ PAR RÉFÉRENCE)
+        // On regroupe d'abord les paiements fractionnés par référence
+        const transactionsByRef = {};
+        dailyTransactions.forEach(t => {
+            if (!transactionsByRef[t.reference]) transactionsByRef[t.reference] = [];
+            transactionsByRef[t.reference].push(t);
+        });
+
+        for (const ref of Object.keys(transactionsByRef)) {
+            const group = transactionsByRef[ref];
+            // FIX: On utilise la transaction avec le prix le plus élevé comme référence pour les métadonnées (évite les erreurs si ordre mélangé)
+            const baseTransac = group.reduce((prev, current) => (prev.prix > current.prix) ? prev : current);
             
-            const isCheck = (transac.modePaiement === 'Chèque');
-            const paymentEntry = {
-                date: transac.date,
-                montantParis: transac.montantParis,
-                montantAbidjan: transac.montantAbidjan,
-                agent: transac.agent,
+            // Calcul des totaux pour ce groupe (cette référence)
+            const totalParis = group.reduce((sum, t) => sum + t.montantParis, 0);
+            const totalAbidjan = group.reduce((sum, t) => sum + t.montantAbidjan, 0);
+            
+            // Préparation des entrées d'historique
+            const newPaymentEntries = group.map(t => ({
+                date: t.date,
+                montantParis: t.montantParis,
+                montantAbidjan: t.montantAbidjan,
+                agent: t.agent,
                 saisiPar: currentUserName,
-                modePaiement: transac.modePaiement,
-                agentMobileMoney: transac.agentMobileMoney,
-                checkStatus: isCheck ? 'Pending' : 'Cleared'
-            };
+                modePaiement: t.modePaiement,
+                agentMobileMoney: t.agentMobileMoney,
+                checkStatus: (t.modePaiement === 'Chèque') ? 'Pending' : 'Cleared'
+            }));
+
+            const query = await transactionsCollection.where("reference", "==", ref).get();
 
             if (!query.empty) {
                 const docRef = query.docs[0].ref;
                 const oldData = query.docs[0].data();
 
-                // Préparation des mises à jour pour plus de clarté
                 const updates = {
-                    montantParis: (oldData.montantParis || 0) + transac.montantParis,
-                    montantAbidjan: (oldData.montantAbidjan || 0) + transac.montantAbidjan,
-                    reste: (oldData.reste || 0) + transac.montantParis + transac.montantAbidjan,
-                    paymentHistory: firebase.firestore.FieldValue.arrayUnion(paymentEntry),
-                    lastPaymentDate: transac.date, // On met à jour la date d'activité pour l'historique
-                    saisiPar: currentUserName // Mise à jour de l'auteur de la saisie
+                    montantParis: (oldData.montantParis || 0) + totalParis,
+                    montantAbidjan: (oldData.montantAbidjan || 0) + totalAbidjan,
+                    reste: (oldData.reste || 0) + totalParis + totalAbidjan,
+                    paymentHistory: firebase.firestore.FieldValue.arrayUnion(...newPaymentEntries),
+                    lastPaymentDate: baseTransac.date,
+                    saisiPar: currentUserName,
+                    isDeleted: false // Réactivation automatique si le dossier était supprimé
                 };
 
-                // Fusionner les agents sans doublons pour ne pas perdre d'historique
+                // Fusion des agents
                 const oldAgents = (oldData.agent || "").split(',').map(a => a.trim()).filter(Boolean);
-                const newAgents = (transac.agent || "").split(',').map(a => a.trim()).filter(Boolean);
-                const combinedAgents = [...new Set([...oldAgents, ...newAgents])].join(', ');
-                if (combinedAgents !== oldData.agent) {
-                    updates.agent = combinedAgents;
-                }
-
-                // Mettre à jour la commune et l'agent mobile money si une nouvelle valeur est fournie
-                if (transac.commune && transac.commune !== oldData.commune) updates.commune = transac.commune;
-                if (transac.agentMobileMoney) updates.agentMobileMoney = transac.agentMobileMoney;
+                const groupAgents = group.map(t => t.agent).join(', ').split(',').map(a => a.trim()).filter(Boolean);
+                const combinedAgents = [...new Set([...oldAgents, ...groupAgents])].join(', ');
                 
-                // IMPORTANT: On ne met PAS à jour la date principale de la transaction (date d'arrivée)
+                if (combinedAgents !== oldData.agent) updates.agent = combinedAgents;
+
+                // Mise à jour infos (Commune, etc.) depuis la dernière entrée du groupe
+                const lastTransac = group[group.length - 1];
+                if (lastTransac.commune && lastTransac.commune !== oldData.commune) updates.commune = lastTransac.commune;
+                if (lastTransac.agentMobileMoney) updates.agentMobileMoney = lastTransac.agentMobileMoney;
+                
                 batch.update(docRef, updates);
             } else {
                 const docRef = transactionsCollection.doc();
+                
+                // Pour un nouveau doc, on fusionne les agents du groupe
+                const groupAgents = group.map(t => t.agent).join(', ').split(',').map(a => a.trim()).filter(Boolean);
+                const combinedAgents = [...new Set(groupAgents)].join(', ');
+
                 batch.set(docRef, { 
-                    ...transac, 
+                    ...baseTransac, // Reprend date, ref, nom, conteneur, prix...
+                    montantParis: totalParis,
+                    montantAbidjan: totalAbidjan,
+                    reste: (totalParis + totalAbidjan) - baseTransac.prix, // Reste calculé sur le total payé vs prix
+                    agent: combinedAgents,
                     isDeleted: false, 
                     saisiPar: currentUserName, 
-                    paymentHistory: [paymentEntry],
-                    lastPaymentDate: transac.date // Initialisation
+                    paymentHistory: newPaymentEntries,
+                    lastPaymentDate: baseTransac.date
                 });
             }
         }
@@ -323,6 +347,27 @@ document.addEventListener('DOMContentLoaded', async () => {
         const searchValue = referenceInput.value.trim();
         if (!searchValue) { clearDisplayFields(); nomInput.value=''; return; }
 
+        // 1. Vérifier d'abord les transactions du jour (Pour le fractionnement immédiat)
+        const dailyItems = dailyTransactions.filter(t => t.reference === searchValue);
+        if (dailyItems.length > 0) {
+             // FIX: On prend l'élément avec le prix le plus élevé comme base (le prix original)
+             const base = dailyItems.reduce((prev, current) => (prev.prix > current.prix) ? prev : current);
+             const totalPaidDaily = dailyItems.reduce((sum, t) => sum + t.montantParis + t.montantAbidjan, 0);
+             // Le reste est calculé par rapport au PRIX ORIGINAL du premier élément saisi
+             const currentRest = (totalPaidDaily) - base.prix;
+             
+             fillFormWithData({
+                 reference: base.reference,
+                 nom: base.nom,
+                 conteneur: base.conteneur,
+                 prix: base.prix, 
+                 reste: currentRest,
+                 isDaily: true
+             });
+             return;
+        }
+
+        // 2. Vérifier dans la Base de Données
         let query = await transactionsCollection.where("reference", "==", searchValue).get();
         if (query.empty) query = await transactionsCollection.where("nom", "==", searchValue).get();
 
@@ -341,16 +386,25 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     function fillFormWithData(data) {
         referenceInput.value = data.reference; 
-        prixInput.value = data.prix;
         if(!nomInput.value) nomInput.value = data.nom || '';
         conteneurInput.value = data.conteneur || '';
         
         if (data.reste < 0) {
-            resteInput.value = data.reste; resteInput.className = 'reste-negatif';
+            // MODIFICATION : Si dette, le champ "Prix" affiche le montant de la dette à régler
+            // Cela permet d'avoir : "200.000 Chèque" pour solder un reste de 200.000
+            prixInput.value = Math.abs(data.reste);
+            
+            resteInput.value = data.reste; 
+            resteInput.className = 'reste-negatif';
             montantParisInput.placeholder = `Reste: ${formatCFA(Math.abs(data.reste))}`;
             montantAbidjanInput.placeholder = `Reste: ${formatCFA(Math.abs(data.reste))}`;
         } else {
-            resteInput.value = 0; resteInput.className = 'reste-positif';
+            // Si pas de dette, on garde le prix original (ou 0 si déjà soldé dans la journée)
+            if (data.isDaily) prixInput.value = 0;
+            else prixInput.value = data.prix;
+
+            resteInput.value = 0; 
+            resteInput.className = 'reste-positif';
             montantParisInput.placeholder = "Soldé Paris"; montantAbidjanInput.placeholder = "Soldé Abidjan";
         }
     }

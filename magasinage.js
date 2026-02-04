@@ -11,7 +11,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let allTransactions = [];
 
     // 1. Chargement des données
-    transactionsCollection.where("isDeleted", "!=", true).orderBy("date", "desc").onSnapshot(snapshot => {
+    transactionsCollection.where("isDeleted", "!=", true).orderBy("isDeleted").orderBy("date", "desc").onSnapshot(snapshot => {
         allTransactions = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         renderTable();
     }, error => console.error(error));

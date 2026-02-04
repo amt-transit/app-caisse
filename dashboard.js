@@ -132,6 +132,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         // On doit parcourir l'historique des paiements de chaque transaction
         let totalChequesEnCoffre = 0;
         let totalVentesCash = 0; // Espèces, OM, Wave...
+        let totalVirements = 0;
 
         transactions.forEach(t => {
             if (t.paymentHistory) {
@@ -142,15 +143,22 @@ document.addEventListener('DOMContentLoaded', async () => {
                     // Si c'est un chèque ET qu'il est 'Pending'
                     if (pay.modePaiement === 'Chèque' && pay.checkStatus === 'Pending') {
                         totalChequesEnCoffre += (pay.montantAbidjan || 0);
+                    } else if (pay.modePaiement === 'Virement') {
+                        // On compte Paris et Abidjan pour les virements
+                        totalVirements += (pay.montantAbidjan || 0) + (pay.montantParis || 0);
                     } else if (pay.modePaiement !== 'Chèque') {
-                        // Si ce n'est pas un chèque, c'est du cash dispo
+                        // Si ce n'est pas un chèque ni un virement, c'est du cash dispo (Espèce, OM, Wave)
                         totalVentesCash += (pay.montantAbidjan || 0);
                     }
                 });
             } else {
                 // Anciennes données : on vérifie la date principale
                 if (isInRange(t.date)) {
-                    totalVentesCash += (t.montantAbidjan || 0);
+                    if (t.modePaiement === 'Virement') {
+                        totalVirements += (t.montantAbidjan || 0) + (t.montantParis || 0);
+                    } else if (t.modePaiement !== 'Chèque') {
+                        totalVentesCash += (t.montantAbidjan || 0);
+                    }
                 }
             }
         });
@@ -163,7 +171,13 @@ document.addEventListener('DOMContentLoaded', async () => {
         const totalRetraits = bankMovements.filter(m => m.type === 'Retrait').reduce((sum, m) => sum + (m.montant || 0), 0);
         const totalDepots = bankMovements.filter(m => m.type === 'Depot').reduce((sum, m) => sum + (m.montant || 0), 0);
         
-        const totalCaisse = (totalVentesCash + totalOtherIncome + totalRetraits) - (totalDepenses + totalDepots);
+        // On ne soustrait que les dépenses qui impactent la caisse (pas Virement ni Chèque)
+        const totalDepensesCaisse = realExpenses.reduce((sum, e) => {
+            if (e.mode !== 'Virement' && e.mode !== 'Chèque') return sum + (e.montant || 0);
+            return sum;
+        }, 0);
+
+        const totalCaisse = (totalVentesCash + totalOtherIncome + totalRetraits) - (totalDepensesCaisse + totalDepots);
 
 
         // --- AFFICHAGE ---
@@ -185,6 +199,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         // NOUVEAU : Affichage Chèques
         const chequeEl = document.getElementById('grandTotalCheques');
         if(chequeEl) chequeEl.textContent = formatCFA(totalChequesEnCoffre);
+
+        // Affichage Virements
+        const virementEl = document.getElementById('grandTotalVirements');
+        if(virementEl) virementEl.textContent = formatCFA(totalVirements);
 
         grandTotalCountEl.textContent = transactions.length;
         grandTotalResteEl.textContent = formatCFA(transactions.reduce((sum, t) => sum + (t.reste || 0), 0));
@@ -239,19 +257,20 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Remplacez votre fonction generateContainerSummary actuelle par celle-ci
     function generateContainerSummary(transactions, expenses) {
         const tbody = document.getElementById('containerSummaryTableBody');
-        tbody.innerHTML = '<tr><td colspan="8">Aucune donnée de conteneur.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="9">Aucune donnée de conteneur.</td></tr>';
         
         // ... (Votre logique de calcul existante reste identique ici) ...
         // Je reprends juste la partie calcul pour le contexte, ne changez pas votre logique de calcul
         const containerData = {};
         transactions.forEach(t => {
             const containerName = (t.conteneur && t.conteneur.trim().toUpperCase()) || "Non spécifié"; 
-            if (!containerData[containerName]) containerData[containerName] = { totalPrix: 0, totalParis: 0, totalAbidjan: 0, totalReste: 0, date: t.date };
+            if (!containerData[containerName]) containerData[containerName] = { totalPrix: 0, totalParis: 0, totalAbidjan: 0, totalReste: 0, date: t.date, count: 0 };
             const data = containerData[containerName];
             data.totalPrix += (t.prix || 0);
             data.totalParis += (t.montantParis || 0);
             data.totalAbidjan += (t.montantAbidjan || 0);
             data.totalReste += (t.reste || 0);
+            data.count++;
             if (t.date && t.date < data.date) data.date = t.date;
         });
 
@@ -288,11 +307,12 @@ document.addEventListener('DOMContentLoaded', async () => {
             const containers = containersByMonth[monthKey];
             
             // Calcul Totaux Mois
-            let mCA = 0, mParis = 0, mAbj = 0, mReste = 0, mDep = 0;
+            let mCA = 0, mParis = 0, mAbj = 0, mReste = 0, mDep = 0, mCount = 0;
             containers.forEach(c => {
-                const d = containerData[c] || { totalPrix: 0, totalParis: 0, totalAbidjan: 0, totalReste: 0 };
+                const d = containerData[c] || { totalPrix: 0, totalParis: 0, totalAbidjan: 0, totalReste: 0, count: 0 };
                 mCA += d.totalPrix; mParis += d.totalParis; mAbj += d.totalAbidjan; mReste += d.totalReste;
                 mDep += (containerExpenses[c] || 0);
+                mCount += d.count;
             });
             const mBenef = mCA - mDep;
             const mPercu = mParis + mAbj;
@@ -312,6 +332,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             monthRow.innerHTML = `
                 <td data-label="Mois"><span style="display:inline-block; width:15px;">▶</span> ${monthLabel} (${containers.length})</td>
+                <td data-label="Op. Totales">${mCount}</td>
                 <td data-label="CA">${formatCFA(mCA)}</td>
                 <td data-label="Total Paris">${formatCFA(mParis)}</td>
                 <td data-label="Total Abidjan">${formatCFA(mAbj)}</td>
@@ -341,7 +362,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             });
 
             containers.forEach(container => {
-                const data = containerData[container] || { totalPrix: 0, totalParis: 0, totalAbidjan: 0, totalReste: 0 };
+                const data = containerData[container] || { totalPrix: 0, totalParis: 0, totalAbidjan: 0, totalReste: 0, count: 0 };
                 const ca = data.totalPrix; 
                 const totalDepenseConteneur = containerExpenses[container] || 0;
                 const beneficeConteneur = ca - totalDepenseConteneur;
@@ -360,6 +381,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
                 row.innerHTML = `
                     <td data-label="Conteneur" style="padding-left: 30px;">↳ <b>${container}</b></td>
+                    <td data-label="Op. Totales">${data.count}</td>
                     <td data-label="CA">${formatCFA(ca)}</td>
                     <td data-label="Total Paris">${formatCFA(data.totalParis)} <br><small style="color:#666; font-size:0.8em;">(${percParis}%)</small></td>
                     <td data-label="Total Abidjan">${formatCFA(data.totalAbidjan)} <br><small style="color:#666; font-size:0.8em;">(${percAbidjan}%)</small></td>
