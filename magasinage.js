@@ -50,6 +50,13 @@ document.addEventListener('DOMContentLoaded', () => {
         
         // On filtre d'abord
         const filtered = allTransactions.filter(t => {
+            // 1. Si le colis est payé (Reste >= 0), on suppose qu'il est sorti -> Pas de magasinage
+            if ((t.reste || 0) >= 0) return false;
+
+            // 2. On ne montre que ceux qui ont des frais (période gratuite dépassée)
+            const { fee } = calculateStorageFee(t.date);
+            if (fee <= 0) return false;
+
             if (!term) return true; 
             return (t.reference || "").toLowerCase().includes(term) ||
                    (t.nom || "").toLowerCase().includes(term) ||
