@@ -26,6 +26,30 @@ document.addEventListener('DOMContentLoaded', () => {
     let unsubscribeExpenses = null; 
     let allExpenses = [];
 
+    // --- GESTION DES SOUS-ONGLETS (Dépenses Mensuelles vs Conteneurs) ---
+    let currentTab = 'monthly'; // 'monthly' | 'container'
+    
+    // Gestion des onglets statiques
+    const tabMonthly = document.getElementById('tabMonthly');
+    const tabContainer = document.getElementById('tabContainer');
+
+    if (tabMonthly && tabContainer) {
+        tabMonthly.addEventListener('click', (e) => {
+            e.preventDefault();
+            currentTab = 'monthly';
+            tabMonthly.classList.add('active');
+            tabContainer.classList.remove('active');
+            renderExpensesTable();
+        });
+        tabContainer.addEventListener('click', (e) => {
+            e.preventDefault();
+            currentTab = 'container';
+            tabContainer.classList.add('active');
+            tabMonthly.classList.remove('active');
+            renderExpensesTable();
+        });
+    }
+
     if (userRole === 'admin' || userRole === 'super_admin') {
         if (actionType) {
             const opt = document.createElement('option');
@@ -71,7 +95,7 @@ document.addEventListener('DOMContentLoaded', () => {
             action: action, 
             type: (action === 'Depense') ? expenseType.value : 'Budget',
             mode: (action === 'Depense') ? expenseMode.value : 'Virement',
-            conteneur: (expenseType.value === 'Conteneur' && action === 'Depense') ? expenseContainer.value.toUpperCase() : '',
+            conteneur: (expenseType.value === 'Conteneur' && action === 'Depense') ? expenseContainer.value.trim().toUpperCase() : '',
             isDeleted: false 
         };
 
@@ -119,7 +143,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function renderExpensesTable() {
         const term = expenseSearchInput ? expenseSearchInput.value.toLowerCase().trim() : "";
-        const filtered = allExpenses.filter(item => {
+        
+        // Filtre par Onglet
+        const tabFiltered = allExpenses.filter(item => {
+            if (currentTab === 'monthly') return item.type !== 'Conteneur' && !item.conteneur;
+            else return item.type === 'Conteneur' || (item.conteneur && item.conteneur.trim() !== '');
+        });
+
+        const filtered = tabFiltered.filter(item => {
             if (!term) return true;
             return (item.description || "").toLowerCase().includes(term) || (item.type || "").toLowerCase().includes(term) || (item.conteneur || "").toLowerCase().includes(term);
         });

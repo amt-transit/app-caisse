@@ -45,6 +45,13 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     });
 
+    let expenseChartInstance = null;
+    let containerChartInstance = null;
+    let paymentChartInstance = null;
+    let profitChartInstance = null;
+    let debtChartInstance = null;
+    let agentChartInstance = null;
+
     let allTransactions = [], allExpenses = [], allOtherIncome = [], allBankMovements = []; 
 
     function filterByDate(items, startDate, endDate) {
@@ -87,6 +94,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         generateBankMovementSummary(filteredBankMovements);
         generateTopClientsSummary(filteredTransactions); 
         generateAdvancedAnalytics(filteredTransactions, allTransactions); // Nouvelles analyses
+        generateVisualCharts(allTransactions, allExpenses); // Graphiques (sur toutes les données pour voir l'évolution)
     }
 
     function updateGrandTotals(transactions, expenses, otherIncomes, bankMovements) {
@@ -237,72 +245,131 @@ document.addEventListener('DOMContentLoaded', async () => {
         // Je reprends juste la partie calcul pour le contexte, ne changez pas votre logique de calcul
         const containerData = {};
         transactions.forEach(t => {
-            const containerName = t.conteneur || "Non spécifié"; 
-            if (!containerData[containerName]) containerData[containerName] = { totalPrix: 0, totalParis: 0, totalAbidjan: 0, totalReste: 0 };
+            const containerName = (t.conteneur && t.conteneur.trim().toUpperCase()) || "Non spécifié"; 
+            if (!containerData[containerName]) containerData[containerName] = { totalPrix: 0, totalParis: 0, totalAbidjan: 0, totalReste: 0, date: t.date };
             const data = containerData[containerName];
             data.totalPrix += (t.prix || 0);
             data.totalParis += (t.montantParis || 0);
             data.totalAbidjan += (t.montantAbidjan || 0);
             data.totalReste += (t.reste || 0);
+            if (t.date && t.date < data.date) data.date = t.date;
         });
 
         const containerExpenses = {};
         expenses.forEach(e => {
-            // On inclut la dépense si elle est liée à un conteneur (peu importe le type déclaré)
             if (e.action !== 'Allocation' && e.conteneur) {
-                const cName = e.conteneur;
+                const cName = e.conteneur.trim().toUpperCase();
+                if (!cName) return;
                 if (!containerExpenses[cName]) containerExpenses[cName] = 0;
                 containerExpenses[cName] += (e.montant || 0);
             }
         });
 
-        // FUSION DES LISTES : On prend les conteneurs des Transactions ET des Dépenses
         const allContainers = new Set([...Object.keys(containerData), ...Object.keys(containerExpenses)]);
 
-        const sortedContainers = Array.from(allContainers).sort((a, b) => {
-            const numA = parseInt(a.replace(/[^0-9]/g, ''), 10) || 0;
-            const numB = parseInt(b.replace(/[^0-9]/g, ''), 10) || 0;
-            return numB - numA;
+        // GROUPAGE PAR MOIS
+        const containersByMonth = {};
+        allContainers.forEach(container => {
+            if (container === "Non spécifié") return;
+            let dateStr = containerData[container]?.date;
+            if (!dateStr) dateStr = "9999-99-99"; 
+            const monthKey = dateStr.substring(0, 7); // YYYY-MM
+            if (!containersByMonth[monthKey]) containersByMonth[monthKey] = [];
+            containersByMonth[monthKey].push(container);
         });
 
-        if (sortedContainers.length === 0 || (sortedContainers.length === 1 && sortedContainers[0] === "Non spécifié")) return;
+        const sortedMonths = Object.keys(containersByMonth).sort().reverse();
+
+        if (sortedMonths.length === 0) return;
         
         tbody.innerHTML = '';
         
-        sortedContainers.forEach(container => {
-            if (container === "Non spécifié") return; 
+        sortedMonths.forEach(monthKey => {
+            const containers = containersByMonth[monthKey];
             
-            // On récupère les données transactionnelles (ou des zéros si le conteneur n'existe que dans les dépenses)
-            const data = containerData[container] || { totalPrix: 0, totalParis: 0, totalAbidjan: 0, totalReste: 0 };
-            const ca = data.totalPrix; 
-            const totalDepenseConteneur = containerExpenses[container] || 0;
-            const beneficeConteneur = ca - totalDepenseConteneur;
-            const totalPercu = data.totalParis + data.totalAbidjan;
+            // Calcul Totaux Mois
+            let mCA = 0, mParis = 0, mAbj = 0, mReste = 0, mDep = 0;
+            containers.forEach(c => {
+                const d = containerData[c] || { totalPrix: 0, totalParis: 0, totalAbidjan: 0, totalReste: 0 };
+                mCA += d.totalPrix; mParis += d.totalParis; mAbj += d.totalAbidjan; mReste += d.totalReste;
+                mDep += (containerExpenses[c] || 0);
+            });
+            const mBenef = mCA - mDep;
+            const mPercu = mParis + mAbj;
 
-            // Calcul des pourcentages par rapport au CA
-            const percParis = ca > 0 ? ((data.totalParis / ca) * 100).toFixed(1) : "0.0";
-            const percAbidjan = ca > 0 ? ((data.totalAbidjan / ca) * 100).toFixed(1) : "0.0";
-            const percReste = ca > 0 ? ((data.totalReste / ca) * 100).toFixed(1) : "0.0";
-
-            const row = document.createElement('tr');
+            // Ligne Mois
+            const monthRow = document.createElement('tr');
+            monthRow.style.backgroundColor = '#cbd5e1';
+            monthRow.style.fontWeight = 'bold';
+            monthRow.style.cursor = 'pointer';
             
-            // --- C'EST ICI QUE ÇA CHANGE ---
-            // On ajoute l'événement onclick
-            row.onclick = () => openContainerDetails(container);
-            row.title = "Cliquez pour voir le détail des opérations";
-            // -------------------------------
+            let monthLabel = "Date Inconnue";
+            if (monthKey !== "9999-99") {
+                const [y, m] = monthKey.split('-');
+                const dateObj = new Date(parseInt(y), parseInt(m)-1, 1);
+                monthLabel = dateObj.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' }).toUpperCase();
+            }
 
-            row.innerHTML = `
-                <td data-label="Conteneur"><b>${container}</b></td>
-                <td data-label="CA">${formatCFA(ca)}</td>
-                <td data-label="Total Paris">${formatCFA(data.totalParis)} <br><small style="color:#666; font-size:0.8em;">(${percParis}%)</small></td>
-                <td data-label="Total Abidjan">${formatCFA(data.totalAbidjan)} <br><small style="color:#666; font-size:0.8em;">(${percAbidjan}%)</small></td>
-                <td data-label="Total Perçu">${formatCFA(totalPercu)}</td>
-                <td data-label="Total Reste" class="${data.totalReste < 0 ? 'reste-negatif' : 'reste-positif'}">${formatCFA(data.totalReste)} <br><small style="color:#dc3545; font-size:0.8em; font-weight: bold;">(${percReste}%)</small></td>
-                <td data-label="Dépenses">${formatCFA(totalDepenseConteneur)}</td>
-                <td data-label="Bénéfice" class="${beneficeConteneur < 0 ? 'reste-negatif' : 'reste-positif'}">${formatCFA(beneficeConteneur)}</td>
+            monthRow.innerHTML = `
+                <td data-label="Mois"><span style="display:inline-block; width:15px;">▶</span> ${monthLabel} (${containers.length})</td>
+                <td data-label="CA">${formatCFA(mCA)}</td>
+                <td data-label="Total Paris">${formatCFA(mParis)}</td>
+                <td data-label="Total Abidjan">${formatCFA(mAbj)}</td>
+                <td data-label="Total Perçu">${formatCFA(mPercu)}</td>
+                <td data-label="Total Reste" class="${mReste < 0 ? 'reste-negatif' : 'reste-positif'}">${formatCFA(mReste)}</td>
+                <td data-label="Dépenses">${formatCFA(mDep)}</td>
+                <td data-label="Bénéfice" class="${mBenef < 0 ? 'reste-negatif' : 'reste-positif'}">${formatCFA(mBenef)}</td>
             `;
-            tbody.appendChild(row);
+            
+            monthRow.onclick = () => {
+                const rows = document.querySelectorAll(`.month-${monthKey}`);
+                const icon = monthRow.querySelector('span');
+                let isHidden = true;
+                rows.forEach(r => {
+                    if (r.style.display === 'none') { r.style.display = 'table-row'; isHidden = false; }
+                    else { r.style.display = 'none'; isHidden = true; }
+                });
+                icon.textContent = isHidden ? '▶' : '▼';
+            };
+            tbody.appendChild(monthRow);
+
+            // Tri des conteneurs
+            containers.sort((a, b) => {
+                const numA = parseInt(a.replace(/[^0-9]/g, ''), 10) || 0;
+                const numB = parseInt(b.replace(/[^0-9]/g, ''), 10) || 0;
+                return numB - numA;
+            });
+
+            containers.forEach(container => {
+                const data = containerData[container] || { totalPrix: 0, totalParis: 0, totalAbidjan: 0, totalReste: 0 };
+                const ca = data.totalPrix; 
+                const totalDepenseConteneur = containerExpenses[container] || 0;
+                const beneficeConteneur = ca - totalDepenseConteneur;
+                const totalPercu = data.totalParis + data.totalAbidjan;
+
+                const percParis = ca > 0 ? ((data.totalParis / ca) * 100).toFixed(1) : "0.0";
+                const percAbidjan = ca > 0 ? ((data.totalAbidjan / ca) * 100).toFixed(1) : "0.0";
+                const percReste = ca > 0 ? ((data.totalReste / ca) * 100).toFixed(1) : "0.0";
+
+                const row = document.createElement('tr');
+                row.className = `month-${monthKey}`;
+                row.style.display = 'none';
+                row.style.backgroundColor = '#f8fafc';
+                row.onclick = () => openContainerDetails(container);
+                row.title = "Cliquez pour voir le détail des opérations";
+
+                row.innerHTML = `
+                    <td data-label="Conteneur" style="padding-left: 30px;">↳ <b>${container}</b></td>
+                    <td data-label="CA">${formatCFA(ca)}</td>
+                    <td data-label="Total Paris">${formatCFA(data.totalParis)} <br><small style="color:#666; font-size:0.8em;">(${percParis}%)</small></td>
+                    <td data-label="Total Abidjan">${formatCFA(data.totalAbidjan)} <br><small style="color:#666; font-size:0.8em;">(${percAbidjan}%)</small></td>
+                    <td data-label="Total Perçu">${formatCFA(totalPercu)}</td>
+                    <td data-label="Total Reste" class="${data.totalReste < 0 ? 'reste-negatif' : 'reste-positif'}">${formatCFA(data.totalReste)} <br><small style="color:#dc3545; font-size:0.8em; font-weight: bold;">(${percReste}%)</small></td>
+                    <td data-label="Dépenses">${formatCFA(totalDepenseConteneur)}</td>
+                    <td data-label="Bénéfice" class="${beneficeConteneur < 0 ? 'reste-negatif' : 'reste-positif'}">${formatCFA(beneficeConteneur)}</td>
+                `;
+                tbody.appendChild(row);
+            });
         });
     }
 
@@ -360,6 +427,264 @@ document.addEventListener('DOMContentLoaded', async () => {
             const row = document.createElement('tr');
             row.innerHTML = `<td data-label="Rang"><b>#${index + 1}</b></td><td data-label="Client">${client.name} ${waBtn}</td><td data-label="Destinataire">${client.destinataire || '-'}</td><td data-label="Nb. Op.">${client.count}</td><td data-label="Chiffre d'Affaires">${formatCFA(client.totalPrix)}</td>`;
             topClientsTableBody.appendChild(row);
+        });
+    }
+
+    // --- GÉNÉRATION DES GRAPHIQUES ---
+    function generateVisualCharts(transactions, expenses) {
+        const ctxExpense = document.getElementById('expenseEvolutionChart');
+        const ctxContainer = document.getElementById('containerEvolutionChart');
+        const ctxPayment = document.getElementById('paymentModeChart');
+        const ctxProfit = document.getElementById('topContainerProfitChart');
+        const ctxDebt = document.getElementById('debtVsCollectedChart');
+        const ctxAgent = document.getElementById('agentPerformanceChart');
+        
+        if (!ctxExpense || !ctxContainer || !ctxPayment || !ctxProfit || !ctxDebt || !ctxAgent) return;
+
+        // 1. GRAPHIQUE DÉPENSES (Mensuelles vs Conteneurs)
+        const expenseStats = {};
+        expenses.forEach(e => {
+            if (!e.date) return;
+            const month = e.date.substring(0, 7); // YYYY-MM
+            if (!expenseStats[month]) expenseStats[month] = { monthly: 0, container: 0 };
+            
+            if (e.type === 'Conteneur' || (e.conteneur && e.conteneur.trim() !== '')) {
+                expenseStats[month].container += (e.montant || 0);
+            } else if (e.action !== 'Allocation') {
+                 expenseStats[month].monthly += (e.montant || 0);
+            }
+        });
+
+        const sortedMonths = Object.keys(expenseStats).sort();
+        
+        if (expenseChartInstance) expenseChartInstance.destroy();
+        expenseChartInstance = new Chart(ctxExpense, {
+            type: 'line',
+            data: {
+                labels: sortedMonths,
+                datasets: [
+                    {
+                        label: 'Dépenses Mensuelles',
+                        data: sortedMonths.map(m => expenseStats[m].monthly),
+                        borderColor: '#ef4444', backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                        fill: true, tension: 0.4
+                    },
+                    {
+                        label: 'Dépenses Conteneurs',
+                        data: sortedMonths.map(m => expenseStats[m].container),
+                        borderColor: '#3b82f6', backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                        fill: true, tension: 0.4
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                interaction: { mode: 'index', intersect: false },
+                scales: { y: { beginAtZero: true } },
+                plugins: { tooltip: { callbacks: { label: (c) => (c.dataset.label || '') + ': ' + formatCFA(c.parsed.y) } } }
+            }
+        });
+
+        // 2. GRAPHIQUE CONTENEURS (Nombre et CA par mois)
+        const containerGroups = {};
+        transactions.forEach(t => {
+            const cName = (t.conteneur && t.conteneur.trim().toUpperCase()) || "Non spécifié";
+            if (cName === "Non spécifié") return;
+            
+            if (!containerGroups[cName]) containerGroups[cName] = { date: t.date, totalCA: 0 };
+            // On prend la date la plus ancienne du conteneur pour déterminer son mois d'arrivée
+            if (t.date && t.date < containerGroups[cName].date) containerGroups[cName].date = t.date;
+            containerGroups[cName].totalCA += (t.prix || 0);
+        });
+
+        const containerStats = {};
+        Object.values(containerGroups).forEach(c => {
+            if (!c.date) return;
+            const month = c.date.substring(0, 7);
+            if (!containerStats[month]) containerStats[month] = { count: 0, ca: 0 };
+            containerStats[month].count++;
+            containerStats[month].ca += c.totalCA;
+        });
+
+        const sortedContainerMonths = Object.keys(containerStats).sort();
+
+        if (containerChartInstance) containerChartInstance.destroy();
+        containerChartInstance = new Chart(ctxContainer, {
+            type: 'bar',
+            data: {
+                labels: sortedContainerMonths,
+                datasets: [
+                    {
+                        label: 'Nombre de Conteneurs',
+                        data: sortedContainerMonths.map(m => containerStats[m].count),
+                        backgroundColor: '#10b981',
+                        yAxisID: 'y',
+                    },
+                    {
+                        label: "Chiffre d'Affaires",
+                        data: sortedContainerMonths.map(m => containerStats[m].ca),
+                        borderColor: '#f59e0b', type: 'line',
+                        yAxisID: 'y1', tension: 0.4
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                scales: {
+                    y: { type: 'linear', display: true, position: 'left', beginAtZero: true, title: {display: true, text: 'Nombre'} },
+                    y1: { type: 'linear', display: true, position: 'right', grid: {drawOnChartArea: false}, title: {display: true, text: 'Montant (CFA)'} }
+                },
+                plugins: { tooltip: { callbacks: { label: (c) => (c.dataset.label || '') + ': ' + (c.dataset.yAxisID === 'y1' ? formatCFA(c.parsed.y) : c.parsed.y) } } }
+            }
+        });
+
+        // 3. GRAPHIQUE MODES DE PAIEMENT (Doughnut)
+        const paymentStats = {};
+        transactions.forEach(t => {
+            // On privilégie l'historique des paiements s'il existe pour plus de précision
+            if (t.paymentHistory && Array.isArray(t.paymentHistory) && t.paymentHistory.length > 0) {
+                t.paymentHistory.forEach(p => {
+                    const mode = p.modePaiement || 'Inconnu';
+                    if (!paymentStats[mode]) paymentStats[mode] = 0;
+                    paymentStats[mode] += (p.montantAbidjan || 0) + (p.montantParis || 0);
+                });
+            } else {
+                // Fallback sur le mode principal
+                const mode = t.modePaiement || 'Espèce';
+                if (!paymentStats[mode]) paymentStats[mode] = 0;
+                paymentStats[mode] += (t.montantAbidjan || 0) + (t.montantParis || 0);
+            }
+        });
+
+        const sortedModes = Object.entries(paymentStats).sort((a, b) => b[1] - a[1]);
+
+        if (paymentChartInstance) paymentChartInstance.destroy();
+        paymentChartInstance = new Chart(ctxPayment, {
+            type: 'doughnut',
+            data: {
+                labels: sortedModes.map(m => m[0]),
+                datasets: [{
+                    data: sortedModes.map(m => m[1]),
+                    backgroundColor: ['#10b981', '#3b82f6', '#f59e0b', '#8b5cf6', '#ef4444', '#64748b'],
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: { position: 'right' },
+                    tooltip: { callbacks: { label: (c) => ' ' + c.label + ': ' + formatCFA(c.parsed) } }
+                }
+            }
+        });
+
+        // 4. GRAPHIQUE TOP 10 RENTABILITÉ CONTENEURS (Barres Horizontales)
+        const contData = {};
+        // Calcul CA
+        transactions.forEach(t => {
+            const cName = (t.conteneur && t.conteneur.trim().toUpperCase()) || "Non spécifié";
+            if (cName === "Non spécifié") return;
+            if (!contData[cName]) contData[cName] = { ca: 0, dep: 0 };
+            contData[cName].ca += (t.prix || 0);
+        });
+        // Calcul Dépenses
+        expenses.forEach(e => {
+            if (e.action !== 'Allocation' && e.conteneur) {
+                const cName = e.conteneur.trim().toUpperCase();
+                if (contData[cName]) contData[cName].dep += (e.montant || 0);
+            }
+        });
+
+        // Calcul Bénéfice et Tri
+        const sortedContainers = Object.entries(contData)
+            .map(([name, d]) => ({ name, benefice: d.ca - d.dep }))
+            .sort((a, b) => b.benefice - a.benefice)
+            .slice(0, 10); // Top 10
+
+        if (profitChartInstance) profitChartInstance.destroy();
+        profitChartInstance = new Chart(ctxProfit, {
+            type: 'bar',
+            data: {
+                labels: sortedContainers.map(c => c.name),
+                datasets: [{
+                    label: 'Bénéfice Net',
+                    data: sortedContainers.map(c => c.benefice),
+                    backgroundColor: sortedContainers.map(c => c.benefice >= 0 ? '#10b981' : '#ef4444'),
+                    borderRadius: 4
+                }]
+            },
+            options: {
+                indexAxis: 'y', // Barres horizontales
+                responsive: true,
+                scales: { x: { beginAtZero: true } },
+                plugins: {
+                    tooltip: { callbacks: { label: (c) => ' Bénéfice: ' + formatCFA(c.parsed.x) } }
+                }
+            }
+        });
+
+        // 5. GRAPHIQUE DETTES VS ENCAISSÉ (Doughnut)
+        let totalEncaisse = 0;
+        let totalDette = 0;
+
+        transactions.forEach(t => {
+            totalEncaisse += (t.montantParis || 0) + (t.montantAbidjan || 0);
+            if ((t.reste || 0) > 0) totalDette += t.reste;
+        });
+
+        if (debtChartInstance) debtChartInstance.destroy();
+        debtChartInstance = new Chart(ctxDebt, {
+            type: 'doughnut',
+            data: {
+                labels: ['Encaissé', 'Dettes Clients'],
+                datasets: [{
+                    data: [totalEncaisse, totalDette],
+                    backgroundColor: ['#10b981', '#ef4444'],
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: { position: 'right' },
+                    tooltip: { callbacks: { label: (c) => ' ' + c.label + ': ' + formatCFA(c.parsed) } }
+                }
+            }
+        });
+
+        // 6. GRAPHIQUE PERFORMANCE AGENT (Barres Verticales)
+        const agentPerf = {};
+        transactions.forEach(t => {
+            const agentString = t.agent || "Non assigné";
+            const agents = agentString.split(',').map(a => a.trim()).filter(a => a.length > 0);
+            
+            agents.forEach(a => {
+                if (!agentPerf[a]) agentPerf[a] = 0;
+                agentPerf[a] += (t.prix || 0);
+            });
+        });
+
+        const sortedAgents = Object.entries(agentPerf).sort((a, b) => b[1] - a[1]).slice(0, 10); // Top 10
+
+        if (agentChartInstance) agentChartInstance.destroy();
+        agentChartInstance = new Chart(ctxAgent, {
+            type: 'bar',
+            data: {
+                labels: sortedAgents.map(a => a[0]),
+                datasets: [{
+                    label: "Chiffre d'Affaires Généré",
+                    data: sortedAgents.map(a => a[1]),
+                    backgroundColor: '#6366f1',
+                    borderRadius: 4
+                }]
+            },
+            options: {
+                responsive: true,
+                scales: { y: { beginAtZero: true } },
+                plugins: {
+                    tooltip: { callbacks: { label: (c) => ' CA: ' + formatCFA(c.parsed.y) } }
+                }
+            }
         });
     }
 
@@ -465,10 +790,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         
         // Filtrer les transactions globales (allTransactions est déjà chargé en mémoire)
         // On filtre uniquement celles qui appartiennent au conteneur cliqué
-        const transactions = allTransactions.filter(t => t.conteneur === containerName);
+        const transactions = allTransactions.filter(t => (t.conteneur && t.conteneur.trim().toUpperCase()) === containerName);
         
         // Filtrer les dépenses liées au conteneur
-        const expenses = allExpenses.filter(e => e.conteneur === containerName);
+        const expenses = allExpenses.filter(e => (e.conteneur && e.conteneur.trim().toUpperCase()) === containerName);
         
         // Trier les transactions par date
         const sortedTransactions = transactions.map(t => ({...t, _type: 'transaction'})).sort((a, b) => new Date(b.date) - new Date(a.date));

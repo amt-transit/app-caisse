@@ -150,6 +150,37 @@
 
     </div>
 
+    <!-- NOUVELLE SECTION GRAPHIQUES -->
+    <div class="dashboard-container" style="margin-top: 20px;">
+        <h2 style="margin-top:0;">📈 Évolution & Statistiques</h2>
+        <div class="charts-grid" style="grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 20px;">
+            <div class="chart-card">
+                <h3>Dépenses : Mensuelles vs Conteneurs</h3>
+                <canvas id="expenseEvolutionChart"></canvas>
+            </div>
+            <div class="chart-card">
+                <h3>Activité Conteneurs (Arrivées & CA)</h3>
+                <canvas id="containerEvolutionChart"></canvas>
+            </div>
+            <div class="chart-card">
+                <h3>Répartition des Paiements</h3>
+                <canvas id="paymentModeChart"></canvas>
+            </div>
+            <div class="chart-card">
+                <h3>Top 10 Conteneurs (Rentabilité)</h3>
+                <canvas id="topContainerProfitChart"></canvas>
+            </div>
+            <div class="chart-card">
+                <h3>Ratio Dettes vs Encaissé</h3>
+                <canvas id="debtVsCollectedChart"></canvas>
+            </div>
+            <div class="chart-card">
+                <h3>Performance par Agent</h3>
+                <canvas id="agentPerformanceChart"></canvas>
+            </div>
+        </div>
+    </div>
+
     <!-- SECTION ANALYSES STRATÉGIQUES (Structure déplacée du JS vers HTML) -->
     <div id="analyticsContainer" class="dashboard-container" style="margin-top: 20px;">
         <h2 style="margin-top:0;">📊 Analyses Stratégiques</h2>
@@ -225,6 +256,7 @@
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
         const firebaseConfig = {
             apiKey: "AIzaSyA255n3XWDRKaYZ9kwOYkfovf5lRexoCA4",
