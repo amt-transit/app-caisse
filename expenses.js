@@ -155,6 +155,20 @@ document.addEventListener('DOMContentLoaded', () => {
             return (item.description || "").toLowerCase().includes(term) || (item.type || "").toLowerCase().includes(term) || (item.conteneur || "").toLowerCase().includes(term);
         });
 
+        // TRI DÉCROISSANT : Conteneur (si onglet Conteneur)
+        if (currentTab === 'container') {
+            filtered.sort((a, b) => {
+                const getNum = (str) => {
+                    const matches = (str || "").match(/\d+/g);
+                    return matches ? parseInt(matches[matches.length - 1], 10) : 0;
+                };
+                const cA = getNum(a.conteneur);
+                const cB = getNum(b.conteneur);
+                if (cB !== cA) return cB - cA;
+                return new Date(b.date) - new Date(a.date);
+            });
+        }
+
         expenseTableBody.innerHTML = ''; 
         if (filtered.length === 0) { expenseTableBody.innerHTML = '<tr><td colspan="7">Aucun résultat.</td></tr>'; return; }
 

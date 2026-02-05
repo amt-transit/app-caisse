@@ -125,6 +125,13 @@ document.addEventListener('DOMContentLoaded', async () => {
         }, 0);
 
         const totalOtherIncome = otherIncomes.reduce((sum, i) => sum + (i.montant || 0), 0);
+        
+        // CORRECTION : On ne garde que les Autres Entrées CASH pour la caisse (pas Virement ni Chèque)
+        const totalOtherIncomeCash = otherIncomes.reduce((sum, i) => {
+            if (i.mode === 'Virement' || i.mode === 'Chèque') return sum;
+            return sum + (i.montant || 0);
+        }, 0);
+
         // On exclut les allocations du calcul des dépenses
         const realExpenses = expenses.filter(e => e.action !== 'Allocation');
         const totalDepenses = realExpenses.reduce((sum, e) => sum + (e.montant || 0), 0);
@@ -173,7 +180,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         // Note 2 : Les mouvements banques (Retraits) ajoutent du cash. Les Dépôts enlèvent du cash.
         
         const totalRetraits = bankMovements.filter(m => m.type === 'Retrait').reduce((sum, m) => sum + (m.montant || 0), 0);
-        const totalDepots = bankMovements.filter(m => m.type === 'Depot').reduce((sum, m) => sum + (m.montant || 0), 0);
+        
+        // CORRECTION : On exclut les remises de chèques car elles ne sortent pas de la caisse espèces
+        const totalDepots = bankMovements.filter(m => m.type === 'Depot' && m.source !== 'Remise Chèques').reduce((sum, m) => sum + (m.montant || 0), 0);
         
         // On ne soustrait que les dépenses qui impactent la caisse (pas Virement ni Chèque)
         const totalDepensesCaisse = realExpenses.reduce((sum, e) => {
@@ -181,7 +190,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             return sum;
         }, 0);
 
-        const totalCaisse = (totalVentesCash + totalOtherIncome + totalRetraits) - (totalDepensesCaisse + totalDepots);
+        const totalCaisse = (totalVentesCash + totalOtherIncomeCash + totalRetraits) - (totalDepensesCaisse + totalDepots);
 
 
         // --- AFFICHAGE ---

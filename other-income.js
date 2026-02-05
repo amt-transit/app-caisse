@@ -28,6 +28,7 @@ document.addEventListener('DOMContentLoaded', () => {
             // AJOUT DU NOM DE L'AUTEUR
             description: `${incomeDesc.value} (${currentUserName})`,
             montant: parseFloat(incomeAmount.value) || 0,
+            mode: document.getElementById('incomeMode').value, // <--- AJOUTER CETTE LIGNE
             isDeleted: false
         };
         
