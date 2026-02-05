@@ -46,8 +46,7 @@
             </div>
             <input type="number" id="montantParis" placeholder="Montant Paris">
             <input type="number" id="montantAbidjan" placeholder="Montant Abidjan">
-            <input type="text" id="agentMobileMoney" placeholder="Info Paiement">
-            
+
             <select id="modePaiement" style="font-weight: bold; color: #0d47a1;">
                 <option value="Espèce" selected>Espèce</option>
                 <option value="Chèque">Chèque</option>
@@ -57,6 +56,14 @@
             </select>
 
             <input type="number" id="reste" placeholder="Reste" readonly>
+        </div>
+
+        <div style="text-align: center; margin: 5px 0;">
+             <span id="toggleAdvancedBtn" style="cursor:pointer; color:#4f46e5; font-size:12px; font-weight:bold; user-select: none;">▼ Plus d'options (Agents, Commune, Ajustements)</span>
+        </div>
+
+        <div id="advancedFields" class="form-grid" style="display:none; margin-top:5px; padding:10px; background:#f1f5f9; border-radius:8px;">
+            <input type="text" id="agentMobileMoney" placeholder="Info Paiement">
             <select id="commune">
                 <option value="">-- Commune --</option>
                 <option value="Abobo">Abobo</option><option value="Anyama">Anyama</option><option value="Autres Communes">Autres Communes</option>
@@ -74,7 +81,15 @@
                 <option value="Mohamed Paris">Mohamed Paris</option><option value="Moussa Paris">Moussa Paris</option><option value="Salif">Salif</option>
                 <option value="Samba">Samba</option><option value="Touré">Touré</option>
             </select>
+            
+            <select id="adjustmentType">
+                <option value="">-- Ajustement (Aucun) --</option>
+                <option value="reduction">Réduction ⬇️</option>
+                <option value="augmentation">Augmentation ⬆️</option>
+            </select>
+            <input type="number" id="adjustmentVal" placeholder="Montant Ajustement">
         </div>
+
         <div class="form-buttons">
             <button id="addEntryBtn">Ajouter Encaissement</button> 
         </div>

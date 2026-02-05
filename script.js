@@ -30,6 +30,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     const modePaiementInput = document.getElementById('modePaiement');
     const resteInput = document.getElementById('reste');
     const communeInput = document.getElementById('commune');
+    // NOUVEAU : Inputs Ajustement (Réduction / Augmentation)
+    const adjustmentTypeInput = document.getElementById('adjustmentType');
+    const adjustmentValInput = document.getElementById('adjustmentVal');
     const referenceList = document.getElementById('referenceList');
     
     // NOUVEAU : ÉLÉMENTS DÉPENSES LIVREUR
@@ -38,6 +41,17 @@ document.addEventListener('DOMContentLoaded', async () => {
     const quickExpenseAmount = document.getElementById('quickExpenseAmount');
     const quickExpenseContainer = document.getElementById('quickExpenseContainer'); // Nouveau champ
     const dailyExpensesTableBody = document.getElementById('dailyExpensesTableBody');
+
+    // GESTION AFFICHAGE AVANCÉ
+    const toggleAdvancedBtn = document.getElementById('toggleAdvancedBtn');
+    const advancedFields = document.getElementById('advancedFields');
+    if (toggleAdvancedBtn && advancedFields) {
+        toggleAdvancedBtn.addEventListener('click', () => {
+            const isHidden = advancedFields.style.display === 'none';
+            advancedFields.style.display = isHidden ? 'grid' : 'none';
+            toggleAdvancedBtn.textContent = isHidden ? '▲ Masquer les options' : '▼ Plus d\'options (Agents, Commune, Ajustements)';
+        });
+    }
 
     // TOTAUX
     const dailyTotalAbidjanEspecesEl = document.getElementById('dailyTotalAbidjanEspeces');
@@ -68,7 +82,9 @@ document.addEventListener('DOMContentLoaded', async () => {
             modePaiement: modePaiementInput.value,
             commune: communeInput.value, 
             agent: agentString,
-            reste: 0
+            reste: 0,
+            adjustmentType: adjustmentTypeInput ? adjustmentTypeInput.value : '',
+            adjustmentVal: adjustmentValInput ? (parseFloat(adjustmentValInput.value) || 0) : 0
         };
 
         if (!newData.date || !newData.reference) return alert("Remplissez la date et la référence/nom.");
@@ -90,6 +106,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (newData.agentMobileMoney) t.agentMobileMoney = newData.agentMobileMoney;
             t.modePaiement = newData.modePaiement; 
             t.reste = (t.montantParis + t.montantAbidjan) - t.prix;
+            // On met à jour l'ajustement si présent dans la nouvelle saisie
+            if (newData.adjustmentType) { t.adjustmentType = newData.adjustmentType; t.adjustmentVal = newData.adjustmentVal; }
         } else {
             dailyTransactions.push(newData);
         }
@@ -100,6 +118,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         // Reset partiel
         prixInput.value = ''; montantParisInput.value = ''; montantAbidjanInput.value = '';
         agentMobileMoneyInput.value = ''; resteInput.value = '';
+        if(adjustmentTypeInput) adjustmentTypeInput.value = ''; if(adjustmentValInput) adjustmentValInput.value = '';
         referenceInput.value = ''; nomInput.value = ''; conteneurInput.value = '';
         agentChoices.setValue([]); 
         resteInput.className = '';
@@ -151,9 +170,13 @@ document.addEventListener('DOMContentLoaded', async () => {
         // Table Transactions
         dailyTableBody.innerHTML = '';
         dailyTransactions.forEach((data, index) => {
+            let priceDisplay = formatCFA(data.prix);
+            if (data.adjustmentType === 'reduction') priceDisplay += ' ⬇️';
+            if (data.adjustmentType === 'augmentation') priceDisplay += ' ⬆️';
+
             dailyTableBody.innerHTML += `
                 <tr>
-                    <td>${data.reference}</td><td>${data.nom || '-'}</td><td>${formatCFA(data.prix)}</td>
+                    <td>${data.reference}</td><td>${data.nom || '-'}</td><td>${priceDisplay}</td>
                     <td>${data.modePaiement}</td>
                     <td class="${data.reste < 0 ? 'reste-negatif' : 'reste-positif'}">${formatCFA(data.reste)}</td>
                     <td><button class="deleteBtn" onclick="removeTransaction(${index})">X</button></td>
@@ -383,6 +406,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     function clearDisplayFields() {
         prixInput.value = ''; conteneurInput.value = ''; resteInput.value = ''; resteInput.className = '';
         montantParisInput.placeholder = 'Montant Paris'; montantAbidjanInput.placeholder = 'Montant Abidjan';
+        if(adjustmentTypeInput) adjustmentTypeInput.value = '';
+        if(adjustmentValInput) adjustmentValInput.value = '';
     }
 
     function fillFormWithData(data) {
@@ -408,6 +433,9 @@ document.addEventListener('DOMContentLoaded', async () => {
             resteInput.className = 'reste-positif';
             montantParisInput.placeholder = "Soldé Paris"; montantAbidjanInput.placeholder = "Soldé Abidjan";
         }
+
+        if (adjustmentTypeInput && data.adjustmentType) adjustmentTypeInput.value = data.adjustmentType;
+        if (adjustmentValInput && data.adjustmentVal) adjustmentValInput.value = data.adjustmentVal;
     }
 
     prixInput.addEventListener('input', calculateAndStyleReste);

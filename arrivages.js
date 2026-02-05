@@ -364,7 +364,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     const rows = results.data;
                     const batch = db.batch();
                     let count = 0, log = "";
-                    const TAUX = 655.957;
+                    const TAUX = 656;
 
                     for (const row of rows) {
                         // NOUVELLE LOGIQUE CSV PARIS : DATE DU TRANSFERT, REFERENCE, EXPEDITEUR, PRIX, DESTINATEUR

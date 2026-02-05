@@ -98,6 +98,7 @@
             <a href="#panel-depenses">Dépenses (Mensuelles)</a>
             <a href="#panel-banque">Mouvements Banque</a>
             <a href="#panel-impayes" style="color: #dc3545;">⚠️ Impayés</a>
+            <a href="#panel-adjustments">Ajustements</a>
         </div>
 
         <div id="panel-conteneurs" class="tab-panel active">
@@ -169,6 +170,18 @@
                     </tr>
                 </thead>
                 <tbody id="unpaidTableBody"></tbody>
+            </table>
+        </div>
+
+        <div id="panel-adjustments" class="tab-panel">
+            <h2 style="margin-top: 30px;">Liste des Réductions & Augmentations</h2>
+            <table id="adjustmentsTable">
+                <thead>
+                    <tr>
+                        <th>Date</th><th>Client</th><th>Référence</th><th>Type</th><th>Montant</th>
+                    </tr>
+                </thead>
+                <tbody id="adjustmentsTableBody"></tbody>
             </table>
         </div>
 

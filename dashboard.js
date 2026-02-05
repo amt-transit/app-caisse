@@ -15,6 +15,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const bankMovementsTableBody = document.getElementById('bankMovementsTableBody');
     const topClientsTableBody = document.getElementById('topClientsTableBody'); 
     const unpaidTableBody = document.getElementById('unpaidTableBody');
+    const adjustmentsTableBody = document.getElementById('adjustmentsTableBody');
 
     const grandTotalPrixEl = document.getElementById('grandTotalPrix');
     const grandTotalCountEl = document.getElementById('grandTotalCount');
@@ -95,6 +96,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         generateBankMovementSummary(filteredBankMovements);
         generateTopClientsSummary(filteredTransactions); 
         generateUnpaidSummary(filteredTransactions);
+        generateAdjustmentSummary(filteredTransactions); // Liste Réductions/Augmentations
         generateAdvancedAnalytics(filteredTransactions, allTransactions); // Nouvelles analyses
         generateVisualCharts(allTransactions, allExpenses); // Graphiques (sur toutes les données pour voir l'évolution)
     }
@@ -492,6 +494,34 @@ document.addEventListener('DOMContentLoaded', async () => {
                 <td><a href="${waLink}" target="_blank" style="text-decoration:none; color: #25D366; font-weight:bold; border: 1px solid #25D366; padding: 2px 8px; border-radius: 4px;">📱 Relancer</a></td>
             `;
             unpaidTableBody.appendChild(row);
+        });
+    }
+
+    function generateAdjustmentSummary(transactions) {
+        if (!adjustmentsTableBody) return;
+        adjustmentsTableBody.innerHTML = '<tr><td colspan="5">Aucun ajustement (Réduction/Augmentation) sur la période.</td></tr>';
+        
+        // Filtrer les transactions avec un ajustement enregistré
+        const adjusted = transactions.filter(t => t.adjustmentType && t.adjustmentType !== '' && t.adjustmentVal > 0);
+        
+        if (adjusted.length === 0) return;
+
+        adjustmentsTableBody.innerHTML = '';
+        adjusted.forEach(t => {
+            const isReduc = t.adjustmentType === 'reduction';
+            const color = isReduc ? '#10b981' : '#ef4444'; // Vert pour Réduction, Rouge pour Augmentation
+            const icon = isReduc ? '⬇️' : '⬆️';
+            const label = isReduc ? 'Réduction' : 'Augmentation';
+            
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td>${t.date}</td>
+                <td>${t.nom || 'Client'}</td>
+                <td>${t.reference}</td>
+                <td><span class="tag" style="background:${color};">${icon} ${label}</span></td>
+                <td style="font-weight:bold; color:${color}">${formatCFA(t.adjustmentVal)}</td>
+            `;
+            adjustmentsTableBody.appendChild(row);
         });
     }
 
