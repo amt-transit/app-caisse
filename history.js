@@ -14,6 +14,17 @@ document.addEventListener('DOMContentLoaded', () => {
     const startDateInput = document.getElementById('startDate');
     const endDateInput = document.getElementById('endDate');
 
+    // --- AJOUT DYNAMIQUE : Checkbox Tri Conteneur ---
+    let sortByContainerCheckbox = document.getElementById('sortByContainerCheckbox');
+    if (!sortByContainerCheckbox && showDeletedCheckbox && showDeletedCheckbox.parentNode) {
+        const span = document.createElement('span');
+        span.style.marginLeft = "15px";
+        span.innerHTML = `<input type="checkbox" id="sortByContainerCheckbox" style="width:auto; vertical-align:middle;"> <label for="sortByContainerCheckbox" style="cursor:pointer; font-size:12px;">Tri par Conteneur</label>`;
+        showDeletedCheckbox.parentNode.appendChild(span);
+        sortByContainerCheckbox = document.getElementById('sortByContainerCheckbox');
+        sortByContainerCheckbox.addEventListener('change', () => applyFiltersAndRender());
+    }
+
     const modal = document.getElementById('paymentHistoryModal');
     const modalList = document.getElementById('paymentHistoryList');
     const modalTitle = document.getElementById('modalRefTitle');
@@ -265,6 +276,22 @@ document.addEventListener('DOMContentLoaded', () => {
         
         // Tri JS pour être sûr (si le tri Firestore a sauté)
         transactions.sort((a, b) => {
+            // SI la case "Tri par Conteneur" est cochée
+            if (sortByContainerCheckbox && sortByContainerCheckbox.checked) {
+                const getNum = (str) => {
+                    const matches = (str || "").match(/\d+/); // Premier nombre trouvé
+                    return matches ? parseInt(matches[0], 10) : 0;
+                };
+
+                const cA = getNum(a.conteneur);
+                const cB = getNum(b.conteneur);
+                if (cB !== cA) return cB - cA; // Tri décroissant Conteneur
+
+                const rA = getNum(a.reference);
+                const rB = getNum(b.reference);
+                return rA - rB; // Tri CROISSANT Référence
+            }
+            // SINON : Tri par Date (Défaut)
             const dateA = a.lastPaymentDate || a.date;
             const dateB = b.lastPaymentDate || b.date;
             return new Date(dateB) - new Date(dateA);

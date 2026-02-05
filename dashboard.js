@@ -479,8 +479,21 @@ document.addEventListener('DOMContentLoaded', async () => {
         
         if (unpaid.length === 0) return;
 
-        // Tri par dette la plus élevée (reste le plus petit/négatif)
-        unpaid.sort((a, b) => a.reste - b.reste);
+        // TRI : Conteneur DÉCROISSANT, Référence CROISSANTE
+        unpaid.sort((a, b) => {
+            const getNum = (str) => {
+                const matches = (str || "").match(/\d+/);
+                return matches ? parseInt(matches[0], 10) : 0;
+            };
+
+            const cA = getNum(a.conteneur);
+            const cB = getNum(b.conteneur);
+            if (cB !== cA) return cB - cA; // Tri décroissant Conteneur
+
+            const rA = getNum(a.reference);
+            const rB = getNum(b.reference);
+            return rA - rB; // Tri CROISSANT Référence
+        });
 
         unpaidTableBody.innerHTML = '';
         unpaid.forEach(t => {
@@ -899,8 +912,16 @@ document.addEventListener('DOMContentLoaded', async () => {
         // Filtrer les dépenses liées au conteneur
         const expenses = allExpenses.filter(e => (e.conteneur && e.conteneur.trim().toUpperCase()) === containerName);
         
-        // Trier les transactions par date
-        const sortedTransactions = transactions.map(t => ({...t, _type: 'transaction'})).sort((a, b) => new Date(b.date) - new Date(a.date));
+        // Trier les transactions : Référence CROISSANTE
+        const sortedTransactions = transactions.map(t => ({...t, _type: 'transaction'})).sort((a, b) => {
+            const getNum = (str) => {
+                const matches = (str || "").match(/\d+/);
+                return matches ? parseInt(matches[0], 10) : 0;
+            };
+            const rA = getNum(a.reference);
+            const rB = getNum(b.reference);
+            return rA - rB;
+        });
         // Trier les dépenses par date
         const sortedExpenses = expenses.map(e => ({...e, _type: 'expense'})).sort((a, b) => new Date(b.date) - new Date(a.date));
         // Combiner : Transactions d'abord, Dépenses ensuite (en bas)
@@ -978,6 +999,49 @@ document.addEventListener('DOMContentLoaded', async () => {
     if(closeBtn) {
         closeBtn.addEventListener('click', () => {
             modalContainer.style.display = 'none';
+        });
+    }
+
+    // --- GESTION PDF MODAL ---
+    const downloadContainerPdfBtn = document.getElementById('downloadContainerPdfBtn');
+    if (downloadContainerPdfBtn) {
+        downloadContainerPdfBtn.addEventListener('click', () => {
+            if (!window.jspdf) return alert("Erreur : Librairie PDF non chargée.");
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF();
+            
+            const title = document.getElementById('modalContainerTitle').textContent || "Détails Opérations";
+            
+            // En-tête du PDF
+            doc.setFontSize(12);
+            doc.setTextColor(40);
+            doc.text(title, 14, 15);
+            
+            doc.setFontSize(8);
+            doc.setTextColor(100);
+            const dateStr = new Date().toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+            doc.text(`Généré le : ${dateStr}`, 14, 22);
+
+            // Génération du tableau
+            doc.autoTable({
+                html: '#containerDetailsTable',
+                startY: 30,
+                theme: 'grid',
+                headStyles: { fillColor: [79, 70, 229], textColor: 255, fontStyle: 'bold' },
+                styles: { fontSize: 7, cellPadding: 2 },
+                footStyles: { fillColor: [241, 245, 249], textColor: 30, fontStyle: 'bold' },
+                didParseCell: function(data) {
+                    // Alignement à droite pour les montants (colonnes 3, 4, 5, 6)
+                    if (data.column.index >= 3) data.cell.styles.halign = 'right';
+
+                    // CORRECTION ENCODAGE : Remplacement des espaces insécables par des espaces normaux
+                    if (data.cell.text) {
+                        data.cell.text = data.cell.text.map(t => t.replace(/[\u00A0\u202F]/g, ' '));
+                    }
+                }
+            });
+            
+            doc.save(`Details_Operations_${title.replace(/[^a-z0-9]/gi, '_')}.pdf`);
         });
     }
 

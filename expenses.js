@@ -23,6 +23,17 @@ document.addEventListener('DOMContentLoaded', () => {
     const showDeletedCheckbox = document.getElementById('showDeletedCheckbox');
     const expenseSearchInput = document.getElementById('expenseSearch');
 
+    // --- AJOUT DYNAMIQUE : Checkbox Tri Conteneur ---
+    let sortExpenseContainerCheckbox = document.getElementById('sortExpenseContainerCheckbox');
+    if (!sortExpenseContainerCheckbox && showDeletedCheckbox && showDeletedCheckbox.parentNode) {
+        const span = document.createElement('span');
+        span.style.marginLeft = "15px";
+        span.innerHTML = `<input type="checkbox" id="sortExpenseContainerCheckbox" style="width:auto; vertical-align:middle;"> <label for="sortExpenseContainerCheckbox" style="cursor:pointer; font-size:12px;">Tri par Conteneur</label>`;
+        showDeletedCheckbox.parentNode.appendChild(span);
+        sortExpenseContainerCheckbox = document.getElementById('sortExpenseContainerCheckbox');
+        sortExpenseContainerCheckbox.addEventListener('change', () => renderExpensesTable());
+    }
+
     let unsubscribeExpenses = null; 
     let allExpenses = [];
 
@@ -155,19 +166,21 @@ document.addEventListener('DOMContentLoaded', () => {
             return (item.description || "").toLowerCase().includes(term) || (item.type || "").toLowerCase().includes(term) || (item.conteneur || "").toLowerCase().includes(term);
         });
 
-        // TRI DÉCROISSANT : Conteneur (si onglet Conteneur)
-        if (currentTab === 'container') {
-            filtered.sort((a, b) => {
+        // TRI
+        filtered.sort((a, b) => {
+            // Si onglet Conteneur ET Checkbox cochée
+            if (currentTab === 'container' && sortExpenseContainerCheckbox && sortExpenseContainerCheckbox.checked) {
                 const getNum = (str) => {
-                    const matches = (str || "").match(/\d+/g);
-                    return matches ? parseInt(matches[matches.length - 1], 10) : 0;
+                    const matches = (str || "").match(/\d+/); // Premier nombre trouvé
+                    return matches ? parseInt(matches[0], 10) : 0;
                 };
                 const cA = getNum(a.conteneur);
                 const cB = getNum(b.conteneur);
                 if (cB !== cA) return cB - cA;
-                return new Date(b.date) - new Date(a.date);
-            });
-        }
+            }
+            // Sinon Date décroissante (Défaut)
+            return new Date(b.date) - new Date(a.date);
+        });
 
         expenseTableBody.innerHTML = ''; 
         if (filtered.length === 0) { expenseTableBody.innerHTML = '<tr><td colspan="7">Aucun résultat.</td></tr>'; return; }

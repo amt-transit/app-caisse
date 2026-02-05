@@ -417,7 +417,15 @@ document.addEventListener('DOMContentLoaded', async () => {
         const { jsPDF } = window.jspdf;
         const doc = new jsPDF();
         doc.text("Top Clients - AMT Caisse", 14, 15);
-        doc.autoTable({ html: '#topClientsTable', startY: 25 });
+        doc.autoTable({ html: '#topClientsTable', 
+            startY: 25,
+            styles: { fontSize: 7 },
+            didParseCell: function(data) {
+                if (data.cell.text) {
+                    data.cell.text = data.cell.text.map(t => t.replace(/[\u00A0\u202F]/g, ' '));
+                }
+            }
+        });
         doc.save('Top_Clients_AMT.pdf');
     });
 

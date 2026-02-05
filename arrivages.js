@@ -291,6 +291,22 @@ document.addEventListener('DOMContentLoaded', () => {
         // Mise à jour du compteur (Affiche le nombre total trouvé)
         if (abidjanCountEl) abidjanCountEl.textContent = filtered.length;
 
+        // TRI : Conteneur DÉCROISSANT, Référence CROISSANTE
+        filtered.sort((a, b) => {
+            const getNum = (str) => {
+                const matches = (str || "").match(/\d+/); // On prend le premier nombre trouvé (ex: 001 dans AB-001)
+                return matches ? parseInt(matches[0], 10) : 0;
+            };
+
+            const cA = getNum(a.conteneur);
+            const cB = getNum(b.conteneur);
+            if (cB !== cA) return cB - cA; // Tri décroissant Conteneur
+
+            const rA = getNum(a.reference);
+            const rB = getNum(b.reference);
+            return rA - rB; // Tri CROISSANT Référence
+        });
+
         // === OPTIMISATION : On ne prend que les 50 premiers pour l'affichage ===
         const toShow = filtered.slice(0, 50);
 
