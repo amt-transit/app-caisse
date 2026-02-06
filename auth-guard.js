@@ -86,6 +86,13 @@ firebase.auth().onAuthStateChanged(async (user) => {
             }
         }
 
+        // Protection page Confirmation
+        if (currentPage.includes('confirmation.html') && userRole === 'saisie_limited') {
+            alert("Accès refusé : Réservé aux Admins et Saisie Full.");
+            window.location.href = 'index.html';
+            return;
+        }
+
         // --- MASQUER LES LIENS ---
         const navDashboard = document.getElementById('nav-dashboard');
         const navExpenses = document.getElementById('nav-expenses');
@@ -95,6 +102,7 @@ firebase.auth().onAuthStateChanged(async (user) => {
         const navAdmin = document.getElementById('nav-admin');
         const navClients = document.getElementById('nav-clients');
         const navMagasinage = document.getElementById('nav-magasinage'); 
+        const navConfirmation = document.getElementById('nav-confirmation');
 
         if (navAdmin && userRole !== 'super_admin') navAdmin.style.display = 'none';
 
@@ -113,6 +121,7 @@ firebase.auth().onAuthStateChanged(async (user) => {
             if (navArrivages) navArrivages.style.display = 'none';
             if (navClients) navClients.style.display = 'none';
             if (navMagasinage) navMagasinage.style.display = 'none';
+            if (navConfirmation) navConfirmation.style.display = 'none';
         }
 
         document.body.style.display = 'block';

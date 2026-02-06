@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=1000">
+    <title>Confirmation - Caisse</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Comfortaa:wght@400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+    <link rel="icon" type="image/png" href="favicon.png">
+</head>
+<body style="display:none">
+    <header class="app-header">
+        <img src="LOGOAMT.png" alt="Logo" class="app-logo">
+        <h1>Confirmation des Saisies</h1>
+        <button id="logoutBtn" style="position: absolute; right: 20px; padding: 8px 15px; cursor: pointer;">Déconnexion</button>
+    </header>
+
+    <nav class="navigation">
+        <a href="index.html">Saisie</a>
+        <a href="confirmation.html" class="active" id="nav-confirmation">Confirmation</a>
+        <a href="dashboard.html" id="nav-dashboard">Tableau de Bord</a>
+        <a href="history.html">Historique</a>
+        <a href="expenses.html" id="nav-expenses">Dépenses</a>
+        <a href="other-income.html" id="nav-other-income">Autres Entrées</a>
+        <a href="bank.html" id="nav-bank">Banque</a>
+        <a href="arrivages.html" id="nav-arrivages">Arrivages</a>
+        <a href="magasinage.html" id="nav-magasinage">Magasinage</a>
+        <a href="clients.html" id="nav-clients">Clients</a>
+        <a href="admin-panel.html" id="nav-admin" style="background-color: #6f42c1; color: white;">ADMIN</a>
+    </nav>
+
+    <div class="dashboard-container">
+        <div style="display: flex; gap: 20px;">
+            <!-- Sidebar: Liste des Jours de Saisie -->
+            <div style="flex: 1; min-width: 250px; border-right: 1px solid #e2e8f0; padding-right: 20px;">
+                <h3>📅 Jours de Saisie</h3>
+                <div class="filter-fields" style="margin-bottom: 10px;">
+                    <input type="date" id="filterDateSession" style="width: 100%;">
+                </div>
+                
+                <h4 style="margin-bottom: 5px; color: #d97706;">⏳ En Attente</h4>
+                <div id="sessionsListPending" style="max-height: 250px; overflow-y: auto; border-bottom: 1px solid #eee; margin-bottom: 15px;">
+                    <p style="color: #666; font-style: italic;">Chargement...</p>
+                </div>
+
+                <h4 style="margin-bottom: 5px; color: #059669;">✅ Historique Validations</h4>
+                <div id="sessionsListValidated" style="max-height: 250px; overflow-y: auto;">
+                    <p style="color: #666; font-style: italic;">Chargement...</p>
+                </div>
+
+                <!-- Section Archives -->
+                <div style="margin-top: 30px; border-top: 2px dashed #cbd5e1; padding-top: 15px;">
+                    <h4 style="margin: 0 0 10px 0; color: #64748b;">📂 Archives</h4>
+                    <div style="display: flex; gap: 5px; margin-bottom: 10px;">
+                        <input type="month" id="archiveMonth" style="font-size: 12px; flex: 1;">
+                        <button id="searchArchiveBtn" style="padding: 5px 10px; font-size: 12px; cursor: pointer; background: #64748b; color: white; border: none; border-radius: 4px;">🔍</button>
+                    </div>
+                    <div id="sessionsListArchives" style="max-height: 200px; overflow-y: auto; font-size: 0.9em;">
+                        <p style="color: #999; font-style: italic;">Sélectionnez un mois.</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Main Content: Détails de la Saisie -->
+            <div style="flex: 3;">
+                <div id="sessionDetails" style="display: none;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; border-bottom: 2px solid #f1f5f9; padding-bottom: 10px;">
+                        <div>
+                            <h2 style="margin: 0; color: #4f46e5;" id="detailDateUser">Détails</h2>
+                            <span id="detailStatus" class="tag" style="background: #94a3b8;">Non Vérifié</span>
+                        </div>
+                        <button id="validateSessionBtn" class="primary" style="background: linear-gradient(135deg, #10b981 0%, #059669 100%);">✅ Valider la Journée</button>
+                    </div>
+
+                    <h3 style="color: #28a745;">Encaissements (<span id="countEncaissements">0</span>)</h3>
+                    <table class="table">
+                        <thead><tr><th>Réf</th><th>Client</th><th>Conteneur</th><th>Prix</th><th>Payé (P+A)</th><th>Mode</th></tr></thead>
+                        <tbody id="detailsEncaissementsBody"></tbody>
+                    </table>
+
+                    <h3 style="color: #d32f2f; margin-top: 20px;">Dépenses (<span id="countDepenses">0</span>)</h3>
+                    <table class="table">
+                        <thead><tr><th>Description</th><th>Type</th><th>Montant</th></tr></thead>
+                        <tbody id="detailsDepensesBody"></tbody>
+                    </table>
+
+                    <div class="daily-summary" style="margin-top: 20px;">
+                        <div class="summary-item"><h4>Total Espèces (A)</h4><span id="totalEsp">0 CFA</span></div>
+                        <div class="summary-item"><h4>Total Dépenses</h4><span id="totalDep">0 CFA</span></div>
+                        <div class="summary-item"><h4>NET (Caisse)</h4><span id="totalNet" style="font-weight: bold;">0 CFA</span></div>
+                    </div>
+                </div>
+                <div id="noSelectionMsg" style="text-align: center; padding: 50px; color: #94a3b8;">
+                    <p>Sélectionnez une session de saisie à gauche pour voir les détails.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+    <script src="firebase-init.js"></script>
+    <script src="auth-guard.js"></script>
+    <script src="confirmation.js"></script>
+</body>
+</html>
