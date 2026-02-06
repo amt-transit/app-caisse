@@ -27,6 +27,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const searchArchiveBtn = document.getElementById('searchArchiveBtn');
 
     let currentSessionId = null;
+    let currentSessionData = null; // Pour stocker les infos de la session en cours (date, user)
 
     // 1. Charger la liste des sessions (Basé sur les logs de validation)
     function loadSessions() {
@@ -128,6 +129,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // 2. Charger les détails d'une session
     async function loadSessionDetails(logId, logData) {
         currentSessionId = logId;
+        currentSessionData = logData; // Sauvegarde du contexte
         noSelectionMsg.style.display = 'none';
         sessionDetailsEl.style.display = 'block';
         
@@ -189,8 +191,22 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             if (payeCeJour > 0) {
+                let actionButtons = '';
+                // On affiche les boutons seulement si la session n'est PAS encore validée
+                if (logData.status !== "VALIDATED") {
+                    actionButtons = `
+                        <button class="btn-edit" style="background:#3b82f6; color:white; border:none; padding:4px 8px; border-radius:4px; cursor:pointer; margin-right:5px;">✏️</button>
+                        <button class="btn-delete" style="background:#ef4444; color:white; border:none; padding:4px 8px; border-radius:4px; cursor:pointer;">🗑️</button>
+                    `;
+                } else {
+                    actionButtons = `<span style="color:#94a3b8; font-size:0.8em;">🔒 Validé</span>`;
+                }
+
                 detailsEncaissementsBody.innerHTML += `
-                    <tr><td>${t.reference}</td><td>${t.nom}</td><td>${t.conteneur}</td><td>${formatCFA(t.prix)}</td><td style="font-weight:bold;">${formatCFA(payeCeJour)}</td><td>${t.modePaiement}</td></tr>
+                    <tr data-id="${doc.id}">
+                        <td>${t.reference}</td><td>${t.nom}</td><td>${t.conteneur}</td><td>${formatCFA(t.prix)}</td><td style="font-weight:bold;">${formatCFA(payeCeJour)}</td><td>${t.modePaiement}</td>
+                        <td>${actionButtons}</td>
+                    </tr>
                 `;
             }
         });
@@ -209,6 +225,145 @@ document.addEventListener('DOMContentLoaded', () => {
         totalEspEl.textContent = formatCFA(sumEsp);
         totalDepEl.textContent = formatCFA(sumDep);
         totalNetEl.textContent = formatCFA(sumEsp - sumDep);
+    }
+
+    // --- GESTION DES ACTIONS (MODIFIER / SUPPRIMER) ---
+    detailsEncaissementsBody.addEventListener('click', (e) => {
+        const btn = e.target.closest('button');
+        if (!btn) return;
+        
+        const tr = btn.closest('tr');
+        const docId = tr.dataset.id;
+        
+        // Vérifier si la session est déjà validée (optionnel : empêcher modif si validé)
+        if (detailStatus.textContent.includes("Validé")) {
+            alert("Impossible de modifier une session déjà validée.");
+            return;
+        }
+
+        if (btn.classList.contains('btn-delete')) {
+            handleDelete(docId);
+        } else if (btn.classList.contains('btn-edit')) {
+            handleEdit(docId);
+        }
+    });
+
+    async function handleDelete(docId) {
+        if (!confirm("Voulez-vous vraiment supprimer cet encaissement de la journée ?")) return;
+        
+        try {
+            const docRef = db.collection("transactions").doc(docId);
+            const doc = await docRef.get();
+            if (!doc.exists) return;
+            
+            const data = doc.data();
+            const sessionDate = currentSessionData.date.split('T')[0];
+            const sessionUser = currentSessionData.user;
+
+            if (data.paymentHistory) {
+                // On retire les paiements faits par cet utilisateur à cette date
+                const newHistory = data.paymentHistory.filter(p => !(p.date === sessionDate && p.saisiPar === sessionUser));
+                
+                // Recalcul des totaux
+                let newAbj = 0, newPar = 0;
+                newHistory.forEach(p => {
+                    newAbj += (p.montantAbidjan || 0);
+                    newPar += (p.montantParis || 0);
+                });
+                
+                const newReste = (data.prix || 0) - (newAbj + newPar);
+                
+                await docRef.update({
+                    paymentHistory: newHistory,
+                    montantAbidjan: newAbj,
+                    montantParis: newPar,
+                    reste: newReste
+                });
+            } else {
+                // Fallback (Anciennes données sans historique) : On marque supprimé
+                await docRef.update({ isDeleted: true });
+            }
+            
+            // Rafraîchir l'affichage
+            loadSessionDetails(currentSessionId, currentSessionData);
+        } catch (error) {
+            console.error(error);
+            alert("Erreur lors de la suppression.");
+        }
+    }
+
+    async function handleEdit(docId) {
+        try {
+            const docRef = db.collection("transactions").doc(docId);
+            const doc = await docRef.get();
+            if (!doc.exists) return;
+            
+            const data = doc.data();
+            const sessionDate = currentSessionData.date.split('T')[0];
+            const sessionUser = currentSessionData.user;
+            
+            // Trouver le montant actuel payé ce jour-là pour pré-remplir le prompt
+            let currentPaymentAbj = 0;
+            let currentPaymentPar = 0;
+            let currentMode = 'Espèce';
+            
+            if (data.paymentHistory) {
+                const entry = data.paymentHistory.find(p => p.date === sessionDate && p.saisiPar === sessionUser);
+                if (entry) {
+                    currentPaymentAbj = entry.montantAbidjan || 0;
+                    currentPaymentPar = entry.montantParis || 0;
+                    currentMode = entry.modePaiement || 'Espèce';
+                }
+            }
+
+            // Demander les nouvelles valeurs
+            const newPrixStr = prompt("Modifier le PRIX TOTAL du colis :", data.prix);
+            if (newPrixStr === null) return;
+            const newPrix = parseFloat(newPrixStr) || 0;
+
+            const newAbjStr = prompt("Modifier le montant payé ABIDJAN (ce jour) :", currentPaymentAbj);
+            if (newAbjStr === null) return;
+            const newPaymentAbj = parseFloat(newAbjStr) || 0;
+
+            // Mise à jour via une suppression + réinsertion propre dans l'historique
+            // Note : Pour simplifier, on réutilise la logique de suppression puis d'ajout manuel, 
+            // mais ici on va modifier directement l'array pour être atomique.
+            
+            // 1. Retirer l'ancienne entrée
+            let newHistory = (data.paymentHistory || []).filter(p => !(p.date === sessionDate && p.saisiPar === sessionUser));
+            
+            // 2. Ajouter la nouvelle entrée corrigée
+            newHistory.push({
+                date: sessionDate,
+                saisiPar: sessionUser,
+                montantAbidjan: newPaymentAbj,
+                montantParis: currentPaymentPar, // On garde Paris tel quel (ou on pourrait demander aussi)
+                modePaiement: currentMode,
+                agent: data.agent || ''
+            });
+
+            // 3. Recalculer les totaux globaux
+            let totalAbj = 0, totalPar = 0;
+            newHistory.forEach(p => {
+                totalAbj += (p.montantAbidjan || 0);
+                totalPar += (p.montantParis || 0);
+            });
+            const newReste = newPrix - (totalAbj + totalPar);
+
+            await docRef.update({
+                prix: newPrix,
+                paymentHistory: newHistory,
+                montantAbidjan: totalAbj,
+                montantParis: totalPar,
+                reste: newReste
+            });
+
+            loadSessionDetails(currentSessionId, currentSessionData);
+
+        } catch (error) {
+            console.error(error);
+            alert("Erreur lors de la modification.");
+        }
     }
 
     validateSessionBtn.addEventListener('click', () => {
