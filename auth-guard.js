@@ -70,7 +70,8 @@ firebase.auth().onAuthStateChanged(async (user) => {
             if (currentPage.includes('dashboard.html') ||
                 currentPage.includes('magasinage.html') || 
                 currentPage.includes('bank.html') || 
-                currentPage.includes('arrivages.html')) {
+                currentPage.includes('arrivages.html') ||
+                currentPage.includes('salaire.html')) {
                 alert("Accès refusé : Votre rôle (Saisie Full) ne permet pas d'accéder à cette page.");
                 window.location.href = 'index.html'; 
                 return;
@@ -103,6 +104,7 @@ firebase.auth().onAuthStateChanged(async (user) => {
         const navClients = document.getElementById('nav-clients');
         const navMagasinage = document.getElementById('nav-magasinage'); 
         const navConfirmation = document.getElementById('nav-confirmation');
+        const navSalaire = document.getElementById('nav-salaire');
 
         if (navAdmin && userRole !== 'super_admin') navAdmin.style.display = 'none';
 
@@ -111,6 +113,7 @@ firebase.auth().onAuthStateChanged(async (user) => {
             if (navBank) navBank.style.display = 'none';
             if (navArrivages) navArrivages.style.display = 'none';
             if (navMagasinage) navMagasinage.style.display = 'none';
+            if (navSalaire) navSalaire.style.display = 'none';
         }
 
         if (userRole === 'saisie_limited') {
@@ -122,6 +125,7 @@ firebase.auth().onAuthStateChanged(async (user) => {
             if (navClients) navClients.style.display = 'none';
             if (navMagasinage) navMagasinage.style.display = 'none';
             if (navConfirmation) navConfirmation.style.display = 'none';
+            if (navSalaire) navSalaire.style.display = 'none';
         }
 
         document.body.style.display = 'block';

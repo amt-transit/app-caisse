@@ -28,6 +28,11 @@ createApp({
             const role = sessionStorage.getItem('userRole');
             return role === 'admin' || role === 'super_admin';
         });
+        // AJOUT : Super Admin pour modifications
+        const isSuperAdmin = computed(() => {
+            const role = sessionStorage.getItem('userRole');
+            return role === 'super_admin';
+        });
 
         const currentSalaireView = ref('employes'); 
         const employeesList = ref([]);
@@ -221,6 +226,7 @@ createApp({
         };
 
         const confirmSalaryPayment = async () => {
+            if(!isSuperAdmin.value) return;
             // VERIFICATION BUDGET : On ne peut pas payer si le mois n'a pas de dotation
             const hasBudget = salaryFunds.value.some(f => f.targetMonth === payForm.value.month);
             if (!hasBudget) {
@@ -258,7 +264,7 @@ createApp({
         // (Identique à votre logique existante pour ne pas tout casser)
 
         const saveGlobalTontine = async () => {
-            if(!isAdmin.value) return;
+            if(!isSuperAdmin.value) return;
             try {
                 await setDoc(doc(db, "settings", "salary"), { tontineAmount: globalTontineAmount.value }, { merge: true });
                 alert("Nouveau montant de tontine enregistré !");
@@ -266,6 +272,7 @@ createApp({
         };
 
         const saveNewEmployee = async () => {
+            if(!isSuperAdmin.value) return;
             if(!newEmp.value.name) return;
             try {
                 await addDoc(collection(db, "employees"), { 
@@ -278,14 +285,19 @@ createApp({
 
         const openEditEmployee = (emp) => { editingEmp.value = { ...emp }; showEditEmployeeModal.value = true; };
         const updateEmployee = async () => {
+            if(!isSuperAdmin.value) return;
             try {
                 await updateDoc(doc(db, "employees", editingEmp.value.id), { name: editingEmp.value.name, salary: editingEmp.value.salary, loan: editingEmp.value.loan, tontineCount: editingEmp.value.tontineCount || 0, isTontine: (editingEmp.value.tontineCount || 0) > 0 });
                 showEditEmployeeModal.value = false;
             } catch(e) { alert("Erreur: " + e.message); }
         };
-        const deleteEmployee = async (id) => { if(confirm("Supprimer cet employé ?")) await deleteDoc(doc(db, "employees", id)); };
+        const deleteEmployee = async (id) => { 
+            if(!isSuperAdmin.value) return;
+            if(confirm("Supprimer cet employé ?")) await deleteDoc(doc(db, "employees", id)); 
+        };
 
         const cancelTontine = async (emp) => {
+            if(!isSuperAdmin.value) return;
             if (!confirm(`Voulez-vous vraiment annuler toutes les parts de tontine pour ${emp.name} ? Cette action est irréversible.`)) {
                 return;
             }
@@ -299,6 +311,7 @@ createApp({
         };
 
         const deleteSalaryPayment = async (payment) => {
+             if(!isSuperAdmin.value) return;
              if(!confirm("Annuler ce paiement ?")) return;
              try {
                 if(payment.loan > 0) {
@@ -333,13 +346,17 @@ createApp({
         const closeMonthDetails = () => { selectedHistoryMonth.value = null; };
 
         const saveSalaryFund = async () => {
+            if(!isSuperAdmin.value) return;
             if(!newFund.value.amount) return;
             try { 
                 await addDoc(collection(db, "salary_funds"), { amount: newFund.value.amount, note: newFund.value.note || 'Dotation', targetMonth: newFund.value.targetMonth || selectedBudgetMonth.value, timestamp: Timestamp.now() }); 
                 showFundModal.value = false; newFund.value = { amount: '', note: '', targetMonth: selectedBudgetMonth.value }; alert("Fonds enregistrés !"); 
             } catch(e) { alert(e.message); } 
         };
-        const deleteSalaryFund = async (id) => { if(confirm("Supprimer ?")) await deleteDoc(doc(db, "salary_funds", id)); };
+        const deleteSalaryFund = async (id) => { 
+            if(!isSuperAdmin.value) return;
+            if(confirm("Supprimer ?")) await deleteDoc(doc(db, "salary_funds", id)); 
+        };
 
         const salaryStats = computed(() => {
             const target = selectedBudgetMonth.value;
@@ -375,6 +392,7 @@ createApp({
         };
 
         const markTontinePayment = async (emp) => {
+            if(!isSuperAdmin.value) return;
             let amount = prompt("Montant de la cotisation pour " + emp.name + " ?", globalTontineAmount.value);
             if (amount === null) return;
             amount = parseFloat(amount);
@@ -404,6 +422,7 @@ createApp({
         });
 
         const markTontineBeneficiary = async (emp) => {
+            if(!isSuperAdmin.value) return;
             if (!confirm(`Confirmer que ${emp.name} récupère la tontine du mois (${selectedTontineMonth.value}) ?`)) return;
             
             const totalShares = employeesList.value.reduce((sum, e) => sum + (parseInt(e.tontineCount || (e.isTontine ? 1 : 0))), 0);
@@ -422,7 +441,10 @@ createApp({
             } catch(e) { alert("Erreur: " + e.message); }
         };
 
-        const deleteTontineBeneficiary = async (payment) => { if(confirm("Supprimer ce gain ?")) await deleteDoc(doc(db, "salary_payments", payment.id)); };
+        const deleteTontineBeneficiary = async (payment) => { 
+            if(!isSuperAdmin.value) return;
+            if(confirm("Supprimer ce gain ?")) await deleteDoc(doc(db, "salary_payments", payment.id)); 
+        };
 
         const exportSalaryHistoryPDF = () => {
             const doc = new jspdf.jsPDF();
@@ -548,7 +570,7 @@ createApp({
         });
 
         return {
-            user, isAdmin, authLoading, loginForm, login, logout, loginError,
+            user, isAdmin, isSuperAdmin, authLoading, loginForm, login, logout, loginError,
             formatMoney, formatDate,
             currentSalaireView, employeesList, salaryHistory, salaryFunds, paiePeriod, selectedPaieMonth,
             showAddEmployeeModal, showEditEmployeeModal, showIndividualHistoryModal, showPayModal, showFundModal,
