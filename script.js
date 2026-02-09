@@ -296,6 +296,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         // -----------------------
 
         const batch = db.batch();
+        // CRÉATION ID SESSION UNIQUE (Pour distinguer les sessions du même jour)
+        const auditRef = db.collection("audit_logs").doc();
+        const currentSessionId = auditRef.id;
+
         // TABLEAUX POUR STOCKER LES IDs FIXES (Pour la confirmation robuste)
         const touchedTransactionIds = [];
         const touchedExpenseIds = [];
@@ -326,7 +330,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                 saisiPar: currentUserName,
                 modePaiement: t.modePaiement,
                 agentMobileMoney: t.agentMobileMoney,
-                checkStatus: (t.modePaiement === 'Chèque') ? 'Pending' : 'Cleared'
+                checkStatus: (t.modePaiement === 'Chèque') ? 'Pending' : 'Cleared',
+                sessionId: currentSessionId // <-- AJOUT CLÉ : On lie le paiement à cette session précise
             }));
 
             const query = await transactionsCollection.where("reference", "==", ref).get();
@@ -395,7 +400,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                 type: typeDepense,
                 isDeleted: false,
                 action: "Depense",
-                conteneur: exp.conteneur || ""
+                conteneur: exp.conteneur || "",
+                sessionId: currentSessionId // <-- AJOUT CLÉ
             });
             touchedExpenseIds.push(docRef.id); // Sauvegarde ID dépense
         });
@@ -407,7 +413,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         
         // NOTE : J'ai supprimé le premier db.collection("audit_logs").add(...) du début de la fonction pour le mettre ici
         // afin d'inclure les IDs.
-        const auditRef = db.collection("audit_logs").doc();
         batch.set(auditRef, {
             date: new Date().toISOString(),
             user: currentUserName,

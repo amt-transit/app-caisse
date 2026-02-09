@@ -192,6 +192,8 @@ document.addEventListener('DOMContentLoaded', () => {
         // Rendu Transactions
         detailsEncaissementsBody.innerHTML = '';
         let sumEsp = 0;
+        // Détection si c'est une session "Nouveau Système" (avec IDs précis)
+        const isNewSystemSession = !!(logData.transactionIds && Array.isArray(logData.transactionIds));
         
         transactionsDocs.forEach(doc => {
             const t = doc.data();
@@ -206,12 +208,30 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (p.date === dateOnly && p.saisiPar === logData.user) {
                         payeCeJour += (p.montantAbidjan || 0) + (p.montantParis || 0);
                         if (p.modePaiement === 'Espèce') sumEsp += (p.montantAbidjan || 0);
+                    // CAS 1 : Nouveau système (Match par ID de session)
+                    if (isNewSystemSession) {
+                        if (p.sessionId === logId) {
+                            payeCeJour += (p.montantAbidjan || 0) + (p.montantParis || 0);
+                            if (p.modePaiement === 'Espèce') sumEsp += (p.montantAbidjan || 0);
+                        }
+                    } 
+                    // CAS 2 : Ancien système (Match par Date + User)
+                    else {
+                        if (p.date === dateOnly && p.saisiPar === logData.user) {
+                            payeCeJour += (p.montantAbidjan || 0) + (p.montantParis || 0);
+                            if (p.modePaiement === 'Espèce') sumEsp += (p.montantAbidjan || 0);
+                        }
                     }
                 });
             } else {
                 // Fallback
                 payeCeJour = (t.montantAbidjan || 0) + (t.montantParis || 0);
                 if (t.modePaiement === 'Espèce') sumEsp += (t.montantAbidjan || 0);
+                // Fallback très anciennes données sans historique
+                if (!isNewSystemSession) {
+                    payeCeJour = (t.montantAbidjan || 0) + (t.montantParis || 0);
+                    if (t.modePaiement === 'Espèce') sumEsp += (t.montantAbidjan || 0);
+                }
             }
 
             if (payeCeJour > 0) {
@@ -287,6 +307,14 @@ document.addEventListener('DOMContentLoaded', () => {
             if (data.paymentHistory) {
                 // On retire les paiements faits par cet utilisateur à cette date
                 const newHistory = data.paymentHistory.filter(p => !(p.date === sessionDate && p.saisiPar === sessionUser));
+                let newHistory;
+                // Si la session a des IDs (Nouveau système), on supprime par sessionId
+                if (currentSessionData.transactionIds) {
+                    newHistory = data.paymentHistory.filter(p => p.sessionId !== currentSessionId);
+                } else {
+                    // Sinon ancien système (Date/User)
+                    newHistory = data.paymentHistory.filter(p => !(p.date === sessionDate && p.saisiPar === sessionUser));
+                }
                 
                 // Recalcul des totaux
                 let newAbj = 0, newPar = 0;
@@ -333,6 +361,14 @@ document.addEventListener('DOMContentLoaded', () => {
             
             if (data.paymentHistory) {
                 const entry = data.paymentHistory.find(p => p.date === sessionDate && p.saisiPar === sessionUser);
+                let entry;
+                // Recherche précise par SessionID si dispo
+                if (currentSessionData.transactionIds) {
+                    entry = data.paymentHistory.find(p => p.sessionId === currentSessionId);
+                } else {
+                    entry = data.paymentHistory.find(p => p.date === sessionDate && p.saisiPar === sessionUser);
+                }
+
                 if (entry) {
                     currentPaymentAbj = entry.montantAbidjan || 0;
                     currentPaymentPar = entry.montantParis || 0;
@@ -355,6 +391,12 @@ document.addEventListener('DOMContentLoaded', () => {
             
             // 1. Retirer l'ancienne entrée
             let newHistory = (data.paymentHistory || []).filter(p => !(p.date === sessionDate && p.saisiPar === sessionUser));
+            let newHistory;
+            if (currentSessionData.transactionIds) {
+                newHistory = (data.paymentHistory || []).filter(p => p.sessionId !== currentSessionId);
+            } else {
+                newHistory = (data.paymentHistory || []).filter(p => !(p.date === sessionDate && p.saisiPar === sessionUser));
+            }
             
             // 2. Ajouter la nouvelle entrée corrigée
             newHistory.push({
@@ -363,7 +405,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 montantAbidjan: newPaymentAbj,
                 montantParis: currentPaymentPar, // On garde Paris tel quel (ou on pourrait demander aussi)
                 modePaiement: currentMode,
-                agent: data.agent || ''
+                agent: data.agent || '',
+                sessionId: currentSessionId // On remet l'ID de session !
             });
 
             // 3. Recalculer les totaux globaux

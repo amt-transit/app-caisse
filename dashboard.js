@@ -24,8 +24,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const grandTotalResteEl = document.getElementById('grandTotalReste');
     const grandTotalOtherIncomeEl = document.getElementById('grandTotalOtherIncome');
     const grandTotalPercuEl = document.getElementById('grandTotalPercu');
-    const grandTotalRetraitsEl = document.getElementById('grandTotalRetraits');
-    const grandTotalDepotsEl = document.getElementById('grandTotalDepots');
+    const grandTotalSoldeBanqueEl = document.getElementById('grandTotalSoldeBanque');
     const grandTotalParisHiddenEl = document.getElementById('grandTotalParisHidden');
     
     const startDateInput = document.getElementById('startDate');
@@ -148,6 +147,15 @@ document.addEventListener('DOMContentLoaded', async () => {
         const totalDepenses = realExpenses.reduce((sum, e) => sum + (e.montant || 0), 0);
         const totalBenefice = (totalEntreesAbidjan + totalOtherIncome) - totalDepenses; 
 
+        // DÉTAIL DÉPENSES
+        const totalDepensesConteneur = realExpenses.reduce((sum, e) => {
+            if (e.type === 'Conteneur' || (e.conteneur && e.conteneur.trim() !== '')) return sum + (e.montant || 0);
+            return sum;
+        }, 0);
+        const totalDepensesMensuelles = totalDepenses - totalDepensesConteneur;
+        document.getElementById('detailDepensesConteneur').textContent = `Conteneurs: ${formatCFA(totalDepensesConteneur)}`;
+        document.getElementById('detailDepensesMensuelles').textContent = `Mensuelles: ${formatCFA(totalDepensesMensuelles)}`;
+
         // --- CALCUL SOLDE CAISSE (ESPÈCES + MOBILE MONEY) ---
         // On considère que tout ce qui n'est pas Chèque ou Virement est du Cash/MM récupéré en espèces.
         
@@ -209,6 +217,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         // CORRECTION : On exclut les remises de chèques car elles ne sortent pas de la caisse espèces
         const totalDepots = bankMovements.filter(m => m.type === 'Depot' && m.source !== 'Remise Chèques').reduce((sum, m) => sum + (m.montant || 0), 0);
 
+        // CALCUL SOLDE BANQUE (Tous dépôts y compris chèques + Virements - Retraits)
+        const totalBankDepotsAll = bankMovements.filter(m => m.type === 'Depot').reduce((sum, m) => sum + (m.montant || 0), 0);
+        const soldeBanque = (totalBankDepotsAll + totalVirements) - totalRetraits;
+
         // Solde Caisse Physique
         const soldeCaisse = (totalVentesCash + totalOtherIncomeCash + totalRetraits) - (totalExpensesCash + totalDepots);
 
@@ -223,8 +235,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         document.getElementById('grandTotalPercu').textContent = formatCFA(totalEntreesAbidjan);
         if(grandTotalParisHiddenEl) grandTotalParisHiddenEl.textContent = `Total Ventes Perçues (P): ${formatCFA(totalEntreesParis)}`;
 
-        grandTotalRetraitsEl.textContent = formatCFA(totalRetraits);
-        grandTotalDepotsEl.textContent = formatCFA(totalDepots);
+        if(grandTotalSoldeBanqueEl) grandTotalSoldeBanqueEl.textContent = formatCFA(soldeBanque);
         
         // NOUVEAU : Affichage Chèques
         const chequeEl = document.getElementById('grandTotalCheques');
