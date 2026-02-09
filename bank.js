@@ -10,6 +10,7 @@ document.addEventListener('DOMContentLoaded', () => {
     
     const addBankMovementBtn = document.getElementById('addBankMovementBtn');
     const bankDate = document.getElementById('bankDate');
+    const bankName = document.getElementById('bankName');
     const bankDesc = document.getElementById('bankDesc');
     const bankAmount = document.getElementById('bankAmount');
     const bankType = document.getElementById('bankType');
@@ -22,6 +23,15 @@ document.addEventListener('DOMContentLoaded', () => {
     const csvFile = document.getElementById('csvFile');
     const uploadLog = document.getElementById('uploadLog');
     const bankSearchInput = document.getElementById('bankSearch');
+
+    // ÉLÉMENTS TOTAUX
+    const totalBankDepositsEl = document.getElementById('totalBankDeposits');
+    const totalBankWithdrawalsEl = document.getElementById('totalBankWithdrawals');
+    const totalBankBalanceEl = document.getElementById('totalBankBalance');
+    const cardBankBalanceEl = document.getElementById('card-bank-balance');
+    const totalBiciciEl = document.getElementById('totalBicici');
+    const totalBridgeEl = document.getElementById('totalBridge');
+    const totalOrangeEl = document.getElementById('totalOrange');
 
     // ÉLÉMENTS REMISE CHÈQUE
     const openCheckDepositBtn = document.getElementById('openCheckDepositBtn');
@@ -36,6 +46,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let allBankMovements = [];
     let allVirements = [];
     let allCombinedMovements = [];
+    let unconfirmedSessions = new Set(); // Pour filtrer virements et chèques
 
     // 1. AJOUT MANUEL
     addBankMovementBtn.addEventListener('click', async () => {
@@ -44,6 +55,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const data = {
             date: bankDate.value,
+            bank: bankName.value,
             // AJOUT DU NOM DE L'AUTEUR
             description: `${bankDesc.value} (${currentUserName})`,
             montant: montant,
@@ -51,8 +63,8 @@ document.addEventListener('DOMContentLoaded', () => {
             isDeleted: false
         };
 
-        if (!data.date || !bankDesc.value || data.montant <= 0) {
-            return alert("Veuillez remplir tous les champs avec un montant valide.");
+        if (!data.date || !data.bank || !bankDesc.value || data.montant <= 0) {
+            return alert("Veuillez remplir tous les champs (Banque incluse) avec un montant valide.");
         }
 
         // Sécurité solde
@@ -77,6 +89,7 @@ document.addEventListener('DOMContentLoaded', () => {
         bankCollection.add(data).then(() => {
             bankDesc.value = '';
             bankAmount.value = '';
+            bankName.value = '';
         }).catch(err => console.error(err));
     });
 
@@ -151,6 +164,10 @@ document.addEventListener('DOMContentLoaded', () => {
             const extracted = [];
             snapshot.docs.forEach(doc => {
                 const t = doc.data();
+                
+                // FILTRE SÉCURITÉ : Ignorer si session non validée
+                if (t.saisiPar && unconfirmedSessions.has(`${t.date}_${t.saisiPar}`)) return;
+
                 // Logique identique au Dashboard pour extraire les paiements
                 if (t.paymentHistory && t.paymentHistory.length > 0) {
                     t.paymentHistory.forEach((pay, idx) => {
@@ -162,6 +179,7 @@ document.addEventListener('DOMContentLoaded', () => {
                                 type: 'Depot',
                                 montant: (pay.montantAbidjan || 0) + (pay.montantParis || 0),
                                 isDeleted: t.isDeleted,
+                                bank: pay.agentMobileMoney, // On récupère la banque ici
                                 _source: 'transaction',
                                 _docId: doc.id
                             });
@@ -176,6 +194,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             type: 'Depot',
                             montant: (t.montantAbidjan || 0) + (t.montantParis || 0),
                             isDeleted: t.isDeleted,
+                            bank: t.agentMobileMoney, // On récupère la banque ici
                             _source: 'transaction',
                             _docId: doc.id
                         });
@@ -187,10 +206,67 @@ document.addEventListener('DOMContentLoaded', () => {
         }, error => console.error(error));
     }
 
+    // LISTENER : Sessions non validées
+    db.collection("audit_logs")
+        .where("action", "==", "VALIDATION_JOURNEE")
+        .onSnapshot(snapshot => {
+            unconfirmedSessions.clear();
+            snapshot.forEach(doc => {
+                const data = doc.data();
+                if (data.status !== "VALIDATED") {
+                    unconfirmedSessions.add(`${data.date.split('T')[0]}_${data.user}`);
+                }
+            });
+            fetchBankMovements(); // Recharger les virements/totaux
+        });
+
     function mergeAndRender() {
         allCombinedMovements = [...allBankMovements, ...allVirements];
         allCombinedMovements.sort((a, b) => new Date(b.date) - new Date(a.date));
+        updateBankTotals();
         renderBankTable();
+    }
+
+    function updateBankTotals() {
+        let totalDepots = 0;
+        let totalRetraits = 0;
+        let soldeBicici = 0;
+        let soldeBridge = 0;
+        let soldeOrange = 0;
+
+        allCombinedMovements.forEach(m => {
+            const montant = m.montant || 0;
+            const bankName = (m.bank || "").toUpperCase();
+            let impact = 0;
+
+            if (m.type === 'Depot') {
+                totalDepots += montant;
+                impact = montant;
+            } else if (m.type === 'Retrait') {
+                totalRetraits += montant;
+                impact = -montant;
+            }
+
+            // Ventilation par banque
+            if (bankName.includes("BICICI")) soldeBicici += impact;
+            else if (bankName.includes("BRIDGE")) soldeBridge += impact;
+            else if (bankName.includes("ORANGE")) soldeOrange += impact;
+        });
+
+        const balance = totalDepots - totalRetraits;
+
+        if (totalBankDepositsEl) totalBankDepositsEl.textContent = formatCFA(totalDepots);
+        if (totalBankWithdrawalsEl) totalBankWithdrawalsEl.textContent = formatCFA(totalRetraits);
+        if (totalBankBalanceEl) {
+            totalBankBalanceEl.textContent = formatCFA(balance);
+            if (cardBankBalanceEl) {
+                cardBankBalanceEl.className = 'total-card ' + (balance >= 0 ? 'card-positif' : 'card-negatif');
+            }
+        }
+
+        if (totalBiciciEl) totalBiciciEl.textContent = formatCFA(soldeBicici);
+        if (totalBridgeEl) totalBridgeEl.textContent = formatCFA(soldeBridge);
+        if (totalOrangeEl) totalOrangeEl.textContent = formatCFA(soldeOrange);
     }
 
     function renderBankTable() {
@@ -225,6 +301,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             row.innerHTML = `
                 <td>${move.date}</td>
+                <td><span class="tag" style="background-color:#e2e8f0; color:#334155;">${move.bank || '-'}</span></td>
                 <td>${move.description}</td>
                 <td>${move.type}</td>
                 <td class="${move.type === 'Depot' ? 'reste-negatif' : 'reste-positif'}">
@@ -288,6 +365,10 @@ document.addEventListener('DOMContentLoaded', () => {
             let pendingChecks = [];
             snapshot.forEach(doc => {
                 const data = doc.data();
+                
+                // FILTRE SÉCURITÉ : On ne peut pas déposer un chèque d'une session non validée
+                if (data.saisiPar && unconfirmedSessions.has(`${data.date}_${data.saisiPar}`)) return;
+
                 if (data.paymentHistory) {
                     data.paymentHistory.forEach((pay, index) => {
                         if (pay.modePaiement === 'Chèque' && pay.checkStatus === 'Pending') {
@@ -419,6 +500,10 @@ document.addEventListener('DOMContentLoaded', () => {
         let totalVentes = 0;
         transSnap.forEach(doc => {
             const d = doc.data();
+            
+            // FILTRE SÉCURITÉ : Ignorer transactions non validées pour le solde dispo
+            if (d.saisiPar && unconfirmedSessions.has(`${d.date}_${d.saisiPar}`)) return;
+
             // CORRECTION : On aligne la logique sur le Dashboard.
             // On ne compte que le CASH disponible (pas les chèques).
             if (d.paymentHistory && d.paymentHistory.length > 0) {
@@ -437,12 +522,28 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const incSnap = await db.collection("other_income").where("isDeleted", "!=", true).get();
         let totalAutres = 0;
-        incSnap.forEach(doc => totalAutres += (doc.data().montant || 0));
+        // CORRECTION : On exclut les Autres Entrées qui ne sont pas du cash (Chèque/Virement)
+        incSnap.forEach(doc => {
+            const d = doc.data();
+            if (d.mode !== 'Virement' && d.mode !== 'Chèque') {
+                totalAutres += (d.montant || 0);
+            }
+        });
 
         const expSnap = await db.collection("expenses").where("isDeleted", "!=", true).get();
         let totalDepenses = 0;
         expSnap.forEach(doc => {
             const d = doc.data();
+            
+            // FILTRE SÉCURITÉ DÉPENSES
+            // On vérifie si la dépense appartient à une session non validée (via description)
+            let isUnconfirmed = false;
+            for (let sessionKey of unconfirmedSessions) {
+                const [sDate, sUser] = sessionKey.split('_');
+                if (d.date === sDate && d.description && d.description.includes(sUser)) isUnconfirmed = true;
+            }
+            if (isUnconfirmed) return;
+
             if (d.mode !== 'Virement' && d.mode !== 'Chèque') {
                 totalDepenses += (d.montant || 0);
             }
@@ -454,7 +555,8 @@ document.addEventListener('DOMContentLoaded', () => {
         bankSnap.forEach(doc => {
             const d = doc.data();
             if (d.type === 'Retrait') totalRetraits += (d.montant || 0);
-            if (d.type === 'Depot') totalDepots += (d.montant || 0);
+            // CORRECTION : On exclut les remises de chèques car elles ne sortent pas de la caisse espèces
+            if (d.type === 'Depot' && d.source !== 'Remise Chèques') totalDepots += (d.montant || 0);
         });
 
         return (totalVentes + totalAutres + totalRetraits) - (totalDepenses + totalDepots);

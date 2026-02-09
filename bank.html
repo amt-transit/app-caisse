@@ -39,6 +39,12 @@
 
         <div class="form-grid">
             <input type="date" id="bankDate" required>
+            <select id="bankName" required>
+                <option value="" disabled selected>Choisir la Banque...</option>
+                <option value="BICICI BANK">BICICI BANK</option>
+                <option value="BRIDGE BANK">BRIDGE BANK</option>
+                <option value="ORANGE BANK">ORANGE BANK</option>
+            </select>
             <input type="text" id="bankDesc" placeholder="Description (ex: Dépôt SIB, Retrait...)" required>
             <div class="prix-container">
                 <input type="number" id="bankAmount" placeholder="Montant">
@@ -54,6 +60,35 @@
         </div>
     </div>
 
+    <div class="dashboard-container" style="margin-bottom: 20px;">
+        <div class="totals-container">
+            <div class="total-card colored-card" style="background-color: #10b981;">
+                <h3>Total Entrées (Dépôts)</h3>
+                <p id="totalBankDeposits">0 CFA</p>
+            </div>
+            <div class="total-card colored-card" style="background-color: #ef4444;">
+                <h3>Total Sorties (Retraits)</h3>
+                <p id="totalBankWithdrawals">0 CFA</p>
+            </div>
+            <div class="total-card" id="card-bank-balance">
+                <h3>Solde Théorique Banque</h3>
+                <p id="totalBankBalance">0 CFA</p>
+            </div>
+            <div class="total-card colored-card" style="background-color: #1e3a8a;">
+                <h3>Solde BICICI</h3>
+                <p id="totalBicici">0 CFA</p>
+            </div>
+            <div class="total-card colored-card" style="background-color: #0ea5e9;">
+                <h3>Solde BRIDGE</h3>
+                <p id="totalBridge">0 CFA</p>
+            </div>
+            <div class="total-card colored-card" style="background-color: #f97316;">
+                <h3>Solde ORANGE BANK</h3>
+                <p id="totalOrange">0 CFA</p>
+            </div>
+        </div>
+    </div>
+
     <div class="history-controls">
         <div class="search-bar-container">
             <input type="text" id="bankSearch" placeholder="Rechercher..." style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px;">
@@ -66,7 +101,7 @@
 
     <h2>Historique des Mouvements</h2>
     <table id="bankTable">
-        <thead><tr><th>Date</th><th>Description</th><th>Type</th><th>Montant</th><th>Action</th></tr></thead>
+        <thead><tr><th>Date</th><th>Banque</th><th>Description</th><th>Type</th><th>Montant</th><th>Action</th></tr></thead>
         <tbody id="bankTableBody"></tbody>
     </table>
 

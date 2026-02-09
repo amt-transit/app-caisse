@@ -40,16 +40,19 @@ document.addEventListener('DOMContentLoaded', () => {
         query.onSnapshot(snapshot => {
             sessionsListPendingEl.innerHTML = '';
             sessionsListValidatedEl.innerHTML = '';
+            
+            let hasPending = false;
 
             if (snapshot.empty) {
                 sessionsListPendingEl.innerHTML = '<p style="padding:10px; color:#999;">Aucune session.</p>';
-                return;
             }
 
             snapshot.forEach(doc => {
                 const div = createSessionElement(doc);
                 const data = doc.data();
                 const isValidated = data.status === "VALIDATED";
+
+                if (!isValidated) hasPending = true;
 
                 // Filtrage date local (seulement pour la liste chargée)
                 if (filterDateSession.value && data.date.split('T')[0] !== filterDateSession.value) return;
@@ -149,27 +152,48 @@ document.addEventListener('DOMContentLoaded', () => {
             validateSessionBtn.style.display = 'block';
         }
 
-        // Charger Transactions
-        const transSnap = await db.collection("transactions")
-            .where("saisiPar", "==", logData.user)
-            .where("lastPaymentDate", "==", dateOnly) // On utilise lastPaymentDate car c'est ce que script.js met à jour
-            .get();
+        // --- CHARGEMENT ROBUSTE (HYBRIDE) ---
+        let transactionsDocs = [];
+        let expensesDocs = [];
 
-        // Charger Dépenses
-        const expSnap = await db.collection("expenses")
-            .where("description", ">=", "") // Hack pour filtrer par description qui contient le user
-            .orderBy("description")
-            .get();
-            
-        // Filtrage manuel des dépenses par date et user (car description contient "User")
-        const expenses = expSnap.docs
-            .map(d => d.data())
-            .filter(e => e.date === dateOnly && e.description.includes(logData.user));
+        // CAS 1 : NOUVEAU SYSTÈME (IDs stockés dans le log)
+        if (logData.transactionIds && Array.isArray(logData.transactionIds)) {
+            // On charge exactement les documents concernés par cette session
+            // Promise.all permet de charger en parallèle, c'est rapide et sûr.
+            const tPromises = logData.transactionIds.map(id => db.collection("transactions").doc(id).get());
+            const tSnapshots = await Promise.all(tPromises);
+            transactionsDocs = tSnapshots.filter(doc => doc.exists);
+        } 
+        // CAS 2 : ANCIEN SYSTÈME (Fallback sur la date/user)
+        else {
+            const transSnap = await db.collection("transactions")
+                .where("saisiPar", "==", logData.user)
+                .where("lastPaymentDate", "==", dateOnly)
+                .get();
+            transactionsDocs = transSnap.docs;
+        }
+
+        // IDEM POUR LES DÉPENSES
+        if (logData.expenseIds && Array.isArray(logData.expenseIds)) {
+            const ePromises = logData.expenseIds.map(id => db.collection("expenses").doc(id).get());
+            const eSnapshots = await Promise.all(ePromises);
+            expensesDocs = eSnapshots.filter(doc => doc.exists).map(d => d.data());
+        } else {
+            // Fallback ancien système
+            const expSnap = await db.collection("expenses")
+                .where("description", ">=", "")
+                .orderBy("description")
+                .get();
+            expensesDocs = expSnap.docs
+                .map(d => d.data())
+                .filter(e => e.date === dateOnly && e.description.includes(logData.user));
+        }
 
         // Rendu Transactions
         detailsEncaissementsBody.innerHTML = '';
         let sumEsp = 0;
-        transSnap.forEach(doc => {
+        
+        transactionsDocs.forEach(doc => {
             const t = doc.data();
             // On doit filtrer l'historique pour ne prendre que ce qui a été payé CE JOUR LÀ par CET UTILISATEUR
             // C'est complexe car le document contient le cumul.
@@ -215,7 +239,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // Rendu Dépenses
         detailsDepensesBody.innerHTML = '';
         let sumDep = 0;
-        expenses.forEach(e => {
+        expensesDocs.forEach(e => {
             sumDep += (e.montant || 0);
             detailsDepensesBody.innerHTML += `<tr><td>${e.description}</td><td>${e.type}</td><td>${formatCFA(e.montant)}</td></tr>`;
         });

@@ -17,16 +17,15 @@ document.addEventListener('DOMContentLoaded', async () => {
     const unpaidTableBody = document.getElementById('unpaidTableBody');
     const adjustmentsTableBody = document.getElementById('adjustmentsTableBody');
 
-    const grandTotalPrixEl = document.getElementById('grandTotalPrix');
     const grandTotalCountEl = document.getElementById('grandTotalCount');
     const grandTotalDepensesEl = document.getElementById('grandTotalDepenses');
     const grandTotalBeneficeEl = document.getElementById('grandTotalBenefice');
+    const grandTotalCaisseEl = document.getElementById('grandTotalCaisse');
     const grandTotalResteEl = document.getElementById('grandTotalReste');
     const grandTotalOtherIncomeEl = document.getElementById('grandTotalOtherIncome');
     const grandTotalPercuEl = document.getElementById('grandTotalPercu');
     const grandTotalRetraitsEl = document.getElementById('grandTotalRetraits');
     const grandTotalDepotsEl = document.getElementById('grandTotalDepots');
-    const grandTotalCaisseEl = document.getElementById('grandTotalCaisse');
     const grandTotalParisHiddenEl = document.getElementById('grandTotalParisHidden');
     
     const startDateInput = document.getElementById('startDate');
@@ -55,6 +54,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     let agentChartInstance = null;
 
     let allTransactions = [], allExpenses = [], allOtherIncome = [], allBankMovements = []; 
+    let unconfirmedSessions = new Set(); // Stocke les clés "YYYY-MM-DD_User" non validées
 
     function filterByDate(items, startDate, endDate) {
         return items.filter(item => {
@@ -79,12 +79,29 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     function updateDashboard() {
+        // 0. SÉCURITÉ : Filtrer les données non confirmées (Sessions en attente)
+        const confirmedTransactions = allTransactions.filter(t => {
+            if (!t.saisiPar) return true; // Données historiques ou Admin
+            const key = `${t.date}_${t.saisiPar}`;
+            return !unconfirmedSessions.has(key);
+        });
+
+        const confirmedExpenses = allExpenses.filter(e => {
+            // Les dépenses sont liées par la description (selon logique confirmation.js)
+            if (!e.description) return true;
+            for (let sessionKey of unconfirmedSessions) {
+                const [sDate, sUser] = sessionKey.split('_');
+                if (e.date === sDate && e.description.includes(sUser)) return false;
+            }
+            return true;
+        });
+
         const startDate = startDateInput.value;
         const endDate = endDateInput.value;
 
         // Filtrer les 4 listes par date
-        const filteredTransactions = filterByDate(allTransactions, startDate, endDate);
-        const filteredExpenses = filterByDate(allExpenses, startDate, endDate);
+        const filteredTransactions = filterByDate(confirmedTransactions, startDate, endDate);
+        const filteredExpenses = filterByDate(confirmedExpenses, startDate, endDate);
         const filteredOtherIncome = filterByDate(allOtherIncome, startDate, endDate);
         const filteredBankMovements = filterByDate(allBankMovements, startDate, endDate);
 
@@ -98,7 +115,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         generateUnpaidSummary(filteredTransactions);
         generateAdjustmentSummary(filteredTransactions); // Liste Réductions/Augmentations
         generateAdvancedAnalytics(filteredTransactions, allTransactions); // Nouvelles analyses
-        generateVisualCharts(allTransactions, allExpenses); // Graphiques (sur toutes les données pour voir l'évolution)
+        generateVisualCharts(confirmedTransactions, confirmedExpenses); // Graphiques (sur données confirmées uniquement)
     }
 
     function updateGrandTotals(transactions, expenses, otherIncomes, bankMovements) {
@@ -126,23 +143,42 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         const totalOtherIncome = otherIncomes.reduce((sum, i) => sum + (i.montant || 0), 0);
         
-        // CORRECTION : On ne garde que les Autres Entrées CASH pour la caisse (pas Virement ni Chèque)
-        const totalOtherIncomeCash = otherIncomes.reduce((sum, i) => {
-            if (i.mode === 'Virement' || i.mode === 'Chèque') return sum;
-            return sum + (i.montant || 0);
-        }, 0);
-
         // On exclut les allocations du calcul des dépenses
         const realExpenses = expenses.filter(e => e.action !== 'Allocation');
         const totalDepenses = realExpenses.reduce((sum, e) => sum + (e.montant || 0), 0);
         const totalBenefice = (totalEntreesAbidjan + totalOtherIncome) - totalDepenses; 
+
+        // --- CALCUL SOLDE CAISSE (ESPÈCES + MOBILE MONEY) ---
+        // On considère que tout ce qui n'est pas Chèque ou Virement est du Cash/MM récupéré en espèces.
+        
+        // 1. Ventes (Cash + MM)
+        const totalVentesCash = transactions.reduce((sum, t) => {
+            if (t.paymentHistory && Array.isArray(t.paymentHistory)) {
+                return sum + t.paymentHistory.reduce((s, p) => {
+                    const isCashOrMM = p.modePaiement !== 'Chèque' && p.modePaiement !== 'Virement';
+                    return (isInRange(p.date) && isCashOrMM) ? s + (p.montantAbidjan || 0) : s;
+                }, 0);
+            }
+            const isCashOrMM = t.modePaiement !== 'Chèque' && t.modePaiement !== 'Virement';
+            return (isInRange(t.date) && isCashOrMM) ? sum + (t.montantAbidjan || 0) : sum;
+        }, 0);
+
+        // 2. Autres Entrées (Cash + MM)
+        const totalOtherIncomeCash = otherIncomes.reduce((sum, i) => {
+            return (i.mode !== 'Chèque' && i.mode !== 'Virement') ? sum + (i.montant || 0) : sum;
+        }, 0);
+
+        // 3. Dépenses (Cash + MM)
+        const totalExpensesCash = realExpenses.reduce((sum, e) => {
+            return (e.mode !== 'Chèque' && e.mode !== 'Virement') ? sum + (e.montant || 0) : sum;
+        }, 0);
+
 
         // --- 2. ANALYSE FINE DE LA TRÉSORERIE ---
         
         // A. Calcul des Chèques en Coffre (Non déposés)
         // On doit parcourir l'historique des paiements de chaque transaction
         let totalChequesEnCoffre = 0;
-        let totalVentesCash = 0; // Espèces, OM, Wave...
         let totalVirements = 0;
 
         transactions.forEach(t => {
@@ -157,9 +193,6 @@ document.addEventListener('DOMContentLoaded', async () => {
                     } else if (pay.modePaiement === 'Virement') {
                         // On compte Paris et Abidjan pour les virements
                         totalVirements += (pay.montantAbidjan || 0) + (pay.montantParis || 0);
-                    } else if (pay.modePaiement !== 'Chèque') {
-                        // Si ce n'est pas un chèque ni un virement, c'est du cash dispo (Espèce, OM, Wave)
-                        totalVentesCash += (pay.montantAbidjan || 0);
                     }
                 });
             } else {
@@ -167,48 +200,32 @@ document.addEventListener('DOMContentLoaded', async () => {
                 if (isInRange(t.date)) {
                     if (t.modePaiement === 'Virement') {
                         totalVirements += (t.montantAbidjan || 0) + (t.montantParis || 0);
-                    } else if (t.modePaiement !== 'Chèque') {
-                        totalVentesCash += (t.montantAbidjan || 0);
                     }
                 }
             }
         });
 
-        // B. Calcul de la Caisse Disponible (Cash)
-        // Caisse = (Ventes Cash + Autres) - (Dépenses Cash)
-        // Note : On suppose que les dépenses sortent de la caisse espèces.
-        // Note 2 : Les mouvements banques (Retraits) ajoutent du cash. Les Dépôts enlèvent du cash.
-        
         const totalRetraits = bankMovements.filter(m => m.type === 'Retrait').reduce((sum, m) => sum + (m.montant || 0), 0);
-        
         // CORRECTION : On exclut les remises de chèques car elles ne sortent pas de la caisse espèces
         const totalDepots = bankMovements.filter(m => m.type === 'Depot' && m.source !== 'Remise Chèques').reduce((sum, m) => sum + (m.montant || 0), 0);
-        
-        // On ne soustrait que les dépenses qui impactent la caisse (pas Virement ni Chèque)
-        const totalDepensesCaisse = realExpenses.reduce((sum, e) => {
-            if (e.mode !== 'Virement' && e.mode !== 'Chèque') return sum + (e.montant || 0);
-            return sum;
-        }, 0);
 
-        const totalCaisse = (totalVentesCash + totalOtherIncomeCash + totalRetraits) - (totalDepensesCaisse + totalDepots);
-
+        // Solde Caisse Physique
+        const soldeCaisse = (totalVentesCash + totalOtherIncomeCash + totalRetraits) - (totalExpensesCash + totalDepots);
 
         // --- AFFICHAGE ---
-        grandTotalPrixEl.textContent = formatCFA(totalEntreesAbidjan);
         grandTotalOtherIncomeEl.textContent = formatCFA(totalOtherIncome);
         grandTotalDepensesEl.textContent = formatCFA(totalDepenses);
         grandTotalBeneficeEl.textContent = formatCFA(totalBenefice);
         grandTotalBeneficeEl.closest('.total-card').className = 'total-card ' + (totalBenefice < 0 ? 'card-negatif' : 'card-positif');
         
+        if(grandTotalCaisseEl) grandTotalCaisseEl.textContent = formatCFA(soldeCaisse);
+
         document.getElementById('grandTotalPercu').textContent = formatCFA(totalEntreesAbidjan);
         if(grandTotalParisHiddenEl) grandTotalParisHiddenEl.textContent = `Total Ventes Perçues (P): ${formatCFA(totalEntreesParis)}`;
 
         grandTotalRetraitsEl.textContent = formatCFA(totalRetraits);
         grandTotalDepotsEl.textContent = formatCFA(totalDepots);
         
-        grandTotalCaisseEl.textContent = formatCFA(totalCaisse);
-        grandTotalCaisseEl.closest('.total-card').className = 'total-card ' + (totalCaisse < 0 ? 'card-negatif' : 'card-positif');
-
         // NOUVEAU : Affichage Chèques
         const chequeEl = document.getElementById('grandTotalCheques');
         if(chequeEl) chequeEl.textContent = formatCFA(totalChequesEnCoffre);
@@ -885,6 +902,20 @@ document.addEventListener('DOMContentLoaded', async () => {
         allBankMovements = snapshot.docs.map(doc => doc.data());
         updateDashboard(); 
     }, error => console.error("Erreur Firestore (bank_movements): ", error));
+
+    // LISTENER : Sessions non validées (Pour exclusion)
+    db.collection("audit_logs")
+        .where("action", "==", "VALIDATION_JOURNEE")
+        .onSnapshot(snapshot => {
+            unconfirmedSessions.clear();
+            snapshot.forEach(doc => {
+                const data = doc.data();
+                if (data.status !== "VALIDATED") {
+                    unconfirmedSessions.add(`${data.date.split('T')[0]}_${data.user}`);
+                }
+            });
+            updateDashboard(); // Recalculer tout quand une validation change
+        });
 
     startDateInput.addEventListener('change', updateDashboard);
     endDateInput.addEventListener('change', updateDashboard);

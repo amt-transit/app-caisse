@@ -40,6 +40,24 @@ firebase.auth().onAuthStateChanged(async (user) => {
         sessionStorage.setItem('userRole', userRole);
         sessionStorage.setItem('userName', userName || 'Utilisateur');
 
+        // --- GESTION GLOBALE DU BADGE DE NOTIFICATION (Placé ici pour s'exécuter AVANT les return) ---
+        // Vérification des sessions en attente sur toutes les pages
+        firebase.firestore().collection("audit_logs")
+            .where("action", "==", "VALIDATION_JOURNEE")
+            .orderBy("date", "desc")
+            .limit(20)
+            .onSnapshot(snapshot => {
+                let hasPending = false;
+                snapshot.forEach(doc => {
+                    if (doc.data().status !== "VALIDATED") hasPending = true;
+                });
+                const navItem = document.getElementById('nav-confirmation');
+                if (navItem) {
+                    if (hasPending) navItem.classList.add('has-pending');
+                    else navItem.classList.remove('has-pending');
+                }
+            }, error => console.log("Badge check info:", error.message));
+
         // --- GESTION DES ACCÈS ---
         const currentPage = window.location.pathname;
 

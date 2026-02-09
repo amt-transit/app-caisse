@@ -33,9 +33,10 @@
 
     <div class="dashboard-container">
         <div id="grandTotals" class="totals-container">
-            <div class="total-card colored-card" id="card-prix">
-                <h3>Entrées Conteneur (Abidjan)</h3> 
-                <p id="grandTotalPrix">0 CFA</p>
+            <div class="total-card colored-card" id="card-percu">
+                <h3>Total Ventes Perçues (A)</h3>
+                <p id="grandTotalPercu">0 CFA</p>
+                <span id="grandTotalParisHidden">Dont Paris: 0 CFA</span>
             </div>
             <div class="total-card colored-card" id="card-other">
                 <h3>+ Autres Entrées</h3>
@@ -49,10 +50,9 @@
                 <h3>= BÉNÉFICE TOTAL</h3>
                 <p id="grandTotalBenefice">0 CFA</p>
             </div>
-            <div class="total-card colored-card" id="card-percu">
-                <h3>Total Ventes Perçues (A)</h3>
-                <p id="grandTotalPercu">0 CFA</p>
-                <span id="grandTotalParisHidden">Dont Paris: 0 CFA</span>
+            <div class="total-card colored-card" id="card-caisse-especes" style="background-color: #0ea5e9;">
+                <h3>Solde Caisse (Espèces + MM)</h3>
+                <p id="grandTotalCaisse">0 CFA</p>
             </div>
             <div class="total-card colored-card" id="card-retraits">
                 <h3>+ Retraits Banque</h3>
@@ -69,10 +69,6 @@
             <div class="total-card colored-card" id="card-virements" style="background-color: #8b5cf6;">
                 <h3>Total Virements Reçus</h3>
                 <p id="grandTotalVirements">0 CFA</p>
-            </div>
-             <div class="total-card" id="card-caisse">
-                <h3>= TOTAL CAISSE (Trésorerie)</h3>
-                <p id="grandTotalCaisse">0 CFA</p>
             </div>
             <div class="total-card">
                 <h3>Opérations Totales</h3>

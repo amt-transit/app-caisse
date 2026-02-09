@@ -65,10 +65,46 @@ document.addEventListener('DOMContentLoaded', async () => {
     let dailyTransactions = JSON.parse(localStorage.getItem('dailyTransactions')) || [];
     let dailyExpenses = JSON.parse(localStorage.getItem('dailyExpenses')) || [];
 
+    // --- GESTION DYNAMIQUE BANQUE (VIREMENT/CHÈQUE) ---
+    // On crée le sélecteur de banque dynamiquement pour ne pas toucher au HTML
+    const bankSelect = document.createElement('select');
+    bankSelect.id = 'banquePaiement';
+    bankSelect.style.display = 'none'; // Masqué par défaut
+    bankSelect.innerHTML = `
+        <option value="" disabled selected>Choisir la Banque...</option>
+        <option value="BICICI BANK">BICICI BANK</option>
+        <option value="BRIDGE BANK">BRIDGE BANK</option>
+        <option value="ORANGE BANK">ORANGE BANK</option>
+    `;
+    // Insertion après le champ Mode de Paiement
+    if(modePaiementInput && modePaiementInput.parentNode) {
+        modePaiementInput.parentNode.insertBefore(bankSelect, modePaiementInput.nextSibling);
+    }
+
+    function updatePaymentUI() {
+        const mode = modePaiementInput.value;
+        if (mode === 'Virement' || mode === 'Chèque') {
+            bankSelect.style.display = 'block';
+            agentMobileMoneyInput.style.display = 'none'; // On cache le champ texte libre
+        } else {
+            bankSelect.style.display = 'none';
+            agentMobileMoneyInput.style.display = 'block'; // On réaffiche le champ texte (pour OM/Wave/Autre)
+        }
+    }
+    modePaiementInput.addEventListener('change', updatePaymentUI);
+    updatePaymentUI(); // Init
+
     // --- 1. GESTION ENCAISSEMENTS (COLIS) ---
     addEntryBtn.addEventListener('click', () => {
         const selectedAgents = agentChoices.getValue(true); 
         const agentString = selectedAgents.join(', '); 
+
+        // Logique pour récupérer le détail (Banque OU Agent MM)
+        let detailPaiement = agentMobileMoneyInput.value;
+        if (bankSelect.style.display !== 'none') {
+            detailPaiement = bankSelect.value;
+            if (!detailPaiement) return alert("Veuillez sélectionner une Banque.");
+        }
 
         const newData = {
             date: document.getElementById('date').value,
@@ -78,7 +114,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             prix: parseFloat(prixInput.value) || 0,
             montantParis: parseFloat(montantParisInput.value) || 0,
             montantAbidjan: parseFloat(montantAbidjanInput.value) || 0,
-            agentMobileMoney: agentMobileMoneyInput.value,
+            agentMobileMoney: detailPaiement, // On stocke la banque ici
             modePaiement: modePaiementInput.value,
             commune: communeInput.value, 
             agent: agentString,
@@ -118,6 +154,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         // Reset partiel
         prixInput.value = ''; montantParisInput.value = ''; montantAbidjanInput.value = '';
         agentMobileMoneyInput.value = ''; resteInput.value = '';
+        bankSelect.value = ''; // Reset banque
         if(adjustmentTypeInput) adjustmentTypeInput.value = ''; if(adjustmentValInput) adjustmentValInput.value = '';
         referenceInput.value = ''; nomInput.value = ''; conteneurInput.value = '';
         agentChoices.setValue([]); 
@@ -259,6 +296,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         // -----------------------
 
         const batch = db.batch();
+        // TABLEAUX POUR STOCKER LES IDs FIXES (Pour la confirmation robuste)
+        const touchedTransactionIds = [];
+        const touchedExpenseIds = [];
 
         // A. Enregistrer Transactions (GROUPÉ PAR RÉFÉRENCE)
         // On regroupe d'abord les paiements fractionnés par référence
@@ -319,6 +359,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 if (lastTransac.agentMobileMoney) updates.agentMobileMoney = lastTransac.agentMobileMoney;
                 
                 batch.update(docRef, updates);
+                touchedTransactionIds.push(docRef.id); // Sauvegarde ID existant
             } else {
                 const docRef = transactionsCollection.doc();
                 
@@ -337,6 +378,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     paymentHistory: newPaymentEntries,
                     lastPaymentDate: baseTransac.date
                 });
+                touchedTransactionIds.push(docRef.id); // Sauvegarde nouvel ID
             }
         }
 
@@ -355,6 +397,26 @@ document.addEventListener('DOMContentLoaded', async () => {
                 action: "Depense",
                 conteneur: exp.conteneur || ""
             });
+            touchedExpenseIds.push(docRef.id); // Sauvegarde ID dépense
+        });
+
+        // --- MISE À JOUR DU LOG D'AUDIT AVEC LES IDs ---
+        // On ajoute les IDs au document audit_log créé plus haut (nécessite de récupérer sa ref)
+        // Comme on a fait un add() simple plus haut sans garder la ref, on va refaire un add() propre ici ou modifier l'approche.
+        // Mieux : On remplace le add() du début par celui-ci qui contient tout.
+        
+        // NOTE : J'ai supprimé le premier db.collection("audit_logs").add(...) du début de la fonction pour le mettre ici
+        // afin d'inclure les IDs.
+        const auditRef = db.collection("audit_logs").doc();
+        batch.set(auditRef, {
+            date: new Date().toISOString(),
+            user: currentUserName,
+            action: "VALIDATION_JOURNEE",
+            details: `Encaissements: ${dailyTransactions.length}, Dépenses: ${dailyExpenses.length}, Total Esp: ${totalEsp}`,
+            targetId: "BATCH",
+            status: "PENDING", // Statut initial
+            transactionIds: touchedTransactionIds, // LA CLÉ DE LA ROBUSTESSE
+            expenseIds: touchedExpenseIds
         });
 
         await batch.commit();
@@ -406,6 +468,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     function clearDisplayFields() {
         prixInput.value = ''; conteneurInput.value = ''; resteInput.value = ''; resteInput.className = '';
         montantParisInput.placeholder = 'Montant Paris'; montantAbidjanInput.placeholder = 'Montant Abidjan';
+        bankSelect.value = '';
         if(adjustmentTypeInput) adjustmentTypeInput.value = '';
         if(adjustmentValInput) adjustmentValInput.value = '';
     }
@@ -436,6 +499,15 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         if (adjustmentTypeInput && data.adjustmentType) adjustmentTypeInput.value = data.adjustmentType;
         if (adjustmentValInput && data.adjustmentVal) adjustmentValInput.value = data.adjustmentVal;
+
+        // Pré-remplissage Mode & Banque
+        if (data.modePaiement) {
+            modePaiementInput.value = data.modePaiement;
+            updatePaymentUI();
+            if ((data.modePaiement === 'Virement' || data.modePaiement === 'Chèque') && data.agentMobileMoney) {
+                bankSelect.value = data.agentMobileMoney;
+            }
+        }
     }
 
     prixInput.addEventListener('input', calculateAndStyleReste);
