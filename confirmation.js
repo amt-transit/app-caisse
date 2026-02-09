@@ -205,9 +205,6 @@ document.addEventListener('DOMContentLoaded', () => {
             let payeCeJour = 0;
             if (t.paymentHistory) {
                 t.paymentHistory.forEach(p => {
-                    if (p.date === dateOnly && p.saisiPar === logData.user) {
-                        payeCeJour += (p.montantAbidjan || 0) + (p.montantParis || 0);
-                        if (p.modePaiement === 'Espèce') sumEsp += (p.montantAbidjan || 0);
                     // CAS 1 : Nouveau système (Match par ID de session)
                     if (isNewSystemSession) {
                         if (p.sessionId === logId) {
@@ -263,7 +260,7 @@ document.addEventListener('DOMContentLoaded', () => {
             sumDep += (e.montant || 0);
             detailsDepensesBody.innerHTML += `<tr><td>${e.description}</td><td>${e.type}</td><td>${formatCFA(e.montant)}</td></tr>`;
         });
-        countDepenses.textContent = expenses.length;
+        countDepenses.textContent = expensesDocs.length;
 
         // Totaux
         totalEspEl.textContent = formatCFA(sumEsp);
@@ -306,7 +303,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if (data.paymentHistory) {
                 // On retire les paiements faits par cet utilisateur à cette date
-                const newHistory = data.paymentHistory.filter(p => !(p.date === sessionDate && p.saisiPar === sessionUser));
                 let newHistory;
                 // Si la session a des IDs (Nouveau système), on supprime par sessionId
                 if (currentSessionData.transactionIds) {
@@ -360,7 +356,6 @@ document.addEventListener('DOMContentLoaded', () => {
             let currentMode = 'Espèce';
             
             if (data.paymentHistory) {
-                const entry = data.paymentHistory.find(p => p.date === sessionDate && p.saisiPar === sessionUser);
                 let entry;
                 // Recherche précise par SessionID si dispo
                 if (currentSessionData.transactionIds) {
@@ -390,7 +385,6 @@ document.addEventListener('DOMContentLoaded', () => {
             // mais ici on va modifier directement l'array pour être atomique.
             
             // 1. Retirer l'ancienne entrée
-            let newHistory = (data.paymentHistory || []).filter(p => !(p.date === sessionDate && p.saisiPar === sessionUser));
             let newHistory;
             if (currentSessionData.transactionIds) {
                 newHistory = (data.paymentHistory || []).filter(p => p.sessionId !== currentSessionId);
