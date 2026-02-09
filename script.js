@@ -480,7 +480,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     function fillFormWithData(data) {
         referenceInput.value = data.reference; 
-        if(!nomInput.value) nomInput.value = data.nom || '';
+        if(!nomInput.value) nomInput.value = data.nomDestinataire || data.nom || '';
         conteneurInput.value = data.conteneur || '';
         
         if (data.reste < 0) {

@@ -83,7 +83,7 @@ document.addEventListener('DOMContentLoaded', () => {
             
             if (!query.empty) {
                 const manifestData = query.docs[0].data();
-                arrivalNom.value = manifestData.nomClient;
+                arrivalNom.value = manifestData.nomDestinataire || manifestData.nomClient;
                 arrivalNom.style.backgroundColor = "#e0f7fa"; 
                 
                 if (manifestData.prixCFA) {
@@ -160,7 +160,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         // NOUVELLE LOGIQUE CSV ABIDJAN : reference, restant, expéditeur, adresse, destinataire, description
                         const ref = (row.reference || row.Reference || '').trim();
                         const restant = parseFloat(row.restant || row.Restant || 0);
-                        let nom = (row['expéditeur'] || row['Expéditeur'] || row.nom || '').trim();
+                        let sender = (row['expéditeur'] || row['Expéditeur'] || row.nom || '').trim();
                         const addr = (row.adresse || row.Adresse || row.adresseDestinataire || '').trim();
                         const dest = (row.destinataire || row.Destinataire || '').trim();
                         const desc = (row.description || row.Description || '').trim();
@@ -173,13 +173,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
                         // RECUPERATION DONNEES PARIS (Si Nom manquant OU Prix manquant pour un colis soldé)
                         let manifestData = null;
-                        if (!nom || (restant === 0 && prix === 0)) {
+                        if (!sender || (restant === 0 && prix === 0)) {
                             const q = await parisManifestCollection.where("reference", "==", ref).get();
                             if (!q.empty) manifestData = q.docs[0].data();
                         }
 
                         if (manifestData) {
-                            if (!nom) nom = manifestData.nomClient;
+                            if (!sender) sender = manifestData.nomClient;
                             // Si payé (restant 0) et prix inconnu, on récupère le prix de Paris
                             if (restant === 0 && prix === 0 && manifestData.prixCFA) {
                                 prix = manifestData.prixCFA;
@@ -202,9 +202,12 @@ document.addEventListener('DOMContentLoaded', () => {
                         const check = await transactionsCollection.where("reference", "==", ref).get();
                         if (!check.empty) { log += `\nDoublon: ${ref}`; continue; }
 
+                        // MODIFICATION : Le Destinataire est le client principal (nom)
+                        const mainClientName = dest || sender;
+
                         const docRef = transactionsCollection.doc();
                         batch.set(docRef, {
-                            date: commonDate, reference: ref, nom: nom || "", conteneur: commonConteneur,
+                            date: commonDate, reference: ref, nom: mainClientName || "", conteneur: commonConteneur,
                             prix: prix, montantParis: mParis, montantAbidjan: 0, 
                             reste: mParis - prix, isDeleted: false, agent: '', agentMobileMoney: '', commune: '',
                             description: desc, adresseDestinataire: addr, nomDestinataire: dest,
@@ -252,7 +255,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         const updates = {};
 
                         // On complète les infos manquantes depuis Paris (Nom, Adresse, Description)
-                        if (!tData.nom || tData.nom.trim() === "") updates.nom = pData.nomClient;
+                        if (!tData.nom || tData.nom.trim() === "") updates.nom = pData.nomDestinataire || pData.nomClient;
                         if (!tData.adresseDestinataire && pData.adresseDestinataire) updates.adresseDestinataire = pData.adresseDestinataire;
                         if ((!tData.description && !tData.article) && pData.typeColis) updates.description = pData.typeColis;
                         if (!tData.dateParis && pData.dateParis) updates.dateParis = pData.dateParis; // Récupération date départ
