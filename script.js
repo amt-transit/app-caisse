@@ -242,17 +242,23 @@ document.addEventListener('DOMContentLoaded', async () => {
     function updateGlobalSummary() {
         let totalAbidjanEsp = 0; 
         let totalParis = 0;
-        let totalMM = 0;
         let totalExpenses = 0;
+        let totalReste = 0;
+        const breakdown = {};
 
         // Calcul Entrées
         dailyTransactions.forEach(t => {
+            const mode = t.modePaiement || 'Espèce';
+            const amount = (t.montantAbidjan || 0) + (t.montantParis || 0);
+            
+            if (!breakdown[mode]) breakdown[mode] = 0;
+            breakdown[mode] += amount;
+
             if (t.modePaiement === 'Espèce') {
                 totalAbidjanEsp += (t.montantAbidjan || 0);
-            } else {
-                totalMM += (t.montantAbidjan || 0) + (t.montantParis || 0);
             }
             totalParis += (t.montantParis || 0);
+            totalReste += (t.reste || 0);
         });
 
         // Calcul Sorties
@@ -271,7 +277,22 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
 
         if(dailyTotalParisEl) dailyTotalParisEl.textContent = formatCFA(totalParis);
-        if(dailyTotalMobileMoneyEl) dailyTotalMobileMoneyEl.textContent = formatCFA(totalMM);
+        if(dailyTotalResteEl) dailyTotalResteEl.textContent = formatCFA(totalReste);
+
+        // Affichage Breakdown (Détail par mode)
+        const breakdownContainer = document.getElementById('paymentBreakdown');
+        if (breakdownContainer) {
+            breakdownContainer.innerHTML = '';
+            for (const [mode, amount] of Object.entries(breakdown)) {
+                if (amount > 0) {
+                    const div = document.createElement('div');
+                    div.className = 'summary-item';
+                    div.style.fontSize = '0.8em';
+                    div.innerHTML = `<h4>${mode}</h4><span style="color:#0d47a1; font-weight:bold;">${formatCFA(amount)}</span>`;
+                    breakdownContainer.appendChild(div);
+                }
+            }
+        }
     }
 
     // Fonctions globales pour onclick

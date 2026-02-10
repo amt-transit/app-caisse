@@ -141,10 +141,10 @@
         </div>
     </div>
 
-    <div class="daily-summary" style="margin-top: 10px; padding: 10px; opacity: 0.8;">
+    <div class="daily-summary" style="margin-top: 10px; padding: 10px; opacity: 0.8; flex-wrap: wrap;">
         <div class="summary-item" style="font-size: 0.8em;"><h4>Total Paris</h4><span id="dailyTotalParis">0</span></div>
-        <div class="summary-item" style="font-size: 0.8em;"><h4>Total Mobile Money</h4><span id="dailyTotalMobileMoney">0</span></div>
         <div class="summary-item" style="font-size: 0.8em;"><h4>Reste Total</h4><span id="dailyTotalReste">0</span></div>
+        <div id="paymentBreakdown" style="width: 100%; display: flex; justify-content: space-around; margin-top: 10px; border-top: 1px solid #ccc; padding-top: 5px; flex-wrap: wrap; gap: 10px;"></div>
     </div>
 
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
