@@ -53,7 +53,10 @@ document.addEventListener('DOMContentLoaded', () => {
             // 1. Si le colis est payé (Reste >= 0), on suppose qu'il est sorti -> Pas de magasinage
             if ((t.reste || 0) >= 0) return false;
 
-            // 2. On ne montre que ceux qui ont des frais (période gratuite dépassée)
+            // 2. Si les frais ont été annulés manuellement lors de la saisie
+            if (t.storageFeeWaived === true) return false;
+
+            // 3. On ne montre que ceux qui ont des frais (période gratuite dépassée)
             const { fee } = calculateStorageFee(t.date);
             if (fee <= 0) return false;
 

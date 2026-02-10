@@ -25,6 +25,22 @@ document.addEventListener('DOMContentLoaded', () => {
         sortByContainerCheckbox.addEventListener('change', () => applyFiltersAndRender());
     }
 
+    // --- AJOUT DYNAMIQUE EN-TÊTE MAGASINAGE ---
+    const historyTable = tableBody.closest('table');
+    if (historyTable) {
+        const theadRow = historyTable.querySelector('thead tr');
+        if (theadRow) {
+            let hasMagasinage = false;
+            Array.from(theadRow.children).forEach(th => { if (th.textContent.includes('Magasinage')) hasMagasinage = true; });
+
+            if (!hasMagasinage && theadRow.children.length >= 5) {
+                const th = document.createElement('th');
+                th.textContent = "Magasinage";
+                theadRow.insertBefore(th, theadRow.children[4]); // Insérer avant "Prix"
+            }
+        }
+    }
+
     const modal = document.getElementById('paymentHistoryModal');
     const modalList = document.getElementById('paymentHistoryList');
     const modalTitle = document.getElementById('modalRefTitle');
@@ -33,6 +49,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let unsubscribeHistory = null; 
     let allTransactions = []; 
     let lastVisibleDoc = null; // Pour la pagination
+    let unconfirmedSessions = new Set(); // Stocke les IDs de sessions non validées
     const PAGE_SIZE = 50;
 
     if (closeModal) closeModal.onclick = () => modal.style.display = "none";
@@ -112,6 +129,18 @@ document.addEventListener('DOMContentLoaded', () => {
             targetId: docId || ''
         }).catch(e => console.error("Audit Error:", e));
     }
+
+    // --- LISTENER SESSIONS NON VALIDÉES ---
+    db.collection("audit_logs")
+        .where("action", "==", "VALIDATION_JOURNEE")
+        .onSnapshot(snapshot => {
+            unconfirmedSessions.clear();
+            snapshot.forEach(doc => {
+                if (doc.data().status !== "VALIDATED") unconfirmedSessions.add(doc.id);
+            });
+            // Si on a déjà chargé des données, on rafraîchit l'affichage
+            if (allTransactions.length > 0) applyFiltersAndRender();
+        });
 
     // --- BOUTON CHARGER PLUS (PAGINATION) ---
     const loadMoreBtn = document.getElementById('loadMoreBtn');
@@ -256,7 +285,30 @@ document.addEventListener('DOMContentLoaded', () => {
             return true;
         });
         
-        renderTable(filteredTransactions);
+        // NETTOYAGE DES TRANSACTIONS NON CONFIRMÉES
+        const cleanTransactions = filteredTransactions.reduce((acc, t) => {
+            if (!t.paymentHistory || !Array.isArray(t.paymentHistory) || t.paymentHistory.length === 0) {
+                acc.push(t); return acc;
+            }
+            // On garde seulement les paiements confirmés
+            const validPayments = t.paymentHistory.filter(p => !p.sessionId || !unconfirmedSessions.has(p.sessionId));
+
+            // Si tout est non confirmé (Nouvelle transaction en attente) -> On masque
+            if (validPayments.length === 0 && t.paymentHistory.length > 0) return acc;
+
+            // Si partiel (Update en attente) -> On recalcule pour l'affichage
+            if (validPayments.length < t.paymentHistory.length) {
+                const newParis = validPayments.reduce((sum, p) => sum + (p.montantParis || 0), 0);
+                const newAbidjan = validPayments.reduce((sum, p) => sum + (p.montantAbidjan || 0), 0);
+                const tClean = { ...t, paymentHistory: validPayments, montantParis: newParis, montantAbidjan: newAbidjan, reste: (t.prix || 0) - (newParis + newAbidjan) };
+                acc.push(tClean);
+            } else {
+                acc.push(t);
+            }
+            return acc;
+        }, []);
+
+        renderTable(cleanTransactions);
     }
 
     function renderTable(transactions) {
@@ -420,11 +472,20 @@ document.addEventListener('DOMContentLoaded', () => {
             paymentDisplayHTML = `<div title="${mode}">${getModeIcon(mode)} <span class="tag mm-tag ${textToClassName(info)}">${info}</span></div>`;
         }
 
+        // LOGIQUE MAGASINAGE
+        let magasinageDisplay = '-';
+        if (data.storageFeeWaived) {
+            magasinageDisplay = '<span class="tag" style="background:#10b981; color:white; font-size:0.8em;">Offert</span>';
+        } else if (data.adjustmentType === 'augmentation' && data.adjustmentVal > 0) {
+            magasinageDisplay = `<span style="color:#d97706; font-weight:bold;">${formatCFA(data.adjustmentVal)}</span>`;
+        }
+
         newRow.innerHTML = `
             <td>${displayDate}</td>
             <td>${data.reference}</td>
             <td>${data.nom || ''}</td>
             <td>${data.conteneur || ''}</td>
+            <td>${magasinageDisplay}</td>
             <td>${formatCFA(data.prix)}</td>
             <td>${formatCFA(data.montantParis)}</td>
             <td>${formatCFA(data.montantAbidjan)}</td>
@@ -444,6 +505,7 @@ document.addEventListener('DOMContentLoaded', () => {
         subtotalRow.innerHTML = `
             <td>${date || 'TOTAL'}</td>
             <td colspan="3" style="text-align: right;">TOTAL</td> 
+            <td></td>
             <td>${formatCFA(totals.prix)}</td>
             <td>${formatCFA(totals.montantParis)}</td>
             <td>${formatCFA(totals.montantAbidjan)}</td>

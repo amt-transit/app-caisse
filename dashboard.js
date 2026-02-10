@@ -77,23 +77,37 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     }
 
+    // Fonction pour nettoyer les transactions des paiements non confirmés
+    function getCleanTransactions(transactions) {
+        return transactions.reduce((acc, t) => {
+            // Si pas d'historique (Legacy), on garde
+            if (!t.paymentHistory || !Array.isArray(t.paymentHistory) || t.paymentHistory.length === 0) {
+                acc.push(t); return acc;
+            }
+            // On ne garde que les paiements confirmés (ou sans sessionId pour les vieux)
+            const validPayments = t.paymentHistory.filter(p => !p.sessionId || !unconfirmedSessions.has(p.sessionId));
+
+            // Si tous les paiements sont non confirmés (Transaction nouvelle en attente) -> On masque
+            if (validPayments.length === 0 && t.paymentHistory.length > 0) return acc;
+
+            // Si partiel (Mise à jour en attente), on recalcule les montants
+            if (validPayments.length < t.paymentHistory.length) {
+                const newParis = validPayments.reduce((sum, p) => sum + (p.montantParis || 0), 0);
+                const newAbidjan = validPayments.reduce((sum, p) => sum + (p.montantAbidjan || 0), 0);
+                const tClean = { ...t, paymentHistory: validPayments, montantParis: newParis, montantAbidjan: newAbidjan, reste: (t.prix || 0) - (newParis + newAbidjan) };
+                acc.push(tClean);
+            } else {
+                acc.push(t);
+            }
+            return acc;
+        }, []);
+    }
+
     function updateDashboard() {
         // 0. SÉCURITÉ : Filtrer les données non confirmées (Sessions en attente)
-        const confirmedTransactions = allTransactions.filter(t => {
-            if (!t.saisiPar) return true; // Données historiques ou Admin
-            const key = `${t.date}_${t.saisiPar}`;
-            return !unconfirmedSessions.has(key);
-        });
+        const confirmedTransactions = getCleanTransactions(allTransactions);
 
-        const confirmedExpenses = allExpenses.filter(e => {
-            // Les dépenses sont liées par la description (selon logique confirmation.js)
-            if (!e.description) return true;
-            for (let sessionKey of unconfirmedSessions) {
-                const [sDate, sUser] = sessionKey.split('_');
-                if (e.date === sDate && e.description.includes(sUser)) return false;
-            }
-            return true;
-        });
+        const confirmedExpenses = allExpenses.filter(e => !e.sessionId || !unconfirmedSessions.has(e.sessionId));
 
         const startDate = startDateInput.value;
         const endDate = endDateInput.value;
@@ -922,7 +936,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             snapshot.forEach(doc => {
                 const data = doc.data();
                 if (data.status !== "VALIDATED") {
-                    unconfirmedSessions.add(`${data.date.split('T')[0]}_${data.user}`);
+                    unconfirmedSessions.add(doc.id); // On stocke l'ID de session
                 }
             });
             updateDashboard(); // Recalculer tout quand une validation change

@@ -165,12 +165,12 @@ document.addEventListener('DOMContentLoaded', () => {
             snapshot.docs.forEach(doc => {
                 const t = doc.data();
                 
-                // FILTRE SÉCURITÉ : Ignorer si session non validée
-                if (t.saisiPar && unconfirmedSessions.has(`${t.date}_${t.saisiPar}`)) return;
-
                 // Logique identique au Dashboard pour extraire les paiements
                 if (t.paymentHistory && t.paymentHistory.length > 0) {
                     t.paymentHistory.forEach((pay, idx) => {
+                        // FILTRE SÉCURITÉ : Ignorer paiement si session non validée
+                        if (pay.sessionId && unconfirmedSessions.has(pay.sessionId)) return;
+
                         if (pay.modePaiement === 'Virement') {
                             extracted.push({
                                 id: `${doc.id}_${idx}`,
@@ -214,7 +214,7 @@ document.addEventListener('DOMContentLoaded', () => {
             snapshot.forEach(doc => {
                 const data = doc.data();
                 if (data.status !== "VALIDATED") {
-                    unconfirmedSessions.add(`${data.date.split('T')[0]}_${data.user}`);
+                    unconfirmedSessions.add(doc.id); // Utilisation de l'ID de session
                 }
             });
             fetchBankMovements(); // Recharger les virements/totaux
@@ -366,11 +366,11 @@ document.addEventListener('DOMContentLoaded', () => {
             snapshot.forEach(doc => {
                 const data = doc.data();
                 
-                // FILTRE SÉCURITÉ : On ne peut pas déposer un chèque d'une session non validée
-                if (data.saisiPar && unconfirmedSessions.has(`${data.date}_${data.saisiPar}`)) return;
-
                 if (data.paymentHistory) {
                     data.paymentHistory.forEach((pay, index) => {
+                        // FILTRE SÉCURITÉ
+                        if (pay.sessionId && unconfirmedSessions.has(pay.sessionId)) return;
+
                         if (pay.modePaiement === 'Chèque' && pay.checkStatus === 'Pending') {
                             pendingChecks.push({
                                 docId: doc.id,
@@ -501,13 +501,13 @@ document.addEventListener('DOMContentLoaded', () => {
         transSnap.forEach(doc => {
             const d = doc.data();
             
-            // FILTRE SÉCURITÉ : Ignorer transactions non validées pour le solde dispo
-            if (d.saisiPar && unconfirmedSessions.has(`${d.date}_${d.saisiPar}`)) return;
-
             // CORRECTION : On aligne la logique sur le Dashboard.
             // On ne compte que le CASH disponible (pas les chèques).
             if (d.paymentHistory && d.paymentHistory.length > 0) {
                 d.paymentHistory.forEach(pay => {
+                    // FILTRE SÉCURITÉ
+                    if (pay.sessionId && unconfirmedSessions.has(pay.sessionId)) return;
+
                     if (pay.modePaiement !== 'Chèque' && pay.modePaiement !== 'Virement') {
                         totalVentes += (pay.montantAbidjan || 0);
                     }
@@ -536,13 +536,8 @@ document.addEventListener('DOMContentLoaded', () => {
             const d = doc.data();
             
             // FILTRE SÉCURITÉ DÉPENSES
-            // On vérifie si la dépense appartient à une session non validée (via description)
-            let isUnconfirmed = false;
-            for (let sessionKey of unconfirmedSessions) {
-                const [sDate, sUser] = sessionKey.split('_');
-                if (d.date === sDate && d.description && d.description.includes(sUser)) isUnconfirmed = true;
-            }
-            if (isUnconfirmed) return;
+            // On vérifie si la dépense appartient à une session non validée (via sessionId)
+            if (d.sessionId && unconfirmedSessions.has(d.sessionId)) return;
 
             if (d.mode !== 'Virement' && d.mode !== 'Chèque') {
                 totalDepenses += (d.montant || 0);

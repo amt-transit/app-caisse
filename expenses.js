@@ -36,6 +36,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     let unsubscribeExpenses = null; 
     let allExpenses = [];
+    let unconfirmedSessions = new Set(); // Stocke les IDs de sessions non validées
 
     // --- GESTION DES SOUS-ONGLETS (Dépenses Mensuelles vs Conteneurs) ---
     let currentTab = 'monthly'; // 'monthly' | 'container'
@@ -143,6 +144,18 @@ document.addEventListener('DOMContentLoaded', () => {
         }, error => console.error(error));
     }
 
+    // --- LISTENER SESSIONS NON VALIDÉES ---
+    db.collection("audit_logs")
+        .where("action", "==", "VALIDATION_JOURNEE")
+        .onSnapshot(snapshot => {
+            unconfirmedSessions.clear();
+            snapshot.forEach(doc => {
+                if (doc.data().status !== "VALIDATED") unconfirmedSessions.add(doc.id);
+            });
+            // Rafraîchir l'affichage
+            if (allExpenses.length > 0) renderExpensesTable();
+        });
+
     function calculateCurrentBudget(expensesList) {
         let total = 0;
         expensesList.forEach(e => {
@@ -155,8 +168,11 @@ document.addEventListener('DOMContentLoaded', () => {
     function renderExpensesTable() {
         const term = expenseSearchInput ? expenseSearchInput.value.toLowerCase().trim() : "";
         
+        // 1. Filtrer les dépenses non confirmées
+        const confirmedExpenses = allExpenses.filter(e => !e.sessionId || !unconfirmedSessions.has(e.sessionId));
+
         // Filtre par Onglet
-        const tabFiltered = allExpenses.filter(item => {
+        const tabFiltered = confirmedExpenses.filter(item => {
             if (currentTab === 'monthly') return item.type !== 'Conteneur' && !item.conteneur;
             else return item.type === 'Conteneur' || (item.conteneur && item.conteneur.trim() !== '');
         });

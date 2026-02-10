@@ -64,6 +64,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     let dailyTransactions = JSON.parse(localStorage.getItem('dailyTransactions')) || [];
     let dailyExpenses = JSON.parse(localStorage.getItem('dailyExpenses')) || [];
+    let currentStorageFeeWaived = false; // État pour savoir si le magasinage est annulé pour la saisie en cours
 
     // --- GESTION DYNAMIQUE BANQUE (VIREMENT/CHÈQUE) ---
     // On crée le sélecteur de banque dynamiquement pour ne pas toucher au HTML
@@ -120,7 +121,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             agent: agentString,
             reste: 0,
             adjustmentType: adjustmentTypeInput ? adjustmentTypeInput.value : '',
-            adjustmentVal: adjustmentValInput ? (parseFloat(adjustmentValInput.value) || 0) : 0
+            adjustmentVal: adjustmentValInput ? (parseFloat(adjustmentValInput.value) || 0) : 0,
+            waiveStorageFee: currentStorageFeeWaived // On stocke la décision d'annulation
         };
 
         if (!newData.date || !newData.reference) return alert("Remplissez la date et la référence/nom.");
@@ -160,6 +162,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         agentChoices.setValue([]); 
         resteInput.className = '';
         referenceInput.focus();
+        currentStorageFeeWaived = false; // Reset après ajout
     });
 
     // --- 2. GESTION DÉPENSES (LIVREUR) ---
@@ -285,16 +288,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         
         if (!confirm(`CONFIRMATION :\n\nEncaissements Espèces : ${formatCFA(totalEsp)}\nDépenses Livreur : ${formatCFA(totalDep)}\n\nNET À VERSER : ${formatCFA(totalEsp - totalDep)}\n\nEnregistrer ?`)) return;
 
-        // --- JOURNAL D'AUDIT ---
-        db.collection("audit_logs").add({
-            date: new Date().toISOString(),
-            user: currentUserName,
-            action: "VALIDATION_JOURNEE",
-            details: `Encaissements: ${dailyTransactions.length}, Dépenses: ${dailyExpenses.length}, Total Esp: ${totalEsp}`,
-            targetId: "BATCH"
-        });
-        // -----------------------
-
         const batch = db.batch();
         // CRÉATION ID SESSION UNIQUE (Pour distinguer les sessions du même jour)
         const auditRef = db.collection("audit_logs").doc();
@@ -358,6 +351,11 @@ document.addEventListener('DOMContentLoaded', async () => {
                 
                 if (combinedAgents !== oldData.agent) updates.agent = combinedAgents;
 
+                // Mise à jour Magasinage (Si annulé dans l'une des saisies du groupe)
+                if (group.some(t => t.waiveStorageFee)) {
+                    updates.storageFeeWaived = true;
+                }
+
                 // Mise à jour infos (Commune, etc.) depuis la dernière entrée du groupe
                 const lastTransac = group[group.length - 1];
                 if (lastTransac.commune && lastTransac.commune !== oldData.commune) updates.commune = lastTransac.commune;
@@ -381,7 +379,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                     isDeleted: false, 
                     saisiPar: currentUserName, 
                     paymentHistory: newPaymentEntries,
-                    lastPaymentDate: baseTransac.date
+                    lastPaymentDate: baseTransac.date,
+                    storageFeeWaived: group.some(t => t.waiveStorageFee) // Pour nouveau doc aussi
                 });
                 touchedTransactionIds.push(docRef.id); // Sauvegarde nouvel ID
             }
@@ -436,6 +435,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     // --- RECHERCHE ---
     referenceInput.addEventListener('change', async () => { 
         const searchValue = referenceInput.value.trim();
+        currentStorageFeeWaived = false; // Reset par défaut
         if (!searchValue) { clearDisplayFields(); nomInput.value=''; return; }
 
         // 1. Vérifier d'abord les transactions du jour (Pour le fractionnement immédiat)
@@ -464,7 +464,40 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         if (!query.empty) {
             if (query.size > 1) return alert("Plusieurs résultats. Soyez plus précis.");
-            fillFormWithData(query.docs[0].data());
+            const data = query.docs[0].data();
+
+            // LOGIQUE MAGASINAGE : Si dette (reste < 0) et pas encore annulé
+            if ((data.reste || 0) < 0 && !data.storageFeeWaived) {
+                const { fee } = calculateStorageFee(data.date);
+                if (fee > 0) {
+                    const userResponse = prompt(
+                        `⚠️ FRAIS DE MAGASINAGE : ${formatCFA(fee)}\n\n` +
+                        `Veuillez confirmer l'action :\n` +
+                        `1. OUI (Payer) : Gardez le montant ${fee}\n` +
+                        `2. NON (Offrir) : Mettez 0\n` +
+                        `3. RÉDUIRE : Modifiez le montant\n` +
+                        `4. ANNULER : Cliquez sur Annuler`,
+                        fee
+                    );
+
+                    if (userResponse === null) { referenceInput.value = ''; return; }
+
+                    const amount = parseFloat(userResponse);
+                    if (isNaN(amount)) { alert("Montant invalide."); referenceInput.value = ''; return; }
+
+                    if (amount === 0) {
+                        currentStorageFeeWaived = true;
+                        alert("Frais de magasinage OFFERTS.");
+                    } else {
+                        data.prix = (data.prix || 0) + amount;
+                        data.reste = ((data.montantParis || 0) + (data.montantAbidjan || 0)) - data.prix;
+                        data.adjustmentType = 'augmentation';
+                        data.adjustmentVal = amount;
+                        alert(`Frais de magasinage de ${formatCFA(amount)} ajoutés au prix.`);
+                    }
+                }
+            }
+            fillFormWithData(data);
         } else {
             // Mode création
         }
@@ -530,6 +563,22 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     function formatCFA(n) { return new Intl.NumberFormat('fr-CI', { style: 'currency', currency: 'XOF' }).format(n || 0); }
     
+    // Fonction utilitaire pour calculer le magasinage (Dupliquée de magasinage.js pour l'instant T)
+    function calculateStorageFee(arrivalDateString) {
+        if (!arrivalDateString) return { days: 0, fee: 0 };
+        const arrivalDate = new Date(arrivalDateString);
+        // On utilise la date de saisie si dispo, sinon aujourd'hui
+        const inputDateVal = document.getElementById('date').value;
+        const compareDate = inputDateVal ? new Date(inputDateVal) : new Date();
+        
+        const diffTime = compareDate - arrivalDate;
+        if (diffTime < 0) return { days: 0, fee: 0 };
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        if (diffDays <= 7) return { days: diffDays, fee: 0 };
+        else if (diffDays <= 14) return { days: diffDays, fee: 10000 };
+        else { const extraDays = diffDays - 14; return { days: diffDays, fee: 10000 + (extraDays * 1000) }; }
+    }
+
     function populateDatalist() {
         transactionsCollection.where("isDeleted", "!=", true).limit(500).get().then(snapshot => {
             const references = new Set(); 
