@@ -282,11 +282,25 @@ document.addEventListener('DOMContentLoaded', async () => {
     saveDayBtn.addEventListener('click', async () => {
         if (dailyTransactions.length === 0 && dailyExpenses.length === 0) return alert("Rien à enregistrer.");
         
-        let totalEsp = 0, totalDep = 0;
-        dailyTransactions.forEach(t => { if(t.modePaiement==='Espèce') totalEsp += t.montantAbidjan; });
+        let totalsByMode = {};
+        let totalEspAbidjan = 0;
+        let totalDep = 0;
+
+        dailyTransactions.forEach(t => {
+            const mode = t.modePaiement || 'Espèce';
+            const amount = (t.montantAbidjan || 0) + (t.montantParis || 0);
+            if (amount > 0) totalsByMode[mode] = (totalsByMode[mode] || 0) + amount;
+            if (mode === 'Espèce') totalEspAbidjan += (t.montantAbidjan || 0);
+        });
+
         dailyExpenses.forEach(e => totalDep += e.montant);
         
-        if (!confirm(`CONFIRMATION :\n\nEncaissements Espèces : ${formatCFA(totalEsp)}\nDépenses Livreur : ${formatCFA(totalDep)}\n\nNET À VERSER : ${formatCFA(totalEsp - totalDep)}\n\nEnregistrer ?`)) return;
+        let msg = "CONFIRMATION :\n\n";
+        for (const [mode, amount] of Object.entries(totalsByMode)) { msg += `Encaissements ${mode} : ${formatCFA(amount)}\n`; }
+        if (Object.keys(totalsByMode).length === 0) msg += "Aucun encaissement.\n";
+        msg += `Dépenses Livreur : ${formatCFA(totalDep)}\n\nNET À VERSER (Espèces) : ${formatCFA(totalEspAbidjan - totalDep)}\n\nEnregistrer ?`;
+
+        if (!confirm(msg)) return;
 
         const batch = db.batch();
         // CRÉATION ID SESSION UNIQUE (Pour distinguer les sessions du même jour)
@@ -416,7 +430,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             date: new Date().toISOString(),
             user: currentUserName,
             action: "VALIDATION_JOURNEE",
-            details: `Encaissements: ${dailyTransactions.length}, Dépenses: ${dailyExpenses.length}, Total Esp: ${totalEsp}`,
+            details: `Encaissements: ${dailyTransactions.length}, Dépenses: ${dailyExpenses.length}, Total Esp: ${totalEspAbidjan}`,
             targetId: "BATCH",
             status: "PENDING", // Statut initial
             transactionIds: touchedTransactionIds, // LA CLÉ DE LA ROBUSTESSE

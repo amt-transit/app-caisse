@@ -269,9 +269,11 @@ document.addEventListener('DOMContentLoaded', () => {
                     actionButtons = `<span style="color:#94a3b8; font-size:0.8em;">🔒 Validé</span>`;
                 }
 
+                const resteClass = (t.reste || 0) < 0 ? 'reste-negatif' : 'reste-positif';
+
                 detailsEncaissementsBody.innerHTML += `
                     <tr data-id="${doc.id}">
-                        <td>${t.reference}</td><td>${t.nom}</td><td>${t.conteneur}</td><td>${formatCFA(t.prix)}</td><td style="font-weight:bold;">${formatCFA(payeCeJour)}</td><td>${t.modePaiement}</td>
+                        <td>${t.reference}</td><td>${t.nom}</td><td>${t.conteneur}</td><td>${formatCFA(t.prix)}</td><td style="font-weight:bold;">${formatCFA(payeCeJour)}</td><td>${t.modePaiement}</td><td class="${resteClass}">${formatCFA(t.reste)}</td>
                         <td>${actionButtons}</td>
                     </tr>
                 `;
