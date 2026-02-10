@@ -17,7 +17,7 @@ const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 
-createApp({
+ createApp({
     setup() {
         const user = ref(null);
         const authLoading = ref(true);
@@ -35,7 +35,7 @@ createApp({
         });
 
         const currentSalaireView = ref('employes'); 
-        const employeesList = ref([]);
+ const employeesList = ref([]);
         const salaryHistory = ref([]);
         const salaryFunds = ref([]); 
         const paiePeriod = ref("15"); 
@@ -600,4 +600,4 @@ createApp({
             tontineBeneficiaries, markTontineBeneficiary, deleteTontineBeneficiary
         };
     }
-}).mount('#app');
+ }).mount('#app');

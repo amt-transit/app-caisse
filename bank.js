@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const currentUserName = sessionStorage.getItem('userName') || 'Inconnu';
 
     const bankCollection = db.collection("bank_movements");
-    
+
     const addBankMovementBtn = document.getElementById('addBankMovementBtn');
     const bankDate = document.getElementById('bankDate');
     const bankName = document.getElementById('bankName');

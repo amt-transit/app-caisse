@@ -15,7 +15,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const bankMovementsTableBody = document.getElementById('bankMovementsTableBody');
     const topClientsTableBody = document.getElementById('topClientsTableBody'); 
     const unpaidTableBody = document.getElementById('unpaidTableBody');
-    const adjustmentsTableBody = document.getElementById('adjustmentsTableBody');
+ const adjustmentsTableBody = document.getElementById('adjustmentsTableBody');
 
     const grandTotalCountEl = document.getElementById('grandTotalCount');
     const grandTotalDepensesEl = document.getElementById('grandTotalDepenses');
@@ -35,7 +35,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const panels = document.querySelectorAll('.tab-panel');
     tabs.forEach(tab => {
         tab.addEventListener('click', (e) => {
-            e.preventDefault();
+ e.preventDefault();
             const targetId = tab.getAttribute('href');
             const targetPanel = document.querySelector(targetId);
             tabs.forEach(t => t.classList.remove('active'));
