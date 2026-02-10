@@ -323,7 +323,18 @@ createApp({
         };
 
         const openIndividualHistory = (emp) => { selectedEmployeeHistoryId.value = emp.id; selectedEmployeeHistoryName.value = emp.name; showIndividualHistoryModal.value = true; };
-        const individualHistory = computed(() => selectedEmployeeHistoryId.value ? salaryHistory.value.filter(p => p.employeeId === selectedEmployeeHistoryId.value) : []);
+        
+        // CORRECTION : Tri par date décroissante pour mieux retracer l'historique
+        const individualHistory = computed(() => {
+            if (!selectedEmployeeHistoryId.value) return [];
+            return salaryHistory.value
+                .filter(p => p.employeeId === selectedEmployeeHistoryId.value)
+                .sort((a, b) => {
+                    const tA = a.timestamp?.seconds || 0;
+                    const tB = b.timestamp?.seconds || 0;
+                    return tB - tA;
+                });
+        });
 
         // Regroupement Historique (Corrigé selon demande précédente)
         const groupedSalaryHistory = computed(() => {
@@ -380,15 +391,21 @@ createApp({
             const currentMonth = selectedTontineMonth.value;
             const totalPaid = salaryHistory.value
                 .filter(p => p.employeeId === empId && p.month === currentMonth)
-                .reduce((sum, p) => sum + (p.tontine || 0), 0);
-            return totalPaid >= (shareIndex * globalTontineAmount.value);
+                .reduce((sum, p) => sum + (parseFloat(p.tontine) || 0), 0);
+            return totalPaid >= (shareIndex * (parseFloat(globalTontineAmount.value) || 0));
         };
+
+        // NOUVEAU : Calcul de la cagnotte totale (Montant à gagner)
+        const tontinePot = computed(() => {
+            const totalShares = employeesList.value.reduce((sum, e) => sum + (parseInt(e.tontineCount || (e.isTontine ? 1 : 0))), 0);
+            return totalShares * (parseFloat(globalTontineAmount.value) || 0);
+        });
 
         const getTontinePaidAmount = (empId) => {
             const currentMonth = selectedTontineMonth.value;
             return salaryHistory.value
                 .filter(p => p.employeeId === empId && p.month === currentMonth)
-                .reduce((sum, p) => sum + (p.tontine || 0), 0);
+                .reduce((sum, p) => sum + (parseFloat(p.tontine) || 0), 0);
         };
 
         const markTontinePayment = async (emp) => {
@@ -577,7 +594,7 @@ createApp({
             newEmp, editingEmp, payForm, newFund, unpaidEmployees, selectedEmployeeHistoryName, individualHistory,
             groupedSalaryHistory, selectedHistoryMonth, openMonthDetails, closeMonthDetails,
             saveNewEmployee, updateEmployee, deleteEmployee, openEditEmployee, openIndividualHistory, selectedBudgetMonth, cancelTontine,
-            openPayModal, confirmSalaryPayment, deleteSalaryPayment, recalcNet, updateBaseFromNet, hasPaidTontine, getTontinePaidAmount, markTontinePayment, tontineMembers, globalTontineAmount, saveGlobalTontine, selectedTontineMonth,
+            openPayModal, confirmSalaryPayment, deleteSalaryPayment, recalcNet, updateBaseFromNet, hasPaidTontine, getTontinePaidAmount, markTontinePayment, tontineMembers, globalTontineAmount, saveGlobalTontine, selectedTontineMonth, tontinePot,
             calculateBase, calculateLoanDeduc, calculateTontineDeduc, calculateNet, exportSalaryHistoryPDF, paieTotals, employeesTotals,
             saveSalaryFund, deleteSalaryFund, salaryStats,
             tontineBeneficiaries, markTontineBeneficiary, deleteTontineBeneficiary
