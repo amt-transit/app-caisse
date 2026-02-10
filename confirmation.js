@@ -89,9 +89,15 @@ document.addEventListener('DOMContentLoaded', () => {
         const isValidated = data.status === "VALIDATED";
         const statusIcon = isValidated ? "✅" : "⏳";
 
+        // AJOUT : Affichage des agents à côté de l'utilisateur
+        let infoLine = `Par: ${data.user}`;
+        if (data.agents) {
+            infoLine += ` <span style="color:#059669; font-weight:bold;">(${data.agents})</span>`;
+        }
+
         div.innerHTML = `
             <div style="font-weight:bold; color:#334155;">${statusIcon} ${dateStr} à ${timeStr}</div>
-            <div style="font-size:0.9em; color:#64748b;">Par: ${data.user}</div>
+            <div style="font-size:0.9em; color:#64748b;">${infoLine}</div>
         `;
         
         div.addEventListener('mouseover', () => div.style.background = '#f1f5f9');
@@ -271,9 +277,19 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 const resteClass = (t.reste || 0) < 0 ? 'reste-negatif' : 'reste-positif';
 
+                // LOGIQUE MAGASINAGE
+                let magasinageDisplay = '-';
+                if (t.storageFeeWaived) {
+                    magasinageDisplay = '<span class="tag" style="background:#10b981; color:white; font-size:0.8em;">Offert</span>';
+                } else if (t.adjustmentType === 'augmentation' && t.adjustmentVal > 0) {
+                    magasinageDisplay = `<span style="color:#d97706; font-weight:bold;">${formatCFA(t.adjustmentVal)}</span>`;
+                }
+
+                const agentsDisplay = t.agent ? `<span style="font-size:0.85em; color:#64748b;">${t.agent}</span>` : '-';
+
                 detailsEncaissementsBody.innerHTML += `
                     <tr data-id="${doc.id}">
-                        <td>${t.reference}</td><td>${t.nom}</td><td>${t.conteneur}</td><td>${formatCFA(t.prix)}</td><td style="font-weight:bold;">${formatCFA(payeCeJour)}</td><td>${t.modePaiement}</td><td class="${resteClass}">${formatCFA(t.reste)}</td>
+                        <td>${t.reference}</td><td>${t.nom}</td><td>${t.conteneur}</td><td>${agentsDisplay}</td><td>${magasinageDisplay}</td><td>${formatCFA(t.prix)}</td><td style="font-weight:bold;">${formatCFA(payeCeJour)}</td><td>${t.modePaiement}</td><td class="${resteClass}">${formatCFA(t.reste)}</td>
                         <td>${actionButtons}</td>
                     </tr>
                 `;

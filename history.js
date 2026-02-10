@@ -25,22 +25,6 @@ document.addEventListener('DOMContentLoaded', () => {
         sortByContainerCheckbox.addEventListener('change', () => applyFiltersAndRender());
     }
 
-    // --- AJOUT DYNAMIQUE EN-TÊTE MAGASINAGE ---
-    const historyTable = tableBody.closest('table');
-    if (historyTable) {
-        const theadRow = historyTable.querySelector('thead tr');
-        if (theadRow) {
-            let hasMagasinage = false;
-            Array.from(theadRow.children).forEach(th => { if (th.textContent.includes('Magasinage')) hasMagasinage = true; });
-
-            if (!hasMagasinage && theadRow.children.length >= 5) {
-                const th = document.createElement('th');
-                th.textContent = "Magasinage";
-                theadRow.insertBefore(th, theadRow.children[4]); // Insérer avant "Prix"
-            }
-        }
-    }
-
     const modal = document.getElementById('paymentHistoryModal');
     const modalList = document.getElementById('paymentHistoryList');
     const modalTitle = document.getElementById('modalRefTitle');

@@ -65,6 +65,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     let dailyTransactions = JSON.parse(localStorage.getItem('dailyTransactions')) || [];
     let dailyExpenses = JSON.parse(localStorage.getItem('dailyExpenses')) || [];
     let currentStorageFeeWaived = false; // État pour savoir si le magasinage est annulé pour la saisie en cours
+    let currentIsNewAdjustment = false; // État pour savoir si un frais a été ajouté
 
     // --- GESTION DYNAMIQUE BANQUE (VIREMENT/CHÈQUE) ---
     // On crée le sélecteur de banque dynamiquement pour ne pas toucher au HTML
@@ -122,7 +123,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             reste: 0,
             adjustmentType: adjustmentTypeInput ? adjustmentTypeInput.value : '',
             adjustmentVal: adjustmentValInput ? (parseFloat(adjustmentValInput.value) || 0) : 0,
-            waiveStorageFee: currentStorageFeeWaived // On stocke la décision d'annulation
+            waiveStorageFee: currentStorageFeeWaived, // On stocke la décision d'annulation
+            isNewAdjustment: currentIsNewAdjustment // On stocke si c'est un nouveau frais
         };
 
         if (!newData.date || !newData.reference) return alert("Remplissez la date et la référence/nom.");
@@ -146,6 +148,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             t.reste = (t.montantParis + t.montantAbidjan) - t.prix;
             // On met à jour l'ajustement si présent dans la nouvelle saisie
             if (newData.adjustmentType) { t.adjustmentType = newData.adjustmentType; t.adjustmentVal = newData.adjustmentVal; }
+            if (newData.isNewAdjustment) t.isNewAdjustment = true;
         } else {
             dailyTransactions.push(newData);
         }
@@ -163,6 +166,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         resteInput.className = '';
         referenceInput.focus();
         currentStorageFeeWaived = false; // Reset après ajout
+        currentIsNewAdjustment = false; // Reset après ajout
     });
 
     // --- 2. GESTION DÉPENSES (LIVREUR) ---
@@ -396,6 +400,17 @@ document.addEventListener('DOMContentLoaded', async () => {
                 if (lastTransac.commune && lastTransac.commune !== oldData.commune) updates.commune = lastTransac.commune;
                 if (lastTransac.agentMobileMoney) updates.agentMobileMoney = lastTransac.agentMobileMoney;
                 
+                // GESTION AUGMENTATION PRIX (MAGASINAGE)
+                // On cherche si une des transactions du groupe contient une augmentation de prix NOUVELLE
+                const augmentationItem = group.find(t => t.isNewAdjustment === true && t.adjustmentType === 'augmentation');
+                if (augmentationItem) {
+                    const fee = augmentationItem.adjustmentVal;
+                    updates.prix = (oldData.prix || 0) + fee;
+                    updates.reste = updates.reste - fee; // On déduit le frais du reste (car le prix augmente)
+                    updates.adjustmentType = 'augmentation';
+                    updates.adjustmentVal = fee;
+                }
+
                 batch.update(docRef, updates);
                 touchedTransactionIds.push(docRef.id); // Sauvegarde ID existant
             } else {
@@ -447,6 +462,19 @@ document.addEventListener('DOMContentLoaded', async () => {
         
         // NOTE : J'ai supprimé le premier db.collection("audit_logs").add(...) du début de la fonction pour le mettre ici
         // afin d'inclure les IDs.
+        
+        // --- AJOUT : Collecte des agents pour le résumé de session ---
+        const sessionAgentsSet = new Set();
+        dailyTransactions.forEach(t => {
+            if (t.agent) {
+                t.agent.split(',').forEach(a => {
+                    const trimmed = a.trim();
+                    if (trimmed) sessionAgentsSet.add(trimmed);
+                });
+            }
+        });
+        const sessionAgentsStr = Array.from(sessionAgentsSet).join(', ');
+
         batch.set(auditRef, {
             date: new Date().toISOString(),
             user: currentUserName,
@@ -455,7 +483,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             targetId: "BATCH",
             status: "PENDING", // Statut initial
             transactionIds: touchedTransactionIds, // LA CLÉ DE LA ROBUSTESSE
-            expenseIds: touchedExpenseIds
+            expenseIds: touchedExpenseIds,
+            agents: sessionAgentsStr // <-- AJOUT DU CHAMP AGENTS
         });
 
         await batch.commit();
@@ -471,6 +500,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     referenceInput.addEventListener('change', async () => { 
         const searchValue = referenceInput.value.trim();
         currentStorageFeeWaived = false; // Reset par défaut
+        currentIsNewAdjustment = false; // Reset par défaut
         if (!searchValue) { clearDisplayFields(); nomInput.value=''; return; }
 
         // 1. Vérifier d'abord les transactions du jour (Pour le fractionnement immédiat)
@@ -528,6 +558,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                         data.reste = ((data.montantParis || 0) + (data.montantAbidjan || 0)) - data.prix;
                         data.adjustmentType = 'augmentation';
                         data.adjustmentVal = amount;
+                        currentIsNewAdjustment = true;
                         alert(`Frais de magasinage de ${formatCFA(amount)} ajoutés au prix.`);
                     }
                 }
