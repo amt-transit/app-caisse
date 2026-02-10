@@ -50,6 +50,12 @@ document.addEventListener('DOMContentLoaded', () => {
             snapshot.forEach(doc => {
                 const div = createSessionElement(doc);
                 const data = doc.data();
+
+                // FILTRE : Masquer les sessions explicitement vides (Nouveau système)
+                if (data.transactionIds && Array.isArray(data.transactionIds) && data.transactionIds.length === 0) {
+                    if (!data.expenseIds || (Array.isArray(data.expenseIds) && data.expenseIds.length === 0)) return;
+                }
+
                 const isValidated = data.status === "VALIDATED";
 
                 if (!isValidated) hasPending = true;
@@ -135,6 +141,24 @@ document.addEventListener('DOMContentLoaded', () => {
         currentSessionData = logData; // Sauvegarde du contexte
         noSelectionMsg.style.display = 'none';
         sessionDetailsEl.style.display = 'block';
+
+        // AJOUT : Bouton de suppression manuelle de la session (pour nettoyage)
+        let deleteSessionBtn = document.getElementById('deleteSessionBtn');
+        if (!deleteSessionBtn) {
+            deleteSessionBtn = document.createElement('button');
+            deleteSessionBtn.id = 'deleteSessionBtn';
+            deleteSessionBtn.className = 'deleteBtn'; // Style rouge
+            deleteSessionBtn.style.marginTop = '10px';
+            deleteSessionBtn.style.float = 'right';
+            deleteSessionBtn.textContent = "🗑️ Supprimer la Session";
+            validateSessionBtn.parentNode.insertBefore(deleteSessionBtn, validateSessionBtn.nextSibling);
+            
+            deleteSessionBtn.addEventListener('click', async () => {
+                if(confirm("Voulez-vous vraiment supprimer cette session et l'historique associé ?\n(Les transactions seront retirées de l'historique des paiements)")) {
+                    await deleteEntireSession(currentSessionId, currentSessionData);
+                }
+            });
+        }
         
         const dateOnly = logData.date.split('T')[0];
         detailDateUser.textContent = `Saisie du ${dateOnly} par ${logData.user}`;
@@ -145,11 +169,13 @@ document.addEventListener('DOMContentLoaded', () => {
             detailStatus.style.background = "#10b981";
             detailStatus.style.color = "white";
             validateSessionBtn.style.display = 'none'; // Cacher le bouton si déjà validé
+            if(deleteSessionBtn) deleteSessionBtn.style.display = 'none';
         } else {
             detailStatus.textContent = "En attente de revue";
             detailStatus.style.background = "#f59e0b";
             detailStatus.style.color = "white";
             validateSessionBtn.style.display = 'block';
+            if(deleteSessionBtn) deleteSessionBtn.style.display = 'block';
         }
 
         // --- CHARGEMENT ROBUSTE (HYBRIDE) ---
@@ -332,6 +358,27 @@ document.addEventListener('DOMContentLoaded', () => {
                 await docRef.update({ isDeleted: true });
             }
             
+            // MISE À JOUR DU LOG D'AUDIT (Pour que la session sache qu'elle a perdu une transaction)
+            if (currentSessionData.transactionIds) {
+                const auditRef = db.collection("audit_logs").doc(currentSessionId);
+                await auditRef.update({
+                    transactionIds: firebase.firestore.FieldValue.arrayRemove(docId)
+                });
+                
+                // Vérifier si la session est devenue vide
+                const updatedLog = await auditRef.get();
+                const d = updatedLog.data();
+                const tEmpty = !d.transactionIds || d.transactionIds.length === 0;
+                const eEmpty = !d.expenseIds || d.expenseIds.length === 0;
+                
+                if (tEmpty && eEmpty) {
+                    await auditRef.delete();
+                    sessionDetailsEl.style.display = 'none';
+                    noSelectionMsg.style.display = 'block';
+                    return; // Fin, plus rien à afficher
+                }
+            }
+
             // Rafraîchir l'affichage
             loadSessionDetails(currentSessionId, currentSessionData);
         } catch (error) {
@@ -424,6 +471,55 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (error) {
             console.error(error);
             alert("Erreur lors de la modification.");
+        }
+    }
+
+    // NOUVELLE FONCTION : Supprimer toute la session
+    async function deleteEntireSession(sessionId, sessionData) {
+        try {
+            // 1. Supprimer les transactions associées (Nettoyage historique)
+            // On réutilise la logique de handleDelete pour chaque transaction visible
+            const rows = Array.from(detailsEncaissementsBody.querySelectorAll('tr'));
+            for (const row of rows) {
+                const docId = row.dataset.id;
+                // Copie simplifiée de la logique de suppression :
+                const docRef = db.collection("transactions").doc(docId);
+                const doc = await docRef.get();
+                if (doc.exists) {
+                    const data = doc.data();
+                    if (data.paymentHistory) {
+                        let newHistory;
+                        if (sessionData.transactionIds) {
+                            newHistory = data.paymentHistory.filter(p => p.sessionId !== sessionId);
+                        } else {
+                            const sDate = sessionData.date.split('T')[0];
+                            newHistory = data.paymentHistory.filter(p => !(p.date === sDate && p.saisiPar === sessionData.user));
+                        }
+                        // Recalcul
+                        let newAbj = 0, newPar = 0;
+                        newHistory.forEach(p => { newAbj += (p.montantAbidjan||0); newPar += (p.montantParis||0); });
+                        const newReste = (data.prix||0) - (newAbj + newPar);
+                        await docRef.update({ paymentHistory: newHistory, montantAbidjan: newAbj, montantParis: newPar, reste: newReste });
+                    }
+                }
+            }
+
+            // 2. Supprimer les dépenses associées (Si IDs disponibles)
+            if (sessionData.expenseIds && Array.isArray(sessionData.expenseIds)) {
+                for (const expId of sessionData.expenseIds) {
+                    await db.collection("expenses").doc(expId).update({ isDeleted: true });
+                }
+            }
+
+            // 3. Supprimer le log
+            await db.collection("audit_logs").doc(sessionId).delete();
+            
+            sessionDetailsEl.style.display = 'none';
+            noSelectionMsg.style.display = 'block';
+            alert("Session supprimée.");
+        } catch (e) {
+            console.error(e);
+            alert("Erreur lors de la suppression de la session.");
         }
     }
 
