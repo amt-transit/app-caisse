@@ -127,21 +127,21 @@ firebase.auth().onAuthStateChanged(async (user) => {
         if (navAdmin && userRole !== 'super_admin') navAdmin.style.display = 'none';
 
         if (userRole === 'saisie_full') {
+            if (navMagasinage) navMagasinage.style.display = 'inline';
             if (navDashboard) navDashboard.style.display = 'none';
             if (navBank) navBank.style.display = 'none';
             if (navArrivages) navArrivages.style.display = 'none';
-            if (navMagasinage) navMagasinage.style.display = 'none';
             if (navSalaire) navSalaire.style.display = 'none';
         }
 
         if (userRole === 'saisie_limited') {
+            if (navMagasinage) navMagasinage.style.display = 'inline';
             if (navDashboard) navDashboard.style.display = 'none';
             if (navExpenses) navExpenses.style.display = 'none';
             if (navOtherIncome) navOtherIncome.style.display = 'none';
             if (navBank) navBank.style.display = 'none';
             if (navArrivages) navArrivages.style.display = 'none';
             if (navClients) navClients.style.display = 'none';
-            if (navMagasinage) navMagasinage.style.display = 'none';
             if (navConfirmation) navConfirmation.style.display = 'none';
             if (navSalaire) navSalaire.style.display = 'none';
         }
