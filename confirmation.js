@@ -235,21 +235,30 @@ document.addEventListener('DOMContentLoaded', () => {
             // Pour être précis, il faudrait regarder paymentHistory.
             
             let payeCeJour = 0;
+            let sessionModes = []; // Stockage des modes de paiement de cette session
+
             if (t.paymentHistory) {
                 t.paymentHistory.forEach(p => {
+                    let isMatch = false;
                     // CAS 1 : Nouveau système (Match par ID de session)
                     if (isNewSystemSession) {
-                        if (p.sessionId === logId) {
-                            payeCeJour += (p.montantAbidjan || 0) + (p.montantParis || 0);
-                            if (p.modePaiement === 'Espèce') sumEsp += (p.montantAbidjan || 0);
-                        }
+                        if (p.sessionId === logId) isMatch = true;
                     } 
                     // CAS 2 : Ancien système (Match par Date + User)
                     else {
-                        if (p.date === dateOnly && p.saisiPar === logData.user) {
-                            payeCeJour += (p.montantAbidjan || 0) + (p.montantParis || 0);
-                            if (p.modePaiement === 'Espèce') sumEsp += (p.montantAbidjan || 0);
-                        }
+                        if (p.date === dateOnly && p.saisiPar === logData.user) isMatch = true;
+                    }
+
+                    if (isMatch) {
+                        const montantP = (p.montantAbidjan || 0) + (p.montantParis || 0);
+                        payeCeJour += montantP;
+                        if (p.modePaiement === 'Espèce') sumEsp += (p.montantAbidjan || 0);
+                        
+                        sessionModes.push({
+                            mode: p.modePaiement || 'Espèce',
+                            info: p.agentMobileMoney || '',
+                            montant: montantP
+                        });
                     }
                 });
             } else {
@@ -260,6 +269,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (!isNewSystemSession) {
                     payeCeJour = (t.montantAbidjan || 0) + (t.montantParis || 0);
                     if (t.modePaiement === 'Espèce') sumEsp += (t.montantAbidjan || 0);
+                    
+                    sessionModes.push({
+                        mode: t.modePaiement || 'Espèce',
+                        info: t.agentMobileMoney || '',
+                        montant: payeCeJour
+                    });
                 }
             }
 
@@ -287,9 +302,22 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 const agentsDisplay = t.agent ? `<span style="font-size:0.85em; color:#64748b;">${t.agent}</span>` : '-';
 
+                // CONSTRUCTION AFFICHAGE MODE (Gestion Fractionné)
+                let modeDisplay = '';
+                if (sessionModes.length > 0) {
+                    modeDisplay = sessionModes.map(m => {
+                        const infoStr = m.info ? ` <span style="font-size:0.85em; color:#666;">(${m.info})</span>` : '';
+                        // Si plusieurs modes, on affiche le montant spécifique
+                        const amountStr = sessionModes.length > 1 ? ` : <b>${formatCFA(m.montant)}</b>` : '';
+                        return `<div style="white-space:nowrap;">${m.mode}${infoStr}${amountStr}</div>`;
+                    }).join('');
+                } else {
+                    modeDisplay = t.modePaiement;
+                }
+
                 detailsEncaissementsBody.innerHTML += `
                     <tr data-id="${doc.id}">
-                        <td>${t.reference}</td><td>${t.nom}</td><td>${t.conteneur}</td><td>${agentsDisplay}</td><td>${magasinageDisplay}</td><td>${formatCFA(t.prix)}</td><td style="font-weight:bold;">${formatCFA(payeCeJour)}</td><td>${t.modePaiement}</td><td class="${resteClass}">${formatCFA(t.reste)}</td>
+                        <td>${t.reference}</td><td>${t.nom}</td><td>${t.conteneur}</td><td>${agentsDisplay}</td><td>${magasinageDisplay}</td><td>${formatCFA(t.prix)}</td><td style="font-weight:bold;">${formatCFA(payeCeJour)}</td><td>${modeDisplay}</td><td class="${resteClass}">${formatCFA(t.reste)}</td>
                         <td>${actionButtons}</td>
                     </tr>
                 `;
