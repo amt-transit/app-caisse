@@ -140,6 +140,7 @@ h2 { text-align: center; color: var(--text-main); margin: 15px 0 10px 0; font-si
     grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
     gap: 10px;
     margin-bottom: 15px;
+    align-items: flex-end; /* Aligne les champs en bas pour compenser les labels Paris/Abidjan */
 }
 input, select {
     width: 100%; 

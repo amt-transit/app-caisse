@@ -28,6 +28,31 @@ document.addEventListener('DOMContentLoaded', async () => {
     const montantAbidjanInput = document.getElementById('montantAbidjan');
     const agentMobileMoneyInput = document.getElementById('agentMobileMoney');
     const modePaiementInput = document.getElementById('modePaiement');
+
+    // --- AJOUT LABELS VISUELS (Paris/Abidjan) ---
+    [
+        { input: montantParisInput, label: "PARIS", color: "#1e40af" },
+        { input: montantAbidjanInput, label: "ABIDJAN", color: "#9a3412" }
+    ].forEach(item => {
+        if (item.input && item.input.parentNode) {
+            const wrapper = document.createElement('div');
+            wrapper.style.display = 'flex';
+            wrapper.style.flexDirection = 'column';
+            wrapper.style.width = '100%'; // Force la largeur pour l'alignement
+            
+            const label = document.createElement('span');
+            label.textContent = item.label;
+            label.style.fontSize = '12px';
+            label.style.fontWeight = 'bold';
+            label.style.marginBottom = '4px';
+            label.style.color = item.color;
+            
+            item.input.parentNode.insertBefore(wrapper, item.input);
+            wrapper.appendChild(label);
+            wrapper.appendChild(item.input);
+        }
+    });
+
     const resteInput = document.getElementById('reste');
     const communeInput = document.getElementById('commune');
     // NOUVEAU : Inputs Ajustement (Réduction / Augmentation)
@@ -495,6 +520,23 @@ document.addEventListener('DOMContentLoaded', async () => {
         
         let waMsg = `*BILAN JOURNÉE DU ${dateStr}*\n`;
         waMsg += `👤 *${currentUserName}*\n\n`;
+        
+        // AJOUT : Détails complets des opérations
+        if (dailyTransactions.length > 0) {
+            waMsg += `📦 *DÉTAIL OPÉRATIONS :*\n`;
+            dailyTransactions.forEach(t => {
+                const mtAbj = t.montantAbidjan > 0 ? formatCFA(t.montantAbidjan) : "0 F";
+                const mtPar = t.montantParis > 0 ? ` (+ Paris: ${formatCFA(t.montantParis)})` : "";
+                const commune = t.commune ? `📍 ${t.commune}` : "";
+                const info = t.agentMobileMoney ? `ℹ️ ${t.agentMobileMoney}` : "";
+                
+                waMsg += `🔹 *${t.reference}* ${t.nom ? `(${t.nom})` : ''}\n`;
+                if (commune) waMsg += `   ${commune}\n`;
+                waMsg += `   💰 ${mtAbj} [${t.modePaiement}]${mtPar} ${info}\n`;
+            });
+            waMsg += `\n`;
+        }
+
         waMsg += `💰 *TOTAL ESPÈCES :* ${formatCFA(totalEspAbidjan)}\n`;
         
         if (dailyExpenses.length > 0) {
