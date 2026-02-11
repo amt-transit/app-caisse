@@ -397,7 +397,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 pendingChecks.forEach(chk => {
                     const tr = document.createElement('tr');
                     tr.innerHTML = `
-                        <td><input type="checkbox" class="check-select" data-amount="${chk.montant}" data-docid="${chk.docId}" data-index="${chk.index}"></td>
+                        <td><input type="checkbox" class="check-select" data-amount="${chk.montant}" data-docid="${chk.docId}" data-index="${chk.index}" data-bank="${chk.info || ''}"></td>
                         <td>${chk.date}</td>
                         <td>
                             <strong>${chk.reference}</strong><br>
@@ -427,7 +427,8 @@ document.addEventListener('DOMContentLoaded', () => {
             selectedChecks.push({
                 docId: box.dataset.docid,
                 index: parseInt(box.dataset.index),
-                amount: amt
+                amount: amt,
+                bank: box.dataset.bank
             });
         });
         totalDepositAmountEl.textContent = formatCFA(total);
@@ -446,6 +447,11 @@ document.addEventListener('DOMContentLoaded', () => {
             // A. Créer l'entrée "Dépôt Banque"
             const bankRef = bankCollection.doc();
             let totalAmount = 0;
+            
+            // Détermination de la banque (Si tous les chèques sont de la même banque, on l'affiche)
+            const uniqueBanks = [...new Set(selectedChecks.map(c => c.bank).filter(b => b))];
+            const depositBank = uniqueBanks.length === 1 ? uniqueBanks[0] : (uniqueBanks.length > 1 ? "Multi-Banques" : "");
+
             selectedChecks.forEach(c => totalAmount += c.amount);
             
             batch.set(bankRef, {
@@ -453,6 +459,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 description: `Remise de ${selectedChecks.length} chèques (${currentUserName})`, // Auteur ajouté ici aussi
                 montant: totalAmount,
                 type: 'Depot',
+                bank: depositBank,
                 isDeleted: false,
                 source: 'Remise Chèques',
                 checks: selectedChecks // Sauvegarde des chèques pour pouvoir annuler plus tard

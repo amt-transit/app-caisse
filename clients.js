@@ -46,7 +46,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (thead) {
             // On ajoute Destinataire et Adresse
             thead.innerHTML = `
-                <th>Rang</th><th>Client (Expéditeur)</th><th>Dernier Destinataire</th><th>Adresse</th><th>Envois</th><th>C.A. Total</th>
+                <th>Rang</th><th>Client (Destinataire)</th><th>Dernier Expéditeur</th><th>Adresse</th><th>Envois</th><th>C.A. Total</th>
             `;
         }
     }
@@ -81,8 +81,12 @@ document.addEventListener('DOMContentLoaded', async () => {
         allTransactionsCache = transSnap.docs.map(doc => doc.data());
 
         // Remplir la liste des noms
-        allParisManifestCache.forEach(d => { if(d.nomClient) allClientNames.add(d.nomClient.trim()); });
-        allTransactionsCache.forEach(d => { if(d.nom) allClientNames.add(d.nom.trim()); });
+        // MODIFICATION : On indexe les Destinataires en priorité
+        allParisManifestCache.forEach(d => { if(d.nomDestinataire) allClientNames.add(d.nomDestinataire.trim()); });
+        allTransactionsCache.forEach(d => { 
+            if(d.nomDestinataire) allClientNames.add(d.nomDestinataire.trim());
+            else if(d.nom) allClientNames.add(d.nom.trim()); 
+        });
 
         const sortedNames = Array.from(allClientNames).sort();
         clientsList.innerHTML = '';
@@ -126,14 +130,15 @@ document.addEventListener('DOMContentLoaded', async () => {
         allTransactionsCache.forEach(data => {
             if (!isDateInPeriod(data.date)) return;
 
-            const name = (data.nom || "Client Inconnu").trim().toUpperCase();
+            // MODIFICATION : Groupement par Destinataire (ou Nom si Destinataire manquant)
+            const name = (data.nomDestinataire || data.nom || "Client Inconnu").trim().toUpperCase();
             if (name === "CLIENT INCONNU" || name === "") return;
 
-            if (!clientStats[name]) clientStats[name] = { count: 0, total: 0, nameStr: data.nom, lastDest: '-', lastAddr: '-' }; 
+            if (!clientStats[name]) clientStats[name] = { count: 0, total: 0, nameStr: name, lastSender: '-', lastAddr: '-' }; 
             
             // On récupère l'adresse si dispo dans la transaction (synchro)
             if (data.adresseDestinataire) clientStats[name].lastAddr = data.adresseDestinataire;
-            if (data.nomDestinataire) clientStats[name].lastDest = data.nomDestinataire;
+            // Pas d'info expéditeur fiable dans transactions (Abidjan), on laisse '-'
             
             clientStats[name].total += (data.prix || 0);
             clientStats[name].count++;
@@ -143,13 +148,14 @@ document.addEventListener('DOMContentLoaded', async () => {
         allParisManifestCache.forEach(data => {
             if (!isDateInPeriod(data.dateParis)) return;
 
-            const name = (data.nomClient || "Client Inconnu").trim().toUpperCase();
+            // MODIFICATION : Groupement par Destinataire
+            const name = (data.nomDestinataire || "Client Inconnu").trim().toUpperCase();
             if (name === "CLIENT INCONNU" || name === "") return;
 
-            if (!clientStats[name]) clientStats[name] = { count: 0, total: 0, nameStr: data.nomClient, lastDest: '-', lastAddr: '-' };
+            if (!clientStats[name]) clientStats[name] = { count: 0, total: 0, nameStr: name, lastSender: '-', lastAddr: '-' };
 
             // Paris Manifeste est plus riche en infos destinataire
-            if (data.nomDestinataire) clientStats[name].lastDest = data.nomDestinataire;
+            if (data.nomClient) clientStats[name].lastSender = data.nomClient; // On stocke l'expéditeur ici
             if (data.adresseDestinataire) clientStats[name].lastAddr = data.adresseDestinataire;
 
             clientStats[name].total += (data.prixCFA || 0);
@@ -186,7 +192,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             row.innerHTML = `
                 <td><b>${rank}</b></td>
                 <td>${client.nameStr}</td>
-                <td style="font-size:0.9em; color:#555;">${client.lastDest}</td>
+                <td style="font-size:0.9em; color:#555;">${client.lastSender}</td>
                 <td style="font-size:0.9em; color:#555;">${client.lastAddr}</td>
                 <td><span class="tag" style="background:#17a2b8;">${client.count} envois</span></td>
                 <td>${formatCFA(client.total)}</td>
@@ -233,29 +239,37 @@ document.addEventListener('DOMContentLoaded', async () => {
         profileName.textContent = "Chargement de " + clientName + "...";
 
         // On peut filtrer nos caches locaux c'est plus rapide !
-        const parisData = allParisManifestCache.filter(d => (d.nomClient||"").trim().toUpperCase() === clientName.toUpperCase());
-        const abidjanData = allTransactionsCache.filter(d => (d.nom||"").trim().toUpperCase() === clientName.toUpperCase());
+        // MODIFICATION : Filtre sur le Destinataire
+        const parisData = allParisManifestCache.filter(d => (d.nomDestinataire||"").trim().toUpperCase() === clientName.toUpperCase());
+        const abidjanData = allTransactionsCache.filter(d => (d.nomDestinataire||d.nom||"").trim().toUpperCase() === clientName.toUpperCase());
 
         let totalSpent = 0;
         let shipments = [];
-        let recipientsMap = {}; 
+        let sendersMap = {}; // On analyse les expéditeurs maintenant
 
         parisData.forEach(item => {
             totalSpent += (item.prixCFA || 0);
-            const dest = item.nomDestinataire || "Non spécifié";
-            const addr = item.adresseDestinataire || "";
-            if (!recipientsMap[dest]) recipientsMap[dest] = { count: 0, address: addr };
-            recipientsMap[dest].count++;
-            if (addr && !recipientsMap[dest].address) recipientsMap[dest].address = addr;
-            shipments.push({ date: item.dateParis, ref: item.reference, type: item.typeColis || "Colis", dest: dest, source: "En route (Paris)" });
+            const sender = item.nomClient || "Non spécifié";
+            
+            if (!sendersMap[sender]) sendersMap[sender] = { count: 0 };
+            sendersMap[sender].count++;
+            
+            shipments.push({ date: item.dateParis, ref: item.reference, type: item.typeColis || "Colis", otherParty: sender, source: "En route (Paris)" });
         });
 
         abidjanData.forEach(item => {
             if (!shipments.find(s => s.ref === item.reference)) {
                 totalSpent += (item.prix || 0);
-                shipments.push({ date: item.date, ref: item.reference, type: "Colis", dest: "-", source: "Reçu (Abidjan)" });
+                shipments.push({ date: item.date, ref: item.reference, type: "Colis", otherParty: "-", source: "Reçu (Abidjan)" });
             }
         });
+
+        // Mise à jour des titres de colonnes pour la fiche individuelle
+        const recipientsTable = recipientsTableBody.closest('table');
+        if(recipientsTable) recipientsTable.querySelector('thead tr').innerHTML = '<th>Expéditeur</th><th>-</th><th>Fréquence</th>';
+        
+        const shipmentsTable = shipmentsTableBody.closest('table');
+        if(shipmentsTable) shipmentsTable.querySelector('thead tr').innerHTML = '<th>Date</th><th>Ref</th><th>Type</th><th>Expéditeur</th>';
 
         shipments.sort((a, b) => new Date(b.date) - new Date(a.date));
 
@@ -264,18 +278,18 @@ document.addEventListener('DOMContentLoaded', async () => {
         profileShipmentCount.textContent = shipments.length;
         profileLastDate.textContent = shipments.length > 0 ? shipments[0].date : "-";
 
-        const sortedRecipients = Object.entries(recipientsMap).map(([name, data]) => ({ name, ...data })).sort((a, b) => b.count - a.count);
+        const sortedSenders = Object.entries(sendersMap).map(([name, data]) => ({ name, ...data })).sort((a, b) => b.count - a.count);
 
         recipientsTableBody.innerHTML = '';
-        if (sortedRecipients.length === 0) recipientsTableBody.innerHTML = '<tr><td colspan="3">Aucun destinataire trouvé.</td></tr>';
-        sortedRecipients.forEach(r => {
-            if (r.name === "Non spécifié" && sortedRecipients.length > 1) return;
-            recipientsTableBody.innerHTML += `<tr><td><b>${r.name}</b></td><td style="font-size:0.9em; color:#666;">${r.address || '-'}</td><td><span class="tag" style="background:#28a745;">${r.count} fois</span></td></tr>`;
+        if (sortedSenders.length === 0) recipientsTableBody.innerHTML = '<tr><td colspan="3">Aucun expéditeur identifié (Données Paris uniquement).</td></tr>';
+        sortedSenders.forEach(r => {
+            if (r.name === "Non spécifié" && sortedSenders.length > 1) return;
+            recipientsTableBody.innerHTML += `<tr><td><b>${r.name}</b></td><td>-</td><td><span class="tag" style="background:#28a745;">${r.count} fois</span></td></tr>`;
         });
 
         shipmentsTableBody.innerHTML = '';
         shipments.forEach(s => {
-            shipmentsTableBody.innerHTML += `<tr><td>${s.date}</td><td>${s.ref}</td><td>${s.type}</td><td>${s.dest}</td></tr>`;
+            shipmentsTableBody.innerHTML += `<tr><td>${s.date}</td><td>${s.ref}</td><td>${s.type}</td><td>${s.otherParty}</td></tr>`;
         });
     }
 

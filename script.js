@@ -488,7 +488,28 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
 
         await batch.commit();
-        alert("Journée enregistrée !");
+        
+        // --- WHATSAPP FEATURE ---
+        const rawDate = document.getElementById('date').value;
+        const dateStr = rawDate ? rawDate.split('-').reverse().join('/') : new Date().toLocaleDateString('fr-FR');
+        
+        let waMsg = `*BILAN JOURNÉE DU ${dateStr}*\n`;
+        waMsg += `👤 *${currentUserName}*\n\n`;
+        waMsg += `💰 *TOTAL ESPÈCES :* ${formatCFA(totalEspAbidjan)}\n`;
+        
+        if (dailyExpenses.length > 0) {
+            waMsg += `\n📉 *DÉPENSES (${formatCFA(totalDep)}) :*\n`;
+            dailyExpenses.forEach(e => {
+                waMsg += `- ${e.description} : ${formatCFA(e.montant)}\n`;
+            });
+        }
+        
+        const net = totalEspAbidjan - totalDep;
+        waMsg += `\n💵 *NET À VERSER :* ${formatCFA(net)}`;
+
+        if (confirm("Journée enregistrée !\n\nVoulez-vous envoyer le bilan par WhatsApp ?")) {
+            window.open(`https://wa.me/?text=${encodeURIComponent(waMsg)}`, '_blank');
+        }
         
         dailyTransactions = [];
         dailyExpenses = [];
