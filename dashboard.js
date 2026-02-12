@@ -94,7 +94,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (validPayments.length < t.paymentHistory.length) {
                 const newParis = validPayments.reduce((sum, p) => sum + (p.montantParis || 0), 0);
                 const newAbidjan = validPayments.reduce((sum, p) => sum + (p.montantAbidjan || 0), 0);
-                const tClean = { ...t, paymentHistory: validPayments, montantParis: newParis, montantAbidjan: newAbidjan, reste: (t.prix || 0) - (newParis + newAbidjan) };
+                const tClean = { ...t, paymentHistory: validPayments, montantParis: newParis, montantAbidjan: newAbidjan, reste: (newParis + newAbidjan) - (t.prix || 0) };
                 acc.push(tClean);
             } else {
                 acc.push(t);
@@ -125,7 +125,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         generateMonthlyExpenseSummary(filteredExpenses); 
         generateBankMovementSummary(filteredBankMovements);
         generateTopClientsSummary(filteredTransactions); 
-        generateUnpaidSummary(filteredTransactions);
+        generateUnpaidSummary(confirmedTransactions);
         generateAdjustmentSummary(filteredTransactions); // Liste Réductions/Augmentations
         generateAdvancedAnalytics(filteredTransactions, allTransactions); // Nouvelles analyses
         generateVisualCharts(confirmedTransactions, confirmedExpenses); // Graphiques (sur données confirmées uniquement)
@@ -551,7 +551,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 <td>${t.date}</td>
                 <td>${t.conteneur || '-'}</td>
                 <td><b>${t.reference}</b></td>
-                <td>${t.nom || '-'}</td>
+                <td>${t.nom || '-'}<br><small style="color:#666">${t.nomDestinataire || ''}</small></td>
                 <td>${formatCFA(t.prix)}</td>
                 <td>${formatCFA(paid)}</td>
                 <td class="reste-negatif" style="font-weight:bold;">${formatCFA(t.reste)}</td>
@@ -580,7 +580,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             const row = document.createElement('tr');
             row.innerHTML = `
                 <td>${t.date}</td>
-                <td>${t.nom || 'Client'}</td>
+                <td>${t.nom || 'Client'}<br><small style="color:#666">${t.nomDestinataire || ''}</small></td>
                 <td>${t.reference}</td>
                 <td><span class="tag" style="background:${color};">${icon} ${label}</span></td>
                 <td style="font-weight:bold; color:${color}">${formatCFA(t.adjustmentVal)}</td>
@@ -1005,7 +1005,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
                     row.innerHTML = `
                         <td>${item.date}</td>
-                        <td>${item.nomDestinataire || '-'}</td>
+                        <td>${item.nom || '-'} <br><small style="color:#666">${item.nomDestinataire || '-'}</small></td>
                         <td>${item.reference || ''}</td>
                         <td>${formatCFA(item.prix)}</td>
                         <td>${formatCFA(item.montantAbidjan)}</td>
