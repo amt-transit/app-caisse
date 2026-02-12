@@ -77,6 +77,15 @@ firebase.auth().onAuthStateChanged(async (user) => {
             return;
         }
 
+        // Protection page Points
+        if (currentPage.includes('points.html')) {
+            if (userRole !== 'admin' && userRole !== 'super_admin') {
+                alert("Accès refusé : Réservé aux Administrateurs.");
+                window.location.href = 'index.html';
+                return;
+            }
+        }
+
         // ADMIN
         if (userRole === 'admin') {
             document.body.style.display = 'block';
@@ -122,8 +131,10 @@ firebase.auth().onAuthStateChanged(async (user) => {
         const navMagasinage = document.getElementById('nav-magasinage'); 
         const navConfirmation = document.getElementById('nav-confirmation');
         const navSalaire = document.getElementById('nav-salaire');
+        const navPoints = document.getElementById('nav-points');
 
         if (navAdmin && userRole !== 'super_admin') navAdmin.style.display = 'none';
+        if (navPoints && (userRole !== 'admin' && userRole !== 'super_admin')) navPoints.style.display = 'none';
 
         if (userRole === 'saisie_full') {
             if (navMagasinage) navMagasinage.style.display = 'inline';

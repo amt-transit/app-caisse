@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Points des Utilisateurs</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Comfortaa:wght@400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+    <link rel="icon" type="image/png" href="favicon.png">
+</head>
+<body style="display:none">
+    <header class="app-header">
+        <img src="LOGOAMT.png" alt="Logo" class="app-logo">
+        <h1>Points Utilisateurs</h1>
+        <button id="logoutBtn" style="position: absolute; right: 20px; padding: 8px 15px; cursor: pointer;">Déconnexion</button>
+    </header>
+
+    <nav class="navigation">
+        <a href="index.html">Saisie</a>
+        <a href="confirmation.html" id="nav-confirmation">Confirmation</a>
+        <a href="dashboard.html" id="nav-dashboard">Tableau de Bord</a>
+        <a href="history.html">Historique</a>
+        <a href="expenses.html" id="nav-expenses">Dépenses</a>
+        <a href="other-income.html" id="nav-other-income">Autres Entrées</a>
+        <a href="bank.html" id="nav-bank">Banque</a>
+        <a href="arrivages.html" id="nav-arrivages">Arrivages</a>
+        <a href="clients.html" id="nav-clients">Clients</a>
+        <a href="magasinage.html" id="nav-magasinage">Magasinage</a>
+        <a href="salaire.html" id="nav-salaire">Salaire</a>
+        <a href="points.html" id="nav-points" class="active">Points</a>
+        <a href="admin-panel.html" id="nav-admin" style="background-color: #6f42c1; color: white;">ADMIN</a>
+    </nav>
+
+    <div class="dashboard-container">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+            <h2>État des Caisses par Utilisateur (Historique)</h2>
+            <div class="filter-fields">
+                <label>Période :</label>
+                <input type="date" id="startDate">
+                <input type="date" id="endDate">
+            </div>
+        </div>
+
+        <table id="pointsTable">
+            <thead>
+                <tr>
+                    <th>Utilisateur</th>
+                    <th>Entrées (Encaissements)</th>
+                    <th>Sorties (Dépenses)</th>
+                    <th>Solde Théorique</th>
+                </tr>
+            </thead>
+            <tbody id="pointsTableBody"></tbody>
+        </table>
+    </div>
+
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+    <script src="firebase-init.js"></script>
+    <script src="auth-guard.js"></script>
+    <script src="points.js"></script>
+</body>
+</html>
