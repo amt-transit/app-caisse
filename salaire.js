@@ -57,6 +57,7 @@ const db = getFirestore(app);
         const selectedBudgetMonth = ref(new Date().toISOString().slice(0, 7));
         const selectedPaieMonth = ref(new Date().toISOString().slice(0, 7));
         const selectedTontineMonth = ref(new Date().toISOString().slice(0, 7));
+        const selectedTontinePeriod = ref("15");
         const selectedHistoryMonth = ref(null);
 
         // --- CHARGEMENT DES DONNÉES ---
@@ -119,16 +120,19 @@ const db = getFirestore(app);
         const calculateTontineDeduc = (emp) => {
             const count = parseInt(emp.tontineCount || (emp.isTontine ? 1 : 0));
             if (count <= 0) return 0;
-            // On ne propose la tontine que pour le SOLDE (30), pas l'acompte
-            if (paiePeriod.value === '15') return 0;
+            
+            const target = count * globalTontineAmount.value;
+            const currentP = paiePeriod.value; // '15' ou '30'
 
-            const summary = getMonthlySummary(emp, selectedPaieMonth.value);
-            const totalDue = count * globalTontineAmount.value;
+            // On vérifie si la tontine a été payée pour CETTE période spécifique (15 ou 30)
+            const paid = salaryHistory.value.filter(p => 
+                p.employeeId === emp.id && 
+                p.month === selectedPaieMonth.value && 
+                (p.period === currentP || (p.type === 'Acompte (15)' && currentP === '15') || (p.type === 'Solde (Fin)' && currentP === '30') || (p.type === 'Cotisation Tontine' && p.period === currentP))
+            ).reduce((sum, p) => sum + (p.tontine || 0), 0);
 
-            // Si on a déjà payé au moins le montant de la tontine ce mois-ci en tontine, c'est bon
-            if (summary.totalTontinePaid >= totalDue) return 0;
-
-            return totalDue - summary.totalTontinePaid;
+            // Si payé pour cette quinzaine, reste = 0, sinon montant cible
+            return Math.max(0, target - paid);
         };
 
         // 4. Calcul Prêt (Plafond 10k mais intelligent)
@@ -196,6 +200,10 @@ const db = getFirestore(app);
             const suggestedLoan = calculateLoanDeduc(emp);
             const tontineAmount = calculateTontineDeduc(emp);
 
+            // Calcul du montant théorique total de la tontine pour affichage
+            const count = parseInt(emp.tontineCount || (emp.isTontine ? 1 : 0));
+            const tontineTotal = count * (parseFloat(globalTontineAmount.value) || 0);
+
             payForm.value = {
                 id: emp.id, 
                 name: emp.name, 
@@ -204,6 +212,7 @@ const db = getFirestore(app);
                 loan: suggestedLoan, 
                 maxLoan: emp.loan || 0,
                 tontine: tontineAmount,
+                tontineTotal: tontineTotal,
                 absence: 0,
                 net: baseAmount - suggestedLoan - tontineAmount
             };
@@ -242,6 +251,7 @@ const db = getFirestore(app);
                     month: payForm.value.month,
                     type: paiePeriod.value === '15' ? 'Acompte (15)' : 'Solde (Fin)',
                     base: payForm.value.base, 
+                    period: paiePeriod.value,
                     loan: payForm.value.loan, 
                     tontine: payForm.value.tontine, 
                     absence: payForm.value.absence || 0,
@@ -389,8 +399,9 @@ const db = getFirestore(app);
         });
         const hasPaidTontine = (empId, shareIndex = 1) => {
             const currentMonth = selectedTontineMonth.value;
+            const currentPeriod = selectedTontinePeriod.value;
             const totalPaid = salaryHistory.value
-                .filter(p => p.employeeId === empId && p.month === currentMonth)
+                .filter(p => p.employeeId === empId && p.month === currentMonth && p.period === currentPeriod)
                 .reduce((sum, p) => sum + (parseFloat(p.tontine) || 0), 0);
             return totalPaid >= (shareIndex * (parseFloat(globalTontineAmount.value) || 0));
         };
@@ -403,8 +414,9 @@ const db = getFirestore(app);
 
         const getTontinePaidAmount = (empId) => {
             const currentMonth = selectedTontineMonth.value;
+            const currentPeriod = selectedTontinePeriod.value;
             return salaryHistory.value
-                .filter(p => p.employeeId === empId && p.month === currentMonth)
+                .filter(p => p.employeeId === empId && p.month === currentMonth && p.period === currentPeriod)
                 .reduce((sum, p) => sum + (parseFloat(p.tontine) || 0), 0);
         };
 
@@ -421,6 +433,7 @@ const db = getFirestore(app);
                     employeeId: emp.id, 
                     employeeName: emp.name, 
                     month: currentMonth,
+                    period: selectedTontinePeriod.value,
                     type: 'Cotisation Tontine',
                     base: 0, 
                     loan: 0, 
@@ -434,12 +447,28 @@ const db = getFirestore(app);
         const tontineBeneficiaries = computed(() => {
             return salaryHistory.value.filter(p => 
                 p.month === selectedTontineMonth.value && 
+                p.period === selectedTontinePeriod.value &&
                 p.type === 'Gain Tontine'
             );
         });
 
+        const hasReceivedTontine = (emp) => {
+            const wins = salaryHistory.value.filter(p => p.employeeId === emp.id && p.type === 'Gain Tontine').length;
+            const allowed = parseInt(emp.tontineCount || (emp.isTontine ? 1 : 0));
+            return wins >= allowed;
+        };
+
         const markTontineBeneficiary = async (emp) => {
             if(!isSuperAdmin.value) return;
+            
+            // Vérification : Un participant ne peut gagner qu'une fois par part (main)
+            const wins = salaryHistory.value.filter(p => p.employeeId === emp.id && p.type === 'Gain Tontine').length;
+            const allowed = parseInt(emp.tontineCount || (emp.isTontine ? 1 : 0));
+            
+            if (wins >= allowed) {
+                return alert(`Impossible : Cet employé a déjà récupéré la tontine ${wins} fois (Nombre de parts : ${allowed}).`);
+            }
+
             if (!confirm(`Confirmer que ${emp.name} récupère la tontine du mois (${selectedTontineMonth.value}) ?`)) return;
             
             const totalShares = employeesList.value.reduce((sum, e) => sum + (parseInt(e.tontineCount || (e.isTontine ? 1 : 0))), 0);
@@ -452,7 +481,7 @@ const db = getFirestore(app);
 
             try {
                 await addDoc(collection(db, "salary_payments"), {
-                    employeeId: emp.id, employeeName: emp.name, month: selectedTontineMonth.value,
+                    employeeId: emp.id, employeeName: emp.name, month: selectedTontineMonth.value, period: selectedTontinePeriod.value,
                     type: 'Gain Tontine', base: 0, loan: 0, tontine: 0, tontineGain: amount, net: 0, timestamp: Timestamp.now()
                 });
             } catch(e) { alert("Erreur: " + e.message); }
@@ -596,8 +625,8 @@ const db = getFirestore(app);
             saveNewEmployee, updateEmployee, deleteEmployee, openEditEmployee, openIndividualHistory, selectedBudgetMonth, cancelTontine,
             openPayModal, confirmSalaryPayment, deleteSalaryPayment, recalcNet, updateBaseFromNet, hasPaidTontine, getTontinePaidAmount, markTontinePayment, tontineMembers, globalTontineAmount, saveGlobalTontine, selectedTontineMonth, tontinePot,
             calculateBase, calculateLoanDeduc, calculateTontineDeduc, calculateNet, exportSalaryHistoryPDF, paieTotals, employeesTotals,
-            saveSalaryFund, deleteSalaryFund, salaryStats,
-            tontineBeneficiaries, markTontineBeneficiary, deleteTontineBeneficiary
+            saveSalaryFund, deleteSalaryFund, salaryStats, selectedTontinePeriod,
+            tontineBeneficiaries, markTontineBeneficiary, deleteTontineBeneficiary, hasReceivedTontine
         };
     }
  }).mount('#app');

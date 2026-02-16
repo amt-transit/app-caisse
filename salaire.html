@@ -157,7 +157,7 @@
                                     <td class="text-right text-orange-500">
                                         <div v-if="(emp.tontineCount || (emp.isTontine ? 1 : 0)) > 0">
                                             {{ formatMoney(calculateTontineDeduc(emp)) }}
-                                            <div v-if="calculateTontineDeduc(emp) === 0 && paiePeriod === '30'" class="text-[9px] text-green-600 font-bold bg-green-50 rounded px-1 inline-block">Déjà Payé</div>
+                                            <div v-if="calculateTontineDeduc(emp) === 0" class="text-[9px] text-green-600 font-bold bg-green-50 rounded px-1 inline-block">Déjà Payé</div>
                                         </div>
                                         <span v-else class="text-gray-300">-</span>
                                     </td>
@@ -291,9 +291,15 @@
                         </div>
 
                     </div>
-                    <div class="flex justify-between items-center mb-4">
-                        <h2 class="font-bold text-gray-700">Suivi Tontine</h2>
-                        <input type="month" v-model="selectedTontineMonth" class="border border-indigo-300 rounded p-1 font-bold text-indigo-700 bg-indigo-50 text-xs">
+                    <div class="flex justify-between items-center mb-4 flex-wrap gap-2">
+                        <h2 class="font-bold text-gray-700">Suivi Tontine (Bimensuel)</h2>
+                        <div class="flex gap-2">
+                            <input type="month" v-model="selectedTontineMonth" class="border border-indigo-300 rounded p-1 font-bold text-indigo-700 bg-indigo-50 text-xs">
+                            <select v-model="selectedTontinePeriod" class="border border-indigo-300 rounded p-1 font-bold text-indigo-700 bg-indigo-50 text-xs">
+                                <option value="15">15 du mois</option>
+                                <option value="30">Fin du mois</option>
+                            </select>
+                        </div>
                     </div>
                     
                     <div class="mb-6 p-4 bg-green-50 border border-green-100 rounded-lg">
@@ -311,7 +317,13 @@
                         <div v-for="emp in tontineMembers" :key="emp.uniqueId" class="tontine-card" :class="{'winner': hasPaidTontine(emp.id, emp.shareIndex)}">
                             <div class="text-3xl mb-2" :class="hasPaidTontine(emp.id, emp.shareIndex) ? 'text-green-500' : 'text-gray-300'"><i class="fa-solid fa-user-circle"></i></div><h3 class="font-bold text-sm">{{ emp.name }}</h3><div class="mt-2 text-[10px] font-bold px-2 py-1 rounded inline-block" :class="hasPaidTontine(emp.id, emp.shareIndex) ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'">{{ hasPaidTontine(emp.id, emp.shareIndex) ? formatMoney(getTontinePaidAmount(emp.id)) : 'NON PAYÉ' }}</div>
                             <button v-if="!hasPaidTontine(emp.id, emp.shareIndex) && isAdmin" @click="markTontinePayment(emp)" class="mt-2 block w-full bg-indigo-50 text-indigo-600 hover:bg-indigo-100 text-[10px] font-bold py-1 rounded border border-indigo-200 transition">Encaisser</button>
-                            <button v-if="isAdmin" @click="markTontineBeneficiary(emp)" class="mt-1 block w-full bg-orange-50 text-orange-600 hover:bg-orange-100 text-[10px] font-bold py-1 rounded border border-orange-200 transition"><i class="fa-solid fa-trophy mr-1"></i> Désigner Gagnant</button>
+                            <button v-if="isAdmin" 
+                                @click="!hasReceivedTontine(emp) && markTontineBeneficiary(emp)" 
+                                :disabled="hasReceivedTontine(emp)"
+                                :class="hasReceivedTontine(emp) ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed' : 'bg-orange-50 text-orange-600 hover:bg-orange-100 border-orange-200'"
+                                class="mt-1 block w-full text-[10px] font-bold py-1 rounded border transition">
+                                <i class="fa-solid fa-trophy mr-1"></i> {{ hasReceivedTontine(emp) ? 'Déjà Gagné' : 'Désigner Gagnant' }}
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -371,7 +383,7 @@
                     <div class="flex justify-between items-center mb-2 text-orange-500">
                         <div class="flex flex-col">
                             <span>- Tontine:</span>
-                            <span class="text-[9px] text-gray-400">Montant prévu</span>
+                            <span class="text-[9px] text-gray-400">Montant prévu <span v-if="payForm.tontineTotal">({{ formatMoney(payForm.tontineTotal) }})</span></span>
                         </div>
                         <input type="number" v-model.number="payForm.tontine" @input="recalcNet" class="w-24 text-right border border-orange-200 rounded p-1 text-orange-600 font-bold bg-white focus:ring-2 focus:ring-orange-200 outline-none">
                     </div>
