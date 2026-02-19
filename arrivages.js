@@ -287,8 +287,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // --- AFFICHAGE ABIDJAN ---
-    // On récupère tout (pour avoir le total)
-    transactionsCollection.where("isDeleted", "!=", true).orderBy("isDeleted").orderBy("date", "desc").onSnapshot(snapshot => {
+    // OPTIMISATION : On ne récupère que les 100 derniers pour éviter de faire ramer l'application
+    transactionsCollection.where("isDeleted", "!=", true).orderBy("isDeleted").orderBy("date", "desc").limit(100).onSnapshot(snapshot => {
         allArrivals = snapshot.docs.map(doc => doc.data());
         renderAbidjanTable();
     }, error => console.error(error));

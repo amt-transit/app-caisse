@@ -709,7 +709,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     function populateDatalist() {
-        transactionsCollection.where("isDeleted", "!=", true).limit(500).get().then(snapshot => {
+        // OPTIMISATION : On réduit la liste d'autocomplétion aux 200 derniers éléments
+        transactionsCollection.where("isDeleted", "!=", true).orderBy("isDeleted").orderBy("date", "desc").limit(200).get().then(snapshot => {
             const references = new Set(); 
             snapshot.forEach(doc => {
                 const d = doc.data();

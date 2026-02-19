@@ -46,7 +46,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (target.classList.contains('deleteBtn')) {
             if (confirm("Supprimer ?")) {
-                transactionsCollection.doc(target.dataset.id).update({ isDeleted: true })
+                transactionsCollection.doc(target.dataset.id).update({ isDeleted: true, deletedBy: currentUserName })
                 .then(() => {
                     row.remove(); // Mise à jour visuelle immédiate
                     logAudit("SUPPRESSION", `Transaction ${target.dataset.id} supprimée`, target.dataset.id);
@@ -122,8 +122,8 @@ document.addEventListener('DOMContentLoaded', () => {
             snapshot.forEach(doc => {
                 if (doc.data().status !== "VALIDATED") unconfirmedSessions.add(doc.id);
             });
-            // Si on a déjà chargé des données, on rafraîchit l'affichage
-            if (allTransactions.length > 0) applyFiltersAndRender();
+            // Si on a déjà chargé des données, on recharge tout pour avoir les derniers paiements à jour
+            if (allTransactions.length > 0) fetchHistory();
         });
 
     // --- BOUTON CHARGER PLUS (PAGINATION) ---
@@ -144,7 +144,7 @@ document.addEventListener('DOMContentLoaded', () => {
         
         let query = transactionsCollection;
 
-        const isFiltering = startDateInput.value || endDateInput.value || smartSearchInput.value || agentFilterInput.value;
+        const isFiltering = startDateInput.value || endDateInput.value || smartSearchInput.value || agentFilterInput.value || showDeletedCheckbox.checked;
 
         if (showDeletedCheckbox.checked) {
              query = transactionsCollection.where("isDeleted", "==", true).orderBy("isDeleted").orderBy("date", "desc");
@@ -271,8 +271,27 @@ document.addEventListener('DOMContentLoaded', () => {
         
         // NETTOYAGE DES TRANSACTIONS NON CONFIRMÉES
         const cleanTransactions = filteredTransactions.reduce((acc, t) => {
+            // FIX : Si on affiche les supprimés, on ne filtre pas (on veut tout voir)
+            if (showDeletedCheckbox.checked) {
+                if (t.deletedBy === currentUserName) {
+                    acc.push(t);
+                }
+                return acc;
+            }
+
             if (!t.paymentHistory || !Array.isArray(t.paymentHistory) || t.paymentHistory.length === 0) {
-                acc.push(t); return acc;
+                // MODIFICATION : On ne garde que les transactions ayant un montant Abidjan > 0 (Legacy)
+                // OU montantParis > 0 (Pour afficher aussi les paiements Paris seuls)
+                // Les Arrivages non payés (qui ne sont pas dans Confirmation) sont masqués.
+                // CAS 1 : PAS D'HISTORIQUE (Legacy ou Arrivages bruts)
+                // Si 'saisiPar' existe, c'est une donnée récente (Arrivages) qui n'a pas encore été validée en Caisse -> ON MASQUE
+                if (t.saisiPar) return acc;
+
+                // Si Legacy (pas de saisiPar), on affiche si montant > 0
+                if ((t.montantAbidjan || 0) > 0 || (t.montantParis || 0) > 0) {
+                    acc.push(t);
+                }
+                return acc;
             }
             // On garde seulement les paiements confirmés
             const validPayments = t.paymentHistory.filter(p => !p.sessionId || !unconfirmedSessions.has(p.sessionId));
@@ -386,7 +405,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
-    showDeletedCheckbox.addEventListener('change', fetchHistory); // Lui il recharge forcément
+    showDeletedCheckbox.addEventListener('change', () => fetchHistory(false)); // Lui il recharge forcément
     
     smartSearchInput.addEventListener('input', triggerFilter);
     agentFilterInput.addEventListener('change', triggerFilter);
