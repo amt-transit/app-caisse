@@ -59,14 +59,20 @@ document.addEventListener('DOMContentLoaded', () => {
     let allArrivals = [];
     let allParisManifest = [];
 
+    // --- CRÉATION DATALIST POUR AUTOCOMPLÉTION (Paris -> Abidjan) ---
+    const parisRefList = document.createElement('datalist');
+    parisRefList.id = 'parisRefList';
+    document.body.appendChild(parisRefList);
+    if(arrivalRef) arrivalRef.setAttribute('list', 'parisRefList');
+
     // ====================================================
     // PANNEAU 1 : LOGIQUE DE RÉCEPTION ABIDJAN
     // ====================================================
 
     // 1. Auto-remplissage du Nom
     if (arrivalRef) {
-        arrivalRef.addEventListener('blur', async () => { 
-            const refValue = arrivalRef.value.trim();
+        arrivalRef.addEventListener('change', async () => { 
+            const refValue = arrivalRef.value.trim().toUpperCase();
             if (!refValue) return;
 
             const checkTrans = await transactionsCollection.where("reference", "==", refValue).get();
@@ -76,13 +82,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 return;
             }
 
-            const query = await parisManifestCollection
-                                    .where("reference", "==", refValue)
-                                    .where("status", "==", "pending")
-                                    .get();
+            // Recherche dans le cache local de Paris (plus rapide)
+            const manifestData = allParisManifest.find(p => p.reference === refValue);
             
-            if (!query.empty) {
-                const manifestData = query.docs[0].data();
+            if (manifestData) {
                 arrivalNom.value = manifestData.nomDestinataire || manifestData.nomClient;
                 arrivalNom.style.backgroundColor = "#e0f7fa"; 
                 
@@ -109,7 +112,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const reste = (montantParis + montantAbidjan) - prix;
 
             const data = {
-                date: arrivalDate.value, reference: arrivalRef.value.trim(), nom: arrivalNom.value.trim(),
+                date: arrivalDate.value, reference: arrivalRef.value.trim().toUpperCase(), nom: arrivalNom.value.trim(),
                 conteneur: arrivalConteneur.value.trim().toUpperCase(), prix: prix,
                 montantParis: montantParis, montantAbidjan: montantAbidjan, reste: reste,
                 isDeleted: false, agent: '', agentMobileMoney: '', commune: '',
@@ -123,7 +126,10 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             
             const check = await transactionsCollection.where("reference", "==", data.reference).get();
-            if (!check.empty) return alert("Référence déjà existante.");
+            if (!check.empty) {
+                const existing = check.docs[0].data();
+                return alert(`Référence déjà existante (Conteneur: ${existing.conteneur}).`);
+            }
 
             transactionsCollection.add(data).then(() => {
                 alert("Colis ajouté !");
@@ -155,10 +161,11 @@ document.addEventListener('DOMContentLoaded', () => {
                     const batch = db.batch();
                     let count = 0; let log = "";
                     const refsToRemove = [];
+                    const processedRefs = new Set(); // Pour éviter les doublons dans le fichier lui-même
 
                     for (const row of rows) {
                         // NOUVELLE LOGIQUE CSV ABIDJAN : reference, restant, expéditeur, adresse, destinataire, description
-                        const ref = (row.reference || row.Reference || '').trim();
+                        const ref = (row.reference || row.Reference || '').trim().toUpperCase();
                         const restant = parseFloat(row.restant || row.Restant || 0);
                         let sender = (row['expéditeur'] || row['Expéditeur'] || row.nom || '').trim();
                         const addr = (row.adresse || row.Adresse || row.adresseDestinataire || '').trim();
@@ -167,6 +174,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
                         if (!ref) {
                             log += `\nIgnoré (Données): ${ref}`; continue;
+                        }
+
+                        if (processedRefs.has(ref)) {
+                            log += `\nDoublon interne (ignoré): ${ref}`; continue;
                         }
 
                         let prix = parseFloat(row.prix || 0);
@@ -200,7 +211,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         }
 
                         const check = await transactionsCollection.where("reference", "==", ref).get();
-                        if (!check.empty) { log += `\nDoublon: ${ref}`; continue; }
+                        if (!check.empty) { log += `\nDoublon (Base): ${ref}`; continue; }
 
                         // MODIFICATION : Le Destinataire est le client principal (nom)
                         const mainClientName = dest || sender;
@@ -215,6 +226,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             saisiPar: currentUserName // Auteur de l'import
                         });
                         refsToRemove.push(ref);
+                        processedRefs.add(ref);
                         count++;
                     }
                     if (count > 0) {
@@ -424,6 +436,7 @@ document.addEventListener('DOMContentLoaded', () => {
     parisManifestCollection.where("status", "==", "pending").orderBy("dateParis", "desc").onSnapshot(snap => {
         allParisManifest = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         renderParisTable();
+        updateParisDatalist();
     });
 
     function renderParisTable() {
@@ -449,17 +462,41 @@ document.addEventListener('DOMContentLoaded', () => {
                 <td>${i.nomClient}</td>
                 <td>${formatCFA(i.prixCFA)}</td>
                 <td>${i.nomDestinataire || '-'}</td>
-                <td><button class="deleteBtn" data-id="${i.id}">Annuler</button></td>
+                <td>
+                    <button class="receiveBtn" data-ref="${i.reference}" style="background:#10b981; color:white; border:none; padding:4px 8px; border-radius:4px; cursor:pointer; margin-right:5px;">Réceptionner</button>
+                    <button class="deleteBtn" data-id="${i.id}">Annuler</button>
+                </td>
             </tr>`;
         });
     }
     if(parisSearchInput) parisSearchInput.addEventListener('input', renderParisTable);
 
-    // Suppression
+    // Mise à jour de la liste d'autocomplétion
+    function updateParisDatalist() {
+        parisRefList.innerHTML = '';
+        allParisManifest.forEach(item => {
+            const opt = document.createElement('option');
+            opt.value = item.reference;
+            opt.label = `${item.nomClient} > ${item.nomDestinataire || '?'}`;
+            parisRefList.appendChild(opt);
+        });
+    }
+
+    // Actions Paris (Réceptionner / Supprimer)
     if (parisTableBody) {
         parisTableBody.addEventListener('click', (e) => {
             if (e.target.classList.contains('deleteBtn')) {
                 if(confirm("Supprimer du manifeste ?")) parisManifestCollection.doc(e.target.dataset.id).delete();
+            }
+            if (e.target.classList.contains('receiveBtn')) {
+                // Basculer vers l'onglet Abidjan et remplir
+                const ref = e.target.dataset.ref;
+                const tabAbidjan = document.querySelector('.sub-nav a[href="#panel-abidjan"]');
+                if(tabAbidjan) tabAbidjan.click();
+                
+                arrivalRef.value = ref;
+                arrivalRef.dispatchEvent(new Event('change')); // Déclenche l'auto-remplissage
+                arrivalConteneur.focus(); // Focus sur le champ manquant
             }
         });
     }
