@@ -324,6 +324,7 @@ td button.editBtn { background-color: #007bff; color: white; border: none; paddi
 
 /* --- MODALE --- */
 .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.8); backdrop-filter: blur(5px); }
+.modal.active { display: flex; align-items: center; justify-content: center; }
 .modal-content { 
     background: #fff; /* Fond blanc Light Mode */
     border: none;
@@ -591,7 +592,7 @@ body.login-page {
 
 /* Onglets spécifiques Livraison */
 .delivery-tabs { display: flex; background: white; padding: 0 10px; border-bottom: 1px solid #e0e0e0; margin-bottom: 15px; gap: 5px; }
-.tab-btn { padding: 10px 20px; border: none; background: none; font-size: 13px; font-weight: 600; color: #666; cursor: pointer; border-bottom: 3px solid transparent; transition: all 0.2s; }
+.tab-btn { padding: 10px 20px; border: none; background: none; font-size: 13px; font-weight: 600; color: #666; cursor: pointer; border-bottom: 3px solid transparent; transition: all 0.2s; text-decoration: none; }
 .tab-btn:hover { background: #f8fafc; color: var(--primary); }
 .tab-btn.active { color: var(--primary); border-bottom-color: var(--primary); background: #f1f5f9; }
 
@@ -612,6 +613,8 @@ body.login-page {
 .status-attente { background: #fff3cd; color: #856404; }
 .status-en-cours { background: #cce5ff; color: #004085; }
 .status-livre { background: #d4edda; color: #155724; }
+.status-incident { background: #fee2e2; color: #991b1b; }
+.status-retour { background: #f3f4f6; color: #1f2937; }
 
 /* Badges Communes (Couleurs spécifiques) */
 .commune-badge { display: inline-block; padding: 3px 10px; border-radius: 10px; font-size: 11px; font-weight: 600; }
@@ -651,3 +654,15 @@ body.login-page {
 .toast { position: fixed; bottom: 30px; right: 30px; padding: 15px 25px; border-radius: 8px; color: white; z-index: 3000; box-shadow: 0 5px 15px rgba(0,0,0,0.2); animation: slideIn 0.3s ease-out; }
 .toast-success { background: #2ecc71; }
 .toast-error { background: #e74c3c; }
+
+/* --- STYLE CHECKBOX --- */
+input[type="checkbox"] {
+    width: 18px !important;
+    height: 18px !important;
+    padding: 0 !important;
+    margin: 0 5px 0 0;
+    cursor: pointer;
+    accent-color: var(--primary);
+    vertical-align: middle;
+    box-shadow: none !important;
+}

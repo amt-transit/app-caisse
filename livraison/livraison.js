@@ -1,9 +1,9 @@
 
 // --- CONFIGURATION & CONSTANTES (Refactorisation) ---
 const CONSTANTS = {
+    COLLECTION: 'livraisons',
+    ARCHIVE_COLLECTION: 'livraisons_archives',
     STORAGE_KEYS: {
-        DELIVERIES: 'deliveries',
-        ARCHIVED: 'archived_deliveries',
         CONTAINER_NAME: 'currentContainerName'
     },
     COMMUNES: {
@@ -24,10 +24,15 @@ const CONSTANTS = {
     DEBOUNCE_DELAY: 300
 };
 
+// Configuration PDF.js Worker
+if (typeof pdfjsLib !== 'undefined') {
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+}
+
 // --- STATE MANAGEMENT ---
-let deliveries = JSON.parse(localStorage.getItem(CONSTANTS.STORAGE_KEYS.DELIVERIES) || '[]');
-let archivedDeliveries = JSON.parse(localStorage.getItem(CONSTANTS.STORAGE_KEYS.ARCHIVED) || '[]');
-let filteredDeliveries = [...deliveries];
+let deliveries = [];
+let archivedDeliveries = [];
+let filteredDeliveries = [];
 let pendingImport = [];
 let currentContainerName = localStorage.getItem(CONSTANTS.STORAGE_KEYS.CONTAINER_NAME) || 'Aucun';
 let currentTab = 'EN_COURS'; // 'EN_COURS' ou 'A_VENIR'
@@ -39,6 +44,7 @@ let currentSort = {
 let itemsPerPage = 100; // Nombre d'éléments par page
 let programDetailsSort = { column: null, direction: 'asc' };
 let currentProgramView = { date: null, livreur: null };
+let isImporting = false;
 
 // --- UTILS (Performance) ---
 function debounce(func, wait) {
@@ -55,15 +61,77 @@ function debounce(func, wait) {
 
 const debouncedFilterDeliveries = debounce(() => filterDeliveries(), CONSTANTS.DEBOUNCE_DELAY);
 
+// Correction encodage (UTF-8 mal interprété comme "TOURÃ‰")
+function fixEncoding(str) {
+    if (!str) return '';
+    return str
+        .replace(/Ã©/g, 'é')
+        .replace(/Ã¨/g, 'è')
+        .replace(/Ã /g, 'à')
+        .replace(/Ã¢/g, 'â')
+        .replace(/Ãª/g, 'ê')
+        .replace(/Ã®/g, 'î')
+        .replace(/Ã´/g, 'ô')
+        .replace(/Ã»/g, 'û')
+        .replace(/Ã§/g, 'ç')
+        .replace(/Ã¯/g, 'ï')
+        .replace(/Ã«/g, 'ë')
+        .replace(/Ã‰/g, 'É')
+        .replace(/Ãˆ/g, 'È')
+        .replace(/Ã€/g, 'À');
+}
+
 // Initialisation
 document.addEventListener('DOMContentLoaded', function() {
-    updateStats();
+    if (typeof db === 'undefined') {
+        console.error("Firebase DB non initialisé");
+        return;
+    }
+    initRealtimeSync();
     updateContainerTitle();
     initActiveContainerInput();
-    renderTable();
-    updateAutocomplete();
-    updateLocationFilterOptions();
 });
+
+// Synchronisation Temps Réel avec Firestore
+function initRealtimeSync() {
+    // 1. Migration unique (LocalStorage -> Firebase) si nécessaire
+    const localData = localStorage.getItem('deliveries');
+    if (localData) {
+        const parsed = JSON.parse(localData);
+        if (parsed.length > 0 && confirm(`MIGRATION : ${parsed.length} livraisons trouvées en local. Migrer vers le serveur ?`)) {
+            const batch = db.batch();
+            parsed.forEach(item => {
+                const docRef = db.collection(CONSTANTS.COLLECTION).doc();
+                const { id, ...data } = item; // On laisse Firestore générer l'ID
+                batch.set(docRef, data);
+            });
+            batch.commit().then(() => {
+                localStorage.removeItem('deliveries');
+                showToast("Migration terminée !", "success");
+            });
+        }
+    }
+
+    // 2. Écouteur sur la collection 'livraisons'
+    db.collection(CONSTANTS.COLLECTION)
+        .orderBy('dateAjout', 'desc')
+        .limit(2000)
+        .onSnapshot((snapshot) => {
+            deliveries = [];
+            snapshot.forEach((doc) => {
+                deliveries.push({ id: doc.id, ...doc.data() });
+            });
+            
+            // Mise à jour de l'interface
+            filterDeliveries();
+            updateStats();
+            updateAutocomplete();
+            updateLocationFilterOptions();
+        }, (error) => {
+            console.error("Erreur sync:", error);
+            showToast("Erreur de synchronisation !", "error");
+        });
+}
 
 // Gestion des onglets
 function switchTab(tab) {
@@ -86,6 +154,12 @@ function switchTab(tab) {
     const activeToolbar = document.getElementById(`toolbar-${tab}`);
     if (activeToolbar) {
         activeToolbar.style.display = 'flex';
+    }
+    
+    // Gestion de la section Conteneur Actif (Visible uniquement sur l'onglet 3)
+    const activeContainerSection = document.getElementById('activeContainerSection');
+    if (activeContainerSection) {
+        activeContainerSection.style.display = (tab === 'EN_COURS') ? 'flex' : 'none';
     }
 
     selectedIds.clear(); // On vide la sélection quand on change d'onglet
@@ -172,10 +246,16 @@ document.addEventListener('click', function(event) {
 
 // Import PDF
 async function importPDF(event) {
+    if (isImporting) return;
     const file = event.target.files[0];
     if (!file) return;
     
-    showToast('Lecture du PDF en cours...', 'success');
+    const overlay = document.getElementById('loadingOverlay');
+    if (overlay) {
+        overlay.querySelector('.loading-text').textContent = `Lecture du PDF ${file.name}...`;
+        overlay.style.display = 'flex';
+    }
+    isImporting = true;
     
     try {
         const arrayBuffer = await file.arrayBuffer();
@@ -200,9 +280,11 @@ async function importPDF(event) {
     } catch (error) {
         console.error(error);
         showToast('Erreur lors de la lecture du PDF', 'error');
+    } finally {
+        if (overlay) overlay.style.display = 'none';
+        isImporting = false;
+        event.target.value = '';
     }
-    
-    event.target.value = '';
 }
 
 // Parser PDF
@@ -284,11 +366,11 @@ function parsePDFText(text) {
                 id: Date.now() + i,
                 ref: ref,
                 montant: montant,
-                expediteur: expediteur,
-                commune: detectCommune(lieu),
-                lieuLivraison: lieu,
-                destinataire: destinataire,
-                description: description,
+                expediteur: fixEncoding(expediteur),
+                commune: detectCommune(fixEncoding(lieu)),
+                lieuLivraison: fixEncoding(lieu),
+                destinataire: fixEncoding(destinataire),
+                description: fixEncoding(description),
                 status: 'EN_ATTENTE',
                 dateAjout: new Date().toISOString()
             });
@@ -300,37 +382,57 @@ function parsePDFText(text) {
 
 // Import Excel
 function importExcel(event) {
+    if (isImporting) return;
     const file = event.target.files[0];
     if (!file) return;
     
+    // Afficher l'écran de chargement
+    const overlay = document.getElementById('loadingOverlay');
+    if (overlay) {
+        overlay.querySelector('.loading-text').textContent = `Importation de ${file.name}...`;
+        overlay.style.display = 'flex';
+    }
+    isImporting = true;
+
     const reader = new FileReader();
     reader.onload = function(e) {
-        try {
-            const data = new Uint8Array(e.target.result);
-            const workbook = XLSX.read(data, { type: 'array' });
-            const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
-            const jsonData = XLSX.utils.sheet_to_json(firstSheet);
-            
-            const imported = jsonData.map((row, i) => ({
-                id: Date.now() + i,
-                ref: row.REF || row.REFERENCE || '',
-                montant: row.RESTANT || row.MONTANT || '',
-                expediteur: row.EXPEDITEUR || '',
-                commune: detectCommune(row.LIVRE || row.LIEU || ''),
-                lieuLivraison: row.LIVRE || row.LIEU || '',
-                destinataire: row.DESTINATAIRE || '',
-                description: row.DESCRIPTION || '',
-                status: 'EN_ATTENTE',
-                dateAjout: new Date().toISOString()
-            })).filter(d => d.ref);
-            
-            if (imported.length > 0) {
-                pendingImport = imported;
-                showPreviewModal(imported);
+        // Utiliser setTimeout pour laisser le temps au navigateur d'afficher le spinner
+        setTimeout(() => {
+            try {
+                const data = new Uint8Array(e.target.result);
+                const workbook = XLSX.read(data, { type: 'array' });
+                const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+                const jsonData = XLSX.utils.sheet_to_json(firstSheet);
+                
+                const imported = jsonData.map((row, i) => ({
+                    id: Date.now() + i,
+                    ref: String(row.REF || row.REFERENCE || ''),
+                    montant: String(row.RESTANT || row.MONTANT || ''),
+                    expediteur: fixEncoding(String(row.EXPEDITEUR || '')),
+                    commune: detectCommune(fixEncoding(String(row.LIVRE || row.LIEU || ''))),
+                    lieuLivraison: fixEncoding(String(row.LIVRE || row.LIEU || '')),
+                    destinataire: fixEncoding(String(row.DESTINATAIRE || '')),
+                    description: fixEncoding(String(row.DESCRIPTION || '')),
+                    status: 'EN_ATTENTE',
+                    dateAjout: new Date().toISOString()
+                })).filter(d => d.ref);
+                
+                if (imported.length > 0) {
+                    pendingImport = imported;
+                    showPreviewModal(imported);
+                    showToast('Fichier analysé avec succès !', 'success');
+                } else {
+                    showToast('Aucune donnée valide trouvée', 'warning');
+                }
+            } catch (error) {
+                console.error(error);
+                showToast('Erreur lors de l\'import Excel', 'error');
+            } finally {
+                // Masquer l'écran de chargement
+                if (overlay) overlay.style.display = 'none';
+                isImporting = false;
             }
-        } catch (error) {
-            showToast('Erreur lors de l\'import Excel', 'error');
-        }
+        }, 100);
     };
     
     reader.readAsArrayBuffer(file);
@@ -351,6 +453,12 @@ function detectCommune(lieu) {
 
 // Aperçu modal
 function showPreviewModal(data) {
+    // Pré-sélectionner le statut selon l'onglet actuel
+    const statusSelect = document.getElementById('importContainerStatus');
+    if (statusSelect && ['PARIS', 'EN_COURS', 'A_VENIR'].includes(currentTab)) {
+        statusSelect.value = currentTab;
+    }
+
     document.getElementById('previewCount').textContent = `${data.length} livraisons détectées`;
     
     const tbody = document.getElementById('previewBody');
@@ -390,38 +498,48 @@ function confirmImport() {
     const bl = document.getElementById('importBl').value;
     const containerStatus = document.getElementById('importContainerStatus').value;
 
-    let newItems = [];
+    const batch = db.batch();
     let updatedCount = 0;
+    let addedCount = 0;
 
     pendingImport.forEach(importItem => {
         // Vérifier si la référence existe déjà dans la base de données
         const existingItem = deliveries.find(d => d.ref === importItem.ref);
 
         if (existingItem) {
-            // CAS 1 : La référence existe -> On déplace le colis existant (on garde ses infos)
+            // CAS 1 : La référence existe -> On déplace le colis existant
+            const docRef = db.collection(CONSTANTS.COLLECTION).doc(existingItem.id);
+            const updates = { containerStatus: containerStatus };
+            
+            // Mise à jour des infos (Montant, etc.) car elles peuvent changer
+            if (importItem.montant) updates.montant = importItem.montant;
+            if (importItem.description) updates.description = importItem.description;
+            if (conteneur) updates.conteneur = conteneur;
+            if (bl) updates.bl = bl;
+
             // Marquer comme venant de "À VENIR" si c'est le cas
             if ((existingItem.containerStatus === 'A_VENIR' || existingItem.containerStatus === 'PARIS') && containerStatus === 'EN_COURS') {
-                existingItem.importedFromTransit = true;
+                updates.importedFromTransit = true;
             } else if (containerStatus !== 'EN_COURS') {
-                delete existingItem.importedFromTransit;
+                updates.importedFromTransit = firebase.firestore.FieldValue.delete();
             }
-            existingItem.containerStatus = containerStatus; // Mise à jour du statut (ex: vers EN_COURS)
-            if (conteneur) existingItem.conteneur = conteneur; // Mise à jour du conteneur
-            if (bl) existingItem.bl = bl; // Mise à jour du BL
+            
+            batch.update(docRef, updates);
             updatedCount++;
         } else {
             // CAS 2 : La référence n'existe pas -> On crée un nouveau colis
-            newItems.push({ 
+            const docRef = db.collection(CONSTANTS.COLLECTION).doc();
+            batch.set(docRef, { 
                 ...importItem, 
+                id: undefined, // Pas d'ID numérique
                 conteneur: conteneur || importItem.conteneur, 
                 bl: bl || importItem.bl, 
-                containerStatus: containerStatus 
+                containerStatus: containerStatus,
+                dateAjout: new Date().toISOString()
             });
+            addedCount++;
         }
     });
-    
-    // On ajoute seulement les nouveaux items à la liste globale
-    deliveries = [...deliveries, ...newItems];
     
     // Mise à jour du conteneur en cours si renseigné
     if (conteneur) {
@@ -433,18 +551,15 @@ function confirmImport() {
         if (activeInput) activeInput.value = currentContainerName;
     }
 
-    // Si on importe dans l'autre onglet, on bascule dessus pour voir le résultat
-    if (containerStatus !== currentTab) {
-        switchTab(containerStatus);
-    }
-
-    saveDeliveries();
-    updateStats();
-    renderTable();
-    updateAutocomplete();
-    updateLocationFilterOptions();
-    closePreviewModal();
-    showToast(`${newItems.length} ajoutés, ${updatedCount} mis à jour/déplacés !`, 'success');
+    batch.commit().then(() => {
+        // Si on importe dans l'autre onglet, on bascule dessus pour voir le résultat
+        if (containerStatus !== currentTab) {
+            switchTab(containerStatus);
+        }
+        
+        closePreviewModal();
+        showToast(`${addedCount} ajoutés, ${updatedCount} mis à jour !`, 'success');
+    }).catch(err => showToast("Erreur import: " + err.message, 'error'));
 }
 
 // Export Excel
@@ -579,6 +694,11 @@ function renderTable() {
     // --- MODE STANDARD : Liste des colis ---
     
     // Restaurer les en-têtes
+    let statusHeader = '<th style="width: 80px;">STATUT</th>';
+    if (currentTab === 'PARIS' || currentTab === 'A_VENIR') {
+        statusHeader = '';
+    }
+
     theadRow.innerHTML = `
         <th class="col-checkbox"><input type="checkbox" id="selectAll" onchange="toggleSelectAll()"></th>
         <th class="sortable" onclick="sortTable('conteneur')" style="width: 120px;">CONTENEUR ${getSortIcon('conteneur')}</th>
@@ -590,7 +710,7 @@ function renderTable() {
         <th style="width: 250px;">DESCRIPTION</th>
         <th style="width: 150px;">INFO</th>
         <th class="sortable" onclick="sortTable('livreur')" style="width: 150px;">LIVREUR (DATE) ${getSortIcon('livreur')}</th>
-        <th style="width: 80px;">STATUT</th>
+        ${statusHeader}
         <th style="width: 150px;">ACTIONS</th>
     `;
 
@@ -610,6 +730,12 @@ function renderTable() {
         } else if (d.status === 'EN_COURS') {
             statusClass = 'status-en-cours';
             statusText = '🚚 En Cours';
+        } else if (d.status === 'INCIDENT') {
+            statusClass = 'status-incident';
+            statusText = '⚠️ Incident';
+        } else if (d.status === 'RETOUR') {
+            statusClass = 'status-retour';
+            statusText = '↩️ Retour';
         }
 
         let transitIndicator = '';
@@ -617,29 +743,34 @@ function renderTable() {
             transitIndicator = '<span title="Arrivé depuis À VENIR ou PARIS">🚢</span> ';
         }
 
+        let statusCell = `<td class="status"><span class="status-badge ${statusClass}">${statusText}</span></td>`;
+        if (currentTab === 'PARIS' || currentTab === 'A_VENIR') {
+            statusCell = '';
+        }
+
         return `
             <tr class="${rowClass}">
-                <td class="col-checkbox"><input type="checkbox" onchange="toggleSelection(${d.id})" ${selectedIds.has(d.id) ? 'checked' : ''}></td>
+                <td class="col-checkbox"><input type="checkbox" onchange="toggleSelection('${d.id}')" ${selectedIds.has(d.id) ? 'checked' : ''}></td>
                 <td>${d.conteneur || '-'}</td>
                 <td class="ref">${transitIndicator}${d.ref}</td>
                 <td class="montant">${d.montant || '-'}</td>
                 <td>${d.expediteur}</td>
-                <td><input type="text" class="editable-cell" value="${(d.lieuLivraison || '').replace(/"/g, '&quot;')}" list="sharedLocationsList" onchange="updateDeliveryLocation(${d.id}, this.value)"></td>
-                <td><input type="text" class="editable-cell" value="${(d.destinataire || '').replace(/"/g, '&quot;')}" onchange="updateDeliveryRecipient(${d.id}, this.value)"></td>
+                <td><input type="text" class="editable-cell" value="${(d.lieuLivraison || '').replace(/"/g, '&quot;')}" list="sharedLocationsList" onchange="updateDeliveryLocation('${d.id}', this.value)"></td>
+                <td><input type="text" class="editable-cell" value="${(d.destinataire || '').replace(/"/g, '&quot;')}" onchange="updateDeliveryRecipient('${d.id}', this.value)"></td>
                 <td>${d.description || '-'}</td>
-                <td><input type="text" class="editable-cell" value="${(d.info || '').replace(/"/g, '&quot;')}" onchange="updateDeliveryInfo(${d.id}, this.value)"></td>
+                <td><input type="text" class="editable-cell" value="${(d.info || '').replace(/"/g, '&quot;')}" onchange="updateDeliveryInfo('${d.id}', this.value)"></td>
                 <td>
                     <strong>${d.livreur || '-'}</strong><br>
                     <small>${d.dateProgramme || ''}</small>
                 </td>
-                <td class="status"><span class="status-badge ${statusClass}">${statusText}</span></td>
+                ${statusCell}
                 <td>
                     <div class="actions">
                         ${d.status !== 'LIVRE' ? 
-                            `<button class="btn btn-success btn-small" onclick="markAsDelivered(${d.id})" title="Marquer comme livré">✅</button>` : 
-                            `<button class="btn btn-warning btn-small" onclick="markAsPending(${d.id})" title="Marquer en attente">⏳</button>`
+                            `<button class="btn btn-success btn-small" onclick="markAsDelivered('${d.id}')" title="Marquer comme livré">✅</button>` : 
+                            `<button class="btn btn-warning btn-small" onclick="markAsPending('${d.id}')" title="Marquer en attente">⏳</button>`
                         }
-                        <button class="btn btn-danger btn-small" onclick="deleteDelivery(${d.id})" title="Supprimer">🗑️</button>
+                        <button class="btn btn-danger btn-small" onclick="deleteDelivery('${d.id}')" title="Supprimer">🗑️</button>
                     </div>
                 </td>
             </tr>
@@ -970,18 +1101,17 @@ function confirmProgram() {
         return;
     }
 
-    deliveries = deliveries.map(d => {
-        if (selectedIds.has(d.id)) {
-            return { ...d, livreur: livreur, dateProgramme: dateProg, status: 'EN_COURS' };
-        }
-        return d;
+    const batch = db.batch();
+    selectedIds.forEach(id => {
+        batch.update(db.collection(CONSTANTS.COLLECTION).doc(id), {
+            livreur: livreur, dateProgramme: dateProg, status: 'EN_COURS'
+        });
     });
-
-    saveDeliveries();
-    filterDeliveries(); // Rafraîchir
-    closeProgramModal();
-    selectedIds.clear(); // Vider la sélection après action
-    showToast('Programme enregistré avec succès !', 'success');
+    batch.commit().then(() => {
+        closeProgramModal();
+        selectedIds.clear();
+        showToast('Programme enregistré !', 'success');
+    });
 }
 
 // Attribution de Conteneur en masse
@@ -1008,27 +1138,68 @@ function confirmAssignContainer() {
     const newConteneur = document.getElementById('assignConteneurInput').value;
     const newStatus = document.getElementById('assignContainerStatus').value;
 
-    deliveries = deliveries.map(d => {
-        if (selectedIds.has(d.id)) {
-            let updated = { ...d, conteneur: newConteneur };
-            if (newStatus) {
-                if ((d.containerStatus === 'A_VENIR' || d.containerStatus === 'PARIS') && newStatus === 'EN_COURS') {
-                    updated.importedFromTransit = true;
-                } else if (newStatus !== 'EN_COURS') {
-                    delete updated.importedFromTransit;
-                }
-                updated.containerStatus = newStatus;
-            }
-            return updated;
+    const batch = db.batch();
+    selectedIds.forEach(id => {
+        const updates = { conteneur: newConteneur };
+        if (newStatus) {
+            updates.containerStatus = newStatus;
+            // Logique transit simplifiée pour batch (suppose lecture locale à jour)
+            // Pour être puriste, on devrait lire chaque doc, mais ici on fait confiance à l'état local synchronisé
         }
-        return d;
+        batch.update(db.collection(CONSTANTS.COLLECTION).doc(id), updates);
     });
 
-    saveDeliveries();
-    filterDeliveries(); // Rafraîchir
-    closeAssignContainerModal();
-    selectedIds.clear(); // Vider la sélection après action
-    showToast('Conteneur attribué avec succès !', 'success');
+    batch.commit().then(() => {
+        closeAssignContainerModal();
+        selectedIds.clear();
+        showToast('Attribution terminée !', 'success');
+    });
+}
+
+// --- ACTIONS GROUPÉES (Suppression & Statut) ---
+
+function deleteSelectedDeliveries() {
+    if (selectedIds.size === 0) {
+        showToast('Veuillez sélectionner au moins une livraison', 'error');
+        return;
+    }
+    
+    if (confirm(`Voulez-vous vraiment supprimer ces ${selectedIds.size} livraisons ?`)) {
+        const batch = db.batch();
+        selectedIds.forEach(id => {
+            batch.delete(db.collection(CONSTANTS.COLLECTION).doc(id));
+        });
+        batch.commit().then(() => {
+            selectedIds.clear();
+            showToast('Livraisons supprimées', 'success');
+        });
+    }
+}
+
+function openBulkStatusModal() {
+    if (selectedIds.size === 0) {
+        showToast('Veuillez sélectionner au moins une livraison', 'error');
+        return;
+    }
+    document.getElementById('bulkStatusCount').textContent = selectedIds.size;
+    document.getElementById('bulkStatusModal').classList.add('active');
+}
+
+function closeBulkStatusModal() {
+    document.getElementById('bulkStatusModal').classList.remove('active');
+}
+
+function confirmBulkStatusChange() {
+    const newStatus = document.getElementById('bulkStatusSelect').value;
+    const batch = db.batch();
+    selectedIds.forEach(id => {
+        batch.update(db.collection(CONSTANTS.COLLECTION).doc(id), { status: newStatus });
+    });
+    batch.commit().then(() => {
+        closeBulkStatusModal();
+        selectedIds.clear();
+        showToast('Statuts mis à jour !', 'success');
+    });
 }
 
 // --- GESTION DES ARCHIVES ---
@@ -1045,29 +1216,32 @@ function archiveCompletedDeliveries() {
     if (confirm(`Voulez-vous archiver ${completed.length} colis livrés ?\nIls seront retirés de la liste principale mais resteront consultables dans les archives.`)) {
         // Ajouter la date d'archivage
         const now = new Date().toISOString();
-        const toArchive = completed.map(d => ({ ...d, dateArchivage: now }));
+        const batch = db.batch();
         
-        // Ajouter aux archives
-        archivedDeliveries = [...archivedDeliveries, ...toArchive];
-        localStorage.setItem(CONSTANTS.STORAGE_KEYS.ARCHIVED, JSON.stringify(archivedDeliveries));
+        completed.forEach(d => {
+            const archiveRef = db.collection(CONSTANTS.ARCHIVE_COLLECTION).doc(d.id);
+            batch.set(archiveRef, { ...d, dateArchivage: now });
+            const activeRef = db.collection(CONSTANTS.COLLECTION).doc(d.id);
+            batch.delete(activeRef);
+        });
         
-        // Retirer de la liste principale
-        deliveries = deliveries.filter(d => d.status !== 'LIVRE');
-        saveDeliveries();
-        
-        // Rafraîchir l'interface
-        filterDeliveries();
-        updateStats();
-        updateAutocomplete(); // Garder les lieux en mémoire même après archivage si besoin (déjà géré par la liste globale)
-        updateLocationFilterOptions();
-        
-        showToast(`${completed.length} colis archivés avec succès !`, 'success');
+        batch.commit().then(() => showToast('Archivage terminé !', 'success'));
     }
 }
 
 function openArchivesModal() {
-    renderArchivesTable(archivedDeliveries);
     document.getElementById('archivesModal').classList.add('active');
+    document.getElementById('archivesBody').innerHTML = '<tr><td colspan="7">Chargement...</td></tr>';
+    
+    db.collection(CONSTANTS.ARCHIVE_COLLECTION)
+        .orderBy('dateArchivage', 'desc')
+        .limit(100)
+        .get()
+        .then(snapshot => {
+            archivedDeliveries = [];
+            snapshot.forEach(doc => archivedDeliveries.push({ id: doc.id, ...doc.data() }));
+            renderArchivesTable(archivedDeliveries);
+        });
 }
 
 function closeArchivesModal() {
@@ -1082,27 +1256,21 @@ function searchArchives() {
     renderArchivesTable(filtered);
 }
 
-function restoreFromArchive(ref) {
+function restoreFromArchive(id) {
     if (confirm('Voulez-vous restaurer ce colis vers la liste principale ?')) {
-        const index = archivedDeliveries.findIndex(d => d.ref === ref);
-        if (index !== -1) {
-            const item = archivedDeliveries[index];
-            
-            // Retirer la date d'archivage et remettre dans la liste principale
-            delete item.dateArchivage;
-            deliveries.push(item);
-            
-            // Retirer des archives
-            archivedDeliveries.splice(index, 1);
-            
-            localStorage.setItem(CONSTANTS.STORAGE_KEYS.ARCHIVED, JSON.stringify(archivedDeliveries));
-            saveDeliveries();
-            
-            // Rafraîchir la vue actuelle (archives) et les stats globales
-            searchArchives(); // Utilise searchArchives pour garder le filtre actuel si existant
-            updateStats();
-            showToast('Colis restauré avec succès !', 'success');
-        }
+        db.collection(CONSTANTS.ARCHIVE_COLLECTION).doc(id).get().then(doc => {
+            if(doc.exists) {
+                const data = doc.data();
+                delete data.dateArchivage;
+                const batch = db.batch();
+                batch.set(db.collection(CONSTANTS.COLLECTION).doc(id), data);
+                batch.delete(db.collection(CONSTANTS.ARCHIVE_COLLECTION).doc(id));
+                batch.commit().then(() => {
+                    showToast("Restauré !", "success");
+                    openArchivesModal();
+                });
+            }
+        });
     }
 }
 
@@ -1120,7 +1288,7 @@ function renderArchivesTable(data) {
             <td>${d.livreur || '-'}</td>
             <td>${d.dateProgramme || '-'}</td>
             <td>
-                <button class="btn btn-warning btn-small" onclick="restoreFromArchive('${d.ref}')">♻️ Restaurer</button>
+                <button class="btn btn-warning btn-small" onclick="restoreFromArchive('${d.id}')">♻️ Restaurer</button>
             </td>
         </tr>
     `).join('');
@@ -1271,74 +1439,39 @@ function getSortIcon(column) {
 
 // Mise à jour du lieu de livraison en direct
 function updateDeliveryLocation(id, newLocation) {
-    const delivery = deliveries.find(d => d.id === id);
-    if (delivery) {
-        delivery.lieuLivraison = newLocation;
-        
-        // Détection automatique de la commune
-        const detected = detectCommune(newLocation);
-        if (detected !== 'AUTRE') {
-            delivery.commune = detected;
-        }
-
-        saveDeliveries();
-        updateAutocomplete();
-        updateLocationFilterOptions();
-        filterDeliveries(); // Rafraîchir pour mettre à jour le badge commune
-    }
+    const detected = detectCommune(newLocation);
+    const updates = { lieuLivraison: newLocation };
+    if (detected !== 'AUTRE') updates.commune = detected;
+    
+    db.collection(CONSTANTS.COLLECTION).doc(id).update(updates);
 }
 
 // Mise à jour du destinataire en direct
 function updateDeliveryRecipient(id, newRecipient) {
-    const delivery = deliveries.find(d => d.id === id);
-    if (delivery) {
-        delivery.destinataire = newRecipient;
-        saveDeliveries();
-    }
+    db.collection(CONSTANTS.COLLECTION).doc(id).update({ destinataire: newRecipient });
 }
 
 // Mise à jour de l'info manuelle en direct
 function updateDeliveryInfo(id, newInfo) {
-    const delivery = deliveries.find(d => d.id === id);
-    if (delivery) {
-        delivery.info = newInfo;
-        saveDeliveries();
-    }
+    db.collection(CONSTANTS.COLLECTION).doc(id).update({ info: newInfo });
 }
 
 // Actions
 function markAsDelivered(id) {
-    const delivery = deliveries.find(d => d.id === id);
-    if (delivery) {
-        delivery.status = 'LIVRE';
-        saveDeliveries();
-        filterDeliveries();
-        updateStats();
-        updateAutocomplete(); // Met à jour les suggestions car un nouveau lieu est validé
-        updateLocationFilterOptions();
-        showToast('Livraison marquée livrée !', 'success');
-    }
+    db.collection(CONSTANTS.COLLECTION).doc(id).update({
+        status: 'LIVRE',
+        dateLivraison: new Date().toISOString()
+    }).then(() => showToast('Marqué comme LIVRÉ', 'success'));
 }
 
 function markAsPending(id) {
-    const delivery = deliveries.find(d => d.id === id);
-    if (delivery) {
-        delivery.status = 'EN_ATTENTE';
-        saveDeliveries();
-        filterDeliveries();
-        updateStats();
-    }
+    db.collection(CONSTANTS.COLLECTION).doc(id).update({ status: 'EN_ATTENTE' });
 }
 
 function deleteDelivery(id) {
     if (confirm('Supprimer cette livraison ?')) {
-        deliveries = deliveries.filter(d => d.id !== id);
-        saveDeliveries();
-        filterDeliveries();
-        updateStats();
-        updateAutocomplete();
-        updateLocationFilterOptions();
-        showToast('Livraison supprimée', 'success');
+        db.collection(CONSTANTS.COLLECTION).doc(id).delete()
+            .then(() => showToast('Livraison supprimée', 'success'));
     }
 }
 
@@ -1359,7 +1492,6 @@ document.getElementById('deliveryForm').addEventListener('submit', function(e) {
     e.preventDefault();
     
     const delivery = {
-        id: Date.now(),
         containerStatus: document.getElementById('newContainerStatus').value,
         conteneur: document.getElementById('conteneur').value,
         bl: '',
@@ -1374,26 +1506,26 @@ document.getElementById('deliveryForm').addEventListener('submit', function(e) {
         dateAjout: new Date().toISOString()
     };
     
-    deliveries.push(delivery);
-    
-    // Basculer vers l'onglet correspondant si nécessaire
-    if (delivery.containerStatus !== currentTab) {
-        switchTab(delivery.containerStatus);
-    }
-
-    saveDeliveries();
-    filterDeliveries();
-    updateStats();
-    updateLocationFilterOptions();
-    closeAddModal();
-    showToast('Livraison ajoutée !', 'success');
+    db.collection(CONSTANTS.COLLECTION).add(delivery)
+        .then(() => {
+            showToast('Livraison ajoutée !', 'success');
+            closeAddModal();
+            if (delivery.containerStatus !== currentTab) {
+                switchTab(delivery.containerStatus);
+            }
+        });
 });
 
 // Mise à jour du titre du conteneur
 function updateContainerTitle() {
     const titleEl = document.getElementById('currentContainerTitle');
+    const displayEl = document.getElementById('displayActiveContainer');
+    
     if (titleEl) {
         titleEl.textContent = `Conteneur en cours : ${currentContainerName}`;
+    }
+    if (displayEl) {
+        displayEl.textContent = currentContainerName;
     }
 }
 
@@ -1486,7 +1618,7 @@ function updateStats() {
 
 // Sauvegarde
 function saveDeliveries() {
-    localStorage.setItem(CONSTANTS.STORAGE_KEYS.DELIVERIES, JSON.stringify(deliveries));
+    // Obsolète avec Firestore
 }
 
 // Toast

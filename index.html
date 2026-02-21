@@ -10,10 +10,6 @@
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/choices.js/public/assets/styles/choices.min.css"/>
     <link rel="icon" type="image/png" href="favicon.png">
-    <!-- Bibliothèques pour Livraison -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
 </head>
 <body style="display:none">
     <header class="app-header">
@@ -34,7 +30,7 @@
         <a href="clients.html" id="nav-clients">Clients</a>
         <a href="magasinage.html" id="nav-magasinage">Magasinage</a>
         <a href="salaire.html" id="nav-salaire">Salaire</a>
-        <a href="#" onclick="openTab(event, 'livraison')" id="nav-livraison">LIVRAISON</a>
+        <a href="livraison.html" id="nav-livraison">LIVRAISON</a>
         <a href="points.html" id="nav-points">Points</a>
         <a href="admin-panel.html" id="nav-admin" style="background-color: #6f42c1; color: white;">ADMIN</a>
     </nav>
@@ -157,255 +153,6 @@
     </div>
     </div>
 
-    <!-- ONGLET 2 : LIVRAISON (AMT TRANS'IT) -->
-    <div id="livraison" class="tab-panel">
-        <!-- En-tête Statistiques -->
-        <div class="stats-bar">
-            <div class="stat-item"><div class="stat-number" id="totalDeliveries">0</div><div class="stat-label">Total</div></div>
-            <div class="stat-item"><div class="stat-number" id="pendingDeliveries">0</div><div class="stat-label">En Attente</div></div>
-            <div class="stat-item"><div class="stat-number" id="completedDeliveries">0</div><div class="stat-label">Livrées</div></div>
-        </div>
-
-        <!-- Sous-onglets Livraison -->
-        <div class="delivery-tabs">
-            <button class="tab-btn active" onclick="switchTab('EN_COURS')" id="tabEnCours">📦 En cours</button>
-            <button class="tab-btn" onclick="switchTab('A_VENIR')" id="tabAVenir">🚢 À venir</button>
-            <button class="tab-btn" onclick="switchTab('PARIS')" id="tabParis">🇫🇷 Paris</button>
-            <button class="tab-btn" onclick="switchTab('PROGRAMME')" id="tabProgramme">📅 Programmes</button>
-        </div>
-
-        <!-- Barres d'outils et Filtres -->
-        <div class="toolbar">
-            <div id="toolbar-EN_COURS" class="tab-toolbar" style="display: flex; gap: 10px; align-items: center;">
-                <div style="display: flex; align-items: center; gap: 5px; background: #e3f2fd; padding: 5px 10px; border-radius: 6px; border: 1px solid #bbdefb;">
-                    <span style="font-weight: bold; color: #1565c0; font-size: 12px;">📦 Actif :</span>
-                    <input type="text" id="activeContainerInput" placeholder="N° Conteneur" style="padding: 5px; width: 120px; border: 1px solid #bbdefb;">
-                    <button class="btn btn-small btn-success" onclick="setActiveContainer()">OK</button>
-                </div>
-                <label class="btn btn-small">📊 Import <input type="file" accept=".xlsx,.xls" onchange="importExcel(event)"></label>
-                <button class="btn btn-small" onclick="openProgramModal()">📅 Programmer</button>
-                <button class="btn btn-small" onclick="openAssignContainerModal()">📦 Attribuer</button>
-                <button class="btn btn-small btn-success" onclick="exportToExcel()">📥 Export</button>
-                <button class="btn btn-small" onclick="showAddModal()">➕ Ajouter</button>
-                <button class="btn btn-small btn-warning" onclick="archiveCompletedDeliveries()">📦 Archiver</button>
-                <button class="btn btn-small" onclick="openArchivesModal()">🗄️ Archives</button>
-            </div>
-            <div id="toolbar-A_VENIR" class="tab-toolbar" style="display: none; gap: 10px;">
-                <label class="btn btn-small">📊 Import <input type="file" accept=".xlsx,.xls" onchange="importExcel(event)"></label>
-                <button class="btn btn-small" onclick="openAssignContainerModal()">📦 Attribuer</button>
-                <button class="btn btn-small btn-success" onclick="exportToExcel()">📥 Export</button>
-                <button class="btn btn-small" onclick="showAddModal()">➕ Ajouter</button>
-            </div>
-            <div id="toolbar-PARIS" class="tab-toolbar" style="display: none; gap: 10px;">
-                <label class="btn btn-small">📊 Import <input type="file" accept=".xlsx,.xls" onchange="importExcel(event)"></label>
-                <button class="btn btn-small btn-success" onclick="exportToExcel()">📥 Export</button>
-                <button class="btn btn-small" onclick="showAddModal()">➕ Ajouter</button>
-            </div>
-            <div id="toolbar-PROGRAMME" class="tab-toolbar" style="display: none; gap: 10px;">
-                <button class="btn btn-small btn-success" onclick="exportToExcel()">📥 Export</button>
-                <button class="btn btn-small" onclick="openArchivesModal()">🗄️ Archives</button>
-            </div>
-            
-            <div class="dropdown-filter" id="communeFilter">
-                <button class="dropdown-toggle" onclick="toggleCommuneDropdown()" id="communeFilterBtn">📍 Communes</button>
-                <div class="dropdown-menu" id="communeDropdownList">
-                    <label><input type="checkbox" value="COCODY" onchange="filterDeliveries()"> COCODY</label>
-                    <label><input type="checkbox" value="YOPOUGON" onchange="filterDeliveries()"> YOPOUGON</label>
-                    <label><input type="checkbox" value="ABOBO" onchange="filterDeliveries()"> ABOBO</label>
-                    <label><input type="checkbox" value="ADJAME" onchange="filterDeliveries()"> ADJAMÉ</label>
-                    <label><input type="checkbox" value="KOUMASSI" onchange="filterDeliveries()"> KOUMASSI</label>
-                    <label><input type="checkbox" value="MARCORY" onchange="filterDeliveries()"> MARCORY</label>
-                    <label><input type="checkbox" value="TREICHVILLE" onchange="filterDeliveries()"> TREICHVILLE</label>
-                    <label><input type="checkbox" value="ATTECOUBE" onchange="filterDeliveries()"> ATTÉCOUBÉ</label>
-                    <label><input type="checkbox" value="PORT-BOUET" onchange="filterDeliveries()"> PORT-BOUËT</label>
-                    <label><input type="checkbox" value="BINGERVILLE" onchange="filterDeliveries()"> BINGERVILLE</label>
-                    <label><input type="checkbox" value="SONGON" onchange="filterDeliveries()"> SONGON</label>
-                    <label><input type="checkbox" value="ANYAMA" onchange="filterDeliveries()"> ANYAMA</label>
-                    <label><input type="checkbox" value="PLATEAU" onchange="filterDeliveries()"> PLATEAU</label>
-                    <label><input type="checkbox" value="AUTRE" onchange="filterDeliveries()"> AUTRE</label>
-                </div>
-            </div>
-            <div class="dropdown-filter" id="locationFilter">
-                <button class="dropdown-toggle" onclick="toggleLocationDropdown()" id="locationFilterBtn">📍 Lieux</button>
-                <div class="dropdown-menu" id="locationDropdownList"></div>
-            </div>
-            <div class="dropdown-filter" id="statusFilter">
-                <button class="dropdown-toggle" onclick="toggleStatusDropdown()" id="statusFilterBtn">📊 Statuts</button>
-                <div class="dropdown-menu" id="statusDropdownList">
-                    <label><input type="checkbox" value="EN_ATTENTE" onchange="filterDeliveries()"> ⏳ En Attente</label>
-                    <label><input type="checkbox" value="EN_COURS" onchange="filterDeliveries()"> 🚚 En Cours</label>
-                    <label><input type="checkbox" value="LIVRE" onchange="filterDeliveries()"> ✅ Livré</label>
-                </div>
-            </div>
-            <input type="text" class="search-filter" id="searchBox" placeholder="🔍 Rechercher..." oninput="debouncedFilterDeliveries()" style="min-width: 150px;">
-        </div>
-
-        <!-- Tableau Principal -->
-        <div class="table-container">
-            <h3 id="currentContainerTitle" style="margin-bottom: 10px; color: var(--text-main);">Conteneur en cours : Aucun</h3>
-            <table id="deliveriesTable">
-                <thead>
-                    <tr>
-                        <th class="col-checkbox"><input type="checkbox" id="selectAll" onchange="toggleSelectAll()"></th>
-                        <th class="sortable" onclick="sortTable('conteneur')">CONTENEUR ↕</th>
-                        <th class="sortable" onclick="sortTable('ref')">REF ↕</th>
-                        <th class="sortable" onclick="sortTable('montant')">MONTANT ↕</th>
-                        <th class="sortable" onclick="sortTable('expediteur')">EXPEDITEUR ↕</th>
-                        <th class="sortable" onclick="sortTable('lieuLivraison')">LIEU ↕</th>
-                        <th class="sortable" onclick="sortTable('destinataire')">DESTINATAIRE ↕</th>
-                        <th>DESCRIPTION</th>
-                        <th>INFO</th>
-                        <th class="sortable" onclick="sortTable('livreur')">LIVREUR (DATE) ↕</th>
-                        <th>STATUT</th>
-                        <th>ACTIONS</th>
-                    </tr>
-                </thead>
-                <tbody id="deliveriesBody"><tr><td colspan="12" class="empty-state">Chargement...</td></tr></tbody>
-            </table>
-        </div>
-
-        <!-- MODALES LIVRAISON -->
-        <div id="addModal" class="modal">
-            <div class="modal-content modal-xl">
-                <h2 class="modal-header">➕ Nouvelle Livraison</h2>
-                <form id="deliveryForm">
-                    <div class="form-grid">
-                        <div class="form-group full-width" style="background: #e3f2fd; padding: 10px; border-radius: 5px;">
-                            <label>Statut du Conteneur</label>
-                            <select id="newContainerStatus">
-                                <option value="PARIS">🇫🇷 Stock Paris (Non chargé)</option>
-                                <option value="EN_COURS">📦 En cours (Arrivé)</option>
-                                <option value="A_VENIR">🚢 À venir (En transit)</option>
-                            </select>
-                        </div>
-                        <div class="form-group"><label>N° Conteneur</label><input type="text" id="conteneur"></div>
-                        <div class="form-group"><label>Référence *</label><input type="text" id="ref" required></div>
-                        <div class="form-group"><label>Montant Restant</label><input type="text" id="montant"></div>
-                        <div class="form-group"><label>Expéditeur *</label><input type="text" id="expediteur" required></div>
-                        <div class="form-group">
-                            <label>Commune *</label>
-                            <select id="commune" required>
-                                <option value="">-- Sélectionnez --</option>
-                                <option value="COCODY">COCODY</option><option value="YOPOUGON">YOPOUGON</option><option value="ABOBO">ABOBO</option>
-                                <option value="ADJAME">ADJAMÉ</option><option value="KOUMASSI">KOUMASSI</option><option value="MARCORY">MARCORY</option>
-                                <option value="TREICHVILLE">TREICHVILLE</option><option value="ATTECOUBE">ATTÉCOUBÉ</option><option value="PORT-BOUET">PORT-BOUËT</option>
-                                <option value="BINGERVILLE">BINGERVILLE</option><option value="SONGON">SONGON</option><option value="ANYAMA">ANYAMA</option>
-                                <option value="PLATEAU">PLATEAU</option><option value="AUTRE">AUTRE</option>
-                            </select>
-                        </div>
-                        <div class="form-group full-width"><label>Lieu de Livraison *</label><input type="text" id="lieuLivraison" required list="sharedLocationsList"></div>
-                        <div class="form-group full-width"><label>Destinataire & Téléphone *</label><input type="text" id="destinataire" required></div>
-                        <div class="form-group full-width"><label>Description</label><textarea id="description" rows="2"></textarea></div>
-                    </div>
-                    <div style="display: flex; gap: 10px; margin-top: 20px;">
-                        <button type="submit" class="btn btn-success">✅ Ajouter</button>
-                        <button type="button" class="btn btn-danger" onclick="closeAddModal()">❌ Annuler</button>
-                    </div>
-                </form>
-            </div>
-        </div>
-
-        <div id="previewModal" class="modal">
-            <div class="modal-content modal-xl">
-                <h2 class="modal-header">📋 Aperçu de l'import</h2>
-                <div class="form-grid" style="margin-bottom: 20px; background: #f8f9fa; padding: 15px; border-radius: 8px;">
-                    <div class="form-group full-width">
-                        <label>Destination</label>
-                        <select id="importContainerStatus" style="width: 100%;">
-                            <option value="PARIS">🇫🇷 Stock PARIS</option>
-                            <option value="EN_COURS">📦 EN COURS</option>
-                            <option value="A_VENIR">🚢 À VENIR</option>
-                        </select>
-                    </div>
-                    <div class="form-group"><label>N° Conteneur (Lot)</label><input type="text" id="importConteneur"></div>
-                    <div class="form-group"><label>N° BL (Lot)</label><input type="text" id="importBl"></div>
-                </div>
-                <p id="previewCount"></p>
-                <div class="preview-table">
-                    <table><thead><tr><th>REF</th><th>EXPEDITEUR</th><th>COMMUNE</th><th>LIEU</th><th>INFO</th></tr></thead><tbody id="previewBody"></tbody></table>
-                </div>
-                <div style="display: flex; gap: 10px; margin-top: 20px;">
-                    <button class="btn btn-success" onclick="confirmImport()">✅ Confirmer</button>
-                    <button class="btn btn-danger" onclick="closePreviewModal()">❌ Annuler</button>
-                </div>
-            </div>
-        </div>
-
-        <div id="programModal" class="modal">
-            <div class="modal-content">
-                <h2 class="modal-header">📅 Programmer Livraison</h2>
-                <p>Pour <strong id="selectedCount">0</strong> colis :</p>
-                <div class="form-grid">
-                    <div class="form-group full-width">
-                        <label>Programme Existant</label>
-                        <select id="existingProgramSelect" onchange="fillProgramFields()"><option value="">-- Nouveau --</option></select>
-                    </div>
-                    <div class="form-group full-width"><label>Livreur</label><input type="text" id="progLivreur"></div>
-                    <div class="form-group full-width"><label>Date</label><input type="date" id="progDate"></div>
-                </div>
-                <div style="display: flex; gap: 10px; margin-top: 20px;">
-                    <button class="btn btn-success" onclick="confirmProgram()">💾 Enregistrer</button>
-                    <button class="btn btn-danger" onclick="closeProgramModal()">❌ Annuler</button>
-                </div>
-            </div>
-        </div>
-
-        <div id="assignContainerModal" class="modal">
-            <div class="modal-content">
-                <h2 class="modal-header">📦 Attribuer Conteneur</h2>
-                <p>Pour <strong id="assignSelectedCount">0</strong> colis :</p>
-                <div class="form-group full-width">
-                    <label>Nouvelle Position</label>
-                    <select id="assignContainerStatus">
-                        <option value="">-- Ne pas changer --</option>
-                        <option value="PARIS">🇫🇷 Stock Paris</option>
-                        <option value="A_VENIR">🚢 En Transit</option>
-                        <option value="EN_COURS">📦 Arrivé</option>
-                    </select>
-                </div>
-                <div class="form-group full-width"><label>N° Conteneur</label><input type="text" id="assignConteneurInput"></div>
-                <div style="display: flex; gap: 10px; margin-top: 20px;">
-                    <button class="btn btn-success" onclick="confirmAssignContainer()">💾 Enregistrer</button>
-                    <button class="btn btn-danger" onclick="closeAssignContainerModal()">❌ Annuler</button>
-                </div>
-            </div>
-        </div>
-
-        <div id="programDetailsModal" class="modal">
-            <div class="modal-content modal-xl">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-                    <h2 class="modal-header" style="margin:0;">📋 Feuille de route</h2>
-                    <div style="display: flex; gap: 10px;">
-                        <button id="btnOpenMap" class="btn btn-warning btn-small">🗺️ Carte</button>
-                        <button id="btnExportPdf" class="btn btn-success btn-small">📄 PDF</button>
-                        <button class="btn btn-danger btn-small" onclick="closeProgramDetailsModal()">Fermer</button>
-                    </div>
-                </div>
-                <div style="background: #f8f9fa; padding: 10px; border-radius: 8px; margin-bottom: 15px;">
-                    <p><strong>Livreur :</strong> <span id="detailLivreur"></span> | <strong>Date :</strong> <span id="detailDate"></span></p>
-                </div>
-                <div class="preview-table"><table id="programDetailsTable"></table></div>
-            </div>
-        </div>
-
-        <div id="archivesModal" class="modal">
-            <div class="modal-content modal-xl" style="height: 90vh;">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-                    <h2 class="modal-header" style="margin:0;">🗄️ Archives</h2>
-                    <button class="btn btn-danger btn-small" onclick="closeArchivesModal()">Fermer</button>
-                </div>
-                <input type="text" id="archiveSearch" class="search-filter" placeholder="🔍 Rechercher..." oninput="searchArchives()" style="margin-bottom: 15px; width: 100%;">
-                <div class="preview-table" style="max-height: calc(90vh - 150px);">
-                    <table id="archivesTable">
-                        <thead><tr><th>DATE</th><th>REF</th><th>CONTENEUR</th><th>DESTINATAIRE</th><th>LIVREUR</th><th>ACTIONS</th></tr></thead>
-                        <tbody id="archivesBody"></tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
-        <datalist id="sharedLocationsList"></datalist>
-    </div>
-
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
@@ -426,7 +173,6 @@
     </script>
     <script src="https://cdn.jsdelivr.net/npm/choices.js/public/assets/scripts/choices.min.js"></script>
     <script src="auth-guard.js"></script>
-    <script src="livraison/livraison.js"></script>
     <script src="script.js"></script>
     <script>
         function openTab(evt, tabName) {
@@ -444,8 +190,14 @@
 
             document.getElementById(tabName).classList.add("active");
             // Activer le bouton cliqué
-            if(evt && evt.currentTarget) evt.currentTarget.classList.add("active");
-            evt.preventDefault();
+            if(evt && evt.currentTarget) {
+                evt.currentTarget.classList.add("active");
+                evt.preventDefault();
+            } else {
+                // Cas où la fonction est appelée sans clic (ex: au chargement)
+                const link = document.querySelector(`a[onclick*="'${tabName}'"]`);
+                if(link) link.classList.add("active");
+            }
         }
     </script>
 </body>
