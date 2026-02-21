@@ -96,7 +96,6 @@ firebase.auth().onAuthStateChanged(async (user) => {
         if (userRole === 'saisie_full') {
             if (currentPage.includes('dashboard.html') ||
                 currentPage.includes('bank.html') || 
-                currentPage.includes('arrivages.html') ||
                 currentPage.includes('salaire.html')) {
                 alert("Accès refusé : Votre rôle (Saisie Full) ne permet pas d'accéder à cette page.");
                 window.location.href = 'index.html'; 
@@ -141,7 +140,6 @@ firebase.auth().onAuthStateChanged(async (user) => {
             if (navMagasinage) navMagasinage.style.display = 'inline';
             if (navDashboard) navDashboard.style.display = 'none';
             if (navBank) navBank.style.display = 'none';
-            if (navArrivages) navArrivages.style.display = 'none';
             if (navSalaire) navSalaire.style.display = 'none';
         }
 
