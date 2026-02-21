@@ -132,6 +132,7 @@ firebase.auth().onAuthStateChanged(async (user) => {
         const navConfirmation = document.getElementById('nav-confirmation');
         const navSalaire = document.getElementById('nav-salaire');
         const navPoints = document.getElementById('nav-points');
+        const navLivraison = document.getElementById('nav-livraison');
 
         if (navAdmin && userRole !== 'super_admin') navAdmin.style.display = 'none';
         if (navPoints && (userRole !== 'admin' && userRole !== 'super_admin')) navPoints.style.display = 'none';
@@ -154,6 +155,7 @@ firebase.auth().onAuthStateChanged(async (user) => {
             if (navClients) navClients.style.display = 'none';
             if (navConfirmation) navConfirmation.style.display = 'none';
             if (navSalaire) navSalaire.style.display = 'none';
+            if (navLivraison) navLivraison.style.display = 'none';
         }
 
         document.body.style.display = 'block';

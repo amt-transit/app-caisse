@@ -507,3 +507,147 @@ body.login-page {
     }
     .form-grid[style*="grid-template-columns"] { grid-template-columns: 1fr !important; }
 }
+
+/* --- INTEGRATION MODULE LIVRAISON --- */
+
+/* Barre de statistiques (Dashboard Livraison) */
+.stats-bar { display: flex; gap: 30px; align-items: center; margin-bottom: 20px; padding: 10px; background: #fff; border-radius: var(--radius); box-shadow: var(--shadow-sm); }
+.stat-item { text-align: center; flex: 1; border-right: 1px solid #eee; }
+.stat-item:last-child { border-right: none; }
+.stat-number { font-size: 1.8em; font-weight: bold; color: var(--primary); }
+.stat-label { font-size: 0.8em; opacity: 0.9; color: var(--text-muted); text-transform: uppercase; }
+
+/* Onglets spécifiques Livraison */
+.delivery-tabs { display: flex; background: white; padding: 0 10px; border-bottom: 1px solid #e0e0e0; margin-bottom: 15px; gap: 5px; }
+.tab-btn { padding: 10px 20px; border: none; background: none; font-size: 13px; font-weight: 600; color: #666; cursor: pointer; border-bottom: 3px solid transparent; transition: all 0.2s; }
+.tab-btn:hover { background: #f8fafc; color: var(--primary); }
+.tab-btn.active { color: var(--primary); border-bottom-color: var(--primary); background: #f1f5f9; }
+
+/* Barre d'outils Livraison */
+.toolbar { padding: 15px; background: #f8f9fa; border: 1px solid #e0e0e0; display: flex; gap: 10px; flex-wrap: wrap; align-items: center; border-radius: 8px; margin-bottom: 15px; }
+
+/* Boutons génériques Livraison */
+.btn { padding: 8px 16px; background: var(--primary); color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 600; display: inline-flex; align-items: center; gap: 8px; transition: all 0.2s; text-decoration: none; }
+.btn:hover { opacity: 0.9; transform: translateY(-1px); box-shadow: var(--shadow-sm); }
+.btn-success { background: var(--success); }
+.btn-danger { background: var(--danger); }
+.btn-warning { background: var(--warning); }
+.btn-small { padding: 4px 10px; font-size: 11px; }
+.btn input[type="file"] { display: none; }
+
+/* Badges de Statut */
+.status-badge { display: inline-block; padding: 4px 12px; border-radius: 12px; font-size: 11px; font-weight: 600; }
+.status-attente { background: #fff3cd; color: #856404; }
+.status-en-cours { background: #cce5ff; color: #004085; }
+.status-livre { background: #d4edda; color: #155724; }
+
+/* Badges Communes (Couleurs spécifiques) */
+.commune-badge { display: inline-block; padding: 3px 10px; border-radius: 10px; font-size: 11px; font-weight: 600; }
+.badge-cocody { background: #e3f2fd; color: #1565c0; }
+.badge-abobo { background: #f3e5f5; color: #6a1b9a; }
+.badge-yopougon { background: #fff3e0; color: #e65100; }
+.badge-adjame { background: #e8f5e9; color: #2e7d32; }
+.badge-koumassi { background: #fce4ec; color: #c2185b; }
+.badge-marcory { background: #e0f2f1; color: #00695c; }
+.badge-treichville { background: #fff3e0; color: #ef6c00; }
+.badge-attecoube { background: #f3e5f5; color: #7b1fa2; }
+.badge-port-bouet { background: #f3e5f5; color: #4a148c; }
+.badge-bingerville { background: #fff9c4; color: #f57f17; }
+.badge-songon { background: #e0f7fa; color: #006064; }
+.badge-anyama { background: #f1f8e9; color: #33691e; }
+.badge-plateau { background: #e1f5fe; color: #01579b; }
+.badge-autre { background: #f5f5f5; color: #616161; }
+
+/* Filtres Dropdown personnalisés */
+.dropdown-filter { position: relative; display: inline-block; }
+.dropdown-toggle { background: white; border: 1px solid #e0e0e0; padding: 8px 12px; border-radius: 6px; cursor: pointer; display: flex; align-items: center; justify-content: space-between; min-width: 200px; font-size: 13px; }
+.dropdown-menu { display: none; position: absolute; top: 100%; left: 0; background: white; border: 1px solid #e0e0e0; border-radius: 6px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); padding: 10px; z-index: 100; min-width: 200px; max-height: 300px; overflow-y: auto; }
+.dropdown-menu.show { display: block; }
+.dropdown-menu label { display: flex; align-items: center; padding: 5px; cursor: pointer; font-size: 13px; }
+.dropdown-menu input { width: auto; margin-right: 10px; height: auto; }
+
+/* Tableaux Livraison */
+.col-checkbox { width: 40px; text-align: center; }
+.empty-state { text-align: center; padding: 40px; color: #999; }
+.empty-state-icon { font-size: 3em; margin-bottom: 10px; }
+
+/* Modales Livraison (Largeur spécifique) */
+.modal-xl { max-width: 800px !important; width: 95%; }
+.preview-table { max-height: 300px; overflow-y: auto; margin: 15px 0; border: 1px solid #eee; }
+
+/* Toast Notification */
+.toast { position: fixed; bottom: 30px; right: 30px; padding: 15px 25px; border-radius: 8px; color: white; z-index: 3000; box-shadow: 0 5px 15px rgba(0,0,0,0.2); animation: slideIn 0.3s ease-out; }
+.toast-success { background: #2ecc71; }
+.toast-error { background: #e74c3c; }
+
+/* --- INTEGRATION MODULE LIVRAISON --- */
+
+/* Barre de statistiques (Dashboard Livraison) */
+.stats-bar { display: flex; gap: 30px; align-items: center; margin-bottom: 20px; padding: 10px; background: #fff; border-radius: var(--radius); box-shadow: var(--shadow-sm); }
+.stat-item { text-align: center; flex: 1; border-right: 1px solid #eee; }
+.stat-item:last-child { border-right: none; }
+.stat-number { font-size: 1.8em; font-weight: bold; color: var(--primary); }
+.stat-label { font-size: 0.8em; opacity: 0.9; color: var(--text-muted); text-transform: uppercase; }
+
+/* Onglets spécifiques Livraison */
+.delivery-tabs { display: flex; background: white; padding: 0 10px; border-bottom: 1px solid #e0e0e0; margin-bottom: 15px; gap: 5px; }
+.tab-btn { padding: 10px 20px; border: none; background: none; font-size: 13px; font-weight: 600; color: #666; cursor: pointer; border-bottom: 3px solid transparent; transition: all 0.2s; }
+.tab-btn:hover { background: #f8fafc; color: var(--primary); }
+.tab-btn.active { color: var(--primary); border-bottom-color: var(--primary); background: #f1f5f9; }
+
+/* Barre d'outils Livraison */
+.toolbar { padding: 15px; background: #f8f9fa; border: 1px solid #e0e0e0; display: flex; gap: 10px; flex-wrap: wrap; align-items: center; border-radius: 8px; margin-bottom: 15px; }
+
+/* Boutons génériques Livraison */
+.btn { padding: 8px 16px; background: var(--primary); color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 600; display: inline-flex; align-items: center; gap: 8px; transition: all 0.2s; text-decoration: none; }
+.btn:hover { opacity: 0.9; transform: translateY(-1px); box-shadow: var(--shadow-sm); }
+.btn-success { background: var(--success); }
+.btn-danger { background: var(--danger); }
+.btn-warning { background: var(--warning); }
+.btn-small { padding: 4px 10px; font-size: 11px; }
+.btn input[type="file"] { display: none; }
+
+/* Badges de Statut */
+.status-badge { display: inline-block; padding: 4px 12px; border-radius: 12px; font-size: 11px; font-weight: 600; }
+.status-attente { background: #fff3cd; color: #856404; }
+.status-en-cours { background: #cce5ff; color: #004085; }
+.status-livre { background: #d4edda; color: #155724; }
+
+/* Badges Communes (Couleurs spécifiques) */
+.commune-badge { display: inline-block; padding: 3px 10px; border-radius: 10px; font-size: 11px; font-weight: 600; }
+.badge-cocody { background: #e3f2fd; color: #1565c0; }
+.badge-abobo { background: #f3e5f5; color: #6a1b9a; }
+.badge-yopougon { background: #fff3e0; color: #e65100; }
+.badge-adjame { background: #e8f5e9; color: #2e7d32; }
+.badge-koumassi { background: #fce4ec; color: #c2185b; }
+.badge-marcory { background: #e0f2f1; color: #00695c; }
+.badge-treichville { background: #fff3e0; color: #ef6c00; }
+.badge-attecoube { background: #f3e5f5; color: #7b1fa2; }
+.badge-port-bouet { background: #f3e5f5; color: #4a148c; }
+.badge-bingerville { background: #fff9c4; color: #f57f17; }
+.badge-songon { background: #e0f7fa; color: #006064; }
+.badge-anyama { background: #f1f8e9; color: #33691e; }
+.badge-plateau { background: #e1f5fe; color: #01579b; }
+.badge-autre { background: #f5f5f5; color: #616161; }
+
+/* Filtres Dropdown personnalisés */
+.dropdown-filter { position: relative; display: inline-block; }
+.dropdown-toggle { background: white; border: 1px solid #e0e0e0; padding: 8px 12px; border-radius: 6px; cursor: pointer; display: flex; align-items: center; justify-content: space-between; min-width: 200px; font-size: 13px; }
+.dropdown-menu { display: none; position: absolute; top: 100%; left: 0; background: white; border: 1px solid #e0e0e0; border-radius: 6px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); padding: 10px; z-index: 100; min-width: 200px; max-height: 300px; overflow-y: auto; }
+.dropdown-menu.show { display: block; }
+.dropdown-menu label { display: flex; align-items: center; padding: 5px; cursor: pointer; font-size: 13px; }
+.dropdown-menu input { width: auto; margin-right: 10px; height: auto; }
+
+/* Tableaux Livraison */
+.col-checkbox { width: 40px; text-align: center; }
+.empty-state { text-align: center; padding: 40px; color: #999; }
+.empty-state-icon { font-size: 3em; margin-bottom: 10px; }
+
+/* Modales Livraison (Largeur spécifique) */
+.modal-xl { max-width: 800px !important; width: 95%; }
+.preview-table { max-height: 300px; overflow-y: auto; margin: 15px 0; border: 1px solid #eee; }
+
+/* Toast Notification */
+.toast { position: fixed; bottom: 30px; right: 30px; padding: 15px 25px; border-radius: 8px; color: white; z-index: 3000; box-shadow: 0 5px 15px rgba(0,0,0,0.2); animation: slideIn 0.3s ease-out; }
+.toast-success { background: #2ecc71; }
+.toast-error { background: #e74c3c; }
