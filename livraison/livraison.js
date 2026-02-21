@@ -90,6 +90,7 @@ document.addEventListener('DOMContentLoaded', function() {
     initRealtimeSync();
     updateContainerTitle();
     initActiveContainerInput();
+    initAutoAddress();
 });
 
 // Synchronisation Temps Réel avec Firestore
@@ -271,6 +272,17 @@ async function importPDF(event) {
         
         const parsed = parsePDFText(allText);
         
+        // Enrichissement automatique des adresses (Auto-Address)
+        for (const item of parsed) {
+            if ((!item.lieuLivraison || !item.lieuLivraison.trim()) && item.destinataire) {
+                const foundAddr = await findAddressForRecipient(item.destinataire);
+                if (foundAddr) {
+                    item.lieuLivraison = foundAddr;
+                    item.commune = detectCommune(foundAddr);
+                }
+            }
+        }
+
         if (parsed.length > 0) {
             pendingImport = parsed;
             showPreviewModal(parsed);
@@ -397,7 +409,7 @@ function importExcel(event) {
     const reader = new FileReader();
     reader.onload = function(e) {
         // Utiliser setTimeout pour laisser le temps au navigateur d'afficher le spinner
-        setTimeout(() => {
+        setTimeout(async () => {
             try {
                 const data = new Uint8Array(e.target.result);
                 const workbook = XLSX.read(data, { type: 'array' });
@@ -417,6 +429,17 @@ function importExcel(event) {
                     dateAjout: new Date().toISOString()
                 })).filter(d => d.ref);
                 
+                // Enrichissement automatique des adresses (Auto-Address)
+                for (const item of imported) {
+                    if ((!item.lieuLivraison || !item.lieuLivraison.trim()) && item.destinataire) {
+                        const foundAddr = await findAddressForRecipient(item.destinataire);
+                        if (foundAddr) {
+                            item.lieuLivraison = foundAddr;
+                            item.commune = detectCommune(foundAddr);
+                        }
+                    }
+                }
+
                 if (imported.length > 0) {
                     pendingImport = imported;
                     showPreviewModal(imported);
@@ -449,6 +472,28 @@ function detectCommune(lieu) {
         if (keywords.some(kw => upper.includes(kw))) return key;
     }
     return 'AUTRE';
+}
+
+// Recherche d'adresse pour un destinataire (Local + Archives)
+async function findAddressForRecipient(name) {
+    if (!name) return null;
+    const val = name.trim();
+    
+    // 1. Recherche locale (Active)
+    const localMatch = deliveries.find(d => 
+        d.destinataire && d.destinataire.toLowerCase() === val.toLowerCase() && d.lieuLivraison
+    );
+    if (localMatch) return localMatch.lieuLivraison;
+
+    // 2. Recherche Archives (Firestore)
+    try {
+        const snap = await db.collection(CONSTANTS.ARCHIVE_COLLECTION)
+            .where('destinataire', '==', val)
+            .limit(1)
+            .get();
+        if (!snap.empty) return snap.docs[0].data().lieuLivraison;
+    } catch (e) { console.error("Erreur recherche adresse archive", e); }
+    return null;
 }
 
 // Aperçu modal
@@ -1634,4 +1679,42 @@ function showToast(message, type = 'success') {
 function loadMoreItems() {
     itemsPerPage += 100; // Augmenter le nombre d'éléments à afficher
     renderTable(); // Re-render le tableau avec la nouvelle limite
+}
+
+// --- AUTO-REMPLISSAGE ADRESSE ---
+function initAutoAddress() {
+    const destInput = document.getElementById('destinataire');
+    const lieuInput = document.getElementById('lieuLivraison');
+    
+    if (!destInput || !lieuInput) return;
+
+    destInput.addEventListener('change', async function() {
+        const val = this.value.trim();
+        // Si pas de nom ou si le lieu est déjà rempli, on ne fait rien
+        if (!val || lieuInput.value.trim() !== '') return;
+
+        // 1. Recherche dans les données locales (Active) - Insensible à la casse
+        // On cherche le colis le plus récent pour ce destinataire
+        const localMatch = deliveries.find(d => 
+            d.destinataire && d.destinataire.toLowerCase() === val.toLowerCase() && d.lieuLivraison
+        );
+        
+        if (localMatch) {
+            lieuInput.value = localMatch.lieuLivraison;
+            showToast(`📍 Adresse trouvée : ${localMatch.lieuLivraison}`, 'success');
+            return;
+        }
+
+        // 2. Recherche dans les archives (Firestore) - Match exact
+        try {
+            const snap = await db.collection(CONSTANTS.ARCHIVE_COLLECTION).where('destinataire', '==', val).limit(1).get();
+            if (!snap.empty) {
+                const data = snap.docs[0].data();
+                if (data.lieuLivraison) {
+                    lieuInput.value = data.lieuLivraison;
+                    showToast(`🗄️ Adresse trouvée (Archives) : ${data.lieuLivraison}`, 'success');
+                }
+            }
+        } catch (e) { console.error("Erreur auto-adresse", e); }
+    });
 }
