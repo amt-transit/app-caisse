@@ -303,7 +303,7 @@ async function importPDF(event) {
 function parsePDFText(text) {
     const deliveries = [];
     const lines = text.split('\n');
-    const refRegex = /^([A-Z]{2}-\d{3}-D\d{2})/;
+    const refRegex = /([A-Z]{2}-\d{3}-D\d{2})/; // Plus souple sur les espaces
     
     for (let i = 0; i < lines.length; i++) {
         const line = lines[i].trim();
@@ -414,20 +414,51 @@ function importExcel(event) {
                 const data = new Uint8Array(e.target.result);
                 const workbook = XLSX.read(data, { type: 'array' });
                 const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
-                const jsonData = XLSX.utils.sheet_to_json(firstSheet);
                 
-                const imported = jsonData.map((row, i) => ({
-                    id: Date.now() + i,
-                    ref: String(row.REF || row.REFERENCE || ''),
-                    montant: String(row.RESTANT || row.MONTANT || ''),
-                    expediteur: fixEncoding(String(row.EXPEDITEUR || '')),
-                    commune: detectCommune(fixEncoding(String(row.LIVRE || row.LIEU || ''))),
-                    lieuLivraison: fixEncoding(String(row.LIVRE || row.LIEU || '')),
-                    destinataire: fixEncoding(String(row.DESTINATAIRE || '')),
-                    description: fixEncoding(String(row.DESCRIPTION || '')),
-                    status: 'EN_ATTENTE',
-                    dateAjout: new Date().toISOString()
-                })).filter(d => d.ref);
+                // Lecture brute pour détecter le format (Liste simple ou Tableau structuré)
+                const rawData = XLSX.utils.sheet_to_json(firstSheet, { header: 1 });
+                let imported = [];
+                const refRegex = /[A-Z]{2}-\d{3}-D\d{2}/i;
+
+                // Vérifie si la première ligne contient un en-tête explicite
+                const hasHeader = rawData.length > 0 && rawData[0].some(cell => 
+                    ['REF', 'REFERENCE', 'CODE'].includes(String(cell).toUpperCase().trim())
+                );
+
+                if (!hasHeader) {
+                    // CAS 1 : Liste simple (pas d'en-tête) -> On scanne tout pour trouver des références
+                    imported = rawData.flat().map((cell, i) => {
+                        const val = String(cell || '').trim();
+                        if (refRegex.test(val)) {
+                            return {
+                                id: Date.now() + i,
+                                ref: val.toUpperCase(),
+                                montant: '', expediteur: '', commune: 'AUTRE', lieuLivraison: '', destinataire: '', description: '',
+                                status: 'EN_ATTENTE', dateAjout: new Date().toISOString()
+                            };
+                        }
+                        return null;
+                    }).filter(d => d !== null);
+                } else {
+                    // CAS 2 : Tableau structuré avec en-têtes
+                    const jsonData = XLSX.utils.sheet_to_json(firstSheet);
+                    imported = jsonData.map((row, i) => {
+                        const r = {};
+                        Object.keys(row).forEach(k => r[k.toUpperCase().trim()] = row[k]);
+                        return {
+                            id: Date.now() + i,
+                            ref: String(r.REF || r.REFERENCE || r.CODE || ''),
+                            montant: String(r.RESTANT || r.MONTANT || r.PRIX || ''),
+                            expediteur: fixEncoding(String(r.EXPEDITEUR || '')),
+                            commune: detectCommune(fixEncoding(String(r.LIVRE || r.LIEU || r.COMMUNE || ''))),
+                            lieuLivraison: fixEncoding(String(r.LIVRE || r.LIEU || '')),
+                            destinataire: fixEncoding(String(r.DESTINATAIRE || r.CLIENT || '')),
+                            description: fixEncoding(String(r.DESCRIPTION || '')),
+                            status: 'EN_ATTENTE',
+                            dateAjout: new Date().toISOString()
+                        };
+                    }).filter(d => d.ref && d.ref.trim() !== '');
+                }
                 
                 // Enrichissement automatique des adresses (Auto-Address)
                 for (const item of imported) {
@@ -574,11 +605,16 @@ function confirmImport() {
         } else {
             // CAS 2 : La référence n'existe pas -> On crée un nouveau colis
             const docRef = db.collection(CONSTANTS.COLLECTION).doc();
+            // On retire l'ID temporaire (numérique) avant l'envoi
+            const { id: _tempId, ...itemData } = importItem;
+
+            // Nettoyage des valeurs undefined (Firestore ne les supporte pas)
+            Object.keys(itemData).forEach(key => itemData[key] === undefined && delete itemData[key]);
+
             batch.set(docRef, { 
-                ...importItem, 
-                id: undefined, // Pas d'ID numérique
-                conteneur: conteneur || importItem.conteneur, 
-                bl: bl || importItem.bl, 
+                ...itemData, 
+                conteneur: conteneur || importItem.conteneur || '', 
+                bl: bl || importItem.bl || '', 
                 containerStatus: containerStatus,
                 dateAjout: new Date().toISOString()
             });
