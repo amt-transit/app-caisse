@@ -160,7 +160,22 @@ function switchTab(tab) {
     // Gestion de la section Conteneur Actif (Visible uniquement sur l'onglet 3)
     const activeContainerSection = document.getElementById('activeContainerSection');
     if (activeContainerSection) {
-        activeContainerSection.style.display = (tab === 'EN_COURS') ? 'flex' : 'none';
+        activeContainerSection.style.display = (tab === 'EN_COURS' || tab === 'A_VENIR') ? 'flex' : 'none';
+    }
+
+    // --- CHARGEMENT DU FILTRE SPÉCIFIQUE À L'ONGLET ---
+    if (tab === 'EN_COURS' || tab === 'A_VENIR') {
+        const key = `container_filter_${tab}`;
+        currentContainerName = localStorage.getItem(key) || 'Aucun';
+        const isActive = localStorage.getItem(`${key}_active`) === 'true';
+        
+        const input = document.getElementById('activeContainerInput');
+        if (input) input.value = currentContainerName !== 'Aucun' ? currentContainerName : '';
+        
+        const cb = document.getElementById('filterByContainerCb');
+        if (cb) cb.checked = isActive;
+        
+        updateContainerTitle();
     }
 
     selectedIds.clear(); // On vide la sélection quand on change d'onglet
@@ -177,8 +192,55 @@ function switchTab(tab) {
 // Gestion du conteneur actif
 function initActiveContainerInput() {
     const input = document.getElementById('activeContainerInput');
+    
+    // Initialisation spécifique à l'onglet par défaut
+    if (currentTab === 'EN_COURS' || currentTab === 'A_VENIR') {
+        const key = `container_filter_${currentTab}`;
+        const saved = localStorage.getItem(key);
+        if (saved) currentContainerName = saved;
+        updateContainerTitle();
+    }
+
     if (input && currentContainerName !== 'Aucun') {
         input.value = currentContainerName;
+    }
+    
+    // INJECTION DYNAMIQUE : Checkbox pour filtrer par ce conteneur
+    if (input && !document.getElementById('filterContainerWrapper')) {
+        const wrapper = document.createElement('div');
+        wrapper.id = 'filterContainerWrapper';
+        wrapper.style.display = 'inline-flex';
+        wrapper.style.alignItems = 'center';
+        wrapper.style.marginLeft = '10px';
+        wrapper.style.backgroundColor = '#e0f2fe';
+        wrapper.style.padding = '4px 8px';
+        wrapper.style.borderRadius = '6px';
+        wrapper.style.border = '1px solid #bae6fd';
+
+        const cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.id = 'filterByContainerCb';
+        // Restauration de l'état coché/décoché
+        const key = `container_filter_${currentTab}`;
+        cb.checked = localStorage.getItem(`${key}_active`) === 'true';
+        cb.style.marginRight = '5px';
+        cb.addEventListener('change', () => {
+            // Sauvegarde de l'état
+            if (currentTab === 'EN_COURS' || currentTab === 'A_VENIR') localStorage.setItem(`container_filter_${currentTab}_active`, cb.checked);
+            filterDeliveries();
+        });
+
+        const lbl = document.createElement('label');
+        lbl.htmlFor = 'filterByContainerCb';
+        lbl.textContent = 'Filtrer la vue';
+        lbl.style.fontSize = '12px';
+        lbl.style.fontWeight = 'bold';
+        lbl.style.color = '#0284c7';
+        lbl.style.cursor = 'pointer';
+
+        wrapper.appendChild(cb);
+        wrapper.appendChild(lbl);
+        input.parentNode.appendChild(wrapper);
     }
 }
 
@@ -187,9 +249,20 @@ function setActiveContainer() {
     const newVal = input.value.trim();
     if (newVal) {
         currentContainerName = newVal;
-        localStorage.setItem(CONSTANTS.STORAGE_KEYS.CONTAINER_NAME, currentContainerName);
+        
+        // Sauvegarde spécifique à l'onglet
+        if (currentTab === 'EN_COURS' || currentTab === 'A_VENIR') {
+            localStorage.setItem(`container_filter_${currentTab}`, currentContainerName);
+        } else {
+            localStorage.setItem(CONSTANTS.STORAGE_KEYS.CONTAINER_NAME, currentContainerName);
+        }
+        
         updateContainerTitle();
         showToast(`Conteneur actif défini : ${newVal}`, 'success');
+        // Si le filtre est coché, on rafraîchit la liste
+        if (document.getElementById('filterByContainerCb')?.checked) {
+            filterDeliveries();
+        }
     } else {
         showToast('Veuillez saisir un numéro de conteneur', 'error');
     }
@@ -1421,6 +1494,10 @@ function filterDeliveries() {
         statusBtn.textContent = `📊 ${selectedStatuses.length} statuts`;
     }
 
+    // Filtre Conteneur Actif
+    const filterContainerCb = document.getElementById('filterByContainerCb');
+    const isContainerFilterActive = filterContainerCb && filterContainerCb.checked;
+
     const searchQuery = document.getElementById('searchBox').value.toLowerCase().trim();
     
     filteredDeliveries = deliveries.filter(d => {
@@ -1446,7 +1523,13 @@ function filterDeliveries() {
         const searchString = `${d.ref} ${d.expediteur} ${d.destinataire} ${d.lieuLivraison} ${d.livreur || ''}`.toLowerCase();
         const matchSearch = !searchQuery || searchString.includes(searchQuery);
         
-        return matchCommune && matchStatus && matchSearch && matchTab && matchLocation;
+        // Match Conteneur Actif
+        let matchContainer = true;
+        if (isContainerFilterActive && currentContainerName !== 'Aucun') {
+            matchContainer = (d.conteneur === currentContainerName);
+        }
+        
+        return matchCommune && matchStatus && matchSearch && matchTab && matchLocation && matchContainer;
     });
 
     // Appliquer le tri
