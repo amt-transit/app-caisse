@@ -11,9 +11,40 @@ document.addEventListener('DOMContentLoaded', async () => {
     const currentUserName = sessionStorage.getItem('userName') || 'Utilisateur';
 
     const agentSelectElement = document.getElementById('agent');
+    const addAgentBtn = document.getElementById('addAgentBtn');
+
     const agentChoices = new Choices(agentSelectElement, {
         removeItemButton: true, placeholder: true, searchPlaceholderValue: 'Rechercher un agent...',
+        shouldSort: false, itemSelectText: '',
     });
+
+    // --- GESTION DYNAMIQUE DES AGENTS (Firestore) ---
+    db.collection("agents").orderBy("name").onSnapshot(snapshot => {
+        if (snapshot.empty) {
+            // MIGRATION AUTOMATIQUE : Si la liste est vide, on ajoute les agents par défaut
+            const defaults = ["Adboul Paris", "Ali Paris", "Autres Paris", "AZIZ", "Bakary Paris", "Cesar", "Cheick Paris", "Lauraine", "Coulibaly Traoré Mah", "Demba Paris", "Drissa Paris", "Fatim Paris", "Hamza", "JB", "Julien", "Kady Paris", "Maley", "Males", "Mohamed Paris", "Moussa Paris", "Salif", "Samba", "Touré", "Blanche"];
+            const batch = db.batch();
+            defaults.forEach(name => {
+                const ref = db.collection("agents").doc();
+                batch.set(ref, { name: name });
+            });
+            batch.commit().then(() => console.log("Liste agents initialisée."));
+            return;
+        }
+
+        const agents = snapshot.docs.map(doc => ({ value: doc.data().name, label: doc.data().name, id: doc.id }));
+        agentChoices.clearChoices();
+        agentChoices.setChoices(agents, 'value', 'label', true);
+    });
+
+    if (addAgentBtn) {
+        addAgentBtn.addEventListener('click', () => {
+            const newName = prompt("Nom du nouvel agent :");
+            if (newName && newName.trim()) {
+                db.collection("agents").add({ name: newName.trim() }).then(() => alert("Agent ajouté !")).catch(e => alert(e));
+            }
+        });
+    }
 
     const addEntryBtn = document.getElementById('addEntryBtn');
     const saveDayBtn = document.getElementById('saveDayBtn');
@@ -64,9 +95,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const addQuickExpenseBtn = document.getElementById('addQuickExpenseBtn');
     const quickExpenseDesc = document.getElementById('quickExpenseDesc');
     const quickExpenseAmount = document.getElementById('quickExpenseAmount');
-    const quickExpenseContainer = document.getElementById('quickExpenseContainer'); // Nouveau champ
     const dailyExpensesTableBody = document.getElementById('dailyExpensesTableBody');
-
     // GESTION AFFICHAGE AVANCÉ
     const toggleAdvancedBtn = document.getElementById('toggleAdvancedBtn');
     const advancedFields = document.getElementById('advancedFields');
@@ -201,22 +230,16 @@ document.addEventListener('DOMContentLoaded', async () => {
             const desc = quickExpenseDesc.value.trim();
             const amount = parseFloat(quickExpenseAmount.value);
             
-            // CORRECTION : Priorité au champ spécifique, sinon on prend le conteneur principal
-            let conteneur = '';
-            if (quickExpenseContainer && quickExpenseContainer.value.trim()) {
-                conteneur = quickExpenseContainer.value.trim().toUpperCase();
-            } else if (conteneurInput && conteneurInput.value.trim()) {
-                conteneur = conteneurInput.value.trim().toUpperCase();
-            }
-
+            // Dépenses livreur = Mensuelles (Pas de conteneur)
+            
             if (!date) return alert("Veuillez sélectionner la date en haut.");
             if (!desc || isNaN(amount) || amount <= 0) return alert("Motif ou Montant invalide.");
- 
+
             dailyExpenses.push({
                 date: date,
                 description: desc,
                 montant: amount,
-                conteneur: conteneur
+                conteneur: ''
             });
 
             saveAllToLocalStorage();
@@ -224,7 +247,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             quickExpenseDesc.value = '';
             quickExpenseAmount.value = '';
-            if(quickExpenseContainer) quickExpenseContainer.value = '';
             quickExpenseDesc.focus();
         });
     }
@@ -465,7 +487,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         dailyExpenses.forEach(exp => {
             const docRef = expensesCollection.doc();
             // Si un conteneur est renseigné, on définit le type sur "Conteneur"
-            const typeDepense = exp.conteneur ? "Conteneur" : "Journalière";
+            const typeDepense = exp.conteneur ? "Conteneur" : "Mensuelle";
 
             batch.set(docRef, {
                 date: exp.date,
@@ -473,7 +495,6 @@ document.addEventListener('DOMContentLoaded', async () => {
                 montant: exp.montant,
                 type: typeDepense,
                 isDeleted: false,
-                action: "Depense",
                 conteneur: exp.conteneur || "",
                 sessionId: currentSessionId // <-- AJOUT CLÉ
             });

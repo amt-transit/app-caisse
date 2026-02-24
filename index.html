@@ -77,17 +77,10 @@
                 <option value="Cocody">Cocody</option><option value="Entrepôt">Entrepôt</option><option value="Yopougon">Yopougon</option>
             </select>
             
-            <select id="agent" multiple>
-                <option value="">-- Choisir un ou plusieurs agents --</option>
-                <option value="Adboul Paris">Adboul Paris</option><option value="Ali Paris">Ali Paris</option><option value="Autres Paris">Autres Paris</option>
-                <option value="AZIZ">AZIZ</option><option value="Bakary Paris">Bakary Paris</option><option value="Cesar">Cesar</option>
-                <option value="Cheick Paris">Cheick Paris</option><option value="Constant">Constant</option><option value="Coulibaly Traoré Mah">Coulibaly Traoré Mah</option>
-                <option value="Demba Paris">Demba Paris</option><option value="Drissa Paris">Drissa Paris</option><option value="Fatim Paris">Fatim Paris</option>
-                <option value="Hamza">Hamza</option><option value="JB">JB</option><option value="Julien">Julien</option>
-                <option value="Kady Paris">Kady Paris</option><option value="Maley">Maley</option><option value="Males">Males</option>
-                <option value="Mohamed Paris">Mohamed Paris</option><option value="Moussa Paris">Moussa Paris</option><option value="Salif">Salif</option>
-                <option value="Samba">Samba</option><option value="Touré">Touré</option>
-            </select>
+            <div style="display: flex; gap: 5px; align-items: flex-start;">
+                <div style="flex-grow: 1;"><select id="agent" multiple></select></div>
+                <button id="addAgentBtn" style="background: #28a745; color: white; border: none; border-radius: 4px; width: 30px; height: 30px; font-weight: bold; cursor: pointer; display: flex; align-items: center; justify-content: center;" title="Ajouter un nouvel agent">+</button>
+            </div>
             
             <select id="adjustmentType">
                 <option value="">-- Ajustement (Aucun) --</option>
@@ -104,10 +97,9 @@
 
         <div id="caisseForm" style="background-color: #fff3e0; border: 1px solid #ffe0b2;">
         <h3 style="margin-top:0; color:#d32f2f;">Dépenses du Livreur (Carburant, etc.)</h3>
-        <div class="form-grid" style="grid-template-columns: 2fr 1fr 1fr 1fr;"> <!-- Le CSS mobile forcera 1 colonne -->
+        <div class="form-grid" style="grid-template-columns: 2fr 1fr 1fr;"> <!-- Le CSS mobile forcera 1 colonne -->
             <input type="text" id="quickExpenseDesc" placeholder="Motif (ex: Carburant, Réparation...)">
             <input type="number" id="quickExpenseAmount" placeholder="Montant">
-            <input type="text" id="quickExpenseContainer" placeholder="Conteneur (ex: D50)">
             <button id="addQuickExpenseBtn" style="background-color: #d32f2f; color: white; border: none; border-radius: 6px; cursor: pointer;">Ajouter Dépense</button>
         </div>
     </div>
