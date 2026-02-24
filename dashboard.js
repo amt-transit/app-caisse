@@ -17,6 +17,51 @@ document.addEventListener('DOMContentLoaded', async () => {
     const unpaidTableBody = document.getElementById('unpaidTableBody');
  const adjustmentsTableBody = document.getElementById('adjustmentsTableBody');
 
+    // --- LOGIQUE D'AFFICHAGE RÉDUIT POUR SAISIE_FULL ---
+    const userRole = sessionStorage.getItem('userRole');
+    if (userRole === 'saisie_full') {
+        // 1. Masquer les Totaux Généraux (Cartes du haut)
+        const totalIds = [
+            'grandTotalCount', 'grandTotalDepenses', 'grandTotalBenefice', 
+            'grandTotalCaisse', 'grandTotalReste', 'grandTotalOtherIncome', 
+            'grandTotalPercu', 'grandTotalSoldeBanque', 'grandTotalParisHidden'
+        ];
+        totalIds.forEach(id => {
+            const el = document.getElementById(id);
+            if (el) {
+                // On masque la carte parente (card ou stats-card)
+                const card = el.closest('.card') || el.closest('.stats-card') || el.parentElement;
+                if (card) card.style.display = 'none';
+            }
+        });
+
+        // 2. Masquer les Graphiques
+        const charts = document.querySelectorAll('canvas');
+        charts.forEach(c => {
+            const container = c.closest('.chart-container') || c.closest('.card') || c.parentElement;
+            if (container) container.style.display = 'none';
+        });
+
+        // 3. Masquer les sections non autorisées
+        const sectionsToHide = [
+            'summaryTableBody',       // Récap Mensuel
+            'agentSummaryTableBody',  // Performance Agents
+            'monthlyExpensesTableBody', // Dépenses Mensuelles
+            'bankMovementsTableBody',   // Banque
+            'agedBalanceBody',          // Balance Agée (Analyses avancées)
+            'dormantClientsBody',       // Clients Dormants
+            'avgLeadTime'               // Délai moyen
+        ];
+        sectionsToHide.forEach(id => {
+            const el = document.getElementById(id);
+            if (el) {
+                const container = el.closest('.card') || el.closest('section') || el.parentElement;
+                if (container) container.style.display = 'none';
+            }
+        });
+        // Note: Les sections 'containerSummaryTableBody', 'topClientsTableBody', 'unpaidTableBody', 'adjustmentsTableBody' restent visibles.
+    }
+
     const grandTotalCountEl = document.getElementById('grandTotalCount');
     const grandTotalDepensesEl = document.getElementById('grandTotalDepenses');
     const grandTotalBeneficeEl = document.getElementById('grandTotalBenefice');
@@ -968,8 +1013,16 @@ document.addEventListener('DOMContentLoaded', async () => {
         // Filtrer les dépenses liées au conteneur
         const expenses = allExpenses.filter(e => (e.conteneur && e.conteneur.trim().toUpperCase()) === containerName);
         
-        // Trier les transactions : Référence CROISSANTE
+        // Trier les transactions : Dettes d'abord, puis Référence CROISSANTE
         const sortedTransactions = transactions.map(t => ({...t, _type: 'transaction'})).sort((a, b) => {
+            // 1. Tri par statut de paiement (Dette < 0 en premier)
+            const isUnpaidA = (a.reste || 0) < -1;
+            const isUnpaidB = (b.reste || 0) < -1;
+
+            if (isUnpaidA && !isUnpaidB) return -1;
+            if (!isUnpaidA && isUnpaidB) return 1;
+
+            // 2. Tri par Référence (Existant)
             const getNum = (str) => {
                 const matches = (str || "").match(/\d+/);
                 return matches ? parseInt(matches[0], 10) : 0;
