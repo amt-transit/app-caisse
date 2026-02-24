@@ -376,7 +376,7 @@ async function importPDF(event) {
 function parsePDFText(text) {
     const deliveries = [];
     const lines = text.split('\n');
-    const refRegex = /([A-Z]{2}-\d{3}-D\d{2})/; // Plus souple sur les espaces
+    const refRegex = /([A-Z]{2}-\d{3}-[A-Z0-9]+)/; // Accepte D53, E12, 123, etc.
     
     for (let i = 0; i < lines.length; i++) {
         const line = lines[i].trim();
@@ -491,7 +491,7 @@ function importExcel(event) {
                 // Lecture brute pour détecter le format (Liste simple ou Tableau structuré)
                 const rawData = XLSX.utils.sheet_to_json(firstSheet, { header: 1 });
                 let imported = [];
-                const refRegex = /[A-Z]{2}-\d{3}-D\d{2}/i;
+                const refRegex = /[A-Z]{2}-\d{3}-[A-Z0-9]+/i;
 
                 // Vérifie si la première ligne contient un en-tête explicite
                 const hasHeader = rawData.length > 0 && rawData[0].some(cell => 
@@ -731,6 +731,7 @@ function exportToExcel() {
         'EXPEDITEUR': d.expediteur,
         'LIVRE': d.lieuLivraison,
         'DESTINATAIRE': d.destinataire,
+        'NUMERO': d.numero || (d.destinataire || '').replace(/\s/g, '').match(/(?:\+225|00225|01|05|07)\d{8}|0\d{9}/)?.[0] || '',
         'LIVREUR': d.livreur || '',
         'DATE_PROGRAMME': d.dateProgramme || '',
         'DESCRIPTION': d.description,
@@ -861,6 +862,7 @@ function renderTable() {
         <th class="sortable" onclick="sortTable('expediteur')" style="width: 150px;">EXPEDITEUR ${getSortIcon('expediteur')}</th>
         <th class="sortable" onclick="sortTable('lieuLivraison')" style="width: 250px;">LIEU DE LIVRAISON ${getSortIcon('lieuLivraison')}</th>
         <th class="sortable" onclick="sortTable('destinataire')" style="width: 180px;">DESTINATAIRE ${getSortIcon('destinataire')}</th>
+        <th style="width: 120px;">NUMÉRO</th>
         <th style="width: 250px;">DESCRIPTION</th>
         <th style="width: 150px;">INFO</th>
         <th class="sortable" onclick="sortTable('livreur')" style="width: 150px;">LIVREUR (DATE) ${getSortIcon('livreur')}</th>
@@ -902,15 +904,63 @@ function renderTable() {
             statusCell = '';
         }
 
+        // --- LOGIQUE WHATSAPP ---
+        // 1. Priorité au champ 'numero' s'il existe
+        let phoneCandidate = d.numero;
+
+        // 2. Sinon, recherche intelligente dans les autres champs (sans fusionner les textes brutalement)
+        if (!phoneCandidate) {
+            const fieldsToCheck = [d.destinataire, d.description, d.info];
+            // Regex robuste (celle utilisée pour l'extraction) : gère espaces, tirets, points
+            const robustRegex = /(?:(?:\+|00)225[\s.-]?)?(?:01|05|07|0)\d(?:[\s.-]?\d{2}){4}|(?:(?:\+|00)225[\s.-]?)?(?:01|05|07|0)\d{8,}/;
+            
+            for (const field of fieldsToCheck) {
+                if (field) {
+                    const match = field.match(robustRegex);
+                    if (match) {
+                        phoneCandidate = match[0];
+                        break; // On prend le premier trouvé
+                    }
+                }
+            }
+        }
+
+        let waBtn = '';
+        if (phoneCandidate) {
+            // Nettoyage final pour l'API WhatsApp (chiffres uniquement)
+            let phone = phoneCandidate.replace(/[^\d]/g, '').replace(/^00/, '');
+            
+            if (phone.length === 10) phone = '225' + phone; // Ajout indicatif CI par défaut
+            
+            const msg = `Bonjour, votre colis ${d.ref} (${d.conteneur || ''}) est disponible pour la livraison.`;
+            waBtn = `<a href="https://wa.me/${phone}?text=${encodeURIComponent(msg)}" target="_blank" class="btn btn-success btn-small" style="background-color:#25D366; border:none; padding:4px 6px; margin-right:4px;" title="Contacter sur WhatsApp">📱</a>`;
+        }
+
+        // Extraction et Nettoyage (Destinataire / Numéro)
+        let displayDestinataire = d.destinataire || '';
+        let displayPhone = d.numero || '';
+        
+        // Regex pour trouver un numéro dans le nom (avec ou sans espaces)
+        const phoneRegex = /(?:(?:\+|00)225[\s.-]?)?(?:01|05|07|0)\d(?:[\s.-]?\d{2}){4}|(?:(?:\+|00)225[\s.-]?)?(?:01|05|07|0)\d{8,}/;
+        const match = displayDestinataire.match(phoneRegex);
+        
+        if (match) {
+            const foundNumber = match[0];
+            if (!displayPhone) displayPhone = foundNumber.replace(/[\s.-]/g, ''); // Normalisation
+            displayDestinataire = displayDestinataire.replace(foundNumber, '').trim();
+            displayDestinataire = displayDestinataire.replace(/[-–,;:\s]+$/, ''); // Nettoyage fin
+        }
+
         return `
             <tr class="${rowClass}">
                 <td class="col-checkbox"><input type="checkbox" onchange="toggleSelection('${d.id}')" ${selectedIds.has(d.id) ? 'checked' : ''}></td>
                 <td>${d.conteneur || '-'}</td>
                 <td class="ref">${transitIndicator}${d.ref}</td>
-                <td class="montant">${d.montant || '-'}</td>
+                <td class="montant"><input type="text" class="editable-cell" value="${(d.montant || '').replace(/"/g, '&quot;')}" onchange="updateDeliveryAmount('${d.id}', this.value)" style="width: 100%;"></td>
                 <td>${d.expediteur}</td>
                 <td><input type="text" class="editable-cell" value="${(d.lieuLivraison || '').replace(/"/g, '&quot;')}" list="sharedLocationsList" onchange="updateDeliveryLocation('${d.id}', this.value)"></td>
-                <td><input type="text" class="editable-cell" value="${(d.destinataire || '').replace(/"/g, '&quot;')}" onchange="updateDeliveryRecipient('${d.id}', this.value)"></td>
+                <td><input type="text" class="editable-cell" value="${displayDestinataire.replace(/"/g, '&quot;')}" onchange="updateDeliveryRecipient('${d.id}', this.value)"></td>
+                <td><input type="text" class="editable-cell" value="${displayPhone}" onchange="updateDeliveryPhone('${d.id}', this.value)" style="font-weight:bold; color:#0d47a1; width:100%;"></td>
                 <td>${d.description || '-'}</td>
                 <td><input type="text" class="editable-cell" value="${(d.info || '').replace(/"/g, '&quot;')}" onchange="updateDeliveryInfo('${d.id}', this.value)"></td>
                 <td>
@@ -920,6 +970,8 @@ function renderTable() {
                 ${statusCell}
                 <td>
                     <div class="actions">
+                        ${waBtn}
+                        <button class="btn btn-small" style="background-color:#64748b; padding:4px 6px;" onclick="printDeliverySlip('${d.id}')" title="Imprimer Bon de Livraison">📄</button>
                         ${d.status !== 'LIVRE' ? 
                             `<button class="btn btn-success btn-small" onclick="markAsDelivered('${d.id}')" title="Marquer comme livré">✅</button>` : 
                             `<button class="btn btn-warning btn-small" onclick="markAsPending('${d.id}')" title="Marquer en attente">⏳</button>`
@@ -1122,6 +1174,55 @@ function exportRoadmapPDF(date, livreur) {
     });
 
     doc.save(`Feuille_de_route_${livreur}_${date}.pdf`);
+}
+
+// Fonction d'export PDF pour un Bon de Livraison individuel
+function printDeliverySlip(id) {
+    const d = deliveries.find(i => i.id == id);
+    if(!d) return;
+    
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF();
+    
+    // En-tête
+    doc.setFontSize(22);
+    doc.setTextColor(40);
+    doc.text("BON DE LIVRAISON", 105, 20, null, null, "center");
+    
+    doc.setFontSize(10);
+    doc.setTextColor(100);
+    doc.text(`Date : ${new Date().toLocaleDateString('fr-FR')}`, 150, 30);
+    doc.text(`Réf : ${d.ref}`, 20, 30);
+
+    // Cadre Expéditeur / Destinataire
+    doc.setDrawColor(200);
+    doc.rect(15, 40, 85, 40);
+    doc.rect(110, 40, 85, 40);
+    
+    doc.setFontSize(12);
+    doc.setTextColor(0);
+    doc.text("EXPÉDITEUR", 20, 48);
+    doc.text("DESTINATAIRE", 115, 48);
+    
+    doc.setFontSize(10);
+    doc.text(doc.splitTextToSize(d.expediteur || 'Non spécifié', 75), 20, 58);
+    doc.text(doc.splitTextToSize((d.destinataire || 'Non spécifié') + '\n' + (d.lieuLivraison || '') + '\n' + (d.commune || ''), 75), 115, 58);
+
+    // Détails Colis
+    doc.autoTable({
+        startY: 90,
+        head: [['Description', 'Conteneur', 'Montant à Payer']],
+        body: [[d.description || 'Colis divers', d.conteneur || '-', d.montant || '0 CFA']],
+        theme: 'grid',
+        headStyles: { fillColor: [60, 60, 60] }
+    });
+
+    // Zone Signature
+    const finalY = doc.lastAutoTable.finalY + 20;
+    doc.text("Signature Client :", 130, finalY);
+    doc.rect(120, finalY + 5, 70, 30);
+
+    doc.save(`BL_${d.ref}.pdf`);
 }
 
 function moveDeliveryOrder(id, direction, date, livreur) {
@@ -1411,7 +1512,7 @@ function searchArchives() {
 }
 
 function restoreFromArchive(id) {
-    if (confirm('Voulez-vous restaurer ce colis vers la liste principale ?')) {
+    if (confirm('Êtes-vous sûr de vouloir restaurer ce colis vers la liste principale ?')) {
         db.collection(CONSTANTS.ARCHIVE_COLLECTION).doc(id).get().then(doc => {
             if(doc.exists) {
                 const data = doc.data();
@@ -1608,11 +1709,41 @@ function updateDeliveryLocation(id, newLocation) {
     if (detected !== 'AUTRE') updates.commune = detected;
     
     db.collection(CONSTANTS.COLLECTION).doc(id).update(updates);
+
+    // PROPAGATION : Mettre à jour tous les colis du même destinataire (tous onglets confondus)
+    const currentItem = deliveries.find(d => d.id === id);
+    if (currentItem && currentItem.destinataire && currentItem.destinataire.trim() !== "") {
+        const recipientNorm = currentItem.destinataire.trim().toLowerCase();
+        const batch = db.batch();
+        let count = 0;
+
+        deliveries.forEach(d => {
+            if (d.id !== id && d.destinataire && d.destinataire.trim().toLowerCase() === recipientNorm && d.lieuLivraison !== newLocation) {
+                const ref = db.collection(CONSTANTS.COLLECTION).doc(d.id);
+                batch.update(ref, updates);
+                count++;
+            }
+        });
+
+        if (count > 0) {
+            batch.commit().then(() => showToast(`Adresse propagée à ${count} autres colis de ${currentItem.destinataire}`, 'success'));
+        }
+    }
 }
 
 // Mise à jour du destinataire en direct
 function updateDeliveryRecipient(id, newRecipient) {
     db.collection(CONSTANTS.COLLECTION).doc(id).update({ destinataire: newRecipient });
+}
+
+// Mise à jour du numéro en direct
+function updateDeliveryPhone(id, newPhone) {
+    db.collection(CONSTANTS.COLLECTION).doc(id).update({ numero: newPhone });
+}
+
+// Mise à jour du montant en direct
+function updateDeliveryAmount(id, newAmount) {
+    db.collection(CONSTANTS.COLLECTION).doc(id).update({ montant: newAmount });
 }
 
 // Mise à jour de l'info manuelle en direct
@@ -1633,7 +1764,7 @@ function markAsPending(id) {
 }
 
 function deleteDelivery(id) {
-    if (confirm('Supprimer cette livraison ?')) {
+    if (confirm('⚠️ ATTENTION : Êtes-vous sûr de vouloir supprimer définitivement cette livraison ?\nCette action est irréversible.')) {
         db.collection(CONSTANTS.COLLECTION).doc(id).delete()
             .then(() => showToast('Livraison supprimée', 'success'));
     }
