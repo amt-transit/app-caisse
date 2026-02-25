@@ -57,12 +57,12 @@
 
         <!-- Barres d'outils et Filtres -->
         <div class="toolbar">
-            <div id="toolbar-EN_COURS" class="tab-toolbar" style="display: flex; gap: 10px; align-items: center;">
-                <div style="display: flex; align-items: center; gap: 5px; background: #e3f2fd; padding: 5px 10px; border-radius: 6px; border: 1px solid #bbdefb;">
+            <div id="activeContainerSection" style="display: flex; align-items: center; gap: 5px; background: #e3f2fd; padding: 5px 10px; border-radius: 6px; border: 1px solid #bbdefb;">
                     <span style="font-weight: bold; color: #1565c0; font-size: 12px;">📦 Actif :</span>
                     <input type="text" id="activeContainerInput" placeholder="N° Conteneur" style="padding: 5px; width: 120px; border: 1px solid #bbdefb;">
                     <button class="btn btn-small btn-success" onclick="setActiveContainer()">OK</button>
-                </div>
+            </div>
+            <div id="toolbar-EN_COURS" class="tab-toolbar" style="display: flex; gap: 10px; align-items: center;">
                 <label class="btn btn-small">📊 Import <input type="file" accept=".xlsx,.xls" onchange="importExcel(event)"></label>
                 <button class="btn btn-small" onclick="openProgramModal()">📅 Programmer</button>
                 <button class="btn btn-small" onclick="openAssignContainerModal()">📦 Attribuer</button>
@@ -138,8 +138,9 @@
                         <th class="sortable" onclick="sortTable('ref')">REF ↕</th>
                         <th class="sortable" onclick="sortTable('montant')">MONTANT ↕</th>
                         <th class="sortable" onclick="sortTable('expediteur')">EXPEDITEUR ↕</th>
-                        <th class="sortable" onclick="sortTable('lieuLivraison')">LIEU ↕</th>
+                        <th class="sortable" onclick="sortTable('lieuLivraison')">LIEU DE LIVRAISON ↕</th>
                         <th class="sortable" onclick="sortTable('destinataire')">DESTINATAIRE ↕</th>
+                        <th>NUMÉRO</th>
                         <th>DESCRIPTION</th>
                         <th>INFO</th>
                         <th class="sortable" onclick="sortTable('livreur')">LIVREUR (DATE) ↕</th>

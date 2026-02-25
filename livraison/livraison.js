@@ -128,6 +128,7 @@ function initRealtimeSync() {
             updateStats();
             updateAutocomplete();
             updateLocationFilterOptions();
+            updateAvailableContainersList();
         }, (error) => {
             console.error("Erreur sync:", error);
             showToast("Erreur de synchronisation !", "error");
@@ -160,7 +161,29 @@ function switchTab(tab) {
     // Gestion de la section Conteneur Actif (Visible uniquement sur l'onglet 3)
     const activeContainerSection = document.getElementById('activeContainerSection');
     if (activeContainerSection) {
-        activeContainerSection.style.display = (tab === 'EN_COURS' || tab === 'A_VENIR') ? 'flex' : 'none';
+        const input = document.getElementById('activeContainerInput');
+        const btn = activeContainerSection.querySelector('button');
+        const label = activeContainerSection.querySelector('span');
+        const select = document.getElementById('quickContainerSelect');
+        const filterWrapper = document.getElementById('filterContainerWrapper');
+
+        if (tab === 'EN_COURS') {
+            activeContainerSection.style.display = 'flex';
+            if(input) input.style.display = '';
+            if(btn) btn.style.display = '';
+            if(label) label.style.display = '';
+            if(filterWrapper) filterWrapper.style.display = '';
+            if(select) select.style.display = 'none';
+        } else if (tab === 'A_VENIR') {
+            activeContainerSection.style.display = 'flex';
+            if(input) input.style.display = 'none';
+            if(btn) btn.style.display = 'none';
+            if(label) label.style.display = 'none';
+            if(filterWrapper) filterWrapper.style.display = 'none';
+            if(select) select.style.display = '';
+        } else {
+            activeContainerSection.style.display = 'none';
+        }
     }
 
     // --- CHARGEMENT DU FILTRE SPÉCIFIQUE À L'ONGLET ---
@@ -187,6 +210,7 @@ function switchTab(tab) {
     updateLocationFilterOptions();
     filterDeliveries();
     updateStats(); // Met à jour les stats pour la vue actuelle
+    updateAvailableContainersList(); // Met à jour la liste des conteneurs disponibles pour le filtre
 }
 
 // Gestion du conteneur actif
@@ -241,6 +265,61 @@ function initActiveContainerInput() {
         wrapper.appendChild(cb);
         wrapper.appendChild(lbl);
         input.parentNode.appendChild(wrapper);
+    }
+}
+
+// --- NOUVEAU : Gestionnaire de liste des conteneurs (Pour l'onglet À VENIR) ---
+function updateAvailableContainersList() {
+    // On ne l'affiche que pour À VENIR
+    if (currentTab !== 'A_VENIR') {
+        const select = document.getElementById('quickContainerSelect');
+        if (select) select.style.display = 'none';
+        return;
+    }
+
+    const containerSelectId = 'quickContainerSelect';
+    let select = document.getElementById(containerSelectId);
+
+    // Création dynamique du sélecteur s'il n'existe pas dans la toolbar active
+    if (!select) {
+        // On essaie de trouver l'endroit où l'injecter (à côté du champ conteneur actif)
+        const wrapper = document.getElementById('activeContainerSection');
+        if (wrapper) {
+            select = document.createElement('select');
+            select.id = containerSelectId;
+            select.className = 'form-control';
+            select.style.maxWidth = '200px';
+            select.style.marginLeft = '10px';
+            select.innerHTML = '<option value="">-- Sélectionner un Conteneur --</option>';
+            select.addEventListener('change', (e) => {
+                const val = e.target.value;
+                const input = document.getElementById('activeContainerInput');
+                if(input) input.value = val;
+                
+                // Force le filtre pour A_VENIR
+                const cb = document.getElementById('filterByContainerCb');
+                if (cb && currentTab === 'A_VENIR') {
+                    cb.checked = !!val;
+                    localStorage.setItem(`container_filter_${currentTab}_active`, cb.checked);
+                }
+                setActiveContainer(); // Déclenche la logique existante
+            });
+            wrapper.appendChild(select);
+        }
+    }
+
+    if (select) {
+        select.style.display = '';
+        // Récupérer les conteneurs uniques de l'onglet actuel
+        const relevantDeliveries = deliveries.filter(d => d.containerStatus === currentTab);
+        const containers = [...new Set(relevantDeliveries.map(d => d.conteneur).filter(c => c))].sort();
+        
+        let html = '<option value="">-- Choisir Conteneur --</option>';
+        containers.forEach(c => {
+            const selected = c === currentContainerName ? 'selected' : '';
+            html += `<option value="${c}" ${selected}>${c}</option>`;
+        });
+        select.innerHTML = html;
     }
 }
 
@@ -521,12 +600,13 @@ function importExcel(event) {
                         return {
                             id: Date.now() + i,
                             ref: String(r.REF || r.REFERENCE || r.CODE || ''),
-                            montant: String(r.RESTANT || r.MONTANT || r.PRIX || ''),
-                            expediteur: fixEncoding(String(r.EXPEDITEUR || '')),
-                            commune: detectCommune(fixEncoding(String(r.LIVRE || r.LIEU || r.COMMUNE || ''))),
-                            lieuLivraison: fixEncoding(String(r.LIVRE || r.LIEU || '')),
-                            destinataire: fixEncoding(String(r.DESTINATAIRE || r.CLIENT || '')),
-                            description: fixEncoding(String(r.DESCRIPTION || '')),
+                            montant: String(r.RESTANT || r.MONTANT || r.PRIX || r['RESTANT A PAYER'] || ''),
+                            expediteur: fixEncoding(String(r.EXPEDITEUR || r['EXPÉDITEUR'] || r.EXP || '')),
+                            commune: detectCommune(fixEncoding(String(r.LIVRE || r.LIEU || r.COMMUNE || r['LIEU DE LIVRAISON'] || ''))),
+                            lieuLivraison: fixEncoding(String(r.LIVRE || r.LIEU || r['LIEU DE LIVRAISON'] || '')),
+                            destinataire: fixEncoding(String(r.DESTINATAIRE || r.CLIENT || r.DESTINATEUR || '')),
+                            description: fixEncoding(String(r.DESCRIPTION || r.NATURE || r['TYPE COLIS'] || '')),
+                            numero: String(r.NUMERO || r.TEL || r.TELEPHONE || r.CONTACT || ''),
                             status: 'EN_ATTENTE',
                             dateAjout: new Date().toISOString()
                         };
@@ -541,6 +621,11 @@ function importExcel(event) {
                             item.lieuLivraison = foundAddr;
                             item.commune = detectCommune(foundAddr);
                         }
+                    }
+                    // Extraction Numéro si manquant (Regex)
+                    if (!item.numero && item.destinataire) {
+                        const phoneMatch = item.destinataire.match(/(?:\+225|00225|01|05|07)\d{8}|0\d{9}/);
+                        if (phoneMatch) item.numero = phoneMatch[0];
                     }
                 }
 
@@ -642,16 +727,16 @@ function closePreviewModal() {
     pendingImport = [];
 }
 
-function confirmImport() {
+async function confirmImport() {
     const conteneur = document.getElementById('importConteneur').value;
     const bl = document.getElementById('importBl').value;
     const containerStatus = document.getElementById('importContainerStatus').value;
 
-    const batch = db.batch();
-    let updatedCount = 0;
-    let addedCount = 0;
-
-    pendingImport.forEach(importItem => {
+    // Préparation des opérations par lots (Batch Chunking)
+    const operations = []; 
+    let processedCount = 0;
+    
+    for (const importItem of pendingImport) {
         // Vérifier si la référence existe déjà dans la base de données
         const existingItem = deliveries.find(d => d.ref === importItem.ref);
 
@@ -660,21 +745,48 @@ function confirmImport() {
             const docRef = db.collection(CONSTANTS.COLLECTION).doc(existingItem.id);
             const updates = { containerStatus: containerStatus };
             
-            // Mise à jour des infos (Montant, etc.) car elles peuvent changer
-            if (importItem.montant) updates.montant = importItem.montant;
-            if (importItem.description) updates.description = importItem.description;
-            if (conteneur) updates.conteneur = conteneur;
-            if (bl) updates.bl = bl;
+            // --- FUSION INTELLIGENTE (Garder le mieux renseigné) ---
+            const pickBest = (oldV, newV) => {
+                const o = String(oldV || '').trim();
+                const n = String(newV || '').trim();
+                if (!n) return o; // Si nouveau vide, garder ancien
+                if (!o) return n; // Si ancien vide, prendre nouveau
+                // Si les deux existent, on privilégie le plus long (plus d'infos)
+                return n.length >= o.length ? n : o;
+            };
 
-            // Marquer comme venant de "À VENIR" si c'est le cas
-            if ((existingItem.containerStatus === 'A_VENIR' || existingItem.containerStatus === 'PARIS') && containerStatus === 'EN_COURS') {
+            updates.montant = pickBest(existingItem.montant, importItem.montant);
+            updates.description = pickBest(existingItem.description, importItem.description);
+            updates.expediteur = pickBest(existingItem.expediteur, importItem.expediteur);
+            updates.destinataire = pickBest(existingItem.destinataire, importItem.destinataire);
+            updates.lieuLivraison = pickBest(existingItem.lieuLivraison, importItem.lieuLivraison);
+            updates.numero = pickBest(existingItem.numero, importItem.numero);
+
+            // Recalcul commune si le lieu a changé
+            if (updates.lieuLivraison !== existingItem.lieuLivraison) {
+                updates.commune = detectCommune(updates.lieuLivraison);
+            }
+
+            // Gestion Conteneur / BL (Priorité : Input Global > Import Excel > Existant)
+            if (conteneur) updates.conteneur = conteneur;
+            else if (importItem.conteneur) updates.conteneur = importItem.conteneur;
+            
+            if (bl) updates.bl = bl;
+            else if (importItem.bl) updates.bl = importItem.bl;
+
+            // LOGIQUE DE TRAÇABILITÉ (Paris -> A Venir -> En Cours)
+            if (containerStatus === 'EN_COURS') {
+                if (existingItem.containerStatus === 'PARIS') {
+                    updates.directFromParis = true; // ALERTE : A sauté l'étape "À Venir" (Client non prévenu)
+                } else if (existingItem.containerStatus === 'A_VENIR') {
+                    updates.directFromParis = false; // Flux normal
+                }
                 updates.importedFromTransit = true;
             } else if (containerStatus !== 'EN_COURS') {
                 updates.importedFromTransit = firebase.firestore.FieldValue.delete();
             }
             
-            batch.update(docRef, updates);
-            updatedCount++;
+            operations.push({ type: 'update', ref: docRef, data: updates });
         } else {
             // CAS 2 : La référence n'existe pas -> On crée un nouveau colis
             const docRef = db.collection(CONSTANTS.COLLECTION).doc();
@@ -684,16 +796,63 @@ function confirmImport() {
             // Nettoyage des valeurs undefined (Firestore ne les supporte pas)
             Object.keys(itemData).forEach(key => itemData[key] === undefined && delete itemData[key]);
 
-            batch.set(docRef, { 
+            operations.push({ type: 'set', ref: docRef, data: { 
                 ...itemData, 
                 conteneur: conteneur || importItem.conteneur || '', 
                 bl: bl || importItem.bl || '', 
                 containerStatus: containerStatus,
                 dateAjout: new Date().toISOString()
-            });
-            addedCount++;
+            }});
         }
-    });
+
+        // --- TRANSFERT VERS RÉCEPTION ABIDJAN (TRANSACTIONS) ---
+        if (containerStatus === 'EN_COURS') {
+            // On vérifie si la transaction existe déjà pour éviter les doublons
+            const transQuery = await db.collection('transactions').where('reference', '==', importItem.ref).get();
+            
+            if (transQuery.empty) {
+                const price = parseFloat((importItem.montant || '0').replace(/[^\d]/g, '')) || 0;
+                const transRef = db.collection('transactions').doc();
+                
+                operations.push({ type: 'set', ref: transRef, data: {
+                    date: new Date().toISOString().split('T')[0],
+                    reference: importItem.ref,
+                    nom: importItem.destinataire || importItem.expediteur || 'Client', // Client principal
+                    conteneur: conteneur || importItem.conteneur || '',
+                    prix: price,
+                    montantParis: 0,
+                    montantAbidjan: 0,
+                    reste: -price, // Dette initiale
+                    isDeleted: false,
+                    description: importItem.description || '',
+                    adresseDestinataire: importItem.lieuLivraison || '',
+                    nomDestinataire: importItem.destinataire || '',
+                    numero: importItem.numero || '', // Nouveau champ Numéro
+                    saisiPar: sessionStorage.getItem('userName') || 'Import Livraison'
+                }});
+            }
+        }
+        processedCount++;
+    }
+
+    // EXÉCUTION DES BATCHS PAR PAQUETS DE 400 (Pour éviter la limite de 500)
+    const BATCH_SIZE = 400;
+    let batch = db.batch();
+    let opCount = 0;
+    let batchPromises = [];
+
+    for (const op of operations) {
+        if (op.type === 'set') batch.set(op.ref, op.data);
+        else if (op.type === 'update') batch.update(op.ref, op.data);
+        else if (op.type === 'delete') batch.delete(op.ref);
+
+        opCount++;
+        if (opCount >= BATCH_SIZE) {
+            batchPromises.push(batch.commit());
+            batch = db.batch();
+            opCount = 0;
+        }
+    }
     
     // Mise à jour du conteneur en cours si renseigné
     if (conteneur) {
@@ -705,15 +864,18 @@ function confirmImport() {
         if (activeInput) activeInput.value = currentContainerName;
     }
 
-    batch.commit().then(() => {
+    if (opCount > 0) batchPromises.push(batch.commit());
+
+    Promise.all(batchPromises).then(() => {
         // Si on importe dans l'autre onglet, on bascule dessus pour voir le résultat
         if (containerStatus !== currentTab) {
             switchTab(containerStatus);
         }
         
         closePreviewModal();
-        showToast(`${addedCount} ajoutés, ${updatedCount} mis à jour !`, 'success');
-    }).catch(err => showToast("Erreur import: " + err.message, 'error'));
+        showToast(`${processedCount} éléments traités avec succès !`, 'success');
+        pendingImport = []; // Nettoyage
+    }).catch(err => showToast("Erreur lors de l'enregistrement : " + err.message, 'error'));
 }
 
 // Export Excel
@@ -854,21 +1016,44 @@ function renderTable() {
         statusHeader = '';
     }
 
-    theadRow.innerHTML = `
-        <th class="col-checkbox"><input type="checkbox" id="selectAll" onchange="toggleSelectAll()"></th>
-        <th class="sortable" onclick="sortTable('conteneur')" style="width: 120px;">CONTENEUR ${getSortIcon('conteneur')}</th>
-        <th class="sortable" onclick="sortTable('ref')" style="width: 100px;">REF ${getSortIcon('ref')}</th>
-        <th class="sortable" onclick="sortTable('montant')" style="width: 100px;">MONTANT ${getSortIcon('montant')}</th>
-        <th class="sortable" onclick="sortTable('expediteur')" style="width: 150px;">EXPEDITEUR ${getSortIcon('expediteur')}</th>
-        <th class="sortable" onclick="sortTable('lieuLivraison')" style="width: 250px;">LIEU DE LIVRAISON ${getSortIcon('lieuLivraison')}</th>
-        <th class="sortable" onclick="sortTable('destinataire')" style="width: 180px;">DESTINATAIRE ${getSortIcon('destinataire')}</th>
-        <th style="width: 120px;">NUMÉRO</th>
-        <th style="width: 250px;">DESCRIPTION</th>
-        <th style="width: 150px;">INFO</th>
-        <th class="sortable" onclick="sortTable('livreur')" style="width: 150px;">LIVREUR (DATE) ${getSortIcon('livreur')}</th>
-        ${statusHeader}
-        <th style="width: 150px;">ACTIONS</th>
-    `;
+    // Colonne "Notifié" uniquement pour l'onglet À VENIR
+    let notifiedHeader = '';
+    if (currentTab === 'A_VENIR') {
+        notifiedHeader = '<th style="width: 80px;">NOTIFIÉ</th>';
+    }
+
+    if (currentTab === 'PARIS') {
+        theadRow.innerHTML = `
+            <th class="col-checkbox"><input type="checkbox" id="selectAll" onchange="toggleSelectAll()"></th>
+            <th style="width: 100px;">DATE</th>
+            <th class="sortable" onclick="sortTable('conteneur')" style="width: 120px;">CONTENEUR ${getSortIcon('conteneur')}</th>
+            <th class="sortable" onclick="sortTable('ref')" style="width: 100px;">RÉF ${getSortIcon('ref')}</th>
+            <th class="sortable" onclick="sortTable('montant')" style="width: 100px;">MONTANT ${getSortIcon('montant')}</th>
+            <th class="sortable" onclick="sortTable('expediteur')" style="width: 150px;">EXPÉDITEUR ${getSortIcon('expediteur')}</th>
+            <th class="sortable" onclick="sortTable('lieuLivraison')" style="width: 250px;">LIEU DE LIVRAISON ${getSortIcon('lieuLivraison')}</th>
+            <th class="sortable" onclick="sortTable('destinataire')" style="width: 180px;">DESTINATAIRE ${getSortIcon('destinataire')}</th>
+            <th style="width: 120px;">NUMÉRO</th>
+            <th style="width: 250px;">DESCRIPTION</th>
+            <th style="width: 100px;">ACTES</th>
+        `;
+    } else {
+        theadRow.innerHTML = `
+            <th class="col-checkbox"><input type="checkbox" id="selectAll" onchange="toggleSelectAll()"></th>
+            <th class="sortable" onclick="sortTable('conteneur')" style="width: 120px;">CONTENEUR ${getSortIcon('conteneur')}</th>
+            <th class="sortable" onclick="sortTable('ref')" style="width: 100px;">REF ${getSortIcon('ref')}</th>
+            <th class="sortable" onclick="sortTable('montant')" style="width: 100px;">MONTANT ${getSortIcon('montant')}</th>
+            <th class="sortable" onclick="sortTable('expediteur')" style="width: 150px;">EXPEDITEUR ${getSortIcon('expediteur')}</th>
+            <th class="sortable" onclick="sortTable('lieuLivraison')" style="width: 250px;">LIEU DE LIVRAISON ${getSortIcon('lieuLivraison')}</th>
+            <th class="sortable" onclick="sortTable('destinataire')" style="width: 180px;">DESTINATAIRE ${getSortIcon('destinataire')}</th>
+            <th style="width: 120px;">NUMÉRO</th>
+            <th style="width: 250px;">DESCRIPTION</th>
+            <th style="width: 150px;">INFO</th>
+            ${notifiedHeader}
+            <th class="sortable" onclick="sortTable('livreur')" style="width: 150px;">LIVREUR (DATE) ${getSortIcon('livreur')}</th>
+            ${statusHeader}
+            <th style="width: 150px;">ACTIONS</th>
+        `;
+    }
 
     // Mise à jour de la case "Tout sélectionner"
     const selectAllCheckbox = document.getElementById('selectAll');
@@ -895,8 +1080,13 @@ function renderTable() {
         }
 
         let transitIndicator = '';
-        if (d.importedFromTransit && currentTab === 'EN_COURS') {
-            transitIndicator = '<span title="Arrivé depuis À VENIR ou PARIS">🚢</span> ';
+        if (currentTab === 'EN_COURS') {
+            if (d.directFromParis) {
+                // ALERTE ROUGE : Vient directement de Paris (Pas passé par À Venir)
+                transitIndicator = '<span title="⚠️ DIRECT DE PARIS (Client non notifié en transit)" style="cursor:help; font-size:1.2em;">⚠️</span> ';
+            } else if (d.importedFromTransit) {
+                transitIndicator = '<span title="Arrivé depuis À VENIR">🚢</span> ';
+            }
         }
 
         let statusCell = `<td class="status"><span class="status-badge ${statusClass}">${statusText}</span></td>`;
@@ -904,14 +1094,21 @@ function renderTable() {
             statusCell = '';
         }
 
-        // --- LOGIQUE WHATSAPP ---
-        // 1. Priorité au champ 'numero' s'il existe
+        // Cellule Notification (À VENIR)
+        let notifiedCell = '';
+        if (currentTab === 'A_VENIR') {
+            const isChecked = d.clientNotified ? 'checked' : '';
+            notifiedCell = `<td style="text-align:center;">
+                <input type="checkbox" ${isChecked} onchange="toggleClientNotified('${d.id}', this.checked)" title="Marquer client comme appelé">
+            </td>`;
+        }
+
+        // --- LOGIQUE WHATSAPP & BOUTONS ---
         let phoneCandidate = d.numero;
 
-        // 2. Sinon, recherche intelligente dans les autres champs (sans fusionner les textes brutalement)
+        // Recherche intelligente du numéro
         if (!phoneCandidate) {
             const fieldsToCheck = [d.destinataire, d.description, d.info];
-            // Regex robuste (celle utilisée pour l'extraction) : gère espaces, tirets, points
             const robustRegex = /(?:(?:\+|00)225[\s.-]?)?(?:01|05|07|0)\d(?:[\s.-]?\d{2}){4}|(?:(?:\+|00)225[\s.-]?)?(?:01|05|07|0)\d{8,}/;
             
             for (const field of fieldsToCheck) {
@@ -936,6 +1133,19 @@ function renderTable() {
             waBtn = `<a href="https://wa.me/${phone}?text=${encodeURIComponent(msg)}" target="_blank" class="btn btn-success btn-small" style="background-color:#25D366; border:none; padding:4px 6px; margin-right:4px;" title="Contacter sur WhatsApp">📱</a>`;
         }
 
+        let actionButtons = waBtn;
+
+        // Boutons BL et Livré uniquement pour EN_COURS (Masqués pour PARIS et A_VENIR)
+        if (currentTab !== 'PARIS' && currentTab !== 'A_VENIR') {
+            actionButtons += `<button class="btn btn-small" style="background-color:#64748b; padding:4px 6px;" onclick="printDeliverySlip('${d.id}')" title="Imprimer Bon de Livraison">📄</button>`;
+            if (d.status !== 'LIVRE') {
+                actionButtons += `<button class="btn btn-success btn-small" onclick="markAsDelivered('${d.id}')" title="Marquer comme livré">✅</button>`;
+            } else {
+                actionButtons += `<button class="btn btn-warning btn-small" onclick="markAsPending('${d.id}')" title="Marquer en attente">⏳</button>`;
+            }
+        }
+        actionButtons += `<button class="btn btn-danger btn-small" onclick="deleteDelivery('${d.id}')" title="Supprimer">🗑️</button>`;
+
         // Extraction et Nettoyage (Destinataire / Numéro)
         let displayDestinataire = d.destinataire || '';
         let displayPhone = d.numero || '';
@@ -951,6 +1161,24 @@ function renderTable() {
             displayDestinataire = displayDestinataire.replace(/[-–,;:\s]+$/, ''); // Nettoyage fin
         }
 
+        if (currentTab === 'PARIS') {
+            return `
+                <tr class="${rowClass}">
+                    <td class="col-checkbox"><input type="checkbox" onchange="toggleSelection('${d.id}')" ${selectedIds.has(d.id) ? 'checked' : ''}></td>
+                    <td>${d.dateAjout ? new Date(d.dateAjout).toLocaleDateString('fr-FR') : '-'}</td>
+                    <td>${d.conteneur || '-'}</td>
+                    <td class="ref">${d.ref}</td>
+                    <td class="montant"><input type="text" class="editable-cell" value="${(d.montant || '').replace(/"/g, '&quot;')}" onchange="updateDeliveryAmount('${d.id}', this.value)" style="width: 100%;"></td>
+                    <td>${d.expediteur}</td>
+                    <td><input type="text" class="editable-cell" value="${(d.lieuLivraison || '').replace(/"/g, '&quot;')}" list="sharedLocationsList" onchange="updateDeliveryLocation('${d.id}', this.value)"></td>
+                    <td><input type="text" class="editable-cell" value="${displayDestinataire.replace(/"/g, '&quot;')}" onchange="updateDeliveryRecipient('${d.id}', this.value)"></td>
+                    <td><input type="text" class="editable-cell" value="${displayPhone}" onchange="updateDeliveryPhone('${d.id}', this.value)" style="font-weight:bold; color:#0d47a1; width:100%;"></td>
+                    <td>${d.description || '-'}</td>
+                    <td><div class="actions">${actionButtons}</div></td>
+                </tr>
+            `;
+        }
+
         return `
             <tr class="${rowClass}">
                 <td class="col-checkbox"><input type="checkbox" onchange="toggleSelection('${d.id}')" ${selectedIds.has(d.id) ? 'checked' : ''}></td>
@@ -963,21 +1191,14 @@ function renderTable() {
                 <td><input type="text" class="editable-cell" value="${displayPhone}" onchange="updateDeliveryPhone('${d.id}', this.value)" style="font-weight:bold; color:#0d47a1; width:100%;"></td>
                 <td>${d.description || '-'}</td>
                 <td><input type="text" class="editable-cell" value="${(d.info || '').replace(/"/g, '&quot;')}" onchange="updateDeliveryInfo('${d.id}', this.value)"></td>
+                ${notifiedCell}
                 <td>
                     <strong>${d.livreur || '-'}</strong><br>
                     <small>${d.dateProgramme || ''}</small>
                 </td>
                 ${statusCell}
                 <td>
-                    <div class="actions">
-                        ${waBtn}
-                        <button class="btn btn-small" style="background-color:#64748b; padding:4px 6px;" onclick="printDeliverySlip('${d.id}')" title="Imprimer Bon de Livraison">📄</button>
-                        ${d.status !== 'LIVRE' ? 
-                            `<button class="btn btn-success btn-small" onclick="markAsDelivered('${d.id}')" title="Marquer comme livré">✅</button>` : 
-                            `<button class="btn btn-warning btn-small" onclick="markAsPending('${d.id}')" title="Marquer en attente">⏳</button>`
-                        }
-                        <button class="btn btn-danger btn-small" onclick="deleteDelivery('${d.id}')" title="Supprimer">🗑️</button>
-                    </div>
+                    <div class="actions">${actionButtons}</div>
                 </td>
             </tr>
         `
@@ -1418,17 +1639,59 @@ function deleteSelectedDeliveries() {
         showToast('Veuillez sélectionner au moins une livraison', 'error');
         return;
     }
+
+    // Si on est dans EN_COURS, on renvoie vers A_VENIR
+    if (currentTab === 'EN_COURS') {
+        if (confirm(`Voulez-vous renvoyer ces ${selectedIds.size} colis vers l'onglet "À VENIR" ?`)) {
+            const batch = db.batch();
+            selectedIds.forEach(id => {
+                batch.update(db.collection(CONSTANTS.COLLECTION).doc(id), {
+                    containerStatus: 'A_VENIR',
+                    status: 'EN_ATTENTE',
+                    livreur: firebase.firestore.FieldValue.delete(),
+                    dateProgramme: firebase.firestore.FieldValue.delete(),
+                    importedFromTransit: firebase.firestore.FieldValue.delete(),
+                    directFromParis: firebase.firestore.FieldValue.delete()
+                });
+                // Suppression synchro transaction
+                const item = deliveries.find(d => d.id === id);
+                if (item && item.ref) deleteTransactionByRef(item.ref);
+            });
+            batch.commit().then(() => {
+                selectedIds.clear();
+                showToast('Colis renvoyés vers À VENIR', 'success');
+            });
+        }
+        return;
+    }
     
     if (confirm(`Voulez-vous vraiment supprimer ces ${selectedIds.size} livraisons ?`)) {
         const batch = db.batch();
         selectedIds.forEach(id => {
             batch.delete(db.collection(CONSTANTS.COLLECTION).doc(id));
+            // Suppression synchro transaction
+            const item = deliveries.find(d => d.id === id);
+            if (item && item.ref) deleteTransactionByRef(item.ref);
         });
         batch.commit().then(() => {
             selectedIds.clear();
             showToast('Livraisons supprimées', 'success');
         });
     }
+}
+
+// Fonction utilitaire pour supprimer la transaction associée (Arrivages)
+function deleteTransactionByRef(ref) {
+    if (!ref) return;
+    db.collection('transactions').where('reference', '==', ref).get()
+        .then(snapshot => {
+            const batch = db.batch();
+            snapshot.forEach(doc => {
+                batch.delete(doc.ref);
+            });
+            if (!snapshot.empty) batch.commit();
+        })
+        .catch(err => console.error("Erreur suppression transaction liée:", err));
 }
 
 function openBulkStatusModal() {
@@ -1751,6 +2014,11 @@ function updateDeliveryInfo(id, newInfo) {
     db.collection(CONSTANTS.COLLECTION).doc(id).update({ info: newInfo });
 }
 
+// Mise à jour du statut "Client Notifié" (Onglet À Venir)
+function toggleClientNotified(id, isChecked) {
+    db.collection(CONSTANTS.COLLECTION).doc(id).update({ clientNotified: isChecked });
+}
+
 // Actions
 function markAsDelivered(id) {
     db.collection(CONSTANTS.COLLECTION).doc(id).update({
@@ -1764,9 +2032,32 @@ function markAsPending(id) {
 }
 
 function deleteDelivery(id) {
+    const d = deliveries.find(item => item.id === id);
+
+    // Si on est dans EN_COURS, on renvoie vers A_VENIR au lieu de supprimer
+    if (d && d.containerStatus === 'EN_COURS') {
+        if (confirm('Voulez-vous renvoyer ce colis vers l\'onglet "À VENIR" ?\n(Il sera retiré de "En Cours" et remis en transit)')) {
+            db.collection(CONSTANTS.COLLECTION).doc(id).update({
+                containerStatus: 'A_VENIR',
+                status: 'EN_ATTENTE', // Reset du statut
+                livreur: firebase.firestore.FieldValue.delete(), // Reset livreur
+                dateProgramme: firebase.firestore.FieldValue.delete(), // Reset date
+                importedFromTransit: firebase.firestore.FieldValue.delete(),
+                directFromParis: firebase.firestore.FieldValue.delete()
+            }).then(() => {
+                deleteTransactionByRef(d.ref); // Supprime aussi de Réception Abidjan
+                showToast('Colis renvoyé vers À VENIR', 'success');
+            });
+        }
+        return;
+    }
+
     if (confirm('⚠️ ATTENTION : Êtes-vous sûr de vouloir supprimer définitivement cette livraison ?\nCette action est irréversible.')) {
         db.collection(CONSTANTS.COLLECTION).doc(id).delete()
-            .then(() => showToast('Livraison supprimée', 'success'));
+            .then(() => {
+                deleteTransactionByRef(d.ref); // Supprime aussi de Réception Abidjan
+                showToast('Livraison supprimée', 'success');
+            });
     }
 }
 
@@ -1786,29 +2077,71 @@ function closeAddModal() {
 document.getElementById('deliveryForm').addEventListener('submit', function(e) {
     e.preventDefault();
     
-    const delivery = {
+    const refInput = document.getElementById('ref').value.trim();
+    
+    // 1. Vérification Doublon (Référence Unique)
+    const existingItem = deliveries.find(d => d.ref === refInput);
+
+    const newItem = {
         containerStatus: document.getElementById('newContainerStatus').value,
-        conteneur: document.getElementById('conteneur').value,
+        conteneur: document.getElementById('conteneur').value.trim(),
         bl: '',
-        ref: document.getElementById('ref').value,
-        montant: document.getElementById('montant').value,
-        expediteur: document.getElementById('expediteur').value,
+        ref: refInput,
+        montant: document.getElementById('montant').value.trim(),
+        expediteur: document.getElementById('expediteur').value.trim(),
         commune: document.getElementById('commune').value,
-        lieuLivraison: document.getElementById('lieuLivraison').value,
-        destinataire: document.getElementById('destinataire').value,
-        description: document.getElementById('description').value,
+        lieuLivraison: document.getElementById('lieuLivraison').value.trim(),
+        destinataire: document.getElementById('destinataire').value.trim(),
+        description: document.getElementById('description').value.trim(),
         status: 'EN_ATTENTE',
         dateAjout: new Date().toISOString()
     };
     
-    db.collection(CONSTANTS.COLLECTION).add(delivery)
-        .then(() => {
+    if (existingItem) {
+        if (!confirm(`La référence ${refInput} existe déjà.\nVoulez-vous fusionner les informations (garder les plus complètes) ?`)) {
+            return;
+        }
+
+        const docRef = db.collection(CONSTANTS.COLLECTION).doc(existingItem.id);
+        const updates = {};
+
+        // Fonction de fusion intelligente (Garder le plus long = plus d'infos)
+        const pickBest = (oldV, newV) => {
+            const o = String(oldV || '').trim();
+            const n = String(newV || '').trim();
+            if (!n) return o;
+            if (!o) return n;
+            return n.length >= o.length ? n : o;
+        };
+
+        updates.containerStatus = newItem.containerStatus;
+        if (newItem.conteneur) updates.conteneur = newItem.conteneur;
+
+        updates.montant = pickBest(existingItem.montant, newItem.montant);
+        updates.expediteur = pickBest(existingItem.expediteur, newItem.expediteur);
+        updates.destinataire = pickBest(existingItem.destinataire, newItem.destinataire);
+        updates.lieuLivraison = pickBest(existingItem.lieuLivraison, newItem.lieuLivraison);
+        updates.description = pickBest(existingItem.description, newItem.description);
+        
+        if (updates.lieuLivraison !== existingItem.lieuLivraison) {
+            updates.commune = newItem.commune;
+        }
+
+        docRef.update(updates).then(() => {
+            showToast('Livraison fusionnée avec succès !', 'success');
+            closeAddModal();
+            if (newItem.containerStatus !== currentTab) switchTab(newItem.containerStatus);
+        });
+
+    } else {
+        db.collection(CONSTANTS.COLLECTION).add(newItem).then(() => {
             showToast('Livraison ajoutée !', 'success');
             closeAddModal();
-            if (delivery.containerStatus !== currentTab) {
-                switchTab(delivery.containerStatus);
+            if (newItem.containerStatus !== currentTab) {
+                switchTab(newItem.containerStatus);
             }
         });
+    }
 });
 
 // Mise à jour du titre du conteneur
