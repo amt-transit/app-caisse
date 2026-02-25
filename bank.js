@@ -90,7 +90,11 @@ document.addEventListener('DOMContentLoaded', () => {
             bankDesc.value = '';
             bankAmount.value = '';
             bankName.value = '';
-        }).catch(err => console.error(err));
+        }).catch(err => {
+            console.error(err);
+            if (err.code === 'resource-exhausted') alert("⚠️ QUOTA ATTEINT : Impossible d'ajouter le mouvement.");
+            else alert("Erreur : " + err.message);
+        });
     });
 
     // 2. IMPORT CSV
@@ -122,8 +126,15 @@ document.addEventListener('DOMContentLoaded', () => {
                         }
                     });
 
-                    if (count > 0) await batch.commit();
-                    uploadLog.textContent = `Succès : ${count} mouvements importés.`;
+                    if (count > 0) {
+                        try {
+                            await batch.commit();
+                            uploadLog.textContent = `Succès : ${count} mouvements importés.`;
+                        } catch (err) {
+                            if (err.code === 'resource-exhausted') alert("⚠️ QUOTA ATTEINT.");
+                            else alert("Erreur : " + err.message);
+                        }
+                    }
                     csvFile.value = '';
                 }
             });
@@ -146,6 +157,7 @@ document.addEventListener('DOMContentLoaded', () => {
         
         // Ensuite on trie par date
         query = query.orderBy("date", "desc");
+        query = query.limit(200); // OPTIMISATION QUOTA
 
         unsubscribeBank = query.onSnapshot(snapshot => {
             allBankMovements = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data(), _source: 'bank' }));
@@ -159,6 +171,7 @@ document.addEventListener('DOMContentLoaded', () => {
         } else {
              transQuery = transQuery.where("isDeleted", "!=", true);
         }
+        transQuery = transQuery.orderBy("date", "desc").limit(200); // OPTIMISATION QUOTA
 
         unsubscribeVirements = transQuery.onSnapshot(snapshot => {
             const extracted = [];
@@ -567,4 +580,51 @@ document.addEventListener('DOMContentLoaded', () => {
     function formatCFA(number) {
         return new Intl.NumberFormat('fr-CI', { style: 'currency', currency: 'XOF' }).format(number || 0);
     }
+
+    initBackToTopButton();
 });
+
+// --- GESTION DU BOUTON "RETOUR EN HAUT" (GLOBAL & MODALS) ---
+function initBackToTopButton() {
+    // 1. Bouton Global (Window)
+    let backToTopBtn = document.getElementById('backToTopBtn');
+    if (!backToTopBtn) {
+        backToTopBtn = document.createElement('button');
+        backToTopBtn.id = 'backToTopBtn';
+        backToTopBtn.title = 'Retour en haut';
+        backToTopBtn.innerHTML = '&#8593;';
+        document.body.appendChild(backToTopBtn);
+        backToTopBtn.addEventListener('click', () => window.scrollTo({ top: 0, behavior: 'smooth' }));
+    }
+
+    const toggleGlobalBtn = () => {
+        if ((window.pageYOffset || document.documentElement.scrollTop) > 300) backToTopBtn.classList.add('show');
+        else backToTopBtn.classList.remove('show');
+    };
+    window.addEventListener('scroll', toggleGlobalBtn, { passive: true });
+
+    // 2. Boutons Modals (.modal-content)
+    const attachModalButtons = () => {
+        document.querySelectorAll('.modal-content').forEach(modalContent => {
+            if (modalContent.dataset.hasBackToTop) return;
+            
+            const modalBtn = document.createElement('button');
+            modalBtn.className = 'modal-back-to-top';
+            modalBtn.innerHTML = '&#8593;';
+            modalBtn.title = 'Haut de page';
+            modalContent.appendChild(modalBtn);
+            modalContent.dataset.hasBackToTop = "true";
+
+            modalBtn.addEventListener('click', () => modalContent.scrollTo({ top: 0, behavior: 'smooth' }));
+
+            modalContent.addEventListener('scroll', () => {
+                if (modalContent.scrollTop > 200) modalBtn.classList.add('show');
+                else modalBtn.classList.remove('show');
+            }, { passive: true });
+        });
+    };
+
+    attachModalButtons();
+    const observer = new MutationObserver(attachModalButtons);
+    observer.observe(document.body, { childList: true, subtree: true });
+}

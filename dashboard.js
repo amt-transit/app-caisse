@@ -72,6 +72,18 @@ document.addEventListener('DOMContentLoaded', async () => {
     const grandTotalSoldeBanqueEl = document.getElementById('grandTotalSoldeBanque');
     const grandTotalParisHiddenEl = document.getElementById('grandTotalParisHidden');
     
+    // --- BOUTON ACTUALISATION TOTAUX ---
+    // On l'insère dynamiquement dans le header des totaux
+    const totalsContainer = document.querySelector('.totals-container');
+    if (totalsContainer) {
+        const refreshBtn = document.createElement('button');
+        refreshBtn.id = 'refreshTotalsBtn';
+        refreshBtn.className = 'btn-refresh-stats';
+        refreshBtn.innerHTML = '🔄 Actualiser les Soldes (Calcul Précis)';
+        refreshBtn.onclick = recalculateGlobalStats;
+        totalsContainer.parentNode.insertBefore(refreshBtn, totalsContainer);
+    }
+
     const startDateInput = document.getElementById('startDate');
     const endDateInput = document.getElementById('endDate');
     const clearFilterBtn = document.getElementById('clearFilterBtn');
@@ -99,6 +111,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     let allTransactions = [], allExpenses = [], allOtherIncome = [], allBankMovements = []; 
     let unconfirmedSessions = new Set(); // Stocke les clés "YYYY-MM-DD_User" non validées
+    let cachedStats = null; // Stockage des stats sauvegardées
 
     function filterByDate(items, startDate, endDate) {
         return items.filter(item => {
@@ -176,10 +189,26 @@ document.addEventListener('DOMContentLoaded', async () => {
         generateVisualCharts(confirmedTransactions, confirmedExpenses); // Graphiques (sur données confirmées uniquement)
     }
 
+    // --- NOUVELLE LOGIQUE D'AFFICHAGE DES TOTAUX ---
     function updateGrandTotals(transactions, expenses, otherIncomes, bankMovements) {
         const startDate = startDateInput.value;
         const endDate = endDateInput.value;
-        const isInRange = (d) => (!startDate || d >= startDate) && (!endDate || d <= endDate);
+        
+        // SI AUCUN FILTRE DE DATE N'EST ACTIF ET QU'ON A DES STATS SAUVEGARDÉES
+        // ON UTILISE LES STATS SAUVEGARDÉES (C'est le "Reflet de la réalité")
+        if (!startDate && !endDate && cachedStats) {
+            renderStats(cachedStats);
+            // On met à jour juste le compteur visuel des éléments chargés
+            grandTotalCountEl.textContent = `${transactions.length} (affichés)`;
+            return;
+        }
+
+        // SINON (Si filtre date actif OU pas de cache), on calcule sur les données chargées (limitées à 1000)
+        calculateAndRenderStats(transactions, expenses, otherIncomes, bankMovements, startDate, endDate);
+    }
+
+    function calculateAndRenderStats(transactions, expenses, otherIncomes, bankMovements, startDate, endDate) {
+        const isInRange = (d) => (!startDate || (d >= startDate)) && (!endDate || (d <= endDate));
 
         // --- 1. VENTES & BÉNÉFICE ---
         // Calcul précis basé sur les paiements effectifs dans la période
@@ -283,29 +312,121 @@ document.addEventListener('DOMContentLoaded', async () => {
         // Solde Caisse Physique
         const soldeCaisse = (totalVentesCash + totalOtherIncomeCash + totalRetraits) - (totalExpensesCash + totalDepots);
 
-        // --- AFFICHAGE ---
-        grandTotalOtherIncomeEl.textContent = formatCFA(totalOtherIncome);
-        grandTotalDepensesEl.textContent = formatCFA(totalDepenses);
-        grandTotalBeneficeEl.textContent = formatCFA(totalBenefice);
-        grandTotalBeneficeEl.closest('.total-card').className = 'total-card ' + (totalBenefice < 0 ? 'card-negatif' : 'card-positif');
-        
-        if(grandTotalCaisseEl) grandTotalCaisseEl.textContent = formatCFA(soldeCaisse);
+        const stats = {
+            otherIncome: totalOtherIncome,
+            depenses: totalDepenses,
+            benefice: totalBenefice,
+            caisse: soldeCaisse,
+            percuAbidjan: totalEntreesAbidjan,
+            percuParis: totalEntreesParis,
+            banque: soldeBanque,
+            cheques: totalChequesEnCoffre,
+            virements: totalVirements,
+            reste: transactions.reduce((sum, t) => sum + (t.reste || 0), 0),
+            count: transactions.length
+        };
 
-        document.getElementById('grandTotalPercu').textContent = formatCFA(totalEntreesAbidjan);
-        if(grandTotalParisHiddenEl) grandTotalParisHiddenEl.textContent = `Total Ventes Perçues (P): ${formatCFA(totalEntreesParis)}`;
+        renderStats(stats);
+    }
 
-        if(grandTotalSoldeBanqueEl) grandTotalSoldeBanqueEl.textContent = formatCFA(soldeBanque);
+    function renderStats(stats) {
+        grandTotalOtherIncomeEl.textContent = formatCFA(stats.otherIncome);
+        grandTotalDepensesEl.textContent = formatCFA(stats.depenses);
+        grandTotalBeneficeEl.textContent = formatCFA(stats.benefice);
+        grandTotalBeneficeEl.closest('.total-card').className = 'total-card ' + (stats.benefice < 0 ? 'card-negatif' : 'card-positif');
         
-        // NOUVEAU : Affichage Chèques
+        if(grandTotalCaisseEl) grandTotalCaisseEl.textContent = formatCFA(stats.caisse);
+
+        document.getElementById('grandTotalPercu').textContent = formatCFA(stats.percuAbidjan);
+        if(grandTotalParisHiddenEl) grandTotalParisHiddenEl.textContent = `Total Ventes Perçues (P): ${formatCFA(stats.percuParis)}`;
+
+        if(grandTotalSoldeBanqueEl) grandTotalSoldeBanqueEl.textContent = formatCFA(stats.banque);
+        
         const chequeEl = document.getElementById('grandTotalCheques');
-        if(chequeEl) chequeEl.textContent = formatCFA(totalChequesEnCoffre);
+        if(chequeEl) chequeEl.textContent = formatCFA(stats.cheques);
 
-        // Affichage Virements
         const virementEl = document.getElementById('grandTotalVirements');
-        if(virementEl) virementEl.textContent = formatCFA(totalVirements);
+        if(virementEl) virementEl.textContent = formatCFA(stats.virements);
 
-        grandTotalCountEl.textContent = transactions.length;
-        grandTotalResteEl.textContent = formatCFA(transactions.reduce((sum, t) => sum + (t.reste || 0), 0));
+        grandTotalCountEl.textContent = stats.count; // Note: Si cached, c'est le count total, sinon count chargé
+        grandTotalResteEl.textContent = formatCFA(stats.reste);
+
+        // Indicateur de date de mise à jour
+        const btn = document.getElementById('refreshTotalsBtn');
+        if (btn && stats.lastUpdated) {
+            const date = new Date(stats.lastUpdated).toLocaleString();
+            btn.innerHTML = `🔄 Actualiser les Soldes <span style="font-size:0.8em; font-weight:normal;">(Dernière MAJ: ${date})</span>`;
+        }
+    }
+
+    // --- FONCTION DE RECALCUL GLOBAL (LOURDE MAIS PRÉCISE) ---
+    async function recalculateGlobalStats() {
+        const btn = document.getElementById('refreshTotalsBtn');
+        btn.disabled = true;
+        btn.textContent = "⏳ Calcul en cours (Téléchargement complet)...";
+
+        try {
+            // 1. Téléchargement de TOUTES les données (Sans limite)
+            // Attention au quota, mais c'est une action utilisateur volontaire
+            const [transSnap, expSnap, incSnap, bankSnap] = await Promise.all([
+                db.collection("transactions").where("isDeleted", "!=", true).get(),
+                db.collection("expenses").where("isDeleted", "!=", true).get(),
+                db.collection("other_income").where("isDeleted", "!=", true).get(),
+                db.collection("bank_movements").where("isDeleted", "!=", true).get()
+            ]);
+
+            const tData = transSnap.docs.map(d => d.data());
+            const eData = expSnap.docs.map(d => d.data());
+            const iData = incSnap.docs.map(d => d.data());
+            const bData = bankSnap.docs.map(d => d.data());
+
+            // 2. On utilise la logique existante pour calculer les stats, mais sans filtre de date
+            // On simule un appel à calculateAndRenderStats mais on intercepte le résultat pour le sauvegarder
+            // Pour faire simple, on réimplémente le calcul ici ou on extrait la logique.
+            // J'ai extrait la logique dans calculateAndRenderStats, mais elle écrit dans le DOM.
+            // On va tricher un peu : on appelle calculateAndRenderStats avec les données complètes, 
+            // puis on lit les valeurs du DOM pour les sauvegarder (c'est le plus sûr pour garantir la cohérence).
+            
+            calculateAndRenderStats(tData, eData, iData, bData, null, null);
+
+            // 3. Sauvegarde dans Firestore
+            const statsToSave = {
+                otherIncome: parseCFA(grandTotalOtherIncomeEl.textContent),
+                depenses: parseCFA(grandTotalDepensesEl.textContent),
+                benefice: parseCFA(grandTotalBeneficeEl.textContent),
+                caisse: parseCFA(grandTotalCaisseEl.textContent),
+                percuAbidjan: parseCFA(document.getElementById('grandTotalPercu').textContent),
+                percuParis: parseCFA(grandTotalParisHiddenEl.textContent.split(': ')[1]),
+                banque: parseCFA(grandTotalSoldeBanqueEl.textContent),
+                cheques: parseCFA(document.getElementById('grandTotalCheques').textContent),
+                virements: parseCFA(document.getElementById('grandTotalVirements').textContent),
+                reste: parseCFA(grandTotalResteEl.textContent),
+                count: tData.length,
+                lastUpdated: new Date().toISOString()
+            };
+
+            await db.collection('stats').doc('dashboard').set(statsToSave);
+            cachedStats = statsToSave; // Mise à jour du cache local
+            
+            alert("Totaux actualisés et sauvegardés avec succès !");
+
+        } catch (error) {
+            console.error("Erreur recalcul:", error);
+            alert("Erreur lors du recalcul : " + error.message);
+        } finally {
+            btn.disabled = false;
+            if (cachedStats && cachedStats.lastUpdated) {
+                const date = new Date(cachedStats.lastUpdated).toLocaleString();
+                btn.innerHTML = `🔄 Actualiser les Soldes <span style="font-size:0.8em; font-weight:normal;">(Dernière MAJ: ${date})</span>`;
+            } else {
+                btn.textContent = '🔄 Actualiser les Soldes (Calcul Précis)';
+            }
+        }
+    }
+
+    function parseCFA(str) {
+        if (!str) return 0;
+        return parseFloat(str.replace(/[^\d-]/g, '')) || 0;
     }
     
     function generateMonthlySummary(transactions) {
@@ -952,6 +1073,14 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     }
 
+    // CHARGEMENT INITIAL DES STATS SAUVEGARDÉES
+    db.collection('stats').doc('dashboard').get().then(doc => {
+        if (doc.exists) {
+            cachedStats = doc.data();
+            updateDashboard(); // Rafraîchir l'affichage avec les stats chargées
+        }
+    });
+
     // Listeners Firestore (avec filtres de suppression)
     transactionsCollection.where("isDeleted", "!=", true).orderBy("isDeleted").orderBy("date", "desc").onSnapshot(snapshot => {
         allTransactions = snapshot.docs.map(doc => doc.data());
@@ -1161,4 +1290,50 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     });
     
+    initBackToTopButton();
 });
+
+// --- GESTION DU BOUTON "RETOUR EN HAUT" (GLOBAL & MODALS) ---
+function initBackToTopButton() {
+    // 1. Bouton Global (Window)
+    let backToTopBtn = document.getElementById('backToTopBtn');
+    if (!backToTopBtn) {
+        backToTopBtn = document.createElement('button');
+        backToTopBtn.id = 'backToTopBtn';
+        backToTopBtn.title = 'Retour en haut';
+        backToTopBtn.innerHTML = '&#8593;';
+        document.body.appendChild(backToTopBtn);
+        backToTopBtn.addEventListener('click', () => window.scrollTo({ top: 0, behavior: 'smooth' }));
+    }
+
+    const toggleGlobalBtn = () => {
+        if ((window.pageYOffset || document.documentElement.scrollTop) > 300) backToTopBtn.classList.add('show');
+        else backToTopBtn.classList.remove('show');
+    };
+    window.addEventListener('scroll', toggleGlobalBtn, { passive: true });
+
+    // 2. Boutons Modals (.modal-content)
+    const attachModalButtons = () => {
+        document.querySelectorAll('.modal-content').forEach(modalContent => {
+            if (modalContent.dataset.hasBackToTop) return;
+            
+            const modalBtn = document.createElement('button');
+            modalBtn.className = 'modal-back-to-top';
+            modalBtn.innerHTML = '&#8593;';
+            modalBtn.title = 'Haut de page';
+            modalContent.appendChild(modalBtn);
+            modalContent.dataset.hasBackToTop = "true";
+
+            modalBtn.addEventListener('click', () => modalContent.scrollTo({ top: 0, behavior: 'smooth' }));
+
+            modalContent.addEventListener('scroll', () => {
+                if (modalContent.scrollTop > 200) modalBtn.classList.add('show');
+                else modalBtn.classList.remove('show');
+            }, { passive: true });
+        });
+    };
+
+    attachModalButtons();
+    const observer = new MutationObserver(attachModalButtons);
+    observer.observe(document.body, { childList: true, subtree: true });
+}

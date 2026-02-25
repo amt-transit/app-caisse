@@ -91,6 +91,7 @@ document.addEventListener('DOMContentLoaded', function() {
     updateContainerTitle();
     initActiveContainerInput();
     initAutoAddress();
+    initBackToTopButton();
 });
 
 // Synchronisation Temps Réel avec Firestore
@@ -116,7 +117,7 @@ function initRealtimeSync() {
     // 2. Écouteur sur la collection 'livraisons'
     db.collection(CONSTANTS.COLLECTION)
         .orderBy('dateAjout', 'desc')
-        .limit(2000)
+        .limit(500)
         .onSnapshot((snapshot) => {
             deliveries = [];
             snapshot.forEach((doc) => {
@@ -875,7 +876,14 @@ async function confirmImport() {
         closePreviewModal();
         showToast(`${processedCount} éléments traités avec succès !`, 'success');
         pendingImport = []; // Nettoyage
-    }).catch(err => showToast("Erreur lors de l'enregistrement : " + err.message, 'error'));
+    }).catch(err => {
+        console.error("Erreur Import:", err);
+        if (err.code === 'resource-exhausted') {
+            alert("⚠️ ALERTE QUOTA FIREBASE ATTEINT !\n\nVous avez dépassé la limite d'écriture quotidienne autorisée par Firebase (Plan Gratuit : 20 000 écritures/jour).\n\nL'enregistrement a été bloqué par le serveur. Veuillez réessayer demain (après minuit, heure du Pacifique) ou passer au plan Blaze.");
+        } else {
+            showToast("Erreur lors de l'enregistrement : " + err.message, 'error');
+        }
+    });
 }
 
 // Export Excel
@@ -1546,7 +1554,7 @@ function openProgramModal() {
             }
         });
     }
-    
+
     document.getElementById('programModal').classList.add('active');
 }
 
@@ -2300,4 +2308,49 @@ function initAutoAddress() {
             }
         } catch (e) { console.error("Erreur auto-adresse", e); }
     });
+}
+
+// --- GESTION DU BOUTON "RETOUR EN HAUT" (GLOBAL & MODALS) ---
+function initBackToTopButton() {
+    // 1. Bouton Global (Window)
+    let backToTopBtn = document.getElementById('backToTopBtn');
+    if (!backToTopBtn) {
+        backToTopBtn = document.createElement('button');
+        backToTopBtn.id = 'backToTopBtn';
+        backToTopBtn.title = 'Retour en haut';
+        backToTopBtn.innerHTML = '&#8593;';
+        document.body.appendChild(backToTopBtn);
+        backToTopBtn.addEventListener('click', () => window.scrollTo({ top: 0, behavior: 'smooth' }));
+    }
+
+    const toggleGlobalBtn = () => {
+        if ((window.pageYOffset || document.documentElement.scrollTop) > 300) backToTopBtn.classList.add('show');
+        else backToTopBtn.classList.remove('show');
+    };
+    window.addEventListener('scroll', toggleGlobalBtn, { passive: true });
+
+    // 2. Boutons Modals (.modal-content)
+    const attachModalButtons = () => {
+        document.querySelectorAll('.modal-content').forEach(modalContent => {
+            if (modalContent.dataset.hasBackToTop) return;
+            
+            const modalBtn = document.createElement('button');
+            modalBtn.className = 'modal-back-to-top';
+            modalBtn.innerHTML = '&#8593;';
+            modalBtn.title = 'Haut de page';
+            modalContent.appendChild(modalBtn);
+            modalContent.dataset.hasBackToTop = "true";
+
+            modalBtn.addEventListener('click', () => modalContent.scrollTo({ top: 0, behavior: 'smooth' }));
+
+            modalContent.addEventListener('scroll', () => {
+                if (modalContent.scrollTop > 200) modalBtn.classList.add('show');
+                else modalBtn.classList.remove('show');
+            }, { passive: true });
+        });
+    };
+
+    attachModalButtons();
+    const observer = new MutationObserver(attachModalButtons);
+    observer.observe(document.body, { childList: true, subtree: true });
 }

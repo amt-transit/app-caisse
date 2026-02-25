@@ -139,7 +139,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 arrivalMontantParis.value = ''; arrivalMontantAbidjan.value = '';
                 arrivalNom.style.backgroundColor = ""; arrivalPrix.style.backgroundColor = ""; arrivalMontantParis.style.backgroundColor = "";
                 arrivalRef.focus();
-            }).catch(err => console.error(err));
+            }).catch(err => {
+                console.error(err);
+                if (err.code === 'resource-exhausted') alert("⚠️ QUOTA ATTEINT : Impossible d'ajouter ce colis aujourd'hui.");
+                else alert("Erreur : " + err.message);
+            });
         });
     }
 
@@ -230,9 +234,19 @@ document.addEventListener('DOMContentLoaded', () => {
                         count++;
                     }
                     if (count > 0) {
-                        await batch.commit();
-                        refsToRemove.forEach(r => removeFromParisManifest(r, commonConteneur));
-                        uploadLog.textContent = `Succès: ${count} ajoutés.\n${log}`;
+                        try {
+                            await batch.commit();
+                            refsToRemove.forEach(r => removeFromParisManifest(r, commonConteneur));
+                            uploadLog.textContent = `Succès: ${count} ajoutés.\n${log}`;
+                        } catch (err) {
+                            console.error(err);
+                            if (err.code === 'resource-exhausted') {
+                                alert("⚠️ QUOTA ATTEINT : Import bloqué par Firebase (Limite journalière).");
+                                uploadLog.textContent = "Erreur Quota.";
+                            } else {
+                                alert("Erreur import : " + err.message);
+                            }
+                        }
                     } else {
                         uploadLog.textContent = `Aucun ajout.\n${log}`;
                     }
@@ -387,7 +401,11 @@ document.addEventListener('DOMContentLoaded', () => {
             
             const check = await livraisonsCollection.where("ref", "==", data.ref).get();
             if (!check.empty) return alert("Déjà dans le manifeste.");
-            livraisonsCollection.add(data).then(() => { parisRef.value = ''; parisNom.value = ''; parisRef.focus(); });
+            livraisonsCollection.add(data).then(() => { parisRef.value = ''; parisNom.value = ''; parisRef.focus(); })
+            .catch(err => {
+                if (err.code === 'resource-exhausted') alert("⚠️ QUOTA ATTEINT.");
+                else console.error(err);
+            });
         });
     }
 
@@ -437,8 +455,15 @@ document.addEventListener('DOMContentLoaded', () => {
                         });
                         count++;
                     }
-                    if (count > 0) await batch.commit();
-                    parisUploadLog.textContent = `Succès: ${count} ajoutés.\n${log}`;
+                    if (count > 0) {
+                        try {
+                            await batch.commit();
+                            parisUploadLog.textContent = `Succès: ${count} ajoutés.\n${log}`;
+                        } catch (err) {
+                            if (err.code === 'resource-exhausted') alert("⚠️ QUOTA ATTEINT : Import bloqué.");
+                            else alert("Erreur : " + err.message);
+                        }
+                    }
                     parisCsvFile.value = '';
                 }
             });
@@ -524,4 +549,50 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function formatCFA(n) { return new Intl.NumberFormat('fr-CI', { style: 'currency', currency: 'XOF' }).format(n || 0); }
+    initBackToTopButton();
 });
+
+// --- GESTION DU BOUTON "RETOUR EN HAUT" (GLOBAL & MODALS) ---
+function initBackToTopButton() {
+    // 1. Bouton Global (Window)
+    let backToTopBtn = document.getElementById('backToTopBtn');
+    if (!backToTopBtn) {
+        backToTopBtn = document.createElement('button');
+        backToTopBtn.id = 'backToTopBtn';
+        backToTopBtn.title = 'Retour en haut';
+        backToTopBtn.innerHTML = '&#8593;';
+        document.body.appendChild(backToTopBtn);
+        backToTopBtn.addEventListener('click', () => window.scrollTo({ top: 0, behavior: 'smooth' }));
+    }
+
+    const toggleGlobalBtn = () => {
+        if ((window.pageYOffset || document.documentElement.scrollTop) > 300) backToTopBtn.classList.add('show');
+        else backToTopBtn.classList.remove('show');
+    };
+    window.addEventListener('scroll', toggleGlobalBtn, { passive: true });
+
+    // 2. Boutons Modals (.modal-content)
+    const attachModalButtons = () => {
+        document.querySelectorAll('.modal-content').forEach(modalContent => {
+            if (modalContent.dataset.hasBackToTop) return;
+            
+            const modalBtn = document.createElement('button');
+            modalBtn.className = 'modal-back-to-top';
+            modalBtn.innerHTML = '&#8593;';
+            modalBtn.title = 'Haut de page';
+            modalContent.appendChild(modalBtn);
+            modalContent.dataset.hasBackToTop = "true";
+
+            modalBtn.addEventListener('click', () => modalContent.scrollTo({ top: 0, behavior: 'smooth' }));
+
+            modalContent.addEventListener('scroll', () => {
+                if (modalContent.scrollTop > 200) modalBtn.classList.add('show');
+                else modalBtn.classList.remove('show');
+            }, { passive: true });
+        });
+    };
+
+    attachModalButtons();
+    const observer = new MutationObserver(attachModalButtons);
+    observer.observe(document.body, { childList: true, subtree: true });
+}

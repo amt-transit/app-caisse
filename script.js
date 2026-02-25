@@ -533,7 +533,17 @@ document.addEventListener('DOMContentLoaded', async () => {
             agents: sessionAgentsStr // <-- AJOUT DU CHAMP AGENTS
         });
 
-        await batch.commit();
+        try {
+            await batch.commit();
+        } catch (error) {
+            console.error("Erreur Enregistrement:", error);
+            if (error.code === 'resource-exhausted') {
+                alert("⚠️ ALERTE QUOTA FIREBASE ATTEINT !\n\nImpossible d'enregistrer la journée : Vous avez dépassé la limite d'écriture quotidienne (20 000 opérations).\n\nVeuillez réessayer demain.");
+            } else {
+                alert("Erreur lors de l'enregistrement : " + error.message);
+            }
+            return; // Arrêt si erreur
+        }
         
         // --- WHATSAPP FEATURE ---
         const rawDate = document.getElementById('date').value;
@@ -749,4 +759,50 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     renderAllTables();
     populateDatalist(); 
+    initBackToTopButton();
 });
+
+// --- GESTION DU BOUTON "RETOUR EN HAUT" (GLOBAL & MODALS) ---
+function initBackToTopButton() {
+    // 1. Bouton Global (Window)
+    let backToTopBtn = document.getElementById('backToTopBtn');
+    if (!backToTopBtn) {
+        backToTopBtn = document.createElement('button');
+        backToTopBtn.id = 'backToTopBtn';
+        backToTopBtn.title = 'Retour en haut';
+        backToTopBtn.innerHTML = '&#8593;';
+        document.body.appendChild(backToTopBtn);
+        backToTopBtn.addEventListener('click', () => window.scrollTo({ top: 0, behavior: 'smooth' }));
+    }
+
+    const toggleGlobalBtn = () => {
+        if ((window.pageYOffset || document.documentElement.scrollTop) > 300) backToTopBtn.classList.add('show');
+        else backToTopBtn.classList.remove('show');
+    };
+    window.addEventListener('scroll', toggleGlobalBtn, { passive: true });
+
+    // 2. Boutons Modals (.modal-content)
+    const attachModalButtons = () => {
+        document.querySelectorAll('.modal-content').forEach(modalContent => {
+            if (modalContent.dataset.hasBackToTop) return;
+            
+            const modalBtn = document.createElement('button');
+            modalBtn.className = 'modal-back-to-top';
+            modalBtn.innerHTML = '&#8593;';
+            modalBtn.title = 'Haut de page';
+            modalContent.appendChild(modalBtn);
+            modalContent.dataset.hasBackToTop = "true";
+
+            modalBtn.addEventListener('click', () => modalContent.scrollTo({ top: 0, behavior: 'smooth' }));
+
+            modalContent.addEventListener('scroll', () => {
+                if (modalContent.scrollTop > 200) modalBtn.classList.add('show');
+                else modalBtn.classList.remove('show');
+            }, { passive: true });
+        });
+    };
+
+    attachModalButtons();
+    const observer = new MutationObserver(attachModalButtons);
+    observer.observe(document.body, { childList: true, subtree: true });
+}
