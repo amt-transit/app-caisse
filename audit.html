@@ -1,9 +1,10 @@
+<!-- c:\Users\JEANAFFA\Desktop\MonAppli Gemini\audit.html -->
 <!DOCTYPE html>
 <html lang="fr">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=1000">
-    <title>Magasinage - Caisse</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Audit des Saisies - AMT</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Comfortaa:wght@400;700&display=swap" rel="stylesheet">
@@ -13,22 +14,22 @@
 <body style="display:none">
     <header class="app-header">
         <img src="LOGOAMT.png" alt="Logo" class="app-logo">
-        <h1>Frais de Magasinage</h1>
+        <h1>Audit des Saisies</h1>
         <button id="logoutBtn" style="position: absolute; right: 20px; padding: 8px 15px; cursor: pointer;">Déconnexion</button>
     </header>
 
     <nav class="navigation">
         <a href="index.html">Saisie</a>
         <a href="confirmation.html" id="nav-confirmation">Confirmation</a>
-        <a href="audit.html" id="nav-audit">Audit</a>
+        <a href="audit.html" id="nav-audit" class="active">Audit</a>
         <a href="dashboard.html" id="nav-dashboard">Tableau de Bord</a>
-        <a href="history.html">Historique</a> 
+        <a href="history.html">Historique</a>
         <a href="expenses.html" id="nav-expenses">Dépenses</a>
         <a href="other-income.html" id="nav-other-income">Autres Entrées</a>
         <a href="bank.html" id="nav-bank">Banque</a>
         <a href="arrivages.html" id="nav-arrivages">Arrivages</a>
         <a href="clients.html" id="nav-clients">Clients</a>
-        <a href="magasinage.html" id="nav-magasinage" class="active">Magasinage</a> 
+        <a href="magasinage.html" id="nav-magasinage">Magasinage</a>
         <a href="salaire.html" id="nav-salaire">Salaire</a>
         <a href="livraison.html" id="nav-livraison">LIVRAISON</a>
         <a href="points.html" id="nav-points">Points</a>
@@ -36,59 +37,50 @@
     </nav>
 
     <div class="dashboard-container">
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
-            <h2>📦 Calcul Frais de Magasinage</h2>
-            <div class="total-card" style="max-width: 250px; background: #fff7ed; border-color: #fdba74;">
-                <h3>Total Frais Latents</h3>
-                <p id="totalMagasinageFees" style="color: #c2410c;">0 CFA</p>
-            </div>
-        </div>
-
-        <div class="filter-container" style="margin-bottom: 20px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+            <h2>Journal des Saisies Validées</h2>
             <div class="filter-fields">
-                <label>Rechercher un colis :</label>
-                <input type="text" id="magasinageSearch" placeholder="Référence, Nom ou Conteneur...">
+                <input type="text" id="auditSearch" placeholder="🔍 Rechercher (User, Date)..." style="padding: 8px; border-radius: 4px; border: 1px solid #ccc;">
+                <button id="exportAuditBtn" class="btn" style="background-color: #10b981; color: white;">Export Excel</button>
             </div>
         </div>
 
-        <div style="overflow-x: auto;">
+        <div class="table-container">
             <table class="table">
                 <thead>
                     <tr>
-                        <th>Date Arrivée</th>
-                        <th>Référence</th>
-                        <th>Client</th>
-                        <th>Conteneur</th>
-                        <th>Durée Stockage</th>
-                        <th>Frais à Payer</th>
+                        <th>Date Validation</th>
+                        <th>Date Saisie</th>
+                        <th>Utilisateur</th>
+                        <th>Encaissements (Espèces)</th>
+                        <th>Dépenses</th>
+                        <th>Résultat Session</th>
+                        <th>Solde Cumulé</th>
+                        <th>Détails</th>
                     </tr>
                 </thead>
-                <tbody id="magasinageTableBody">
-                    <!-- Rempli par JS -->
+                <tbody id="auditTableBody">
+                    <tr><td colspan="8" style="text-align:center;">Chargement des données...</td></tr>
                 </tbody>
             </table>
+        </div>
+    </div>
+
+    <!-- Modal Détails Session -->
+    <div id="auditDetailsModal" class="modal">
+        <div class="modal-content" style="max-width: 800px;">
+            <span class="close-modal" onclick="document.getElementById('auditDetailsModal').style.display='none'">&times;</span>
+            <h2 id="modalAuditTitle">Détails Session</h2>
+            <div id="modalAuditContent"></div>
         </div>
     </div>
 
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
-    <script>
-        const firebaseConfig = {
-            apiKey: "AIzaSyA255n3XWDRKaYZ9kwOYkfovf5lRexoCA4",
-            authDomain: "caisse-amt-perso.firebaseapp.com",
-            projectId: "caisse-amt-perso",
-            storageBucket: "caisse-amt-perso.firebasestorage.app",
-            messagingSenderId: "682789156997",
-            appId: "1:682789156997:web:9ce3303120851d37be91ec"
-        };
-        firebase.initializeApp(firebaseConfig);
-        const db = firebase.firestore();
-        document.getElementById('logoutBtn').addEventListener('click', () => {
-            if (confirm("Voulez-vous vous déconnecter ?")) firebase.auth().signOut();
-        });
-    </script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="firebase-init.js"></script>
     <script src="auth-guard.js"></script>
-    <script src="magasinage.js"></script>
+    <script src="audit.js"></script>
 </body>
 </html>

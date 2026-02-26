@@ -512,15 +512,25 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     // Remplacez votre fonction generateContainerSummary actuelle par celle-ci
-    function generateContainerSummary(transactions, expenses) {
+    function generateContainerSummary(filteredTransactions, filteredExpenses) {
         const tbody = document.getElementById('containerSummaryTableBody');
-        tbody.innerHTML = '<tr><td colspan="10">Aucune donnée de conteneur.</td></tr>';
+        if (!tbody) return;
+        tbody.innerHTML = '<tr><td colspan="10">Chargement des données conteneur...</td></tr>';
         
-        // ... (Votre logique de calcul existante reste identique ici) ...
-        // Je reprends juste la partie calcul pour le contexte, ne changez pas votre logique de calcul
+        // 1. Identifier les conteneurs pertinents (ceux qui ont une activité dans la période filtrée)
+        const relevantContainers = new Set();
+        filteredTransactions.forEach(t => { if(t.conteneur) relevantContainers.add(t.conteneur.trim().toUpperCase()); });
+        filteredExpenses.forEach(e => { if(e.conteneur) relevantContainers.add(e.conteneur.trim().toUpperCase()); });
+
+        // 2. SÉCURITÉ : On utilise la liste globale complète et on la nettoie pour garantir l'exactitude des totaux.
+        const sourceTransactions = getCleanTransactions(allTransactions);
+        const sourceExpenses = allExpenses.filter(e => !e.sessionId || !unconfirmedSessions.has(e.sessionId));
+
         const containerData = {};
-        transactions.forEach(t => {
+        sourceTransactions.forEach(t => {
             const containerName = (t.conteneur && t.conteneur.trim().toUpperCase()) || "Non spécifié"; 
+            if (containerName === "Non spécifié") return;
+
             if (!containerData[containerName]) containerData[containerName] = { totalPrix: 0, totalParis: 0, totalAbidjan: 0, totalReste: 0, date: t.date, count: 0, unpaidCount: 0 };
             const data = containerData[containerName];
             data.totalPrix += (t.prix || 0);
@@ -533,20 +543,23 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
 
         const containerExpenses = {};
-        expenses.forEach(e => {
+        sourceExpenses.forEach(e => {
             if (e.action !== 'Allocation' && e.conteneur) {
                 const cName = e.conteneur.trim().toUpperCase();
                 if (!cName) return;
+                
                 if (!containerExpenses[cName]) containerExpenses[cName] = 0;
                 containerExpenses[cName] += (e.montant || 0);
             }
         });
 
-        const allContainers = new Set([...Object.keys(containerData), ...Object.keys(containerExpenses)]);
+        // 3. On filtre les conteneurs calculés pour n'afficher que ceux qui sont pertinents pour la période sélectionnée.
+        const allCalculatedContainers = [...new Set([...Object.keys(containerData), ...Object.keys(containerExpenses)])];
+        const containersToDisplay = allCalculatedContainers.filter(c => relevantContainers.has(c));
 
         // GROUPAGE PAR MOIS
         const containersByMonth = {};
-        allContainers.forEach(container => {
+        containersToDisplay.forEach(container => {
             if (container === "Non spécifié") return;
             let dateStr = containerData[container]?.date;
             if (!dateStr) dateStr = "9999-99-99"; 
@@ -1173,10 +1186,12 @@ document.addEventListener('DOMContentLoaded', async () => {
         
         // Filtrer les transactions globales (allTransactions est déjà chargé en mémoire)
         // On filtre uniquement celles qui appartiennent au conteneur cliqué
-        const transactions = allTransactions.filter(t => (t.conteneur && t.conteneur.trim().toUpperCase()) === containerName);
+        // FIX : On utilise getCleanTransactions pour exclure les montants en attente de validation
+        const cleanTransactions = getCleanTransactions(allTransactions);
+        const transactions = cleanTransactions.filter(t => (t.conteneur && t.conteneur.trim().toUpperCase()) === containerName);
         
         // Filtrer les dépenses liées au conteneur
-        const expenses = allExpenses.filter(e => (e.conteneur && e.conteneur.trim().toUpperCase()) === containerName);
+        const expenses = allExpenses.filter(e => (e.conteneur && e.conteneur.trim().toUpperCase()) === containerName && (!e.sessionId || !unconfirmedSessions.has(e.sessionId)));
         
         // Trier les transactions : Dettes d'abord, puis Référence CROISSANTE
         const sortedTransactions = transactions.map(t => ({...t, _type: 'transaction'})).sort((a, b) => {

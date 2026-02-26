@@ -110,6 +110,15 @@ firebase.auth().onAuthStateChanged(async (user) => {
             }
         }
 
+        // Protection page Audit
+        if (currentPage.includes('audit.html')) {
+            if (userRole !== 'admin' && userRole !== 'super_admin') {
+                alert("Accès refusé : Réservé aux Administrateurs.");
+                window.location.href = 'index.html';
+                return;
+            }
+        }
+
         // ADMIN
         if (userRole === 'admin') {
             document.body.style.display = 'block';
@@ -155,9 +164,11 @@ firebase.auth().onAuthStateChanged(async (user) => {
         const navSalaire = document.getElementById('nav-salaire');
         const navPoints = document.getElementById('nav-points');
         const navLivraison = document.getElementById('nav-livraison');
+        const navAudit = document.getElementById('nav-audit');
 
         if (navAdmin && userRole !== 'super_admin') navAdmin.style.display = 'none';
         if (navPoints && (userRole !== 'admin' && userRole !== 'super_admin')) navPoints.style.display = 'none';
+        if (navAudit && (userRole !== 'admin' && userRole !== 'super_admin')) navAudit.style.display = 'none';
 
         if (userRole === 'saisie_full') {
             if (navMagasinage) navMagasinage.style.display = 'inline';
