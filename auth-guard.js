@@ -47,14 +47,38 @@ firebase.auth().onAuthStateChanged(async (user) => {
             .orderBy("date", "desc")
             .limit(20)
             .onSnapshot(snapshot => {
-                let hasPending = false;
+                let pendingCount = 0;
                 snapshot.forEach(doc => {
-                    if (doc.data().status !== "VALIDATED") hasPending = true;
+                    if (doc.data().status !== "VALIDATED") {
+                        pendingCount++;
+                    }
                 });
                 const navItem = document.getElementById('nav-confirmation');
                 if (navItem) {
-                    if (hasPending) navItem.classList.add('has-pending');
-                    else navItem.classList.remove('has-pending');
+                    // On retire l'ancienne classe qui mettait le "!"
+                    navItem.classList.remove('has-pending');
+
+                    // On cherche ou on crée le badge pour le compteur
+                    let badge = navItem.querySelector('.pending-count-badge');
+                    if (!badge) {
+                        badge = document.createElement('span');
+                        badge.className = 'pending-count-badge';
+                        // Style du badge
+                        badge.style.cssText = "background-color:#ef4444; color:white; border-radius:10px; padding:1px 6px; font-size:10px; font-weight:bold; margin-left:5px; vertical-align:super;";
+                        
+                        // On essaie de l'insérer dans le lien <a> pour un meilleur alignement
+                        const link = navItem.querySelector('a');
+                        if (link) link.appendChild(badge);
+                        else navItem.appendChild(badge);
+                    }
+
+                    // On met à jour le compteur et la visibilité
+                    if (pendingCount > 0) {
+                        badge.textContent = pendingCount;
+                        badge.style.display = 'inline-block';
+                    } else {
+                        badge.style.display = 'none';
+                    }
                 }
             }, error => console.log("Badge check info:", error.message));
 
