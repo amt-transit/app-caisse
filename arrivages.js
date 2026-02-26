@@ -218,7 +218,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         if (!check.empty) { log += `\nDoublon (Base): ${ref}`; continue; }
 
                         // MODIFICATION : Le Destinataire est le client principal (nom)
-                        const mainClientName = dest || sender;
+                        const mainClientName = sender || dest;
 
                         const docRef = transactionsCollection.doc();
                         batch.set(docRef, {

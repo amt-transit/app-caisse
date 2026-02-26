@@ -179,7 +179,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const filtered = tabFiltered.filter(item => {
             if (!term) return true;
-            return (item.description || "").toLowerCase().includes(term) || (item.type || "").toLowerCase().includes(term) || (item.conteneur || "").toLowerCase().includes(term);
+            return (item.description || "").toLowerCase().includes(term) || 
+                   (item.type || "").toLowerCase().includes(term) || 
+                   (item.conteneur || "").toLowerCase().includes(term) ||
+                   (item.montant || 0).toString().includes(term); // Recherche par montant
         });
 
         // TRI

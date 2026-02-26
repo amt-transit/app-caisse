@@ -108,7 +108,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         const filtered = data.filter(s => 
             s.user.toLowerCase().includes(term) || 
             s.dateSaisie.includes(term) ||
-            new Date(s.dateValidation).toLocaleDateString('fr-FR').includes(term)
+            new Date(s.dateValidation).toLocaleDateString('fr-FR').includes(term) ||
+            s.detailsTrans.some(t => (t.reference || '').toLowerCase().includes(term)) ||
+            // Recherche par montant (Total ou Détail)
+            s.totalIn.toString().includes(term) ||
+            s.detailsTrans.some(t => (t.montantSpecifique || 0).toString().includes(term))
         );
 
         if (filtered.length === 0) {
@@ -121,6 +125,10 @@ document.addEventListener('DOMContentLoaded', async () => {
             const dateVal = new Date(s.dateValidation).toLocaleString('fr-FR');
             const dateSaisie = new Date(s.dateSaisie).toLocaleDateString('fr-FR');
 
+            tr.style.cursor = 'pointer';
+            tr.title = "Cliquez pour voir les détails";
+            tr.onclick = () => window.openAuditDetails(s.id);
+
             tr.innerHTML = `
                 <td>${dateVal}</td>
                 <td>${dateSaisie}</td>
@@ -129,7 +137,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 <td style="color:#ef4444;">${formatCFA(s.totalOut)}</td>
                 <td style="font-weight:bold;">${formatCFA(s.result)}</td>
                 <td style="font-weight:bold; color:#2563eb; background-color:#eff6ff;">${formatCFA(s.balance)}</td>
-                <td><button class="btn btn-small" onclick="openAuditDetails('${s.id}')">👁️ Voir</button></td>
+                <td><button class="btn btn-small">👁️ Voir</button></td>
             `;
             tableBody.appendChild(tr);
         });

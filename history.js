@@ -258,12 +258,18 @@ document.addEventListener('DOMContentLoaded', () => {
                 const ref = (data.reference || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
                 const nom = (data.nom || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
                 const conteneur = (data.conteneur || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+                const description = (data.description || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+                
+                // Recherche dans les montants (convertis en texte)
+                const prixStr = (data.prix || 0).toString();
+                const payeAbjStr = (data.montantAbidjan || 0).toString();
+                const payeParStr = (data.montantParis || 0).toString();
                 
                 const isTerminaison = /^d\d+$/.test(searchTerm);
                 if (isTerminaison) {
                     if (!ref.endsWith(searchTerm) && !conteneur.includes(searchTerm)) return false;
                 } else {
-                    if (!ref.includes(searchTerm) && !nom.includes(searchTerm) && !conteneur.includes(searchTerm)) return false;
+                    if (!ref.includes(searchTerm) && !nom.includes(searchTerm) && !conteneur.includes(searchTerm) && !description.includes(searchTerm) && !prixStr.includes(searchTerm) && !payeAbjStr.includes(searchTerm) && !payeParStr.includes(searchTerm)) return false;
                 }
             }
             return true;

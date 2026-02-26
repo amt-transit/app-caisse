@@ -17,8 +17,9 @@ document.addEventListener('DOMContentLoaded', () => {
     }, error => console.error(error));
 
     // 2. Fonction de calcul des frais (NOUVELLE LOGIQUE)
-    function calculateStorageFee(dateString) {
+    function calculateStorageFee(dateString, quantity = 1) {
         if (!dateString) return { days: 0, fee: 0 };
+        const qte = parseInt(quantity) || 1;
 
         const arrivalDate = new Date(dateString);
         const today = new Date();
@@ -39,8 +40,8 @@ document.addEventListener('DOMContentLoaded', () => {
         } else {
             // Au-delà de 14 jours : 10 000 F + 1 000 F par jour supplémentaire
             const extraDays = diffDays - 14;
-            const fee = 10000 + (extraDays * 1000);
-            return { days: diffDays, fee: fee };
+            const unitFee = 10000 + (extraDays * 1000);
+            return { days: diffDays, fee: unitFee * qte }; // Multiplication par la quantité
         }
     }
 
@@ -57,7 +58,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (t.storageFeeWaived === true) return false;
 
             // 3. On ne montre que ceux qui ont des frais (période gratuite dépassée)
-            const { fee } = calculateStorageFee(t.date);
+            const { fee } = calculateStorageFee(t.date, t.quantite);
             if (fee <= 0) return false;
 
             if (!term) return true; 
@@ -79,7 +80,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const toShow = filtered.slice(0, 100);
 
         toShow.forEach(t => {
-            const { days, fee } = calculateStorageFee(t.date);
+            const { days, fee } = calculateStorageFee(t.date, t.quantite);
             
             if (fee > 0) totalPotentialFees += fee;
 
@@ -100,7 +101,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             row.innerHTML = `
                 <td>${t.date}</td>
-                <td>${t.reference}</td>
+                <td>${t.reference} <span style="font-size:0.8em; color:#666;">(x${t.quantite || 1})</span></td>
                 <td>${t.nom}</td>
                 <td>${t.conteneur}</td>
                 <td><span class="tag" style="background:#e2e8f0; color:#334155;">${days} jours</span></td>

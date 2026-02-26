@@ -609,6 +609,7 @@ function importExcel(event) {
                             destinataire: fixEncoding(String(r.DESTINATAIRE || r.CLIENT || r.DESTINATEUR || '')),
                             description: fixEncoding(String(r.DESCRIPTION || r.NATURE || r['TYPE COLIS'] || '')),
                             numero: String(r.NUMERO || r.TEL || r.TELEPHONE || r.CONTACT || ''),
+                            quantite: parseInt(r.QTE || r.QUANTITE || r.QUANTITÉ || 1), // Récupération Quantité
                             status: 'EN_ATTENTE',
                             dateAjout: new Date().toISOString()
                         };
@@ -683,7 +684,20 @@ async function findAddressForRecipient(name) {
     );
     if (localMatch) return localMatch.lieuLivraison;
 
-    // 2. Recherche Archives (Firestore)
+    // 2. Recherche Firestore Active (Pour les items hors limite 500)
+    try {
+        const snapActive = await db.collection(CONSTANTS.COLLECTION)
+            .where('destinataire', '==', val)
+            .limit(10)
+            .get();
+        
+        for (const doc of snapActive.docs) {
+            const d = doc.data();
+            if (d.lieuLivraison && d.lieuLivraison.trim() !== "") return d.lieuLivraison;
+        }
+    } catch (e) { console.error("Erreur recherche adresse active", e); }
+
+    // 3. Recherche Archives (Firestore)
     try {
         const snap = await db.collection(CONSTANTS.ARCHIVE_COLLECTION)
             .where('destinataire', '==', val)
@@ -719,6 +733,7 @@ function showPreviewModal(data) {
         return `
         <tr class="${rowClass}">
             <td>${d.ref}</td>
+            <td style="font-weight:bold; text-align:center;">${d.quantite || 1}</td>
             <td>${d.expediteur.substring(0, 30)}</td>
             <td><span class="commune-badge badge-${d.commune.toLowerCase().replace(/[éè]/g, 'e').replace('-', '')}">${d.commune}</span></td>
             <td>${d.lieuLivraison.substring(0, 40)}...</td>
@@ -732,13 +747,11 @@ function showPreviewModal(data) {
 function closePreviewModal() {
     document.getElementById('previewModal').classList.remove('active');
     document.getElementById('importConteneur').value = '';
-    document.getElementById('importBl').value = '';
     pendingImport = [];
 }
 
 async function confirmImport() {
     const conteneur = document.getElementById('importConteneur').value;
-    const bl = document.getElementById('importBl').value;
     const containerStatus = document.getElementById('importContainerStatus').value;
 
     // --- NOUVEAU : Pré-traitement pour fusionner les doublons DANS le fichier importé ---
@@ -767,6 +780,7 @@ async function confirmImport() {
             existing.destinataire = pickBest(existing.destinataire, item.destinataire);
             existing.lieuLivraison = pickBest(existing.lieuLivraison, item.lieuLivraison);
             existing.numero = pickBest(existing.numero, item.numero);
+            existing.quantite = (existing.quantite || 1) + (item.quantite || 1); // Cumul des quantités si doublon exact
             
             if (existing.lieuLivraison !== originalLieu) {
                  existing.commune = detectCommune(existing.lieuLivraison);
@@ -786,6 +800,26 @@ async function confirmImport() {
     for (const importItem of finalImportList) {
         // Vérifier si la référence existe déjà dans la base de données (Insensible à la casse)
         const existingItem = deliveries.find(d => d.ref.toUpperCase() === importItem.ref.toUpperCase());
+
+        // --- LOGIQUE INTELLIGENTE : RECHERCHE PAR RÉFÉRENCE DE BASE ---
+        // Si l'item n'a pas d'infos complètes, on cherche son "Parent" (ex: MD-067-E2 pour MD-067-E2_1_969)
+        if (containerStatus === 'EN_COURS' && (!importItem.expediteur || !importItem.destinataire)) {
+            // On tente d'extraire la base (tout ce qui est avant le premier underscore ou tiret final)
+            // Ex: MD-067-E2_1 -> MD-067-E2
+            const baseRefMatch = importItem.ref.match(/^([A-Z]{2}-\d{3}-[A-Z0-9]+)(?:_.*)?$/);
+            const baseRef = baseRefMatch ? baseRefMatch[1] : null;
+
+            if (baseRef) {
+                // On cherche le parent dans la base locale (A_VENIR, PARIS, etc.)
+                const parentItem = deliveries.find(d => d.ref === baseRef);
+                if (parentItem) {
+                    if (!importItem.expediteur) importItem.expediteur = parentItem.expediteur;
+                    if (!importItem.destinataire) importItem.destinataire = parentItem.destinataire;
+                    if (!importItem.lieuLivraison) importItem.lieuLivraison = parentItem.lieuLivraison;
+                    if (!importItem.commune || importItem.commune === 'AUTRE') importItem.commune = parentItem.commune;
+                }
+            }
+        }
 
         if (existingItem) {
             // CAS 1 : La référence existe -> On déplace le colis existant
@@ -809,9 +843,6 @@ async function confirmImport() {
             if (conteneur) updates.conteneur = conteneur;
             else if (importItem.conteneur) updates.conteneur = importItem.conteneur;
             
-            if (bl) updates.bl = bl;
-            else if (importItem.bl) updates.bl = importItem.bl;
-
             // LOGIQUE DE TRAÇABILITÉ (Paris -> A Venir -> En Cours)
             if (containerStatus === 'EN_COURS') {
                 if (existingItem.containerStatus === 'PARIS') {
@@ -838,7 +869,7 @@ async function confirmImport() {
             operations.push({ type: 'set', ref: docRef, data: { 
                 ...itemData, 
                 conteneur: conteneur || importItem.conteneur || '', 
-                bl: bl || importItem.bl || '', 
+                quantite: importItem.quantite || 1, // Stockage de la quantité
                 containerStatus: containerStatus,
                 dateAjout: new Date().toISOString()
             }});
@@ -868,7 +899,8 @@ async function confirmImport() {
                     adresseDestinataire: importItem.lieuLivraison || '',
                     nomDestinataire: importItem.destinataire || '',
                     numero: importItem.numero || '', // Nouveau champ Numéro
-                    saisiPar: sessionStorage.getItem('userName') || 'Import Livraison'
+                    saisiPar: sessionStorage.getItem('userName') || 'Import Livraison',
+                    quantite: importItem.quantite || 1 // IMPORTANT : Pour le calcul magasinage
                 }});
             }
         }
@@ -934,7 +966,7 @@ function exportToExcel() {
     
     const data = filteredDeliveries.map(d => ({ // Export uniquement ce qu'on voit (filtré)
         'CONTENEUR': d.conteneur || '',
-        'BL': d.bl || '',
+        'QTE': d.quantite || 1,
         'REF': d.ref,
         'RESTANT': d.montant,
         'EXPEDITEUR': d.expediteur,
@@ -1075,6 +1107,7 @@ function renderTable() {
             <th style="width: 100px;">DATE</th>
             <th class="sortable" onclick="sortTable('conteneur')" style="width: 120px;">CONTENEUR ${getSortIcon('conteneur')}</th>
             <th class="sortable" onclick="sortTable('ref')" style="width: 100px;">RÉF ${getSortIcon('ref')}</th>
+            <th style="width: 60px;">QTE</th>
             <th class="sortable" onclick="sortTable('montant')" style="width: 100px;">MONTANT ${getSortIcon('montant')}</th>
             <th class="sortable" onclick="sortTable('expediteur')" style="width: 150px;">EXPÉDITEUR ${getSortIcon('expediteur')}</th>
             <th class="sortable" onclick="sortTable('lieuLivraison')" style="width: 250px;">LIEU DE LIVRAISON ${getSortIcon('lieuLivraison')}</th>
@@ -1088,6 +1121,7 @@ function renderTable() {
             <th class="col-checkbox"><input type="checkbox" id="selectAll" onchange="toggleSelectAll()"></th>
             <th class="sortable" onclick="sortTable('conteneur')" style="width: 120px;">CONTENEUR ${getSortIcon('conteneur')}</th>
             <th class="sortable" onclick="sortTable('ref')" style="width: 100px;">REF ${getSortIcon('ref')}</th>
+            <th style="width: 60px;">QTE</th>
             <th class="sortable" onclick="sortTable('montant')" style="width: 100px;">MONTANT ${getSortIcon('montant')}</th>
             <th class="sortable" onclick="sortTable('expediteur')" style="width: 150px;">EXPEDITEUR ${getSortIcon('expediteur')}</th>
             <th class="sortable" onclick="sortTable('lieuLivraison')" style="width: 250px;">LIEU DE LIVRAISON ${getSortIcon('lieuLivraison')}</th>
@@ -1215,6 +1249,7 @@ function renderTable() {
                     <td>${d.dateAjout ? new Date(d.dateAjout).toLocaleDateString('fr-FR') : '-'}</td>
                     <td>${d.conteneur || '-'}</td>
                     <td class="ref">${d.ref}</td>
+                    <td style="text-align:center;"><input type="number" class="editable-cell" value="${d.quantite || 1}" onchange="updateDeliveryQuantity('${d.id}', this.value)" style="width: 50px; text-align:center; font-weight:bold;"></td>
                     <td class="montant"><input type="text" class="editable-cell" value="${(d.montant || '').replace(/"/g, '&quot;')}" onchange="updateDeliveryAmount('${d.id}', this.value)" style="width: 100%;"></td>
                     <td>${d.expediteur}</td>
                     <td><input type="text" class="editable-cell" value="${(d.lieuLivraison || '').replace(/"/g, '&quot;')}" list="sharedLocationsList" onchange="updateDeliveryLocation('${d.id}', this.value)"></td>
@@ -1231,6 +1266,7 @@ function renderTable() {
                 <td class="col-checkbox"><input type="checkbox" onchange="toggleSelection('${d.id}')" ${selectedIds.has(d.id) ? 'checked' : ''}></td>
                 <td>${d.conteneur || '-'}</td>
                 <td class="ref">${transitIndicator}${d.ref}</td>
+                <td style="text-align:center;"><input type="number" class="editable-cell" value="${d.quantite || 1}" onchange="updateDeliveryQuantity('${d.id}', this.value)" style="width: 50px; text-align:center; font-weight:bold;"></td>
                 <td class="montant"><input type="text" class="editable-cell" value="${(d.montant || '').replace(/"/g, '&quot;')}" onchange="updateDeliveryAmount('${d.id}', this.value)" style="width: 100%;"></td>
                 <td>${d.expediteur}</td>
                 <td><input type="text" class="editable-cell" value="${(d.lieuLivraison || '').replace(/"/g, '&quot;')}" list="sharedLocationsList" onchange="updateDeliveryLocation('${d.id}', this.value)"></td>
@@ -2023,21 +2059,29 @@ function updateDeliveryLocation(id, newLocation) {
     // PROPAGATION : Mettre à jour tous les colis du même destinataire (tous onglets confondus)
     const currentItem = deliveries.find(d => d.id === id);
     if (currentItem && currentItem.destinataire && currentItem.destinataire.trim() !== "") {
-        const recipientNorm = currentItem.destinataire.trim().toLowerCase();
-        const batch = db.batch();
-        let count = 0;
+        const recipientName = currentItem.destinataire.trim();
+        
+        // REQUÊTE FIRESTORE pour toucher TOUS les onglets (même ceux non chargés localement)
+        db.collection(CONSTANTS.COLLECTION)
+            .where('destinataire', '==', recipientName)
+            .get()
+            .then(snapshot => {
+                const batch = db.batch();
+                let count = 0;
+                
+                snapshot.forEach(doc => {
+                    // On ne met à jour que si l'ID est différent ET que le lieu est différent (pour économiser des écritures)
+                    if (doc.id !== id && doc.data().lieuLivraison !== newLocation) {
+                        batch.update(doc.ref, updates);
+                        count++;
+                    }
+                });
 
-        deliveries.forEach(d => {
-            if (d.id !== id && d.destinataire && d.destinataire.trim().toLowerCase() === recipientNorm && d.lieuLivraison !== newLocation) {
-                const ref = db.collection(CONSTANTS.COLLECTION).doc(d.id);
-                batch.update(ref, updates);
-                count++;
-            }
-        });
-
-        if (count > 0) {
-            batch.commit().then(() => showToast(`Adresse propagée à ${count} autres colis de ${currentItem.destinataire}`, 'success'));
-        }
+                if (count > 0) {
+                    batch.commit().then(() => showToast(`Adresse propagée à ${count} autres colis de ${recipientName}`, 'success'));
+                }
+            })
+            .catch(err => console.error("Erreur propagation adresse:", err));
     }
 }
 
@@ -2054,6 +2098,11 @@ function updateDeliveryPhone(id, newPhone) {
 // Mise à jour du montant en direct
 function updateDeliveryAmount(id, newAmount) {
     db.collection(CONSTANTS.COLLECTION).doc(id).update({ montant: newAmount });
+}
+
+// Mise à jour de la quantité en direct
+function updateDeliveryQuantity(id, newQty) {
+    db.collection(CONSTANTS.COLLECTION).doc(id).update({ quantite: parseInt(newQty) || 1 });
 }
 
 // Mise à jour de l'info manuelle en direct
@@ -2132,7 +2181,7 @@ document.getElementById('deliveryForm').addEventListener('submit', function(e) {
     const newItem = {
         containerStatus: document.getElementById('newContainerStatus').value,
         conteneur: document.getElementById('conteneur').value.trim(),
-        bl: '',
+        quantite: parseInt(document.getElementById('quantite').value) || 1, // Récupération de la saisie
         ref: refInput,
         montant: document.getElementById('montant').value.trim(),
         expediteur: document.getElementById('expediteur').value.trim(),
@@ -2163,6 +2212,7 @@ document.getElementById('deliveryForm').addEventListener('submit', function(e) {
 
         updates.containerStatus = newItem.containerStatus;
         if (newItem.conteneur) updates.conteneur = newItem.conteneur;
+        updates.quantite = (existingItem.quantite || 0) + newItem.quantite; // On cumule les quantités en cas de fusion
 
         updates.montant = pickBest(existingItem.montant, newItem.montant);
         updates.expediteur = pickBest(existingItem.expediteur, newItem.expediteur);
@@ -2459,7 +2509,7 @@ async function removeDuplicatesFromDatabase() {
 
                 // Fusion des données des doublons vers le master
                 duplicates.forEach(dup => {
-                    ['montant', 'expediteur', 'destinataire', 'lieuLivraison', 'commune', 'description', 'numero', 'conteneur', 'bl', 'livreur', 'dateProgramme'].forEach(field => {
+                    ['montant', 'expediteur', 'destinataire', 'lieuLivraison', 'commune', 'description', 'numero', 'conteneur', 'quantite', 'livreur', 'dateProgramme'].forEach(field => {
                         const best = pickBest(master[field], dup[field]);
                         if (best !== master[field]) {
                             updates[field] = best;
