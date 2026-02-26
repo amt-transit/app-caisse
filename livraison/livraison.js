@@ -92,6 +92,7 @@ document.addEventListener('DOMContentLoaded', function() {
     initActiveContainerInput();
     initAutoAddress();
     initBackToTopButton();
+    initDuplicateCleaner(); // Initialisation du bouton de nettoyage
 });
 
 // Synchronisation Temps Réel avec Firestore
@@ -600,7 +601,7 @@ function importExcel(event) {
                         Object.keys(row).forEach(k => r[k.toUpperCase().trim()] = row[k]);
                         return {
                             id: Date.now() + i,
-                            ref: String(r.REF || r.REFERENCE || r.CODE || ''),
+                        ref: String(r.REF || r.REFERENCE || r.CODE || '').trim().toUpperCase(), // Force Majuscule pour correspondance
                             montant: String(r.RESTANT || r.MONTANT || r.PRIX || r['RESTANT A PAYER'] || ''),
                             expediteur: fixEncoding(String(r.EXPEDITEUR || r['EXPÉDITEUR'] || r.EXP || '')),
                             commune: detectCommune(fixEncoding(String(r.LIVRE || r.LIEU || r.COMMUNE || r['LIEU DE LIVRAISON'] || ''))),
@@ -625,8 +626,15 @@ function importExcel(event) {
                     }
                     // Extraction Numéro si manquant (Regex)
                     if (!item.numero && item.destinataire) {
-                        const phoneMatch = item.destinataire.match(/(?:\+225|00225|01|05|07)\d{8}|0\d{9}/);
-                        if (phoneMatch) item.numero = phoneMatch[0];
+                        // Regex améliorée pour gérer les espaces/tirets et nettoyer le nom
+                        const phoneRegex = /(?:(?:\+|00)225[\s.-]?)?(?:01|05|07|0)\d(?:[\s.-]?\d{2}){4}|(?:(?:\+|00)225[\s.-]?)?(?:01|05|07|0)\d{8,}/;
+                        const phoneMatch = item.destinataire.match(phoneRegex);
+                        if (phoneMatch) {
+                            // On assigne le numéro trouvé et nettoyé
+                            item.numero = phoneMatch[0].replace(/[\s.-]/g, ''); 
+                            // On nettoie le nom du destinataire en retirant le numéro et les caractères de fin
+                            item.destinataire = item.destinataire.replace(phoneMatch[0], '').trim().replace(/[-–,;:\s]+$/, '');
+                        }
                     }
                 }
 
@@ -733,13 +741,51 @@ async function confirmImport() {
     const bl = document.getElementById('importBl').value;
     const containerStatus = document.getElementById('importContainerStatus').value;
 
+    // --- NOUVEAU : Pré-traitement pour fusionner les doublons DANS le fichier importé ---
+    const uniqueImports = new Map();
+    const pickBest = (oldV, newV) => {
+        const o = String(oldV || '').trim();
+        const n = String(newV || '').trim();
+        if (!n) return o; // Si nouveau vide, garder ancien
+        if (!o) return n; // Si ancien vide, prendre nouveau
+        // Si les deux existent, on privilégie le plus long (plus d'infos)
+        return n.length >= o.length ? n : o;
+    };
+
+    for (const item of pendingImport) {
+        const ref = item.ref.toUpperCase();
+        if (!ref) continue;
+
+        if (uniqueImports.has(ref)) {
+            // Le doublon existe, on fusionne les données
+            const existing = uniqueImports.get(ref);
+            const originalLieu = existing.lieuLivraison;
+
+            existing.montant = pickBest(existing.montant, item.montant);
+            existing.description = pickBest(existing.description, item.description);
+            existing.expediteur = pickBest(existing.expediteur, item.expediteur);
+            existing.destinataire = pickBest(existing.destinataire, item.destinataire);
+            existing.lieuLivraison = pickBest(existing.lieuLivraison, item.lieuLivraison);
+            existing.numero = pickBest(existing.numero, item.numero);
+            
+            if (existing.lieuLivraison !== originalLieu) {
+                 existing.commune = detectCommune(existing.lieuLivraison);
+            }
+        } else {
+            // Première fois qu'on voit cette référence, on l'ajoute
+            uniqueImports.set(ref, { ...item });
+        }
+    }
+    const finalImportList = Array.from(uniqueImports.values());
+
     // Préparation des opérations par lots (Batch Chunking)
     const operations = []; 
-    let processedCount = 0;
+    let createdCount = 0;
+    let updatedCount = 0;
     
-    for (const importItem of pendingImport) {
-        // Vérifier si la référence existe déjà dans la base de données
-        const existingItem = deliveries.find(d => d.ref === importItem.ref);
+    for (const importItem of finalImportList) {
+        // Vérifier si la référence existe déjà dans la base de données (Insensible à la casse)
+        const existingItem = deliveries.find(d => d.ref.toUpperCase() === importItem.ref.toUpperCase());
 
         if (existingItem) {
             // CAS 1 : La référence existe -> On déplace le colis existant
@@ -747,15 +793,6 @@ async function confirmImport() {
             const updates = { containerStatus: containerStatus };
             
             // --- FUSION INTELLIGENTE (Garder le mieux renseigné) ---
-            const pickBest = (oldV, newV) => {
-                const o = String(oldV || '').trim();
-                const n = String(newV || '').trim();
-                if (!n) return o; // Si nouveau vide, garder ancien
-                if (!o) return n; // Si ancien vide, prendre nouveau
-                // Si les deux existent, on privilégie le plus long (plus d'infos)
-                return n.length >= o.length ? n : o;
-            };
-
             updates.montant = pickBest(existingItem.montant, importItem.montant);
             updates.description = pickBest(existingItem.description, importItem.description);
             updates.expediteur = pickBest(existingItem.expediteur, importItem.expediteur);
@@ -788,6 +825,7 @@ async function confirmImport() {
             }
             
             operations.push({ type: 'update', ref: docRef, data: updates });
+            updatedCount++;
         } else {
             // CAS 2 : La référence n'existe pas -> On crée un nouveau colis
             const docRef = db.collection(CONSTANTS.COLLECTION).doc();
@@ -804,6 +842,7 @@ async function confirmImport() {
                 containerStatus: containerStatus,
                 dateAjout: new Date().toISOString()
             }});
+            createdCount++;
         }
 
         // --- TRANSFERT VERS RÉCEPTION ABIDJAN (TRANSACTIONS) ---
@@ -833,7 +872,6 @@ async function confirmImport() {
                 }});
             }
         }
-        processedCount++;
     }
 
     // EXÉCUTION DES BATCHS PAR PAQUETS DE 400 (Pour éviter la limite de 500)
@@ -874,7 +912,8 @@ async function confirmImport() {
         }
         
         closePreviewModal();
-        showToast(`${processedCount} éléments traités avec succès !`, 'success');
+        // Rapport détaillé pour confirmer l'ajout des infos complémentaires
+        alert(`Rapport d'importation :\n\n✅ ${createdCount} Nouveaux colis créés\n🔄 ${updatedCount} Colis mis à jour (Infos complétées)`);
         pendingImport = []; // Nettoyage
     }).catch(err => {
         console.error("Erreur Import:", err);
@@ -2353,4 +2392,96 @@ function initBackToTopButton() {
     attachModalButtons();
     const observer = new MutationObserver(attachModalButtons);
     observer.observe(document.body, { childList: true, subtree: true });
+}
+
+// --- OUTIL DE NETTOYAGE DES DOUBLONS EXISTANTS ---
+function initDuplicateCleaner() {
+    // Vérifie si le bouton existe déjà pour éviter les doublons visuels
+    if (document.getElementById('btnCleanDuplicates')) return;
+
+    const btn = document.createElement('button');
+    btn.id = 'btnCleanDuplicates';
+    btn.innerHTML = "🧹 Nettoyer Doublons";
+    btn.className = "btn"; 
+    // Style : Fixé en bas à gauche, orange pour attirer l'attention mais distinct des actions principales
+    btn.style.cssText = "position: fixed; bottom: 20px; left: 20px; z-index: 1000; background-color: #f59e0b; color: white; padding: 10px 15px; border-radius: 30px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); border: none; cursor: pointer; font-weight: bold; font-size: 12px;";
+    btn.onclick = removeDuplicatesFromDatabase;
+    document.body.appendChild(btn);
+}
+
+async function removeDuplicatesFromDatabase() {
+    if (!confirm("⚠️ MAINTENANCE BASE DE DONNÉES ⚠️\n\nVoulez-vous rechercher et fusionner les doublons existants (même Référence) ?\n\nCette action va :\n1. Regrouper les colis par Référence\n2. Fusionner les informations (garder les plus complètes)\n3. Supprimer les doublons superflus\n\nCette action est irréversible.")) return;
+
+    const loadingToast = document.createElement('div');
+    loadingToast.className = 'toast';
+    loadingToast.textContent = "Analyse des doublons en cours...";
+    loadingToast.style.background = "#3b82f6";
+    document.body.appendChild(loadingToast);
+
+    try {
+        const groups = {};
+        // 1. Regroupement par Référence
+        deliveries.forEach(d => {
+            if (!d.ref) return;
+            const key = d.ref.toUpperCase().trim();
+            if (!groups[key]) groups[key] = [];
+            groups[key].push(d);
+        });
+
+        let batch = db.batch();
+        let opCount = 0;
+        let deletedCount = 0;
+        let updatedCount = 0;
+
+        // Fonction utilitaire pour garder la chaîne la plus longue (plus d'infos)
+        const pickBest = (oldV, newV) => {
+            const o = String(oldV || '').trim();
+            const n = String(newV || '').trim();
+            if (!n) return o;
+            if (!o) return n;
+            return n.length >= o.length ? n : o;
+        };
+
+        for (const ref in groups) {
+            const group = groups[ref];
+            if (group.length > 1) {
+                // Tri pour déterminer le "Maître" (Celui à garder)
+                // On garde celui qui a le statut le plus avancé (LIVRE > EN_COURS > ...)
+                group.sort((a, b) => {
+                    const score = s => { if (s === 'LIVRE') return 4; if (s === 'EN_COURS') return 3; if (s === 'A_VENIR') return 2; return 1; };
+                    return score(b.status) - score(a.status);
+                });
+
+                const master = group[0];
+                const duplicates = group.slice(1);
+                let updates = {};
+                let hasUpdates = false;
+
+                // Fusion des données des doublons vers le master
+                duplicates.forEach(dup => {
+                    ['montant', 'expediteur', 'destinataire', 'lieuLivraison', 'commune', 'description', 'numero', 'conteneur', 'bl', 'livreur', 'dateProgramme'].forEach(field => {
+                        const best = pickBest(master[field], dup[field]);
+                        if (best !== master[field]) {
+                            updates[field] = best;
+                            master[field] = best; // Mise à jour locale
+                            hasUpdates = true;
+                        }
+                    });
+                    // Suppression du doublon
+                    batch.delete(db.collection(CONSTANTS.COLLECTION).doc(dup.id));
+                    opCount++; deletedCount++;
+                });
+
+                if (hasUpdates) {
+                    batch.update(db.collection(CONSTANTS.COLLECTION).doc(master.id), updates);
+                    opCount++; updatedCount++;
+                }
+
+                if (opCount >= 400) { await batch.commit(); batch = db.batch(); opCount = 0; }
+            }
+        }
+        if (opCount > 0) await batch.commit();
+        loadingToast.remove();
+        alert(deletedCount > 0 ? `✅ Nettoyage terminé !\n\n🗑️ ${deletedCount} doublons supprimés\n💾 ${updatedCount} fiches fusionnées` : "👍 Base de données saine : Aucun doublon trouvé.");
+    } catch (error) { console.error(error); loadingToast.remove(); alert("Erreur : " + error.message); }
 }
