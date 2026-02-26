@@ -368,11 +368,12 @@ document.addEventListener('DOMContentLoaded', async () => {
         try {
             // 1. Téléchargement de TOUTES les données (Sans limite)
             // Attention au quota, mais c'est une action utilisateur volontaire
-            const [transSnap, expSnap, incSnap, bankSnap] = await Promise.all([
+            const [transSnap, expSnap, incSnap, bankSnap, auditSnap] = await Promise.all([
                 db.collection("transactions").where("isDeleted", "!=", true).get(),
                 db.collection("expenses").where("isDeleted", "!=", true).get(),
                 db.collection("other_income").where("isDeleted", "!=", true).get(),
-                db.collection("bank_movements").where("isDeleted", "!=", true).get()
+                db.collection("bank_movements").where("isDeleted", "!=", true).get(),
+                db.collection("audit_logs").where("action", "==", "VALIDATION_JOURNEE").get() // Récupérer les statuts de session
             ]);
 
             const tData = transSnap.docs.map(d => d.data());
@@ -380,14 +381,49 @@ document.addEventListener('DOMContentLoaded', async () => {
             const iData = incSnap.docs.map(d => d.data());
             const bData = bankSnap.docs.map(d => d.data());
 
-            // 2. On utilise la logique existante pour calculer les stats, mais sans filtre de date
-            // On simule un appel à calculateAndRenderStats mais on intercepte le résultat pour le sauvegarder
-            // Pour faire simple, on réimplémente le calcul ici ou on extrait la logique.
-            // J'ai extrait la logique dans calculateAndRenderStats, mais elle écrit dans le DOM.
-            // On va tricher un peu : on appelle calculateAndRenderStats avec les données complètes, 
-            // puis on lit les valeurs du DOM pour les sauvegarder (c'est le plus sûr pour garantir la cohérence).
+            // 1b. Identifier les sessions NON VALIDÉES
+            const pendingSessionIds = new Set();
+            auditSnap.forEach(doc => {
+                if (doc.data().status !== "VALIDATED") pendingSessionIds.add(doc.id);
+            });
+
+            // 1c. Filtrer les données (Exclure ce qui est PENDING)
+            const cleanTData = getCleanTransactions(tData).filter(t => {
+                // getCleanTransactions nettoie déjà l'historique, mais vérifions globalement
+                // Si c'est une nouvelle transaction entièrement dans une session pending, elle aura été vidée par getCleanTransactions
+                // ou ses montants réduits.
+                // Ici on s'assure juste de passer les données nettoyées à la suite.
+                return true; 
+            });
+
+            // Pour getCleanTransactions, il faut que unconfirmedSessions (variable globale) soit à jour, 
+            // MAIS ici on est dans une fonction async qui peut être appelée n'importe quand.
+            // On va réutiliser la logique de nettoyage localement pour être sûr.
             
-            calculateAndRenderStats(tData, eData, iData, bData, null, null);
+            const secureTData = tData.reduce((acc, t) => {
+                if (!t.paymentHistory || !Array.isArray(t.paymentHistory) || t.paymentHistory.length === 0) {
+                    acc.push(t); return acc;
+                }
+                // On ne garde que les paiements validés
+                const validPayments = t.paymentHistory.filter(p => !p.sessionId || !pendingSessionIds.has(p.sessionId));
+                
+                if (validPayments.length === 0 && t.paymentHistory.length > 0) return acc; // Tout est en attente
+
+                if (validPayments.length < t.paymentHistory.length) {
+                    const newParis = validPayments.reduce((sum, p) => sum + (p.montantParis || 0), 0);
+                    const newAbidjan = validPayments.reduce((sum, p) => sum + (p.montantAbidjan || 0), 0);
+                    const tClean = { ...t, paymentHistory: validPayments, montantParis: newParis, montantAbidjan: newAbidjan, reste: (newParis + newAbidjan) - (t.prix || 0) };
+                    acc.push(tClean);
+                } else {
+                    acc.push(t);
+                }
+                return acc;
+            }, []);
+
+            const secureEData = eData.filter(e => !e.sessionId || !pendingSessionIds.has(e.sessionId));
+
+            // 2. On utilise la logique existante pour calculer les stats, mais sans filtre de date
+            calculateAndRenderStats(secureTData, secureEData, iData, bData, null, null);
 
             // 3. Sauvegarde dans Firestore
             const statsToSave = {

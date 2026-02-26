@@ -18,6 +18,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     const startDateInput = document.getElementById('startDate');
     const endDateInput = document.getElementById('endDate');
     const tableBody = document.getElementById('pointsTableBody');
+    const agentSearchInput = document.getElementById('agentSearch');
+    const sortByAgentCheckbox = document.getElementById('sortByAgent');
+
+    let currentStats = {}; // Stockage local pour filtrage/tri sans rechargement
 
     // Initialisation Dates (Mois en cours)
     const today = new Date();
@@ -28,6 +32,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Écouteurs
     startDateInput.addEventListener('change', loadPointsData);
     endDateInput.addEventListener('change', loadPointsData);
+    if(agentSearchInput) agentSearchInput.addEventListener('input', renderPointsTable);
+    if(sortByAgentCheckbox) sortByAgentCheckbox.addEventListener('change', renderPointsTable);
 
     // Chargement initial
     loadPointsData();
@@ -49,6 +55,12 @@ document.addEventListener('DOMContentLoaded', async () => {
                 .where("date", "<=", end + "T23:59:59")
                 .get();
 
+            // 1b. Identifier les sessions NON VALIDÉES (En attente)
+            const pendingSessions = new Set();
+            sessionsSnap.docs.forEach(doc => {
+                if (doc.data().status !== "VALIDATED") pendingSessions.add(doc.id);
+            });
+
             const sessionUserMap = {};
             sessionsSnap.forEach(doc => {
                 const data = doc.data();
@@ -68,28 +80,63 @@ document.addEventListener('DOMContentLoaded', async () => {
                 .get();
 
             // --- TRAITEMENT DES DONNÉES ---
-            const userStats = {};
+            currentStats = {};
 
             // A. Traitement des Encaissements (Espèces uniquement pour le "Point")
             transSnap.forEach(doc => {
                 const t = doc.data();
                 if (t.isDeleted === true) return;
+
+                // SÉCURITÉ : Si le paiement est lié à une session non validée, on l'ignore
+                if (t.paymentHistory) {
+                    // On ne garde que les paiements validés ou hors session (legacy)
+                    const validPayments = t.paymentHistory.filter(p => !p.sessionId || !pendingSessions.has(p.sessionId));
+                    
+                    // Si aucun paiement valide, on ignore la transaction
+                    if (validPayments.length === 0) return;
+
+                    // On recalcule le montant Abidjan basé uniquement sur les paiements validés
+                    const validAmount = validPayments.reduce((sum, p) => sum + (p.montantAbidjan || 0), 0);
+                    
+                    // Si le montant validé est 0, on passe
+                    if (validAmount === 0) return;
+
+                    // On utilise le montant recalculé
+                    t.montantAbidjan = validAmount;
+                } else {
+                    // Fallback pour anciennes données sans historique : on affiche
+                }
                 
                 // On ne compte que les espèces pour la caisse physique
                 if (t.modePaiement !== 'Espèce') return;
 
                 const user = t.saisiPar || "Inconnu";
+                let agent = t.agent || "Aucun";
+                if (agent.trim() === "") agent = "Aucun";
                 
-                if (!userStats[user]) userStats[user] = { in: 0, out: 0 };
+                // Clé unique : User + Agent
+                const key = `${user}_${agent}`;
                 
-                // On prend le montant Abidjan (Caisse locale)
-                userStats[user].in += (t.montantAbidjan || 0);
+                if (!currentStats[key]) currentStats[key] = { user: user, agent: agent, in: 0, out: 0, details: [] };
+                
+                currentStats[key].in += (t.montantAbidjan || 0);
+                // Ajout du détail
+                currentStats[key].details.push({
+                    date: t.date,
+                    type: 'Encaissement',
+                    desc: `${t.reference} - ${t.nom}`,
+                    amount: (t.montantAbidjan || 0),
+                    isExpense: false
+                });
             });
 
             // B. Traitement des Dépenses
             expSnap.forEach(doc => {
                 const e = doc.data();
                 if (e.isDeleted === true) return;
+
+                // SÉCURITÉ : Si la dépense est liée à une session non validée, on l'ignore
+                if (e.sessionId && pendingSessions.has(e.sessionId)) return;
 
                 let user = "Inconnu";
 
@@ -103,37 +150,139 @@ document.addEventListener('DOMContentLoaded', async () => {
                     if (match && match[1]) user = match[1];
                 }
 
-                // Si l'utilisateur n'a pas d'encaissement mais a des dépenses, on l'initialise
-                if (!userStats[user]) userStats[user] = { in: 0, out: 0 };
+                // Les dépenses ne sont pas liées à un agent spécifique -> "Aucun"
+                const agent = "Aucun";
+                const key = `${user}_${agent}`;
 
-                userStats[user].out += (e.montant || 0);
+                if (!currentStats[key]) currentStats[key] = { user: user, agent: agent, in: 0, out: 0, details: [] };
+
+                currentStats[key].out += (e.montant || 0);
+                // Ajout du détail
+                currentStats[key].details.push({
+                    date: e.date,
+                    type: 'Dépense',
+                    desc: e.description,
+                    amount: (e.montant || 0),
+                    isExpense: true
+                });
             });
 
-            // --- AFFICHAGE ---
-            tableBody.innerHTML = '';
-            const sortedUsers = Object.keys(userStats).sort();
-
-            if (sortedUsers.length === 0) {
-                tableBody.innerHTML = '<tr><td colspan="4" style="text-align:center;">Aucune activité sur cette période.</td></tr>';
-                return;
-            }
-
-            sortedUsers.forEach(user => {
-                const stats = userStats[user];
-                const solde = stats.in - stats.out;
-                
-                const row = document.createElement('tr');
-                row.innerHTML = `
-                    <td style="font-weight:bold;">${user}</td>
-                    <td style="color:#10b981;">${formatCFA(stats.in)}</td>
-                    <td style="color:#ef4444;">${formatCFA(stats.out)}</td>
-                    <td style="font-weight:bold; font-size:1.1em; color:${solde >= 0 ? '#000' : '#d32f2f'}">${formatCFA(solde)}</td>
-                `;
-                tableBody.appendChild(row);
-            });
+            renderPointsTable();
 
         } catch (e) { console.error(e); alert("Erreur chargement points."); }
     }
+
+    function renderPointsTable() {
+            tableBody.innerHTML = '';
+            
+            let rows = Object.values(currentStats);
+
+            // 1. Filtrage
+            const term = agentSearchInput ? agentSearchInput.value.toLowerCase().trim() : "";
+            if (term) {
+                rows = rows.filter(r => r.agent.toLowerCase().includes(term));
+            }
+
+            // 2. Tri
+            rows.sort((a, b) => {
+                if (sortByAgentCheckbox && sortByAgentCheckbox.checked) return a.agent.localeCompare(b.agent) || a.user.localeCompare(b.user);
+                return a.user.localeCompare(b.user) || a.agent.localeCompare(b.agent);
+            });
+
+            if (rows.length === 0) {
+                tableBody.innerHTML = '<tr><td colspan="5" style="text-align:center;">Aucune activité sur cette période.</td></tr>';
+                return;
+            }
+
+            let totalIn = 0;
+            let totalOut = 0;
+
+            rows.forEach(row => {
+                // On n'affiche pas les lignes vides (0 in, 0 out)
+                if (row.in === 0 && row.out === 0) return;
+
+                const solde = row.in - row.out;
+                totalIn += row.in;
+                totalOut += row.out;
+                
+                const tr = document.createElement('tr');
+                
+                // Style pour mettre en valeur l'agent
+                const agentStyle = row.agent !== "Aucun" ? "font-weight:bold; color:#4f46e5;" : "color:#9ca3af; font-style:italic;";
+
+                // Rendre la ligne cliquable
+                tr.style.cursor = 'pointer';
+                tr.title = "Cliquez pour voir le détail des opérations";
+                tr.onclick = () => openPointDetailsModal(row);
+
+                tr.innerHTML = `
+                    <td style="${agentStyle}">${row.agent}</td>
+                    <td>${row.user}</td>
+                    <td style="color:#10b981;">${formatCFA(row.in)}</td>
+                    <td style="color:#ef4444;">${formatCFA(row.out)}</td>
+                    <td style="font-weight:bold; font-size:1.1em; color:${solde >= 0 ? '#000' : '#d32f2f'}">${formatCFA(solde)}</td>
+                `;
+                tableBody.appendChild(tr);
+            });
+
+            // Ligne des Totaux Généraux
+            const totalRow = document.createElement('tr');
+            totalRow.style.backgroundColor = '#f3f4f6';
+            totalRow.style.fontWeight = 'bold';
+            totalRow.style.borderTop = '2px solid #e5e7eb';
+            totalRow.innerHTML = `
+                <td colspan="2" style="text-align:right; padding-right:15px;">TOTAUX GÉNÉRAUX :</td>
+                <td style="color:#10b981;">${formatCFA(totalIn)}</td>
+                <td style="color:#ef4444;">${formatCFA(totalOut)}</td>
+                <td style="color:#000;">${formatCFA(totalIn - totalOut)}</td>
+            `;
+            tableBody.appendChild(totalRow);
+    }
+
+    // --- GESTION DU MODAL DE DÉTAILS ---
+    window.openPointDetailsModal = function(data) {
+        const modal = document.getElementById('pointDetailsModal');
+        const title = document.getElementById('modalTitle');
+        const tbody = document.getElementById('modalDetailsBody');
+        const totalDiv = document.getElementById('modalTotal');
+
+        title.textContent = `Détails : ${data.user} (Agent: ${data.agent})`;
+        tbody.innerHTML = '';
+
+        // Tri des détails par date (du plus récent au plus ancien)
+        const sortedDetails = data.details.sort((a, b) => new Date(b.date) - new Date(a.date));
+
+        sortedDetails.forEach(item => {
+            const tr = document.createElement('tr');
+            const color = item.isExpense ? '#ef4444' : '#10b981';
+            const sign = item.isExpense ? '-' : '+';
+            
+            tr.innerHTML = `
+                <td>${item.date}</td>
+                <td><span class="tag" style="background-color:${item.isExpense ? '#fee2e2' : '#d1fae5'}; color:${color}">${item.type}</span></td>
+                <td>${item.desc}</td>
+                <td style="text-align:right; font-weight:bold; color:${color}">${sign} ${formatCFA(item.amount)}</td>
+            `;
+            tbody.appendChild(tr);
+        });
+
+        const solde = data.in - data.out;
+        totalDiv.innerHTML = `Solde Théorique : <span style="color:${solde >= 0 ? '#000' : '#d32f2f'}">${formatCFA(solde)}</span>`;
+
+        modal.style.display = 'block';
+    };
+
+    window.closePointDetailsModal = function() {
+        document.getElementById('pointDetailsModal').style.display = 'none';
+    };
+
+    // Fermeture du modal si on clique en dehors
+    window.onclick = function(event) {
+        const modal = document.getElementById('pointDetailsModal');
+        if (event.target == modal) {
+            modal.style.display = "none";
+        }
+    };
 
     function formatCFA(n) { return new Intl.NumberFormat('fr-CI', { style: 'currency', currency: 'XOF' }).format(n || 0); }
     initBackToTopButton();

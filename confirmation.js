@@ -29,6 +29,58 @@ document.addEventListener('DOMContentLoaded', () => {
     let currentSessionId = null;
     let currentSessionData = null; // Pour stocker les infos de la session en cours (date, user)
 
+    // --- MODAL ÉDITION (Injection Dynamique) ---
+    const editModalHTML = `
+    <div id="editTransactionModal" class="modal">
+        <div class="modal-content" style="max-width: 400px; border-radius: 12px; padding: 20px;">
+            <span class="close-modal" id="closeEditModal" style="float:right; cursor:pointer; font-size:24px;">&times;</span>
+            <h2 style="margin-top:0;">Modifier Transaction</h2>
+            <div style="margin-bottom: 15px;">
+                <label style="display:block; margin-bottom:5px; font-weight:bold; font-size:13px;">Prix Total Colis :</label>
+                <input type="number" id="editPrix" style="width:100%; padding:8px; border:1px solid #ccc; border-radius:6px; box-sizing:border-box;">
+            </div>
+            <div style="margin-bottom: 15px;">
+                <label style="display:block; margin-bottom:5px; font-weight:bold; font-size:13px;">Montant Payé Abidjan (Ce jour) :</label>
+                <input type="number" id="editMontantAbidjan" style="width:100%; padding:8px; border:1px solid #ccc; border-radius:6px; box-sizing:border-box;">
+            </div>
+            <div style="margin-bottom: 15px;">
+                <label style="display:block; margin-bottom:5px; font-weight:bold; font-size:13px;">Montant Payé Paris (Ce jour) :</label>
+                <input type="number" id="editMontantParis" style="width:100%; padding:8px; border:1px solid #ccc; border-radius:6px; box-sizing:border-box;">
+            </div>
+            <div style="text-align:right; margin-top:20px; display:flex; gap:10px; justify-content:flex-end;">
+                <button id="cancelEditBtn" style="padding:8px 16px; border:1px solid #ccc; background:white; border-radius:6px; cursor:pointer;">Annuler</button>
+                <button id="saveEditBtn" style="padding:8px 16px; border:none; background:#10b981; color:white; border-radius:6px; cursor:pointer; font-weight:bold;">Enregistrer</button>
+            </div>
+        </div>
+    </div>
+    `;
+    document.body.insertAdjacentHTML('beforeend', editModalHTML);
+
+    const editModal = document.getElementById('editTransactionModal');
+    const closeEditModalBtn = document.getElementById('closeEditModal');
+    const cancelEditBtn = document.getElementById('cancelEditBtn');
+    const saveEditBtn = document.getElementById('saveEditBtn');
+    const editPrixInput = document.getElementById('editPrix');
+    const editMontantAbidjanInput = document.getElementById('editMontantAbidjan');
+    const editMontantParisInput = document.getElementById('editMontantParis');
+
+    let currentEditDocId = null;
+    let currentEditOriginalData = null;
+
+    function closeEditModalFunc() {
+        editModal.classList.remove('active');
+        currentEditDocId = null;
+        currentEditOriginalData = null;
+    }
+
+    if(closeEditModalBtn) closeEditModalBtn.onclick = closeEditModalFunc;
+    if(cancelEditBtn) cancelEditBtn.onclick = closeEditModalFunc;
+    
+    // Fermeture au clic en dehors
+    window.addEventListener('click', (e) => {
+        if (e.target == editModal) closeEditModalFunc();
+    });
+
     // 1. Charger la liste des sessions (Basé sur les logs de validation)
     function loadSessions() {
         // OPTIMISATION : On ne charge que les 20 dernières sessions par défaut
@@ -443,10 +495,9 @@ document.addEventListener('DOMContentLoaded', () => {
             const sessionDate = currentSessionData.date.split('T')[0];
             const sessionUser = currentSessionData.user;
             
-            // Trouver le montant actuel payé ce jour-là pour pré-remplir le prompt
+            // Trouver le montant actuel payé ce jour-là pour pré-remplir
             let currentPaymentAbj = 0;
             let currentPaymentPar = 0;
-            let currentMode = 'Espèce';
             
             if (data.paymentHistory) {
                 let entry;
@@ -460,29 +511,65 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (entry) {
                     currentPaymentAbj = entry.montantAbidjan || 0;
                     currentPaymentPar = entry.montantParis || 0;
-                    currentMode = entry.modePaiement || 'Espèce';
                 }
             }
 
-            // Demander les nouvelles valeurs
-            const newPrixStr = prompt("Modifier le PRIX TOTAL du colis :", data.prix);
-            if (newPrixStr === null) return;
-            const newPrix = parseFloat(newPrixStr) || 0;
+            // Pré-remplir et afficher le modal
+            currentEditDocId = docId;
+            currentEditOriginalData = data;
+            
+            editPrixInput.value = data.prix || 0;
+            editMontantAbidjanInput.value = currentPaymentAbj;
+            editMontantParisInput.value = currentPaymentPar;
+            
+            editModal.classList.add('active');
 
-            const newAbjStr = prompt("Modifier le montant payé ABIDJAN (ce jour) :", currentPaymentAbj);
-            if (newAbjStr === null) return;
-            const newPaymentAbj = parseFloat(newAbjStr) || 0;
+        } catch (error) {
+            console.error(error);
+            alert("Erreur lors de l'ouverture de la modification.");
+        }
+    }
 
-            // Mise à jour via une suppression + réinsertion propre dans l'historique
-            // Note : Pour simplifier, on réutilise la logique de suppression puis d'ajout manuel, 
-            // mais ici on va modifier directement l'array pour être atomique.
+    // LOGIQUE ENREGISTREMENT MODAL
+    saveEditBtn.onclick = async () => {
+        if (!currentEditDocId || !currentEditOriginalData) return;
+        
+        const newPrix = parseFloat(editPrixInput.value) || 0;
+        const newPaymentAbj = parseFloat(editMontantAbidjanInput.value) || 0;
+        const newPaymentPar = parseFloat(editMontantParisInput.value) || 0;
+        
+        saveEditBtn.disabled = true;
+        saveEditBtn.textContent = "Enregistrement...";
+
+        try {
+            const docRef = db.collection("transactions").doc(currentEditDocId);
+            const data = currentEditOriginalData;
+            const sessionDate = currentSessionData.date.split('T')[0];
+            const sessionUser = currentSessionData.user;
             
             // 1. Retirer l'ancienne entrée
             let newHistory;
+            let currentMode = 'Espèce';
+            let currentAgent = '';
+            let currentInfo = '';
+            let currentSessionIdEntry = currentSessionId;
+
+            let oldEntry;
             if (currentSessionData.transactionIds) {
+                oldEntry = (data.paymentHistory || []).find(p => p.sessionId === currentSessionId);
                 newHistory = (data.paymentHistory || []).filter(p => p.sessionId !== currentSessionId);
             } else {
+                oldEntry = (data.paymentHistory || []).find(p => p.date === sessionDate && p.saisiPar === sessionUser);
                 newHistory = (data.paymentHistory || []).filter(p => !(p.date === sessionDate && p.saisiPar === sessionUser));
+            }
+
+            if (oldEntry) {
+                currentMode = oldEntry.modePaiement || 'Espèce';
+                currentAgent = oldEntry.agent || '';
+                currentInfo = oldEntry.agentMobileMoney || '';
+                if(oldEntry.sessionId) currentSessionIdEntry = oldEntry.sessionId;
+            } else {
+                currentAgent = data.agent || '';
             }
             
             // 2. Ajouter la nouvelle entrée corrigée
@@ -490,10 +577,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 date: sessionDate,
                 saisiPar: sessionUser,
                 montantAbidjan: newPaymentAbj,
-                montantParis: currentPaymentPar, // On garde Paris tel quel (ou on pourrait demander aussi)
+                montantParis: newPaymentPar,
                 modePaiement: currentMode,
-                agent: data.agent || '',
-                sessionId: currentSessionId // On remet l'ID de session !
+                agent: currentAgent,
+                agentMobileMoney: currentInfo,
+                sessionId: currentSessionIdEntry
             });
 
             // 3. Recalculer les totaux globaux
@@ -512,13 +600,17 @@ document.addEventListener('DOMContentLoaded', () => {
                 reste: newReste
             });
 
+            closeEditModalFunc();
             loadSessionDetails(currentSessionId, currentSessionData);
 
         } catch (error) {
             console.error(error);
-            alert("Erreur lors de la modification.");
+            alert("Erreur lors de l'enregistrement.");
+        } finally {
+            saveEditBtn.disabled = false;
+            saveEditBtn.textContent = "Enregistrer";
         }
-    }
+    };
 
     // NOUVELLE FONCTION : Supprimer toute la session
     async function deleteEntireSession(sessionId, sessionData) {

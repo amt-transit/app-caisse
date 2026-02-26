@@ -41,12 +41,15 @@
                 <label>Période :</label>
                 <input type="date" id="startDate">
                 <input type="date" id="endDate">
+                <input type="text" id="agentSearch" placeholder="🔍 Agent..." style="margin-left:10px; padding:5px; border-radius:4px; border:1px solid #ccc;">
+                <label style="margin-left:10px; cursor:pointer; font-size:0.9em;"><input type="checkbox" id="sortByAgent"> Tri par Agent</label>
             </div>
         </div>
 
         <table id="pointsTable">
             <thead>
                 <tr>
+                    <th>Agent</th>
                     <th>Utilisateur</th>
                     <th>Entrées (Encaissements)</th>
                     <th>Sorties (Dépenses)</th>
@@ -55,6 +58,28 @@
             </thead>
             <tbody id="pointsTableBody"></tbody>
         </table>
+    </div>
+
+    <!-- Modal Détails Points -->
+    <div id="pointDetailsModal" class="modal">
+        <div class="modal-content" style="max-width: 800px;">
+            <span class="close-modal" onclick="closePointDetailsModal()">&times;</span>
+            <h2 id="modalTitle">Détails</h2>
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>Type</th>
+                            <th>Description</th>
+                            <th style="text-align:right">Montant</th>
+                        </tr>
+                    </thead>
+                    <tbody id="modalDetailsBody"></tbody>
+                </table>
+            </div>
+            <div style="margin-top: 20px; text-align: right; font-weight: bold; font-size: 1.2em;" id="modalTotal"></div>
+        </div>
     </div>
 
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
