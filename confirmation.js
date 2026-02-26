@@ -131,6 +131,15 @@ document.addEventListener('DOMContentLoaded', () => {
         const dateStr = dateObj.toLocaleDateString('fr-FR');
         const timeStr = dateObj.toLocaleTimeString('fr-FR', {hour: '2-digit', minute:'2-digit'});
         
+        // Date de saisie (Choisie par l'utilisateur)
+        let entryDateDisplay = dateStr; // Par défaut = date validation (pour anciens logs)
+        if (data.entryDate) {
+            // Parsing manuel pour éviter les décalages de fuseau horaire (YYYY-MM-DD)
+            const parts = data.entryDate.split('-');
+            const d = new Date(parts[0], parts[1] - 1, parts[2]);
+            entryDateDisplay = d.toLocaleDateString('fr-FR');
+        }
+        
         const div = document.createElement('div');
         div.className = 'session-item';
         div.style.padding = '10px';
@@ -148,8 +157,9 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         div.innerHTML = `
-            <div style="font-weight:bold; color:#334155;">${statusIcon} ${dateStr} à ${timeStr}</div>
-            <div style="font-size:0.9em; color:#64748b;">${infoLine}</div>
+            <div style="font-weight:bold; color:#334155; font-size:1.05em;">${statusIcon} Saisie : ${entryDateDisplay}</div>
+            <div style="font-size:0.9em; color:#64748b; margin-top:2px;">${infoLine}</div>
+            <div style="font-size:0.8em; color:#94a3b8; margin-top:2px;">Validé le : ${dateStr} à ${timeStr}</div>
         `;
         
         div.addEventListener('mouseover', () => div.style.background = '#f1f5f9');
@@ -287,6 +297,8 @@ document.addEventListener('DOMContentLoaded', () => {
             // Pour être précis, il faudrait regarder paymentHistory.
             
             let payeCeJour = 0;
+            let payeAbidjanCeJour = 0;
+            let payeParisCeJour = 0;
             let sessionModes = []; // Stockage des modes de paiement de cette session
 
             if (t.paymentHistory) {
@@ -304,6 +316,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (isMatch) {
                         const montantP = (p.montantAbidjan || 0) + (p.montantParis || 0);
                         payeCeJour += montantP;
+                        payeAbidjanCeJour += (p.montantAbidjan || 0);
+                        payeParisCeJour += (p.montantParis || 0);
                         if (p.modePaiement === 'Espèce') sumEsp += (p.montantAbidjan || 0);
                         
                         sessionModes.push({
@@ -316,10 +330,14 @@ document.addEventListener('DOMContentLoaded', () => {
             } else {
                 // Fallback
                 payeCeJour = (t.montantAbidjan || 0) + (t.montantParis || 0);
+                payeAbidjanCeJour = (t.montantAbidjan || 0);
+                payeParisCeJour = (t.montantParis || 0);
+
                 if (t.modePaiement === 'Espèce') sumEsp += (t.montantAbidjan || 0);
                 // Fallback très anciennes données sans historique
                 if (!isNewSystemSession) {
                     payeCeJour = (t.montantAbidjan || 0) + (t.montantParis || 0);
+                    // Note: Pour le fallback ancien, on suppose que c'est réparti comme dans le doc principal
                     if (t.modePaiement === 'Espèce') sumEsp += (t.montantAbidjan || 0);
                     
                     sessionModes.push({
@@ -352,7 +370,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     magasinageDisplay = `<span style="color:#d97706; font-weight:bold;">${formatCFA(t.adjustmentVal)}</span>`;
                 }
 
-                const agentsDisplay = t.agent ? `<span style="font-size:0.85em; color:#64748b;">${t.agent}</span>` : '-';
+                // AJOUT : Date de saisie à côté de l'agent
+                const agentsDisplay = t.agent ? `<span style="font-size:0.85em; color:#64748b;">${t.agent}</span> <span style="font-size:0.75em; color:#94a3b8;">(${t.date})</span>` : '-';
 
                 // CONSTRUCTION AFFICHAGE MODE (Gestion Fractionné)
                 let modeDisplay = '';
@@ -369,7 +388,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 detailsEncaissementsBody.innerHTML += `
                     <tr data-id="${doc.id}">
-                        <td>${t.reference}</td><td>${t.nom}</td><td>${t.conteneur}</td><td>${agentsDisplay}</td><td>${magasinageDisplay}</td><td>${formatCFA(t.prix)}</td><td style="font-weight:bold;">${formatCFA(payeCeJour)}</td><td>${modeDisplay}</td><td class="${resteClass}">${formatCFA(t.reste)}</td>
+                        <td>${t.reference}</td><td>${t.nom}</td><td>${t.conteneur}</td><td>${agentsDisplay}</td><td>${magasinageDisplay}</td><td>${formatCFA(t.prix)}</td><td style="font-weight:bold; color:#d97706;">${formatCFA(payeAbidjanCeJour)}</td><td style="font-weight:bold; color:#2563eb;">${formatCFA(payeParisCeJour)}</td><td>${modeDisplay}</td><td class="${resteClass}">${formatCFA(t.reste)}</td>
                         <td>${actionButtons}</td>
                     </tr>
                 `;

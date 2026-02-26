@@ -521,8 +521,21 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
         const sessionAgentsStr = Array.from(sessionAgentsSet).join(', ');
 
+        // DÉTERMINATION INTELLIGENTE DE LA DATE DE SAISIE
+        // On privilégie la date des transactions saisies, sinon la date du champ, sinon aujourd'hui
+        let realEntryDate = "";
+        if (dailyTransactions.length > 0) {
+            realEntryDate = dailyTransactions[0].date;
+        } else if (dailyExpenses.length > 0) {
+            realEntryDate = dailyExpenses[0].date;
+        } else {
+            realEntryDate = document.getElementById('date').value;
+        }
+        if (!realEntryDate) realEntryDate = new Date().toISOString().split('T')[0];
+
         batch.set(auditRef, {
             date: new Date().toISOString(),
+            entryDate: realEntryDate, // Utilisation de la date réelle des opérations
             user: currentUserName,
             action: "VALIDATION_JOURNEE",
             details: `Encaissements: ${dailyTransactions.length}, Dépenses: ${dailyExpenses.length}, Total Esp: ${totalEspAbidjan}`,
