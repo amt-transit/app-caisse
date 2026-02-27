@@ -3,6 +3,90 @@ document.addEventListener('DOMContentLoaded', async () => {
         alert("Erreur: Connexion BDD échouée."); return;
     }
 
+    // SERVICE TRANSACTION (Injecté localement car non chargé via HTML)
+    const transactionService = {
+        getCleanTransactions(transactions, validatedSessions) {
+            return transactions.reduce((acc, t) => {
+                if (!t.paymentHistory || !Array.isArray(t.paymentHistory) || t.paymentHistory.length === 0) {
+                    acc.push(t);
+                    return acc;
+                }
+                const validPayments = t.paymentHistory.filter(p => !p.sessionId || validatedSessions.has(p.sessionId));
+                const newParis = validPayments.reduce((sum, p) => sum + (p.montantParis || 0), 0);
+                const newAbidjan = validPayments.reduce((sum, p) => sum + (p.montantAbidjan || 0), 0);
+                const tClean = {
+                    ...t,
+                    paymentHistory: validPayments,
+                    montantParis: newParis,
+                    montantAbidjan: newAbidjan,
+                    reste: (newParis + newAbidjan) - (t.prix || 0)
+                };
+                acc.push(tClean);
+                return acc;
+            }, []);
+        },
+        async calculateAvailableBalance(db, unconfirmedSessions) {
+            const transSnap = await db.collection("transactions").where("isDeleted", "!=", true).limit(2000).get();
+            let totalVentes = 0;
+            transSnap.forEach(doc => {
+                const d = doc.data();
+                if (d.paymentHistory && d.paymentHistory.length > 0) {
+                    d.paymentHistory.forEach(pay => {
+                        if (pay.sessionId && unconfirmedSessions.has(pay.sessionId)) return;
+                        if (pay.modePaiement !== 'Chèque' && pay.modePaiement !== 'Virement') {
+                            totalVentes += (pay.montantAbidjan || 0);
+                        }
+                    });
+                } else {
+                    if (d.modePaiement !== 'Chèque' && d.modePaiement !== 'Virement') {
+                        totalVentes += (d.montantAbidjan || 0);
+                    }
+                }
+            });
+            const incSnap = await db.collection("other_income").where("isDeleted", "!=", true).limit(1000).get();
+            let totalAutres = 0;
+            incSnap.forEach(doc => {
+                const d = doc.data();
+                if (d.mode !== 'Virement' && d.mode !== 'Chèque') {
+                    totalAutres += (d.montant || 0);
+                }
+            });
+            const expSnap = await db.collection("expenses").where("isDeleted", "!=", true).limit(1000).get();
+            let totalDepenses = 0;
+            expSnap.forEach(doc => {
+                const d = doc.data();
+                if (d.sessionId && unconfirmedSessions.has(d.sessionId)) return;
+                if (d.mode !== 'Virement' && d.mode !== 'Chèque') {
+                    totalDepenses += (d.montant || 0);
+                }
+            });
+            const bankSnap = await db.collection("bank_movements").where("isDeleted", "!=", true).limit(1000).get();
+            let totalRetraits = 0;
+            let totalDepots = 0;
+            bankSnap.forEach(doc => {
+                const d = doc.data();
+                if (d.type === 'Retrait') totalRetraits += (d.montant || 0);
+                if (d.type === 'Depot' && d.source !== 'Remise Chèques') totalDepots += (d.montant || 0);
+            });
+            return (totalVentes + totalAutres + totalRetraits) - (totalDepenses + totalDepots);
+        },
+        calculateStorageFee(dateString, quantity = 1, compareDate = new Date()) {
+            if (!dateString) return { days: 0, fee: 0 };
+            const qte = parseInt(quantity) || 1;
+            const arrivalDate = new Date(dateString);
+            const diffTime = compareDate - arrivalDate;
+            if (diffTime < 0) return { days: 0, fee: 0 };
+            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+            if (diffDays <= 7) return { days: diffDays, fee: 0 };
+            else if (diffDays <= 14) return { days: diffDays, fee: 10000 };
+            else {
+                const extraDays = diffDays - 14;
+                const unitFee = 10000 + (extraDays * 1000);
+                return { days: diffDays, fee: unitFee * qte };
+            }
+        }
+    };
+
     const transactionsCollection = db.collection("transactions");
     const expensesCollection = db.collection("expenses");
     const bankCollection = db.collection("bank_movements");
@@ -543,7 +627,10 @@ document.addEventListener('DOMContentLoaded', async () => {
             status: "PENDING", // Statut initial
             transactionIds: touchedTransactionIds, // LA CLÉ DE LA ROBUSTESSE
             expenseIds: touchedExpenseIds,
-            agents: sessionAgentsStr // <-- AJOUT DU CHAMP AGENTS
+            agents: sessionAgentsStr, // <-- AJOUT DU CHAMP AGENTS
+            totalIn: totalEspAbidjan, // OPTIMISATION AUDIT : Stockage direct des totaux
+            totalOut: totalDep,
+            result: totalEspAbidjan - totalDep
         });
 
         try {
@@ -631,8 +718,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
 
         // 2. Vérifier dans la Base de Données
-        let query = await transactionsCollection.where("reference", "==", searchValue).get();
-        if (query.empty) query = await transactionsCollection.where("nom", "==", searchValue).get();
+        let query = await transactionsCollection.where("reference", "==", searchValue).limit(10).get();
+        if (query.empty) query = await transactionsCollection.where("nom", "==", searchValue).limit(10).get();
 
         if (!query.empty) {
             if (query.size > 1) return alert("Plusieurs résultats. Soyez plus précis.");
@@ -640,7 +727,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             // LOGIQUE MAGASINAGE : Si dette (reste < 0) et pas encore annulé
             if ((data.reste || 0) < 0 && !data.storageFeeWaived) {
-                const { fee } = calculateStorageFee(data.date);
+                const inputDateVal = document.getElementById('date').value;
+                const compareDate = inputDateVal ? new Date(inputDateVal) : new Date();
+                const { fee } = transactionService.calculateStorageFee(data.date, 1, compareDate);
                 if (fee > 0) {
                     const userResponse = prompt(
                         `⚠️ FRAIS DE MAGASINAGE : ${formatCFA(fee)}\n\n` +
@@ -736,22 +825,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     function formatCFA(n) { return new Intl.NumberFormat('fr-CI', { style: 'currency', currency: 'XOF' }).format(n || 0); }
     
-    // Fonction utilitaire pour calculer le magasinage (Dupliquée de magasinage.js pour l'instant T)
-    function calculateStorageFee(arrivalDateString) {
-        if (!arrivalDateString) return { days: 0, fee: 0 };
-        const arrivalDate = new Date(arrivalDateString);
-        // On utilise la date de saisie si dispo, sinon aujourd'hui
-        const inputDateVal = document.getElementById('date').value;
-        const compareDate = inputDateVal ? new Date(inputDateVal) : new Date();
-        
-        const diffTime = compareDate - arrivalDate;
-        if (diffTime < 0) return { days: 0, fee: 0 };
-        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-        if (diffDays <= 7) return { days: diffDays, fee: 0 };
-        else if (diffDays <= 14) return { days: diffDays, fee: 10000 };
-        else { const extraDays = diffDays - 14; return { days: diffDays, fee: 10000 + (extraDays * 1000) }; }
-    }
-
     function populateDatalist() {
         // OPTIMISATION : On réduit la liste d'autocomplétion aux 200 derniers éléments
         transactionsCollection.where("isDeleted", "!=", true).orderBy("isDeleted").orderBy("date", "desc").limit(200).get().then(snapshot => {
@@ -774,48 +847,3 @@ document.addEventListener('DOMContentLoaded', async () => {
     populateDatalist(); 
     initBackToTopButton();
 });
-
-// --- GESTION DU BOUTON "RETOUR EN HAUT" (GLOBAL & MODALS) ---
-function initBackToTopButton() {
-    // 1. Bouton Global (Window)
-    let backToTopBtn = document.getElementById('backToTopBtn');
-    if (!backToTopBtn) {
-        backToTopBtn = document.createElement('button');
-        backToTopBtn.id = 'backToTopBtn';
-        backToTopBtn.title = 'Retour en haut';
-        backToTopBtn.innerHTML = '&#8593;';
-        document.body.appendChild(backToTopBtn);
-        backToTopBtn.addEventListener('click', () => window.scrollTo({ top: 0, behavior: 'smooth' }));
-    }
-
-    const toggleGlobalBtn = () => {
-        if ((window.pageYOffset || document.documentElement.scrollTop) > 300) backToTopBtn.classList.add('show');
-        else backToTopBtn.classList.remove('show');
-    };
-    window.addEventListener('scroll', toggleGlobalBtn, { passive: true });
-
-    // 2. Boutons Modals (.modal-content)
-    const attachModalButtons = () => {
-        document.querySelectorAll('.modal-content').forEach(modalContent => {
-            if (modalContent.dataset.hasBackToTop) return;
-            
-            const modalBtn = document.createElement('button');
-            modalBtn.className = 'modal-back-to-top';
-            modalBtn.innerHTML = '&#8593;';
-            modalBtn.title = 'Haut de page';
-            modalContent.appendChild(modalBtn);
-            modalContent.dataset.hasBackToTop = "true";
-
-            modalBtn.addEventListener('click', () => modalContent.scrollTo({ top: 0, behavior: 'smooth' }));
-
-            modalContent.addEventListener('scroll', () => {
-                if (modalContent.scrollTop > 200) modalBtn.classList.add('show');
-                else modalBtn.classList.remove('show');
-            }, { passive: true });
-        });
-    };
-
-    attachModalButtons();
-    const observer = new MutationObserver(attachModalButtons);
-    observer.observe(document.body, { childList: true, subtree: true });
-}

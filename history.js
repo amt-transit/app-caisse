@@ -168,7 +168,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 query = query.where("isDeleted", "!=", true).orderBy("isDeleted").orderBy("date", "desc");
              } else {
                 // Si on filtre, on charge tout le "non supprimé" et on filtre en JS
-                query = query.where("isDeleted", "!=", true).orderBy("isDeleted").orderBy("date", "desc");
+                // OPTIMISATION : On ajoute une limite de sécurité pour ne pas exploser le quota
+                query = query.where("isDeleted", "!=", true).orderBy("isDeleted").orderBy("date", "desc").limit(1000);
              }
         }
         
@@ -523,53 +524,6 @@ document.addEventListener('DOMContentLoaded', () => {
             <td colspan="3"></td>`;
         tableBody.appendChild(subtotalRow);
     }
-    function formatCFA(n) { return new Intl.NumberFormat('fr-CI', { style: 'currency', currency: 'XOF' }).format(n || 0); }
-    function textToClassName(t) { return t ? t.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, '-') : ''; }
 
     initBackToTopButton();
 });
-
-// --- GESTION DU BOUTON "RETOUR EN HAUT" (GLOBAL & MODALS) ---
-function initBackToTopButton() {
-    // 1. Bouton Global (Window)
-    let backToTopBtn = document.getElementById('backToTopBtn');
-    if (!backToTopBtn) {
-        backToTopBtn = document.createElement('button');
-        backToTopBtn.id = 'backToTopBtn';
-        backToTopBtn.title = 'Retour en haut';
-        backToTopBtn.innerHTML = '&#8593;';
-        document.body.appendChild(backToTopBtn);
-        backToTopBtn.addEventListener('click', () => window.scrollTo({ top: 0, behavior: 'smooth' }));
-    }
-
-    const toggleGlobalBtn = () => {
-        if ((window.pageYOffset || document.documentElement.scrollTop) > 300) backToTopBtn.classList.add('show');
-        else backToTopBtn.classList.remove('show');
-    };
-    window.addEventListener('scroll', toggleGlobalBtn, { passive: true });
-
-    // 2. Boutons Modals (.modal-content)
-    const attachModalButtons = () => {
-        document.querySelectorAll('.modal-content').forEach(modalContent => {
-            if (modalContent.dataset.hasBackToTop) return;
-            
-            const modalBtn = document.createElement('button');
-            modalBtn.className = 'modal-back-to-top';
-            modalBtn.innerHTML = '&#8593;';
-            modalBtn.title = 'Haut de page';
-            modalContent.appendChild(modalBtn);
-            modalContent.dataset.hasBackToTop = "true";
-
-            modalBtn.addEventListener('click', () => modalContent.scrollTo({ top: 0, behavior: 'smooth' }));
-
-            modalContent.addEventListener('scroll', () => {
-                if (modalContent.scrollTop > 200) modalBtn.classList.add('show');
-                else modalBtn.classList.remove('show');
-            }, { passive: true });
-        });
-    };
-
-    attachModalButtons();
-    const observer = new MutationObserver(attachModalButtons);
-    observer.observe(document.body, { childList: true, subtree: true });
-}

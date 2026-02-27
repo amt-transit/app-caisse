@@ -3,6 +3,90 @@ document.addEventListener('DOMContentLoaded', () => {
         alert("Erreur: Connexion BDD échouée."); return;
     }
 
+    // SERVICE TRANSACTION (Injecté localement car non chargé via HTML)
+    const transactionService = {
+        getCleanTransactions(transactions, validatedSessions) {
+            return transactions.reduce((acc, t) => {
+                if (!t.paymentHistory || !Array.isArray(t.paymentHistory) || t.paymentHistory.length === 0) {
+                    acc.push(t);
+                    return acc;
+                }
+                const validPayments = t.paymentHistory.filter(p => !p.sessionId || validatedSessions.has(p.sessionId));
+                const newParis = validPayments.reduce((sum, p) => sum + (p.montantParis || 0), 0);
+                const newAbidjan = validPayments.reduce((sum, p) => sum + (p.montantAbidjan || 0), 0);
+                const tClean = {
+                    ...t,
+                    paymentHistory: validPayments,
+                    montantParis: newParis,
+                    montantAbidjan: newAbidjan,
+                    reste: (newParis + newAbidjan) - (t.prix || 0)
+                };
+                acc.push(tClean);
+                return acc;
+            }, []);
+        },
+        async calculateAvailableBalance(db, unconfirmedSessions) {
+            const transSnap = await db.collection("transactions").where("isDeleted", "!=", true).limit(2000).get();
+            let totalVentes = 0;
+            transSnap.forEach(doc => {
+                const d = doc.data();
+                if (d.paymentHistory && d.paymentHistory.length > 0) {
+                    d.paymentHistory.forEach(pay => {
+                        if (pay.sessionId && unconfirmedSessions.has(pay.sessionId)) return;
+                        if (pay.modePaiement !== 'Chèque' && pay.modePaiement !== 'Virement') {
+                            totalVentes += (pay.montantAbidjan || 0);
+                        }
+                    });
+                } else {
+                    if (d.modePaiement !== 'Chèque' && d.modePaiement !== 'Virement') {
+                        totalVentes += (d.montantAbidjan || 0);
+                    }
+                }
+            });
+            const incSnap = await db.collection("other_income").where("isDeleted", "!=", true).limit(1000).get();
+            let totalAutres = 0;
+            incSnap.forEach(doc => {
+                const d = doc.data();
+                if (d.mode !== 'Virement' && d.mode !== 'Chèque') {
+                    totalAutres += (d.montant || 0);
+                }
+            });
+            const expSnap = await db.collection("expenses").where("isDeleted", "!=", true).limit(1000).get();
+            let totalDepenses = 0;
+            expSnap.forEach(doc => {
+                const d = doc.data();
+                if (d.sessionId && unconfirmedSessions.has(d.sessionId)) return;
+                if (d.mode !== 'Virement' && d.mode !== 'Chèque') {
+                    totalDepenses += (d.montant || 0);
+                }
+            });
+            const bankSnap = await db.collection("bank_movements").where("isDeleted", "!=", true).limit(1000).get();
+            let totalRetraits = 0;
+            let totalDepots = 0;
+            bankSnap.forEach(doc => {
+                const d = doc.data();
+                if (d.type === 'Retrait') totalRetraits += (d.montant || 0);
+                if (d.type === 'Depot' && d.source !== 'Remise Chèques') totalDepots += (d.montant || 0);
+            });
+            return (totalVentes + totalAutres + totalRetraits) - (totalDepenses + totalDepots);
+        },
+        calculateStorageFee(dateString, quantity = 1, compareDate = new Date()) {
+            if (!dateString) return { days: 0, fee: 0 };
+            const qte = parseInt(quantity) || 1;
+            const arrivalDate = new Date(dateString);
+            const diffTime = compareDate - arrivalDate;
+            if (diffTime < 0) return { days: 0, fee: 0 };
+            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+            if (diffDays <= 7) return { days: diffDays, fee: 0 };
+            else if (diffDays <= 14) return { days: diffDays, fee: 10000 };
+            else {
+                const extraDays = diffDays - 14;
+                const unitFee = 10000 + (extraDays * 1000);
+                return { days: diffDays, fee: unitFee * qte };
+            }
+        }
+    };
+
     const transactionsCollection = db.collection("transactions");
     const tableBody = document.getElementById('magasinageTableBody');
     const searchInput = document.getElementById('magasinageSearch');
@@ -15,35 +99,6 @@ document.addEventListener('DOMContentLoaded', () => {
         allTransactions = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         renderTable();
     }, error => console.error(error));
-
-    // 2. Fonction de calcul des frais (NOUVELLE LOGIQUE)
-    function calculateStorageFee(dateString, quantity = 1) {
-        if (!dateString) return { days: 0, fee: 0 };
-        const qte = parseInt(quantity) || 1;
-
-        const arrivalDate = new Date(dateString);
-        const today = new Date();
-        
-        // Calcul de la différence en jours (arrondi au supérieur)
-        const diffTime = today - arrivalDate;
-        // Si la date est dans le futur (erreur de saisie), on met 0
-        if (diffTime < 0) return { days: 0, fee: 0 };
-
-        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-
-        if (diffDays <= 7) {
-            // Semaine 1 : Gratuit
-            return { days: diffDays, fee: 0 };
-        } else if (diffDays <= 14) {
-            // Semaine 2 : Pénalité fixe de 10 000 F
-            return { days: diffDays, fee: 10000 };
-        } else {
-            // Au-delà de 14 jours : 10 000 F + 1 000 F par jour supplémentaire
-            const extraDays = diffDays - 14;
-            const unitFee = 10000 + (extraDays * 1000);
-            return { days: diffDays, fee: unitFee * qte }; // Multiplication par la quantité
-        }
-    }
 
     // 3. Affichage du tableau
     function renderTable() {
@@ -58,7 +113,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (t.storageFeeWaived === true) return false;
 
             // 3. On ne montre que ceux qui ont des frais (période gratuite dépassée)
-            const { fee } = calculateStorageFee(t.date, t.quantite);
+            const { fee } = transactionService.calculateStorageFee(t.date, t.quantite);
             if (fee <= 0) return false;
 
             if (!term) return true; 
@@ -80,7 +135,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const toShow = filtered.slice(0, 100);
 
         toShow.forEach(t => {
-            const { days, fee } = calculateStorageFee(t.date, t.quantite);
+            const { days, fee } = transactionService.calculateStorageFee(t.date, t.quantite);
             
             if (fee > 0) totalPotentialFees += fee;
 
@@ -115,53 +170,5 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if(searchInput) searchInput.addEventListener('input', renderTable);
 
-    function formatCFA(n) {
-        return new Intl.NumberFormat('fr-CI', { style: 'currency', currency: 'XOF' }).format(n || 0);
-    }
     initBackToTopButton();
 });
-
-// --- GESTION DU BOUTON "RETOUR EN HAUT" (GLOBAL & MODALS) ---
-function initBackToTopButton() {
-    // 1. Bouton Global (Window)
-    let backToTopBtn = document.getElementById('backToTopBtn');
-    if (!backToTopBtn) {
-        backToTopBtn = document.createElement('button');
-        backToTopBtn.id = 'backToTopBtn';
-        backToTopBtn.title = 'Retour en haut';
-        backToTopBtn.innerHTML = '&#8593;';
-        document.body.appendChild(backToTopBtn);
-        backToTopBtn.addEventListener('click', () => window.scrollTo({ top: 0, behavior: 'smooth' }));
-    }
-
-    const toggleGlobalBtn = () => {
-        if ((window.pageYOffset || document.documentElement.scrollTop) > 300) backToTopBtn.classList.add('show');
-        else backToTopBtn.classList.remove('show');
-    };
-    window.addEventListener('scroll', toggleGlobalBtn, { passive: true });
-
-    // 2. Boutons Modals (.modal-content)
-    const attachModalButtons = () => {
-        document.querySelectorAll('.modal-content').forEach(modalContent => {
-            if (modalContent.dataset.hasBackToTop) return;
-            
-            const modalBtn = document.createElement('button');
-            modalBtn.className = 'modal-back-to-top';
-            modalBtn.innerHTML = '&#8593;';
-            modalBtn.title = 'Haut de page';
-            modalContent.appendChild(modalBtn);
-            modalContent.dataset.hasBackToTop = "true";
-
-            modalBtn.addEventListener('click', () => modalContent.scrollTo({ top: 0, behavior: 'smooth' }));
-
-            modalContent.addEventListener('scroll', () => {
-                if (modalContent.scrollTop > 200) modalBtn.classList.add('show');
-                else modalBtn.classList.remove('show');
-            }, { passive: true });
-        });
-    };
-
-    attachModalButtons();
-    const observer = new MutationObserver(attachModalButtons);
-    observer.observe(document.body, { childList: true, subtree: true });
-}

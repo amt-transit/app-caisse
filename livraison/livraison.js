@@ -232,9 +232,14 @@ function initActiveContainerInput() {
     }
     
     // INJECTION DYNAMIQUE : Checkbox pour filtrer par ce conteneur
-    if (input && !document.getElementById('filterContainerWrapper')) {
-        const wrapper = document.createElement('div');
-        wrapper.id = 'filterContainerWrapper';
+    if (input) {
+        let wrapper = document.getElementById('filterContainerWrapper');
+        if (!wrapper) {
+            wrapper = document.createElement('div');
+            wrapper.id = 'filterContainerWrapper';
+            input.parentNode.appendChild(wrapper);
+        }
+        
         wrapper.style.display = 'inline-flex';
         wrapper.style.alignItems = 'center';
         wrapper.style.marginLeft = '10px';
@@ -243,6 +248,7 @@ function initActiveContainerInput() {
         wrapper.style.borderRadius = '6px';
         wrapper.style.border = '1px solid #bae6fd';
 
+        if (!document.getElementById('filterByContainerCb')) {
         const cb = document.createElement('input');
         cb.type = 'checkbox';
         cb.id = 'filterByContainerCb';
@@ -266,7 +272,7 @@ function initActiveContainerInput() {
 
         wrapper.appendChild(cb);
         wrapper.appendChild(lbl);
-        input.parentNode.appendChild(wrapper);
+        }
     }
 }
 
@@ -661,18 +667,6 @@ function importExcel(event) {
     event.target.value = '';
 }
 
-// Détecter commune
-// Détection plus robuste des communes
-function detectCommune(lieu) {
-    if (!lieu) return 'AUTRE';
-    const upper = lieu.toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, ""); // Supprime les accents
-
-    for (const [key, keywords] of Object.entries(CONSTANTS.COMMUNES)) {
-        if (keywords.some(kw => upper.includes(kw))) return key;
-    }
-    return 'AUTRE';
-}
-
 // Recherche d'adresse pour un destinataire (Local + Archives)
 async function findAddressForRecipient(name) {
     if (!name) return null;
@@ -1003,7 +997,7 @@ function renderTable() {
                 <th class="col-checkbox"><input type="checkbox" id="selectAll" onchange="toggleSelectAll()"></th>
                 <th style="width: 100px;">REF</th>
                 <th style="width: 120px;">CONTENEUR</th>
-                <th style="width: 120px;">BL</th>
+                <th style="width: 60px;">Qté</th>
                 <th style="width: 100px;">MONTANT</th>
                 <th style="width: 150px;">EXPEDITEUR</th>
                 <th style="width: 80px;">COMMUNE</th>
@@ -1107,7 +1101,7 @@ function renderTable() {
             <th style="width: 100px;">DATE</th>
             <th class="sortable" onclick="sortTable('conteneur')" style="width: 120px;">CONTENEUR ${getSortIcon('conteneur')}</th>
             <th class="sortable" onclick="sortTable('ref')" style="width: 100px;">RÉF ${getSortIcon('ref')}</th>
-            <th style="width: 60px;">QTE</th>
+            <th style="width: 60px;">Qté</th>
             <th class="sortable" onclick="sortTable('montant')" style="width: 100px;">MONTANT ${getSortIcon('montant')}</th>
             <th class="sortable" onclick="sortTable('expediteur')" style="width: 150px;">EXPÉDITEUR ${getSortIcon('expediteur')}</th>
             <th class="sortable" onclick="sortTable('lieuLivraison')" style="width: 250px;">LIEU DE LIVRAISON ${getSortIcon('lieuLivraison')}</th>
@@ -1121,7 +1115,7 @@ function renderTable() {
             <th class="col-checkbox"><input type="checkbox" id="selectAll" onchange="toggleSelectAll()"></th>
             <th class="sortable" onclick="sortTable('conteneur')" style="width: 120px;">CONTENEUR ${getSortIcon('conteneur')}</th>
             <th class="sortable" onclick="sortTable('ref')" style="width: 100px;">REF ${getSortIcon('ref')}</th>
-            <th style="width: 60px;">QTE</th>
+            <th style="width: 60px;">Qté</th>
             <th class="sortable" onclick="sortTable('montant')" style="width: 100px;">MONTANT ${getSortIcon('montant')}</th>
             <th class="sortable" onclick="sortTable('expediteur')" style="width: 150px;">EXPEDITEUR ${getSortIcon('expediteur')}</th>
             <th class="sortable" onclick="sortTable('lieuLivraison')" style="width: 250px;">LIEU DE LIVRAISON ${getSortIcon('lieuLivraison')}</th>
@@ -2064,6 +2058,7 @@ function updateDeliveryLocation(id, newLocation) {
         // REQUÊTE FIRESTORE pour toucher TOUS les onglets (même ceux non chargés localement)
         db.collection(CONSTANTS.COLLECTION)
             .where('destinataire', '==', recipientName)
+            .limit(500)
             .get()
             .then(snapshot => {
                 const batch = db.batch();
@@ -2186,6 +2181,7 @@ document.getElementById('deliveryForm').addEventListener('submit', function(e) {
         montant: document.getElementById('montant').value.trim(),
         expediteur: document.getElementById('expediteur').value.trim(),
         commune: document.getElementById('commune').value,
+        numero: document.getElementById('numero').value.trim(),
         lieuLivraison: document.getElementById('lieuLivraison').value.trim(),
         destinataire: document.getElementById('destinataire').value.trim(),
         description: document.getElementById('description').value.trim(),
@@ -2397,51 +2393,6 @@ function initAutoAddress() {
             }
         } catch (e) { console.error("Erreur auto-adresse", e); }
     });
-}
-
-// --- GESTION DU BOUTON "RETOUR EN HAUT" (GLOBAL & MODALS) ---
-function initBackToTopButton() {
-    // 1. Bouton Global (Window)
-    let backToTopBtn = document.getElementById('backToTopBtn');
-    if (!backToTopBtn) {
-        backToTopBtn = document.createElement('button');
-        backToTopBtn.id = 'backToTopBtn';
-        backToTopBtn.title = 'Retour en haut';
-        backToTopBtn.innerHTML = '&#8593;';
-        document.body.appendChild(backToTopBtn);
-        backToTopBtn.addEventListener('click', () => window.scrollTo({ top: 0, behavior: 'smooth' }));
-    }
-
-    const toggleGlobalBtn = () => {
-        if ((window.pageYOffset || document.documentElement.scrollTop) > 300) backToTopBtn.classList.add('show');
-        else backToTopBtn.classList.remove('show');
-    };
-    window.addEventListener('scroll', toggleGlobalBtn, { passive: true });
-
-    // 2. Boutons Modals (.modal-content)
-    const attachModalButtons = () => {
-        document.querySelectorAll('.modal-content').forEach(modalContent => {
-            if (modalContent.dataset.hasBackToTop) return;
-            
-            const modalBtn = document.createElement('button');
-            modalBtn.className = 'modal-back-to-top';
-            modalBtn.innerHTML = '&#8593;';
-            modalBtn.title = 'Haut de page';
-            modalContent.appendChild(modalBtn);
-            modalContent.dataset.hasBackToTop = "true";
-
-            modalBtn.addEventListener('click', () => modalContent.scrollTo({ top: 0, behavior: 'smooth' }));
-
-            modalContent.addEventListener('scroll', () => {
-                if (modalContent.scrollTop > 200) modalBtn.classList.add('show');
-                else modalBtn.classList.remove('show');
-            }, { passive: true });
-        });
-    };
-
-    attachModalButtons();
-    const observer = new MutationObserver(attachModalButtons);
-    observer.observe(document.body, { childList: true, subtree: true });
 }
 
 // --- OUTIL DE NETTOYAGE DES DOUBLONS EXISTANTS ---

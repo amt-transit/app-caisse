@@ -125,7 +125,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 return alert("Veuillez remplir Date, Conteneur, Référence, Nom et Prix.");
             }
             
-            const check = await transactionsCollection.where("reference", "==", data.reference).get();
+            const check = await transactionsCollection.where("reference", "==", data.reference).limit(1).get();
             if (!check.empty) {
                 const existing = check.docs[0].data();
                 return alert(`Référence déjà existante (Conteneur: ${existing.conteneur}).`);
@@ -189,7 +189,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         // RECUPERATION DONNEES PARIS (Si Nom manquant OU Prix manquant pour un colis soldé)
                         let manifestData = null;
                         if (!sender || (restant === 0 && prix === 0)) {
-                            const q = await livraisonsCollection.where("ref", "==", ref).where("containerStatus", "==", "PARIS").get();
+                            const q = await livraisonsCollection.where("ref", "==", ref).where("containerStatus", "==", "PARIS").limit(1).get();
                             if (!q.empty) manifestData = q.docs[0].data();
                         }
 
@@ -214,7 +214,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             mParis = prix - restant;
                         }
 
-                        const check = await transactionsCollection.where("reference", "==", ref).get();
+                        const check = await transactionsCollection.where("reference", "==", ref).limit(1).get();
                         if (!check.empty) { log += `\nDoublon (Base): ${ref}`; continue; }
 
                         // MODIFICATION : Le Destinataire est le client principal (nom)
@@ -264,7 +264,7 @@ document.addEventListener('DOMContentLoaded', () => {
             syncParisBtn.disabled = true; syncParisBtn.textContent = "Analyse...";
             
             try {
-                const parisSnap = await livraisonsCollection.where("containerStatus", "==", "PARIS").get();
+                const parisSnap = await livraisonsCollection.where("containerStatus", "==", "PARIS").limit(1000).get();
                 if (parisSnap.empty) { alert("Manifeste vide."); return; }
 
                 const batch = db.batch();
@@ -273,7 +273,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 for (const docP of parisSnap.docs) {
                     const pData = docP.data();
                     const ref = pData.ref.trim();
-                    const transSnap = await transactionsCollection.where("reference", "==", ref).get();
+                    const transSnap = await transactionsCollection.where("reference", "==", ref).limit(1).get();
 
                     if (!transSnap.empty) {
                         const docT = transSnap.docs[0];
@@ -399,7 +399,7 @@ document.addEventListener('DOMContentLoaded', () => {
             
             if (!parisDate.value || !data.ref || !data.expediteur) return alert("Champs manquants.");
             
-            const check = await livraisonsCollection.where("ref", "==", data.ref).get();
+            const check = await livraisonsCollection.where("ref", "==", data.ref).limit(1).get();
             if (!check.empty) return alert("Déjà dans le manifeste.");
             livraisonsCollection.add(data).then(() => { parisRef.value = ''; parisNom.value = ''; parisRef.focus(); })
             .catch(err => {
@@ -431,7 +431,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         const exp = row["EXPEDITEUR"]?.trim();
                         if (!ref) { log += `\nIgnoré (Ref manquante)`; continue; }
 
-                        const check = await parisManifestCollection.where("reference", "==", ref).get();
+                        const check = await parisManifestCollection.where("reference", "==", ref).limit(1).get();
                         if (!check.empty) { log += `\nIgnoré (Existe): ${ref}`; continue; }
 
                         const prixE = parseFloat((row["PRIX"]||"0").replace(',','.'));
@@ -540,7 +540,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function removeFromParisManifest(ref, conteneur) {
-        const q = await livraisonsCollection.where("ref", "==", ref).where("containerStatus", "==", "PARIS").get();
+        const q = await livraisonsCollection.where("ref", "==", ref).where("containerStatus", "==", "PARIS").limit(1).get();
         if (!q.empty) {
             // Au lieu de supprimer, on déplace vers EN_COURS
             // On met aussi à jour le conteneur si fourni lors de la réception
@@ -548,51 +548,5 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    function formatCFA(n) { return new Intl.NumberFormat('fr-CI', { style: 'currency', currency: 'XOF' }).format(n || 0); }
     initBackToTopButton();
 });
-
-// --- GESTION DU BOUTON "RETOUR EN HAUT" (GLOBAL & MODALS) ---
-function initBackToTopButton() {
-    // 1. Bouton Global (Window)
-    let backToTopBtn = document.getElementById('backToTopBtn');
-    if (!backToTopBtn) {
-        backToTopBtn = document.createElement('button');
-        backToTopBtn.id = 'backToTopBtn';
-        backToTopBtn.title = 'Retour en haut';
-        backToTopBtn.innerHTML = '&#8593;';
-        document.body.appendChild(backToTopBtn);
-        backToTopBtn.addEventListener('click', () => window.scrollTo({ top: 0, behavior: 'smooth' }));
-    }
-
-    const toggleGlobalBtn = () => {
-        if ((window.pageYOffset || document.documentElement.scrollTop) > 300) backToTopBtn.classList.add('show');
-        else backToTopBtn.classList.remove('show');
-    };
-    window.addEventListener('scroll', toggleGlobalBtn, { passive: true });
-
-    // 2. Boutons Modals (.modal-content)
-    const attachModalButtons = () => {
-        document.querySelectorAll('.modal-content').forEach(modalContent => {
-            if (modalContent.dataset.hasBackToTop) return;
-            
-            const modalBtn = document.createElement('button');
-            modalBtn.className = 'modal-back-to-top';
-            modalBtn.innerHTML = '&#8593;';
-            modalBtn.title = 'Haut de page';
-            modalContent.appendChild(modalBtn);
-            modalContent.dataset.hasBackToTop = "true";
-
-            modalBtn.addEventListener('click', () => modalContent.scrollTo({ top: 0, behavior: 'smooth' }));
-
-            modalContent.addEventListener('scroll', () => {
-                if (modalContent.scrollTop > 200) modalBtn.classList.add('show');
-                else modalBtn.classList.remove('show');
-            }, { passive: true });
-        });
-    };
-
-    attachModalButtons();
-    const observer = new MutationObserver(attachModalButtons);
-    observer.observe(document.body, { childList: true, subtree: true });
-}

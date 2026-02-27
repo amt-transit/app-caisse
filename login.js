@@ -25,15 +25,24 @@ document.addEventListener('DOMContentLoaded', () => {
 
         console.log("Tentative de connexion avec :", emailTechnique); // Pour débugger
 
+        // Dans login.js, après signInWithEmailAndPassword
         firebase.auth().signInWithEmailAndPassword(emailTechnique, password)
-            .then(() => {
-                window.location.href = 'index.html';
-            })
-            .catch((error) => {
-                console.error(error);
-                // Messages d'erreur simplifiés
-                showError("Nom d'utilisateur ou mot de passe incorrect.");
-            });
+        .then((userCredential) => {
+            // Vérification supplémentaire : le document users existe-t-il ?
+            return db.collection("users").doc(userCredential.user.uid).get();
+        })
+        .then((userDoc) => {
+            if (!userDoc.exists) {
+            // Oups, l'utilisateur a un compte Auth mais pas de profil Firestore
+            firebase.auth().signOut();
+            showError("Compte utilisateur corrompu. Contactez l'admin.");
+            } else {
+            window.location.href = 'index.html';
+            }
+        })
+        .catch((error) => {
+            showError("Nom d'utilisateur ou mot de passe incorrect.");
+        });
     });
 
     function showError(message) {

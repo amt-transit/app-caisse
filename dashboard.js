@@ -3,6 +3,90 @@ document.addEventListener('DOMContentLoaded', async () => {
         alert("Erreur: Connexion BDD échouée."); return;
     }
 
+    // SERVICE TRANSACTION (Injecté localement car non chargé via HTML)
+    const transactionService = {
+        getCleanTransactions(transactions, validatedSessions) {
+            return transactions.reduce((acc, t) => {
+                if (!t.paymentHistory || !Array.isArray(t.paymentHistory) || t.paymentHistory.length === 0) {
+                    acc.push(t);
+                    return acc;
+                }
+                const validPayments = t.paymentHistory.filter(p => !p.sessionId || validatedSessions.has(p.sessionId));
+                const newParis = validPayments.reduce((sum, p) => sum + (p.montantParis || 0), 0);
+                const newAbidjan = validPayments.reduce((sum, p) => sum + (p.montantAbidjan || 0), 0);
+                const tClean = {
+                    ...t,
+                    paymentHistory: validPayments,
+                    montantParis: newParis,
+                    montantAbidjan: newAbidjan,
+                    reste: (newParis + newAbidjan) - (t.prix || 0)
+                };
+                acc.push(tClean);
+                return acc;
+            }, []);
+        },
+        async calculateAvailableBalance(db, unconfirmedSessions) {
+            const transSnap = await db.collection("transactions").where("isDeleted", "!=", true).limit(2000).get();
+            let totalVentes = 0;
+            transSnap.forEach(doc => {
+                const d = doc.data();
+                if (d.paymentHistory && d.paymentHistory.length > 0) {
+                    d.paymentHistory.forEach(pay => {
+                        if (pay.sessionId && unconfirmedSessions.has(pay.sessionId)) return;
+                        if (pay.modePaiement !== 'Chèque' && pay.modePaiement !== 'Virement') {
+                            totalVentes += (pay.montantAbidjan || 0);
+                        }
+                    });
+                } else {
+                    if (d.modePaiement !== 'Chèque' && d.modePaiement !== 'Virement') {
+                        totalVentes += (d.montantAbidjan || 0);
+                    }
+                }
+            });
+            const incSnap = await db.collection("other_income").where("isDeleted", "!=", true).limit(1000).get();
+            let totalAutres = 0;
+            incSnap.forEach(doc => {
+                const d = doc.data();
+                if (d.mode !== 'Virement' && d.mode !== 'Chèque') {
+                    totalAutres += (d.montant || 0);
+                }
+            });
+            const expSnap = await db.collection("expenses").where("isDeleted", "!=", true).limit(1000).get();
+            let totalDepenses = 0;
+            expSnap.forEach(doc => {
+                const d = doc.data();
+                if (d.sessionId && unconfirmedSessions.has(d.sessionId)) return;
+                if (d.mode !== 'Virement' && d.mode !== 'Chèque') {
+                    totalDepenses += (d.montant || 0);
+                }
+            });
+            const bankSnap = await db.collection("bank_movements").where("isDeleted", "!=", true).limit(1000).get();
+            let totalRetraits = 0;
+            let totalDepots = 0;
+            bankSnap.forEach(doc => {
+                const d = doc.data();
+                if (d.type === 'Retrait') totalRetraits += (d.montant || 0);
+                if (d.type === 'Depot' && d.source !== 'Remise Chèques') totalDepots += (d.montant || 0);
+            });
+            return (totalVentes + totalAutres + totalRetraits) - (totalDepenses + totalDepots);
+        },
+        calculateStorageFee(dateString, quantity = 1, compareDate = new Date()) {
+            if (!dateString) return { days: 0, fee: 0 };
+            const qte = parseInt(quantity) || 1;
+            const arrivalDate = new Date(dateString);
+            const diffTime = compareDate - arrivalDate;
+            if (diffTime < 0) return { days: 0, fee: 0 };
+            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+            if (diffDays <= 7) return { days: diffDays, fee: 0 };
+            else if (diffDays <= 14) return { days: diffDays, fee: 10000 };
+            else {
+                const extraDays = diffDays - 14;
+                const unitFee = 10000 + (extraDays * 1000);
+                return { days: diffDays, fee: unitFee * qte };
+            }
+        }
+    };
+
     // --- 1. DOM ELEMENTS & CONFIG ---
     const startDateInput = document.getElementById('startDate');
     const endDateInput = document.getElementById('endDate');
@@ -56,41 +140,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // --- 3. CORE LOGIC : NETTOYAGE & SÉCURITÉ ---
 
-    /**
-     * Cette fonction est le COEUR du système.
-     * Elle prend les transactions brutes et recalcule tout en ne gardant QUE les paiements validés.
-     */
+    // Utilisation du service centralisé
     function getCleanTransactions(transactions) {
-        return transactions.reduce((acc, t) => {
-            // Si pas d'historique (Legacy ou Arrivage brut), on garde tel quel (sauf si Arrivage non payé)
-            if (!t.paymentHistory || !Array.isArray(t.paymentHistory) || t.paymentHistory.length === 0) {
-                // Si c'est un arrivage récent (avec auteur) mais sans paiement, c'est une dette pure, on garde.
-                // Si c'est une vieille donnée, on garde.
-                acc.push(t); 
-                return acc;
-            }
-
-            // FILTRE STRICT : On ne garde que les paiements liés à une session VALIDÉE (ou sans session = Legacy)
-            const validPayments = t.paymentHistory.filter(p => !p.sessionId || validatedSessions.has(p.sessionId));
-
-            // RECALCUL SYSTÉMATIQUE DES TOTAUX
-            // On ignore les montants stockés à la racine du document pour éviter les incohérences (Ghost Payments)
-            const newParis = validPayments.reduce((sum, p) => sum + (p.montantParis || 0), 0);
-            const newAbidjan = validPayments.reduce((sum, p) => sum + (p.montantAbidjan || 0), 0);
-            
-            // On recrée l'objet transaction avec les valeurs justes
-            const tClean = { 
-                ...t, 
-                paymentHistory: validPayments, 
-                montantParis: newParis, 
-                montantAbidjan: newAbidjan, 
-                // Reste = (Paris + Abidjan) - Prix. (Négatif = Dette)
-                reste: (newParis + newAbidjan) - (t.prix || 0) 
-            };
-            
-            acc.push(tClean);
-            return acc;
-        }, []);
+        return transactionService.getCleanTransactions(transactions, validatedSessions);
     }
 
     function updateDashboard() {
@@ -523,6 +575,4 @@ document.addEventListener('DOMContentLoaded', async () => {
         startDateInput.value = ''; endDateInput.value = ''; updateDashboard();
     });
 
-    // Fonction utilitaire
-    function formatCFA(n) { return new Intl.NumberFormat('fr-CI', { style: 'currency', currency: 'XOF' }).format(n || 0); }
 });

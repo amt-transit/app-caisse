@@ -3,6 +3,90 @@ document.addEventListener('DOMContentLoaded', () => {
         alert("Erreur: La connexion à la base de données a échoué."); return;
     }
 
+    // SERVICE TRANSACTION (Injecté localement car non chargé via HTML)
+    const transactionService = {
+        getCleanTransactions(transactions, validatedSessions) {
+            return transactions.reduce((acc, t) => {
+                if (!t.paymentHistory || !Array.isArray(t.paymentHistory) || t.paymentHistory.length === 0) {
+                    acc.push(t);
+                    return acc;
+                }
+                const validPayments = t.paymentHistory.filter(p => !p.sessionId || validatedSessions.has(p.sessionId));
+                const newParis = validPayments.reduce((sum, p) => sum + (p.montantParis || 0), 0);
+                const newAbidjan = validPayments.reduce((sum, p) => sum + (p.montantAbidjan || 0), 0);
+                const tClean = {
+                    ...t,
+                    paymentHistory: validPayments,
+                    montantParis: newParis,
+                    montantAbidjan: newAbidjan,
+                    reste: (newParis + newAbidjan) - (t.prix || 0)
+                };
+                acc.push(tClean);
+                return acc;
+            }, []);
+        },
+        async calculateAvailableBalance(db, unconfirmedSessions) {
+            const transSnap = await db.collection("transactions").where("isDeleted", "!=", true).limit(2000).get();
+            let totalVentes = 0;
+            transSnap.forEach(doc => {
+                const d = doc.data();
+                if (d.paymentHistory && d.paymentHistory.length > 0) {
+                    d.paymentHistory.forEach(pay => {
+                        if (pay.sessionId && unconfirmedSessions.has(pay.sessionId)) return;
+                        if (pay.modePaiement !== 'Chèque' && pay.modePaiement !== 'Virement') {
+                            totalVentes += (pay.montantAbidjan || 0);
+                        }
+                    });
+                } else {
+                    if (d.modePaiement !== 'Chèque' && d.modePaiement !== 'Virement') {
+                        totalVentes += (d.montantAbidjan || 0);
+                    }
+                }
+            });
+            const incSnap = await db.collection("other_income").where("isDeleted", "!=", true).limit(1000).get();
+            let totalAutres = 0;
+            incSnap.forEach(doc => {
+                const d = doc.data();
+                if (d.mode !== 'Virement' && d.mode !== 'Chèque') {
+                    totalAutres += (d.montant || 0);
+                }
+            });
+            const expSnap = await db.collection("expenses").where("isDeleted", "!=", true).limit(1000).get();
+            let totalDepenses = 0;
+            expSnap.forEach(doc => {
+                const d = doc.data();
+                if (d.sessionId && unconfirmedSessions.has(d.sessionId)) return;
+                if (d.mode !== 'Virement' && d.mode !== 'Chèque') {
+                    totalDepenses += (d.montant || 0);
+                }
+            });
+            const bankSnap = await db.collection("bank_movements").where("isDeleted", "!=", true).limit(1000).get();
+            let totalRetraits = 0;
+            let totalDepots = 0;
+            bankSnap.forEach(doc => {
+                const d = doc.data();
+                if (d.type === 'Retrait') totalRetraits += (d.montant || 0);
+                if (d.type === 'Depot' && d.source !== 'Remise Chèques') totalDepots += (d.montant || 0);
+            });
+            return (totalVentes + totalAutres + totalRetraits) - (totalDepenses + totalDepots);
+        },
+        calculateStorageFee(dateString, quantity = 1, compareDate = new Date()) {
+            if (!dateString) return { days: 0, fee: 0 };
+            const qte = parseInt(quantity) || 1;
+            const arrivalDate = new Date(dateString);
+            const diffTime = compareDate - arrivalDate;
+            if (diffTime < 0) return { days: 0, fee: 0 };
+            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+            if (diffDays <= 7) return { days: diffDays, fee: 0 };
+            else if (diffDays <= 14) return { days: diffDays, fee: 10000 };
+            else {
+                const extraDays = diffDays - 14;
+                const unitFee = 10000 + (extraDays * 1000);
+                return { days: diffDays, fee: unitFee * qte };
+            }
+        }
+    };
+
     // CORRECTION : On récupère le nom de l'utilisateur connecté
     const currentUserName = sessionStorage.getItem('userName') || 'Inconnu';
 
@@ -72,7 +156,7 @@ document.addEventListener('DOMContentLoaded', () => {
             addBankMovementBtn.disabled = true;
             addBankMovementBtn.textContent = "Vérification...";
             try {
-                const soldeCaisse = await calculateAvailableBalance(db);
+                const soldeCaisse = await transactionService.calculateAvailableBalance(db, unconfirmedSessions);
                 if (data.montant > soldeCaisse) {
                     alert(`ERREUR : Solde de caisse insuffisant (${formatCFA(soldeCaisse)}) !`);
                     addBankMovementBtn.disabled = false;
@@ -169,7 +253,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (showDeletedCheckbox.checked) {
              transQuery = transQuery.where("isDeleted", "==", true);
         } else {
-             transQuery = transQuery.where("isDeleted", "!=", true);
+             transQuery = transQuery.where("isDeleted", "!=", true).orderBy("isDeleted");
         }
         transQuery = transQuery.orderBy("date", "desc").limit(200); // OPTIMISATION QUOTA
 
@@ -373,7 +457,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // 5. GESTION REMISE CHÈQUES
     if (openCheckDepositBtn) {
         openCheckDepositBtn.addEventListener('click', async () => {
-            const snapshot = await db.collection("transactions").where("isDeleted", "!=", true).get();
+            const snapshot = await db.collection("transactions").where("isDeleted", "!=", true).limit(1000).get();
             
             let pendingChecks = [];
             snapshot.forEach(doc => {
@@ -514,117 +598,5 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // Fonction utilitaire copiée pour bank.js (pour éviter dépendances)
-    async function calculateAvailableBalance(db) {
-        const transSnap = await db.collection("transactions").where("isDeleted", "!=", true).get();
-        let totalVentes = 0;
-        transSnap.forEach(doc => {
-            const d = doc.data();
-            
-            // CORRECTION : On aligne la logique sur le Dashboard.
-            // On ne compte que le CASH disponible (pas les chèques).
-            if (d.paymentHistory && d.paymentHistory.length > 0) {
-                d.paymentHistory.forEach(pay => {
-                    // FILTRE SÉCURITÉ
-                    if (pay.sessionId && unconfirmedSessions.has(pay.sessionId)) return;
-
-                    if (pay.modePaiement !== 'Chèque' && pay.modePaiement !== 'Virement') {
-                        totalVentes += (pay.montantAbidjan || 0);
-                    }
-                });
-            } else {
-                // Fallback pour anciennes données (considérées comme cash par défaut)
-                if (d.modePaiement !== 'Chèque' && d.modePaiement !== 'Virement') {
-                    totalVentes += (d.montantAbidjan || 0); 
-                }
-            }
-        });
-
-        const incSnap = await db.collection("other_income").where("isDeleted", "!=", true).get();
-        let totalAutres = 0;
-        // CORRECTION : On exclut les Autres Entrées qui ne sont pas du cash (Chèque/Virement)
-        incSnap.forEach(doc => {
-            const d = doc.data();
-            if (d.mode !== 'Virement' && d.mode !== 'Chèque') {
-                totalAutres += (d.montant || 0);
-            }
-        });
-
-        const expSnap = await db.collection("expenses").where("isDeleted", "!=", true).get();
-        let totalDepenses = 0;
-        expSnap.forEach(doc => {
-            const d = doc.data();
-            
-            // FILTRE SÉCURITÉ DÉPENSES
-            // On vérifie si la dépense appartient à une session non validée (via sessionId)
-            if (d.sessionId && unconfirmedSessions.has(d.sessionId)) return;
-
-            if (d.mode !== 'Virement' && d.mode !== 'Chèque') {
-                totalDepenses += (d.montant || 0);
-            }
-        });
-
-        const bankSnap = await db.collection("bank_movements").where("isDeleted", "!=", true).get();
-        let totalRetraits = 0;
-        let totalDepots = 0;
-        bankSnap.forEach(doc => {
-            const d = doc.data();
-            if (d.type === 'Retrait') totalRetraits += (d.montant || 0);
-            // CORRECTION : On exclut les remises de chèques car elles ne sortent pas de la caisse espèces
-            if (d.type === 'Depot' && d.source !== 'Remise Chèques') totalDepots += (d.montant || 0);
-        });
-
-        return (totalVentes + totalAutres + totalRetraits) - (totalDepenses + totalDepots);
-    }
-
-    function formatCFA(number) {
-        return new Intl.NumberFormat('fr-CI', { style: 'currency', currency: 'XOF' }).format(number || 0);
-    }
-
     initBackToTopButton();
 });
-
-// --- GESTION DU BOUTON "RETOUR EN HAUT" (GLOBAL & MODALS) ---
-function initBackToTopButton() {
-    // 1. Bouton Global (Window)
-    let backToTopBtn = document.getElementById('backToTopBtn');
-    if (!backToTopBtn) {
-        backToTopBtn = document.createElement('button');
-        backToTopBtn.id = 'backToTopBtn';
-        backToTopBtn.title = 'Retour en haut';
-        backToTopBtn.innerHTML = '&#8593;';
-        document.body.appendChild(backToTopBtn);
-        backToTopBtn.addEventListener('click', () => window.scrollTo({ top: 0, behavior: 'smooth' }));
-    }
-
-    const toggleGlobalBtn = () => {
-        if ((window.pageYOffset || document.documentElement.scrollTop) > 300) backToTopBtn.classList.add('show');
-        else backToTopBtn.classList.remove('show');
-    };
-    window.addEventListener('scroll', toggleGlobalBtn, { passive: true });
-
-    // 2. Boutons Modals (.modal-content)
-    const attachModalButtons = () => {
-        document.querySelectorAll('.modal-content').forEach(modalContent => {
-            if (modalContent.dataset.hasBackToTop) return;
-            
-            const modalBtn = document.createElement('button');
-            modalBtn.className = 'modal-back-to-top';
-            modalBtn.innerHTML = '&#8593;';
-            modalBtn.title = 'Haut de page';
-            modalContent.appendChild(modalBtn);
-            modalContent.dataset.hasBackToTop = "true";
-
-            modalBtn.addEventListener('click', () => modalContent.scrollTo({ top: 0, behavior: 'smooth' }));
-
-            modalContent.addEventListener('scroll', () => {
-                if (modalContent.scrollTop > 200) modalBtn.classList.add('show');
-                else modalBtn.classList.remove('show');
-            }, { passive: true });
-        });
-    };
-
-    attachModalButtons();
-    const observer = new MutationObserver(attachModalButtons);
-    observer.observe(document.body, { childList: true, subtree: true });
-}

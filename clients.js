@@ -74,10 +74,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         topClientsTableBody.innerHTML = '<tr><td colspan="4">Chargement des données...</td></tr>';
         
         // Charger les noms pour l'autocomplete
-        const parisSnap = await parisManifestCollection.get();
+        const parisSnap = await parisManifestCollection.limit(2000).get();
         allParisManifestCache = parisSnap.docs.map(doc => doc.data());
         
-        const transSnap = await transactionsCollection.where("isDeleted", "!=", true).get();
+        const transSnap = await transactionsCollection.where("isDeleted", "!=", true).limit(2000).get();
         allTransactionsCache = transSnap.docs.map(doc => doc.data());
 
         // Remplir la liste des noms
@@ -443,53 +443,5 @@ document.addEventListener('DOMContentLoaded', async () => {
         doc.save('Top_Clients_AMT.pdf');
     });
 
-    function formatCFA(n) {
-        return new Intl.NumberFormat('fr-CI', { style: 'currency', currency: 'XOF' }).format(n || 0);
-    }
     initBackToTopButton();
 });
-
-// --- GESTION DU BOUTON "RETOUR EN HAUT" (GLOBAL & MODALS) ---
-function initBackToTopButton() {
-    // 1. Bouton Global (Window)
-    let backToTopBtn = document.getElementById('backToTopBtn');
-    if (!backToTopBtn) {
-        backToTopBtn = document.createElement('button');
-        backToTopBtn.id = 'backToTopBtn';
-        backToTopBtn.title = 'Retour en haut';
-        backToTopBtn.innerHTML = '&#8593;';
-        document.body.appendChild(backToTopBtn);
-        backToTopBtn.addEventListener('click', () => window.scrollTo({ top: 0, behavior: 'smooth' }));
-    }
-
-    const toggleGlobalBtn = () => {
-        if ((window.pageYOffset || document.documentElement.scrollTop) > 300) backToTopBtn.classList.add('show');
-        else backToTopBtn.classList.remove('show');
-    };
-    window.addEventListener('scroll', toggleGlobalBtn, { passive: true });
-
-    // 2. Boutons Modals (.modal-content)
-    const attachModalButtons = () => {
-        document.querySelectorAll('.modal-content').forEach(modalContent => {
-            if (modalContent.dataset.hasBackToTop) return;
-            
-            const modalBtn = document.createElement('button');
-            modalBtn.className = 'modal-back-to-top';
-            modalBtn.innerHTML = '&#8593;';
-            modalBtn.title = 'Haut de page';
-            modalContent.appendChild(modalBtn);
-            modalContent.dataset.hasBackToTop = "true";
-
-            modalBtn.addEventListener('click', () => modalContent.scrollTo({ top: 0, behavior: 'smooth' }));
-
-            modalContent.addEventListener('scroll', () => {
-                if (modalContent.scrollTop > 200) modalBtn.classList.add('show');
-                else modalBtn.classList.remove('show');
-            }, { passive: true });
-        });
-    };
-
-    attachModalButtons();
-    const observer = new MutationObserver(attachModalButtons);
-    observer.observe(document.body, { childList: true, subtree: true });
-}
