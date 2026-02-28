@@ -269,62 +269,123 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     function renderContainerSummary(transactions, expenses) {
         if (!containerSummaryBody) return;
-        containerSummaryBody.innerHTML = '<tr><td colspan="10">Calcul en cours...</td></tr>';
+        containerSummaryBody.innerHTML = '<tr><td colspan="5">Calcul en cours...</td></tr>';
 
-        const data = {};
-        
+        const months = {};
+        const getMonthKey = (dateStr) => dateStr ? dateStr.substring(0, 7) : '0000-00';
+        const getMonthLabel = (dateStr) => {
+            if(!dateStr) return 'Indéfini';
+            const d = new Date(dateStr);
+            return d.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' }).replace(/^\w/, c => c.toUpperCase());
+        };
+
         // 1. Agréger Transactions
         transactions.forEach(t => {
-            const c = (t.conteneur || "Non spécifié").trim().toUpperCase();
-            if (!data[c]) data[c] = { ca: 0, paris: 0, abidjan: 0, reste: 0, count: 0, unpaid: 0, date: t.date };
+            const mKey = getMonthKey(t.date);
+            const mLabel = getMonthLabel(t.date);
+            const cName = (t.conteneur || "Non spécifié").trim().toUpperCase();
+
+            if (!months[mKey]) months[mKey] = { key: mKey, label: mLabel, containers: {}, stats: { ca: 0, dep: 0, count: 0 } };
+            if (!months[mKey].containers[cName]) {
+                months[mKey].containers[cName] = { name: cName, ca: 0, paris: 0, abidjan: 0, reste: 0, count: 0, unpaid: 0, dep: 0 };
+            }
             
-            data[c].ca += (t.prix || 0);
-            data[c].paris += (t.montantParis || 0);
-            data[c].abidjan += (t.montantAbidjan || 0);
-            data[c].reste += (t.reste || 0);
-            data[c].count++;
-            if ((t.reste || 0) < -1) data[c].unpaid++;
-            if (t.date < data[c].date) data[c].date = t.date; // Garder la date la plus ancienne
+            const c = months[mKey].containers[cName];
+            c.ca += (t.prix || 0);
+            c.paris += (t.montantParis || 0);
+            c.abidjan += (t.montantAbidjan || 0);
+            c.reste += (t.reste || 0);
+            c.count++;
+            if ((t.reste || 0) < -1) c.unpaid++;
+
+            months[mKey].stats.ca += (t.prix || 0);
         });
 
         // 2. Agréger Dépenses
         expenses.forEach(e => {
-            if (e.conteneur) {
-                const c = e.conteneur.trim().toUpperCase();
-                if (!data[c]) data[c] = { ca: 0, paris: 0, abidjan: 0, reste: 0, count: 0, unpaid: 0, date: e.date };
-                if (!data[c].dep) data[c].dep = 0;
-                data[c].dep += (e.montant || 0);
+            if (e.type === 'Conteneur' || e.conteneur) {
+                const mKey = getMonthKey(e.date);
+                const mLabel = getMonthLabel(e.date);
+                const cName = (e.conteneur || "Non spécifié").trim().toUpperCase();
+
+                if (!months[mKey]) months[mKey] = { key: mKey, label: mLabel, containers: {}, stats: { ca: 0, dep: 0, count: 0 } };
+                if (!months[mKey].containers[cName]) {
+                    months[mKey].containers[cName] = { name: cName, ca: 0, paris: 0, abidjan: 0, reste: 0, count: 0, unpaid: 0, dep: 0 };
+                }
+                
+                months[mKey].containers[cName].dep += (e.montant || 0);
+                months[mKey].stats.dep += (e.montant || 0);
             }
         });
 
         // 3. Affichage
-        const rows = Object.entries(data).sort((a, b) => b[1].date.localeCompare(a[1].date)); // Tri par date récente
+        const sortedMonths = Object.values(months).sort((a, b) => b.key.localeCompare(a.key));
         
         containerSummaryBody.innerHTML = '';
-        if (rows.length === 0) { containerSummaryBody.innerHTML = '<tr><td colspan="10">Aucune donnée.</td></tr>'; return; }
+        if (sortedMonths.length === 0) { containerSummaryBody.innerHTML = '<tr><td colspan="5">Aucune donnée.</td></tr>'; return; }
 
-        rows.forEach(([name, d]) => {
-            if (name === "NON SPÉCIFIÉ") return;
-            const benef = d.ca - (d.dep || 0);
-            const percu = d.paris + d.abidjan;
+        sortedMonths.forEach(m => {
+            const benef = m.stats.ca - m.stats.dep;
+            const nbConteneurs = Object.keys(m.containers).length;
             
+            // Calcul Pourcentages
+            const pctDep = m.stats.ca ? Math.round((m.stats.dep / m.stats.ca) * 100) : 0;
+            const pctBen = m.stats.ca ? Math.round((benef / m.stats.ca) * 100) : 0;
+
             const tr = document.createElement('tr');
             tr.style.cursor = 'pointer';
-            tr.onclick = () => openContainerDetails(name);
+            tr.onclick = () => openMonthDetails(m.key);
+            tr.title = "Cliquez pour voir les détails du mois";
+            
             tr.innerHTML = `
-                <td><b>${name}</b></td>
-                <td>${d.count}</td>
-                <td style="color:${d.unpaid > 0 ? 'red' : 'green'}">${d.unpaid}</td>
-                <td>${formatCFA(d.ca)}</td>
-                <td>${formatCFA(d.paris)}</td>
-                <td>${formatCFA(d.abidjan)}</td>
-                <td style="font-weight:bold">${formatCFA(percu)}</td>
-                <td class="${d.reste < 0 ? 'reste-negatif' : 'reste-positif'}">${formatCFA(d.reste)}</td>
-                <td>${formatCFA(d.dep || 0)}</td>
-                <td class="${benef < 0 ? 'reste-negatif' : 'reste-positif'}"><b>${formatCFA(benef)}</b></td>
+                <td><b>${m.label}</b></td>
+                <td><span class="tag" style="background:#64748b;">${nbConteneurs} Conteneurs</span></td>
+                <td>${formatCFA(m.stats.ca)}</td>
+                <td style="color:#ef4444;">${formatCFA(m.stats.dep)} <span style="font-size:0.8em">(${pctDep}%)</span></td>
+                <td style="font-weight:bold; color:${benef >= 0 ? '#10b981' : '#ef4444'}">${formatCFA(benef)} <span style="font-size:0.8em">(${pctBen}%)</span></td>
             `;
             containerSummaryBody.appendChild(tr);
         });
+        
+        window.monthlyData = months;
+    }
+
+    // --- 7b. MODAL DÉTAILS MOIS ---
+    window.openMonthDetails = function(monthKey) {
+        const m = window.monthlyData && window.monthlyData[monthKey];
+        if (!m) return;
+        
+        const modal = document.getElementById('monthDetailsModal');
+        const title = document.getElementById('modalMonthTitle');
+        const tbody = document.getElementById('modalMonthBody');
+        
+        title.textContent = `Détails du Mois : ${m.label}`;
+        tbody.innerHTML = '';
+        
+        Object.values(m.containers).sort((a, b) => a.name.localeCompare(b.name)).forEach(c => {
+            const benef = c.ca - c.dep;
+            const percu = c.paris + c.abidjan;
+            
+            const tr = document.createElement('tr');
+            tr.style.cursor = 'pointer';
+            tr.onclick = () => openContainerDetails(c.name); // Ouvre le modal détails conteneur (existant)
+            
+            tr.innerHTML = `
+                <td><b>${c.name}</b></td>
+                <td>${c.count}</td>
+                <td style="color:${c.unpaid > 0 ? 'red' : 'green'}">${c.unpaid}</td>
+                <td>${formatCFA(c.ca)}</td>
+                <td>${formatCFA(c.paris)}</td>
+                <td>${formatCFA(c.abidjan)}</td>
+                <td style="font-weight:bold">${formatCFA(percu)}</td>
+                <td class="${c.reste < 0 ? 'reste-negatif' : 'reste-positif'}">${formatCFA(c.reste)}</td>
+                <td>${formatCFA(c.dep)}</td>
+                <td class="${benef < 0 ? 'reste-negatif' : 'reste-positif'}"><b>${formatCFA(benef)}</b></td>
+            `;
+            tbody.appendChild(tr);
+        });
+        
+        modal.style.display = 'flex';
     }
 
     function renderTopClients(transactions) {
@@ -495,15 +556,19 @@ document.addEventListener('DOMContentLoaded', async () => {
             totalPar += (t.montantParis || 0);
             totalReste += (t.reste || 0);
 
+            const pctAbj = t.prix ? Math.round((t.montantAbidjan / t.prix) * 100) : 0;
+            const pctPar = t.prix ? Math.round((t.montantParis / t.prix) * 100) : 0;
+            const pctReste = t.prix ? Math.round((t.reste / t.prix) * 100) : 0;
+
             tbody.innerHTML += `
                 <tr>
                     <td>${t.date}</td>
                     <td>${t.nom} <small>(${t.reference})</small></td>
                     <td>${t.reference}</td>
                     <td>${formatCFA(t.prix)}</td>
-                    <td>${formatCFA(t.montantAbidjan)}</td>
-                    <td>${formatCFA(t.montantParis)}</td>
-                    <td class="${t.reste < 0 ? 'reste-negatif' : 'reste-positif'}">${formatCFA(t.reste)}</td>
+                    <td>${formatCFA(t.montantAbidjan)} <span style="font-size:0.8em; color:#d97706;">(${pctAbj}%)</span></td>
+                    <td>${formatCFA(t.montantParis)} <span style="font-size:0.8em; color:#2563eb;">(${pctPar}%)</span></td>
+                    <td class="${t.reste < 0 ? 'reste-negatif' : 'reste-positif'}">${formatCFA(t.reste)} <span style="font-size:0.8em; color:#64748b;">(${pctReste}%)</span></td>
                 </tr>
             `;
         });
@@ -519,11 +584,22 @@ document.addEventListener('DOMContentLoaded', async () => {
             `;
         });
 
-        // Totaux Footer Modal
-        document.getElementById('modalTotalPrix').textContent = formatCFA(totalPrix);
-        document.getElementById('modalTotalPayeAbj').textContent = formatCFA(totalAbj);
-        document.getElementById('modalTotalPayePar').textContent = formatCFA(totalPar);
-        document.getElementById('modalTotalReste').textContent = formatCFA(totalReste);
+        // Totaux En-tête Modal
+        const totalDep = cleanExp.reduce((sum, e) => sum + (e.montant || 0), 0);
+        const benefice = totalPrix - totalDep;
+
+        // Calcul Pourcentages Totaux
+        const pctAbjTotal = totalPrix ? Math.round((totalAbj / totalPrix) * 100) : 0;
+        const pctParTotal = totalPrix ? Math.round((totalPar / totalPrix) * 100) : 0;
+        const pctResteTotal = totalPrix ? Math.round((totalReste / totalPrix) * 100) : 0;
+
+        document.getElementById('topTotalPrix').textContent = formatCFA(totalPrix);
+        document.getElementById('topTotalPayeAbj').innerHTML = `${formatCFA(totalAbj)} <span style="font-size:0.8em">(${pctAbjTotal}%)</span>`;
+        document.getElementById('topTotalPayePar').innerHTML = `${formatCFA(totalPar)} <span style="font-size:0.8em">(${pctParTotal}%)</span>`;
+        document.getElementById('topTotalReste').innerHTML = `${formatCFA(totalReste)} <span style="font-size:0.8em">(${pctResteTotal}%)</span>`;
+        document.getElementById('topTotalDep').textContent = formatCFA(totalDep);
+        document.getElementById('topTotalBen').textContent = formatCFA(benefice);
+        document.getElementById('topTotalBen').style.color = benefice >= 0 ? '#10b981' : '#ef4444';
 
         // Gestion Export Excel Modal
         const btnExcel = document.getElementById('downloadContainerExcelBtn');
