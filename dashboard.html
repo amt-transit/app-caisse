@@ -101,15 +101,17 @@
         </div>
 
         <div id="panel-conteneurs" class="tab-panel active">
-            <h2 style="margin-top: 30px;">Récapitulatif par Conteneur</h2>
-            <table id="containerSummaryTable">
+            <h2 style="margin-top: 30px;">Récapitulatif Mensuel (Conteneurs)</h2>
+            <!-- Dummy table to prevent JS errors from existing dashboard.js -->
+            <table id="containerSummaryTable" style="display:none;"></table>
+            
+            <table id="monthSummaryTable">
                 <thead>
                     <tr>
-                        <th>Conteneur</th><th>Op. Totales</th><th>Non Payés</th><th>Chiffre d'Affaires (CA)</th><th>Total Paris</th><th>Total Abidjan</th>
-                        <th>Total Perçu (P+A)</th><th>Total Reste</th><th>Total Dépenses</th><th>BÉNÉFICE Conteneur</th>
+                        <th>Mois</th><th>Nb. Conteneurs</th><th>Chiffre d'Affaires (CA)</th><th>Total Dépenses</th><th>BÉNÉFICE Total</th><th>Action</th>
                     </tr>
                 </thead>
-                <tbody id="containerSummaryTableBody"></tbody>
+                <tbody id="monthSummaryTableBody"></tbody>
             </table>
         </div>
 
@@ -292,6 +294,27 @@
             </div>
         </div>
     </div>
+
+    <!-- MODAL DÉTAILS MOIS (LISTE CONTENEURS) -->
+    <div id="monthDetailsModal" class="modal">
+        <div class="modal-content modal-lg" style="width: 95% !important; max-width: 1200px !important;">
+            <div class="modal-header">
+                <h2 id="modalMonthTitle">Détails du Mois</h2>
+                <span class="close-modal" onclick="document.getElementById('monthDetailsModal').style.display='none'">&times;</span>
+            </div>
+            <div style="overflow-x: auto;">
+                <table id="monthContainersTable">
+                    <thead>
+                        <tr>
+                            <th>Conteneur</th><th>Op.</th><th>Non Payés</th><th>CA</th><th>Paris</th><th>Abidjan</th>
+                            <th>Perçu</th><th>Reste</th><th>Dépenses</th><th>BÉNÉFICE</th>
+                        </tr>
+                    </thead>
+                    <tbody id="modalContainerSummaryBody"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
     
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
@@ -304,5 +327,120 @@
     <script src="auth-guard.js"></script>
     <script src="dashboard.js"></script>
     <script src="utils.js"></script>
+    
+    <!-- SCRIPT SPÉCIFIQUE POUR LE REGROUPEMENT PAR MOIS -->
+    <script>
+        document.addEventListener('DOMContentLoaded', async () => {
+            const monthTableBody = document.getElementById('monthSummaryTableBody');
+            const modalBody = document.getElementById('modalContainerSummaryBody');
+            const modalTitle = document.getElementById('modalMonthTitle');
+            const modal = document.getElementById('monthDetailsModal');
+            
+            if (!monthTableBody) return;
+
+            // Chargement des données
+            const [transSnap, expSnap] = await Promise.all([
+                db.collection("transactions").where("isDeleted", "!=", true).get(),
+                db.collection("expenses").where("type", "==", "Conteneur").where("isDeleted", "!=", true).get()
+            ]);
+
+            const containers = {};
+
+            // 1. Traitement des Transactions
+            transSnap.forEach(doc => {
+                const d = doc.data();
+                const name = (d.conteneur || "INCONNU").trim().toUpperCase();
+                if (!name) return;
+
+                if (!containers[name]) {
+                    containers[name] = {
+                        name: name,
+                        firstDate: d.date, // Date de référence pour le mois
+                        count: 0,
+                        unpaidCount: 0,
+                        ca: 0,
+                        paris: 0,
+                        abidjan: 0,
+                        reste: 0,
+                        expenses: 0
+                    };
+                }
+                
+                // Mise à jour de la date la plus ancienne pour déterminer le mois du conteneur
+                if (d.date < containers[name].firstDate) containers[name].firstDate = d.date;
+
+                containers[name].count++;
+                if ((d.reste || 0) < 0) containers[name].unpaidCount++;
+                containers[name].ca += (d.prix || 0);
+                containers[name].paris += (d.montantParis || 0);
+                containers[name].abidjan += (d.montantAbidjan || 0);
+                containers[name].reste += (d.reste || 0);
+            });
+
+            // 2. Traitement des Dépenses
+            expSnap.forEach(doc => {
+                const d = doc.data();
+                const name = (d.conteneur || "").trim().toUpperCase();
+                if (containers[name]) {
+                    containers[name].expenses += (d.montant || 0);
+                }
+            });
+
+            // 3. Regroupement par Mois
+            const months = {};
+            Object.values(containers).forEach(c => {
+                const dateObj = new Date(c.firstDate);
+                const monthKey = `${dateObj.getFullYear()}-${String(dateObj.getMonth() + 1).padStart(2, '0')}`; // YYYY-MM
+                const monthLabel = dateObj.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
+                
+                if (!months[monthKey]) {
+                    months[monthKey] = { label: monthLabel.charAt(0).toUpperCase() + monthLabel.slice(1), key: monthKey, containers: [], totalCA: 0, totalExp: 0, totalBen: 0 };
+                }
+                
+                months[monthKey].containers.push(c);
+                months[monthKey].totalCA += c.ca;
+                months[monthKey].totalExp += c.expenses;
+                months[monthKey].totalBen += (c.ca - c.expenses);
+            });
+
+            // 4. Affichage du Tableau Mensuel
+            const sortedMonths = Object.values(months).sort((a, b) => b.key.localeCompare(a.key));
+            
+            monthTableBody.innerHTML = sortedMonths.map(m => `
+                <tr>
+                    <td style="font-weight:bold; color:#4f46e5;">${m.label}</td>
+                    <td><span class="tag" style="background:#64748b;">${m.containers.length}</span></td>
+                    <td>${formatCFA(m.totalCA)}</td>
+                    <td style="color:#ef4444;">${formatCFA(m.totalExp)}</td>
+                    <td style="font-weight:bold; color:${m.totalBen >= 0 ? '#10b981' : '#ef4444'}">${formatCFA(m.totalBen)}</td>
+                    <td><button class="btn-small" style="background:#4f46e5; color:white; border:none; padding:5px 10px; border-radius:4px; cursor:pointer;" onclick="openMonthDetails('${m.key}')">Voir Détails</button></td>
+                </tr>
+            `).join('');
+
+            // 5. Fonction d'ouverture du Modal
+            window.openMonthDetails = (monthKey) => {
+                const m = months[monthKey];
+                if (!m) return;
+                
+                modalTitle.textContent = `Détails : ${m.label}`;
+                
+                // Tri des conteneurs par nom
+                m.containers.sort((a, b) => b.name.localeCompare(a.name));
+
+                modalBody.innerHTML = m.containers.map(c => {
+                    const benefice = c.ca - c.expenses;
+                    return `
+                    <tr>
+                        <td><strong>${c.name}</strong></td><td>${c.count}</td><td>${c.unpaidCount}</td><td>${formatCFA(c.ca)}</td>
+                        <td style="color:#2563eb;">${formatCFA(c.paris)}</td><td style="color:#d97706;">${formatCFA(c.abidjan)}</td>
+                        <td><strong>${formatCFA(c.paris + c.abidjan)}</strong></td><td class="${c.reste < 0 ? 'reste-negatif' : 'reste-positif'}">${formatCFA(c.reste)}</td>
+                        <td style="color:#ef4444;">${formatCFA(c.expenses)}</td><td style="font-weight:bold; color:${benefice >= 0 ? '#10b981' : '#ef4444'}">${formatCFA(benefice)}</td>
+                    </tr>`;
+                }).join('');
+                
+                modal.style.display = 'flex';
+            };
+        });
+    </script>
 </body>
 </html>

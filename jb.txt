@@ -33,3 +33,7 @@ const firebaseConfig = {
         storageBucket: "caisse-amt-perso.firebasestorage.app",
         messagingSenderId: "682789156997",
         appId: "1:682789156997:web:9ce3303120851d37be91ec"
+
+
+ firebase emulators:start --import=./firebase-data --export-on-exit
+       
