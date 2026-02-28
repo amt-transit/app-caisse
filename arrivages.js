@@ -302,9 +302,10 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // --- AFFICHAGE ABIDJAN ---
-    // OPTIMISATION : On ne récupère que les 100 derniers pour éviter de faire ramer l'application
-    transactionsCollection.where("isDeleted", "!=", true).orderBy("isDeleted").orderBy("date", "desc").limit(100).onSnapshot(snapshot => {
-        allArrivals = snapshot.docs.map(doc => doc.data());
+    // MODIFICATION : On écoute désormais la collection 'livraisons' (En Cours) au lieu de 'transactions'
+    // pour refléter fidèlement l'onglet Livraison > En Cours.
+    livraisonsCollection.where("containerStatus", "==", "EN_COURS").orderBy("dateAjout", "desc").limit(100).onSnapshot(snapshot => {
+        allArrivals = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         renderAbidjanTable();
     }, error => console.error(error));
 
@@ -313,8 +314,9 @@ document.addEventListener('DOMContentLoaded', () => {
         
         const filtered = allArrivals.filter(item => {
             if (!term) return true;
-            return (item.reference || "").toLowerCase().includes(term) ||
-                   (item.nom || "").toLowerCase().includes(term) ||
+            // Adaptation des champs pour la recherche (livraisons vs transactions)
+            return (item.ref || "").toLowerCase().includes(term) ||
+                   (item.destinataire || item.expediteur || "").toLowerCase().includes(term) ||
                    (item.conteneur || "").toLowerCase().includes(term);
         });
 
@@ -332,8 +334,8 @@ document.addEventListener('DOMContentLoaded', () => {
             const cB = getNum(b.conteneur);
             if (cB !== cA) return cB - cA; // Tri décroissant Conteneur
 
-            const rA = getNum(a.reference);
-            const rB = getNum(b.reference);
+            const rA = getNum(a.ref);
+            const rB = getNum(b.ref);
             return rA - rB; // Tri CROISSANT Référence
         });
 
@@ -342,34 +344,45 @@ document.addEventListener('DOMContentLoaded', () => {
 
         arrivalsTableBody.innerHTML = '';
         if (toShow.length === 0) {
-            arrivalsTableBody.innerHTML = '<tr><td colspan="6">Aucun résultat.</td></tr>';
+            arrivalsTableBody.innerHTML = '<tr><td colspan="9">Aucun résultat.</td></tr>';
             return;
         }
         toShow.forEach(item => {
             const row = document.createElement('tr');
-            // NOUVELLE LOGIQUE COLONNES : Reference, Restant, Expéditeur, Destinataire, Adresse, Description
-            // Si Restant == 0, c'est probablement payé à Paris (Vert)
-            const description = item.description || item.article || item.typeColis || item.conteneur || '';
-            const adresse = item.adresseDestinataire || item.commune || '';
-            const destinataire = item.nomDestinataire || '';
-            const isPaid = (item.reste || 0) === 0; // Si 0 pile, c'est payé (vert). Si négatif, c'est une dette (rouge).
+            
+            // Adaptation des champs pour l'affichage (livraisons)
+            const date = item.dateAjout ? new Date(item.dateAjout).toLocaleDateString('fr-FR') : '-';
+            const description = item.description || '';
+            const adresse = item.lieuLivraison || item.commune || '';
+            const destinataire = item.destinataire || '';
+            const expediteur = item.expediteur || '';
+            
+            // Gestion du montant (Restant)
+            // Dans livraisons, 'montant' est une chaine qui peut contenir "CFA"
+            const montantStr = item.montant || '0';
+            const montantVal = parseFloat(montantStr.replace(/[^\d]/g, '')) || 0;
+            
+            // Si montantVal > 0, c'est un reste à payer (Rouge). Sinon c'est payé (Vert).
+            const isPaid = montantVal === 0;
+            const colorStyle = isPaid ? 'color:#28a745; font-weight:bold;' : 'color:#dc3545; font-weight:bold;';
 
             // Logique WhatsApp (Relance Dette)
             let waBtn = '';
-            if ((item.reste || 0) < 0) {
-                const debtAmount = Math.abs(item.reste);
-                const message = `Bonjour ${destinataire || 'Client'}, sauf erreur de notre part, le solde restant à payer pour le colis ${item.reference} est de ${formatCFA(debtAmount)}. Merci.`;
+            if (!isPaid && item.numero) {
+                let phone = item.numero.replace(/[^\d]/g, '');
+                if (phone.length === 10) phone = '225' + phone;
+                const message = `Bonjour ${destinataire || 'Client'}, votre colis ${item.ref} est arrivé. Reste à payer : ${montantStr}. Merci.`;
                 const waLink = `https://wa.me/?text=${encodeURIComponent(message)}`;
                 waBtn = ` <a href="${waLink}" target="_blank" style="text-decoration:none; font-size:16px; margin-left:5px;" title="Relancer sur WhatsApp">📱</a>`;
             }
 
             row.innerHTML = `
-                <td>${item.date}</td>
-                <td>${item.conteneur}</td>
-                <td>${item.reference}</td>
-                <td style="font-weight:bold; color:${isPaid ? '#28a745' : ((item.reste||0) < 0 ? '#dc3545' : '#28a745')}">${formatCFA(item.reste)}</td>
-                <td>${item.nom}${waBtn}</td>
-                <td>${destinataire}</td>
+                <td>${date}</td>
+                <td>${item.conteneur || '-'}</td>
+                <td>${item.ref}</td>
+                <td style="${colorStyle}">${montantStr}</td>
+                <td>${expediteur}</td>
+                <td>${destinataire}${waBtn}</td>
                 <td>${item.numero || ''}</td>
                 <td>${adresse}</td>
                 <td>${description}</td>
@@ -422,7 +435,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     const rows = results.data;
                     const batch = db.batch();
                     let count = 0, log = "";
-                    const TAUX = 656;
+                    const TAUX = 1;
 
                     for (const row of rows) {
                         // NOUVELLE LOGIQUE CSV PARIS : DATE DU TRANSFERT, REFERENCE, EXPEDITEUR, PRIX, DESTINATEUR

@@ -11,7 +11,7 @@
     <header class="app-header">
         <img src="LOGOAMT.png" alt="Logo" class="app-logo">
         <h1>Panneau Super Admin</h1>
-        <button class="logout-btn" style="position: absolute; right: 20px;">Déconnexion</button>
+        <button id="logoutBtn" style="position: absolute; right: 20px;" class="logout-btn">Déconnexion</button>
     </header>
 
     <nav class="navigation">
@@ -66,21 +66,7 @@
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
-    <script>
-        const firebaseConfig = {
-            apiKey: "AIzaSyA255n3XWDRKaYZ9kwOYkfovf5lRexoCA4",
-            authDomain: "caisse-amt-perso.firebaseapp.com",
-            projectId: "caisse-amt-perso",
-            storageBucket: "caisse-amt-perso.firebasestorage.app",
-            messagingSenderId: "682789156997",
-            appId: "1:682789156997:web:9ce3303120851d37be91ec"
-        };
-        firebase.initializeApp(firebaseConfig);
-        const db = firebase.firestore();
-        document.querySelector('.logout-btn').addEventListener('click', () => {
-            if (confirm("Voulez-vous vous déconnecter ?")) firebase.auth().signOut();
-        });
-    </script>
+    <script src="firebase-init.js"></script>
     <script src="auth-guard.js"></script>
     <script src="admin-panel.js"></script>
     <script src="utils.js"></script>

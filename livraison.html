@@ -67,10 +67,11 @@
                     <button class="btn btn-small btn-success" onclick="setActiveContainer()">OK</button>
             </div>
             <div id="toolbar-EN_COURS" class="tab-toolbar" style="display: flex; gap: 10px; align-items: center;">
-                <label class="btn btn-small">📊 Import <input type="file" accept=".xlsx,.xls" onchange="importExcel(event)"></label>
+                <label class="btn btn-small">📊 Import <input type="file" accept=".xlsx,.xls,.csv" onchange="importExcel(event)"></label>
                 <button class="btn btn-small" onclick="openProgramModal()">📅 Programmer</button>
                 <button class="btn btn-small" onclick="openAssignContainerModal()">📦 Attribuer</button>
                 <button class="btn btn-small" onclick="openBulkStatusModal()">🔄 Statut</button>
+                <button class="btn btn-small" onclick="forceSyncTransactions()" style="background-color: #8b5cf6; color: white;">🔄 Synchro Saisie</button>
                 <button class="btn btn-small btn-danger" onclick="deleteSelectedDeliveries()">🗑️ Supprimer</button>
                 <button class="btn btn-small btn-success" onclick="exportToExcel()">📥 Export</button>
                 <button class="btn btn-small" onclick="showAddModal()">➕ Ajouter</button>
@@ -78,14 +79,14 @@
                 <button class="btn btn-small" onclick="openArchivesModal()">🗄️ Archives</button>
             </div>
             <div id="toolbar-A_VENIR" class="tab-toolbar" style="display: none; gap: 10px;">
-                <label class="btn btn-small">📊 Import <input type="file" accept=".xlsx,.xls" onchange="importExcel(event)"></label>
+                <label class="btn btn-small">📊 Import <input type="file" accept=".xlsx,.xls,.csv" onchange="importExcel(event)"></label>
                 <button class="btn btn-small" onclick="openAssignContainerModal()">📦 Attribuer</button>
                 <button class="btn btn-small btn-danger" onclick="deleteSelectedDeliveries()">🗑️ Supprimer</button>
                 <button class="btn btn-small btn-success" onclick="exportToExcel()">📥 Export</button>
                 <button class="btn btn-small" onclick="showAddModal()">➕ Ajouter</button>
             </div>
             <div id="toolbar-PARIS" class="tab-toolbar" style="display: none; gap: 10px;">
-                <label class="btn btn-small">📊 Import <input type="file" accept=".xlsx,.xls" onchange="importExcel(event)"></label>
+                <label class="btn btn-small">📊 Import <input type="file" accept=".xlsx,.xls,.csv" onchange="importExcel(event)"></label>
                 <button class="btn btn-small btn-danger" onclick="deleteSelectedDeliveries()">🗑️ Supprimer</button>
                 <button class="btn btn-small btn-success" onclick="exportToExcel()">📥 Export</button>
                 <button class="btn btn-small" onclick="showAddModal()">➕ Ajouter</button>
@@ -323,6 +324,45 @@
         <datalist id="sharedLocationsList"></datalist>
     </div>
 
+    <!-- Modal Progression Import -->
+    <div id="importProgressModal" class="modal" style="z-index: 2000;">
+        <div class="modal-content" style="max-width: 400px; text-align: center; padding: 30px;">
+            <h3 style="margin-top: 0; color: #333;">Importation en cours...</h3>
+            <div style="margin: 20px 0; background-color: #f3f4f6; border-radius: 10px; height: 20px; width: 100%; overflow: hidden; border: 1px solid #e5e7eb;">
+                <div id="importProgressBar" style="background-color: #10b981; height: 100%; width: 0%; transition: width 0.3s ease;"></div>
+            </div>
+            <p id="importProgressText" style="margin: 0; color: #6b7280; font-weight: bold;">0%</p>
+            <p style="font-size: 0.85em; color: #9ca3af; margin-top: 10px;">Veuillez ne pas fermer la page.</p>
+        </div>
+    </div>
+
+    <!-- Modal Résultat Import -->
+    <div id="importResultModal" class="modal" style="z-index: 2000;">
+        <div class="modal-content" style="max-width: 500px;">
+            <div class="modal-header">
+                <h2 style="margin: 0;">Rapport d'Importation</h2>
+                <span class="close-modal" onclick="document.getElementById('importResultModal').classList.remove('active')">&times;</span>
+            </div>
+            <div id="importResultContent" style="padding: 20px; font-size: 1.1em; line-height: 1.6;"></div>
+            <div style="text-align: right; margin-top: 10px;">
+                <button class="btn btn-success" onclick="document.getElementById('importResultModal').classList.remove('active')">Fermer</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Choix Suppression (En Cours) -->
+    <div id="deleteChoiceModal" class="modal" style="z-index: 2001;">
+        <div class="modal-content" style="max-width: 400px; text-align: center; padding: 30px;">
+            <h3 style="margin-top: 0; color: #333;">Action de Suppression</h3>
+            <p style="color: #666; margin-bottom: 25px;">Que voulez-vous faire de ces colis ?</p>
+            <div style="display: flex; flex-direction: column; gap: 10px;">
+                <button class="btn btn-warning" onclick="confirmDeleteAction('MOVE')" style="justify-content: center;">🚢 Renvoyer vers "À VENIR"</button>
+                <button class="btn btn-danger" onclick="confirmDeleteAction('DELETE')" style="justify-content: center;">🗑️ Supprimer Définitivement</button>
+                <button class="btn" style="background: #e5e7eb; color: #333; justify-content: center;" onclick="closeDeleteChoiceModal()">Annuler</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Écran de chargement Import -->
     <div id="loadingOverlay" class="loading-overlay" style="display: none;">
         <div class="loading-spinner" style="width: 60px; height: 60px; border-width: 6px;"></div>
@@ -332,21 +372,7 @@
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
-    <script>
-        const firebaseConfig = {
-            apiKey: "AIzaSyA255n3XWDRKaYZ9kwOYkfovf5lRexoCA4",
-            authDomain: "caisse-amt-perso.firebaseapp.com",
-            projectId: "caisse-amt-perso",
-            storageBucket: "caisse-amt-perso.firebasestorage.app",
-            messagingSenderId: "682789156997",
-            appId: "1:682789156997:web:9ce3303120851d37be91ec"
-        };
-        firebase.initializeApp(firebaseConfig);
-        const db = firebase.firestore();
-        document.getElementById('logoutBtn').addEventListener('click', () => {
-            if (confirm("Voulez-vous vous déconnecter ?")) firebase.auth().signOut();
-        });
-    </script>
+    <script src="firebase-init.js"></script>
     <script src="auth-guard.js"></script>
     <script src="livraison/livraison.js"></script>
     <script src="utils.js"></script>

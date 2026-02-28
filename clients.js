@@ -4,7 +4,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     const transactionsCollection = db.collection("transactions");
-    const parisManifestCollection = db.collection("paris_manifest");
+    const livraisonsCollection = db.collection("livraisons"); // Remplacement de paris_manifest par livraisons
 
     const clientSearchInput = document.getElementById('clientSearch');
     const clientsList = document.getElementById('clientsList');
@@ -34,7 +34,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     let allClientNames = new Set();
     let allTransactionsCache = [];
-    let allParisManifestCache = [];
+    let allLivraisonsCache = []; // Renommé pour clarté
     let geoChartInstance = null;
     let financeChartInstance = null;
     let timeChartInstance = null;
@@ -74,15 +74,15 @@ document.addEventListener('DOMContentLoaded', async () => {
         topClientsTableBody.innerHTML = '<tr><td colspan="4">Chargement des données...</td></tr>';
         
         // Charger les noms pour l'autocomplete
-        const parisSnap = await parisManifestCollection.limit(2000).get();
-        allParisManifestCache = parisSnap.docs.map(doc => doc.data());
+        const livraisonsSnap = await livraisonsCollection.orderBy("dateAjout", "desc").limit(2000).get();
+        allLivraisonsCache = livraisonsSnap.docs.map(doc => doc.data());
         
         const transSnap = await transactionsCollection.where("isDeleted", "!=", true).limit(2000).get();
         allTransactionsCache = transSnap.docs.map(doc => doc.data());
 
         // Remplir la liste des noms
         // MODIFICATION : On indexe les Destinataires en priorité
-        allParisManifestCache.forEach(d => { if(d.nomDestinataire) allClientNames.add(d.nomDestinataire.trim()); });
+        allLivraisonsCache.forEach(d => { if(d.destinataire) allClientNames.add(d.destinataire.trim()); });
         allTransactionsCache.forEach(d => { 
             if(d.nomDestinataire) allClientNames.add(d.nomDestinataire.trim());
             else if(d.nom) allClientNames.add(d.nom.trim()); 
@@ -144,21 +144,30 @@ document.addEventListener('DOMContentLoaded', async () => {
             clientStats[name].count++;
         });
 
-        // B. Traitement Manifeste (En Route)
-        allParisManifestCache.forEach(data => {
-            if (!isDateInPeriod(data.dateParis)) return;
+        // B. Traitement Livraisons (En Route : Paris / À Venir)
+        // On ne prend que ce qui n'est PAS encore en transaction (donc pas EN_COURS ni LIVRE)
+        allLivraisonsCache.forEach(data => {
+            if (data.containerStatus === 'EN_COURS' || data.containerStatus === 'LIVRE') return;
+
+            if (!isDateInPeriod(data.dateAjout)) return;
 
             // MODIFICATION : Groupement par Destinataire
-            const name = (data.nomDestinataire || "Client Inconnu").trim().toUpperCase();
+            const name = (data.destinataire || "Client Inconnu").trim().toUpperCase();
             if (name === "CLIENT INCONNU" || name === "") return;
 
             if (!clientStats[name]) clientStats[name] = { count: 0, total: 0, nameStr: name, lastSender: '-', lastAddr: '-' };
 
-            // Paris Manifeste est plus riche en infos destinataire
-            if (data.nomClient) clientStats[name].lastSender = data.nomClient; // On stocke l'expéditeur ici
-            if (data.adresseDestinataire) clientStats[name].lastAddr = data.adresseDestinataire;
+            // Livraisons est riche en infos destinataire
+            if (data.expediteur) clientStats[name].lastSender = data.expediteur;
+            if (data.lieuLivraison) clientStats[name].lastAddr = data.lieuLivraison;
 
-            clientStats[name].total += (data.prixCFA || 0);
+            // Calcul Montant (Prix Original ou Montant/Reste)
+            let amount = 0;
+            // On essaie de récupérer le prix total (prixOriginal) sinon le montant (qui peut être le reste)
+            if (data.prixOriginal) amount = parseFloat(String(data.prixOriginal).replace(/[^\d]/g, '')) || 0;
+            if (amount === 0 && data.montant) amount = parseFloat(String(data.montant).replace(/[^\d]/g, '')) || 0;
+
+            clientStats[name].total += amount;
             clientStats[name].count++;
         });
 
@@ -240,21 +249,26 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         // On peut filtrer nos caches locaux c'est plus rapide !
         // MODIFICATION : Filtre sur le Destinataire
-        const parisData = allParisManifestCache.filter(d => (d.nomDestinataire||"").trim().toUpperCase() === clientName.toUpperCase());
+        const livraisonsData = allLivraisonsCache.filter(d => (d.destinataire||"").trim().toUpperCase() === clientName.toUpperCase());
         const abidjanData = allTransactionsCache.filter(d => (d.nomDestinataire||d.nom||"").trim().toUpperCase() === clientName.toUpperCase());
 
         let totalSpent = 0;
         let shipments = [];
         let sendersMap = {}; // On analyse les expéditeurs maintenant
 
-        parisData.forEach(item => {
-            totalSpent += (item.prixCFA || 0);
-            const sender = item.nomClient || "Non spécifié";
+        livraisonsData.forEach(item => {
+            // On ne compte que ce qui est en route pour éviter les doublons avec transactions
+            if (item.containerStatus === 'EN_COURS' || item.containerStatus === 'LIVRE') return;
+
+            let amount = parseFloat(String(item.prixOriginal || item.montant || '0').replace(/[^\d]/g, '')) || 0;
+            totalSpent += amount;
+            
+            const sender = item.expediteur || "Non spécifié";
             
             if (!sendersMap[sender]) sendersMap[sender] = { count: 0 };
             sendersMap[sender].count++;
             
-            shipments.push({ date: item.dateParis, ref: item.reference, type: item.typeColis || "Colis", otherParty: sender, source: "En route (Paris)" });
+            shipments.push({ date: (item.dateAjout || "").split('T')[0], ref: item.ref, type: item.description || "Colis", otherParty: sender, source: `En route (${item.containerStatus})` });
         });
 
         abidjanData.forEach(item => {

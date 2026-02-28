@@ -6,11 +6,20 @@ document.addEventListener('DOMContentLoaded', () => {
     const passwordInput = document.getElementById('password');
     const loginError = document.getElementById('loginError');
 
-    firebase.auth().onAuthStateChanged(user => {
-        if (user) window.location.href = 'index.html';
+    // CORRECTION : On ne redirige QUE si le profil existe déjà
+    // Cela évite de couper l'herbe sous le pied à la création automatique
+    firebase.auth().onAuthStateChanged(async user => {
+        if (user) {
+            try {
+                const doc = await db.collection("users").doc(user.uid).get(); 
+                if (doc.exists) {
+                    window.location.href = 'index.html';
+                }
+            } catch (e) { console.error(e); }
+        }
     });
 
-    loginBtn.addEventListener('click', () => {
+    loginBtn.addEventListener('click', async () => {
         const username = usernameInput.value.trim();
         const password = passwordInput.value;
 
@@ -19,30 +28,61 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
+        // Feedback visuel
+        loginBtn.disabled = true;
+        loginBtn.textContent = "Vérification...";
+
         // ON RECRÉE L'EMAIL TECHNIQUE
         const cleanUsername = username.toLowerCase().replace(/\s+/g, '');
-        const emailTechnique = `${cleanUsername}@amt.local`;
+        let emailTechnique = cleanUsername;
+        if (!cleanUsername.includes('@')) {
+            emailTechnique = `${cleanUsername}@amt.local`;
+        }
 
         console.log("Tentative de connexion avec :", emailTechnique); // Pour débugger
 
-        // Dans login.js, après signInWithEmailAndPassword
-        firebase.auth().signInWithEmailAndPassword(emailTechnique, password)
-        .then((userCredential) => {
+        try {
+            // FORCE LA PERSISTANCE DE SESSION (Important pour le local)
+            await firebase.auth().setPersistence(firebase.auth.Auth.Persistence.LOCAL);
+
+            const userCredential = await firebase.auth().signInWithEmailAndPassword(emailTechnique, password);
+            const uid = userCredential.user.uid;
+
             // Vérification supplémentaire : le document users existe-t-il ?
-            return db.collection("users").doc(userCredential.user.uid).get();
-        })
-        .then((userDoc) => {
-            if (!userDoc.exists) {
-            // Oups, l'utilisateur a un compte Auth mais pas de profil Firestore
-            firebase.auth().signOut();
-            showError("Compte utilisateur corrompu. Contactez l'admin.");
-            } else {
-            window.location.href = 'index.html';
+            let userDoc = await db.collection("users").doc(uid).get();
+
+            // --- AUTO-RÉPARATION EN LOCAL ---
+            // Si on est en local et que le document n'existe pas, on le crée automatiquement
+            if (!userDoc.exists && (location.hostname === "localhost" || location.hostname === "127.0.0.1")) {
+                console.log("🔧 Mode Local : Création automatique du profil Admin...");
+                await db.collection("users").doc(uid).set({
+                    email: emailTechnique,
+                    role: 'super_admin',
+                    displayName: 'Admin Local',
+                    createdAt: new Date().toISOString()
+                });
+                userDoc = await db.collection("users").doc(uid).get(); // On recharge le doc créé
+                alert("✅ Profil Admin créé automatiquement pour le mode local !");
             }
-        })
-        .catch((error) => {
+            // --------------------------------
+
+            if (!userDoc.exists) {
+                // Oups, l'utilisateur a un compte Auth mais pas de profil Firestore (Cas Prod)
+                await firebase.auth().signOut();
+                showError("Compte utilisateur corrompu. Contactez l'admin.");
+                loginBtn.disabled = false;
+                loginBtn.textContent = "Se connecter";
+            } else {
+                // Petit délai pour assurer la sauvegarde de la session avant redirection
+                setTimeout(() => window.location.href = 'index.html', 500);
+            }
+
+        } catch (error) {
+            console.error(error);
             showError("Nom d'utilisateur ou mot de passe incorrect.");
-        });
+            loginBtn.disabled = false;
+            loginBtn.textContent = "Se connecter";
+        }
     });
 
     function showError(message) {

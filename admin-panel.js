@@ -133,6 +133,10 @@ document.addEventListener('DOMContentLoaded', async () => {
             try {
                 // Initialisation d'une app secondaire pour créer l'user sans déconnecter l'admin
                 const secondaryApp = firebase.initializeApp(firebaseConfig, "Secondary");
+                if (location.hostname === "localhost" || location.hostname === "127.0.0.1") {
+                    secondaryApp.auth().useEmulator("http://localhost:9099");
+                }
+
                 const userCred = await secondaryApp.auth().createUserWithEmailAndPassword(email, password);
                 const uid = userCred.user.uid;
 

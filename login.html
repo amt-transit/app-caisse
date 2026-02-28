@@ -63,6 +63,7 @@
 
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
     <script>
         const firebaseConfig = {
             apiKey: "AIzaSyA255n3XWDRKaYZ9kwOYkfovf5lRexoCA4",
@@ -73,6 +74,11 @@
             appId: "1:682789156997:web:9ce3303120851d37be91ec"
         };
         firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
+        if (location.hostname === "localhost" || location.hostname === "127.0.0.1") {
+            firebase.auth().useEmulator("http://localhost:9099");
+            db.useEmulator("localhost", 8080);
+        }
     </script>
     <script src="login.js"></script>
     <script>

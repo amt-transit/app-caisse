@@ -118,7 +118,7 @@ function initRealtimeSync() {
     // 2. Écouteur sur la collection 'livraisons'
     db.collection(CONSTANTS.COLLECTION)
         .orderBy('dateAjout', 'desc')
-        .limit(500)
+        .limit(2000) // Augmentation de la limite pour voir plus de données
         .onSnapshot((snapshot) => {
             deliveries = [];
             snapshot.forEach((doc) => {
@@ -554,13 +554,25 @@ function parsePDFText(text) {
 
 // Import Excel
 function importExcel(event) {
+    console.log("Début importExcel");
     if (isImporting) return;
     const file = event.target.files[0];
     if (!file) return;
+
+    if (typeof XLSX === 'undefined') {
+        alert("Erreur CRITIQUE : La bibliothèque Excel n'est pas chargée.\nVérifiez votre connexion internet et rechargez la page.");
+        return;
+    }
     
-    // Afficher l'écran de chargement
+    // Afficher le Modal de Progression (ou l'overlay si modal absent)
+    const progressModal = document.getElementById('importProgressModal');
     const overlay = document.getElementById('loadingOverlay');
-    if (overlay) {
+    
+    if (progressModal) {
+        progressModal.classList.add('active');
+        document.getElementById('importProgressBar').style.width = '0%';
+        document.getElementById('importProgressText').textContent = `Lecture de ${file.name}...`;
+    } else if (overlay) {
         overlay.querySelector('.loading-text').textContent = `Importation de ${file.name}...`;
         overlay.style.display = 'flex';
     }
@@ -578,42 +590,117 @@ function importExcel(event) {
                 // Lecture brute pour détecter le format (Liste simple ou Tableau structuré)
                 const rawData = XLSX.utils.sheet_to_json(firstSheet, { header: 1 });
                 let imported = [];
-                const refRegex = /[A-Z]{2}-\d{3}-[A-Z0-9]+/i;
+                // Regex améliorée : Accepte tiret (-), underscore (_), espace ( ), point (.) comme séparateurs
+                const refRegex = /[A-Z]{2}[-_\s.]\d{3}[-_\s.][A-Z0-9]+/i;
 
-                // Vérifie si la première ligne contient un en-tête explicite
-                const hasHeader = rawData.length > 0 && rawData[0].some(cell => 
-                    ['REF', 'REFERENCE', 'CODE'].includes(String(cell).toUpperCase().trim())
-                );
+                // Recherche de la ligne d'en-tête (Scan des 20 premières lignes)
+                let headerRowIndex = -1;
+                // Liste élargie des mots-clés pour l'en-tête
+                const headerKeywords = ['REF', 'REFERENCE', 'CODE', 'DATE DU TRANSFERT', 'N° COLIS', 'NUMERO COLIS', 'TRACKING', 'N°', 'MONTANT', 'PRIX', 'EXPEDITEUR', 'DESTINATAIRE'];
 
-                if (!hasHeader) {
-                    // CAS 1 : Liste simple (pas d'en-tête) -> On scanne tout pour trouver des références
-                    imported = rawData.flat().map((cell, i) => {
-                        const val = String(cell || '').trim();
-                        if (refRegex.test(val)) {
-                            return {
-                                id: Date.now() + i,
-                                ref: val.toUpperCase(),
-                                montant: '', expediteur: '', commune: 'AUTRE', lieuLivraison: '', destinataire: '', description: '',
-                                status: 'EN_ATTENTE', dateAjout: new Date().toISOString()
-                            };
+                for (let i = 0; i < Math.min(rawData.length, 20); i++) {
+                    if (rawData[i] && rawData[i].some(cell => 
+                        headerKeywords.includes(String(cell).toUpperCase().trim())
+                    )) {
+                        headerRowIndex = i;
+                        break;
+                    }
+                }
+
+                if (headerRowIndex === -1) {
+                    // CAS 1 : Pas d'en-tête détecté -> ANALYSE INTELLIGENTE PAR LIGNE
+                    // On cherche la structure dans chaque ligne indépendamment
+                    imported = rawData.map((row, i) => {
+                        if (!Array.isArray(row) || row.length === 0) return null;
+                        
+                        // 1. Trouver la Référence (Priorité absolue)
+                        let ref = '';
+                        let refIdx = -1;
+                        
+                        for (let j = 0; j < row.length; j++) {
+                            const val = String(row[j] || '').trim().toUpperCase();
+                            if (refRegex.test(val)) {
+                                ref = val;
+                                refIdx = j;
+                                break;
+                            }
                         }
-                        return null;
+                        
+                        if (!ref) return null; // Pas de ref sur cette ligne -> on ignore
+
+                        // 2. Trouver les autres infos autour de la Ref
+                        let montant = '';
+                        let expediteur = '';
+                        let destinataire = '';
+                        let lieu = '';
+                        let description = '';
+                        let numero = '';
+
+                        // On analyse les autres cellules de la ligne
+                        const otherCells = row.map((c, idx) => ({ val: String(c || '').trim(), idx })).filter(c => c.idx !== refIdx && c.val !== '');
+                        
+                        for (const cell of otherCells) {
+                            const val = cell.val;
+                            
+                            // Détection Montant (Chiffres + evt CFA)
+                            // On nettoie les sauts de ligne pour le test
+                            const cleanVal = val.replace(/[\n\r]+/g, ' ');
+                            if (!montant && /^[\d\s.,]+(?:CFA)?$/i.test(cleanVal) && val.replace(/[^\d]/g, '').length > 0) {
+                                montant = val;
+                                continue;
+                            }
+                            
+                            // Détection Numéro
+                            if (!numero && /(?:(?:\+|00)225[\s.-]?)?(?:01|05|07|0)\d(?:[\s.-]?\d{2}){4}/.test(val.replace(/\s/g,''))) {
+                                numero = val;
+                                continue;
+                            }
+
+                            // Détection Lieu (Communes connues)
+                            const upperVal = val.toUpperCase();
+                            if (!lieu && Object.keys(CONSTANTS.COMMUNES).some(c => upperVal.includes(c))) {
+                                lieu = val;
+                                continue;
+                            }
+
+                            // Reste : Expéditeur / Destinataire / Description (Heuristique positionnelle)
+                            if (!expediteur) { expediteur = val; continue; }
+                            if (!destinataire) { destinataire = val; continue; }
+                            if (!description) { description = val; continue; }
+                        }
+
+                        return {
+                            id: Date.now() + i,
+                            ref: ref,
+                            montant: montant,
+                            expediteur: fixEncoding(expediteur),
+                            commune: detectCommune(fixEncoding(lieu || expediteur || destinataire)),
+                            lieuLivraison: fixEncoding(lieu),
+                            destinataire: fixEncoding(destinataire),
+                            description: fixEncoding(description),
+                            numero: numero,
+                            status: 'EN_ATTENTE',
+                            dateAjout: new Date().toISOString(),
+                            quantite: 1
+                        };
                     }).filter(d => d !== null);
                 } else {
                     // CAS 2 : Tableau structuré avec en-têtes
-                    const jsonData = XLSX.utils.sheet_to_json(firstSheet);
+                    const jsonData = XLSX.utils.sheet_to_json(firstSheet, { range: headerRowIndex });
                     imported = jsonData.map((row, i) => {
                         const r = {};
                         Object.keys(row).forEach(k => r[k.toUpperCase().trim()] = row[k]);
                         return {
                             id: Date.now() + i,
                         ref: String(r.REF || r.REFERENCE || r.CODE || '').trim().toUpperCase(), // Force Majuscule pour correspondance
-                            montant: String(r.RESTANT || r.MONTANT || r.PRIX || r['RESTANT A PAYER'] || ''),
+                            prixOriginal: String(r.PRIX || r.VALEUR || r['PRIX TOTAL'] || r['MONTANT TOTAL'] || ''), // Capture du Prix Total pour calcul
+                            montant: String(r.RESTANT || r.MONTANT || r.PRIX || r['RESTANT A PAYER'] || r['RENSTANT A PAYER'] || r['MONTANT A PAYER'] || ''),
                             expediteur: fixEncoding(String(r.EXPEDITEUR || r['EXPÉDITEUR'] || r.EXP || '')),
-                            commune: detectCommune(fixEncoding(String(r.LIVRE || r.LIEU || r.COMMUNE || r['LIEU DE LIVRAISON'] || ''))),
-                            lieuLivraison: fixEncoding(String(r.LIVRE || r.LIEU || r['LIEU DE LIVRAISON'] || '')),
+                            commune: detectCommune(fixEncoding(String(r.LIVRE || r.LIEU || r.COMMUNE || r['LIEU DE LIVRAISON'] || r.ADRESSE || r.ADRESSES || ''))),
+                            lieuLivraison: fixEncoding(String(r.LIVRE || r.LIEU || r['LIEU DE LIVRAISON'] || r.ADRESSE || r.ADRESSES || '')),
                             destinataire: fixEncoding(String(r.DESTINATAIRE || r.CLIENT || r.DESTINATEUR || '')),
                             description: fixEncoding(String(r.DESCRIPTION || r.NATURE || r['TYPE COLIS'] || '')),
+                            info: fixEncoding(String(r.INFO || r.INFORMATION || r.COMMENTAIRE || '')),
                             numero: String(r.NUMERO || r.TEL || r.TELEPHONE || r.CONTACT || ''),
                             quantite: parseInt(r.QTE || r.QUANTITE || r.QUANTITÉ || 1), // Récupération Quantité
                             status: 'EN_ATTENTE',
@@ -623,7 +710,21 @@ function importExcel(event) {
                 }
                 
                 // Enrichissement automatique des adresses (Auto-Address)
-                for (const item of imported) {
+                for (let i = 0; i < imported.length; i++) {
+                    const item = imported[i];
+
+                    // Feedback visuel tous les 5 items pour ne pas bloquer l'UI et montrer la progression
+                    if (i % 5 === 0) {
+                        const pct = Math.round(((i + 1) / imported.length) * 100);
+                        if (progressModal) {
+                             document.getElementById('importProgressBar').style.width = `${pct}%`;
+                             document.getElementById('importProgressText').textContent = `Analyse ligne ${i + 1}/${imported.length} (${pct}%)`;
+                        } else if (overlay) {
+                             overlay.querySelector('.loading-text').textContent = `Analyse ligne ${i + 1}/${imported.length}...`;
+                        }
+                        await new Promise(r => setTimeout(r, 0));
+                    }
+
                     if ((!item.lieuLivraison || !item.lieuLivraison.trim()) && item.destinataire) {
                         const foundAddr = await findAddressForRecipient(item.destinataire);
                         if (foundAddr) {
@@ -650,14 +751,19 @@ function importExcel(event) {
                     showPreviewModal(imported);
                     showToast('Fichier analysé avec succès !', 'success');
                 } else {
-                    showToast('Aucune donnée valide trouvée', 'warning');
+                    let msg = "⚠️ Aucune donnée valide trouvée.\n\nVérifiez que votre fichier contient une colonne 'REF' ou 'REFERENCE'.";
+                    if (rawData.length > 0 && rawData[0].length === 1) {
+                        msg += "\n\n💡 DIAGNOSTIC : Il semble que votre fichier CSV ne soit pas lu correctement (tout est dans une seule colonne). Essayez de l'enregistrer en format Excel (.xlsx) avant d'importer.";
+                    }
+                    alert(msg);
                 }
             } catch (error) {
                 console.error(error);
-                showToast('Erreur lors de l\'import Excel', 'error');
+                alert("Erreur technique lors de l'importation :\n" + error.message);
             } finally {
                 // Masquer l'écran de chargement
                 if (overlay) overlay.style.display = 'none';
+                if (progressModal) progressModal.classList.remove('active');
                 isImporting = false;
             }
         }, 100);
@@ -760,7 +866,17 @@ async function confirmImport() {
     };
 
     for (const item of pendingImport) {
-        const ref = item.ref.toUpperCase();
+        let ref = item.ref.toUpperCase();
+        
+        // LOGIQUE DE REGROUPEMENT (En Cours) : On nettoie les suffixes _1_512 pour grouper sur la racine
+        // Ex: KA-086-D41_1_512 -> KA-086-D41
+        if (containerStatus === 'EN_COURS') {
+             const match = ref.match(/^([A-Z]{2}[-_\s.]\d{3}[-_\s.][A-Z0-9]+)(?:_.*)?$/);
+             if (match) {
+                 ref = match[1]; // On garde juste la racine
+             }
+        }
+
         if (!ref) continue;
 
         if (uniqueImports.has(ref)) {
@@ -769,7 +885,16 @@ async function confirmImport() {
             const originalLieu = existing.lieuLivraison;
 
             existing.montant = pickBest(existing.montant, item.montant);
-            existing.description = pickBest(existing.description, item.description);
+            
+            // FUSION DESCRIPTION (Concaténation pour ne rien perdre)
+            if (item.description && item.description.trim() !== "") {
+                if (!existing.description) existing.description = item.description;
+                else if (!existing.description.includes(item.description)) {
+                     existing.description = `${existing.description} - ${item.description}`;
+                }
+            }
+
+            existing.info = pickBest(existing.info, item.info);
             existing.expediteur = pickBest(existing.expediteur, item.expediteur);
             existing.destinataire = pickBest(existing.destinataire, item.destinataire);
             existing.lieuLivraison = pickBest(existing.lieuLivraison, item.lieuLivraison);
@@ -779,19 +904,40 @@ async function confirmImport() {
             if (existing.lieuLivraison !== originalLieu) {
                  existing.commune = detectCommune(existing.lieuLivraison);
             }
+            
+            // On met à jour la ref de l'objet existant (pour être sûr d'avoir la version courte)
+            existing.ref = ref;
         } else {
             // Première fois qu'on voit cette référence, on l'ajoute
-            uniqueImports.set(ref, { ...item });
+            uniqueImports.set(ref, { ...item, ref: ref });
         }
     }
     const finalImportList = Array.from(uniqueImports.values());
+
+    // Afficher le Modal de Progression
+    const progressModal = document.getElementById('importProgressModal');
+    if (progressModal) {
+        progressModal.classList.add('active');
+        document.getElementById('importProgressBar').style.width = '0%';
+        document.getElementById('importProgressText').textContent = 'Préparation des données...';
+    }
 
     // Préparation des opérations par lots (Batch Chunking)
     const operations = []; 
     let createdCount = 0;
     let updatedCount = 0;
     
-    for (const importItem of finalImportList) {
+    for (let i = 0; i < finalImportList.length; i++) {
+        const importItem = finalImportList[i];
+
+        // Feedback visuel Préparation (Mise à jour tous les 5 items pour fluidité)
+        if (progressModal && i % 5 === 0) {
+             const pct = Math.round(((i + 1) / finalImportList.length) * 100);
+             document.getElementById('importProgressBar').style.width = `${pct}%`;
+             document.getElementById('importProgressText').textContent = `Préparation ${i + 1}/${finalImportList.length} (${pct}%)`;
+             await new Promise(r => setTimeout(r, 0)); // Pause pour laisser l'interface se mettre à jour
+        }
+
         // Vérifier si la référence existe déjà dans la base de données (Insensible à la casse)
         const existingItem = deliveries.find(d => d.ref.toUpperCase() === importItem.ref.toUpperCase());
 
@@ -820,32 +966,52 @@ async function confirmImport() {
             const docRef = db.collection(CONSTANTS.COLLECTION).doc(existingItem.id);
             const updates = { containerStatus: containerStatus };
             
-            // --- FUSION INTELLIGENTE (Garder le mieux renseigné) ---
-            updates.montant = pickBest(existingItem.montant, importItem.montant);
-            updates.description = pickBest(existingItem.description, importItem.description);
-            updates.expediteur = pickBest(existingItem.expediteur, importItem.expediteur);
-            updates.destinataire = pickBest(existingItem.destinataire, importItem.destinataire);
-            updates.lieuLivraison = pickBest(existingItem.lieuLivraison, importItem.lieuLivraison);
-            updates.numero = pickBest(existingItem.numero, importItem.numero);
-
-            // Recalcul commune si le lieu a changé
-            if (updates.lieuLivraison !== existingItem.lieuLivraison) {
-                updates.commune = detectCommune(updates.lieuLivraison);
+            // --- SAUVEGARDE DU PRIX ORIGINAL (PARIS) ---
+            // Si le colis vient de PARIS (ou a un montant existant) et qu'on met à jour,
+            // on sauvegarde l'ancien montant comme "prixOriginal" s'il n'existe pas déjà.
+            // Cela permet de garder la trace du "Prix Total" même si le montant devient un "Reste à payer".
+            if (existingItem.montant && !existingItem.prixOriginal) {
+                // On nettoie le montant pour ne garder que le chiffre
+                updates.prixOriginal = existingItem.montant;
             }
 
-            // Gestion Conteneur / BL (Priorité : Input Global > Import Excel > Existant)
-            if (conteneur) updates.conteneur = conteneur;
-            else if (importItem.conteneur) updates.conteneur = importItem.conteneur;
-            
-            // LOGIQUE DE TRAÇABILITÉ (Paris -> A Venir -> En Cours)
             if (containerStatus === 'EN_COURS') {
+                // LOGIQUE SIMPLIFIÉE (Demande utilisateur) :
+                // On met à jour UNIQUEMENT la quantité (comptée dans le fichier importé) et le statut.
+                // On conserve les données existantes (Description, Expéditeur, etc.) sans fusionner.
+                
+                updates.quantite = importItem.quantite; // Quantité issue du comptage des racines dans l'import
+                
+                if (conteneur) updates.conteneur = conteneur;
+                else if (importItem.conteneur) updates.conteneur = importItem.conteneur;
+
                 if (existingItem.containerStatus === 'PARIS') {
                     updates.directFromParis = true; // ALERTE : A sauté l'étape "À Venir" (Client non prévenu)
                 } else if (existingItem.containerStatus === 'A_VENIR') {
                     updates.directFromParis = false; // Flux normal
                 }
                 updates.importedFromTransit = true;
-            } else if (containerStatus !== 'EN_COURS') {
+            } else {
+                // LOGIQUE STANDARD (Fusion) pour les autres onglets (PARIS, A_VENIR)
+                
+                // Pour le montant, on privilégie la nouvelle valeur importée (ex: Reste à payer dans A_VENIR)
+                if (importItem.montant && importItem.montant.trim() !== '') {
+                    updates.montant = importItem.montant;
+                } else {
+                    updates.montant = existingItem.montant;
+                }
+
+                updates.description = pickBest(existingItem.description, importItem.description);
+                updates.info = pickBest(existingItem.info, importItem.info);
+                updates.expediteur = pickBest(existingItem.expediteur, importItem.expediteur);
+                updates.destinataire = pickBest(existingItem.destinataire, importItem.destinataire);
+                updates.lieuLivraison = pickBest(existingItem.lieuLivraison, importItem.lieuLivraison);
+                updates.numero = pickBest(existingItem.numero, importItem.numero);
+                if (importItem.quantite && importItem.quantite !== existingItem.quantite) updates.quantite = importItem.quantite;
+                if (updates.lieuLivraison !== existingItem.lieuLivraison) updates.commune = detectCommune(updates.lieuLivraison);
+                if (conteneur) updates.conteneur = conteneur;
+                else if (importItem.conteneur) updates.conteneur = importItem.conteneur;
+                
                 updates.importedFromTransit = firebase.firestore.FieldValue.delete();
             }
             
@@ -876,7 +1042,32 @@ async function confirmImport() {
             const transQuery = await db.collection('transactions').where('reference', '==', importItem.ref).get();
             
             if (transQuery.empty) {
-                const price = parseFloat((importItem.montant || '0').replace(/[^\d]/g, '')) || 0;
+                // LOGIQUE FINANCIÈRE AVANCÉE (Comme Arrivages)
+                
+                let restant = 0;
+                let totalPrix = 0;
+
+                if (existingItem) {
+                    // CAS 1 : Données issues de l'historique (Paris -> A Venir -> En Cours)
+                    // Le montant actuel dans la fiche est le "Reste à payer" (mis à jour dans A_VENIR)
+                    restant = parseFloat((existingItem.montant || '0').replace(/[^\d]/g, '')) || 0;
+                    
+                    // Le prix total est le prix original (Paris). Si pas de prix original, on suppose que le reste est le prix total.
+                    const original = parseFloat((existingItem.prixOriginal || '0').replace(/[^\d]/g, '')) || 0;
+                    totalPrix = original > 0 ? original : restant;
+                } else {
+                    // CAS 2 : Import direct sans historique (Nouveau colis)
+                    restant = parseFloat((importItem.montant || '0').replace(/[^\d]/g, '')) || 0;
+                    totalPrix = parseFloat((importItem.prixOriginal || '0').replace(/[^\d]/g, '')) || 0;
+                    if (totalPrix === 0) totalPrix = restant;
+                }
+
+                // 4. Calcul du montant payé à Paris
+                let mParis = 0;
+                if (totalPrix > restant) {
+                    mParis = totalPrix - restant; // La différence a été payée
+                }
+
                 const transRef = db.collection('transactions').doc();
                 
                 operations.push({ type: 'set', ref: transRef, data: {
@@ -884,10 +1075,10 @@ async function confirmImport() {
                     reference: importItem.ref,
                     nom: importItem.destinataire || importItem.expediteur || 'Client', // Client principal
                     conteneur: conteneur || importItem.conteneur || '',
-                    prix: price,
-                    montantParis: 0,
+                    prix: totalPrix, // CORRECTION : Utilisation de la bonne variable
+                    montantParis: mParis,
                     montantAbidjan: 0,
-                    reste: -price, // Dette initiale
+                    reste: -restant, // La dette est exactement le montant restant
                     isDeleted: false,
                     description: importItem.description || '',
                     adresseDestinataire: importItem.lieuLivraison || '',
@@ -923,6 +1114,13 @@ async function confirmImport() {
     if (conteneur) {
         currentContainerName = conteneur;
         localStorage.setItem(CONSTANTS.STORAGE_KEYS.CONTAINER_NAME, currentContainerName);
+        
+        // FIX : Mise à jour du stockage spécifique à l'onglet cible pour éviter que switchTab ne l'écrase
+        if (containerStatus === 'EN_COURS' || containerStatus === 'A_VENIR') {
+            localStorage.setItem(`container_filter_${containerStatus}`, currentContainerName);
+            localStorage.setItem(`container_filter_${containerStatus}_active`, 'true'); // On active le filtre
+        }
+
         updateContainerTitle();
         // Mettre à jour le champ dans la toolbar aussi
         const activeInput = document.getElementById('activeContainerInput');
@@ -931,17 +1129,53 @@ async function confirmImport() {
 
     if (opCount > 0) batchPromises.push(batch.commit());
 
-    Promise.all(batchPromises).then(() => {
+    // Suivi de la progression des lots
+    const totalBatches = batchPromises.length;
+    let completedBatches = 0;
+
+    const trackedPromises = batchPromises.map(p => p.then(res => {
+        completedBatches++;
+        if (progressModal) {
+            const pct = Math.round((completedBatches / totalBatches) * 100);
+            document.getElementById('importProgressBar').style.width = `${pct}%`;
+            document.getElementById('importProgressText').textContent = `Enregistrement ${pct}% (${completedBatches}/${totalBatches} lots)`;
+        }
+        return res;
+    }));
+
+    Promise.all(trackedPromises).then(() => {
+        // Masquer la progression
+        if (progressModal) progressModal.classList.remove('active');
+
         // Si on importe dans l'autre onglet, on bascule dessus pour voir le résultat
         if (containerStatus !== currentTab) {
             switchTab(containerStatus);
         }
         
         closePreviewModal();
-        // Rapport détaillé pour confirmer l'ajout des infos complémentaires
-        alert(`Rapport d'importation :\n\n✅ ${createdCount} Nouveaux colis créés\n🔄 ${updatedCount} Colis mis à jour (Infos complétées)`);
+        
+        // Afficher le Rapport Détaillé (Modal) au lieu de l'alerte
+        const resultModal = document.getElementById('importResultModal');
+        if (resultModal) {
+            const content = document.getElementById('importResultContent');
+            content.innerHTML = `
+                <div style="display:flex; align-items:center; margin-bottom:15px; color:#065f46; background:#d1fae5; padding:10px; border-radius:8px;">
+                    <span style="font-size:1.5em; margin-right:15px;">✅</span>
+                    <div><strong>${createdCount}</strong> Nouveaux colis créés</div>
+                </div>
+                <div style="display:flex; align-items:center; color:#1e40af; background:#dbeafe; padding:10px; border-radius:8px;">
+                    <span style="font-size:1.5em; margin-right:15px;">🔄</span>
+                    <div><strong>${updatedCount}</strong> Colis mis à jour (Infos complétées)</div>
+                </div>
+            `;
+            resultModal.classList.add('active');
+        } else {
+            alert(`Rapport d'importation :\n\n✅ ${createdCount} Nouveaux colis créés\n🔄 ${updatedCount} Colis mis à jour`);
+        }
+
         pendingImport = []; // Nettoyage
     }).catch(err => {
+        if (progressModal) progressModal.classList.remove('active');
         console.error("Erreur Import:", err);
         if (err.code === 'resource-exhausted') {
             alert("⚠️ ALERTE QUOTA FIREBASE ATTEINT !\n\nVous avez dépassé la limite d'écriture quotidienne autorisée par Firebase (Plan Gratuit : 20 000 écritures/jour).\n\nL'enregistrement a été bloqué par le serveur. Veuillez réessayer demain (après minuit, heure du Pacifique) ou passer au plan Blaze.");
@@ -949,6 +1183,56 @@ async function confirmImport() {
             showToast("Erreur lors de l'enregistrement : " + err.message, 'error');
         }
     });
+}
+
+// --- FONCTION DE SYNCHRONISATION FORCÉE (Réparation) ---
+async function forceSyncTransactions() {
+    if (!confirm("Voulez-vous forcer la synchronisation des transactions ?\n\nCela va copier les Noms, Adresses et Numéros corrects de l'onglet 'En Cours' vers la Caisse (Saisie) pour corriger les erreurs.")) return;
+
+    const loadingToast = document.createElement('div');
+    loadingToast.className = 'toast';
+    loadingToast.textContent = "Synchronisation en cours...";
+    loadingToast.style.background = "#3b82f6";
+    document.body.appendChild(loadingToast);
+
+    try {
+        const enCoursItems = deliveries.filter(d => d.containerStatus === 'EN_COURS');
+        let batch = db.batch();
+        let count = 0;
+        let updatedCount = 0;
+
+        for (const item of enCoursItems) {
+            if (!item.ref) continue;
+
+            // On cherche la transaction correspondante
+            const q = await db.collection('transactions').where('reference', '==', item.ref).get();
+            
+            if (!q.empty) {
+                q.forEach(doc => {
+                    const t = doc.data();
+                    const updates = {};
+                    
+                    // On met à jour avec les données fiables de Livraison
+                    const newNom = item.destinataire || item.expediteur || 'Client';
+                    if (newNom && t.nom !== newNom) updates.nom = newNom;
+                    if (item.destinataire && t.nomDestinataire !== item.destinataire) updates.nomDestinataire = item.destinataire;
+                    if (item.lieuLivraison && t.adresseDestinataire !== item.lieuLivraison) updates.adresseDestinataire = item.lieuLivraison;
+                    if (item.numero && t.numero !== item.numero) updates.numero = item.numero;
+                    if (item.description && t.description !== item.description) updates.description = item.description;
+
+                    if (Object.keys(updates).length > 0) {
+                        batch.update(doc.ref, updates);
+                        updatedCount++;
+                        count++;
+                    }
+                });
+            }
+            if (count >= 400) { await batch.commit(); batch = db.batch(); count = 0; }
+        }
+        if (count > 0) await batch.commit();
+        loadingToast.remove();
+        alert(`✅ Synchronisation terminée !\n${updatedCount} fiches corrigées dans la Caisse.`);
+    } catch (e) { console.error(e); loadingToast.remove(); alert("Erreur : " + e.message); }
 }
 
 // Export Excel
@@ -1711,50 +1995,22 @@ function confirmAssignContainer() {
 
 // --- ACTIONS GROUPÉES (Suppression & Statut) ---
 
+let pendingDeleteContext = null;
+
 function deleteSelectedDeliveries() {
     if (selectedIds.size === 0) {
         showToast('Veuillez sélectionner au moins une livraison', 'error');
         return;
     }
 
-    // Si on est dans EN_COURS, on renvoie vers A_VENIR
+    // Si on est dans EN_COURS, on demande quoi faire (Renvoyer ou Supprimer)
     if (currentTab === 'EN_COURS') {
-        if (confirm(`Voulez-vous renvoyer ces ${selectedIds.size} colis vers l'onglet "À VENIR" ?`)) {
-            const batch = db.batch();
-            selectedIds.forEach(id => {
-                batch.update(db.collection(CONSTANTS.COLLECTION).doc(id), {
-                    containerStatus: 'A_VENIR',
-                    status: 'EN_ATTENTE',
-                    livreur: firebase.firestore.FieldValue.delete(),
-                    dateProgramme: firebase.firestore.FieldValue.delete(),
-                    importedFromTransit: firebase.firestore.FieldValue.delete(),
-                    directFromParis: firebase.firestore.FieldValue.delete()
-                });
-                // Suppression synchro transaction
-                const item = deliveries.find(d => d.id === id);
-                if (item && item.ref) deleteTransactionByRef(item.ref);
-            });
-            batch.commit().then(() => {
-                selectedIds.clear();
-                showToast('Colis renvoyés vers À VENIR', 'success');
-            });
-        }
+        openDeleteChoiceModal({ type: 'bulk' });
         return;
     }
     
-    if (confirm(`Voulez-vous vraiment supprimer ces ${selectedIds.size} livraisons ?`)) {
-        const batch = db.batch();
-        selectedIds.forEach(id => {
-            batch.delete(db.collection(CONSTANTS.COLLECTION).doc(id));
-            // Suppression synchro transaction
-            const item = deliveries.find(d => d.id === id);
-            if (item && item.ref) deleteTransactionByRef(item.ref);
-        });
-        batch.commit().then(() => {
-            selectedIds.clear();
-            showToast('Livraisons supprimées', 'success');
-        });
-    }
+    // Suppression standard pour les autres onglets
+    permanentlyDeleteSelected(false);
 }
 
 // Fonction utilitaire pour supprimer la transaction associée (Arrivages)
@@ -1795,6 +2051,73 @@ function confirmBulkStatusChange() {
         selectedIds.clear();
         showToast('Statuts mis à jour !', 'success');
     });
+}
+
+// --- FONCTION DE SYNCHRONISATION FORCÉE (Réparation) ---
+async function forceSyncTransactions() {
+    if (!confirm("Voulez-vous forcer la synchronisation des transactions ?\n\nCela va copier les Noms, Adresses, Numéros ET MONTANTS corrects de l'onglet 'En Cours' vers la Caisse (Saisie) pour corriger les erreurs.")) return;
+
+    const loadingToast = document.createElement('div');
+    loadingToast.className = 'toast';
+    loadingToast.textContent = "Synchronisation en cours...";
+    loadingToast.style.background = "#3b82f6";
+    document.body.appendChild(loadingToast);
+
+    try {
+        const enCoursItems = deliveries.filter(d => d.containerStatus === 'EN_COURS');
+        let batch = db.batch();
+        let count = 0;
+        let updatedCount = 0;
+
+        for (const item of enCoursItems) {
+            if (!item.ref) continue;
+
+            // On cherche la transaction correspondante
+            const q = await db.collection('transactions').where('reference', '==', item.ref).get();
+            
+            if (!q.empty) {
+                q.forEach(doc => {
+                    const t = doc.data();
+                    const updates = {};
+                    
+                    // On met à jour avec les données fiables de Livraison
+                    const newNom = item.destinataire || item.expediteur || 'Client';
+                    if (newNom && t.nom !== newNom) updates.nom = newNom;
+                    if (item.destinataire && t.nomDestinataire !== item.destinataire) updates.nomDestinataire = item.destinataire;
+                    if (item.lieuLivraison && t.adresseDestinataire !== item.lieuLivraison) updates.adresseDestinataire = item.lieuLivraison;
+                    if (item.numero && t.numero !== item.numero) updates.numero = item.numero;
+                    if (item.description && t.description !== item.description) updates.description = item.description;
+
+                    // --- CORRECTION MONTANTS ---
+                    const restant = parseFloat((item.montant || '0').replace(/[^\d]/g, '')) || 0;
+                    const original = parseFloat((item.prixOriginal || '0').replace(/[^\d]/g, '')) || 0;
+                    const totalPrix = original > 0 ? original : restant;
+                    
+                    let mParis = 0;
+                    if (totalPrix > restant) {
+                        mParis = totalPrix - restant;
+                    }
+
+                    if (t.prix !== totalPrix || t.montantParis !== mParis) {
+                        updates.prix = totalPrix;
+                        updates.montantParis = mParis;
+                        const currentAbidjan = t.montantAbidjan || 0;
+                        updates.reste = (mParis + currentAbidjan) - totalPrix;
+                    }
+
+                    if (Object.keys(updates).length > 0) {
+                        batch.update(doc.ref, updates);
+                        updatedCount++;
+                        count++;
+                    }
+                });
+            }
+            if (count >= 400) { await batch.commit(); batch = db.batch(); count = 0; }
+        }
+        if (count > 0) await batch.commit();
+        loadingToast.remove();
+        alert(`✅ Synchronisation terminée !\n${updatedCount} fiches corrigées dans la Caisse.`);
+    } catch (e) { console.error(e); loadingToast.remove(); alert("Erreur : " + e.message); }
 }
 
 // --- GESTION DES ARCHIVES ---
@@ -1966,7 +2289,8 @@ function filterDeliveries() {
         
         // Match Conteneur Actif
         let matchContainer = true;
-        if (isContainerFilterActive && currentContainerName !== 'Aucun') {
+        // CORRECTION : On n'applique le filtre conteneur QUE sur les onglets En Cours et À Venir
+        if (['EN_COURS', 'A_VENIR'].includes(currentTab) && isContainerFilterActive && currentContainerName !== 'Aucun') {
             matchContainer = (d.conteneur === currentContainerName);
         }
         
@@ -2125,31 +2449,13 @@ function markAsPending(id) {
 function deleteDelivery(id) {
     const d = deliveries.find(item => item.id === id);
 
-    // Si on est dans EN_COURS, on renvoie vers A_VENIR au lieu de supprimer
+    // Si on est dans EN_COURS, on demande quoi faire
     if (d && d.containerStatus === 'EN_COURS') {
-        if (confirm('Voulez-vous renvoyer ce colis vers l\'onglet "À VENIR" ?\n(Il sera retiré de "En Cours" et remis en transit)')) {
-            db.collection(CONSTANTS.COLLECTION).doc(id).update({
-                containerStatus: 'A_VENIR',
-                status: 'EN_ATTENTE', // Reset du statut
-                livreur: firebase.firestore.FieldValue.delete(), // Reset livreur
-                dateProgramme: firebase.firestore.FieldValue.delete(), // Reset date
-                importedFromTransit: firebase.firestore.FieldValue.delete(),
-                directFromParis: firebase.firestore.FieldValue.delete()
-            }).then(() => {
-                deleteTransactionByRef(d.ref); // Supprime aussi de Réception Abidjan
-                showToast('Colis renvoyé vers À VENIR', 'success');
-            });
-        }
+        openDeleteChoiceModal({ type: 'single', id: id });
         return;
     }
 
-    if (confirm('⚠️ ATTENTION : Êtes-vous sûr de vouloir supprimer définitivement cette livraison ?\nCette action est irréversible.')) {
-        db.collection(CONSTANTS.COLLECTION).doc(id).delete()
-            .then(() => {
-                deleteTransactionByRef(d.ref); // Supprime aussi de Réception Abidjan
-                showToast('Livraison supprimée', 'success');
-            });
-    }
+    permanentlyDeleteSingle(id, false);
 }
 
 // Modal ajout
@@ -2228,6 +2534,28 @@ document.getElementById('deliveryForm').addEventListener('submit', function(e) {
 
     } else {
         db.collection(CONSTANTS.COLLECTION).add(newItem).then(() => {
+            // --- SYNC TRANSACTION (Si En Cours) ---
+            // Si on ajoute manuellement un colis "En Cours", on crée la transaction financière correspondante
+            if (newItem.containerStatus === 'EN_COURS') {
+                const price = parseFloat((newItem.montant || '0').replace(/[^\d]/g, '')) || 0;
+                db.collection('transactions').add({
+                    date: newItem.dateAjout.split('T')[0],
+                    reference: newItem.ref,
+                    nom: newItem.destinataire || newItem.expediteur || 'Client',
+                    conteneur: newItem.conteneur || '',
+                    prix: price,
+                    montantParis: 0,
+                    montantAbidjan: 0,
+                    reste: -price, // Dette initiale
+                    isDeleted: false,
+                    description: newItem.description || '',
+                    adresseDestinataire: newItem.lieuLivraison || '',
+                    nomDestinataire: newItem.destinataire || '',
+                    numero: newItem.numero || '',
+                    saisiPar: sessionStorage.getItem('userName') || 'Saisie Livraison',
+                    quantite: newItem.quantite || 1
+                });
+            }
             showToast('Livraison ajoutée !', 'success');
             closeAddModal();
             if (newItem.containerStatus !== currentTab) {
@@ -2485,4 +2813,105 @@ async function removeDuplicatesFromDatabase() {
         loadingToast.remove();
         alert(deletedCount > 0 ? `✅ Nettoyage terminé !\n\n🗑️ ${deletedCount} doublons supprimés\n💾 ${updatedCount} fiches fusionnées` : "👍 Base de données saine : Aucun doublon trouvé.");
     } catch (error) { console.error(error); loadingToast.remove(); alert("Erreur : " + error.message); }
+}
+
+// --- GESTION DU MODAL DE CHOIX DE SUPPRESSION ---
+
+function openDeleteChoiceModal(context) {
+    pendingDeleteContext = context;
+    document.getElementById('deleteChoiceModal').classList.add('active');
+}
+
+window.closeDeleteChoiceModal = function() {
+    document.getElementById('deleteChoiceModal').classList.remove('active');
+    pendingDeleteContext = null;
+};
+
+window.confirmDeleteAction = function(action) {
+    const context = pendingDeleteContext; // FIX: Sauvegarder le contexte avant de le nettoyer
+    closeDeleteChoiceModal();
+    if (!context) return;
+
+    if (context.type === 'bulk') {
+        if (action === 'MOVE') {
+            moveSelectedToAVenir();
+        } else if (action === 'DELETE') {
+            permanentlyDeleteSelected(true); // true = skip confirm
+        }
+    } else if (context.type === 'single') {
+        if (action === 'MOVE') {
+            moveSingleToAVenir(context.id);
+        } else if (action === 'DELETE') {
+            permanentlyDeleteSingle(context.id, true);
+        }
+    }
+};
+
+// Fonctions utilitaires de suppression/déplacement
+function moveSelectedToAVenir() {
+    const batch = db.batch();
+    selectedIds.forEach(id => {
+        batch.update(db.collection(CONSTANTS.COLLECTION).doc(id), {
+            containerStatus: 'A_VENIR',
+            status: 'EN_ATTENTE',
+            livreur: firebase.firestore.FieldValue.delete(),
+            dateProgramme: firebase.firestore.FieldValue.delete(),
+            importedFromTransit: firebase.firestore.FieldValue.delete(),
+            directFromParis: firebase.firestore.FieldValue.delete()
+        });
+        const item = deliveries.find(d => d.id === id);
+        if (item && item.ref) deleteTransactionByRef(item.ref);
+    });
+    batch.commit().then(() => {
+        selectedIds.clear();
+        showToast('Colis renvoyés vers À VENIR', 'success');
+    });
+}
+
+function permanentlyDeleteSelected(skipConfirm = false) {
+    if (!skipConfirm && !confirm(`Voulez-vous vraiment supprimer ces ${selectedIds.size} livraisons ?`)) return;
+
+    const batch = db.batch();
+    selectedIds.forEach(id => {
+        batch.delete(db.collection(CONSTANTS.COLLECTION).doc(id));
+        const item = deliveries.find(d => d.id === id);
+        if (item && item.ref) deleteTransactionByRef(item.ref);
+    });
+    batch.commit().then(() => {
+        selectedIds.clear();
+        showToast('Livraisons supprimées', 'success');
+    }).catch(error => {
+        console.error("Erreur suppression groupée:", error);
+        showToast("Erreur lors de la suppression groupée", "error");
+    });
+}
+
+function moveSingleToAVenir(id) {
+    const d = deliveries.find(item => item.id === id);
+    db.collection(CONSTANTS.COLLECTION).doc(id).update({
+        containerStatus: 'A_VENIR',
+        status: 'EN_ATTENTE',
+        livreur: firebase.firestore.FieldValue.delete(),
+        dateProgramme: firebase.firestore.FieldValue.delete(),
+        importedFromTransit: firebase.firestore.FieldValue.delete(),
+        directFromParis: firebase.firestore.FieldValue.delete()
+    }).then(() => {
+        if (d && d.ref) deleteTransactionByRef(d.ref);
+        showToast('Colis renvoyé vers À VENIR', 'success');
+    });
+}
+
+function permanentlyDeleteSingle(id, skipConfirm = false) {
+    if (!skipConfirm && !confirm('⚠️ ATTENTION : Êtes-vous sûr de vouloir supprimer définitivement cette livraison ?\nCette action est irréversible.')) return;
+
+    const d = deliveries.find(item => item.id === id);
+    db.collection(CONSTANTS.COLLECTION).doc(id).delete()
+        .then(() => {
+            if (d && d.ref) deleteTransactionByRef(d.ref);
+            showToast('Livraison supprimée', 'success');
+        })
+        .catch(error => {
+            console.error("Erreur suppression:", error);
+            showToast("Erreur lors de la suppression: " + error.message, "error");
+        });
 }

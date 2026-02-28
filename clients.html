@@ -187,21 +187,7 @@
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
-    <script>
-        const firebaseConfig = {
-            apiKey: "AIzaSyA255n3XWDRKaYZ9kwOYkfovf5lRexoCA4",
-            authDomain: "caisse-amt-perso.firebaseapp.com",
-            projectId: "caisse-amt-perso",
-            storageBucket: "caisse-amt-perso.firebasestorage.app",
-            messagingSenderId: "682789156997",
-            appId: "1:682789156997:web:9ce3303120851d37be91ec"
-        };
-        firebase.initializeApp(firebaseConfig);
-        const db = firebase.firestore();
-        document.getElementById('logoutBtn').addEventListener('click', () => {
-            if (confirm("Voulez-vous vous déconnecter ?")) firebase.auth().signOut();
-        });
-    </script>
+    <script src="firebase-init.js"></script>
     <script src="auth-guard.js"></script>
     <script src="clients.js"></script>
     <script src="utils.js"></script> 
