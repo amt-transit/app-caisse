@@ -163,7 +163,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         calculateTotals(filteredTrans, filteredExp, filteredInc, filteredBank);
         
         // Tableaux
-        renderContainerSummary(filteredTrans, filteredExp);
+        renderContainerSummary(filteredTrans, filteredExp, cleanTransactions);
         renderTopClients(filteredTrans);
         renderAgentSummary(filteredTrans);
         renderMonthlySales(filteredTrans);
@@ -267,9 +267,22 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // --- 5. RENDUS TABLEAUX ---
 
-    function renderContainerSummary(transactions, expenses) {
+    function renderContainerSummary(transactions, expenses, allCleanTransactions) {
         if (!containerSummaryBody) return;
         containerSummaryBody.innerHTML = '<tr><td colspan="5">Calcul en cours...</td></tr>';
+
+        // 1. DÉTERMINATION DU MOIS D'ORIGINE PAR CONTENEUR
+        // On cherche la date la plus ancienne pour chaque conteneur dans tout l'historique
+        const containerOrigins = {};
+        if (allCleanTransactions) {
+            allCleanTransactions.forEach(t => {
+                if (!t.conteneur) return;
+                const cName = t.conteneur.trim().toUpperCase();
+                if (!containerOrigins[cName] || t.date < containerOrigins[cName]) {
+                    containerOrigins[cName] = t.date;
+                }
+            });
+        }
 
         const months = {};
         const getMonthKey = (dateStr) => dateStr ? dateStr.substring(0, 7) : '0000-00';
@@ -279,11 +292,18 @@ document.addEventListener('DOMContentLoaded', async () => {
             return d.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' }).replace(/^\w/, c => c.toUpperCase());
         };
 
-        // 1. Agréger Transactions
+        // 2. Agréger Transactions (En utilisant la date d'origine du conteneur)
         transactions.forEach(t => {
-            const mKey = getMonthKey(t.date);
-            const mLabel = getMonthLabel(t.date);
             const cName = (t.conteneur || "Non spécifié").trim().toUpperCase();
+
+            // On utilise la date d'origine du conteneur si elle existe, sinon la date de transaction
+            let refDate = t.date;
+            if (cName !== "NON SPÉCIFIÉ" && containerOrigins[cName]) {
+                refDate = containerOrigins[cName];
+            }
+
+            const mKey = getMonthKey(refDate);
+            const mLabel = getMonthLabel(refDate);
 
             if (!months[mKey]) months[mKey] = { key: mKey, label: mLabel, containers: {}, stats: { ca: 0, dep: 0, count: 0 } };
             if (!months[mKey].containers[cName]) {
@@ -301,12 +321,19 @@ document.addEventListener('DOMContentLoaded', async () => {
             months[mKey].stats.ca += (t.prix || 0);
         });
 
-        // 2. Agréger Dépenses
+        // 3. Agréger Dépenses (En utilisant la date d'origine du conteneur)
         expenses.forEach(e => {
             if (e.type === 'Conteneur' || e.conteneur) {
-                const mKey = getMonthKey(e.date);
-                const mLabel = getMonthLabel(e.date);
                 const cName = (e.conteneur || "Non spécifié").trim().toUpperCase();
+
+                // On utilise la date d'origine du conteneur si elle existe, sinon la date de dépense
+                let refDate = e.date;
+                if (cName !== "NON SPÉCIFIÉ" && containerOrigins[cName]) {
+                    refDate = containerOrigins[cName];
+                }
+
+                const mKey = getMonthKey(refDate);
+                const mLabel = getMonthLabel(refDate);
 
                 if (!months[mKey]) months[mKey] = { key: mKey, label: mLabel, containers: {}, stats: { ca: 0, dep: 0, count: 0 } };
                 if (!months[mKey].containers[cName]) {
@@ -553,6 +580,31 @@ document.addEventListener('DOMContentLoaded', async () => {
         const cleanTrans = getCleanTransactions(allTransactions).filter(t => t.conteneur === containerName);
         const cleanExp = allExpenses.filter(e => e.conteneur === containerName && (!e.sessionId || validatedSessions.has(e.sessionId)));
 
+        // TRI DES COLIS (Ordre croissant par référence : Suffixe puis Nombre)
+        cleanTrans.sort((a, b) => {
+            const refA = (a.reference || "").trim();
+            const refB = (b.reference || "").trim();
+            
+            // Découpage pour tri intelligent (Suffixe puis Nombre)
+            const partsA = refA.split('-');
+            const partsB = refB.split('-');
+            
+            if (partsA.length >= 3 && partsB.length >= 3) {
+                // 1. Tri par Suffixe (ex: D46, D50)
+                const suffixA = partsA[partsA.length - 1];
+                const suffixB = partsB[partsB.length - 1];
+                const suffixComp = suffixA.localeCompare(suffixB, undefined, { numeric: true, sensitivity: 'base' });
+                if (suffixComp !== 0) return suffixComp;
+                
+                // 2. Tri par Nombre (ex: 116, 136)
+                const numA = parseInt(partsA[partsA.length - 2], 10);
+                const numB = parseInt(partsB[partsB.length - 2], 10);
+                if (!isNaN(numA) && !isNaN(numB)) return numA - numB;
+            }
+            
+            return refA.localeCompare(refB, undefined, { numeric: true });
+        });
+
         let totalPrix = 0, totalAbj = 0, totalPar = 0, totalReste = 0;
 
         cleanTrans.forEach(t => {
@@ -561,19 +613,15 @@ document.addEventListener('DOMContentLoaded', async () => {
             totalPar += (t.montantParis || 0);
             totalReste += (t.reste || 0);
 
-            const pctAbj = t.prix ? Math.round((t.montantAbidjan / t.prix) * 100) : 0;
-            const pctPar = t.prix ? Math.round((t.montantParis / t.prix) * 100) : 0;
-            const pctReste = t.prix ? Math.round((t.reste / t.prix) * 100) : 0;
-
             tbody.innerHTML += `
                 <tr>
                     <td>${t.date}</td>
                     <td>${t.nom} <small>(${t.reference})</small></td>
                     <td>${t.reference}</td>
                     <td>${formatCFA(t.prix)}</td>
-                    <td>${formatCFA(t.montantAbidjan)} <span style="font-size:0.8em; color:#d97706;">(${pctAbj}%)</span></td>
-                    <td>${formatCFA(t.montantParis)} <span style="font-size:0.8em; color:#2563eb;">(${pctPar}%)</span></td>
-                    <td class="${t.reste < 0 ? 'reste-negatif' : 'reste-positif'}">${formatCFA(t.reste)} <span style="font-size:0.8em; color:#64748b;">(${pctReste}%)</span></td>
+                    <td>${formatCFA(t.montantAbidjan)}</td>
+                    <td>${formatCFA(t.montantParis)}</td>
+                    <td class="${t.reste < 0 ? 'reste-negatif' : 'reste-positif'}">${formatCFA(t.reste)}</td>
                 </tr>
             `;
         });
