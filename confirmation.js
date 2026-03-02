@@ -637,46 +637,62 @@ document.addEventListener('DOMContentLoaded', () => {
     // NOUVELLE FONCTION : Supprimer toute la session
     async function deleteEntireSession(sessionId, sessionData) {
         try {
-            // 1. Supprimer les transactions associées (Nettoyage historique)
-            // On réutilise la logique de handleDelete pour chaque transaction visible
-            const rows = Array.from(detailsEncaissementsBody.querySelectorAll('tr'));
-            for (const row of rows) {
-                const docId = row.dataset.id;
-                // Copie simplifiée de la logique de suppression :
+            // 1. IDENTIFICATION DES TRANSACTIONS À NETTOYER
+            let transactionIds = [];
+            
+            if (sessionData.transactionIds && Array.isArray(sessionData.transactionIds) && sessionData.transactionIds.length > 0) {
+                // CAS 1 : Nouveau système (IDs stockés) - Plus fiable
+                transactionIds = sessionData.transactionIds;
+            } else {
+                // CAS 2 : Ancien système (Fallback sur le DOM)
+                const rows = Array.from(detailsEncaissementsBody.querySelectorAll('tr'));
+                transactionIds = rows.map(r => r.dataset.id).filter(id => id);
+            }
+
+            // 2. TRAITEMENT DES TRANSACTIONS (Rétablissement des montants)
+            for (const docId of transactionIds) {
                 const docRef = db.collection("transactions").doc(docId);
                 const doc = await docRef.get();
+                
                 if (doc.exists) {
                     const data = doc.data();
                     if (data.paymentHistory) {
                         let newHistory;
+                        
                         if (sessionData.transactionIds) {
+                            // Filtrage par Session ID
                             newHistory = data.paymentHistory.filter(p => p.sessionId !== sessionId);
                         } else {
+                            // Filtrage par Date/User (Legacy)
                             const sDate = sessionData.date.split('T')[0];
                             newHistory = data.paymentHistory.filter(p => !(p.date === sDate && p.saisiPar === sessionData.user));
                         }
-                        // Recalcul
+
+                        // Recalcul des montants
                         let newAbj = 0, newPar = 0;
                         newHistory.forEach(p => { newAbj += (p.montantAbidjan||0); newPar += (p.montantParis||0); });
+                        
                         const newReste = (data.prix||0) - (newAbj + newPar);
+                        
                         await docRef.update({ paymentHistory: newHistory, montantAbidjan: newAbj, montantParis: newPar, reste: newReste });
                     }
                 }
             }
 
-            // 2. Supprimer les dépenses associées (Si IDs disponibles)
+            // 3. Supprimer les dépenses associées (Si IDs disponibles)
             if (sessionData.expenseIds && Array.isArray(sessionData.expenseIds)) {
                 for (const expId of sessionData.expenseIds) {
                     await db.collection("expenses").doc(expId).update({ isDeleted: true });
                 }
             }
 
-            // 3. Supprimer le log
+            // 4. Supprimer le log
             await db.collection("audit_logs").doc(sessionId).delete();
             
             sessionDetailsEl.style.display = 'none';
             noSelectionMsg.style.display = 'block';
-            alert("Session supprimée.");
+            alert("Session supprimée et montants rétablis.");
+            loadSessions(); // Rafraîchir la liste
         } catch (e) {
             console.error(e);
             alert("Erreur lors de la suppression de la session.");
