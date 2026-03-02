@@ -66,7 +66,7 @@ document.addEventListener('DOMContentLoaded', () => {
             bankSnap.forEach(doc => {
                 const d = doc.data();
                 if (d.type === 'Retrait') totalRetraits += (d.montant || 0);
-                if (d.type === 'Depot' && d.source !== 'Remise Chèques') totalDepots += (d.montant || 0);
+                if (d.type === 'Depot' && d.source !== 'Remise Chèques' && d.source !== 'Solde Initial') totalDepots += (d.montant || 0);
             });
             return (totalVentes + totalAutres + totalRetraits) - (totalDepenses + totalDepots);
         },
@@ -137,6 +137,9 @@ document.addEventListener('DOMContentLoaded', () => {
         const montant = parseFloat(bankAmount.value) || 0;
         const type = bankType.value; 
 
+        // DÉTECTION DU SOLDE INITIAL
+        const isInitial = bankDesc.value.toLowerCase().includes('initial');
+
         const data = {
             date: bankDate.value,
             bank: bankName.value,
@@ -144,6 +147,7 @@ document.addEventListener('DOMContentLoaded', () => {
             description: `${bankDesc.value} (${currentUserName})`,
             montant: montant,
             type: type,
+            source: isInitial ? 'Solde Initial' : 'Saisie Manuelle',
             isDeleted: false
         };
 
@@ -152,7 +156,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         // Sécurité solde
-        if (type === 'Depot') {
+        if (type === 'Depot' && !isInitial) {
             addBankMovementBtn.disabled = true;
             addBankMovementBtn.textContent = "Vérification...";
             try {
@@ -396,13 +400,19 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             }
 
+            // Logique d'affichage améliorée : un dépôt n'est "négatif" (sortie de caisse)
+            // que s'il s'agit d'une saisie manuelle.
+            const isNegativeDisplay = move.type === 'Depot' && move.source === 'Saisie Manuelle';
+            const amountClass = isNegativeDisplay ? 'reste-negatif' : 'reste-positif';
+            const sign = isNegativeDisplay ? '-' : '+';
+
             row.innerHTML = `
                 <td>${move.date}</td>
                 <td><span class="tag" style="background-color:#e2e8f0; color:#334155;">${move.bank || '-'}</span></td>
                 <td>${move.description}</td>
                 <td>${move.type}</td>
-                <td class="${move.type === 'Depot' ? 'reste-negatif' : 'reste-positif'}">
-                    ${move.type === 'Depot' ? '-' : '+'} ${formatCFA(move.montant)}
+                <td class="${amountClass}">
+                    ${sign} ${formatCFA(move.montant)}
                 </td>
                 <td>${deleteButtonHTML}</td>
             `;

@@ -66,7 +66,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             bankSnap.forEach(doc => {
                 const d = doc.data();
                 if (d.type === 'Retrait') totalRetraits += (d.montant || 0);
-                if (d.type === 'Depot' && d.source !== 'Remise Chèques') totalDepots += (d.montant || 0);
+                if (d.type === 'Depot' && d.source !== 'Remise Chèques' && d.source !== 'Solde Initial') totalDepots += (d.montant || 0);
             });
             return (totalVentes + totalAutres + totalRetraits) - (totalDepenses + totalDepots);
         },
@@ -228,7 +228,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         // D. Banque
         const retraits = bank.filter(m => m.type === 'Retrait').reduce((sum, m) => sum + m.montant, 0);
-        const depots = bank.filter(m => m.type === 'Depot' && m.source !== 'Remise Chèques').reduce((sum, m) => sum + m.montant, 0); // On exclut remises chèques du flux caisse
+        const depots = bank.filter(m => m.type === 'Depot' && m.source !== 'Remise Chèques' && m.source !== 'Solde Initial').reduce((sum, m) => sum + m.montant, 0); // On exclut remises chèques et solde initial du flux caisse
         const depotsAll = bank.filter(m => m.type === 'Depot').reduce((sum, m) => sum + m.montant, 0);
         
         // E. Soldes
@@ -445,9 +445,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     function renderBankMovements(movements) {
         if (!bankMovementsBody) return;
         const sorted = movements.sort((a, b) => new Date(b.date) - new Date(a.date));
-        bankMovementsBody.innerHTML = sorted.map(m => `
-            <tr><td>${m.date}</td><td>${m.description}</td><td>${m.type}</td><td class="${m.type==='Depot'?'reste-negatif':'reste-positif'}">${formatCFA(m.montant)}</td></tr>
-        `).join('');
+        bankMovementsBody.innerHTML = sorted.map(m => {
+            // Logique d'affichage améliorée
+            const isNegativeDisplay = m.type === 'Depot' && m.source === 'Saisie Manuelle';
+            const amountClass = isNegativeDisplay ? 'reste-negatif' : 'reste-positif';
+            return `
+                <tr><td>${m.date}</td><td>${m.description}</td><td>${m.type}</td><td class="${amountClass}">${formatCFA(m.montant)}</td></tr>
+            `;
+        }).join('');
     }
 
     function renderUnpaid(transactions) {

@@ -97,7 +97,7 @@ const transactionService = {
             const d = doc.data();
             if (d.type === 'Retrait') totalRetraits += (d.montant || 0);
             // On exclut les remises de chèques car elles ne sortent pas de la caisse espèces
-            if (d.type === 'Depot' && d.source !== 'Remise Chèques') totalDepots += (d.montant || 0);
+            if (d.type === 'Depot' && d.source !== 'Remise Chèques' && d.source !== 'Solde Initial') totalDepots += (d.montant || 0);
         });
 
         return (totalVentes + totalAutres + totalRetraits) - (totalDepenses + totalDepots);

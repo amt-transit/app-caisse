@@ -66,7 +66,7 @@ document.addEventListener('DOMContentLoaded', () => {
             bankSnap.forEach(doc => {
                 const d = doc.data();
                 if (d.type === 'Retrait') totalRetraits += (d.montant || 0);
-                if (d.type === 'Depot' && d.source !== 'Remise Chèques') totalDepots += (d.montant || 0);
+                if (d.type === 'Depot' && d.source !== 'Remise Chèques' && d.source !== 'Solde Initial') totalDepots += (d.montant || 0);
             });
             return (totalVentes + totalAutres + totalRetraits) - (totalDepenses + totalDepots);
         },
