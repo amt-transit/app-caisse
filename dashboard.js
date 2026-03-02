@@ -227,7 +227,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         const depMensuelle = totalDep - depConteneur;
 
         // D. Banque
-        const retraits = bank.filter(m => m.type === 'Retrait').reduce((sum, m) => sum + m.montant, 0);
+        const retraits = bank.filter(m => m.type === 'Retrait' || m.type === 'Paiement').reduce((sum, m) => sum + m.montant, 0);
         const depots = bank.filter(m => m.type === 'Depot' && m.source !== 'Remise Chèques' && m.source !== 'Solde Initial').reduce((sum, m) => sum + m.montant, 0); // On exclut remises chèques et solde initial du flux caisse
         const depotsAll = bank.filter(m => m.type === 'Depot').reduce((sum, m) => sum + m.montant, 0);
         
@@ -447,7 +447,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         const sorted = movements.sort((a, b) => new Date(b.date) - new Date(a.date));
         bankMovementsBody.innerHTML = sorted.map(m => {
             // Logique d'affichage améliorée
-            const isNegativeDisplay = m.type === 'Depot' && m.source === 'Saisie Manuelle';
+            const isNegativeDisplay = (m.type === 'Depot' && m.source === 'Saisie Manuelle') || m.type === 'Paiement';
             const amountClass = isNegativeDisplay ? 'reste-negatif' : 'reste-positif';
             return `
                 <tr><td>${m.date}</td><td>${m.description}</td><td>${m.type}</td><td class="${amountClass}">${formatCFA(m.montant)}</td></tr>

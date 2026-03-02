@@ -132,10 +132,44 @@ document.addEventListener('DOMContentLoaded', () => {
     let allCombinedMovements = [];
     let unconfirmedSessions = new Set(); // Pour filtrer virements et chèques
 
+    // 0. INJECTION DYNAMIQUE DE L'OPTION "PAIEMENT"
+    if (bankType && !bankType.querySelector('option[value="Paiement"]')) {
+        const opt = document.createElement('option');
+        opt.value = "Paiement";
+        opt.textContent = "Paiement / Virement (Sortie)";
+        // On l'insère après Retrait
+        bankType.appendChild(opt);
+    }
+
+    // 0b. INJECTION DYNAMIQUE DU CHAMP CONTENEUR (Pour les paiements liés)
+    let bankConteneur = document.getElementById('bankConteneur');
+    if (!bankConteneur && bankType && bankType.parentNode) {
+        bankConteneur = document.createElement('input');
+        bankConteneur.id = 'bankConteneur';
+        bankConteneur.type = 'text';
+        bankConteneur.placeholder = 'Conteneur concerné (Ex: TC-001)';
+        bankConteneur.style.display = 'none'; // Caché par défaut
+        bankConteneur.style.marginTop = '5px';
+        bankConteneur.style.width = '100%';
+        bankConteneur.style.padding = '8px';
+        bankConteneur.style.border = '1px solid #ccc';
+        bankConteneur.style.borderRadius = '4px';
+        
+        // Insertion après le sélecteur de type
+        bankType.parentNode.insertBefore(bankConteneur, bankType.nextSibling);
+
+        // Affichage conditionnel
+        bankType.addEventListener('change', () => {
+            bankConteneur.style.display = (bankType.value === 'Paiement') ? 'block' : 'none';
+            if (bankType.value !== 'Paiement') bankConteneur.value = '';
+        });
+    }
+
     // 1. AJOUT MANUEL
     addBankMovementBtn.addEventListener('click', async () => {
         const montant = parseFloat(bankAmount.value) || 0;
         const type = bankType.value; 
+        const conteneur = bankConteneur ? bankConteneur.value.trim().toUpperCase() : '';
 
         // DÉTECTION DU SOLDE INITIAL
         const isInitial = bankDesc.value.toLowerCase().includes('initial');
@@ -174,10 +208,26 @@ document.addEventListener('DOMContentLoaded', () => {
             addBankMovementBtn.textContent = "Enregistrer le Mouvement";
         }
 
-        bankCollection.add(data).then(() => {
+        bankCollection.add(data).then((docRef) => {
+            // AUTOMATISATION : Si c'est un Paiement lié à un Conteneur, on crée la dépense automatiquement
+            if (type === 'Paiement' && conteneur) {
+                db.collection("expenses").add({
+                    date: data.date,
+                    description: `${data.description} (Virement Bancaire)`,
+                    montant: data.montant,
+                    type: 'Conteneur',
+                    conteneur: conteneur,
+                    mode: 'Virement', // Important : Mode Virement pour ne pas impacter la caisse physique
+                    action: 'Depense',
+                    isDeleted: false,
+                    linkedBankMovementId: docRef.id // Lien pour suppression en cascade
+                });
+            }
+
             bankDesc.value = '';
             bankAmount.value = '';
             bankName.value = '';
+            if(bankConteneur) bankConteneur.value = '';
         }).catch(err => {
             console.error(err);
             if (err.code === 'resource-exhausted') alert("⚠️ QUOTA ATTEINT : Impossible d'ajouter le mouvement.");
@@ -343,7 +393,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (m.type === 'Depot') {
                 totalDepots += montant;
                 impact = montant;
-            } else if (m.type === 'Retrait') {
+            } else if (m.type === 'Retrait' || m.type === 'Paiement') {
                 totalRetraits += montant;
                 impact = -montant;
             }
@@ -402,7 +452,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // Logique d'affichage améliorée : un dépôt n'est "négatif" (sortie de caisse)
             // que s'il s'agit d'une saisie manuelle.
-            const isNegativeDisplay = move.type === 'Depot' && move.source === 'Saisie Manuelle';
+            // Un Paiement est aussi négatif (Sortie Banque)
+            const isNegativeDisplay = (move.type === 'Depot' && move.source === 'Saisie Manuelle') || move.type === 'Paiement';
             const amountClass = isNegativeDisplay ? 'reste-negatif' : 'reste-positif';
             const sign = isNegativeDisplay ? '-' : '+';
 
@@ -429,6 +480,11 @@ document.addEventListener('DOMContentLoaded', () => {
         if (event.target.classList.contains('deleteBtn')) {
             const docId = event.target.getAttribute('data-id');
             if (!confirm("Confirmer la suppression ? Elle sera archivée.")) return;
+
+            // SUPPRESSION EN CASCADE : Si une dépense est liée à ce mouvement, on la supprime aussi
+            db.collection("expenses").where("linkedBankMovementId", "==", docId).get().then(snap => {
+                snap.forEach(doc => doc.ref.update({ isDeleted: true }));
+            });
 
             // LOGIQUE D'ANNULATION DE REMISE DE CHÈQUE
             const move = allBankMovements.find(m => m.id === docId);
