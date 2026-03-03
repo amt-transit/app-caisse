@@ -28,6 +28,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     let currentSessionId = null;
     let currentSessionData = null; // Pour stocker les infos de la session en cours (date, user)
+    let currentSessionAllTransactions = []; // Pour la recherche
+    let confirmationSearchInput = null; // Pour la recherche
 
     // --- MODAL ÉDITION (Injection Dynamique) ---
     const editModalHTML = `
@@ -80,6 +82,25 @@ document.addEventListener('DOMContentLoaded', () => {
     window.addEventListener('click', (e) => {
         if (e.target == editModal) closeEditModalFunc();
     });
+
+    // --- INJECTION BARRE DE RECHERCHE ---
+    const encaissementsCard = document.getElementById('detailsEncaissementsBody')?.closest('.card');
+    if (encaissementsCard) {
+        const h3 = encaissementsCard.querySelector('h3');
+        confirmationSearchInput = document.createElement('input');
+        confirmationSearchInput.type = 'text';
+        confirmationSearchInput.id = 'confirmationSearchInput';
+        confirmationSearchInput.placeholder = 'Rechercher un colis (Réf, Nom, Conteneur)...';
+        confirmationSearchInput.style.cssText = "width: 100%; padding: 8px; margin: 10px 0; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box;";
+        
+        if (h3) {
+            // On insère la barre de recherche après le titre "Encaissements"
+            h3.parentNode.insertBefore(confirmationSearchInput, h3.nextSibling);
+        }
+
+        confirmationSearchInput.addEventListener('input', filterAndRenderTransactions);
+    }
+
 
     // 1. Charger la liste des sessions (Basé sur les logs de validation)
     function loadSessions() {
@@ -288,6 +309,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Rendu Transactions
         detailsEncaissementsBody.innerHTML = '';
+        currentSessionAllTransactions = []; // Vider pour la nouvelle session
         let sumEsp = 0;
         let totalsByMode = {}; // Nouveau : Pour le détail Wave/Orange/etc.
         // Détection si c'est une session "Nouveau Système" (avec IDs précis)
@@ -364,53 +386,19 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             }
 
-            if (payeCeJour > 0) {
-                let actionButtons = '';
-                // On affiche les boutons seulement si la session n'est PAS encore validée
-                if (logData.status !== "VALIDATED") {
-                    actionButtons = `
-                        <button class="btn-edit" style="background:#3b82f6; color:white; border:none; padding:4px 8px; border-radius:4px; cursor:pointer; margin-right:5px;">✏️</button>
-                        <button class="btn-delete" style="background:#ef4444; color:white; border:none; padding:4px 8px; border-radius:4px; cursor:pointer;">🗑️</button>
-                    `;
-                } else {
-                    actionButtons = `<span style="color:#94a3b8; font-size:0.8em;">🔒 Validé</span>`;
-                }
-
-                const resteClass = (t.reste || 0) < 0 ? 'reste-negatif' : 'reste-positif';
-
-                // LOGIQUE MAGASINAGE
-                let magasinageDisplay = '-';
-                if (t.storageFeeWaived) {
-                    magasinageDisplay = '<span class="tag" style="background:#10b981; color:white; font-size:0.8em;">Offert</span>';
-                } else if (t.adjustmentType === 'augmentation' && t.adjustmentVal > 0) {
-                    magasinageDisplay = `<span style="color:#d97706; font-weight:bold;">${formatCFA(t.adjustmentVal)}</span>`;
-                }
-
-                // AJOUT : Date de saisie à côté de l'agent
-                const agentsDisplay = t.agent ? `<span style="font-size:0.85em; color:#64748b;">${t.agent}</span> <span style="font-size:0.75em; color:#94a3b8;">(${t.date})</span>` : '-';
-
-                // CONSTRUCTION AFFICHAGE MODE (Gestion Fractionné)
-                let modeDisplay = '';
-                if (sessionModes.length > 0) {
-                    modeDisplay = sessionModes.map(m => {
-                        const infoStr = m.info ? ` <span style="font-size:0.85em; color:#666;">(${m.info})</span>` : '';
-                        // Si plusieurs modes, on affiche le montant spécifique
-                        const amountStr = sessionModes.length > 1 ? ` : <b>${formatCFA(m.montant)}</b>` : '';
-                        return `<div style="white-space:nowrap;">${m.mode}${infoStr}${amountStr}</div>`;
-                    }).join('');
-                } else {
-                    modeDisplay = t.modePaiement;
-                }
-
-                detailsEncaissementsBody.innerHTML += `
-                    <tr data-id="${doc.id}">
-                        <td>${t.reference}</td><td>${t.nom}</td><td>${t.conteneur}</td><td>${agentsDisplay}</td><td>${magasinageDisplay}</td><td>${formatCFA(t.prix)}</td><td style="font-weight:bold; color:#d97706;">${formatCFA(payeAbidjanCeJour)}</td><td style="font-weight:bold; color:#2563eb;">${formatCFA(payeParisCeJour)}</td><td>${modeDisplay}</td><td class="${resteClass}">${formatCFA(t.reste)}</td>
-                        <td>${actionButtons}</td>
-                    </tr>
-                `;
+            if (payeCeJour > 0) { // On ne stocke que les transactions avec un paiement dans cette session
+                currentSessionAllTransactions.push({
+                    docId: doc.id,
+                    data: t,
+                    payeAbidjanCeJour,
+                    payeParisCeJour,
+                    sessionModes
+                });
             }
         });
-        countEncaissements.textContent = detailsEncaissementsBody.children.length;
+
+        // Appel à la nouvelle fonction de rendu/filtrage
+        filterAndRenderTransactions();
 
         // --- AFFICHAGE DU DÉTAIL PAR MODE (Wave, Orange, etc.) ---
         const tableContainer = detailsEncaissementsBody.closest('table');
@@ -444,6 +432,81 @@ document.addEventListener('DOMContentLoaded', () => {
         totalDepEl.textContent = formatCFA(sumDep);
         totalNetEl.textContent = formatCFA(sumEsp - sumDep);
     }
+
+    // --- NOUVELLES FONCTIONS POUR LA RECHERCHE ---
+
+    function filterAndRenderTransactions() {
+        const searchTerm = confirmationSearchInput ? confirmationSearchInput.value.toLowerCase().trim() : '';
+        let filteredTransactions = currentSessionAllTransactions;
+
+        if (searchTerm) {
+            filteredTransactions = currentSessionAllTransactions.filter(trans => {
+                const t = trans.data;
+                return (t.reference || '').toLowerCase().includes(searchTerm) ||
+                       (t.nom || '').toLowerCase().includes(searchTerm) ||
+                       (t.conteneur || '').toLowerCase().includes(searchTerm);
+            });
+        }
+
+        renderTransactionsTable(filteredTransactions);
+    }
+
+    function renderTransactionsTable(transactionsToRender) {
+        detailsEncaissementsBody.innerHTML = '';
+
+        if (transactionsToRender.length === 0) {
+            detailsEncaissementsBody.innerHTML = '<tr><td colspan="11" style="text-align:center; padding:15px;">Aucun encaissement trouvé pour cette recherche.</td></tr>';
+            countEncaissements.textContent = 0;
+            return;
+        }
+
+        transactionsToRender.forEach(trans => {
+            const { docId, data: t, payeAbidjanCeJour, payeParisCeJour, sessionModes } = trans;
+
+            let actionButtons = '';
+            if (currentSessionData.status !== "VALIDATED") {
+                actionButtons = `
+                    <button class="btn-edit" style="background:#3b82f6; color:white; border:none; padding:4px 8px; border-radius:4px; cursor:pointer; margin-right:5px;">✏️</button>
+                    <button class="btn-delete" style="background:#ef4444; color:white; border:none; padding:4px 8px; border-radius:4px; cursor:pointer;">🗑️</button>
+                `;
+            } else {
+                actionButtons = `<span style="color:#94a3b8; font-size:0.8em;">🔒 Validé</span>`;
+            }
+
+            const resteClass = (t.reste || 0) < 0 ? 'reste-negatif' : 'reste-positif';
+
+            let magasinageDisplay = '-';
+            if (t.storageFeeWaived) {
+                magasinageDisplay = '<span class="tag" style="background:#10b981; color:white; font-size:0.8em;">Offert</span>';
+            } else if (t.adjustmentType === 'augmentation' && t.adjustmentVal > 0) {
+                magasinageDisplay = `<span style="color:#d97706; font-weight:bold;">${formatCFA(t.adjustmentVal)}</span>`;
+            }
+
+            const agentsDisplay = t.agent ? `<span style="font-size:0.85em; color:#64748b;">${t.agent}</span> <span style="font-size:0.75em; color:#94a3b8;">(${t.date})</span>` : '-';
+
+            let modeDisplay = '';
+            if (sessionModes.length > 0) {
+                modeDisplay = sessionModes.map(m => {
+                    const infoStr = m.info ? ` <span style="font-size:0.85em; color:#666;">(${m.info})</span>` : '';
+                    const amountStr = sessionModes.length > 1 ? ` : <b>${formatCFA(m.montant)}</b>` : '';
+                    return `<div style="white-space:nowrap;">${m.mode}${infoStr}${amountStr}</div>`;
+                }).join('');
+            } else {
+                modeDisplay = t.modePaiement;
+            }
+
+            const row = document.createElement('tr');
+            row.dataset.id = docId;
+            row.innerHTML = `
+                <td>${t.reference}</td><td>${t.nom}</td><td>${t.conteneur}</td><td>${agentsDisplay}</td><td>${magasinageDisplay}</td><td>${formatCFA(t.prix)}</td><td style="font-weight:bold; color:#d97706;">${formatCFA(payeAbidjanCeJour)}</td><td style="font-weight:bold; color:#2563eb;">${formatCFA(payeParisCeJour)}</td><td>${modeDisplay}</td><td class="${resteClass}">${formatCFA(t.reste)}</td>
+                <td>${actionButtons}</td>
+            `;
+            detailsEncaissementsBody.appendChild(row);
+        });
+
+        countEncaissements.textContent = transactionsToRender.length;
+    }
+
 
     // --- GESTION DES ACTIONS (MODIFIER / SUPPRIMER) ---
     detailsEncaissementsBody.addEventListener('click', (e) => {
