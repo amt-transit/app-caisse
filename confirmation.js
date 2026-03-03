@@ -527,21 +527,40 @@ document.addEventListener('DOMContentLoaded', () => {
             sessionsListPendingEl.innerHTML = '<p style="padding:10px; color:#666;">Recherche de la session...</p>';
             sessionsListValidatedEl.innerHTML = '';
 
-            // 1. Trouver la transaction correspondante
+            // 1. Trouver la transaction correspondante (Match Exact OU Partiel)
+            let matchingDocs = [];
+
+            // A. Match Exact (Rapide)
             let tSnaps = await db.collection("transactions").where("reference", "==", term).limit(5).get();
+            if (!tSnaps.empty) matchingDocs = tSnaps.docs;
             
-            // Si pas trouvé par référence, essayer par nom (exact)
-            if (tSnaps.empty) {
+            // B. Si pas trouvé, Match Nom Exact
+            if (matchingDocs.length === 0) {
                 tSnaps = await db.collection("transactions").where("nom", "==", term).limit(5).get();
+                if (!tSnaps.empty) matchingDocs = tSnaps.docs;
             }
 
-            if (tSnaps.empty) {
-                sessionsListPendingEl.innerHTML = '<p style="padding:10px; color:#ef4444;">Aucune transaction trouvée pour cette recherche.</p>';
+            // C. Si toujours rien, Recherche Partielle (Scan des 2000 derniers éléments)
+            // Permet de trouver "023" dans "ML-023-D53"
+            if (matchingDocs.length === 0) {
+                sessionsListPendingEl.innerHTML = '<p style="padding:10px; color:#666;">Recherche approfondie (Scan)...</p>';
+                const snapshot = await db.collection("transactions").orderBy("date", "desc").limit(2000).get();
+                
+                matchingDocs = snapshot.docs.filter(doc => {
+                    const d = doc.data();
+                    return (d.reference || '').toUpperCase().includes(term) || 
+                           (d.nom || '').toUpperCase().includes(term);
+                });
+            }
+
+            if (matchingDocs.length === 0) {
+                sessionsListPendingEl.innerHTML = '<p style="padding:10px; color:#ef4444;">Aucune transaction trouvée (sur les 2000 dernières).</p>';
                 return;
             }
 
             const foundSessions = new Map();
-            const transIds = tSnaps.docs.map(d => d.id);
+            // On limite à 20 transactions pour ne pas surcharger les requêtes suivantes
+            const transIds = matchingDocs.slice(0, 20).map(d => d.id);
 
             // 2. Trouver les sessions contenant ces transactions
             // Stratégie A : Nouveau système (transactionIds contient l'ID)
@@ -559,7 +578,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // Stratégie B : Ancien système (Fallback Date/User)
             if (foundSessions.size === 0) {
-                for (const docT of tSnaps.docs) {
+                const docsToCheck = matchingDocs.filter(d => transIds.includes(d.id));
+                for (const docT of docsToCheck) {
                     const tData = docT.data();
                     // On cherche une session validée par cet utilisateur à cette date (entryDate)
                     const q = await db.collection("audit_logs")
@@ -576,8 +596,12 @@ document.addEventListener('DOMContentLoaded', () => {
             if (foundSessions.size === 0) {
                 sessionsListPendingEl.innerHTML = '<p style="padding:10px;">Transaction trouvée, mais aucune session de validation associée (Peut-être une saisie directe ou ancienne).</p>';
             } else {
-                sessionsListPendingEl.innerHTML = '<div style="padding:5px 10px; background:#e0f2fe; color:#0284c7; font-size:0.9em; font-weight:bold;">Résultats de recherche :</div>';
-                foundSessions.forEach(doc => {
+                sessionsListPendingEl.innerHTML = `<div style="padding:5px 10px; background:#e0f2fe; color:#0284c7; font-size:0.9em; font-weight:bold;">Résultats pour "${term}" :</div>`;
+                // Tri par date décroissante
+                const sortedSessions = Array.from(foundSessions.values()).sort((a, b) => {
+                    return new Date(b.data().date) - new Date(a.data().date);
+                });
+                sortedSessions.forEach(doc => {
                     sessionsListPendingEl.appendChild(createSessionElement(doc));
                 });
             }
