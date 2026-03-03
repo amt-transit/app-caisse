@@ -13,6 +13,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const detailDateUser = document.getElementById('detailDateUser');
     const detailStatus = document.getElementById('detailStatus');
     const validateSessionBtn = document.getElementById('validateSessionBtn');
+    const archiveSessionBtn = document.getElementById('archiveSessionBtn');
     
     const detailsEncaissementsBody = document.getElementById('detailsEncaissementsBody');
     const detailsDepensesBody = document.getElementById('detailsDepensesBody');
@@ -25,6 +26,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const archiveMonthInput = document.getElementById('archiveMonth');
     const searchArchiveBtn = document.getElementById('searchArchiveBtn');
+    const globalSessionSearch = document.getElementById('globalSessionSearch');
 
     let currentSessionId = null;
     let currentSessionData = null; // Pour stocker les infos de la session en cours (date, user)
@@ -129,6 +131,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (data.transactionIds && Array.isArray(data.transactionIds) && data.transactionIds.length === 0) {
                     if (!data.expenseIds || (Array.isArray(data.expenseIds) && data.expenseIds.length === 0)) return;
                 }
+
+                // FILTRE : Masquer les sessions archivées de la vue principale
+                if (data.status === "ARCHIVED") return;
 
                 const isValidated = data.status === "VALIDATED";
 
@@ -260,12 +265,14 @@ document.addEventListener('DOMContentLoaded', () => {
             detailStatus.style.background = "#10b981";
             detailStatus.style.color = "white";
             validateSessionBtn.style.display = 'none'; // Cacher le bouton si déjà validé
+            if(archiveSessionBtn) archiveSessionBtn.style.display = 'inline-block'; // Afficher bouton archiver
             if(deleteSessionBtn) deleteSessionBtn.style.display = 'none';
         } else {
             detailStatus.textContent = "En attente de revue";
             detailStatus.style.background = "#f59e0b";
             detailStatus.style.color = "white";
             validateSessionBtn.style.display = 'block';
+            if(archiveSessionBtn) archiveSessionBtn.style.display = 'none';
             if(deleteSessionBtn) deleteSessionBtn.style.display = 'block';
         }
 
@@ -508,6 +515,96 @@ document.addEventListener('DOMContentLoaded', () => {
         countEncaissements.textContent = transactionsToRender.length;
     }
 
+    // --- RECHERCHE GLOBALE DE SESSION (Par Référence) ---
+    if (globalSessionSearch) {
+        globalSessionSearch.addEventListener('change', async () => {
+            const term = globalSessionSearch.value.trim().toUpperCase();
+            if (!term) {
+                loadSessions(); // Recharger la vue par défaut
+                return;
+            }
+
+            sessionsListPendingEl.innerHTML = '<p style="padding:10px; color:#666;">Recherche de la session...</p>';
+            sessionsListValidatedEl.innerHTML = '';
+
+            // 1. Trouver la transaction correspondante
+            let tSnaps = await db.collection("transactions").where("reference", "==", term).limit(5).get();
+            
+            // Si pas trouvé par référence, essayer par nom (exact)
+            if (tSnaps.empty) {
+                tSnaps = await db.collection("transactions").where("nom", "==", term).limit(5).get();
+            }
+
+            if (tSnaps.empty) {
+                sessionsListPendingEl.innerHTML = '<p style="padding:10px; color:#ef4444;">Aucune transaction trouvée pour cette recherche.</p>';
+                return;
+            }
+
+            const foundSessions = new Map();
+            const transIds = tSnaps.docs.map(d => d.id);
+
+            // 2. Trouver les sessions contenant ces transactions
+            // Stratégie A : Nouveau système (transactionIds contient l'ID)
+            // Note : array-contains-any est limité à 10 valeurs
+            const chunks = [];
+            for (let i=0; i<transIds.length; i+=10) chunks.push(transIds.slice(i, i+10));
+
+            for (const chunk of chunks) {
+                const q = await db.collection("audit_logs")
+                    .where("action", "==", "VALIDATION_JOURNEE")
+                    .where("transactionIds", "array-contains-any", chunk)
+                    .get();
+                q.forEach(doc => foundSessions.set(doc.id, doc));
+            }
+
+            // Stratégie B : Ancien système (Fallback Date/User)
+            if (foundSessions.size === 0) {
+                for (const docT of tSnaps.docs) {
+                    const tData = docT.data();
+                    // On cherche une session validée par cet utilisateur à cette date (entryDate)
+                    const q = await db.collection("audit_logs")
+                        .where("action", "==", "VALIDATION_JOURNEE")
+                        .where("user", "==", tData.saisiPar)
+                        .where("entryDate", "==", tData.date)
+                        .limit(1)
+                        .get();
+                    q.forEach(doc => foundSessions.set(doc.id, doc));
+                }
+            }
+
+            sessionsListPendingEl.innerHTML = '';
+            if (foundSessions.size === 0) {
+                sessionsListPendingEl.innerHTML = '<p style="padding:10px;">Transaction trouvée, mais aucune session de validation associée (Peut-être une saisie directe ou ancienne).</p>';
+            } else {
+                sessionsListPendingEl.innerHTML = '<div style="padding:5px 10px; background:#e0f2fe; color:#0284c7; font-size:0.9em; font-weight:bold;">Résultats de recherche :</div>';
+                foundSessions.forEach(doc => {
+                    sessionsListPendingEl.appendChild(createSessionElement(doc));
+                });
+            }
+        });
+    }
+
+    // --- ARCHIVAGE DE SESSION ---
+    if (archiveSessionBtn) {
+        archiveSessionBtn.addEventListener('click', async () => {
+            if (!currentSessionId) return;
+            if (confirm("Voulez-vous archiver cette session ?\n\nElle disparaîtra de la liste principale mais restera accessible via la recherche d'archives par mois.")) {
+                try {
+                    await db.collection("audit_logs").doc(currentSessionId).update({
+                        status: "ARCHIVED"
+                    });
+                    alert("Session archivée avec succès.");
+                    sessionDetailsEl.style.display = 'none';
+                    noSelectionMsg.style.display = 'block';
+                    // On recharge la liste pour faire disparaître la session
+                    loadSessions();
+                } catch (error) {
+                    console.error(error);
+                    alert("Erreur lors de l'archivage.");
+                }
+            }
+        });
+    }
 
     // --- GESTION DES ACTIONS (MODIFIER / SUPPRIMER) ---
     detailsEncaissementsBody.addEventListener('click', (e) => {
