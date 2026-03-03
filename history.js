@@ -1,5 +1,5 @@
 document.addEventListener('DOMContentLoaded', () => {
-    if (typeof firebase === 'undefined' || typeof db === 'undefined' || typeof Choices === 'undefined') {
+    if (typeof firebase === 'undefined' || typeof db === 'undefined') {
         alert("Erreur: Connexion échouée."); return;
     }
 
