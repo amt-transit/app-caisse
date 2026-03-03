@@ -104,11 +104,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // 1. Charger la liste des sessions (Basé sur les logs de validation)
     function loadSessions() {
-        // OPTIMISATION : On ne charge que les 20 dernières sessions par défaut
+        // OPTIMISATION : On charge les 100 dernières sessions (au lieu de 20)
+        // Cela évite que les sessions en attente ne "disparaissent" visuellement si de nombreuses sessions validées s'ajoutent.
         let query = db.collection("audit_logs")
             .where("action", "==", "VALIDATION_JOURNEE")
             .orderBy("date", "desc")
-            .limit(20); 
+            .limit(100); 
 
         query.onSnapshot(snapshot => {
             sessionsListPendingEl.innerHTML = '';
