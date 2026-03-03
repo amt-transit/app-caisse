@@ -528,20 +528,6 @@ document.addEventListener('DOMContentLoaded', () => {
         totalNetEl.textContent = formatCFA(sumEsp - sumDep);
     }
 
-    // CORRECTION : Récupérer les IDs des dépenses dans loadSessionDetails
-    // Remplacer la partie expensesDocs dans loadSessionDetails
-    // ... (voir plus bas dans le code complet, je vais patcher loadSessionDetails)
-    
-    // --- PATCH loadSessionDetails pour garder les IDs des dépenses ---
-    // Je dois réécrire la partie expensesDocs de loadSessionDetails pour inclure l'ID
-    // Comme je ne peux pas patcher une fonction existante facilement sans la réécrire, je vais supposer que je modifie la fonction loadSessionDetails ci-dessous.
-    
-    // ... (Code existant loadSessionDetails modifié ci-dessous) ...
-
-    // --- NOUVELLES FONCTIONS POUR LA RECHERCHE ---
-
-    }
-
     // --- NOUVELLES FONCTIONS POUR LA RECHERCHE ---
 
     function filterAndRenderTransactions() {
