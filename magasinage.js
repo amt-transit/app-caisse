@@ -92,6 +92,25 @@ document.addEventListener('DOMContentLoaded', () => {
     const searchInput = document.getElementById('magasinageSearch');
     const totalFeesEl = document.getElementById('totalMagasinageFees');
 
+    // --- MISE À JOUR DYNAMIQUE EN-TÊTE (Ajout colonne Qté) ---
+    if (tableBody) {
+        const magTable = tableBody.closest('table');
+        if (magTable) {
+            const theadRow = magTable.querySelector('thead tr');
+            if (theadRow) {
+                theadRow.innerHTML = `
+                    <th>Date</th>
+                    <th>Référence</th>
+                    <th style="width:50px; text-align:center;">Qté</th>
+                    <th>Client</th>
+                    <th>Conteneur</th>
+                    <th>Durée</th>
+                    <th>Frais</th>
+                `;
+            }
+        }
+    }
+
     let allTransactions = [];
 
     // 1. Chargement des données
@@ -156,7 +175,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
             row.innerHTML = `
                 <td>${t.date}</td>
-                <td>${t.reference} <span style="font-size:0.8em; color:#666;">(x${t.quantite || 1})</span></td>
+                <td>${t.reference}</td>
+                <td style="font-weight:bold; text-align:center;">${t.quantite || 1}</td>
                 <td>${t.nom}</td>
                 <td>${t.conteneur}</td>
                 <td><span class="tag" style="background:#e2e8f0; color:#334155;">${days} jours</span></td>

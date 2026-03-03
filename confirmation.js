@@ -289,6 +289,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // Rendu Transactions
         detailsEncaissementsBody.innerHTML = '';
         let sumEsp = 0;
+        let totalsByMode = {}; // Nouveau : Pour le détail Wave/Orange/etc.
         // Détection si c'est une session "Nouveau Système" (avec IDs précis)
         const isNewSystemSession = !!(logData.transactionIds && Array.isArray(logData.transactionIds));
         
@@ -322,6 +323,12 @@ document.addEventListener('DOMContentLoaded', () => {
                         payeAbidjanCeJour += (p.montantAbidjan || 0);
                         payeParisCeJour += (p.montantParis || 0);
                         if (p.modePaiement === 'Espèce') sumEsp += (p.montantAbidjan || 0);
+
+                        // CALCUL DÉTAILLÉ PAR MODE (Wave, Orange, etc.)
+                        let modeKey = p.modePaiement || 'Espèce';
+                        if (p.agentMobileMoney) modeKey += ` (${p.agentMobileMoney})`; // Ex: "Mobile Money (Wave)"
+                        if (!totalsByMode[modeKey]) totalsByMode[modeKey] = 0;
+                        totalsByMode[modeKey] += (p.montantAbidjan || 0);
                         
                         sessionModes.push({
                             mode: p.modePaiement || 'Espèce',
@@ -342,6 +349,12 @@ document.addEventListener('DOMContentLoaded', () => {
                     payeCeJour = (t.montantAbidjan || 0) + (t.montantParis || 0);
                     // Note: Pour le fallback ancien, on suppose que c'est réparti comme dans le doc principal
                     if (t.modePaiement === 'Espèce') sumEsp += (t.montantAbidjan || 0);
+
+                    // CALCUL DÉTAILLÉ FALLBACK
+                    let modeKey = t.modePaiement || 'Espèce';
+                    if (t.agentMobileMoney) modeKey += ` (${t.agentMobileMoney})`;
+                    if (!totalsByMode[modeKey]) totalsByMode[modeKey] = 0;
+                    totalsByMode[modeKey] += (t.montantAbidjan || 0);
                     
                     sessionModes.push({
                         mode: t.modePaiement || 'Espèce',
@@ -398,6 +411,24 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
         countEncaissements.textContent = detailsEncaissementsBody.children.length;
+
+        // --- AFFICHAGE DU DÉTAIL PAR MODE (Wave, Orange, etc.) ---
+        const tableContainer = detailsEncaissementsBody.closest('table');
+        let breakdownDiv = document.getElementById('breakdownModesDiv');
+        if (!breakdownDiv && tableContainer) {
+            breakdownDiv = document.createElement('div');
+            breakdownDiv.id = 'breakdownModesDiv';
+            breakdownDiv.style.cssText = "margin: 10px 0; padding: 10px; background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 6px;";
+            tableContainer.parentNode.insertBefore(breakdownDiv, tableContainer.nextSibling);
+        }
+        
+        if (breakdownDiv) {
+            let html = '<strong>Répartition des Encaissements :</strong><div style="display:flex; gap:15px; flex-wrap:wrap; margin-top:5px;">';
+            for (const [m, amount] of Object.entries(totalsByMode)) {
+                if (amount > 0) html += `<div><span class="tag" style="background:#fff; border:1px solid #ccc;">${m}</span> : <b>${formatCFA(amount)}</b></div>`;
+            }
+            breakdownDiv.innerHTML = html + '</div>';
+        }
 
         // Rendu Dépenses
         detailsDepensesBody.innerHTML = '';

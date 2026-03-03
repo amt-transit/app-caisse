@@ -206,7 +206,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
                     // Ventilation par mode
                     const mode = p.modePaiement || t.modePaiement || 'Espèce';
-                    if (mode === 'Espèce') totalVentesCash += (p.montantAbidjan || 0);
+                    if (['Espèce', 'Wave', 'OM', 'Mobile Money'].includes(mode)) totalVentesCash += (p.montantAbidjan || 0);
                     if (mode === 'Chèque' && p.checkStatus === 'Pending') totalCheques += (p.montantAbidjan || 0);
                     if (mode === 'Virement') totalVirements += ((p.montantAbidjan || 0) + (p.montantParis || 0));
                 }

@@ -69,9 +69,10 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const sessionTrans = transactionsBySession[sessionId] || [];
                 const sessionExps = expensesBySession[sessionId] || [];
 
-                // Total Espèces (Uniquement Espèce Abidjan)
+                // Total Espèces (Espèce + Wave + OM + Mobile Money)
                 const totalIn = sessionTrans.reduce((sum, t) => {
-                    return t.modeSpecifique === 'Espèce' ? sum + t.montantSpecifique : sum;
+                    const m = t.modeSpecifique;
+                    return (m === 'Espèce' || m === 'Wave' || m === 'OM' || m === 'Mobile Money') ? sum + t.montantSpecifique : sum;
                 }, 0);
 
                 const totalOut = sessionExps.reduce((sum, e) => sum + (e.montant || 0), 0);
@@ -155,16 +156,16 @@ document.addEventListener('DOMContentLoaded', async () => {
         
         // Colonne Encaissements
         html += `<div style="flex:1;">
-            <h3 style="color:#10b981; border-bottom:2px solid #10b981; padding-bottom:5px;">Encaissements Espèces (${formatCFA(session.totalIn)})</h3>
+            <h3 style="color:#10b981; border-bottom:2px solid #10b981; padding-bottom:5px;">Encaissements (Espèces/Wave/OM) (${formatCFA(session.totalIn)})</h3>
             <table class="table" style="font-size:0.9em;">
-                <thead><tr><th>Ref</th><th>Client</th><th>Montant</th></tr></thead>
+                <thead><tr><th>Ref</th><th>Client</th><th>Mode</th><th>Montant</th></tr></thead>
                 <tbody>`;
         
-        const espTrans = session.detailsTrans.filter(t => t.modeSpecifique === 'Espèce');
-        if (espTrans.length === 0) html += `<tr><td colspan="3">Aucun encaissement espèce.</td></tr>`;
+        const espTrans = session.detailsTrans.filter(t => ['Espèce', 'Wave', 'OM', 'Mobile Money'].includes(t.modeSpecifique));
+        if (espTrans.length === 0) html += `<tr><td colspan="4">Aucun encaissement.</td></tr>`;
         else {
             espTrans.forEach(t => {
-                html += `<tr><td>${t.reference}</td><td>${t.nom}</td><td>${formatCFA(t.montantSpecifique)}</td></tr>`;
+                html += `<tr><td>${t.reference}</td><td>${t.nom}</td><td>${t.modeSpecifique}</td><td>${formatCFA(t.montantSpecifique)}</td></tr>`;
             });
         }
         html += `</tbody></table></div>`;
