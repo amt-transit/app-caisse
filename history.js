@@ -682,9 +682,27 @@ document.addEventListener('DOMContentLoaded', () => {
         if (index !== '') {
             // Mise à jour
             const originalPayment = currentEditingTransaction.paymentHistory[index];
+            
+            // GESTION INTELLIGENTE DU STATUT CHÈQUE
+            if (paymentData.modePaiement === 'Chèque') {
+                // Si c'était déjà un chèque avec un statut (ex: Deposited), on le garde. Sinon 'Pending'.
+                if (originalPayment.modePaiement === 'Chèque' && originalPayment.checkStatus) {
+                    paymentData.checkStatus = originalPayment.checkStatus;
+                } else {
+                    paymentData.checkStatus = 'Pending';
+                }
+            } else {
+                // Si ce n'est plus un chèque, on retire le statut pour nettoyer
+                delete paymentData.checkStatus;
+                delete originalPayment.checkStatus;
+            }
+
             currentEditingTransaction.paymentHistory[index] = { ...originalPayment, ...paymentData };
         } else {
             // Ajout
+            if (paymentData.modePaiement === 'Chèque') {
+                paymentData.checkStatus = 'Pending';
+            }
             currentEditingTransaction.paymentHistory.push(paymentData);
         }
         renderPaymentHistoryTable();
@@ -715,6 +733,20 @@ document.addEventListener('DOMContentLoaded', () => {
                 updates.paymentHistory.sort((a, b) => new Date(b.date) - new Date(a.date));
                 updates.lastPaymentDate = updates.paymentHistory[0].date;
             }
+
+            // RECALCUL DES AGENTS (Mise à jour du champ principal pour l'affichage tableau)
+            const uniqueAgents = new Set();
+            if (updates.paymentHistory) {
+                updates.paymentHistory.forEach(p => {
+                    if (p.agent) {
+                        p.agent.split(',').forEach(a => {
+                            const trimmed = a.trim();
+                            if (trimmed) uniqueAgents.add(trimmed);
+                        });
+                    }
+                });
+            }
+            updates.agent = Array.from(uniqueAgents).join(', ');
 
             await transactionsCollection.doc(currentEditingTransaction.id).update(updates);
 
