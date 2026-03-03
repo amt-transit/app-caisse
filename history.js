@@ -1,5 +1,5 @@
 document.addEventListener('DOMContentLoaded', () => {
-    if (typeof firebase === 'undefined' || typeof db === 'undefined') {
+    if (typeof firebase === 'undefined' || typeof db === 'undefined' || typeof Choices === 'undefined') {
         alert("Erreur: Connexion échouée."); return;
     }
 
@@ -25,19 +25,99 @@ document.addEventListener('DOMContentLoaded', () => {
         sortByContainerCheckbox.addEventListener('change', () => applyFiltersAndRender());
     }
 
-    const modal = document.getElementById('paymentHistoryModal');
-    const modalList = document.getElementById('paymentHistoryList');
-    const modalTitle = document.getElementById('modalRefTitle');
-    const closeModal = document.querySelector('.close-modal'); 
+    // --- MODAL DE VISUALISATION (EXISTANT) ---
+    const viewModal = document.getElementById('paymentHistoryModal');
+    const viewModalList = document.getElementById('paymentHistoryList');
+    const viewModalTitle = document.getElementById('modalRefTitle');
+    const closeViewModal = document.querySelector('.close-modal');
+
+    // --- NOUVEAU : MODAL D'ÉDITION COMPLET ---
+    const editModalHTML = `
+    <div id="historyEditModal" class="modal">
+        <div class="modal-content" style="max-width: 950px; border-radius: 12px;">
+            <span class="close-modal" id="closeHistoryEditModal" style="float:right; cursor:pointer; font-size:24px;">&times;</span>
+            <h2 id="historyEditModalTitle" style="margin-top:0;">Modifier Transaction</h2>
+            
+            <div class="form-grid" style="grid-template-columns: 1fr 1fr 1fr 1fr; gap:15px;">
+                <div><label>Référence</label><input type="text" id="editHistRef" readonly style="background:#eee;"></div>
+                <div><label>Nom Client</label><input type="text" id="editHistNom"></div>
+                <div><label>Conteneur</label><input type="text" id="editHistConteneur"></div>
+                <div><label>Prix Total</label><input type="number" id="editHistPrix"></div>
+            </div>
+
+            <hr style="margin: 20px 0;">
+
+            <h3 style="margin-bottom:10px;">Historique des paiements</h3>
+            <div style="max-height: 200px; overflow-y: auto; border: 1px solid #eee; border-radius: 8px;">
+                <table class="table">
+                    <thead><tr><th>Date</th><th>Montant Paris</th><th>Montant Abidjan</th><th>Mode</th><th>Agent</th><th>Saisi par</th><th>Action</th></tr></thead>
+                    <tbody id="editHistPaymentsBody"></tbody>
+                </table>
+            </div>
+
+            <h3 style="margin-top:20px;">Ajouter / Modifier un paiement</h3>
+            <div class="form-grid" style="grid-template-columns: 1fr 1fr 1fr; gap:15px; background: #f8f9fa; padding: 15px; border-radius: 8px;">
+                <input type="hidden" id="editHistPaymentIndex">
+                <div><label>Date</label><input type="date" id="editHistPayDate"></div>
+                <div><label>Montant Paris</label><input type="number" id="editHistPayParis" placeholder="0"></div>
+                <div><label>Montant Abidjan</label><input type="number" id="editHistPayAbidjan" placeholder="0"></div>
+                <div><label>Mode Paiement</label>
+                    <select id="editHistPayMode">
+                        <option>Espèce</option><option>Wave</option><option>OM</option><option>Chèque</option><option>Virement</option>
+                    </select>
+                </div>
+                <div><label>Banque / Agent MM</label><input type="text" id="editHistPayInfo" placeholder="Ex: BICICI, Wave..."></div>
+                <div><label>Agent (Livreur)</label><select id="editHistPayAgent"></select></div>
+            </div>
+            <button id="addOrUpdatePaymentBtn" class="btn" style="margin-top:10px; background:#3b82f6;">Ajouter ce paiement</button>
+
+            <div style="text-align:right; margin-top:30px; border-top: 1px solid #eee; padding-top: 15px;">
+                <button id="cancelHistoryEditBtn" class="btn" style="background: #6c757d; margin-right:10px;">Annuler</button>
+                <button id="saveHistoryChangesBtn" class="btn btn-success">Enregistrer les modifications</button>
+            </div>
+        </div>
+    </div>
+    `;
+    document.body.insertAdjacentHTML('beforeend', editModalHTML);
+
+    // Références du nouveau modal
+    const editModal = document.getElementById('historyEditModal');
+    const closeEditModalBtn = document.getElementById('closeHistoryEditModal');
+    const cancelEditBtn = document.getElementById('cancelHistoryEditBtn');
+    const saveChangesBtn = document.getElementById('saveHistoryChangesBtn');
+    const addOrUpdatePaymentBtn = document.getElementById('addOrUpdatePaymentBtn');
+
+    // Champs du modal
+    const editHistRef = document.getElementById('editHistRef');
+    const editHistNom = document.getElementById('editHistNom');
+    const editHistConteneur = document.getElementById('editHistConteneur');
+    const editHistPrix = document.getElementById('editHistPrix');
+    const editHistPaymentsBody = document.getElementById('editHistPaymentsBody');
+    const editHistPaymentIndex = document.getElementById('editHistPaymentIndex');
+    const editHistPayDate = document.getElementById('editHistPayDate');
+    const editHistPayParis = document.getElementById('editHistPayParis');
+    const editHistPayAbidjan = document.getElementById('editHistPayAbidjan');
+    const editHistPayMode = document.getElementById('editHistPayMode');
+    const editHistPayInfo = document.getElementById('editHistPayInfo');
+    const editHistPayAgent = document.getElementById('editHistPayAgent');
 
     let unsubscribeHistory = null; 
     let allTransactions = []; 
     let lastVisibleDoc = null; // Pour la pagination
     let unconfirmedSessions = new Set(); // Stocke les IDs de sessions non validées
     const PAGE_SIZE = 50;
+    
+    let currentEditingTransaction = null; // Pour stocker la transaction en cours d'édition
+    let allAgents = []; // Cache pour la liste des agents
 
-    if (closeModal) closeModal.onclick = () => modal.style.display = "none";
-    window.onclick = (e) => { if (e.target == modal) modal.style.display = "none"; };
+    // --- GESTION MODALS ---
+    if (closeViewModal) closeViewModal.onclick = () => viewModal.style.display = "none";
+    if (closeEditModalBtn) closeEditModalBtn.onclick = () => editModal.style.display = "none";
+    if (cancelEditBtn) cancelEditBtn.onclick = () => editModal.style.display = "none";
+    window.onclick = (e) => { 
+        if (e.target == viewModal) viewModal.style.display = "none"; 
+        if (e.target == editModal) editModal.style.display = "none"; 
+    };
 
     // --- GESTION CLICS TABLEAU ---
     tableBody.addEventListener('click', (event) => {
@@ -55,37 +135,18 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
         if (target.classList.contains('editBtn')) {
-            const oldPrice = parseFloat(target.dataset.prix);
-            const newPriceStr = prompt("Nouveau PRIX :", oldPrice);
-            if (newPriceStr === null) return;
-            const newPrice = parseFloat(newPriceStr);
-            if (isNaN(newPrice) || newPrice <= 0) return alert("Prix invalide.");
-            
-            const paris = parseFloat(target.dataset.paris);
-            const abidjan = parseFloat(target.dataset.abidjan);
-            const newReste = (paris + abidjan) - newPrice;
-
-            transactionsCollection.doc(target.dataset.id).update({ prix: newPrice, reste: newReste })
-                .then(() => {
-                    alert("Modifié !");
-                    // Mise à jour visuelle immédiate
-                    target.dataset.prix = newPrice;
-                    row.children[4].textContent = formatCFA(newPrice);
-                    row.children[8].textContent = formatCFA(newReste);
-                    row.children[8].className = newReste < 0 ? 'reste-negatif' : 'reste-positif';
-                    logAudit("MODIFICATION", `Prix modifié de ${oldPrice} à ${newPrice}`, target.dataset.id);
-                }).catch(() => alert("Erreur."));
+            openEditModal(target.dataset.id);
             return;
         }
         if (row && row.dataset.id) {
             const transaction = allTransactions.find(t => t.id === row.dataset.id);
-            if (transaction) openPaymentModal(transaction);
+            if (transaction) openViewHistoryModal(transaction);
         }
     });
 
-    function openPaymentModal(data) {
-        modalTitle.textContent = `${data.reference} - ${data.nom || 'Client'}`;
-        modalList.innerHTML = '';
+    function openViewHistoryModal(data) {
+        viewModalTitle.textContent = `${data.reference} - ${data.nom || 'Client'}`;
+        viewModalList.innerHTML = '';
         if (data.paymentHistory && data.paymentHistory.length > 0) {
             data.paymentHistory.forEach(pay => {
                 let amounts = [];
@@ -94,13 +155,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 
                 const modeBadge = pay.modePaiement ? `<span class="tag" style="background:#6c757d; font-size:10px; margin-right:5px;">${pay.modePaiement}</span>` : '';
                 const li = document.createElement('li');
-                li.innerHTML = `<span style="font-weight:bold; min-width:90px;">${pay.date}</span><span style="flex-grow:1; margin:0 10px;">${modeBadge} ${amounts.join(' + ')}</span><span style="font-size:0.85em; color:#666">${pay.agent || '-'}</span>`;
-                modalList.appendChild(li);
+                li.innerHTML = `<span style="font-weight:bold; min-width:90px;">${pay.date}</span><span style="flex-grow:1; margin:0 10px;">${modeBadge} ${amounts.join(' + ')}</span><span style="font-size:0.85em; color:#666">${pay.agent || '-'} (${pay.saisiPar || '?'})</span>`;
+                viewModalList.appendChild(li);
             });
         } else {
-            modalList.innerHTML = `<li style="color:gray; font-style:italic; justify-content:center;">Pas de détails.</li><li style="justify-content: space-around;"><span>Total P: ${formatCFA(data.montantParis)}</span><span>Total A: ${formatCFA(data.montantAbidjan)}</span></li>`;
+            viewModalList.innerHTML = `<li style="color:gray; font-style:italic; justify-content:center;">Pas de détails.</li><li style="justify-content: space-around;"><span>Total P: ${formatCFA(data.montantParis)}</span><span>Total A: ${formatCFA(data.montantAbidjan)}</span></li>`;
         }
-        modal.style.display = "block";
+        viewModal.style.display = "block";
     }
 
     // --- FONCTION JOURNAL D'AUDIT (SÉCURITÉ) ---
@@ -113,6 +174,12 @@ document.addEventListener('DOMContentLoaded', () => {
             targetId: docId || ''
         }).catch(e => console.error("Audit Error:", e));
     }
+
+    // --- CHARGEMENT AGENTS (POUR MODAL) ---
+    db.collection("agents").orderBy("name").get().then(snap => {
+        allAgents = snap.docs.map(doc => doc.data().name);
+        editHistPayAgent.innerHTML = '<option value="">- Aucun -</option>' + allAgents.map(a => `<option value="${a}">${a}</option>`).join('');
+    });
 
     // --- LISTENER SESSIONS NON VALIDÉES ---
     db.collection("audit_logs")
@@ -524,6 +591,147 @@ document.addEventListener('DOMContentLoaded', () => {
             <td colspan="3"></td>`;
         tableBody.appendChild(subtotalRow);
     }
+
+    // --- NOUVELLE LOGIQUE MODAL D'ÉDITION ---
+
+    function openEditModal(docId) {
+        const transaction = allTransactions.find(t => t.id === docId);
+        if (!transaction) return alert("Transaction introuvable.");
+
+        // Copie profonde pour éviter de modifier l'original
+        currentEditingTransaction = JSON.parse(JSON.stringify(transaction));
+
+        // Remplir les champs principaux
+        document.getElementById('historyEditModalTitle').textContent = `Modifier : ${transaction.reference}`;
+        editHistRef.value = transaction.reference;
+        editHistNom.value = transaction.nom || '';
+        editHistConteneur.value = transaction.conteneur || '';
+        editHistPrix.value = transaction.prix || 0;
+
+        renderPaymentHistoryTable();
+        resetPaymentForm();
+        editModal.style.display = 'block';
+    }
+
+    function renderPaymentHistoryTable() {
+        editHistPaymentsBody.innerHTML = '';
+        if (!currentEditingTransaction || !currentEditingTransaction.paymentHistory) return;
+
+        currentEditingTransaction.paymentHistory.forEach((p, index) => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td>${p.date}</td>
+                <td>${formatCFA(p.montantParis)}</td>
+                <td>${formatCFA(p.montantAbidjan)}</td>
+                <td>${p.modePaiement || 'Espèce'}</td>
+                <td>${p.agent || '-'}</td>
+                <td>${p.saisiPar || '?'}</td>
+                <td>
+                    <button class="btn-small" onclick="window.editHistoryPayment(${index})">✏️</button>
+                    <button class="btn-small btn-danger" onclick="window.deleteHistoryPayment(${index})">🗑️</button>
+                </td>
+            `;
+            editHistPaymentsBody.appendChild(tr);
+        });
+    }
+
+    function resetPaymentForm() {
+        editHistPaymentIndex.value = '';
+        editHistPayDate.value = new Date().toISOString().split('T')[0];
+        editHistPayParis.value = '';
+        editHistPayAbidjan.value = '';
+        editHistPayMode.value = 'Espèce';
+        editHistPayInfo.value = '';
+        editHistPayAgent.value = '';
+        addOrUpdatePaymentBtn.textContent = "Ajouter ce paiement";
+    }
+
+    window.editHistoryPayment = (index) => {
+        const payment = currentEditingTransaction.paymentHistory[index];
+        editHistPaymentIndex.value = index;
+        editHistPayDate.value = payment.date;
+        editHistPayParis.value = payment.montantParis || 0;
+        editHistPayAbidjan.value = payment.montantAbidjan || 0;
+        editHistPayMode.value = payment.modePaiement || 'Espèce';
+        editHistPayInfo.value = payment.agentMobileMoney || '';
+        editHistPayAgent.value = payment.agent || '';
+        addOrUpdatePaymentBtn.textContent = "Mettre à jour ce paiement";
+    };
+
+    window.deleteHistoryPayment = (index) => {
+        if (confirm("Supprimer ce paiement de l'historique ?")) {
+            currentEditingTransaction.paymentHistory.splice(index, 1);
+            renderPaymentHistoryTable();
+        }
+    };
+
+    addOrUpdatePaymentBtn.addEventListener('click', () => {
+        const paymentData = {
+            date: editHistPayDate.value,
+            montantParis: parseFloat(editHistPayParis.value) || 0,
+            montantAbidjan: parseFloat(editHistPayAbidjan.value) || 0,
+            modePaiement: editHistPayMode.value,
+            agentMobileMoney: editHistPayInfo.value.trim(),
+            agent: editHistPayAgent.value,
+            saisiPar: currentUserName // L'éditeur est le "saisiPar"
+        };
+
+        if (!paymentData.date) return alert("La date du paiement est obligatoire.");
+
+        const index = editHistPaymentIndex.value;
+        if (index !== '') {
+            // Mise à jour
+            const originalPayment = currentEditingTransaction.paymentHistory[index];
+            currentEditingTransaction.paymentHistory[index] = { ...originalPayment, ...paymentData };
+        } else {
+            // Ajout
+            currentEditingTransaction.paymentHistory.push(paymentData);
+        }
+        renderPaymentHistoryTable();
+        resetPaymentForm();
+    });
+
+    saveChangesBtn.addEventListener('click', async () => {
+        if (!currentEditingTransaction) return;
+
+        saveChangesBtn.disabled = true;
+        saveChangesBtn.textContent = "Enregistrement...";
+
+        try {
+            const updates = {
+                nom: editHistNom.value.trim(),
+                conteneur: editHistConteneur.value.trim().toUpperCase(),
+                prix: parseFloat(editHistPrix.value) || 0,
+                paymentHistory: currentEditingTransaction.paymentHistory
+            };
+
+            // Recalculer les totaux et le reste
+            updates.montantParis = updates.paymentHistory.reduce((sum, p) => sum + (p.montantParis || 0), 0);
+            updates.montantAbidjan = updates.paymentHistory.reduce((sum, p) => sum + (p.montantAbidjan || 0), 0);
+            updates.reste = (updates.montantParis + updates.montantAbidjan) - updates.prix;
+
+            // Mettre à jour la date de dernier paiement
+            if (updates.paymentHistory.length > 0) {
+                updates.paymentHistory.sort((a, b) => new Date(b.date) - new Date(a.date));
+                updates.lastPaymentDate = updates.paymentHistory[0].date;
+            }
+
+            await transactionsCollection.doc(currentEditingTransaction.id).update(updates);
+
+            logAudit("MODIFICATION_COMPLÈTE", `Transaction ${currentEditingTransaction.reference} modifiée`, currentEditingTransaction.id);
+
+            alert("Transaction modifiée avec succès !");
+            editModal.style.display = 'none';
+            fetchHistory(); // Recharger la table principale
+
+        } catch (error) {
+            console.error("Erreur sauvegarde:", error);
+            alert("Une erreur est survenue lors de la sauvegarde.");
+        } finally {
+            saveChangesBtn.disabled = false;
+            saveChangesBtn.textContent = "Enregistrer les modifications";
+        }
+    });
 
     initBackToTopButton();
 });
