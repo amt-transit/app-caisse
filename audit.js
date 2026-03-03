@@ -192,19 +192,56 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Export Excel
     exportBtn.addEventListener('click', () => {
-        const data = allSessions.map(s => ({
-            'Date Validation': new Date(s.dateValidation).toLocaleString('fr-FR'),
-            'Date Saisie': new Date(s.dateSaisie).toLocaleDateString('fr-FR'),
-            'Utilisateur': s.user,
-            'Encaissements (Esp)': s.totalIn,
-            'Dépenses': s.totalOut,
-            'Résultat Session': s.result,
-            'Solde Cumulé': s.balance
-        }));
-        const ws = XLSX.utils.json_to_sheet(data);
+        let exportData = [];
+
+        // On parcourt toutes les sessions pour extraire le détail
+        allSessions.forEach(s => {
+            const dateVal = new Date(s.dateValidation).toLocaleString('fr-FR');
+            const dateSaisie = new Date(s.dateSaisie).toLocaleDateString('fr-FR');
+            const user = s.user;
+
+            // 1. Encaissements (Filtrés sur les modes comptabilisés : Espèce, Wave, OM)
+            const validTrans = s.detailsTrans.filter(t => ['Espèce', 'Wave', 'OM', 'Mobile Money'].includes(t.modeSpecifique));
+            
+            validTrans.forEach(t => {
+                exportData.push({
+                    'Date Validation': dateVal,
+                    'Date Saisie': dateSaisie,
+                    'Utilisateur': user,
+                    'Type': 'Encaissement',
+                    'Référence': t.reference,
+                    'Client / Description': t.nom,
+                    'Mode': t.modeSpecifique,
+                    'Entrée': t.montantSpecifique,
+                    'Sortie': 0
+                });
+            });
+
+            // 2. Dépenses
+            s.detailsExps.forEach(e => {
+                exportData.push({
+                    'Date Validation': dateVal,
+                    'Date Saisie': dateSaisie,
+                    'Utilisateur': user,
+                    'Type': 'Dépense',
+                    'Référence': '-',
+                    'Client / Description': e.description,
+                    'Mode': 'Espèce',
+                    'Entrée': 0,
+                    'Sortie': e.montant
+                });
+            });
+        });
+
+        if (exportData.length === 0) {
+            alert("Aucune donnée à exporter.");
+            return;
+        }
+
+        const ws = XLSX.utils.json_to_sheet(exportData);
         const wb = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(wb, ws, "Audit");
-        XLSX.writeFile(wb, "Audit_Saisies.xlsx");
+        XLSX.utils.book_append_sheet(wb, ws, "Détail Audit");
+        XLSX.writeFile(wb, "Audit_Detaille.xlsx");
     });
 
     searchInput.addEventListener('input', () => renderTable(allSessions.slice().reverse())); // On re-filtre sur la liste inversée
