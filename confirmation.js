@@ -32,28 +32,69 @@ document.addEventListener('DOMContentLoaded', () => {
     let currentSessionData = null; // Pour stocker les infos de la session en cours (date, user)
     let currentSessionAllTransactions = []; // Pour la recherche
     let confirmationSearchInput = null; // Pour la recherche
+    let allAgents = []; // Pour la liste déroulante des agents
 
     // --- MODAL ÉDITION (Injection Dynamique) ---
     const editModalHTML = `
     <div id="editTransactionModal" class="modal">
-        <div class="modal-content" style="max-width: 400px; border-radius: 12px; padding: 20px;">
+        <div class="modal-content" style="max-width: 950px; border-radius: 12px;">
             <span class="close-modal" id="closeEditModal" style="float:right; cursor:pointer; font-size:24px;">&times;</span>
-            <h2 style="margin-top:0;">Modifier Transaction</h2>
-            <div style="margin-bottom: 15px;">
-                <label style="display:block; margin-bottom:5px; font-weight:bold; font-size:13px;">Prix Total Colis :</label>
-                <input type="number" id="editPrix" style="width:100%; padding:8px; border:1px solid #ccc; border-radius:6px; box-sizing:border-box;">
+            <h2 id="editModalTitle" style="margin-top:0;">Modifier Transaction</h2>
+            
+            <div class="form-grid" style="display:grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap:15px; margin-bottom:20px;">
+                <div><label>Référence</label><input type="text" id="editRef" readonly style="background:#eee; width:100%;"></div>
+                <div><label>Nom Client</label><input type="text" id="editNom" style="width:100%;"></div>
+                <div><label>Conteneur</label><input type="text" id="editConteneur" style="width:100%;"></div>
+                <div><label>Prix Total</label><input type="number" id="editPrixTotal" style="width:100%;"></div>
             </div>
-            <div style="margin-bottom: 15px;">
-                <label style="display:block; margin-bottom:5px; font-weight:bold; font-size:13px;">Montant Payé Abidjan (Ce jour) :</label>
-                <input type="number" id="editMontantAbidjan" style="width:100%; padding:8px; border:1px solid #ccc; border-radius:6px; box-sizing:border-box;">
+
+            <hr style="margin: 20px 0; border:0; border-top:1px solid #eee;">
+
+            <h3 style="margin-bottom:10px;">Historique des paiements</h3>
+            <div style="max-height: 200px; overflow-y: auto; border: 1px solid #eee; border-radius: 8px;">
+                <table class="table" style="margin:0;">
+                    <thead><tr><th>Date</th><th>Montant Paris</th><th>Montant Abidjan</th><th>Mode</th><th>Agent</th><th>Saisi par</th><th>Action</th></tr></thead>
+                    <tbody id="editPaymentsBody"></tbody>
+                </table>
             </div>
-            <div style="margin-bottom: 15px;">
-                <label style="display:block; margin-bottom:5px; font-weight:bold; font-size:13px;">Montant Payé Paris (Ce jour) :</label>
-                <input type="number" id="editMontantParis" style="width:100%; padding:8px; border:1px solid #ccc; border-radius:6px; box-sizing:border-box;">
+
+            <h3 style="margin-top:20px;">Ajouter / Modifier un paiement</h3>
+            <div class="form-grid" style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:15px; background: #f8f9fa; padding: 15px; border-radius: 8px;">
+                <input type="hidden" id="editPaymentIndex">
+                <div><label>Date</label><input type="date" id="editPayDate" style="width:100%;"></div>
+                <div><label>Montant Paris</label><input type="number" id="editPayParis" placeholder="0" style="width:100%;"></div>
+                <div><label>Montant Abidjan</label><input type="number" id="editPayAbidjan" placeholder="0" style="width:100%;"></div>
+                <div><label>Mode Paiement</label>
+                    <select id="editPayMode" style="width:100%;"><option>Espèce</option><option>Wave</option><option>OM</option><option>Chèque</option><option>Virement</option></select>
+                </div>
+                <div><label>Banque / Agent MM</label><input type="text" id="editPayInfo" placeholder="Ex: BICICI, Wave..." style="width:100%;"></div>
+                <div><label>Agent (Livreur)</label><select id="editPayAgent" style="width:100%;"></select></div>
             </div>
-            <div style="text-align:right; margin-top:20px; display:flex; gap:10px; justify-content:flex-end;">
-                <button id="cancelEditBtn" style="padding:8px 16px; border:1px solid #ccc; background:white; border-radius:6px; cursor:pointer;">Annuler</button>
-                <button id="saveEditBtn" style="padding:8px 16px; border:none; background:#10b981; color:white; border-radius:6px; cursor:pointer; font-weight:bold;">Enregistrer</button>
+            <button id="addOrUpdatePaymentBtn" class="btn" style="margin-top:10px; background:#3b82f6; color:white; border:none; padding:8px 15px; border-radius:6px; cursor:pointer;">Ajouter ce paiement</button>
+
+            <div style="text-align:right; margin-top:30px; border-top: 1px solid #eee; padding-top: 15px;">
+                <button id="cancelEditBtn" class="btn" style="background: #6c757d; color:white; margin-right:10px; border:none; padding:8px 15px; border-radius:6px; cursor:pointer;">Annuler</button>
+                <button id="saveEditBtn" class="btn btn-success" style="background: #10b981; color:white; border:none; padding:8px 15px; border-radius:6px; cursor:pointer;">Enregistrer les modifications</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL ÉDITION DÉPENSE -->
+    <div id="editExpenseModal" class="modal">
+        <div class="modal-content" style="max-width: 500px; border-radius: 12px; padding:20px;">
+            <span class="close-modal" id="closeExpenseModal" style="float:right; cursor:pointer; font-size:24px;">&times;</span>
+            <h2 style="margin-top:0;">Modifier Dépense</h2>
+            <div style="margin-bottom:15px;"><label style="display:block; margin-bottom:5px;">Date</label><input type="date" id="editExpDate" style="width:100%; padding:8px; box-sizing:border-box;"></div>
+            <div style="margin-bottom:15px;"><label style="display:block; margin-bottom:5px;">Description</label><input type="text" id="editExpDesc" style="width:100%; padding:8px; box-sizing:border-box;"></div>
+            <div style="margin-bottom:15px;"><label style="display:block; margin-bottom:5px;">Montant</label><input type="number" id="editExpAmount" style="width:100%; padding:8px; box-sizing:border-box;"></div>
+            <div style="margin-bottom:15px;"><label style="display:block; margin-bottom:5px;">Type</label>
+                <select id="editExpType" style="width:100%; padding:8px; box-sizing:border-box;">
+                    <option value="Mensuelle">Mensuelle</option>
+                    <option value="Conteneur">Conteneur</option>
+                </select>
+            </div>
+            <div style="text-align:right; margin-top:20px;">
+                <button id="saveExpenseBtn" class="btn btn-success" style="background: #10b981; color:white; border:none; padding:8px 15px; border-radius:6px; cursor:pointer;">Enregistrer</button>
             </div>
         </div>
     </div>
@@ -61,28 +102,55 @@ document.addEventListener('DOMContentLoaded', () => {
     document.body.insertAdjacentHTML('beforeend', editModalHTML);
 
     const editModal = document.getElementById('editTransactionModal');
+    const editExpenseModal = document.getElementById('editExpenseModal');
     const closeEditModalBtn = document.getElementById('closeEditModal');
+    const closeExpenseModalBtn = document.getElementById('closeExpenseModal');
     const cancelEditBtn = document.getElementById('cancelEditBtn');
     const saveEditBtn = document.getElementById('saveEditBtn');
-    const editPrixInput = document.getElementById('editPrix');
-    const editMontantAbidjanInput = document.getElementById('editMontantAbidjan');
-    const editMontantParisInput = document.getElementById('editMontantParis');
+    const addOrUpdatePaymentBtn = document.getElementById('addOrUpdatePaymentBtn');
+    const saveExpenseBtn = document.getElementById('saveExpenseBtn');
 
-    let currentEditDocId = null;
-    let currentEditOriginalData = null;
+    // Champs Transaction
+    const editRef = document.getElementById('editRef');
+    const editNom = document.getElementById('editNom');
+    const editConteneur = document.getElementById('editConteneur');
+    const editPrixTotal = document.getElementById('editPrixTotal');
+    const editPaymentsBody = document.getElementById('editPaymentsBody');
+    const editPaymentIndex = document.getElementById('editPaymentIndex');
+    const editPayDate = document.getElementById('editPayDate');
+    const editPayParis = document.getElementById('editPayParis');
+    const editPayAbidjan = document.getElementById('editPayAbidjan');
+    const editPayMode = document.getElementById('editPayMode');
+    const editPayInfo = document.getElementById('editPayInfo');
+    const editPayAgent = document.getElementById('editPayAgent');
+
+    // Champs Dépense
+    const editExpDate = document.getElementById('editExpDate');
+    const editExpDesc = document.getElementById('editExpDesc');
+    const editExpAmount = document.getElementById('editExpAmount');
+    const editExpType = document.getElementById('editExpType');
+
+    let currentEditingTransaction = null;
+    let currentEditingExpenseId = null;
 
     function closeEditModalFunc() {
         editModal.classList.remove('active');
-        currentEditDocId = null;
-        currentEditOriginalData = null;
+        currentEditingTransaction = null;
+    }
+
+    function closeExpenseModalFunc() {
+        editExpenseModal.classList.remove('active');
+        currentEditingExpenseId = null;
     }
 
     if(closeEditModalBtn) closeEditModalBtn.onclick = closeEditModalFunc;
     if(cancelEditBtn) cancelEditBtn.onclick = closeEditModalFunc;
+    if(closeExpenseModalBtn) closeExpenseModalBtn.onclick = closeExpenseModalFunc;
     
     // Fermeture au clic en dehors
     window.addEventListener('click', (e) => {
         if (e.target == editModal) closeEditModalFunc();
+        if (e.target == editExpenseModal) closeExpenseModalFunc();
     });
 
     // --- INJECTION BARRE DE RECHERCHE ---
@@ -102,6 +170,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
         confirmationSearchInput.addEventListener('input', filterAndRenderTransactions);
     }
+
+    // --- CHARGEMENT AGENTS ---
+    db.collection("agents").orderBy("name").get().then(snap => {
+        allAgents = snap.docs.map(doc => doc.data().name);
+        if(editPayAgent) editPayAgent.innerHTML = '<option value="">- Aucun -</option>' + allAgents.map(a => `<option value="${a}">${a}</option>`).join('');
+    });
 
 
     // 1. Charger la liste des sessions (Basé sur les logs de validation)
@@ -302,7 +376,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (logData.expenseIds && Array.isArray(logData.expenseIds)) {
             const ePromises = logData.expenseIds.map(id => db.collection("expenses").doc(id).get());
             const eSnapshots = await Promise.all(ePromises);
-            expensesDocs = eSnapshots.filter(doc => doc.exists).map(d => d.data());
+            expensesDocs = eSnapshots.filter(doc => doc.exists).map(d => ({ id: d.id, ...d.data() }));
         } else {
             // Fallback ancien système
             const expSnap = await db.collection("expenses")
@@ -311,7 +385,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 .limit(500)
                 .get();
             expensesDocs = expSnap.docs
-                .map(d => d.data())
+                .map(d => ({ id: d.id, ...d.data() }))
                 .filter(e => e.date === dateOnly && e.description.includes(logData.user));
         }
 
@@ -429,9 +503,22 @@ document.addEventListener('DOMContentLoaded', () => {
         // Rendu Dépenses
         detailsDepensesBody.innerHTML = '';
         let sumDep = 0;
-        expensesDocs.forEach(e => {
+        expensesDocs.forEach((e, idx) => {
+            // On essaie de récupérer l'ID du document. 
+            // Si expensesDocs vient de Promise.all(doc.get()), c'est un objet data() pur si on a fait .map(d=>d.data()).
+            // Il faut récupérer l'ID.
+            // Dans loadSessionDetails, on a fait: expensesDocs = eSnapshots.filter(doc => doc.exists).map(d => d.data());
+            // On a perdu l'ID ! Corrigeons ça.
+            
             sumDep += (e.montant || 0);
-            detailsDepensesBody.innerHTML += `<tr><td>${e.description}</td><td>${e.type}</td><td>${formatCFA(e.montant)}</td></tr>`;
+            
+            let actions = '';
+            if (logData.status !== "VALIDATED") {
+                actions = `<button class="btn-edit-exp" data-id="${e.id}" style="background:#3b82f6; color:white; border:none; padding:2px 6px; border-radius:4px; cursor:pointer; margin-right:5px;">✏️</button>
+                           <button class="btn-delete-exp" data-id="${e.id}" style="background:#ef4444; color:white; border:none; padding:2px 6px; border-radius:4px; cursor:pointer;">🗑️</button>`;
+            }
+
+            detailsDepensesBody.innerHTML += `<tr><td>${e.description}</td><td>${e.type}</td><td>${formatCFA(e.montant)}</td><td>${actions}</td></tr>`;
         });
         countDepenses.textContent = expensesDocs.length;
 
@@ -439,6 +526,20 @@ document.addEventListener('DOMContentLoaded', () => {
         totalEspEl.textContent = formatCFA(sumEsp);
         totalDepEl.textContent = formatCFA(sumDep);
         totalNetEl.textContent = formatCFA(sumEsp - sumDep);
+    }
+
+    // CORRECTION : Récupérer les IDs des dépenses dans loadSessionDetails
+    // Remplacer la partie expensesDocs dans loadSessionDetails
+    // ... (voir plus bas dans le code complet, je vais patcher loadSessionDetails)
+    
+    // --- PATCH loadSessionDetails pour garder les IDs des dépenses ---
+    // Je dois réécrire la partie expensesDocs de loadSessionDetails pour inclure l'ID
+    // Comme je ne peux pas patcher une fonction existante facilement sans la réécrire, je vais supposer que je modifie la fonction loadSessionDetails ci-dessous.
+    
+    // ... (Code existant loadSessionDetails modifié ci-dessous) ...
+
+    // --- NOUVELLES FONCTIONS POUR LA RECHERCHE ---
+
     }
 
     // --- NOUVELLES FONCTIONS POUR LA RECHERCHE ---
@@ -651,6 +752,18 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
+    // --- GESTION ACTIONS DÉPENSES ---
+    detailsDepensesBody.addEventListener('click', (e) => {
+        const btn = e.target.closest('button');
+        if (!btn) return;
+        const docId = btn.dataset.id;
+        if (btn.classList.contains('btn-delete-exp')) {
+            handleDeleteExpense(docId);
+        } else if (btn.classList.contains('btn-edit-exp')) {
+            handleEditExpense(docId);
+        }
+    });
+
     async function handleDelete(docId) {
         if (!confirm("Voulez-vous vraiment supprimer cet encaissement de la journée ?")) return;
         
@@ -723,6 +836,54 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    async function handleDeleteExpense(docId) {
+        if (!confirm("Supprimer cette dépense ?")) return;
+        try {
+            // 1. Marquer supprimé
+            await db.collection("expenses").doc(docId).update({ isDeleted: true });
+            
+            // 2. Retirer du log de session
+            if (currentSessionData.expenseIds) {
+                const auditRef = db.collection("audit_logs").doc(currentSessionId);
+                await auditRef.update({
+                    expenseIds: firebase.firestore.FieldValue.arrayRemove(docId)
+                });
+            }
+            loadSessionDetails(currentSessionId, currentSessionData);
+        } catch (e) {
+            console.error(e);
+            alert("Erreur suppression dépense.");
+        }
+    }
+
+    async function handleEditExpense(docId) {
+        try {
+            const doc = await db.collection("expenses").doc(docId).get();
+            if (!doc.exists) return;
+            const data = doc.data();
+            currentEditingExpenseId = docId;
+            editExpDate.value = data.date;
+            editExpDesc.value = data.description;
+            editExpAmount.value = data.montant;
+            editExpType.value = data.type || 'Mensuelle';
+            editExpenseModal.classList.add('active');
+        } catch (e) { console.error(e); }
+    }
+
+    saveExpenseBtn.onclick = async () => {
+        if (!currentEditingExpenseId) return;
+        try {
+            await db.collection("expenses").doc(currentEditingExpenseId).update({
+                date: editExpDate.value,
+                description: editExpDesc.value,
+                montant: parseFloat(editExpAmount.value) || 0,
+                type: editExpType.value
+            });
+            closeExpenseModalFunc();
+            loadSessionDetails(currentSessionId, currentSessionData);
+        } catch (e) { alert("Erreur enregistrement dépense."); }
+    };
+
     async function handleEdit(docId) {
         try {
             const docRef = db.collection("transactions").doc(docId);
@@ -730,36 +891,19 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!doc.exists) return;
             
             const data = doc.data();
-            const sessionDate = currentSessionData.date.split('T')[0];
-            const sessionUser = currentSessionData.user;
             
-            // Trouver le montant actuel payé ce jour-là pour pré-remplir
-            let currentPaymentAbj = 0;
-            let currentPaymentPar = 0;
-            
-            if (data.paymentHistory) {
-                let entry;
-                // Recherche précise par SessionID si dispo
-                if (currentSessionData.transactionIds) {
-                    entry = data.paymentHistory.find(p => p.sessionId === currentSessionId);
-                } else {
-                    entry = data.paymentHistory.find(p => p.date === sessionDate && p.saisiPar === sessionUser);
-                }
+            // Copie profonde
+            currentEditingTransaction = JSON.parse(JSON.stringify({ id: doc.id, ...data }));
 
-                if (entry) {
-                    currentPaymentAbj = entry.montantAbidjan || 0;
-                    currentPaymentPar = entry.montantParis || 0;
-                }
-            }
+            // Remplir champs principaux
+            document.getElementById('editModalTitle').textContent = `Modifier : ${data.reference}`;
+            editRef.value = data.reference;
+            editNom.value = data.nom || '';
+            editConteneur.value = data.conteneur || '';
+            editPrixTotal.value = data.prix || 0;
 
-            // Pré-remplir et afficher le modal
-            currentEditDocId = docId;
-            currentEditOriginalData = data;
-            
-            editPrixInput.value = data.prix || 0;
-            editMontantAbidjanInput.value = currentPaymentAbj;
-            editMontantParisInput.value = currentPaymentPar;
-            
+            renderPaymentHistoryTable();
+            resetPaymentForm();
             editModal.classList.add('active');
 
         } catch (error) {
@@ -768,75 +912,136 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    // --- LOGIQUE MODAL TRANSACTION (COPIÉE DE HISTORY.JS) ---
+    function renderPaymentHistoryTable() {
+        editPaymentsBody.innerHTML = '';
+        if (!currentEditingTransaction || !currentEditingTransaction.paymentHistory) return;
+
+        currentEditingTransaction.paymentHistory.forEach((p, index) => {
+            const tr = document.createElement('tr');
+            // Surbrillance du paiement de la session actuelle
+            const isCurrentSession = p.sessionId === currentSessionId;
+            if (isCurrentSession) tr.style.backgroundColor = "#e0f2fe";
+
+            tr.innerHTML = `
+                <td>${p.date}</td>
+                <td>${formatCFA(p.montantParis)}</td>
+                <td>${formatCFA(p.montantAbidjan)}</td>
+                <td>${p.modePaiement || 'Espèce'}</td>
+                <td>${p.agent || '-'}</td>
+                <td>${p.saisiPar || '?'}</td>
+                <td>
+                    <button class="btn-small" onclick="window.editConfPayment(${index})">✏️</button>
+                    <button class="btn-small btn-danger" onclick="window.deleteConfPayment(${index})">🗑️</button>
+                </td>
+            `;
+            editPaymentsBody.appendChild(tr);
+        });
+    }
+
+    function resetPaymentForm() {
+        editPaymentIndex.value = '';
+        editPayDate.value = new Date().toISOString().split('T')[0];
+        editPayParis.value = '';
+        editPayAbidjan.value = '';
+        editPayMode.value = 'Espèce';
+        editPayInfo.value = '';
+        editPayAgent.value = '';
+        addOrUpdatePaymentBtn.textContent = "Ajouter ce paiement";
+    }
+
+    // Fonctions globales pour les boutons onclick dans le HTML généré
+    window.editConfPayment = (index) => {
+        const payment = currentEditingTransaction.paymentHistory[index];
+        editPaymentIndex.value = index;
+        editPayDate.value = payment.date;
+        editPayParis.value = payment.montantParis || 0;
+        editPayAbidjan.value = payment.montantAbidjan || 0;
+        editPayMode.value = payment.modePaiement || 'Espèce';
+        editPayInfo.value = payment.agentMobileMoney || '';
+        editPayAgent.value = payment.agent || '';
+        addOrUpdatePaymentBtn.textContent = "Mettre à jour ce paiement";
+    };
+
+    window.deleteConfPayment = (index) => {
+        if (confirm("Supprimer ce paiement ?")) {
+            currentEditingTransaction.paymentHistory.splice(index, 1);
+            renderPaymentHistoryTable();
+        }
+    };
+
+    addOrUpdatePaymentBtn.addEventListener('click', () => {
+        const paymentData = {
+            date: editPayDate.value,
+            montantParis: parseFloat(editPayParis.value) || 0,
+            montantAbidjan: parseFloat(editPayAbidjan.value) || 0,
+            modePaiement: editPayMode.value,
+            agentMobileMoney: editPayInfo.value.trim(),
+            agent: editPayAgent.value,
+            saisiPar: sessionStorage.getItem('userName') || 'Admin',
+            // Si c'est un ajout, on peut lier à la session courante si la date correspond, 
+            // mais par sécurité on laisse vide ou on met l'ID si c'est explicitement voulu.
+            // Ici on ne force pas le sessionId pour les ajouts manuels sauf si on veut qu'il apparaisse dans cette session.
+            // On va dire que si la date correspond à la session, on lie.
+            sessionId: (editPayDate.value === currentSessionData.date.split('T')[0]) ? currentSessionId : null
+        };
+
+        if (!paymentData.date) return alert("Date obligatoire.");
+
+        const index = editPaymentIndex.value;
+        if (index !== '') {
+            const original = currentEditingTransaction.paymentHistory[index];
+            // On garde le sessionId original s'il existe
+            if (original.sessionId) paymentData.sessionId = original.sessionId;
+            
+            // Gestion Chèque
+            if (paymentData.modePaiement === 'Chèque') {
+                paymentData.checkStatus = (original.modePaiement === 'Chèque' && original.checkStatus) ? original.checkStatus : 'Pending';
+            }
+            currentEditingTransaction.paymentHistory[index] = { ...original, ...paymentData };
+        } else {
+            if (paymentData.modePaiement === 'Chèque') paymentData.checkStatus = 'Pending';
+            currentEditingTransaction.paymentHistory.push(paymentData);
+        }
+        renderPaymentHistoryTable();
+        resetPaymentForm();
+    });
+
     // LOGIQUE ENREGISTREMENT MODAL
     saveEditBtn.onclick = async () => {
-        if (!currentEditDocId || !currentEditOriginalData) return;
-        
-        const newPrix = parseFloat(editPrixInput.value) || 0;
-        const newPaymentAbj = parseFloat(editMontantAbidjanInput.value) || 0;
-        const newPaymentPar = parseFloat(editMontantParisInput.value) || 0;
+        if (!currentEditingTransaction) return;
         
         saveEditBtn.disabled = true;
         saveEditBtn.textContent = "Enregistrement...";
 
         try {
-            const docRef = db.collection("transactions").doc(currentEditDocId);
-            const data = currentEditOriginalData;
-            const sessionDate = currentSessionData.date.split('T')[0];
-            const sessionUser = currentSessionData.user;
-            
-            // 1. Retirer l'ancienne entrée
-            let newHistory;
-            let currentMode = 'Espèce';
-            let currentAgent = '';
-            let currentInfo = '';
-            let currentSessionIdEntry = currentSessionId;
+            const updates = {
+                nom: editNom.value.trim(),
+                conteneur: editConteneur.value.trim().toUpperCase(),
+                prix: parseFloat(editPrixTotal.value) || 0,
+                paymentHistory: currentEditingTransaction.paymentHistory
+            };
 
-            let oldEntry;
-            if (currentSessionData.transactionIds) {
-                oldEntry = (data.paymentHistory || []).find(p => p.sessionId === currentSessionId);
-                newHistory = (data.paymentHistory || []).filter(p => p.sessionId !== currentSessionId);
-            } else {
-                oldEntry = (data.paymentHistory || []).find(p => p.date === sessionDate && p.saisiPar === sessionUser);
-                newHistory = (data.paymentHistory || []).filter(p => !(p.date === sessionDate && p.saisiPar === sessionUser));
+            // Recalcul Totaux
+            updates.montantParis = updates.paymentHistory.reduce((sum, p) => sum + (p.montantParis || 0), 0);
+            updates.montantAbidjan = updates.paymentHistory.reduce((sum, p) => sum + (p.montantAbidjan || 0), 0);
+            updates.reste = (updates.montantParis + updates.montantAbidjan) - updates.prix;
+
+            // Recalcul Agents
+            const uniqueAgents = new Set();
+            if (updates.paymentHistory) {
+                updates.paymentHistory.forEach(p => {
+                    if (p.agent) {
+                        p.agent.split(',').forEach(a => {
+                            const trimmed = a.trim();
+                            if (trimmed) uniqueAgents.add(trimmed);
+                        });
+                    }
+                });
             }
+            updates.agent = Array.from(uniqueAgents).join(', ');
 
-            if (oldEntry) {
-                currentMode = oldEntry.modePaiement || 'Espèce';
-                currentAgent = oldEntry.agent || '';
-                currentInfo = oldEntry.agentMobileMoney || '';
-                if(oldEntry.sessionId) currentSessionIdEntry = oldEntry.sessionId;
-            } else {
-                currentAgent = data.agent || '';
-            }
-            
-            // 2. Ajouter la nouvelle entrée corrigée
-            newHistory.push({
-                date: sessionDate,
-                saisiPar: sessionUser,
-                montantAbidjan: newPaymentAbj,
-                montantParis: newPaymentPar,
-                modePaiement: currentMode,
-                agent: currentAgent,
-                agentMobileMoney: currentInfo,
-                sessionId: currentSessionIdEntry
-            });
-
-            // 3. Recalculer les totaux globaux
-            let totalAbj = 0, totalPar = 0;
-            newHistory.forEach(p => {
-                totalAbj += (p.montantAbidjan || 0);
-                totalPar += (p.montantParis || 0);
-            });
-            const newReste = newPrix - (totalAbj + totalPar);
-
-            await docRef.update({
-                prix: newPrix,
-                paymentHistory: newHistory,
-                montantAbidjan: totalAbj,
-                montantParis: totalPar,
-                reste: newReste
-            });
+            await db.collection("transactions").doc(currentEditingTransaction.id).update(updates);
 
             closeEditModalFunc();
             loadSessionDetails(currentSessionId, currentSessionData);
