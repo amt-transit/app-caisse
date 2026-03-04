@@ -42,6 +42,7 @@ document.addEventListener('DOMContentLoaded', () => {
             <h2 id="editModalTitle" style="margin-top:0;">Modifier Transaction</h2>
             
             <div class="form-grid" style="display:grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap:15px; margin-bottom:20px;">
+                <div><label>Date Opération</label><input type="date" id="editMainDate" style="width:100%;"></div>
                 <div><label>Référence</label><input type="text" id="editRef" readonly style="background:#eee; width:100%;"></div>
                 <div><label>Nom Client</label><input type="text" id="editNom" style="width:100%;"></div>
                 <div><label>Conteneur</label><input type="text" id="editConteneur" style="width:100%;"></div>
@@ -111,6 +112,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const saveExpenseBtn = document.getElementById('saveExpenseBtn');
 
     // Champs Transaction
+    const editMainDate = document.getElementById('editMainDate');
     const editRef = document.getElementById('editRef');
     const editNom = document.getElementById('editNom');
     const editConteneur = document.getElementById('editConteneur');
@@ -895,6 +897,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // Remplir champs principaux
             document.getElementById('editModalTitle').textContent = `Modifier : ${data.reference}`;
+            editMainDate.value = data.date;
             editRef.value = data.reference;
             editNom.value = data.nom || '';
             editConteneur.value = data.conteneur || '';
@@ -1014,6 +1017,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         try {
             const updates = {
+                date: editMainDate.value,
                 nom: editNom.value.trim(),
                 conteneur: editConteneur.value.trim().toUpperCase(),
                 prix: parseFloat(editPrixTotal.value) || 0,

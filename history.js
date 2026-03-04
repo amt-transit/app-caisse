@@ -14,6 +14,16 @@ document.addEventListener('DOMContentLoaded', () => {
     const startDateInput = document.getElementById('startDate');
     const endDateInput = document.getElementById('endDate');
 
+    // --- AJOUT DYNAMIQUE : Bouton Correction Date en Masse ---
+    const controlsContainer = document.querySelector('.history-controls') || smartSearchInput.parentNode;
+    const batchDateBtn = document.createElement('button');
+    batchDateBtn.innerHTML = '<i class="fa-solid fa-calendar-days"></i> Corriger Dates (Lot)';
+    batchDateBtn.className = "btn";
+    batchDateBtn.style.cssText = "background-color:#f59e0b; color:white; margin-left:10px; font-size:12px; padding: 6px 12px; display:none; border:none; border-radius:4px; cursor:pointer;";
+    if (controlsContainer) controlsContainer.appendChild(batchDateBtn);
+
+    let currentFilteredTransactions = []; // Pour stocker la liste affichée
+
     // --- AJOUT DYNAMIQUE : Checkbox Tri Conteneur ---
     let sortByContainerCheckbox = document.getElementById('sortByContainerCheckbox');
     if (!sortByContainerCheckbox && showDeletedCheckbox && showDeletedCheckbox.parentNode) {
@@ -39,6 +49,7 @@ document.addEventListener('DOMContentLoaded', () => {
             <h2 id="historyEditModalTitle" style="margin-top:0;">Modifier Transaction</h2>
             
             <div class="form-grid" style="grid-template-columns: 1fr 1fr 1fr 1fr; gap:15px;">
+                <div><label>Date Opération</label><input type="date" id="editHistMainDate"></div>
                 <div><label>Référence</label><input type="text" id="editHistRef" readonly style="background:#eee;"></div>
                 <div><label>Nom Client</label><input type="text" id="editHistNom"></div>
                 <div><label>Conteneur</label><input type="text" id="editHistConteneur"></div>
@@ -88,6 +99,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const addOrUpdatePaymentBtn = document.getElementById('addOrUpdatePaymentBtn');
 
     // Champs du modal
+    const editHistMainDate = document.getElementById('editHistMainDate');
     const editHistRef = document.getElementById('editHistRef');
     const editHistNom = document.getElementById('editHistNom');
     const editHistConteneur = document.getElementById('editHistConteneur');
@@ -342,6 +354,16 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             return true;
         });
+
+        currentFilteredTransactions = filteredTransactions; // Sauvegarde pour l'action de masse
+        
+        // Afficher le bouton de correction si on filtre et qu'il y a des résultats
+        if ((smartSearchInput.value || agentFilterInput.value) && filteredTransactions.length > 0 && (userRole === 'admin' || userRole === 'super_admin')) {
+            batchDateBtn.style.display = "inline-block";
+            batchDateBtn.textContent = `📅 Corriger Dates (${filteredTransactions.length})`;
+        } else {
+            batchDateBtn.style.display = "none";
+        }
         
         // NETTOYAGE DES TRANSACTIONS NON CONFIRMÉES
         const cleanTransactions = filteredTransactions.reduce((acc, t) => {
@@ -603,6 +625,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Remplir les champs principaux
         document.getElementById('historyEditModalTitle').textContent = `Modifier : ${transaction.reference}`;
+        editHistMainDate.value = transaction.date;
         editHistRef.value = transaction.reference;
         editHistNom.value = transaction.nom || '';
         editHistConteneur.value = transaction.conteneur || '';
@@ -717,6 +740,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         try {
             const updates = {
+                date: editHistMainDate.value,
                 nom: editHistNom.value.trim(),
                 conteneur: editHistConteneur.value.trim().toUpperCase(),
                 prix: parseFloat(editHistPrix.value) || 0,
@@ -762,6 +786,42 @@ document.addEventListener('DOMContentLoaded', () => {
         } finally {
             saveChangesBtn.disabled = false;
             saveChangesBtn.textContent = "Enregistrer les modifications";
+        }
+    });
+
+    // --- LOGIQUE CORRECTION EN MASSE ---
+    batchDateBtn.addEventListener('click', async () => {
+        if (currentFilteredTransactions.length === 0) return;
+        
+        const newDate = prompt(`Voulez-vous changer la date de ces ${currentFilteredTransactions.length} transactions ?\n\nEntrez la nouvelle date (AAAA-MM-JJ) :`);
+        if (!newDate) return;
+        
+        // Validation format date simple
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(newDate)) return alert("Format invalide. Utilisez AAAA-MM-JJ (ex: 2026-03-04)");
+
+        if (!confirm(`⚠️ ATTENTION : Vous allez modifier la date de ${currentFilteredTransactions.length} opérations pour le ${newDate}.\n\nConfirmer ?`)) return;
+
+        batchDateBtn.disabled = true;
+        batchDateBtn.textContent = "Traitement...";
+
+        const batch = db.batch();
+        let count = 0;
+
+        currentFilteredTransactions.forEach(t => {
+            const ref = transactionsCollection.doc(t.id);
+            batch.update(ref, { date: newDate, lastPaymentDate: newDate }); // On met à jour la date principale et le tri
+            count++;
+        });
+
+        try {
+            await batch.commit();
+            alert(`Succès ! ${count} dates mises à jour.`);
+            fetchHistory(); // Recharger
+        } catch (e) {
+            console.error(e);
+            alert("Erreur lors de la mise à jour : " + e.message);
+        } finally {
+            batchDateBtn.disabled = false;
         }
     });
 

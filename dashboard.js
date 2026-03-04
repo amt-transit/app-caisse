@@ -861,19 +861,19 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // B. Données
     db.collection("transactions").where("isDeleted", "!=", true).onSnapshot(snap => {
-        allTransactions = snap.docs.map(d => d.data());
+        allTransactions = snap.docs.map(d => ({ id: d.id, ...d.data() }));
         updateDashboard();
     });
     db.collection("expenses").where("isDeleted", "!=", true).onSnapshot(snap => {
-        allExpenses = snap.docs.map(d => d.data());
+        allExpenses = snap.docs.map(d => ({ id: d.id, ...d.data() }));
         updateDashboard();
     });
     db.collection("other_income").where("isDeleted", "!=", true).onSnapshot(snap => {
-        allOtherIncome = snap.docs.map(d => d.data());
+        allOtherIncome = snap.docs.map(d => ({ id: d.id, ...d.data() }));
         updateDashboard();
     });
     db.collection("bank_movements").where("isDeleted", "!=", true).onSnapshot(snap => {
-        allBankMovements = snap.docs.map(d => d.data());
+        allBankMovements = snap.docs.map(d => ({ id: d.id, ...d.data() }));
         updateDashboard();
     });
 
