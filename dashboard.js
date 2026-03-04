@@ -91,6 +91,24 @@ document.addEventListener('DOMContentLoaded', async () => {
     const startDateInput = document.getElementById('startDate');
     const endDateInput = document.getElementById('endDate');
     const clearFilterBtn = document.getElementById('clearFilterBtn');
+
+    // --- GESTION DES ONGLETS ---
+    const tabs = document.querySelectorAll('.sub-nav a');
+    const panels = document.querySelectorAll('.tab-panel');
+
+    tabs.forEach(tab => {
+        tab.addEventListener('click', (e) => {
+            e.preventDefault();
+            const targetId = tab.getAttribute('href');
+            const targetPanel = document.querySelector(targetId);
+            
+            tabs.forEach(t => t.classList.remove('active'));
+            panels.forEach(p => p.classList.remove('active'));
+            
+            tab.classList.add('active');
+            if (targetPanel) targetPanel.classList.add('active');
+        });
+    });
     
     // Tableaux
     const containerSummaryBody = document.getElementById('containerSummaryTableBody');

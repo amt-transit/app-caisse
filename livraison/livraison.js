@@ -93,6 +93,7 @@ document.addEventListener('DOMContentLoaded', function() {
     initAutoAddress();
     initBackToTopButton();
     initDuplicateCleaner(); // Initialisation du bouton de nettoyage
+    initAuditSyncButton(); // Initialisation du bouton Audit
 });
 
 // Synchronisation Temps Réel avec Firestore
@@ -839,10 +840,20 @@ async function findAddressForRecipient(name) {
 
     // 3. Recherche Archives (Firestore)
     try {
-        const snap = await db.collection(CONSTANTS.ARCHIVE_COLLECTION)
+        // Essai 1 : Recherche Exacte
+        let snap = await db.collection(CONSTANTS.ARCHIVE_COLLECTION)
             .where('destinataire', '==', val)
             .limit(1)
             .get();
+        
+        // Essai 2 : Recherche en Majuscules (Si pas trouvé)
+        if (snap.empty) {
+            snap = await db.collection(CONSTANTS.ARCHIVE_COLLECTION)
+                .where('destinataire', '==', val.toUpperCase())
+                .limit(1)
+                .get();
+        }
+
         if (!snap.empty) return snap.docs[0].data().lieuLivraison;
     } catch (e) { console.error("Erreur recherche adresse archive", e); }
     return null;
@@ -2737,29 +2748,20 @@ function initAutoAddress() {
         // Si pas de nom ou si le lieu est déjà rempli, on ne fait rien
         if (!val || lieuInput.value.trim() !== '') return;
 
-        // 1. Recherche dans les données locales (Active) - Insensible à la casse
-        // On cherche le colis le plus récent pour ce destinataire
-        const localMatch = deliveries.find(d => 
-            d.destinataire && d.destinataire.toLowerCase() === val.toLowerCase() && d.lieuLivraison
-        );
+        // Utilisation de la fonction centralisée (Locale + Archives + Majuscules)
+        const foundAddr = await findAddressForRecipient(val);
         
-        if (localMatch) {
-            lieuInput.value = localMatch.lieuLivraison;
-            showToast(`📍 Adresse trouvée : ${localMatch.lieuLivraison}`, 'success');
-            return;
-        }
-
-        // 2. Recherche dans les archives (Firestore) - Match exact
-        try {
-            const snap = await db.collection(CONSTANTS.ARCHIVE_COLLECTION).where('destinataire', '==', val).limit(1).get();
-            if (!snap.empty) {
-                const data = snap.docs[0].data();
-                if (data.lieuLivraison) {
-                    lieuInput.value = data.lieuLivraison;
-                    showToast(`🗄️ Adresse trouvée (Archives) : ${data.lieuLivraison}`, 'success');
-                }
+        if (foundAddr) {
+            lieuInput.value = foundAddr;
+            showToast(`📍 Adresse trouvée : ${foundAddr}`, 'success');
+            
+            // Auto-détection commune si le champ existe
+            const communeInput = document.getElementById('commune');
+            if (communeInput && typeof detectCommune === 'function') {
+                const detected = detectCommune(foundAddr);
+                if (detected !== 'AUTRE') communeInput.value = detected;
             }
-        } catch (e) { console.error("Erreur auto-adresse", e); }
+        }
     });
 }
 
@@ -2886,6 +2888,125 @@ window.confirmDeleteAction = function(action) {
         }
     }
 };
+
+// --- NOUVEAU : BOUTON SYNCHRO AUDIT ---
+function initAuditSyncButton() {
+    const toolbars = document.querySelectorAll('.toolbar');
+    toolbars.forEach(toolbar => {
+        if (toolbar.querySelector('.btn-audit-sync')) return;
+
+        const btn = document.createElement('button');
+        btn.className = "btn btn-audit-sync";
+        btn.innerHTML = "🔍 Vérif. Audit";
+        btn.style.backgroundColor = "#6f42c1"; // Violet
+        btn.style.color = "white";
+        btn.title = "Vérifier les paiements dans l'Audit et mettre à jour les statuts";
+        btn.onclick = checkAuditForDeliveries;
+        
+        // Insérer avant la barre de recherche
+        const search = toolbar.querySelector('.search-box') || toolbar.querySelector('input[type="text"]');
+        if (search) {
+            // Remonter jusqu'à l'enfant direct de la toolbar pour éviter l'erreur insertBefore
+            let target = search;
+            while (target && target.parentNode !== toolbar) {
+                target = target.parentNode;
+            }
+            if (target) toolbar.insertBefore(btn, target);
+            else toolbar.appendChild(btn);
+        } else {
+            toolbar.appendChild(btn);
+        }
+    });
+}
+
+async function checkAuditForDeliveries() {
+    if (!confirm("Lancer la vérification des statuts via l'Audit ?\n\nCela va :\n1. Chercher les colis payés/validés dans l'Audit.\n2. Mettre à jour leur statut en 'LIVRÉ'.\n3. Vous proposer de déplacer ceux qui sont encore à Paris/À Venir.")) return;
+
+    const loadingToast = document.createElement('div');
+    loadingToast.className = 'toast';
+    loadingToast.textContent = "Analyse Audit & Transactions...";
+    loadingToast.style.background = "#6f42c1";
+    document.body.appendChild(loadingToast);
+
+    try {
+        // 1. Récupérer les sessions validées
+        const sessionsSnap = await db.collection("audit_logs")
+            .where("action", "==", "VALIDATION_JOURNEE")
+            .where("status", "==", "VALIDATED")
+            .get();
+        
+        const validatedSessionIds = new Set(sessionsSnap.docs.map(d => d.id));
+
+        // 2. Identifier les colis non livrés
+        const pendingDeliveries = deliveries.filter(d => d.status !== 'LIVRE');
+        if (pendingDeliveries.length === 0) {
+            loadingToast.remove();
+            return alert("Tous les colis sont déjà livrés.");
+        }
+
+        // 3. Vérifier le statut financier
+        const refsToCheck = [...new Set(pendingDeliveries.map(d => d.ref).filter(r => r))];
+        const validatedRefs = new Set();
+
+        // Découpage en lots de 10 pour Firestore 'in' query
+        const chunks = [];
+        for (let i = 0; i < refsToCheck.length; i += 10) chunks.push(refsToCheck.slice(i, i + 10));
+
+        for (const chunk of chunks) {
+            const q = await db.collection("transactions").where("reference", "in", chunk).get();
+            q.forEach(doc => {
+                const t = doc.data();
+                // Est validé si lié à une session validée
+                if (t.paymentHistory && t.paymentHistory.some(p => p.sessionId && validatedSessionIds.has(p.sessionId))) {
+                    validatedRefs.add(t.reference);
+                }
+            });
+        }
+
+        // 4. Identifier les candidats
+        const moveCandidates = [];
+        const updateCandidates = [];
+
+        for (const item of pendingDeliveries) {
+            if (validatedRefs.has(item.ref)) {
+                if (['PARIS', 'A_VENIR'].includes(item.containerStatus)) {
+                    moveCandidates.push(item);
+                } else {
+                    updateCandidates.push(item);
+                }
+            }
+        }
+
+        let batch = db.batch();
+        let opCount = 0;
+        let movedCount = 0;
+        let updatedCount = 0;
+
+        // Traitement des déplacements (Confirmation groupée)
+        if (moveCandidates.length > 0) {
+            if (confirm(`${moveCandidates.length} colis validés sont encore dans 'Paris' ou 'À Venir'.\n\nTout déplacer vers 'EN COURS' et marquer 'LIVRÉ' ?`)) {
+                moveCandidates.forEach(item => {
+                    batch.update(db.collection(CONSTANTS.COLLECTION).doc(item.id), {
+                        containerStatus: 'EN_COURS', status: 'LIVRE', dateLivraison: new Date().toISOString(), importedFromTransit: true
+                    });
+                    movedCount++; opCount++;
+                });
+            }
+        }
+
+        // Traitement des mises à jour simples
+        updateCandidates.forEach(item => {
+            batch.update(db.collection(CONSTANTS.COLLECTION).doc(item.id), { status: 'LIVRE', dateLivraison: new Date().toISOString() });
+            updatedCount++; opCount++;
+        });
+
+        if (opCount > 0) await batch.commit();
+
+        loadingToast.remove();
+        alert(`✅ Terminé !\n\n📦 ${updatedCount + movedCount} colis marqués LIVRÉ\n🚚 Dont ${movedCount} déplacés vers EN COURS.`);
+
+    } catch (e) { console.error(e); loadingToast.remove(); alert("Erreur : " + e.message); }
+}
 
 // Fonctions utilitaires de suppression/déplacement
 function moveSelectedToAVenir() {

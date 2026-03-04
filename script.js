@@ -90,6 +90,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const transactionsCollection = db.collection("transactions");
     const expensesCollection = db.collection("expenses");
     const bankCollection = db.collection("bank_movements");
+    const livraisonsCollection = db.collection("livraisons");
 
     // Récupération du nom de l'utilisateur connecté
     const currentUserName = sessionStorage.getItem('userName') || 'Utilisateur';
@@ -565,6 +566,27 @@ document.addEventListener('DOMContentLoaded', async () => {
                 });
                 touchedTransactionIds.push(docRef.id); // Sauvegarde nouvel ID
             }
+
+            // --- SYNCHRONISATION AVEC LIVRAISON ---
+            // Si on modifie/crée une transaction, on met à jour le colis correspondant dans Livraison
+            const livQuery = await livraisonsCollection.where("ref", "==", ref).limit(1).get();
+            if (!livQuery.empty) {
+                const livDoc = livQuery.docs[0];
+                const livUpdates = {};
+                
+                // Mise à jour Conteneur
+                if (baseTransac.conteneur && baseTransac.conteneur !== livDoc.data().conteneur) {
+                    livUpdates.conteneur = baseTransac.conteneur;
+                }
+                // Mise à jour Nom (Destinataire)
+                if (baseTransac.nom && baseTransac.nom !== livDoc.data().destinataire) {
+                    livUpdates.destinataire = baseTransac.nom;
+                }
+
+                if (Object.keys(livUpdates).length > 0) {
+                    batch.update(livDoc.ref, livUpdates);
+                }
+            }
         }
 
         // B. Enregistrer Dépenses
@@ -762,6 +784,43 @@ document.addEventListener('DOMContentLoaded', async () => {
             fillFormWithData(data);
         } else {
             // Mode création
+            
+            // --- SAISIE INTELLIGENTE : Recherche dans Livraisons (Paris / À Venir) ---
+            const livQuery = await livraisonsCollection.where("ref", "==", searchValue).limit(1).get();
+            
+            if (!livQuery.empty) {
+                const livData = livQuery.docs[0].data();
+                
+                // Remplissage Nom
+                if (livData.destinataire || livData.expediteur) {
+                    nomInput.value = livData.destinataire || livData.expediteur;
+                    nomInput.style.backgroundColor = "#e0f7fa"; // Feedback visuel (Bleu clair)
+                }
+                
+                // Remplissage Conteneur
+                if (livData.conteneur) {
+                    conteneurInput.value = livData.conteneur;
+                }
+                
+                // Remplissage Commune
+                if (livData.commune && communeInput) {
+                    communeInput.value = livData.commune;
+                }
+
+                // Remplissage Prix (Si disponible)
+                let price = 0;
+                if (livData.prixOriginal) {
+                    price = parseFloat(String(livData.prixOriginal).replace(/[^\d]/g, '')) || 0;
+                }
+                if (price === 0 && livData.montant) {
+                    price = parseFloat(String(livData.montant).replace(/[^\d]/g, '')) || 0;
+                }
+                
+                if (price > 0) {
+                    prixInput.value = price;
+                    calculateAndStyleReste();
+                }
+            }
         }
     });
 

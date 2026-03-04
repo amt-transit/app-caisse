@@ -128,7 +128,29 @@ document.addEventListener('DOMContentLoaded', () => {
             const check = await transactionsCollection.where("reference", "==", data.reference).limit(1).get();
             if (!check.empty) {
                 const existing = check.docs[0].data();
-                return alert(`Référence déjà existante (Conteneur: ${existing.conteneur}).`);
+                
+                // --- GESTION DES PRÉ-PAIEMENTS ---
+                if (confirm(`⚠️ Cette référence existe DÉJÀ (Client: ${existing.nom}, Conteneur: ${existing.conteneur}).\n\nS'agit-il d'un colis PRÉ-PAYÉ qui vient d'arriver ?\n\n✅ OK : Valider l'arrivée (Mise à jour Conteneur + Statut Logistique)\n❌ Annuler : Ne rien faire`)) {
+                    
+                    // 1. Mise à jour de la transaction (Conteneur)
+                    await check.docs[0].ref.update({
+                        conteneur: data.conteneur
+                    });
+
+                    // 2. Mise à jour Logistique (Livraisons -> En Cours)
+                    await removeFromParisManifest(data.reference, data.conteneur);
+
+                    alert("✅ Arrivée validée ! Le colis est maintenant 'En Cours'.");
+                    
+                    // Reset du formulaire
+                    arrivalRef.value = ''; arrivalNom.value = ''; arrivalPrix.value = '';
+                    arrivalRef.dataset.dateParis = '';
+                    arrivalMontantParis.value = ''; arrivalMontantAbidjan.value = '';
+                    arrivalNom.style.backgroundColor = ""; arrivalPrix.style.backgroundColor = ""; arrivalMontantParis.style.backgroundColor = "";
+                    arrivalRef.focus();
+                    return;
+                }
+                return;
             }
 
             transactionsCollection.add(data).then(() => {
@@ -553,11 +575,15 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function removeFromParisManifest(ref, conteneur) {
-        const q = await livraisonsCollection.where("ref", "==", ref).where("containerStatus", "==", "PARIS").limit(1).get();
+        // MODIFICATION : Recherche élargie pour inclure A_VENIR
+        const q = await livraisonsCollection.where("ref", "==", ref).limit(5).get();
         if (!q.empty) {
-            // Au lieu de supprimer, on déplace vers EN_COURS
-            // On met aussi à jour le conteneur si fourni lors de la réception
-            await q.docs[0].ref.update({ containerStatus: 'EN_COURS', conteneur: conteneur || q.docs[0].data().conteneur || '' });
+            // On cible en priorité les colis qui sont à PARIS ou A_VENIR
+            const targetDoc = q.docs.find(d => ['PARIS', 'A_VENIR'].includes(d.data().containerStatus));
+            
+            if (targetDoc) {
+                await targetDoc.ref.update({ containerStatus: 'EN_COURS', conteneur: conteneur || targetDoc.data().conteneur || '' });
+            }
         }
     }
 

@@ -774,6 +774,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
             await transactionsCollection.doc(currentEditingTransaction.id).update(updates);
 
+            // --- SYNCHRONISATION AVEC LIVRAISON ---
+            try {
+                const livQuery = await db.collection("livraisons").where("ref", "==", currentEditingTransaction.reference).limit(1).get();
+                if (!livQuery.empty) {
+                    await livQuery.docs[0].ref.update({
+                        conteneur: updates.conteneur,
+                        destinataire: updates.nom
+                    });
+                }
+            } catch (e) { console.error("Erreur sync livraison:", e); }
+
             logAudit("MODIFICATION_COMPLÈTE", `Transaction ${currentEditingTransaction.reference} modifiée`, currentEditingTransaction.id);
 
             alert("Transaction modifiée avec succès !");

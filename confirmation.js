@@ -1045,6 +1045,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
             await db.collection("transactions").doc(currentEditingTransaction.id).update(updates);
 
+            // --- SYNCHRONISATION AVEC LIVRAISON ---
+            try {
+                const livQuery = await db.collection("livraisons").where("ref", "==", currentEditingTransaction.reference).limit(1).get();
+                if (!livQuery.empty) {
+                    await livQuery.docs[0].ref.update({
+                        conteneur: updates.conteneur,
+                        destinataire: updates.nom
+                    });
+                }
+            } catch (e) { console.error("Erreur sync livraison:", e); }
+
             closeEditModalFunc();
             loadSessionDetails(currentSessionId, currentSessionData);
 
@@ -1122,21 +1133,64 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    validateSessionBtn.addEventListener('click', () => {
+    validateSessionBtn.addEventListener('click', async () => {
         if (!currentSessionId) return;
         if (confirm("Confirmer la validation de cette journée ?")) {
-            // Ici on pourrait mettre à jour le document audit_log pour dire "Validé par Admin"
-            db.collection("audit_logs").doc(currentSessionId).update({
+            
+            // --- NOUVELLE LOGIQUE : Mise à jour du statut Livraison ---
+            const batch = db.batch();
+            let deliveryUpdateCount = 0;
+
+            // 1. On récupère les références des transactions de la session en cours
+            const refsToUpdate = currentSessionAllTransactions.map(t => t.data.reference);
+
+            if (refsToUpdate.length > 0) {
+                // 2. On cherche les livraisons correspondantes dans "EN_COURS"
+                // Firestore "in" query is limited to 30 items. We chunk it to be safe.
+                const chunks = [];
+                for (let i = 0; i < refsToUpdate.length; i += 30) {
+                    chunks.push(refsToUpdate.slice(i, i + 30));
+                }
+
+                for (const chunk of chunks) {
+                    const deliveryQuery = db.collection("livraisons")
+                        .where("ref", "in", chunk)
+                        .where("containerStatus", "==", "EN_COURS");
+                    
+                    const deliverySnapshot = await deliveryQuery.get();
+
+                    deliverySnapshot.forEach(doc => {
+                        // 3. On ajoute la mise à jour au batch
+                        batch.update(doc.ref, { 
+                            status: 'LIVRE', 
+                            dateLivraison: new Date().toISOString() 
+                        });
+                        deliveryUpdateCount++;
+                    });
+                }
+            }
+
+            // On met à jour le log d'audit (dans le même batch pour l'atomicité)
+            const auditLogRef = db.collection("audit_logs").doc(currentSessionId);
+            batch.update(auditLogRef, {
                 status: "VALIDATED",
                 validatedBy: sessionStorage.getItem('userName'),
                 validatedAt: new Date().toISOString()
-            }).then(() => {
-                alert("Journée validée avec succès !");
+            });
+
+            try {
+                await batch.commit();
+                let successMsg = "Journée validée avec succès !";
+                if (deliveryUpdateCount > 0) successMsg += `\n\n✅ ${deliveryUpdateCount} colis mis à jour comme "Livré" dans l'onglet Livraison.`;
+                alert(successMsg);
                 detailStatus.textContent = "Validé";
                 detailStatus.style.background = "#10b981";
                 detailStatus.style.color = "white";
                 validateSessionBtn.style.display = 'none';
-            });
+            } catch (error) {
+                console.error("Erreur lors de la validation :", error);
+                alert("Une erreur est survenue lors de la validation.");
+            }
         }
     });
 

@@ -350,6 +350,10 @@ td button.editBtn { background-color: #007bff; color: white; border: none; paddi
     max-height: 85vh; /* Limite la hauteur à 85% de l'écran */
     overflow-y: auto; /* Active le scroll à l'intérieur du modal */
 }
+/* Fond opaque pour les en-têtes sticky dans les modales */
+.modal-content th {
+    background-color: #e2e8f0;
+}
 .history-list li { padding: 10px 0; font-size: 13px; border-bottom: 1px solid #f1f5f9; }
 
 /* --- SUPPRESSION --- */
@@ -410,7 +414,14 @@ body { min-height: 100vh; overflow-y: auto; overflow-x: hidden; }
 }
 .modal-header {
     display: flex; justify-content: space-between; align-items: center; color: var(--text-main); font-weight: 700; font-size: 18px;
-    border-bottom: 1px solid var(--glass-border); padding-bottom: 10px; margin-bottom: 15px;
+    border-bottom: 1px solid var(--glass-border);
+    position: sticky;
+    top: 0;
+    background-color: #fff;
+    z-index: 110;
+    margin: -25px -25px 15px -25px;
+    padding: 20px 25px 15px 25px;
+    border-radius: 16px 16px 0 0;
 }
 .close-modal {
     font-size: 24px; font-weight: bold; cursor: pointer; color: #aaa;
