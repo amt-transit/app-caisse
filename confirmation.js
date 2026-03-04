@@ -263,9 +263,21 @@ document.addEventListener('DOMContentLoaded', () => {
             <div style="font-size:0.8em; color:#94a3b8; margin-top:2px;">Validé le : ${dateStr} à ${timeStr}</div>
         `;
         
-        div.addEventListener('mouseover', () => div.style.background = '#f1f5f9');
-        div.addEventListener('mouseout', () => div.style.background = 'transparent');
-        div.addEventListener('click', () => loadSessionDetails(doc.id, data));
+        div.addEventListener('mouseover', () => {
+            if (!div.classList.contains('selected-session')) div.style.background = '#f1f5f9';
+        });
+        div.addEventListener('mouseout', () => {
+            if (!div.classList.contains('selected-session')) div.style.background = 'transparent';
+        });
+        div.addEventListener('click', () => {
+            document.querySelectorAll('.session-item').forEach(el => {
+                el.classList.remove('selected-session');
+                el.style.background = 'transparent';
+            });
+            div.classList.add('selected-session');
+            div.style.background = '#e0f2fe'; // Bleu clair pour la sélection
+            loadSessionDetails(doc.id, data);
+        });
         return div;
     }
 

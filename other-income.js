@@ -69,6 +69,18 @@ document.addEventListener('DOMContentLoaded', () => {
             return (item.description || "").toLowerCase().includes(term);
         });
 
+        // Calcul du total filtré
+        const totalFiltered = filtered.reduce((sum, item) => sum + (item.montant || 0), 0);
+        
+        // Recherche du titre H2 pour afficher le total
+        const headers = document.getElementsByTagName('h2');
+        for (let h of headers) {
+            if (h.textContent.includes("Historique")) {
+                h.innerHTML = `Historique des Autres Entrées <span style="font-size:0.8em; color:#2975d7; margin-left:10px;">(Total: ${formatCFA(totalFiltered)})</span>`;
+                break;
+            }
+        }
+
         incomeTableBody.innerHTML = ''; 
         if (filtered.length === 0) {
             incomeTableBody.innerHTML = '<tr><td colspan="4">Aucun résultat.</td></tr>';

@@ -190,6 +190,13 @@ document.addEventListener('DOMContentLoaded', () => {
                    (item.montant || 0).toString().includes(term); // Recherche par montant
         });
 
+        // Calcul du total filtré
+        const totalFiltered = filtered.reduce((sum, item) => sum + (item.montant || 0), 0);
+        const historyTitle = document.getElementById('expensesHistoryTitle');
+        if (historyTitle) {
+            historyTitle.innerHTML = `Historique des Opérations <span style="font-size:0.8em; color:#2975d7; margin-left:10px;">(Total: ${formatCFA(totalFiltered)})</span>`;
+        }
+
         // TRI
         filtered.sort((a, b) => {
             // Si onglet Conteneur ET Checkbox cochée
