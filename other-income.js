@@ -76,7 +76,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const headers = document.getElementsByTagName('h2');
         for (let h of headers) {
             if (h.textContent.includes("Historique")) {
-                h.innerHTML = `Historique des Autres Entrées <span style="font-size:0.8em; color:#2975d7; margin-left:10px;">(Total: ${formatCFA(totalFiltered)})</span>`;
+                h.innerHTML = `Historique des Autres Entrées <span style="margin-left:15px; font-size:0.8em; font-weight:normal;"><span class="tag" style="background:#fff; border:1px solid #ccc; color:#333;">Total</span> : <b style="color:#2975d7;">${formatCFA(totalFiltered)}</b></span>`;
                 break;
             }
         }

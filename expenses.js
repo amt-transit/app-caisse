@@ -194,7 +194,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const totalFiltered = filtered.reduce((sum, item) => sum + (item.montant || 0), 0);
         const historyTitle = document.getElementById('expensesHistoryTitle');
         if (historyTitle) {
-            historyTitle.innerHTML = `Historique des Opérations <span style="font-size:0.8em; color:#2975d7; margin-left:10px;">(Total: ${formatCFA(totalFiltered)})</span>`;
+            historyTitle.innerHTML = `Historique des Opérations <span style="margin-left:15px; font-size:0.8em; font-weight:normal;"><span class="tag" style="background:#fff; border:1px solid #ccc; color:#333;">Total</span> : <b style="color:#2975d7;">${formatCFA(totalFiltered)}</b></span>`;
         }
 
         // TRI
