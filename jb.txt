@@ -36,4 +36,6 @@ const firebaseConfig = {
 
 
  firebase emulators:start --import=./firebase-data --export-on-exit
+
+  les modifications pour désactiver la connexion aux émulateurs locaux et utiliser votre base de données Firebase en ligne (Production).
        

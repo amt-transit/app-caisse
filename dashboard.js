@@ -173,7 +173,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         renderAdjustments(filteredTrans);
         
         // Graphiques & Analyses
-        renderCharts(cleanTransactions, cleanExpenses);
+        renderCharts(filteredTrans, filteredExp);
         renderAdvancedAnalytics(cleanTransactions);
     }
 
@@ -285,7 +285,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
 
         const months = {};
-        const getMonthKey = (dateStr) => dateStr ? dateStr.substring(0, 7) : '0000-00';
+        const getMonthKey = (dateStr) => (dateStr && typeof dateStr === 'string' && dateStr.length >= 7) ? dateStr.substring(0, 7) : '0000-00';
         const getMonthLabel = (dateStr) => {
             if(!dateStr) return 'Indéfini';
             const d = new Date(dateStr);
@@ -297,9 +297,10 @@ document.addEventListener('DOMContentLoaded', async () => {
             const cName = (t.conteneur || "Non spécifié").trim().toUpperCase();
 
             // On utilise la date d'origine du conteneur si elle existe, sinon la date de transaction
-            let refDate = t.date;
-            if (cName !== "NON SPÉCIFIÉ" && containerOrigins[cName]) {
-                refDate = containerOrigins[cName];
+            let refDate = String(t.date || '');
+            const originDate = containerOrigins[cName];
+            if (cName !== "NON SPÉCIFIÉ" && originDate) {
+                refDate = String(originDate);
             }
 
             const mKey = getMonthKey(refDate);
@@ -327,9 +328,10 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const cName = (e.conteneur || "Non spécifié").trim().toUpperCase();
 
                 // On utilise la date d'origine du conteneur si elle existe, sinon la date de dépense
-                let refDate = e.date;
-                if (cName !== "NON SPÉCIFIÉ" && containerOrigins[cName]) {
-                    refDate = containerOrigins[cName];
+                let refDate = String(e.date || '');
+                const originDate = containerOrigins[cName];
+                if (cName !== "NON SPÉCIFIÉ" && originDate) {
+                    refDate = String(originDate);
                 }
 
                 const mKey = getMonthKey(refDate);
@@ -453,7 +455,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (!monthlySummaryBody) return;
         const months = {};
         transactions.forEach(t => {
-            const m = t.date.substring(0, 7);
+            const dateStr = String(t.date || '');
+            if (dateStr.length < 7) return;
+            const m = dateStr.substring(0, 7);
             if (!months[m]) months[m] = { count: 0, ca: 0 };
             months[m].count++;
             months[m].ca += (t.prix || 0);
@@ -464,14 +468,14 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     function renderMonthlyExpenses(expenses) {
         if (!monthlyExpensesBody) return;
-        const monthly = expenses.filter(e => e.type === 'Mensuelle' && e.action !== 'Allocation');
+        const monthly = expenses.filter(e => e.type === 'Mensuelle' && e.action !== 'Allocation' && e.date);
         monthly.sort((a, b) => new Date(b.date) - new Date(a.date));
         monthlyExpensesBody.innerHTML = monthly.map(e => `<tr><td>${e.date}</td><td>${e.description}</td><td>${formatCFA(e.montant)}</td></tr>`).join('');
     }
 
     function renderBankMovements(movements) {
         if (!bankMovementsBody) return;
-        const sorted = movements.sort((a, b) => new Date(b.date) - new Date(a.date));
+        const sorted = movements.filter(m => m.date).sort((a, b) => new Date(b.date) - new Date(a.date));
         bankMovementsBody.innerHTML = sorted.map(m => {
             // Logique d'affichage améliorée
             const isNegativeDisplay = (m.type === 'Depot' && m.source === 'Saisie Manuelle') || m.type === 'Paiement';
@@ -519,33 +523,207 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     function renderCharts(transactions, expenses) {
         if (userRole === 'saisie_full') return;
+        if (typeof Chart === 'undefined') return console.warn("Chart.js non chargé");
         
-        // Exemple : Graphique Dépenses vs Conteneurs
-        const ctx = document.getElementById('expenseEvolutionChart');
-        if (ctx) {
-            if (charts.expense) charts.expense.destroy();
-            
-            const months = {};
-            expenses.forEach(e => {
-                const m = e.date.substring(0, 7);
-                if (!months[m]) months[m] = { mens: 0, cont: 0 };
-                if (e.type === 'Conteneur') months[m].cont += e.montant;
-                else if (e.action !== 'Allocation') months[m].mens += e.montant;
-            });
-            const labels = Object.keys(months).sort();
-            
-            charts.expense = new Chart(ctx, {
-                type: 'line',
-                data: {
-                    labels: labels,
-                    datasets: [
-                        { label: 'Mensuelles', data: labels.map(l => months[l].mens), borderColor: '#ef4444', fill: false },
-                        { label: 'Conteneurs', data: labels.map(l => months[l].cont), borderColor: '#3b82f6', fill: false }
-                    ]
-                }
-            });
+        try {
+            // 1. Graphique Dépenses vs Conteneurs (Existant)
+            const ctx = document.getElementById('expenseEvolutionChart');
+            if (ctx) {
+                if (charts.expense) charts.expense.destroy();
+                
+                const months = {};
+                expenses.forEach(e => {
+                    const dateStr = String(e.date || '');
+                    if (dateStr.length < 7) return;
+                    const m = dateStr.substring(0, 7);
+                    if (!months[m]) months[m] = { mens: 0, cont: 0 };
+                    if (e.type === 'Conteneur') months[m].cont += e.montant;
+                    else if (e.action !== 'Allocation') months[m].mens += e.montant;
+                });
+                const labels = Object.keys(months).sort();
+                
+                charts.expense = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: labels,
+                        datasets: [
+                            { label: 'Mensuelles', data: labels.map(l => months[l].mens), borderColor: '#ef4444', fill: false },
+                            { label: 'Conteneurs', data: labels.map(l => months[l].cont), borderColor: '#3b82f6', fill: false }
+                        ]
+                    }
+                });
+            }
+
+            // 2. Activité Conteneurs (Arrivées & CA)
+            // CORRECTION: ID mis à jour pour correspondre au HTML (containerEvolutionChart)
+            const ctxActivity = document.getElementById('containerEvolutionChart');
+            if (ctxActivity) {
+                if (charts.activity) charts.activity.destroy();
+                
+                const activityData = {};
+                transactions.forEach(t => {
+                    const dateStr = String(t.date || '');
+                    if (dateStr.length < 7) return;
+                    const m = dateStr.substring(0, 7);
+                    if (!activityData[m]) activityData[m] = { ca: 0, count: 0 };
+                    activityData[m].ca += (t.prix || 0);
+                    activityData[m].count++;
+                });
+                const labels = Object.keys(activityData).sort();
+                
+                charts.activity = new Chart(ctxActivity, {
+                    type: 'bar',
+                    data: {
+                        labels: labels,
+                        datasets: [
+                            { label: 'Chiffre d\'Affaires', data: labels.map(l => activityData[l].ca), backgroundColor: '#4f46e5', yAxisID: 'y' },
+                            { label: 'Nombre Colis', data: labels.map(l => activityData[l].count), type: 'line', borderColor: '#f59e0b', yAxisID: 'y1' }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        scales: {
+                            y: { type: 'linear', display: true, position: 'left' },
+                            y1: { type: 'linear', display: true, position: 'right', grid: { drawOnChartArea: false } }
+                        }
+                    }
+                });
+            }
+
+            // 3. Répartition des Paiements
+            // CORRECTION: ID mis à jour pour correspondre au HTML (paymentModeChart)
+            const ctxPayments = document.getElementById('paymentModeChart');
+            if (ctxPayments) {
+                if (charts.payments) charts.payments.destroy();
+                const paymentStats = {};
+                transactions.forEach(t => {
+                    if (t.paymentHistory) {
+                        t.paymentHistory.forEach(p => {
+                            const mode = p.modePaiement || 'Espèce';
+                            if (!paymentStats[mode]) paymentStats[mode] = 0;
+                            paymentStats[mode] += (p.montantAbidjan || 0) + (p.montantParis || 0);
+                        });
+                    } else {
+                        const mode = t.modePaiement || 'Espèce';
+                        if (!paymentStats[mode]) paymentStats[mode] = 0;
+                        paymentStats[mode] += (t.montantAbidjan || 0) + (t.montantParis || 0);
+                    }
+                });
+                
+                charts.payments = new Chart(ctxPayments, {
+                    type: 'doughnut',
+                    data: {
+                        labels: Object.keys(paymentStats),
+                        datasets: [{
+                            data: Object.values(paymentStats),
+                            backgroundColor: ['#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6', '#64748b']
+                        }]
+                    }
+                });
+            }
+
+            // 4. Top 10 Conteneurs (Rentabilité)
+            // CORRECTION: ID mis à jour pour correspondre au HTML (topContainerProfitChart)
+            const ctxTopContainers = document.getElementById('topContainerProfitChart');
+            if (ctxTopContainers) {
+                if (charts.topContainers) charts.topContainers.destroy();
+                const containerStats = {};
+                
+                // CA
+                transactions.forEach(t => {
+                    const c = (t.conteneur || "Inconnu").trim().toUpperCase();
+                    if (!containerStats[c]) containerStats[c] = { ca: 0, dep: 0 };
+                    containerStats[c].ca += (t.prix || 0);
+                });
+                
+                // Dépenses
+                expenses.forEach(e => {
+                    if (e.type === 'Conteneur' || e.conteneur) {
+                        const c = (e.conteneur || "Inconnu").trim().toUpperCase();
+                        if (!containerStats[c]) containerStats[c] = { ca: 0, dep: 0 };
+                        containerStats[c].dep += (e.montant || 0);
+                    }
+                });
+
+                const sortedContainers = Object.entries(containerStats)
+                    .map(([name, stats]) => ({ name, profit: stats.ca - stats.dep }))
+                    .sort((a, b) => b.profit - a.profit)
+                    .slice(0, 10);
+
+                charts.topContainers = new Chart(ctxTopContainers, {
+                    type: 'bar',
+                    data: {
+                        labels: sortedContainers.map(c => c.name),
+                        datasets: [{
+                            label: 'Marge Bénéficiaire',
+                            data: sortedContainers.map(c => c.profit),
+                            backgroundColor: sortedContainers.map(c => c.profit >= 0 ? '#10b981' : '#ef4444')
+                        }]
+                    },
+                    options: { indexAxis: 'y' }
+                });
+            }
+
+            // 5. Ratio Dettes vs Encaissé
+            // CORRECTION: ID mis à jour pour correspondre au HTML (debtVsCollectedChart)
+            const ctxDebt = document.getElementById('debtVsCollectedChart');
+            if (ctxDebt) {
+                if (charts.debt) charts.debt.destroy();
+                let totalPaid = 0;
+                let totalDebt = 0;
+                
+                transactions.forEach(t => {
+                    totalPaid += (t.montantParis || 0) + (t.montantAbidjan || 0);
+                    if ((t.reste || 0) < -1) totalDebt += Math.abs(t.reste);
+                });
+
+                charts.debt = new Chart(ctxDebt, {
+                    type: 'pie',
+                    data: {
+                        labels: ['Encaissé', 'Dettes (Reste à percevoir)'],
+                        datasets: [{
+                            data: [totalPaid, totalDebt],
+                            backgroundColor: ['#10b981', '#ef4444']
+                        }]
+                    }
+                });
+            }
+
+            // 6. Performance par Agent
+            const ctxAgents = document.getElementById('agentPerformanceChart');
+            if (ctxAgents) {
+                if (charts.agents) charts.agents.destroy();
+                const agentStats = {};
+                
+                transactions.forEach(t => {
+                    if (t.agent) {
+                        t.agent.split(',').forEach(a => {
+                            const name = a.trim();
+                            if (!agentStats[name]) agentStats[name] = 0;
+                            agentStats[name] += (t.prix || 0);
+                        });
+                    }
+                });
+
+                const sortedAgents = Object.entries(agentStats)
+                    .sort((a, b) => b[1] - a[1])
+                    .slice(0, 10); // Top 10 agents
+
+                charts.agents = new Chart(ctxAgents, {
+                    type: 'bar',
+                    data: {
+                        labels: sortedAgents.map(a => a[0]),
+                        datasets: [{
+                            label: 'Chiffre d\'Affaires Généré',
+                            data: sortedAgents.map(a => a[1]),
+                            backgroundColor: '#8b5cf6'
+                        }]
+                    }
+                });
+            }
+        } catch (e) {
+            console.error("Erreur lors de l'affichage des graphiques :", e);
         }
-        // ... (Ajouter les autres graphiques ici si nécessaire, même logique)
     }
 
     function renderAdvancedAnalytics(transactions) {
@@ -554,7 +732,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         const buckets = { '0-30j': 0, '31-60j': 0, '61-90j': 0, '+90j': 0 };
         transactions.forEach(t => {
             if ((t.reste || 0) < -1) {
-                const days = (now - new Date(t.date)) / (1000 * 60 * 60 * 24);
+                const dateStr = String(t.date || '');
+                if (dateStr.length < 10) return;
+                const days = (now - new Date(dateStr)) / (1000 * 60 * 60 * 24);
                 if (days <= 30) buckets['0-30j'] += t.reste;
                 else if (days <= 60) buckets['31-60j'] += t.reste;
                 else if (days <= 90) buckets['61-90j'] += t.reste;

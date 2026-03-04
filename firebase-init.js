@@ -10,11 +10,11 @@ firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
 
 // DÉTECTION ENVIRONNEMENT LOCAL (EMULATEURS)
-if (location.hostname === "localhost" || location.hostname === "127.0.0.1") {
-    db.useEmulator("localhost", 8080);
-    firebase.auth().useEmulator("http://localhost:9099");
-    console.log("🔧 Mode Local : Connecté aux émulateurs Firebase");
-}
+// if (location.hostname === "localhost" || location.hostname === "127.0.0.1") {
+//     db.useEmulator("localhost", 8080);
+//     firebase.auth().useEmulator("http://localhost:9099");
+//     console.log("🔧 Mode Local : Connecté aux émulateurs Firebase");
+// }
 
 const logoutBtn = document.getElementById('logoutBtn');
 if (logoutBtn) {

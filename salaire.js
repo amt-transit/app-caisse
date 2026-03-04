@@ -17,12 +17,7 @@ const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 
-// DÉTECTION ENVIRONNEMENT LOCAL (EMULATEURS)
-if (location.hostname === "localhost" || location.hostname === "127.0.0.1") {
-    connectAuthEmulator(auth, "http://localhost:9099");
-    connectFirestoreEmulator(db, 'localhost', 8080);
-    console.log("🔧 Mode Local (Salaire) : Connecté aux émulateurs");
-}
+console.log("✅ Mode Production (Salaire) : Connecté");
 
  createApp({
     setup() {

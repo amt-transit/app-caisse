@@ -51,20 +51,7 @@ document.addEventListener('DOMContentLoaded', () => {
             // Vérification supplémentaire : le document users existe-t-il ?
             let userDoc = await db.collection("users").doc(uid).get();
 
-            // --- AUTO-RÉPARATION EN LOCAL ---
-            // Si on est en local et que le document n'existe pas, on le crée automatiquement
-            if (!userDoc.exists && (location.hostname === "localhost" || location.hostname === "127.0.0.1")) {
-                console.log("🔧 Mode Local : Création automatique du profil Admin...");
-                await db.collection("users").doc(uid).set({
-                    email: emailTechnique,
-                    role: 'super_admin',
-                    displayName: 'Admin Local',
-                    createdAt: new Date().toISOString()
-                });
-                userDoc = await db.collection("users").doc(uid).get(); // On recharge le doc créé
-                alert("✅ Profil Admin créé automatiquement pour le mode local !");
-            }
-            // --------------------------------
+            // --- AUTO-RÉPARATION SUPPRIMÉE POUR PROD ---
 
             if (!userDoc.exists) {
                 // Oups, l'utilisateur a un compte Auth mais pas de profil Firestore (Cas Prod)

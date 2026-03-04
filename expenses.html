@@ -35,14 +35,6 @@
         <a href="admin-panel.html" id="nav-admin" style="background-color: #6f42c1; color: white;">ADMIN</a>
     </nav>
 
-    <div class="dashboard-container" style="margin-bottom: 20px; background-color: #e3f2fd; border: 1px solid #bbdefb;">
-        <div style="text-align: center;">
-            <h3 style="margin-top: 0; color: #1565c0;">BUDGET MENSUEL DISPONIBLE</h3>
-            <p id="budgetDisplay" style="font-size: 32px; font-weight: bold; color: #0d47a1; margin: 10px 0;">Calcul...</p>
-            <p style="font-size: 0.9em; color: #555;">Ce montant diminue à chaque dépense.</p>
-        </div>
-    </div>
-
     <div id="caisseForm">
         <div class="form-grid">
             <input type="date" id="expenseDate" required>
@@ -74,30 +66,68 @@
         </div>
     </div>
 
-    <div class="history-controls">
-        <div class="search-bar-container">
-            <input type="text" id="expenseSearch" placeholder="Rechercher dans les dépenses..." style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px;">
-        </div>
-        <div class="checkbox-container" style="margin-top: 10px;">
-            <input type="checkbox" id="showDeletedCheckbox" style="width: auto;">
-            <label for="showDeletedCheckbox">Afficher les éléments supprimés</label>
-        </div>
-    </div>
-
     <div class="sub-nav" style="justify-content: center; margin-top: 20px; margin-bottom: 10px;">
         <a href="#" id="tabMonthly" class="active">Dépenses Mensuelles</a>
         <a href="#" id="tabContainer">Dépenses Conteneurs</a>
+        <a href="#" id="tabTotals">Totaux & Statistiques</a>
     </div>
 
-    <h2>Historique des Opérations</h2>
-    <table id="expenseTable">
-        <thead>
-            <tr>
-                <th>Date</th><th>Description</th><th>Montant</th><th>Type</th><th>Mode</th><th>Conteneur</th><th>Action</th>
-            </tr>
-        </thead>
-        <tbody id="expenseTableBody"></tbody>
-    </table>
+    <!-- VUE LISTE (Mensuelles / Conteneurs) -->
+    <div id="listView">
+        <div class="history-controls">
+            <div class="search-bar-container">
+                <input type="text" id="expenseSearch" placeholder="Rechercher dans les dépenses..." style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px;">
+            </div>
+            <div class="checkbox-container" style="margin-top: 10px;">
+                <input type="checkbox" id="showDeletedCheckbox" style="width: auto;">
+                <label for="showDeletedCheckbox">Afficher les éléments supprimés</label>
+            </div>
+        </div>
+
+        <h2>Historique des Opérations</h2>
+        <table id="expenseTable">
+            <thead>
+                <tr>
+                    <th>Date</th><th>Description</th><th>Montant</th><th>Type</th><th>Mode</th><th>Conteneur</th><th>Action</th>
+                </tr>
+            </thead>
+            <tbody id="expenseTableBody"></tbody>
+        </table>
+    </div>
+
+    <!-- VUE TOTAUX -->
+    <div id="totalsView" style="display:none; margin-top: 20px;">
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px;">
+            <div style="background: white; padding: 15px; border-radius: 12px; box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);">
+                <h3 style="margin-top:0; border-bottom:1px solid #eee; padding-bottom:10px;">Dépenses par Mois</h3>
+                <table class="table">
+                    <thead><tr><th>Mois</th><th style="text-align:right">Total</th></tr></thead>
+                    <tbody id="totalsMonthBody"></tbody>
+                </table>
+            </div>
+            <div style="background: white; padding: 15px; border-radius: 12px; box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);">
+                <h3 style="margin-top:0; border-bottom:1px solid #eee; padding-bottom:10px;">Dépenses par Conteneur</h3>
+                <table class="table">
+                    <thead><tr><th>Conteneur</th><th style="text-align:right">Total</th></tr></thead>
+                    <tbody id="totalsContainerBody"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL DÉTAILS DÉPENSES -->
+    <div id="expenseDetailsModal" class="modal">
+        <div class="modal-content" style="max-width: 800px;">
+            <span class="close-modal" id="closeExpenseDetailsModal" style="float:right; cursor:pointer; font-size:24px;">&times;</span>
+            <h2 id="expenseDetailsTitle" style="margin-top:0;">Détails</h2>
+            <div style="max-height: 60vh; overflow-y: auto;">
+                <table class="table">
+                    <thead><tr><th>Date</th><th>Description</th><th>Type</th><th>Mode</th><th>Montant</th></tr></thead>
+                    <tbody id="expenseDetailsBody"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
 
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
