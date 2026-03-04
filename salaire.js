@@ -711,10 +711,10 @@ if (location.hostname === "localhost" || location.hostname === "127.0.0.1") {
         // --- DASHBOARD DATA ---
         const dashboardStats = computed(() => {
             return {
-                employeesCount: employeesList.value.length,
-                toPayCount: unpaidEmployees.value.length,
-                budgetBalance: salaryStats.value.balance,
-                tontinePot: tontinePot.value
+                employeesCount: employeesList.value ? employeesList.value.length : 0,
+                toPayCount: unpaidEmployees.value ? unpaidEmployees.value.length : 0,
+                budgetBalance: salaryStats.value ? salaryStats.value.balance : 0,
+                tontinePot: tontinePot.value || 0
             };
         });
 

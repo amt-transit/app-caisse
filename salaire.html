@@ -80,7 +80,7 @@
                     
                     <button @click="currentSalaireView = 'paie'" :class="currentSalaireView === 'paie' ? 'bg-indigo-50 text-indigo-700 border-l-4 border-indigo-600' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'" class="text-left px-3 py-2 rounded-r text-sm font-medium transition-all flex items-center whitespace-nowrap">
                         <i class="fa-solid fa-money-bill-wave w-6 text-center mr-2"></i> Saisie Paie
-                        <span v-if="dashboardStats.toPayCount > 0" class="ml-auto bg-red-100 text-red-600 text-[10px] font-bold px-2 py-0.5 rounded-full">{{ dashboardStats.toPayCount }}</span>
+                        <span v-if="dashboardStats && dashboardStats.toPayCount > 0" class="ml-auto bg-red-100 text-red-600 text-[10px] font-bold px-2 py-0.5 rounded-full">{{ dashboardStats.toPayCount }}</span>
                     </button>
                     
                     <button @click="currentSalaireView = 'fonds'" :class="currentSalaireView === 'fonds' ? 'bg-indigo-50 text-indigo-700 border-l-4 border-indigo-600' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'" class="text-left px-3 py-2 rounded-r text-sm font-medium transition-all flex items-center whitespace-nowrap">
@@ -108,19 +108,19 @@
                     <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
                         <div class="bg-white p-4 rounded shadow border-l-4 border-blue-500 cursor-pointer hover:bg-blue-50 transition" @click="currentSalaireView = 'employes'">
                             <div class="text-gray-500 text-xs font-bold uppercase">Effectif Total</div>
-                            <div class="text-2xl font-bold text-gray-800">{{ dashboardStats.employeesCount }} <span class="text-sm font-normal text-gray-400">Employés</span></div>
+                            <div class="text-2xl font-bold text-gray-800">{{ dashboardStats ? dashboardStats.employeesCount : 0 }} <span class="text-sm font-normal text-gray-400">Employés</span></div>
                         </div>
                         <div class="bg-white p-4 rounded shadow border-l-4 border-red-500 cursor-pointer hover:bg-red-50 transition" @click="currentSalaireView = 'paie'">
                             <div class="text-gray-500 text-xs font-bold uppercase">Reste à Payer (Mois)</div>
-                            <div class="text-2xl font-bold text-red-600">{{ dashboardStats.toPayCount }} <span class="text-sm font-normal text-gray-400">personnes</span></div>
+                            <div class="text-2xl font-bold text-red-600">{{ dashboardStats ? dashboardStats.toPayCount : 0 }} <span class="text-sm font-normal text-gray-400">personnes</span></div>
                         </div>
                         <div class="bg-white p-4 rounded shadow border-l-4 border-green-500 cursor-pointer hover:bg-green-50 transition" @click="currentSalaireView = 'fonds'">
                             <div class="text-gray-500 text-xs font-bold uppercase">Solde Budget</div>
-                            <div class="text-2xl font-bold font-mono" :class="dashboardStats.budgetBalance >= 0 ? 'text-green-600' : 'text-red-600'">{{ formatMoney(dashboardStats.budgetBalance) }}</div>
+                            <div class="text-2xl font-bold font-mono" :class="(dashboardStats && dashboardStats.budgetBalance >= 0) ? 'text-green-600' : 'text-red-600'">{{ formatMoney(dashboardStats ? dashboardStats.budgetBalance : 0) }}</div>
                         </div>
                         <div class="bg-white p-4 rounded shadow border-l-4 border-orange-500 cursor-pointer hover:bg-orange-50 transition" @click="currentSalaireView = 'tontine'">
                             <div class="text-gray-500 text-xs font-bold uppercase">Cagnotte Tontine</div>
-                            <div class="text-2xl font-bold text-orange-600 font-mono">{{ formatMoney(dashboardStats.tontinePot) }}</div>
+                            <div class="text-2xl font-bold text-orange-600 font-mono">{{ formatMoney(dashboardStats ? dashboardStats.tontinePot : 0) }}</div>
                         </div>
                     </div>
 
