@@ -628,6 +628,23 @@ function importExcel(event) {
                         
                         if (!ref) return null; // Pas de ref sur cette ligne -> on ignore
 
+                        // --- DÉBUT MODIFICATION : DÉTECTION DU FICHIER SCANNEUR ---
+                        // Si la ligne vient d'un scanneur (contient ARRIVE A DESTINATION ou la réf a le format _1_6)
+                        const isScannerFile = row.some(c => String(c).toUpperCase().includes('ARRIVE A DESTINATION')) || /_\d+_\d+$/.test(ref);
+
+                        if (isScannerFile) {
+                            return {
+                                id: Date.now() + i,
+                                ref: ref, // ex: MD-127-E2_1_6
+                                status: 'EN_ATTENTE',
+                                dateAjout: new Date().toISOString(),
+                                quantite: 1, // Chaque ligne du scan vaut 1 colis
+                                // On laisse tout vide pour forcer la récupération depuis "À Venir"
+                                expediteur: '', destinataire: '', lieuLivraison: '', description: '', montant: '', numero: '', commune: ''
+                            };
+                        }
+                        // --- FIN MODIFICATION ---
+
                         // 2. Trouver les autres infos autour de la Ref
                         let montant = '';
                         let expediteur = '';
@@ -724,6 +741,29 @@ function importExcel(event) {
                         }
                         await new Promise(r => setTimeout(r, 0));
                     }
+
+                    // --- DÉBUT MODIFICATION : RECHERCHE DU PARENT (À VENIR / PARIS) ---
+                    // On extrait la racine de la référence (ex: MD-127-E2 au lieu de MD-127-E2_1_6)
+                    const baseRefMatch = item.ref.match(/^([A-Z]{2}[-_\s.]\d{3}[-_\s.][A-Z0-9]+)(?:_.*)?$/i);
+                    const baseRef = baseRefMatch ? baseRefMatch[1] : item.ref;
+
+                    // On cherche cette racine dans notre base de données locale
+                    const parentItem = deliveries.find(d => d.ref.toUpperCase() === baseRef.toUpperCase());
+
+                    if (parentItem) {
+                        // Si on trouve le colis dans "À Venir", on copie toutes ses informations vers le scan
+                        item.expediteur = parentItem.expediteur || item.expediteur;
+                        item.destinataire = parentItem.destinataire || item.destinataire;
+                        item.lieuLivraison = parentItem.lieuLivraison || item.lieuLivraison;
+                        item.commune = parentItem.commune || item.commune;
+                        item.montant = parentItem.montant || item.montant;
+                        item.numero = parentItem.numero || item.numero;
+                        // Optionnel : Ajouter le type de carton lu par le scan à la description
+                        if (!item.description && parentItem.description) {
+                            item.description = parentItem.description;
+                        }
+                    }
+                    // --- FIN MODIFICATION ---
 
                     if ((!item.lieuLivraison || !item.lieuLivraison.trim()) && item.destinataire) {
                         const foundAddr = await findAddressForRecipient(item.destinataire);

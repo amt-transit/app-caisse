@@ -1,6 +1,6 @@
 import { createApp, ref, computed, onMounted, watch } from "https://unpkg.com/vue@3/dist/vue.esm-browser.prod.js";
 import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut, connectAuthEmulator } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-auth.js";
-import { getFirestore, collection, addDoc, setDoc, deleteDoc, query, where, orderBy, onSnapshot, updateDoc, doc, serverTimestamp, getDocs, Timestamp, writeBatch, getDoc, limit, connectFirestoreEmulator } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
+import { getFirestore, collection, addDoc, setDoc, deleteDoc, query, where, orderBy, onSnapshot, updateDoc, doc, serverTimestamp, getDocs, Timestamp, writeBatch, getDoc, limit, connectFirestoreEmulator, runTransaction } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js";
 
 // CONFIGURATION FIREBASE
@@ -41,7 +41,7 @@ if (location.hostname === "localhost" || location.hostname === "127.0.0.1") {
             return role === 'super_admin';
         });
 
-        const currentSalaireView = ref('employes'); 
+        const currentSalaireView = ref('dashboard'); 
  const employeesList = ref([]);
         const salaryHistory = ref([]);
         const salaryFunds = ref([]); 
@@ -52,6 +52,7 @@ if (location.hostname === "localhost" || location.hostname === "127.0.0.1") {
         const showIndividualHistoryModal = ref(false); 
         const showPayModal = ref(false);
         const showFundModal = ref(false);
+        const showDebtModal = ref(false);
 
         const newEmp = ref({ name: '', salary: 0, loan: 0, tontineCount: 0 });
         const editingEmp = ref({}); 
@@ -66,6 +67,9 @@ if (location.hostname === "localhost" || location.hostname === "127.0.0.1") {
         const selectedTontineMonth = ref(new Date().toISOString().slice(0, 7));
         const selectedTontinePeriod = ref("15");
         const selectedHistoryMonth = ref(null);
+        const searchQuery = ref(''); // Pour la recherche employé
+        const toast = ref({ show: false, message: '', type: 'success' }); // État notification
+        const actionLoading = ref(false); // État chargement global
 
         // --- CHARGEMENT DES DONNÉES ---
         const loadEmployees = () => {
@@ -200,6 +204,21 @@ if (location.hostname === "localhost" || location.hostname === "127.0.0.1") {
             }, { salary: 0, loan: 0, tontine: 0 });
         });
 
+        // 7. Filtrage des employés (Recherche)
+        const filteredEmployees = computed(() => {
+            if (!searchQuery.value) return employeesList.value;
+            const q = searchQuery.value.toLowerCase();
+            return employeesList.value.filter(emp => 
+                emp.name.toLowerCase().includes(q)
+            );
+        });
+
+        // Fonction utilitaire pour afficher un Toast
+        const showToast = (msg, type = 'success') => {
+            toast.value = { show: true, message: msg, type };
+            setTimeout(() => toast.value.show = false, 3000);
+        };
+
         // --- ACTIONS ---
 
         const openPayModal = (emp) => {
@@ -249,32 +268,46 @@ if (location.hostname === "localhost" || location.hostname === "127.0.0.1") {
                 alert(`Impossible d'effectuer un paiement pour ${payForm.value.month} : Aucun fonds n'a été alloué pour ce mois. Veuillez ajouter une dotation dans l'onglet "Fonds & Budget".`);
                 return;
             }
+            actionLoading.value = true;
 
             try {
-                // On enregistre
-                await addDoc(collection(db, "salary_payments"), {
-                    employeeId: payForm.value.id, 
-                    employeeName: payForm.value.name, 
-                    month: payForm.value.month,
-                    type: paiePeriod.value === '15' ? 'Acompte (15)' : 'Solde (Fin)',
-                    base: payForm.value.base, 
-                    period: paiePeriod.value,
-                    loan: payForm.value.loan, 
-                    tontine: payForm.value.tontine, 
-                    absence: payForm.value.absence || 0,
-                    net: payForm.value.net,
-                    timestamp: Timestamp.now()
+                // UTILISATION D'UNE TRANSACTION POUR SÉCURISER LE PAIEMENT ET LA DETTE
+                await runTransaction(db, async (transaction) => {
+                    // 1. Lecture fraîche de l'employé (pour la dette actuelle)
+                    const empRef = doc(db, "employees", payForm.value.id);
+                    const empDoc = await transaction.get(empRef);
+                    if (!empDoc.exists()) throw "Employé introuvable !";
+
+                    const currentLoan = empDoc.data().loan || 0;
+                    const newLoan = Math.max(0, currentLoan - payForm.value.loan);
+
+                    // 2. Création du document de paiement
+                    const newPaymentRef = doc(collection(db, "salary_payments"));
+                    transaction.set(newPaymentRef, {
+                        employeeId: payForm.value.id, 
+                        employeeName: payForm.value.name, 
+                        month: payForm.value.month,
+                        type: paiePeriod.value === '15' ? 'Acompte (15)' : 'Solde (Fin)',
+                        base: payForm.value.base, 
+                        period: paiePeriod.value,
+                        loan: payForm.value.loan, 
+                        tontine: payForm.value.tontine, 
+                        absence: payForm.value.absence || 0,
+                        net: payForm.value.net,
+                        timestamp: Timestamp.now()
+                    });
+
+                    // 3. Mise à jour de la dette (si remboursement)
+                    if (payForm.value.loan > 0) {
+                        transaction.update(empRef, { loan: newLoan });
+                    }
                 });
                 
-                // On met à jour la dette de l'employé
-                if(payForm.value.loan > 0) {
-                    const emp = employeesList.value.find(e => e.id === payForm.value.id);
-                    if(emp) await updateDoc(doc(db, "employees", payForm.value.id), { loan: Math.max(0, emp.loan - payForm.value.loan) });
-                }
                 
                 showPayModal.value = false;
-                // alert("Paiement enregistré !");
-            } catch(e) { alert("Erreur: " + e.message); }
+                showToast("Paiement enregistré avec succès !", "success");
+            } catch(e) { showToast("Erreur: " + e.message, "error"); }
+            finally { actionLoading.value = false; }
         };
 
         // --- RESTE DU CODE (GESTION RH, TONTINE, PDF...) ---
@@ -284,29 +317,35 @@ if (location.hostname === "localhost" || location.hostname === "127.0.0.1") {
             if(!isSuperAdmin.value) return;
             try {
                 await setDoc(doc(db, "settings", "salary"), { tontineAmount: globalTontineAmount.value }, { merge: true });
-                alert("Nouveau montant de tontine enregistré !");
-            } catch(e) { alert("Erreur : " + e.message); }
+                showToast("Nouveau montant de tontine enregistré !");
+            } catch(e) { showToast("Erreur : " + e.message, "error"); }
         };
 
         const saveNewEmployee = async () => {
             if(!isSuperAdmin.value) return;
             if(!newEmp.value.name) return;
+            actionLoading.value = true;
             try {
                 await addDoc(collection(db, "employees"), { 
                     name: newEmp.value.name, salary: newEmp.value.salary || 0, loan: newEmp.value.loan || 0, tontineCount: newEmp.value.tontineCount || 0, isTontine: (newEmp.value.tontineCount || 0) > 0
                 });
                 showAddEmployeeModal.value = false;
                 newEmp.value = { name: '', salary: 0, loan: 0, tontineCount: 0 };
-            } catch(e) { alert("Erreur: " + e.message); }
+                showToast("Employé ajouté avec succès !");
+            } catch(e) { showToast("Erreur: " + e.message, "error"); }
+            finally { actionLoading.value = false; }
         };
 
         const openEditEmployee = (emp) => { editingEmp.value = { ...emp }; showEditEmployeeModal.value = true; };
         const updateEmployee = async () => {
             if(!isSuperAdmin.value) return;
+            actionLoading.value = true;
             try {
                 await updateDoc(doc(db, "employees", editingEmp.value.id), { name: editingEmp.value.name, salary: editingEmp.value.salary, loan: editingEmp.value.loan, tontineCount: editingEmp.value.tontineCount || 0, isTontine: (editingEmp.value.tontineCount || 0) > 0 });
                 showEditEmployeeModal.value = false;
-            } catch(e) { alert("Erreur: " + e.message); }
+                showToast("Modifications enregistrées !");
+            } catch(e) { showToast("Erreur: " + e.message, "error"); }
+            finally { actionLoading.value = false; }
         };
         const deleteEmployee = async (id) => { 
             if(!isSuperAdmin.value) return;
@@ -323,8 +362,8 @@ if (location.hostname === "localhost" || location.hostname === "127.0.0.1") {
                     tontineCount: 0,
                     isTontine: false
                 });
-                alert(`La tontine pour ${emp.name} a été annulée.`);
-            } catch (e) { alert("Erreur lors de l'annulation de la tontine : " + e.message); }
+                showToast(`La tontine pour ${emp.name} a été annulée.`);
+            } catch (e) { showToast("Erreur : " + e.message, "error"); }
         };
 
         const deleteSalaryPayment = async (payment) => {
@@ -336,7 +375,8 @@ if (location.hostname === "localhost" || location.hostname === "127.0.0.1") {
                     if(emp) await updateDoc(doc(db, "employees", payment.employeeId), { loan: emp.loan + payment.loan });
                 }
                 await deleteDoc(doc(db, "salary_payments", payment.id));
-             } catch(e) { alert("Erreur: " + e.message); }
+                showToast("Paiement annulé.");
+             } catch(e) { showToast("Erreur: " + e.message, "error"); }
         };
 
         const openIndividualHistory = (emp) => { selectedEmployeeHistoryId.value = emp.id; selectedEmployeeHistoryName.value = emp.name; showIndividualHistoryModal.value = true; };
@@ -376,10 +416,12 @@ if (location.hostname === "localhost" || location.hostname === "127.0.0.1") {
         const saveSalaryFund = async () => {
             if(!isSuperAdmin.value) return;
             if(!newFund.value.amount) return;
+            actionLoading.value = true;
             try { 
                 await addDoc(collection(db, "salary_funds"), { amount: newFund.value.amount, note: newFund.value.note || 'Dotation', targetMonth: newFund.value.targetMonth || selectedBudgetMonth.value, timestamp: Timestamp.now() }); 
-                showFundModal.value = false; newFund.value = { amount: '', note: '', targetMonth: selectedBudgetMonth.value }; alert("Fonds enregistrés !"); 
-            } catch(e) { alert(e.message); } 
+                showFundModal.value = false; newFund.value = { amount: '', note: '', targetMonth: selectedBudgetMonth.value }; showToast("Fonds enregistrés !"); 
+            } catch(e) { showToast(e.message, "error"); }
+            finally { actionLoading.value = false; }
         };
         const deleteSalaryFund = async (id) => { 
             if(!isSuperAdmin.value) return;
@@ -448,7 +490,8 @@ if (location.hostname === "localhost" || location.hostname === "127.0.0.1") {
                     net: 0,
                     timestamp: Timestamp.now()
                 });
-            } catch(e) { alert("Erreur: " + e.message); }
+                showToast("Cotisation enregistrée !");
+            } catch(e) { showToast("Erreur: " + e.message, "error"); }
         };
 
         const tontineBeneficiaries = computed(() => {
@@ -491,7 +534,8 @@ if (location.hostname === "localhost" || location.hostname === "127.0.0.1") {
                     employeeId: emp.id, employeeName: emp.name, month: selectedTontineMonth.value, period: selectedTontinePeriod.value,
                     type: 'Gain Tontine', base: 0, loan: 0, tontine: 0, tontineGain: amount, net: 0, timestamp: Timestamp.now()
                 });
-            } catch(e) { alert("Erreur: " + e.message); }
+                showToast("Gain enregistré !");
+            } catch(e) { showToast("Erreur: " + e.message, "error"); }
         };
 
         const deleteTontineBeneficiary = async (payment) => { 
@@ -603,6 +647,79 @@ if (location.hostname === "localhost" || location.hostname === "127.0.0.1") {
             doc.save("Rapport_Salaires_Complet.pdf");
         };
 
+        // Génération Bulletin de Paie Individuel
+        const printPayslip = (payment) => {
+            const doc = new jspdf.jsPDF();
+            
+            // En-tête
+            doc.setFontSize(16);
+            doc.setTextColor(79, 70, 229); // Indigo
+            doc.text("BULLETIN DE PAIE", 105, 20, null, null, "center");
+            
+            doc.setFontSize(10);
+            doc.setTextColor(0);
+            doc.text(`Date : ${formatDate(payment.timestamp)}`, 14, 35);
+            doc.text(`Période : ${payment.month}`, 14, 40);
+            doc.text(`Type : ${payment.type}`, 14, 45);
+            
+            doc.setFontSize(12);
+            doc.text(`Employé : ${payment.employeeName}`, 14, 55);
+
+            // Tableau Détails
+            const body = [
+                ['Salaire de Base / Avance', formatMoney(payment.base)],
+                ['Remboursement Prêt', `-${formatMoney(payment.loan)}`],
+                ['Retenue Tontine', `-${formatMoney(payment.tontine)}`],
+                ['Absence / Autre', `-${formatMoney(payment.absence)}`],
+                [{content: 'NET À PAYER', styles: {fontStyle: 'bold', fillColor: [240, 240, 240]}}, {content: formatMoney(payment.net), styles: {fontStyle: 'bold', fillColor: [240, 240, 240], textColor: [79, 70, 229]}}]
+            ];
+
+            doc.autoTable({
+                startY: 65,
+                head: [['Désignation', 'Montant']],
+                body: body,
+                theme: 'grid',
+                columnStyles: { 1: { halign: 'right' } }
+            });
+
+            // Pied de page
+            const finalY = doc.lastAutoTable.finalY + 20;
+            doc.setFontSize(10);
+            doc.text("Signature Employé :", 140, finalY);
+            doc.text("Signature Direction :", 14, finalY);
+
+            doc.save(`Bulletin_${payment.employeeName}_${payment.month}.pdf`);
+        };
+
+        // --- GESTION CRÉANCES ---
+        const selectedDebtEmployee = ref(null);
+        
+        const openDebtModal = (emp) => {
+            selectedDebtEmployee.value = emp;
+            showDebtModal.value = true;
+        };
+
+        const debtRepaymentHistory = computed(() => {
+            if (!selectedDebtEmployee.value) return [];
+            return salaryHistory.value
+                .filter(p => p.employeeId === selectedDebtEmployee.value.id && (p.loan || 0) > 0)
+                .sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0));
+        });
+
+        const getEmployeeRepaidTotal = (empId) => salaryHistory.value.filter(p => p.employeeId === empId).reduce((sum, p) => sum + (p.loan || 0), 0);
+
+        // --- DASHBOARD DATA ---
+        const dashboardStats = computed(() => {
+            return {
+                employeesCount: employeesList.value.length,
+                toPayCount: unpaidEmployees.value.length,
+                budgetBalance: salaryStats.value.balance,
+                tontinePot: tontinePot.value
+            };
+        });
+
+        const recentActivity = computed(() => salaryHistory.value.slice(0, 8));
+
         // Fonction qui remplace l'espace insécable (problématique en PDF) par un espace normal
         const formatMoney = (m) => {
             if (!m && m !== 0) return '0 F';
@@ -629,12 +746,15 @@ if (location.hostname === "localhost" || location.hostname === "127.0.0.1") {
             currentSalaireView, employeesList, salaryHistory, salaryFunds, paiePeriod, selectedPaieMonth,
             showAddEmployeeModal, showEditEmployeeModal, showIndividualHistoryModal, showPayModal, showFundModal,
             newEmp, editingEmp, payForm, newFund, unpaidEmployees, selectedEmployeeHistoryName, individualHistory,
-            groupedSalaryHistory, selectedHistoryMonth, openMonthDetails, closeMonthDetails,
+            groupedSalaryHistory, selectedHistoryMonth, openMonthDetails, closeMonthDetails, searchQuery, filteredEmployees,
             saveNewEmployee, updateEmployee, deleteEmployee, openEditEmployee, openIndividualHistory, selectedBudgetMonth, cancelTontine,
             openPayModal, confirmSalaryPayment, deleteSalaryPayment, recalcNet, updateBaseFromNet, hasPaidTontine, getTontinePaidAmount, markTontinePayment, tontineMembers, globalTontineAmount, saveGlobalTontine, selectedTontineMonth, tontinePot,
-            calculateBase, calculateLoanDeduc, calculateTontineDeduc, calculateNet, exportSalaryHistoryPDF, paieTotals, employeesTotals,
+            calculateBase, calculateLoanDeduc, calculateTontineDeduc, calculateNet, exportSalaryHistoryPDF, printPayslip, paieTotals, employeesTotals,
             saveSalaryFund, deleteSalaryFund, salaryStats, selectedTontinePeriod,
-            tontineBeneficiaries, markTontineBeneficiary, deleteTontineBeneficiary, hasReceivedTontine
+            tontineBeneficiaries, markTontineBeneficiary, deleteTontineBeneficiary, hasReceivedTontine,
+            toast, actionLoading, // Export des états UX
+            showDebtModal, selectedDebtEmployee, openDebtModal, debtRepaymentHistory, getEmployeeRepaidTotal, // Export Créances
+            dashboardStats, recentActivity // Export Dashboard
         };
     }
  }).mount('#app');
