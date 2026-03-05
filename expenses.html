@@ -59,6 +59,12 @@
                 <option value="Mensuelle">Dépense Mensuelle</option>
                 <option value="Conteneur">Dépense de Conteneur</option>
             </select>
+            <select id="expenseSubtype" style="display:none;">
+                <option value="">-- Catégorie (Optionnel) --</option>
+                <option value="Dépenses Livraison">Dépenses Livraison</option>
+                <option value="Dépenses Péage">Dépenses Péage</option>
+                <option value="Dépenses Carburant">Dépenses Carburant</option>
+            </select>
             <input type="text" id="expenseContainer" placeholder="Nom du Conteneur (ex: D35)" style="display:none;">
         </div>
         <div class="form-buttons">
@@ -97,6 +103,14 @@
 
     <!-- VUE TOTAUX -->
     <div id="totalsView" style="display:none; margin-top: 20px;">
+        <div class="filter-container" style="margin-bottom: 20px; background: white; padding: 15px; border-radius: 12px; box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);">
+            <h4 style="margin-top:0; margin-bottom:10px; color:#64748b;">Filtrer les statistiques par période</h4>
+            <div class="filter-fields">
+                <label>Du :</label> <input type="date" id="totalStartDate">
+                <label>Au :</label> <input type="date" id="totalEndDate">
+                <button id="filterTotalsBtn" class="primary" style="padding: 6px 12px; font-size: 12px;">Appliquer</button>
+            </div>
+        </div>
         <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px;">
             <div style="background: white; padding: 15px; border-radius: 12px; box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);">
                 <h3 style="margin-top:0; border-bottom:1px solid #eee; padding-bottom:10px;">Dépenses par Mois</h3>
@@ -110,6 +124,13 @@
                 <table class="table">
                     <thead><tr><th>Conteneur</th><th style="text-align:right">Total</th></tr></thead>
                     <tbody id="totalsContainerBody"></tbody>
+                </table>
+            </div>
+            <div style="background: white; padding: 15px; border-radius: 12px; box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);">
+                <h3 style="margin-top:0; border-bottom:1px solid #eee; padding-bottom:10px;">Par Catégorie Spéciale</h3>
+                <table class="table">
+                    <thead><tr><th>Catégorie</th><th style="text-align:right">Total</th></tr></thead>
+                    <tbody id="totalsCategoryBody"></tbody>
                 </table>
             </div>
         </div>

@@ -14,6 +14,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const expenseDesc = document.getElementById('expenseDesc');
     const expenseAmount = document.getElementById('expenseAmount');
     const expenseType = document.getElementById('expenseType');
+    const expenseSubtype = document.getElementById('expenseSubtype');
     const expenseMode = document.getElementById('expenseMode'); 
     const expenseContainer = document.getElementById('expenseContainer');
     const actionType = document.getElementById('actionType');
@@ -21,6 +22,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const expenseTableBody = document.getElementById('expenseTableBody');
     const showDeletedCheckbox = document.getElementById('showDeletedCheckbox');
     const expenseSearchInput = document.getElementById('expenseSearch');
+
+    // Filtres Totaux
+    const totalStartDate = document.getElementById('totalStartDate');
+    const totalEndDate = document.getElementById('totalEndDate');
+    const filterTotalsBtn = document.getElementById('filterTotalsBtn');
 
     // --- AJOUT DYNAMIQUE : Checkbox Tri Conteneur ---
     let sortExpenseContainerCheckbox = document.getElementById('sortExpenseContainerCheckbox');
@@ -100,16 +106,20 @@ document.addEventListener('DOMContentLoaded', () => {
                 expenseType.style.display = 'inline-block';
                 expenseMode.style.display = 'inline-block';
                 if(expenseType.value === 'Conteneur') expenseContainer.style.display = 'block';
+                if(expenseType.value === 'Mensuelle' && expenseSubtype) expenseSubtype.style.display = 'block';
                 addExpenseBtn.className = 'deleteBtn'; addExpenseBtn.textContent = "Valider la Dépense";
             }
         });
     }
+    if (expenseType.value === 'Mensuelle' && expenseSubtype) expenseSubtype.style.display = 'block';
 
     expenseType.addEventListener('change', () => {
         if (expenseType.value === 'Conteneur' && (!actionType || actionType.value !== 'Allocation')) {
             expenseContainer.style.display = 'block';
+            if(expenseSubtype) expenseSubtype.style.display = 'none';
         } else {
             expenseContainer.style.display = 'none';
+            if(expenseSubtype) expenseSubtype.style.display = 'block';
         }
     });
 
@@ -118,10 +128,15 @@ document.addEventListener('DOMContentLoaded', () => {
         const montant = parseFloat(expenseAmount.value) || 0;
         const action = actionType ? actionType.value : 'Depense'; 
 
+        let finalDesc = expenseDesc.value;
+        if (expenseType.value === 'Mensuelle' && expenseSubtype && expenseSubtype.value) {
+            finalDesc = `${expenseSubtype.value} - ${finalDesc}`;
+        }
+
         const data = {
             date: expenseDate.value,
             // CORRECTION : Ajout du nom de l'utilisateur dans la description
-            description: `${expenseDesc.value} (${currentUserName})`, 
+            description: `${finalDesc} (${currentUserName})`, 
             montant: montant,
             action: action, 
             type: (action === 'Depense') ? expenseType.value : 'Budget',
@@ -134,6 +149,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         expensesCollection.add(data).then(() => {
             expenseDesc.value = ''; expenseAmount.value = ''; expenseContainer.value = '';
+            if(expenseSubtype) expenseSubtype.value = '';
             expenseMode.value = 'Espèce';
             alert("Dépense enregistrée.");
         }).catch(err => console.error(err));
@@ -238,13 +254,27 @@ document.addEventListener('DOMContentLoaded', () => {
     function renderTotals() {
         const totalsMonthBody = document.getElementById('totalsMonthBody');
         const totalsContainerBody = document.getElementById('totalsContainerBody');
+        const totalsCategoryBody = document.getElementById('totalsCategoryBody');
         
         const months = {};
         const containers = {};
+        const categories = {
+            'Dépenses Livraison': 0,
+            'Dépenses Péage': 0,
+            'Dépenses Carburant': 0,
+            'Autres': 0
+        };
+
+        const start = totalStartDate ? totalStartDate.value : null;
+        const end = totalEndDate ? totalEndDate.value : null;
 
         allExpenses.forEach(e => {
             if (e.isDeleted) return;
             if (e.sessionId && unconfirmedSessions.has(e.sessionId)) return;
+            
+            // Filtre Date pour les totaux
+            if (start && e.date < start) return;
+            if (end && e.date > end) return;
 
             // Par Mois
             if (e.type === 'Mensuelle') {
@@ -259,6 +289,19 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (!containers[c]) containers[c] = 0;
                 containers[c] += (e.montant || 0);
             }
+
+            // Par Catégorie (Basé sur la description)
+            let matchedCat = false;
+            for (const cat of ['Dépenses Livraison', 'Dépenses Péage', 'Dépenses Carburant']) {
+                if ((e.description || '').startsWith(cat)) {
+                    categories[cat] += (e.montant || 0);
+                    matchedCat = true;
+                    break;
+                }
+            }
+            if (!matchedCat && e.type === 'Mensuelle') {
+                // On peut compter le reste comme "Autres" si on veut
+            }
         });
 
         // Rendu Mois (Tri décroissant)
@@ -270,8 +313,17 @@ document.addEventListener('DOMContentLoaded', () => {
         totalsContainerBody.innerHTML = Object.entries(containers).sort((a, b) => a[0].localeCompare(b[0])).map(([c, total]) => `
             <tr style="cursor:pointer;" onclick="window.showContainerDetails('${c}')"><td>${c}</td><td style="text-align:right; font-weight:bold; color:#ef4444;">${formatCFA(total)}</td></tr>
         `).join('');
+
+        // Rendu Catégories
+        if (totalsCategoryBody) {
+            totalsCategoryBody.innerHTML = Object.entries(categories).map(([cat, total]) => `
+                <tr><td>${cat}</td><td style="text-align:right; font-weight:bold; color:#ef4444;">${formatCFA(total)}</td></tr>
+            `).join('');
+        }
     }
     
+    if(filterTotalsBtn) filterTotalsBtn.addEventListener('click', renderTotals);
+
     showDeletedCheckbox.addEventListener('change', fetchExpenses);
     if(expenseSearchInput) expenseSearchInput.addEventListener('input', renderExpensesTable); 
     fetchExpenses();

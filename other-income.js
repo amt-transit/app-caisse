@@ -11,6 +11,7 @@ document.addEventListener('DOMContentLoaded', () => {
     
     const addIncomeBtn = document.getElementById('addIncomeBtn');
     const incomeDate = document.getElementById('incomeDate');
+    const incomeCategory = document.getElementById('incomeCategory');
     const incomeDesc = document.getElementById('incomeDesc');
     const incomeAmount = document.getElementById('incomeAmount');
     
@@ -18,15 +19,27 @@ document.addEventListener('DOMContentLoaded', () => {
     const showDeletedCheckbox = document.getElementById('showDeletedCheckbox');
     const incomeSearchInput = document.getElementById('incomeSearch');
 
+    // Stats Elements
+    const statsStartDate = document.getElementById('statsStartDate');
+    const statsEndDate = document.getElementById('statsEndDate');
+    const totalBeneficeAchatEl = document.getElementById('totalBeneficeAchat');
+    const totalVenteMarchandiseEl = document.getElementById('totalVenteMarchandise');
+    const totalAutreEl = document.getElementById('totalAutre');
+
     let unsubscribeIncome = null;
     let allIncome = [];
 
     // 1. AJOUT MANUEL (AVEC AUTEUR)
     addIncomeBtn.addEventListener('click', () => {
+        let finalDesc = incomeDesc.value;
+        if (incomeCategory && incomeCategory.value) {
+            finalDesc = `${incomeCategory.value} - ${finalDesc}`;
+        }
+
         const data = {
             date: incomeDate.value,
             // AJOUT DU NOM DE L'AUTEUR
-            description: `${incomeDesc.value} (${currentUserName})`,
+            description: `${finalDesc} (${currentUserName})`,
             montant: parseFloat(incomeAmount.value) || 0,
             mode: document.getElementById('incomeMode').value, // <--- AJOUTER CETTE LIGNE
             isDeleted: false
@@ -38,6 +51,7 @@ document.addEventListener('DOMContentLoaded', () => {
         
         incomeCollection.add(data).then(() => {
             incomeDesc.value = '';
+            if (incomeCategory) incomeCategory.value = '';
             incomeAmount.value = '';
         }).catch(err => console.error(err));
     });
@@ -58,6 +72,7 @@ document.addEventListener('DOMContentLoaded', () => {
         unsubscribeIncome = query.onSnapshot(snapshot => {
             allIncome = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
             renderIncomeTable();
+            updateStats(); // Mettre à jour les stats à chaque changement
         }, error => console.error(error));
     }
 
@@ -106,6 +121,36 @@ document.addEventListener('DOMContentLoaded', () => {
             incomeTableBody.appendChild(row); 
         });
     }
+
+    function updateStats() {
+        const start = statsStartDate.value;
+        const end = statsEndDate.value;
+
+        let totalBen = 0;
+        let totalVente = 0;
+        let totalAutre = 0;
+
+        allIncome.forEach(inc => {
+            if (inc.isDeleted) return;
+            if (start && inc.date < start) return;
+            if (end && inc.date > end) return;
+
+            const desc = (inc.description || '');
+            const montant = inc.montant || 0;
+
+            if (desc.startsWith('Bénéfice sur Achat')) totalBen += montant;
+            else if (desc.startsWith('Vente Marchandises')) totalVente += montant;
+            else totalAutre += montant;
+        });
+
+        if(totalBeneficeAchatEl) totalBeneficeAchatEl.textContent = formatCFA(totalBen);
+        if(totalVenteMarchandiseEl) totalVenteMarchandiseEl.textContent = formatCFA(totalVente);
+        if(totalAutreEl) totalAutreEl.textContent = formatCFA(totalAutre);
+    }
+
+    // Listeners pour les filtres de date
+    if(statsStartDate) statsStartDate.addEventListener('change', updateStats);
+    if(statsEndDate) statsEndDate.addEventListener('change', updateStats);
     
     showDeletedCheckbox.addEventListener('change', fetchIncome);
     if(incomeSearchInput) incomeSearchInput.addEventListener('input', renderIncomeTable);

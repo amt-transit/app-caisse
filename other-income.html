@@ -38,6 +38,11 @@
     <div id="caisseForm">
         <div class="form-grid">
             <input type="date" id="incomeDate" required>
+            <select id="incomeCategory">
+                <option value="">-- Catégorie (Optionnel) --</option>
+                <option value="Bénéfice sur Achat">Bénéfice sur Achat</option>
+                <option value="Vente Marchandises">Vente Marchandises</option>
+            </select>
             <input type="text" id="incomeDesc" placeholder="Description (ex: Apport...)" required>
             <div class="prix-container">
                 <input type="number" id="incomeAmount" placeholder="Montant">
@@ -56,6 +61,32 @@
         </div>
     </div>
 
+    <!-- SECTION STATISTIQUES -->
+    <div class="dashboard-container" style="margin-bottom: 20px; padding: 15px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; flex-wrap: wrap; gap: 10px;">
+            <h3 style="margin:0;">Résumé par Catégorie</h3>
+            <div class="filter-fields" style="display: flex; gap: 10px; align-items: center;">
+                <label>Période :</label>
+                <input type="date" id="statsStartDate" style="padding: 5px; border-radius: 4px; border: 1px solid #ccc;">
+                <span style="font-weight:bold;">au</span>
+                <input type="date" id="statsEndDate" style="padding: 5px; border-radius: 4px; border: 1px solid #ccc;">
+            </div>
+        </div>
+        <div class="totals-container" id="categoryStatsContainer">
+             <div class="total-card colored-card" style="background-color: #10b981;">
+                <h3>Bénéfice sur Achat</h3>
+                <p id="totalBeneficeAchat">0 CFA</p>
+            </div>
+            <div class="total-card colored-card" style="background-color: #3b82f6;">
+                <h3>Vente Marchandises</h3>
+                <p id="totalVenteMarchandise">0 CFA</p>
+            </div>
+             <div class="total-card colored-card" style="background-color: #64748b;">
+                <h3>Autres Entrées</h3>
+                <p id="totalAutre">0 CFA</p>
+            </div>
+        </div>
+    </div>
 
     <div class="history-controls">
         <div class="search-bar-container">
