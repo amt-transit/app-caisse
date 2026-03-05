@@ -1015,7 +1015,20 @@ async function confirmImport() {
         if (existingItem) {
             // CAS 1 : La référence existe -> On déplace le colis existant
             const docRef = db.collection(CONSTANTS.COLLECTION).doc(existingItem.id);
-            const updates = { containerStatus: containerStatus };
+            
+            // --- PROTECTION CONTRE LA RÉGRESSION (Ne pas faire reculer un colis) ---
+            // Si le colis est déjà "EN_COURS" (Arrivé), on ne le renvoie pas vers "PARIS" ou "A_VENIR".
+            // Si le colis est "A_VENIR", on ne le renvoie pas vers "PARIS".
+            let targetStatus = containerStatus;
+            const currentStatus = existingItem.containerStatus;
+
+            if (currentStatus === 'EN_COURS' && (containerStatus === 'PARIS' || containerStatus === 'A_VENIR')) {
+                targetStatus = currentStatus; // On force le maintien en "EN_COURS"
+            } else if (currentStatus === 'A_VENIR' && containerStatus === 'PARIS') {
+                targetStatus = currentStatus; // On force le maintien en "A_VENIR"
+            }
+
+            const updates = { containerStatus: targetStatus };
             
             // --- SAUVEGARDE DU PRIX ORIGINAL (PARIS) ---
             // Si le colis vient de PARIS (ou a un montant existant) et qu'on met à jour,
@@ -1063,7 +1076,11 @@ async function confirmImport() {
                 if (conteneur) updates.conteneur = conteneur;
                 else if (importItem.conteneur) updates.conteneur = importItem.conteneur;
                 
-                updates.importedFromTransit = firebase.firestore.FieldValue.delete();
+                // On ne supprime le flag de transit que si le colis n'est PAS "En Cours"
+                // (Si on est protégé et qu'on reste En Cours, on garde l'historique et l'icône bateau)
+                if (targetStatus !== 'EN_COURS') {
+                    updates.importedFromTransit = firebase.firestore.FieldValue.delete();
+                }
             }
             
             operations.push({ type: 'update', ref: docRef, data: updates });
