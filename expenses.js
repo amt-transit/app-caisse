@@ -39,6 +39,121 @@ document.addEventListener('DOMContentLoaded', () => {
         sortExpenseContainerCheckbox.addEventListener('change', () => renderExpensesTable());
     }
 
+    // --- AJOUT DYNAMIQUE : Résumé Catégories (Inspiré de Autres Entrées) ---
+    let expenseStatsContainer = document.getElementById('expenseStatsContainer');
+    // On l'injecte avant le tableau si pas présent
+    const tableContainer = document.querySelector('#listView table') || document.querySelector('#expenseTableBody')?.closest('table');
+    if (tableContainer && tableContainer.parentNode) {
+        // 1. Contrôles (Filtre Mois)
+        let expenseStatsControls = document.getElementById('expenseStatsControls');
+        if (!expenseStatsControls) {
+            expenseStatsControls = document.createElement('div');
+            expenseStatsControls.id = 'expenseStatsControls';
+            expenseStatsControls.style.cssText = "margin-bottom: 10px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap;";
+            
+            const now = new Date();
+            const defaultMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+
+            expenseStatsControls.innerHTML = `
+                <div style="display:flex; align-items:center; gap:5px; background:#fff; padding:5px 10px; border:1px solid #e2e8f0; border-radius:8px; box-shadow:0 1px 2px rgba(0,0,0,0.05);">
+                    <span style="font-size:0.9em; font-weight:600; color:#64748b;">📅 Période :</span>
+                    <input type="month" id="expenseStatsMonthFilter" value="${defaultMonth}" style="border:none; outline:none; font-family:inherit; color:#334155; background:transparent; cursor:pointer;">
+                    <button id="clearExpenseStatsFilter" title="Tout voir" style="margin-left:5px; border:none; background:#f1f5f9; color:#64748b; border-radius:4px; padding:2px 6px; cursor:pointer; font-size:0.8em;">✖</button>
+                </div>
+            `;
+            tableContainer.parentNode.insertBefore(expenseStatsControls, tableContainer);
+
+            // Listeners pour le filtre
+            setTimeout(() => {
+                const monthInput = document.getElementById('expenseStatsMonthFilter');
+                const clearBtn = document.getElementById('clearExpenseStatsFilter');
+                if (monthInput) monthInput.addEventListener('change', () => renderExpensesTable());
+                if (clearBtn) clearBtn.addEventListener('click', () => {
+                    if(monthInput) monthInput.value = '';
+                    renderExpensesTable();
+                });
+            }, 0);
+        }
+
+        // 2. Conteneur Stats
+        if (!expenseStatsContainer) {
+            expenseStatsContainer = document.createElement('div');
+            expenseStatsContainer.id = 'expenseStatsContainer';
+            expenseStatsContainer.style.cssText = "display:flex; gap:15px; margin-bottom:15px; flex-wrap:wrap;";
+            tableContainer.parentNode.insertBefore(expenseStatsContainer, tableContainer);
+        }
+    }
+
+    function updateExpenseCategoryStats() {
+        if (!expenseStatsContainer) return;
+        // Masquer si on est sur l'onglet Totaux (qui a sa propre vue)
+        if (currentTab === 'totals') {
+            expenseStatsContainer.style.display = 'none';
+            return;
+        }
+        expenseStatsContainer.style.display = 'flex';
+
+        const stats = {
+            'Livraison': 0,
+            'Péage': 0,
+            'Carburant': 0,
+            'Autres': 0
+        };
+        let totalView = 0;
+        
+        const monthFilter = document.getElementById('expenseStatsMonthFilter')?.value;
+
+        allExpenses.forEach(e => {
+            if (e.isDeleted) return;
+            if (e.sessionId && unconfirmedSessions.has(e.sessionId)) return;
+
+            // Filtre Mois
+            if (monthFilter && !e.date.startsWith(monthFilter)) return;
+
+            // Filtre selon l'onglet actif (Mensuelle vs Conteneur)
+            if (currentTab === 'monthly' && (e.type === 'Conteneur' || e.conteneur)) return;
+            if (currentTab === 'container' && !(e.type === 'Conteneur' || e.conteneur)) return;
+
+            const desc = (e.description || '').toLowerCase();
+            const amount = e.montant || 0;
+            
+            totalView += amount;
+
+            if (desc.includes('livraison')) stats['Livraison'] += amount;
+            else if (desc.includes('péage') || desc.includes('peage')) stats['Péage'] += amount;
+            else if (desc.includes('carburant')) stats['Carburant'] += amount;
+            else stats['Autres'] += amount;
+        });
+
+        // Configuration des couleurs (Fond + Texte)
+        const colors = { 
+            'Livraison': { bg: '#e0f2fe', text: '#0369a1' }, // Bleu clair
+            'Péage': { bg: '#fef3c7', text: '#b45309' }, // Orange clair
+            'Carburant': { bg: '#fee2e2', text: '#b91c1c' }, // Rouge clair
+            'Autres': { bg: '#e2e8f0', text: '#475569' } // Gris (Slate-200)
+        };
+        
+        let html = '';
+        
+        // 1. Carte TOTAL (Vert)
+        html += `
+            <div style="background:#10b981; color:white; border-radius:8px; padding:10px 15px; min-width:140px; box-shadow:0 4px 6px rgba(0,0,0,0.1);">
+                <div style="font-size:0.8em; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:4px; opacity:0.9;">Total ${currentTab === 'monthly' ? 'Mensuel' : 'Conteneur'}</div>
+                <div style="font-size:1.4em; font-weight:bold;">${formatCFA(totalView)}</div>
+            </div>
+        `;
+
+        // 2. Cartes Catégories
+        html += Object.entries(stats).map(([key, val]) => `
+            <div style="background:${colors[key].bg}; border:1px solid ${colors[key].bg}; border-radius:8px; padding:10px 15px; min-width:140px; box-shadow:0 1px 2px rgba(0,0,0,0.05);">
+                <div style="font-size:0.8em; color:${colors[key].text}; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:4px;">${key}</div>
+                <div style="font-size:1.2em; font-weight:bold; color:${colors[key].text};">${formatCFA(val)}</div>
+            </div>
+        `).join('');
+        
+        expenseStatsContainer.innerHTML = html;
+    }
+
     let unsubscribeExpenses = null; 
     let allExpenses = [];
     let unconfirmedSessions = new Set(); // Stocke les IDs de sessions non validées
@@ -182,12 +297,16 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
     function renderExpensesTable() {
+        // Mise à jour des stats catégories (Visible sur Monthly et Container)
+        updateExpenseCategoryStats();
+
         if (currentTab === 'totals') {
             renderTotals();
             return;
         }
 
         const term = expenseSearchInput ? expenseSearchInput.value.toLowerCase().trim() : "";
+        const monthFilter = document.getElementById('expenseStatsMonthFilter')?.value;
         
         // 1. Filtrer les dépenses non confirmées
         const confirmedExpenses = allExpenses.filter(e => !e.sessionId || !unconfirmedSessions.has(e.sessionId));
@@ -199,6 +318,9 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         const filtered = tabFiltered.filter(item => {
+            // Filtre Mois
+            if (monthFilter && !item.date.startsWith(monthFilter)) return false;
+
             if (!term) return true;
             return (item.description || "").toLowerCase().includes(term) || 
                    (item.type || "").toLowerCase().includes(term) || 
@@ -235,6 +357,15 @@ document.addEventListener('DOMContentLoaded', () => {
         filtered.forEach(expense => {
             const row = document.createElement('tr');
             if (expense.isDeleted === true) row.classList.add('deleted-row');
+            
+            // --- AJOUT : Couleur de fond selon la catégorie (Identique aux Totaux) ---
+            if (expense.isDeleted !== true) {
+                const desc = (expense.description || '').toLowerCase();
+                if (desc.includes('livraison')) row.style.backgroundColor = '#e0f2fe'; // Bleu clair
+                else if (desc.includes('péage') || desc.includes('peage')) row.style.backgroundColor = '#fef3c7'; // Orange clair
+                else if (desc.includes('carburant')) row.style.backgroundColor = '#fee2e2'; // Rouge clair
+                else row.style.backgroundColor = '#f1f5f9'; // Gris très clair (Autres)
+            }
             
             const colorClass = 'reste-negatif';
             const sign = '-';

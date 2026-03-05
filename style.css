@@ -249,7 +249,7 @@ td button.editBtn { background-color: #007bff; color: white; border: none; paddi
 /* --- COULEURS GRANDS TOTAUX DASHBOARD --- */
 /* Inversion : Background coloré, texte blanc */
 #card-prix, #card-percu { background-color: var(--primary); }
-#card-other { background-color: #06b6d4; }
+#card-other { background-color: #64748b; }
 #card-depenses { background-color: var(--danger); }
 #card-reste { background-color: var(--warning); }
 #card-retraits { background-color: #8b5cf6; }

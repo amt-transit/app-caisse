@@ -19,9 +19,47 @@ document.addEventListener('DOMContentLoaded', () => {
     const showDeletedCheckbox = document.getElementById('showDeletedCheckbox');
     const incomeSearchInput = document.getElementById('incomeSearch');
 
+    // --- INJECTION FILTRE MOIS (Remplacement des dates) ---
+    const tableContainer = document.querySelector('#incomeTableBody')?.closest('table');
+    if (tableContainer && tableContainer.parentNode) {
+        // Masquer les anciens filtres s'ils existent
+        ['statsStartDate', 'statsEndDate'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el && el.parentElement) el.parentElement.style.display = 'none';
+        });
+
+        let incomeStatsControls = document.getElementById('incomeStatsControls');
+        if (!incomeStatsControls) {
+            incomeStatsControls = document.createElement('div');
+            incomeStatsControls.id = 'incomeStatsControls';
+            incomeStatsControls.style.cssText = "margin-bottom: 10px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap;";
+            
+            const now = new Date();
+            const defaultMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+
+            incomeStatsControls.innerHTML = `
+                <div style="display:flex; align-items:center; gap:5px; background:#fff; padding:5px 10px; border:1px solid #e2e8f0; border-radius:8px; box-shadow:0 1px 2px rgba(0,0,0,0.05);">
+                    <span style="font-size:0.9em; font-weight:600; color:#64748b;">📅 Période :</span>
+                    <input type="month" id="incomeStatsMonthFilter" value="${defaultMonth}" style="border:none; outline:none; font-family:inherit; color:#334155; background:transparent; cursor:pointer;">
+                    <button id="clearIncomeStatsFilter" title="Tout voir" style="margin-left:5px; border:none; background:#f1f5f9; color:#64748b; border-radius:4px; padding:2px 6px; cursor:pointer; font-size:0.8em;">✖</button>
+                </div>
+            `;
+            tableContainer.parentNode.insertBefore(incomeStatsControls, tableContainer);
+
+            setTimeout(() => {
+                const monthInput = document.getElementById('incomeStatsMonthFilter');
+                const clearBtn = document.getElementById('clearIncomeStatsFilter');
+                if (monthInput) monthInput.addEventListener('change', () => { renderIncomeTable(); updateStats(); });
+                if (clearBtn) clearBtn.addEventListener('click', () => {
+                    if(monthInput) monthInput.value = '';
+                    renderIncomeTable();
+                    updateStats();
+                });
+            }, 0);
+        }
+    }
+
     // Stats Elements
-    const statsStartDate = document.getElementById('statsStartDate');
-    const statsEndDate = document.getElementById('statsEndDate');
     const totalBeneficeAchatEl = document.getElementById('totalBeneficeAchat');
     const totalVenteMarchandiseEl = document.getElementById('totalVenteMarchandise');
     const totalAutreEl = document.getElementById('totalAutre');
@@ -78,8 +116,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function renderIncomeTable() {
         const term = incomeSearchInput ? incomeSearchInput.value.toLowerCase().trim() : "";
+        const monthFilter = document.getElementById('incomeStatsMonthFilter')?.value;
         
         const filtered = allIncome.filter(item => {
+            if (monthFilter && !item.date.startsWith(monthFilter)) return false;
             if (!term) return true;
             return (item.description || "").toLowerCase().includes(term);
         });
@@ -106,6 +146,14 @@ document.addEventListener('DOMContentLoaded', () => {
             const row = document.createElement('tr');
             if (income.isDeleted === true) row.classList.add('deleted-row');
             
+            // --- AJOUT : Couleur de fond selon la catégorie (Pastel très clair) ---
+            if (income.isDeleted !== true) {
+                const desc = (income.description || '').toLowerCase();
+                if (desc.includes('bénéfice') || desc.includes('benefice')) row.style.backgroundColor = '#ecfdf5'; // Vert très clair
+                else if (desc.includes('vente')) row.style.backgroundColor = '#eff6ff'; // Bleu très clair
+                else row.style.backgroundColor = '#f8fafc'; // Gris très clair
+            }
+            
             let deleteButtonHTML = '';
             // Seul l'admin peut supprimer
             if ((userRole === 'admin' || userRole === 'super_admin') && income.isDeleted !== true) {
@@ -123,8 +171,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function updateStats() {
-        const start = statsStartDate.value;
-        const end = statsEndDate.value;
+        const monthFilter = document.getElementById('incomeStatsMonthFilter')?.value;
 
         let totalBen = 0;
         let totalVente = 0;
@@ -132,8 +179,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         allIncome.forEach(inc => {
             if (inc.isDeleted) return;
-            if (start && inc.date < start) return;
-            if (end && inc.date > end) return;
+            if (monthFilter && !inc.date.startsWith(monthFilter)) return;
 
             const desc = (inc.description || '');
             const montant = inc.montant || 0;
@@ -148,10 +194,6 @@ document.addEventListener('DOMContentLoaded', () => {
         if(totalAutreEl) totalAutreEl.textContent = formatCFA(totalAutre);
     }
 
-    // Listeners pour les filtres de date
-    if(statsStartDate) statsStartDate.addEventListener('change', updateStats);
-    if(statsEndDate) statsEndDate.addEventListener('change', updateStats);
-    
     showDeletedCheckbox.addEventListener('change', fetchIncome);
     if(incomeSearchInput) incomeSearchInput.addEventListener('input', renderIncomeTable);
     
