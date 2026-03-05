@@ -224,6 +224,7 @@ td button.editBtn { background-color: #007bff; color: white; border: none; paddi
     text-align: center; border: 1px solid var(--border-color);
     box-shadow: var(--shadow-sm);
     transition: transform 0.2s;
+    cursor: pointer;
 }
 .total-card:hover { transform: translateY(-3px); box-shadow: var(--shadow-md); border-color: var(--primary); }
 .total-card h3 { margin-top: 0; font-size: 13px; color: var(--text-muted); margin-bottom: 5px; text-transform: uppercase; }
