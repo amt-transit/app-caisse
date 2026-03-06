@@ -381,7 +381,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 // Les Arrivages non payés (qui ne sont pas dans Confirmation) sont masqués.
                 // CAS 1 : PAS D'HISTORIQUE (Legacy ou Arrivages bruts)
                 // Si 'saisiPar' existe, c'est une donnée récente (Arrivages) qui n'a pas encore été validée en Caisse -> ON MASQUE
-                if (t.saisiPar) return acc;
+                if (t.saisiPar && (t.montantParis || 0) === 0) return acc;
 
                 // Si Legacy (pas de saisiPar), on affiche si montant > 0
                 if ((t.montantAbidjan || 0) > 0 || (t.montantParis || 0) > 0) {

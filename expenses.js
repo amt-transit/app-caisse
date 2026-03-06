@@ -86,8 +86,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function updateExpenseCategoryStats() {
         if (!expenseStatsContainer) return;
-        // Masquer si on est sur l'onglet Totaux (qui a sa propre vue)
-        if (currentTab === 'totals') {
+        // Masquer si on est sur l'onglet Totaux OU Conteneur (car logique mensuelle uniquement)
+        if (currentTab === 'totals' || currentTab === 'container') {
             expenseStatsContainer.style.display = 'none';
             return;
         }
@@ -119,9 +119,14 @@ document.addEventListener('DOMContentLoaded', () => {
             
             totalView += amount;
 
-            if (desc.includes('livraison')) stats['Livraison'] += amount;
-            else if (desc.includes('péage') || desc.includes('peage')) stats['Péage'] += amount;
-            else if (desc.includes('carburant')) stats['Carburant'] += amount;
+            // Mots-clés pour catégorisation automatique
+            const kwPeage = ['péage', 'peage'];
+            const kwCarburant = ['carburant', 'essence', 'gasoil'];
+            const kwLivraison = ['livraison', 'police', 'douane', 'gendarmerie', 'gendarme', 'achat', 'lavage', 'aide', 'frais', 'transp', 'founi', 'stock'];
+
+            if (kwPeage.some(k => desc.includes(k))) stats['Péage'] += amount;
+            else if (kwCarburant.some(k => desc.includes(k))) stats['Carburant'] += amount;
+            else if (kwLivraison.some(k => desc.includes(k))) stats['Livraison'] += amount;
             else stats['Autres'] += amount;
         });
 
@@ -359,11 +364,16 @@ document.addEventListener('DOMContentLoaded', () => {
             if (expense.isDeleted === true) row.classList.add('deleted-row');
             
             // --- AJOUT : Couleur de fond selon la catégorie (Identique aux Totaux) ---
-            if (expense.isDeleted !== true) {
+            if (expense.isDeleted !== true && expense.type === 'Mensuelle') {
                 const desc = (expense.description || '').toLowerCase();
-                if (desc.includes('livraison')) row.style.backgroundColor = '#e0f2fe'; // Bleu clair
-                else if (desc.includes('péage') || desc.includes('peage')) row.style.backgroundColor = '#fef3c7'; // Orange clair
-                else if (desc.includes('carburant')) row.style.backgroundColor = '#fee2e2'; // Rouge clair
+                
+                const kwPeage = ['péage', 'peage'];
+                const kwCarburant = ['carburant', 'essence', 'gasoil'];
+                const kwLivraison = ['livraison', 'police', 'douane', 'gendarmerie', 'gendarme', 'achat', 'lavage', 'aide', 'frais', 'transp', 'founi', 'stock'];
+
+                if (kwPeage.some(k => desc.includes(k))) row.style.backgroundColor = '#fef3c7'; // Orange clair (Péage)
+                else if (kwCarburant.some(k => desc.includes(k))) row.style.backgroundColor = '#fee2e2'; // Rouge clair (Carburant)
+                else if (kwLivraison.some(k => desc.includes(k))) row.style.backgroundColor = '#e0f2fe'; // Bleu clair (Livraison)
                 else row.style.backgroundColor = '#f1f5f9'; // Gris très clair (Autres)
             }
             
@@ -422,16 +432,41 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             // Par Catégorie (Basé sur la description)
-            let matchedCat = false;
-            for (const cat of ['Dépenses Livraison', 'Dépenses Péage', 'Dépenses Carburant']) {
-                if ((e.description || '').startsWith(cat)) {
-                    categories[cat] += (e.montant || 0);
-                    matchedCat = true;
-                    break;
+            // UNIQUEMENT POUR LES DÉPENSES MENSUELLES
+            if (e.type === 'Mensuelle') {
+                let matchedCat = false;
+                const desc = (e.description || '').toLowerCase();
+
+                // 1. Vérification préfixe standard
+                for (const cat of ['Dépenses Livraison', 'Dépenses Péage', 'Dépenses Carburant']) {
+                    if ((e.description || '').startsWith(cat)) {
+                        categories[cat] += (e.montant || 0);
+                        matchedCat = true;
+                        break;
+                    }
                 }
-            }
-            if (!matchedCat && e.type === 'Mensuelle') {
-                // On peut compter le reste comme "Autres" si on veut
+
+                // 2. Vérification par mots-clés (si pas de préfixe)
+                if (!matchedCat) {
+                    const kwPeage = ['péage', 'peage'];
+                    const kwCarburant = ['carburant', 'essence', 'gasoil'];
+                    const kwLivraison = ['livraison', 'police', 'douane', 'gendarmerie', 'gendarme', 'achat', 'lavage', 'aide', 'frais', 'transp', 'founi', 'stock'];
+
+                    if (kwPeage.some(k => desc.includes(k))) {
+                        categories['Dépenses Péage'] += (e.montant || 0);
+                        matchedCat = true;
+                    } else if (kwCarburant.some(k => desc.includes(k))) {
+                        categories['Dépenses Carburant'] += (e.montant || 0);
+                        matchedCat = true;
+                    } else if (kwLivraison.some(k => desc.includes(k))) {
+                        categories['Dépenses Livraison'] += (e.montant || 0);
+                        matchedCat = true;
+                    }
+                }
+
+                if (!matchedCat) {
+                    categories['Autres'] += (e.montant || 0);
+                }
             }
         });
 

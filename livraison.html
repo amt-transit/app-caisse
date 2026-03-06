@@ -31,7 +31,6 @@
         <a href="expenses.html" id="nav-expenses">Dépenses</a>
         <a href="other-income.html" id="nav-other-income">Autres Entrées</a>
         <a href="bank.html" id="nav-bank">Banque</a>
-        <a href="arrivages.html" id="nav-arrivages">Arrivages</a>
         <a href="clients.html" id="nav-clients">Clients</a>
         <a href="magasinage.html" id="nav-magasinage">Magasinage</a>
         <a href="salaire.html" id="nav-salaire">Salaire</a>
@@ -55,7 +54,11 @@
             <a href="#" class="tab-btn" onclick="switchTab('A_VENIR'); return false;" id="tabAVenir">🚢 À venir</a>
             <a href="#" class="tab-btn" onclick="switchTab('PARIS'); return false;" id="tabParis">🇫🇷 Paris</a>
             <a href="#" class="tab-btn" onclick="switchTab('PROGRAMME'); return false;" id="tabProgramme">📅 Programmes</a>
+            <button class="btn btn-small" onclick="openHelpModal()" style="margin-left: auto; background-color: #64748b; color: white; border: none;" title="Comment ça marche ?">❓ Aide</button>
         </div>
+
+        <!-- Description contextuelle (Guidance) -->
+        <div id="tabDescription" class="tab-description"></div>
 
         <!-- Barres d'outils et Filtres -->
         <div class="toolbar">
@@ -303,6 +306,44 @@
                     <p><strong>Livreur :</strong> <span id="detailLivreur"></span> | <strong>Date :</strong> <span id="detailDate"></span></p>
                 </div>
                 <div class="preview-table"><table id="programDetailsTable"></table></div>
+            </div>
+        </div>
+
+        <!-- Modal Aide / Guide -->
+        <div id="helpModal" class="modal">
+            <div class="modal-content" style="max-width: 600px;">
+                <div class="modal-header">
+                    <h2 style="margin:0;">📘 Guide du Flux Logistique</h2>
+                    <span class="close-modal" onclick="document.getElementById('helpModal').classList.remove('active')">&times;</span>
+                </div>
+                <div style="padding: 10px 0;">
+                    <div class="help-step">
+                        <div class="help-icon">1</div>
+                        <div class="help-content">
+                            <h4>🇫🇷 PARIS (Départ)</h4>
+                            <p>Saisissez ou importez les colis reçus en France. À cette étape, aucune dette n'est créée. C'est votre "Brouillon" ou Manifeste de départ.</p>
+                        </div>
+                    </div>
+                    <div class="help-arrow">⬇️</div>
+                    <div class="help-step">
+                        <div class="help-icon">2</div>
+                        <div class="help-content">
+                            <h4>🚢 À VENIR (Transit)</h4>
+                            <p>Attribuez un N° de Conteneur aux colis. Ils sont en mer. Vous pouvez notifier les clients de l'arrivée prochaine.</p>
+                        </div>
+                    </div>
+                    <div class="help-arrow">⬇️</div>
+                    <div class="help-step">
+                        <div class="help-icon">3</div>
+                        <div class="help-content">
+                            <h4>📦 EN COURS (Arrivée Abidjan)</h4>
+                            <p>C'est l'étape clé. Quand un colis arrive ici (via Import Scanner ou déplacement manuel), <strong>la dette financière est créée</strong> dans la Caisse. Le colis est prêt à être livré.</p>
+                        </div>
+                    </div>
+                </div>
+                <div style="text-align: right; margin-top: 10px;">
+                    <button class="btn" onclick="document.getElementById('helpModal').classList.remove('active')">Fermer</button>
+                </div>
             </div>
         </div>
 

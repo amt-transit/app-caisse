@@ -118,7 +118,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 isDeleted: false, agent: '', agentMobileMoney: '', commune: '',
                 dateParis: arrivalRef.dataset.dateParis || "",
                 lastPaymentDate: arrivalDate.value, // Initialisation pour qu'il apparaisse dans l'historique
-                saisiPar: currentUserName // Auteur de la création
+                saisiPar: currentUserName, // Auteur de la création
+                paymentHistory: [] // Initialisation
             };
 
             if (!data.date || !data.reference || !data.nom || !data.conteneur || data.prix <= 0) {
@@ -153,9 +154,22 @@ document.addEventListener('DOMContentLoaded', () => {
                 return;
             }
 
+            // --- AJOUT : Création de l'historique de paiement initial ---
+            if (montantParis > 0 || montantAbidjan > 0) {
+                data.paymentHistory.push({
+                    date: arrivalDate.value,
+                    montantParis: montantParis,
+                    montantAbidjan: montantAbidjan,
+                    modePaiement: 'Espèce', // Par défaut
+                    agent: '',
+                    saisiPar: currentUserName
+                });
+            }
+
             transactionsCollection.add(data).then(() => {
                 alert("Colis ajouté !");
-                removeFromParisManifest(data.reference, data.conteneur); 
+                // Mise à jour de la livraison avec le reste à payer (Dette)
+                removeFromParisManifest(data.reference, data.conteneur, Math.abs(data.reste)); 
                 arrivalRef.value = ''; arrivalNom.value = ''; arrivalPrix.value = '';
                 arrivalRef.dataset.dateParis = ''; // Reset
                 arrivalMontantParis.value = ''; arrivalMontantAbidjan.value = '';
@@ -242,6 +256,19 @@ document.addEventListener('DOMContentLoaded', () => {
                         // MODIFICATION : Le Destinataire est le client principal (nom)
                         const mainClientName = sender || dest;
 
+                        // --- AJOUT : Historique Paiement ---
+                        const paymentHistory = [];
+                        if (mParis > 0) {
+                            paymentHistory.push({
+                                date: commonDate,
+                                montantParis: mParis,
+                                montantAbidjan: 0,
+                                modePaiement: 'Espèce',
+                                agent: '',
+                                saisiPar: currentUserName
+                            });
+                        }
+
                         const docRef = transactionsCollection.doc();
                         batch.set(docRef, {
                             date: commonDate, reference: ref, nom: mainClientName || "", conteneur: commonConteneur,
@@ -249,16 +276,18 @@ document.addEventListener('DOMContentLoaded', () => {
                             reste: mParis - prix, isDeleted: false, agent: '', agentMobileMoney: '', commune: '',
                             description: desc, adresseDestinataire: addr, nomDestinataire: dest,
                             lastPaymentDate: commonDate, // Initialisation
-                            saisiPar: currentUserName // Auteur de l'import
+                            saisiPar: currentUserName, // Auteur de l'import
+                            paymentHistory: paymentHistory
                         });
-                        refsToRemove.push(ref);
+                        // On stocke la référence ET la dette pour la mise à jour
+                        refsToRemove.push({ ref: ref, debt: prix - mParis });
                         processedRefs.add(ref);
                         count++;
                     }
                     if (count > 0) {
                         try {
                             await batch.commit();
-                            refsToRemove.forEach(r => removeFromParisManifest(r, commonConteneur));
+                            refsToRemove.forEach(item => removeFromParisManifest(item.ref, commonConteneur, item.debt));
                             uploadLog.textContent = `Succès: ${count} ajoutés.\n${log}`;
                         } catch (err) {
                             console.error(err);
@@ -574,7 +603,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    async function removeFromParisManifest(ref, conteneur) {
+    async function removeFromParisManifest(ref, conteneur, newRestant = null) {
         // MODIFICATION : Recherche élargie pour inclure A_VENIR
         const q = await livraisonsCollection.where("ref", "==", ref).limit(5).get();
         if (!q.empty) {
@@ -582,7 +611,17 @@ document.addEventListener('DOMContentLoaded', () => {
             const targetDoc = q.docs.find(d => ['PARIS', 'A_VENIR'].includes(d.data().containerStatus));
             
             if (targetDoc) {
-                await targetDoc.ref.update({ containerStatus: 'EN_COURS', conteneur: conteneur || targetDoc.data().conteneur || '' });
+                const currentData = targetDoc.data();
+                const updates = { containerStatus: 'EN_COURS', conteneur: conteneur || currentData.conteneur || '' };
+                
+                if (newRestant !== null) {
+                    updates.montant = newRestant + " CFA";
+                    // Sauvegarde du prix original si non existant (pour compatibilité avec Livraison.js)
+                    if (currentData.montant && !currentData.prixOriginal) {
+                        updates.prixOriginal = currentData.montant;
+                    }
+                }
+                await targetDoc.ref.update(updates);
             }
         }
     }

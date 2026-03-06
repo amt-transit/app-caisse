@@ -756,3 +756,30 @@ input[type="checkbox"] {
     opacity: 1;
     pointer-events: auto;
 }
+
+/* --- AIDE & DESCRIPTION CONTEXTUELLE --- */
+.tab-description {
+    background-color: #f8fafc;
+    border-left: 4px solid var(--primary);
+    padding: 12px 20px;
+    margin-bottom: 20px;
+    border-radius: 0 4px 4px 0;
+    color: var(--text-muted);
+    font-size: 13px;
+    display: flex;
+    align-items: center;
+    box-shadow: var(--shadow-sm);
+}
+.help-step {
+    display: flex; gap: 15px; margin-bottom: 20px; align-items: flex-start;
+}
+.help-icon {
+    font-size: 20px; background: #e0f2fe; color: var(--primary);
+    width: 40px; height: 40px; display: flex; align-items: center; justify-content: center;
+    border-radius: 50%; flex-shrink: 0; font-weight: bold;
+}
+.help-content h4 { margin: 0 0 5px 0; color: var(--text-main); font-size: 14px; }
+.help-content p { margin: 0; font-size: 13px; color: var(--text-muted); line-height: 1.4; }
+.help-arrow {
+    text-align: center; font-size: 20px; color: #cbd5e1; margin-bottom: 10px;
+}

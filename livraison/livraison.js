@@ -138,6 +138,14 @@ function initRealtimeSync() {
         });
 }
 
+// --- DESCRIPTIONS CONTEXTUELLES (GUIDANCE) ---
+const TAB_DESCRIPTIONS = {
+    'EN_COURS': "📍 <strong>ABIDJAN (Réception) :</strong> Gestion des colis physiquement arrivés et prêts à être livrés. <span style='color:#d97706;'>⚠️ C'est ici que la dette financière est calculée.</span>",
+    'A_VENIR': "🌊 <strong>TRANSIT (Mer) :</strong> Suivi des colis chargés dans les conteneurs. Vérifiez les numéros et notifiez les clients.",
+    'PARIS': "🇫🇷 <strong>DÉPART (France) :</strong> Saisie initiale des colis reçus à l'entrepôt de départ. Aucune transaction financière n'est encore créée.",
+    'PROGRAMME': "🚚 <strong>DISTRIBUTION :</strong> Organisation des tournées. Assignez des livreurs, imprimez les feuilles de route et validez la remise."
+};
+
 // Gestion des onglets
 function switchTab(tab) {
     currentTab = tab;
@@ -153,6 +161,10 @@ function switchTab(tab) {
     } else {
         document.getElementById('tabProgramme').classList.add('active');
     }
+
+    // Mise à jour de la description contextuelle
+    const descEl = document.getElementById('tabDescription');
+    if (descEl) descEl.innerHTML = TAB_DESCRIPTIONS[tab] || '';
 
     // Gestion des barres d'outils (Afficher uniquement celle de l'onglet actif)
     document.querySelectorAll('.tab-toolbar').forEach(el => el.style.display = 'none');
@@ -1117,11 +1129,14 @@ async function confirmImport() {
 
                 if (existingItem) {
                     // CAS 1 : Données issues de l'historique (Paris -> A Venir -> En Cours)
-                    // Le montant actuel dans la fiche est le "Reste à payer" (mis à jour dans A_VENIR)
-                    restant = parseFloat((existingItem.montant || '0').replace(/[^\d]/g, '')) || 0;
+                    
+                    // LOGIQUE CORRIGÉE : Le "restant" est TOUJOURS la valeur de l'item existant dans la base (A Venir / Paris).
+                    // L'import "En Cours" (scanner) est purement logistique et n'a pas d'impact financier direct sur le calcul.
+                    const currentMontantStr = existingItem.montant || '0';
+                    restant = parseFloat(String(currentMontantStr).replace(/[^\d]/g, '')) || 0;
                     
                     // Le prix total est le prix original (Paris). Si pas de prix original, on suppose que le reste est le prix total.
-                    const original = parseFloat((existingItem.prixOriginal || '0').replace(/[^\d]/g, '')) || 0;
+                    let original = parseFloat((existingItem.prixOriginal || '0').replace(/[^\d]/g, '')) || 0;
                     totalPrix = original > 0 ? original : restant;
                 } else {
                     // CAS 2 : Import direct sans historique (Nouveau colis)
@@ -1134,6 +1149,19 @@ async function confirmImport() {
                 let mParis = 0;
                 if (totalPrix > restant) {
                     mParis = totalPrix - restant; // La différence a été payée
+                }
+
+                // --- AJOUT : Historique Paiement pour Paris ---
+                const paymentHistory = [];
+                if (mParis > 0) {
+                    paymentHistory.push({
+                        date: new Date().toISOString().split('T')[0],
+                        montantParis: mParis,
+                        montantAbidjan: 0,
+                        modePaiement: 'Espèce',
+                        agent: '',
+                        saisiPar: sessionStorage.getItem('userName') || 'Import Livraison'
+                    });
                 }
 
                 const transRef = db.collection('transactions').doc();
@@ -1153,7 +1181,8 @@ async function confirmImport() {
                     nomDestinataire: importItem.destinataire || '',
                     numero: importItem.numero || '', // Nouveau champ Numéro
                     saisiPar: sessionStorage.getItem('userName') || 'Import Livraison',
-                    quantite: importItem.quantite || 1 // IMPORTANT : Pour le calcul magasinage
+                    quantite: importItem.quantite || 1, // IMPORTANT : Pour le calcul magasinage
+                    paymentHistory: paymentHistory
                 }});
             }
         }
@@ -1370,13 +1399,31 @@ function renderTable() {
                 <th>ACTIONS</th>
             `;
         }
+        
+        // --- MESSAGES VIDES CONTEXTUELS (Guidance) ---
+        let emptyTitle = "Aucune livraison";
+        let emptySub = "Importez un PDF/Excel ou ajoutez manuellement";
+        
+        if (currentTab === 'PARIS') {
+            emptyTitle = "Entrepôt Paris vide";
+            emptySub = "Commencez par saisir les colis reçus ou importez le manifeste Excel.";
+        } else if (currentTab === 'A_VENIR') {
+            emptyTitle = "Rien en transit";
+            emptySub = "Les colis assignés à un conteneur depuis l'onglet 'Paris' apparaîtront ici.";
+        } else if (currentTab === 'EN_COURS') {
+            emptyTitle = "Aucun colis à Abidjan";
+            emptySub = "Importez le fichier du scanner ou validez l'arrivée d'un conteneur.";
+        } else if (currentTab === 'PROGRAMME') {
+            emptyTitle = "Aucun programme";
+            emptySub = "Allez dans 'En Cours', sélectionnez des colis et cliquez sur 'Programmer'.";
+        }
 
         tbody.innerHTML = `
             <tr>
                 <td colspan="12" class="empty-state">
                     <div class="empty-state-icon">📦</div>
-                    <h3>Aucune livraison</h3>
-                    <p>Importez un PDF/Excel ou ajoutez manuellement</p>
+                    <h3>${emptyTitle}</h3>
+                    <p>${emptySub}</p>
                 </td>
             </tr>
         `;
@@ -1983,6 +2030,12 @@ function closeProgramModal() {
     document.getElementById('programModal').classList.remove('active');
     document.getElementById('progLivreur').value = '';
 }
+
+// --- AIDE ---
+function openHelpModal() {
+    document.getElementById('helpModal').classList.add('active');
+}
+// (La fermeture est gérée par le onclick dans le HTML ou générique)
 
 function fillProgramFields() {
     const select = document.getElementById('existingProgramSelect');

@@ -149,8 +149,12 @@ document.addEventListener('DOMContentLoaded', () => {
             // --- AJOUT : Couleur de fond selon la catégorie (Pastel très clair) ---
             if (income.isDeleted !== true) {
                 const desc = (income.description || '').toLowerCase();
-                if (desc.includes('bénéfice') || desc.includes('benefice')) row.style.backgroundColor = '#ecfdf5'; // Vert très clair
-                else if (desc.includes('vente')) row.style.backgroundColor = '#eff6ff'; // Bleu très clair
+                
+                const kwBenefice = ['bénéfice', 'benefice', 'achat', 'gain', 'profit', 'marge'];
+                const kwVente = ['vente', 'marchandise', 'vendue', 'vendu', 'article', 'produit'];
+
+                if (kwBenefice.some(k => desc.includes(k))) row.style.backgroundColor = '#ecfdf5'; // Vert très clair
+                else if (kwVente.some(k => desc.includes(k))) row.style.backgroundColor = '#eff6ff'; // Bleu très clair
                 else row.style.backgroundColor = '#f8fafc'; // Gris très clair
             }
             
@@ -181,11 +185,14 @@ document.addEventListener('DOMContentLoaded', () => {
             if (inc.isDeleted) return;
             if (monthFilter && !inc.date.startsWith(monthFilter)) return;
 
-            const desc = (inc.description || '');
+            const desc = (inc.description || '').toLowerCase();
             const montant = inc.montant || 0;
 
-            if (desc.startsWith('Bénéfice sur Achat')) totalBen += montant;
-            else if (desc.startsWith('Vente Marchandises')) totalVente += montant;
+            const kwBenefice = ['bénéfice', 'benefice', 'achat', 'gain', 'profit', 'marge'];
+            const kwVente = ['vente', 'marchandise', 'vendue', 'vendu', 'article', 'produit'];
+
+            if (kwBenefice.some(k => desc.includes(k))) totalBen += montant;
+            else if (kwVente.some(k => desc.includes(k))) totalVente += montant;
             else totalAutre += montant;
         });
 
