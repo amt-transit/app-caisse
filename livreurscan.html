@@ -1,0 +1,1422 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>AMT — Mode Livreur</title>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+<!-- ZXing pour scan codes-barres/QR via caméra -->
+<script src="https://unpkg.com/@zxing/library@latest/umd/index.min.js"></script>
+
+<!-- Firebase (même config que livraison.js) -->
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+
+<style>
+:root {
+  --green:   #16a34a;
+  --green-l: #dcfce7;
+  --green-d: #14532d;
+  --orange:  #ea580c;
+  --orange-l:#fff7ed;
+  --red:     #dc2626;
+  --red-l:   #fee2e2;
+  --blue:    #2563eb;
+  --blue-l:  #dbeafe;
+  --wa:      #25D366;
+  --wa-d:    #128C7E;
+  --bg:      #0f172a;
+  --surface: #1e293b;
+  --card:    #273344;
+  --border:  rgba(255,255,255,0.08);
+  --text:    #f1f5f9;
+  --muted:   #94a3b8;
+  --radius:  16px;
+}
+
+* { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+
+html, body {
+  height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+  overscroll-behavior: none;
+  overflow: hidden;
+}
+
+/* ── SCREENS ── */
+.screen {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  transition: transform 0.35s cubic-bezier(0.4,0,0.2,1), opacity 0.35s;
+}
+
+.screen.hidden {
+  transform: translateY(30px);
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* ── TOP BAR ── */
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 18px;
+  padding-top: max(14px, env(safe-area-inset-top));
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.topbar-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.topbar-logo {
+  width: 34px; height: 34px;
+  background: var(--green);
+  border-radius: 10px;
+  display: flex; align-items:center; justify-content:center;
+  font-size: 1.1rem;
+}
+
+.topbar-title {
+  font-size: 0.9rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.topbar-sub {
+  font-size: 0.65rem;
+  color: var(--muted);
+  margin-top: 1px;
+}
+
+.topbar-btn {
+  padding: 6px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.topbar-btn:active { background: var(--card); }
+
+/* ── MAIN CONTENT ── */
+.content {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 16px;
+  padding-bottom: max(24px, env(safe-area-inset-bottom));
+  -webkit-overflow-scrolling: touch;
+}
+
+/* ── SCAN SCREEN ── */
+#screen-scan .content {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+/* Camera viewfinder */
+.viewfinder-wrap {
+  position: relative;
+  border-radius: var(--radius);
+  overflow: hidden;
+  background: #000;
+  aspect-ratio: 1 / 1;
+  max-height: 300px;
+  width: 100%;
+}
+
+#video-preview {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.viewfinder-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.viewfinder-box {
+  width: 65%;
+  aspect-ratio: 1;
+  border: 2.5px solid rgba(22,163,74,0.85);
+  border-radius: 14px;
+  box-shadow: 0 0 0 9999px rgba(0,0,0,0.45);
+  position: relative;
+}
+
+.viewfinder-box::before,
+.viewfinder-box::after {
+  content: '';
+  position: absolute;
+  width: 22px; height: 22px;
+  border-color: #22c55e;
+  border-style: solid;
+}
+
+.viewfinder-box::before {
+  top: -2px; left: -2px;
+  border-width: 3px 0 0 3px;
+  border-radius: 4px 0 0 0;
+}
+
+.viewfinder-box::after {
+  bottom: -2px; right: -2px;
+  border-width: 0 3px 3px 0;
+  border-radius: 0 0 4px 0;
+}
+
+.scan-line {
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, #22c55e, transparent);
+  animation: scan-anim 2s ease-in-out infinite;
+  border-radius: 1px;
+}
+
+@keyframes scan-anim {
+  0%   { top: 5%; opacity: 1; }
+  50%  { top: 90%; opacity: 0.7; }
+  100% { top: 5%; opacity: 1; }
+}
+
+.viewfinder-label {
+  position: absolute;
+  bottom: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 0.7rem;
+  color: rgba(255,255,255,0.8);
+  background: rgba(0,0,0,0.5);
+  padding: 3px 10px;
+  border-radius: 20px;
+  white-space: nowrap;
+}
+
+/* Scan status ring */
+.scan-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  background: var(--card);
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  font-size: 0.8rem;
+  font-weight: 500;
+}
+
+.scan-dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: var(--green);
+  animation: blink 1.2s ease-in-out infinite;
+  flex-shrink: 0;
+}
+
+@keyframes blink {
+  0%,100% { opacity: 1; } 50% { opacity: 0.3; }
+}
+
+/* Manual input row */
+.manual-row {
+  display: flex;
+  gap: 8px;
+}
+
+.manual-input {
+  flex: 1;
+  padding: 12px 14px;
+  background: var(--card);
+  border: 1.5px solid var(--border);
+  border-radius: 12px;
+  color: var(--text);
+  font-size: 0.9rem;
+  font-weight: 600;
+  font-family: inherit;
+  outline: none;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  transition: border-color 0.2s;
+}
+
+.manual-input:focus {
+  border-color: var(--green);
+}
+
+.manual-input::placeholder {
+  color: var(--muted);
+  text-transform: none;
+  font-weight: 400;
+  letter-spacing: 0;
+}
+
+.btn-search {
+  padding: 12px 16px;
+  background: var(--blue);
+  border: none;
+  border-radius: 12px;
+  color: white;
+  font-size: 1.1rem;
+  cursor: pointer;
+  transition: background 0.2s;
+  flex-shrink: 0;
+}
+
+.btn-search:active { background: #1d4ed8; }
+
+/* ── RESULT CARD ── */
+.result-card {
+  background: var(--card);
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  animation: slide-in 0.3s cubic-bezier(0.4,0,0.2,1);
+}
+
+@keyframes slide-in {
+  from { transform: translateY(16px); opacity: 0; }
+  to   { transform: translateY(0); opacity: 1; }
+}
+
+.result-header {
+  padding: 14px 16px 10px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.result-ref {
+  font-size: 1rem;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+
+.result-status-badge {
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 3px 9px;
+  border-radius: 20px;
+}
+
+.status-en-attente { background: var(--orange-l); color: var(--orange); }
+.status-en-cours   { background: var(--blue-l);   color: var(--blue); }
+.status-livre      { background: var(--green-l);  color: var(--green-d); }
+.status-incident   { background: var(--red-l);    color: var(--red); }
+
+.result-body {
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.result-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.result-label {
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  font-weight: 600;
+  flex-shrink: 0;
+  min-width: 78px;
+}
+
+.result-value {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--text);
+  word-break: break-word;
+}
+
+.result-value.phone {
+  color: #67e8f9;
+  font-size: 0.925rem;
+}
+
+.result-value.amount {
+  color: #fbbf24;
+  font-weight: 800;
+  font-size: 1rem;
+}
+
+/* Not found state */
+.not-found {
+  text-align: center;
+  padding: 24px;
+  color: var(--muted);
+  background: var(--card);
+  border-radius: var(--radius);
+  border: 1.5px solid var(--border);
+}
+
+.not-found-icon { font-size: 2rem; margin-bottom: 8px; }
+.not-found-text { font-size: 0.875rem; font-weight: 500; }
+
+/* ── ACTION BUTTONS ── */
+.actions-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  padding: 0 16px 16px;
+}
+
+.action-btn {
+  padding: 14px 10px;
+  border-radius: 14px;
+  border: none;
+  font-size: 0.8rem;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  transition: transform 0.15s, opacity 0.15s;
+  font-family: inherit;
+  letter-spacing: 0.01em;
+  line-height: 1.2;
+}
+
+.action-btn:active { transform: scale(0.95); opacity: 0.85; }
+
+.action-btn .btn-icon { font-size: 1.4rem; line-height: 1; }
+
+.btn-wa {
+  background: var(--wa);
+  color: white;
+  grid-column: 1 / -1;
+  flex-direction: row;
+  padding: 16px;
+  font-size: 0.925rem;
+  border-radius: 16px;
+}
+
+.btn-wa .btn-icon { font-size: 1.6rem; }
+
+.btn-photo {
+  background: #7c3aed;
+  color: white;
+}
+
+.btn-done {
+  background: var(--green);
+  color: white;
+}
+
+.btn-incident {
+  background: var(--red);
+  color: white;
+}
+
+.btn-call {
+  background: var(--blue);
+  color: white;
+}
+
+.btn-wa:disabled, .btn-done:disabled {
+  opacity: 0.4;
+  pointer-events: none;
+}
+
+/* ── PHOTO PREVIEW ── */
+.photos-row {
+  display: flex;
+  gap: 8px;
+  padding: 0 16px 10px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.photos-row::-webkit-scrollbar { display: none; }
+
+.photo-thumb {
+  width: 72px;
+  height: 72px;
+  border-radius: 10px;
+  object-fit: cover;
+  border: 2px solid var(--green);
+  flex-shrink: 0;
+  cursor: pointer;
+  transition: transform 0.15s;
+}
+
+.photo-thumb:active { transform: scale(0.9); }
+
+.photo-add-btn {
+  width: 72px; height: 72px;
+  border-radius: 10px;
+  border: 2px dashed var(--border);
+  background: var(--card);
+  color: var(--muted);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.3rem;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: border-color 0.2s;
+}
+
+.photo-add-btn:active { border-color: var(--green); }
+
+.photo-count-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  background: #7c3aed33;
+  border: 1px solid #7c3aed66;
+  border-radius: 20px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: #a78bfa;
+  margin: 0 16px 10px;
+  align-self: flex-start;
+}
+
+/* ── HISTORY SCREEN ── */
+#screen-history .content {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.history-item {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 12px 14px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.history-item:active { background: var(--surface); }
+
+.history-dot {
+  width: 10px; height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.history-dot.livre    { background: var(--green); }
+.history-dot.incident { background: var(--red); }
+.history-dot.pending  { background: var(--orange); }
+
+.history-info { flex: 1; min-width: 0; }
+
+.history-ref {
+  font-size: 0.875rem;
+  font-weight: 700;
+}
+
+.history-dest {
+  font-size: 0.75rem;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-top: 2px;
+}
+
+.history-time {
+  font-size: 0.65rem;
+  color: var(--muted);
+  flex-shrink: 0;
+}
+
+/* ── BOTTOM NAV ── */
+.bottom-nav {
+  display: flex;
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  padding-bottom: max(10px, env(safe-area-inset-bottom));
+  flex-shrink: 0;
+}
+
+.nav-item {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 10px 4px 6px;
+  gap: 3px;
+  cursor: pointer;
+  transition: color 0.2s;
+  color: var(--muted);
+  font-size: 0.6rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  border: none;
+  background: none;
+  font-family: inherit;
+}
+
+.nav-item .nav-icon { font-size: 1.3rem; line-height: 1; }
+
+.nav-item.active { color: var(--green); }
+
+/* ── TOAST ── */
+#toast {
+  position: fixed;
+  top: max(60px, env(safe-area-inset-top) + 60px);
+  left: 50%;
+  transform: translateX(-50%) translateY(-80px);
+  background: #1e293b;
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 10px 18px;
+  border-radius: 100px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  z-index: 9999;
+  transition: transform 0.3s cubic-bezier(0.4,0,0.2,1);
+  white-space: nowrap;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+  pointer-events: none;
+  max-width: calc(100vw - 32px);
+}
+
+#toast.show { transform: translateX(-50%) translateY(0); }
+#toast.success { background: #052e16; border-color: #166534; }
+#toast.error   { background: #450a0a; border-color: #991b1b; }
+
+/* ── LOADING OVERLAY ── */
+#loading {
+  position: fixed;
+  inset: 0;
+  background: rgba(15,23,42,0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 8888;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s;
+  backdrop-filter: blur(4px);
+}
+
+#loading.show { opacity: 1; pointer-events: auto; }
+
+.spinner {
+  width: 40px; height: 40px;
+  border: 3px solid var(--border);
+  border-top-color: var(--green);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── SUCCESS FLASH ── */
+.success-flash {
+  position: fixed;
+  inset: 0;
+  background: rgba(22,163,74,0.18);
+  z-index: 7777;
+  pointer-events: none;
+  animation: flash 0.5s ease-out forwards;
+}
+
+@keyframes flash {
+  0%   { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+/* ── DIVIDER ── */
+.section-label {
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--muted);
+  font-weight: 700;
+  padding: 0 2px;
+  margin-top: 4px;
+}
+
+/* Empty state in scan */
+.scan-empty {
+  text-align: center;
+  padding: 20px;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.scan-empty .icon { font-size: 2.5rem; margin-bottom: 8px; }
+
+/* Daily counter */
+.daily-counter {
+  display: flex;
+  gap: 8px;
+  padding: 10px 14px;
+  background: var(--card);
+  border-radius: 12px;
+  border: 1px solid var(--border);
+}
+
+.counter-item {
+  flex: 1;
+  text-align: center;
+}
+
+.counter-num {
+  font-size: 1.4rem;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.counter-num.green  { color: #4ade80; }
+.counter-num.orange { color: #fb923c; }
+.counter-num.red    { color: #f87171; }
+
+.counter-lbl {
+  font-size: 0.6rem;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-top: 3px;
+}
+
+/* Input file (caché) */
+#photoInput { display: none; }
+</style>
+</head>
+<body>
+
+<!-- TOAST -->
+<div id="toast"></div>
+
+<!-- LOADING -->
+<div id="loading"><div class="spinner"></div></div>
+
+<!-- HIDDEN FILE INPUT FOR PHOTOS -->
+<input type="file" id="photoInput" accept="image/*" capture="environment" multiple>
+
+<!-- ═══════════════════════════════════════
+     SCREEN 1 : SCAN / RECHERCHE
+     ═══════════════════════════════════════ -->
+<div class="screen" id="screen-scan">
+  <div class="topbar">
+    <div class="topbar-brand">
+      <div class="topbar-logo">📦</div>
+      <div>
+        <div class="topbar-title">AMT TRANS'IT</div>
+        <div class="topbar-sub">Mode Livreur</div>
+      </div>
+    </div>
+    <button class="topbar-btn" onclick="showScreen('history')">Historique</button>
+  </div>
+
+  <div class="content" id="scan-content">
+
+    <!-- Compteur journalier -->
+    <div class="daily-counter">
+      <div class="counter-item">
+        <div class="counter-num green" id="cnt-livre">0</div>
+        <div class="counter-lbl">Livrés</div>
+      </div>
+      <div class="counter-item">
+        <div class="counter-num orange" id="cnt-pending">0</div>
+        <div class="counter-lbl">En attente</div>
+      </div>
+      <div class="counter-item">
+        <div class="counter-num red" id="cnt-incident">0</div>
+        <div class="counter-lbl">Incidents</div>
+      </div>
+    </div>
+
+    <!-- Caméra scan -->
+    <div class="section-label">Scanner le code-barres / QR</div>
+    <div class="viewfinder-wrap" id="viewfinder-wrap">
+      <video id="video-preview" autoplay muted playsinline></video>
+      <div class="viewfinder-overlay">
+        <div class="viewfinder-box">
+          <div class="scan-line"></div>
+        </div>
+      </div>
+      <div class="viewfinder-label" id="scan-label">Pointez vers un code-barres</div>
+    </div>
+
+    <div class="scan-status">
+      <div class="scan-dot" id="scan-dot"></div>
+      <span id="scan-status-text">Caméra active — prête à scanner</span>
+    </div>
+
+    <!-- Saisie manuelle -->
+    <div class="section-label">Ou saisir manuellement</div>
+    <div class="manual-row">
+      <input type="text" class="manual-input" id="manual-ref" placeholder="Ex: AMT-2024-001"
+             oninput="this.value=this.value.toUpperCase()"
+             onkeydown="if(event.key==='Enter') searchDelivery(this.value.trim())">
+      <button class="btn-search" onclick="searchDelivery(document.getElementById('manual-ref').value.trim())">🔍</button>
+    </div>
+
+    <!-- Zone résultat (injectée dynamiquement) -->
+    <div id="result-zone"></div>
+
+  </div><!-- /content -->
+
+  <!-- Photos (hors content pour ne pas scroller) -->
+  <div id="photos-section" style="display:none;">
+    <div class="photo-count-badge" id="photo-count-badge">📷 0 photo(s)</div>
+    <div class="photos-row" id="photos-row">
+      <div class="photo-add-btn" onclick="addPhoto()">
+        <span>📷</span>
+        <span style="font-size:0.6rem; margin-top:2px;">Ajouter</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Action buttons (hors content pour rester visible) -->
+  <div class="actions-grid" id="actions-grid" style="display:none; padding:10px 16px 14px;">
+    <button class="action-btn btn-wa" id="btn-wa" onclick="sendToWhatsApp()" disabled>
+      <span class="btn-icon">💬</span>
+      <span>Envoyer preuve WhatsApp<br><small style="font-weight:400; opacity:0.85;">groupe + client</small></span>
+    </button>
+    <button class="action-btn btn-photo" onclick="addPhoto()">
+      <span class="btn-icon">📷</span>
+      Prendre photo
+    </button>
+    <button class="action-btn btn-done" id="btn-done" onclick="markDone()" disabled>
+      <span class="btn-icon">✅</span>
+      Marquer livré
+    </button>
+    <button class="action-btn btn-call" id="btn-call" onclick="callClient()">
+      <span class="btn-icon">📞</span>
+      Appeler
+    </button>
+    <button class="action-btn btn-incident" onclick="markIncident()" style="grid-column:1/-1; flex-direction:row; padding:12px 16px; border-radius:14px; font-size:0.82rem;">
+      <span class="btn-icon">⚠️</span>
+      Signaler incident
+    </button>
+  </div>
+
+  <div class="bottom-nav">
+    <button class="nav-item active" id="nav-scan" onclick="showScreen('scan')">
+      <span class="nav-icon">📷</span>Scanner
+    </button>
+    <button class="nav-item" id="nav-history" onclick="showScreen('history')">
+      <span class="nav-icon">📋</span>Historique
+    </button>
+    <button class="nav-item" id="nav-back" onclick="window.location.href='livraison.html'">
+      <span class="nav-icon">🏠</span>Bureau
+    </button>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════
+     SCREEN 2 : HISTORIQUE JOURNÉE
+     ═══════════════════════════════════════ -->
+<div class="screen hidden" id="screen-history">
+  <div class="topbar">
+    <div class="topbar-brand">
+      <div class="topbar-logo" style="background:#334155;">📋</div>
+      <div>
+        <div class="topbar-title">Aujourd'hui</div>
+        <div class="topbar-sub" id="history-date"></div>
+      </div>
+    </div>
+    <button class="topbar-btn" onclick="showScreen('scan')">← Retour</button>
+  </div>
+
+  <div class="content" id="history-list">
+    <div class="scan-empty">
+      <div class="icon">📭</div>
+      Aucune livraison aujourd'hui
+    </div>
+  </div>
+
+  <div class="bottom-nav">
+    <button class="nav-item" id="nav-scan2" onclick="showScreen('scan')">
+      <span class="nav-icon">📷</span>Scanner
+    </button>
+    <button class="nav-item active" id="nav-history2" onclick="showScreen('history')">
+      <span class="nav-icon">📋</span>Historique
+    </button>
+    <button class="nav-item" id="nav-back2" onclick="window.location.href='livraison.html'">
+      <span class="nav-icon">🏠</span>Bureau
+    </button>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════
+     SCRIPTS
+     ═══════════════════════════════════════ -->
+<script>
+// ── FIREBASE CONFIG (identique à livraison.html) ──
+const firebaseConfig = {
+    apiKey:            "AIzaSyA255n3XWDRKaYZ9kwOYkfovf5lRexoCA4",
+    authDomain:        "caisse-amt-perso.firebaseapp.com",
+    projectId:         "caisse-amt-perso",
+    storageBucket:     "caisse-amt-perso.firebasestorage.app",
+    messagingSenderId: "682789156997",
+    appId:             "1:682789156997:web:9ce3303120851d37be91ec"
+};
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
+
+// ── NUMÉRO DU GROUPE WHATSAPP ──
+// ⚠️ Remplace par le numéro du téléphone qui héberge le groupe
+// (ce numéro doit être en format international sans +)
+// Pour envoyer à un groupe WhatsApp Business via l'app, on utilisera
+// le partage natif du téléphone (Web Share API) qui est plus fiable
+const WA_GROUP_NUMBER = ''; // Laisser vide pour utiliser le partage natif
+
+// ── STATE ──
+let currentDelivery = null;
+let capturedPhotos = [];   // Array de {dataUrl, blob}
+let todayHistory   = [];
+let scannerActive  = false;
+let codeReader     = null;
+let currentScreen  = 'scan';
+
+// ── INIT ──
+document.addEventListener('DOMContentLoaded', () => {
+    document.getElementById('history-date').textContent =
+        new Date().toLocaleDateString('fr-FR', { weekday:'long', day:'numeric', month:'long' });
+
+    initScanner();
+    loadTodayStats();
+
+    // Photo input listener
+    document.getElementById('photoInput').addEventListener('change', handlePhotoCapture);
+});
+
+// ── SCANNER (ZXing) ──
+async function initScanner() {
+    try {
+        codeReader = new ZXing.BrowserMultiFormatReader();
+        const videoEl = document.getElementById('video-preview');
+
+        codeReader.decodeFromConstraints(
+            { video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } } },
+            videoEl,
+            (result, err) => {
+                if (result) {
+                    const text = result.getText().trim().toUpperCase();
+                    // Anti-doublon : ne pas rescanner le même code en < 3s
+                    if (text === (window._lastScan || '') && Date.now() - (window._lastScanTime || 0) < 3000) return;
+                    window._lastScan = text;
+                    window._lastScanTime = Date.now();
+
+                    vibrate([30, 20, 30]); // Vibration courte = scan réussi
+                    document.getElementById('scan-label').textContent = `✓ ${text}`;
+                    document.getElementById('manual-ref').value = text;
+                    searchDelivery(text);
+                }
+            }
+        );
+
+        document.getElementById('scan-status-text').textContent = 'Caméra active — prête à scanner';
+        scannerActive = true;
+
+    } catch (e) {
+        console.warn('Scanner caméra non disponible:', e);
+        document.getElementById('viewfinder-wrap').style.display = 'none';
+        document.getElementById('scan-status-text').textContent = '⚠️ Caméra non disponible — saisir manuellement';
+    }
+}
+
+// ── RECHERCHE LIVRAISON ──
+async function searchDelivery(ref) {
+    if (!ref || ref.length < 2) return;
+    showLoading(true);
+
+    try {
+        // Recherche exacte d'abord
+        let snap = await db.collection('livraisons').where('ref', '==', ref).limit(1).get();
+
+        // Recherche insensible à la casse si rien trouvé
+        if (snap.empty) {
+            snap = await db.collection('livraisons').where('ref', '==', ref.toLowerCase()).limit(1).get();
+        }
+
+        showLoading(false);
+
+        if (snap.empty) {
+            showNotFound(ref);
+        } else {
+            const doc = snap.docs[0];
+            currentDelivery = { id: doc.id, ...doc.data() };
+            capturedPhotos = [];
+            renderResult(currentDelivery);
+        }
+    } catch (e) {
+        showLoading(false);
+        showToast('Erreur connexion Firebase', 'error');
+    }
+}
+
+// ── AFFICHAGE RÉSULTAT ──
+function renderResult(d) {
+    // Extraire numéro de téléphone
+    const phone = extractPhone(d);
+
+    // Badge statut
+    const statusMap = {
+        'EN_ATTENTE': ['⏳ En attente', 'status-en-attente'],
+        'EN_COURS':   ['🚚 En cours',   'status-en-cours'],
+        'LIVRE':      ['✅ Livré',       'status-livre'],
+        'INCIDENT':   ['⚠️ Incident',   'status-incident'],
+    };
+    const [statusLabel, statusClass] = statusMap[d.status] || ['—', ''];
+
+    // Montant formaté
+    const montant = d.montant ? `<span class="result-value amount">${d.montant} FCFA</span>` : '<span class="result-value" style="color:var(--green)">✓ Soldé</span>';
+
+    document.getElementById('result-zone').innerHTML = `
+        <div class="result-card">
+            <div class="result-header">
+                <div class="result-ref">${d.ref || '—'}</div>
+                <span class="result-status-badge ${statusClass}">${statusLabel}</span>
+            </div>
+            <div class="result-body">
+                <div class="result-row">
+                    <span class="result-label">Destinataire</span>
+                    <span class="result-value">${cleanName(d.destinataire) || '—'}</span>
+                </div>
+                <div class="result-row">
+                    <span class="result-label">Téléphone</span>
+                    <span class="result-value phone">${phone || '⚠️ Non renseigné'}</span>
+                </div>
+                <div class="result-row">
+                    <span class="result-label">Lieu</span>
+                    <span class="result-value">${d.lieuLivraison || '—'}</span>
+                </div>
+                <div class="result-row">
+                    <span class="result-label">Conteneur</span>
+                    <span class="result-value">${d.conteneur || '—'}</span>
+                </div>
+                <div class="result-row">
+                    <span class="result-label">Restant</span>
+                    ${montant}
+                </div>
+                ${d.description ? `<div class="result-row"><span class="result-label">Note</span><span class="result-value" style="color:var(--muted)">${d.description}</span></div>` : ''}
+            </div>
+        </div>
+    `;
+
+    // Afficher sections actions
+    document.getElementById('photos-section').style.display = 'block';
+    document.getElementById('actions-grid').style.display = 'grid';
+
+    // État des boutons
+    const isLivre = d.status === 'LIVRE';
+    document.getElementById('btn-done').disabled = isLivre;
+    document.getElementById('btn-wa').disabled = false;
+    document.getElementById('btn-call').style.display = phone ? '' : 'none';
+
+    // Scroll vers résultat
+    document.getElementById('result-zone').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+
+    // Reset photos UI
+    updatePhotosUI();
+}
+
+function showNotFound(ref) {
+    currentDelivery = null;
+    capturedPhotos = [];
+    document.getElementById('result-zone').innerHTML = `
+        <div class="not-found">
+            <div class="not-found-icon">🔍</div>
+            <div class="not-found-text">Aucun colis trouvé pour : <strong>${ref}</strong></div>
+        </div>
+    `;
+    document.getElementById('photos-section').style.display = 'none';
+    document.getElementById('actions-grid').style.display = 'none';
+    vibrate([100, 50, 100]); // Vibration erreur
+}
+
+// ── PHOTOS ──
+function addPhoto() {
+    document.getElementById('photoInput').click();
+}
+
+function handlePhotoCapture(event) {
+    const files = Array.from(event.target.files);
+    if (!files.length) return;
+
+    files.forEach(file => {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            capturedPhotos.push({ dataUrl: e.target.result, file });
+            updatePhotosUI();
+
+            // Activer bouton WA dès qu'il y a une photo
+            document.getElementById('btn-wa').disabled = false;
+
+            if (capturedPhotos.length === 1) {
+                showToast('📷 Photo ajoutée !', 'success');
+            }
+        };
+        reader.readAsDataURL(file);
+    });
+
+    event.target.value = ''; // Reset pour permettre re-sélection
+}
+
+function updatePhotosUI() {
+    const count = capturedPhotos.length;
+    const badge = document.getElementById('photo-count-badge');
+    badge.textContent = `📷 ${count} photo${count > 1 ? 's' : ''}`;
+
+    const row = document.getElementById('photos-row');
+    row.innerHTML = `
+        <div class="photo-add-btn" onclick="addPhoto()">
+            <span>📷</span>
+            <span style="font-size:0.6rem; margin-top:2px;">Ajouter</span>
+        </div>
+    ` + capturedPhotos.map((p, i) => `
+        <img src="${p.dataUrl}" class="photo-thumb" onclick="viewPhoto(${i})" title="Photo ${i+1}">
+    `).join('');
+}
+
+function viewPhoto(index) {
+    // Affiche la photo en plein écran
+    const overlay = document.createElement('div');
+    overlay.style.cssText = `position:fixed;inset:0;background:rgba(0,0,0,0.92);z-index:9990;display:flex;align-items:center;justify-content:center;`;
+    overlay.innerHTML = `
+        <img src="${capturedPhotos[index].dataUrl}" style="max-width:96%;max-height:90vh;border-radius:12px;object-fit:contain;">
+        <button onclick="this.parentElement.remove()" style="position:absolute;top:20px;right:20px;background:rgba(255,255,255,0.15);border:none;color:white;font-size:1.5rem;width:44px;height:44px;border-radius:50%;cursor:pointer;">✕</button>
+    `;
+    overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+    document.body.appendChild(overlay);
+}
+
+// ── MARQUER LIVRÉ ──
+async function markDone() {
+    if (!currentDelivery) return;
+    showLoading(true);
+
+    try {
+        await db.collection('livraisons').doc(currentDelivery.id).update({
+            status: 'LIVRE',
+            dateLivraison: new Date().toISOString(),
+            scanProof: true
+        });
+
+        currentDelivery.status = 'LIVRE';
+        document.getElementById('btn-done').disabled = true;
+
+        // Flash vert
+        const flash = document.createElement('div');
+        flash.className = 'success-flash';
+        document.body.appendChild(flash);
+        setTimeout(() => flash.remove(), 600);
+
+        vibrate([50, 30, 50, 30, 100]);
+        showToast('✅ Livraison confirmée !', 'success');
+
+        // Mettre à jour le badge statut dans le card
+        const badge = document.querySelector('.result-status-badge');
+        if (badge) {
+            badge.textContent = '✅ Livré';
+            badge.className = 'result-status-badge status-livre';
+        }
+
+        addToHistory(currentDelivery, 'livre');
+        updateCounters();
+        showLoading(false);
+
+    } catch (e) {
+        showLoading(false);
+        showToast('Erreur lors de la mise à jour', 'error');
+    }
+}
+
+// ── SIGNALER INCIDENT ──
+async function markIncident() {
+    if (!currentDelivery) return;
+
+    const reason = prompt('Motif de l\'incident (optionnel) :') ?? '';
+    if (reason === null) return; // Annulé
+
+    showLoading(true);
+    try {
+        await db.collection('livraisons').doc(currentDelivery.id).update({
+            status: 'INCIDENT',
+            incidentNote: reason,
+            dateIncident: new Date().toISOString()
+        });
+
+        currentDelivery.status = 'INCIDENT';
+        vibrate([200, 100, 200]);
+        showToast('⚠️ Incident signalé', 'error');
+        addToHistory(currentDelivery, 'incident');
+        updateCounters();
+        showLoading(false);
+    } catch (e) {
+        showLoading(false);
+        showToast('Erreur', 'error');
+    }
+}
+
+// ── APPEL CLIENT ──
+function callClient() {
+    if (!currentDelivery) return;
+    const phone = extractPhone(currentDelivery);
+    if (!phone) return;
+
+    let clean = phone.replace(/[^\d]/g, '');
+    if (clean.startsWith('225')) clean = '+' + clean;
+    else if (clean.length === 10) clean = '+225' + clean;
+    else clean = '+' + clean;
+
+    window.location.href = `tel:${clean}`;
+}
+
+// ══════════════════════════════════════════════════════════
+//  WHATSAPP — STRATÉGIE MULTI-CIBLE EN 1 CLIC
+//  
+//  Fonctionnement :
+//  1. On construit le message texte (ref + lieu + montant)
+//  2. Si on a des photos → Web Share API (natif Android/iOS)
+//     → ouvre le sélecteur de partage du téléphone
+//     → le livreur choisit WhatsApp + choisit le groupe
+//     → LA PHOTO ET LE TEXTE sont pré-remplis
+//  3. Si pas de photo → lien wa.me avec texte pré-rempli
+//     → s'ouvre directement dans WhatsApp
+//
+//  TEMPS ESTIMÉ : 8-12 secondes (vs 30-40s avant)
+// ══════════════════════════════════════════════════════════
+
+async function sendToWhatsApp() {
+    if (!currentDelivery) return;
+
+    const d = currentDelivery;
+    const name = cleanName(d.destinataire) || 'Client';
+    const phone = extractPhone(d);
+    const montant = d.montant ? `💰 Restant : ${d.montant} FCFA` : '✅ Soldé';
+
+    // Message standard
+    const message = [
+        `📦 *LIVRAISON AMT TRANS'IT*`,
+        ``,
+        `✅ Colis : *${d.ref}*`,
+        `👤 Destinataire : ${name}`,
+        `📍 Lieu : ${d.lieuLivraison || '—'}`,
+        `${montant}`,
+        `🕐 ${new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}`,
+    ].join('\n');
+
+    // ── CAS 1 : On a des photos → Web Share API ──
+    if (capturedPhotos.length > 0 && navigator.share && navigator.canShare) {
+        try {
+            // Convertir les dataUrls en File objects
+            const photoFiles = capturedPhotos.map((p, i) => {
+                const blob = dataURLtoBlob(p.dataUrl);
+                return new File([blob], `livraison_${d.ref}_${i+1}.jpg`, { type: 'image/jpeg' });
+            });
+
+            const shareData = { text: message, files: photoFiles };
+
+            if (navigator.canShare(shareData)) {
+                await navigator.share(shareData);
+                showToast('📤 Partagé avec succès !', 'success');
+                return;
+            }
+        } catch (e) {
+            if (e.name !== 'AbortError') console.warn('Share API error:', e);
+            else return; // L'utilisateur a annulé
+        }
+    }
+
+    // ── CAS 2 : Partage texte seul via Share API ──
+    if (navigator.share) {
+        try {
+            await navigator.share({ text: message });
+            showToast('📤 Message partagé !', 'success');
+            return;
+        } catch (e) {
+            if (e.name === 'AbortError') return;
+        }
+    }
+
+    // ── CAS 3 : Fallback → lien wa.me (client direct) ──
+    if (phone) {
+        let clean = phone.replace(/[^\d]/g, '');
+        if (!clean.startsWith('225') && clean.length === 10) clean = '225' + clean;
+        const url = `https://wa.me/${clean}?text=${encodeURIComponent(message)}`;
+        window.open(url, '_blank');
+        showToast('📱 WhatsApp ouvert', 'success');
+    } else {
+        // Copier dans le presse-papier si pas de numéro
+        try {
+            await navigator.clipboard.writeText(message);
+            showToast('📋 Message copié ! Colle-le dans WhatsApp', 'success');
+        } catch {
+            showToast('⚠️ Pas de numéro disponible', 'error');
+        }
+    }
+}
+
+// ── UTILS ──
+function extractPhone(d) {
+    const phoneRegex = /(?:(?:\+|00)225[\s.-]?)?(?:01|05|07|0)\d(?:[\s.-]?\d{2}){4}|(?:(?:\+|00)225[\s.-]?)?(?:01|05|07|0)\d{8,}/;
+    const sources = [d.numero, d.destinataire, d.description, d.info];
+    for (const s of sources) {
+        if (!s) continue;
+        const m = s.match(phoneRegex);
+        if (m) return m[0];
+    }
+    return '';
+}
+
+function cleanName(str) {
+    if (!str) return '';
+    return str.replace(/(?:(?:\+|00)225[\s.-]?)?(?:01|05|07|0)\d(?:[\s.-]?\d{2}){4}|(?:(?:\+|00)225[\s.-]?)?(?:01|05|07|0)\d{8,}/g, '').trim().replace(/[-–,;:\s]+$/, '');
+}
+
+function dataURLtoBlob(dataURL) {
+    const arr = dataURL.split(',');
+    const mime = arr[0].match(/:(.*?);/)[1];
+    const bstr = atob(arr[1]);
+    let n = bstr.length;
+    const u8arr = new Uint8Array(n);
+    while (n--) u8arr[n] = bstr.charCodeAt(n);
+    return new Blob([u8arr], { type: mime });
+}
+
+function vibrate(pattern) {
+    if (navigator.vibrate) navigator.vibrate(pattern);
+}
+
+// ── HISTORIQUE LOCAL ──
+function addToHistory(d, type) {
+    const entry = {
+        ref: d.ref,
+        dest: cleanName(d.destinataire),
+        lieu: d.lieuLivraison,
+        type,
+        time: Date.now()
+    };
+    todayHistory.unshift(entry);
+    renderHistory();
+}
+
+function renderHistory() {
+    const el = document.getElementById('history-list');
+    if (!todayHistory.length) {
+        el.innerHTML = `<div class="scan-empty"><div class="icon">📭</div>Aucune livraison aujourd'hui</div>`;
+        return;
+    }
+    el.innerHTML = todayHistory.map(h => `
+        <div class="history-item">
+            <div class="history-dot ${h.type === 'livre' ? 'livre' : h.type === 'incident' ? 'incident' : 'pending'}"></div>
+            <div class="history-info">
+                <div class="history-ref">${h.ref}</div>
+                <div class="history-dest">${h.dest || '—'} · ${h.lieu || '—'}</div>
+            </div>
+            <div class="history-time">${new Date(h.time).toLocaleTimeString('fr-FR', {hour:'2-digit', minute:'2-digit'})}</div>
+        </div>
+    `).join('');
+}
+
+// ── COMPTEURS JOURNALIERS ──
+async function loadTodayStats() {
+    try {
+        const today = new Date();
+        today.setHours(0,0,0,0);
+        const snap = await db.collection('livraisons')
+            .where('dateLivraison', '>=', today.toISOString())
+            .get();
+
+        let livre = 0, incident = 0, pending = 0;
+        snap.forEach(doc => {
+            const s = doc.data().status;
+            if (s === 'LIVRE') livre++;
+            else if (s === 'INCIDENT') incident++;
+            else pending++;
+        });
+
+        document.getElementById('cnt-livre').textContent    = livre;
+        document.getElementById('cnt-incident').textContent = incident;
+        document.getElementById('cnt-pending').textContent  = pending;
+    } catch (e) { /* silencieux */ }
+}
+
+function updateCounters() {
+    const livre    = parseInt(document.getElementById('cnt-livre').textContent) || 0;
+    const incident = parseInt(document.getElementById('cnt-incident').textContent) || 0;
+
+    if (currentDelivery?.status === 'LIVRE') {
+        document.getElementById('cnt-livre').textContent = livre + 1;
+    } else if (currentDelivery?.status === 'INCIDENT') {
+        document.getElementById('cnt-incident').textContent = incident + 1;
+    }
+}
+
+// ── NAVIGATION ÉCRANS ──
+function showScreen(name) {
+    document.querySelectorAll('.screen').forEach(s => s.classList.add('hidden'));
+    document.getElementById('screen-' + name).classList.remove('hidden');
+    currentScreen = name;
+
+    // Bottom nav
+    document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+    document.querySelectorAll(`[id^="nav-${name}"]`).forEach(n => n.classList.add('active'));
+
+    if (name === 'history') renderHistory();
+}
+
+// ── TOAST ──
+let toastTimer;
+function showToast(msg, type = '') {
+    const el = document.getElementById('toast');
+    el.textContent = msg;
+    el.className = `show ${type}`;
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => el.classList.remove('show'), 2800);
+}
+
+// ── LOADING ──
+function showLoading(show) {
+    document.getElementById('loading').classList.toggle('show', show);
+}
+
+// ── AUTH GUARD ──
+firebase.auth().onAuthStateChanged(user => {
+    if (!user) window.location.href = 'index.html';
+});
+</script>
+</body>
+</html>
