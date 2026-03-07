@@ -3311,71 +3311,31 @@ async function processScan(event) {
     document.getElementById('scanLoading').style.display = 'block';
 
     try {
-        // 3. Lancer l'IA Tesseract pour lire le texte sur l'image
-        const result = await Tesseract.recognize(file, 'fra', {
-            logger: m => console.log(m) // Optionnel : pour voir la progression dans la console
+        // 3. Lancer l'IA Tesseract ('eng' est souvent plus précis pour les codes alphanumériques)
+        const result = await Tesseract.recognize(file, 'eng', {
+            logger: m => console.log(m) 
         });
         const text = result.data.text;
+        console.log("🔍 TEXTE BRUT LU PAR LA CAMÉRA :\n", text); // Utile pour comprendre les erreurs
 
-        // 4. Chercher la référence avec une Regex (Ex: BA-233-E2)
-        // Accepte les formats avec ou sans suffixe
-        const refMatch = text.match(/[A-Z]{2}[-_\s.]\d{3}[-_\s.][A-Z0-9]+/i);
+        // 4. NOUVELLE REGEX ULTRA TOLÉRANTE
+        // Cherche : (2 Lettres) + séparateurs ou espaces ignorés + (3 Chiffres) + séparateurs ignorés + (2 ou 3 Alphanumériques)
+        const refMatch = text.match(/([A-Z]{2})[-_.\s]*(\d{3})[-_.\s]*([A-Z0-9]{2,3})/i);
 
         if (refMatch) {
-            let extractedRef = refMatch[0].toUpperCase();
+            // 5. On RECONSTRUIT la référence parfaite. 
+            // Même s'il a lu "B A . 233 E 2 _ 1", ça deviendra "BA-233-E2"
+            let extractedRef = `${refMatch[1]}-${refMatch[2]}-${refMatch[3]}`.toUpperCase();
             
-            // Nettoyage : Si la photo a lu BA-233-E2_1_480, on garde juste BA-233-E2
-            const baseMatch = extractedRef.match(/^([A-Z]{2}[-_\s.]\d{3}[-_\s.][A-Z0-9]+)/);
-            if (baseMatch) {
-                extractedRef = baseMatch[1];
-            }
-
-            // 5. Chercher le colis dans la base de données locale
-            const delivery = deliveries.find(d => d.ref.toUpperCase().includes(extractedRef));
-
-            if (delivery) {
-                // Remplir la Référence
-                document.getElementById('scanRef').value = delivery.ref;
-
-                // LOGIQUE MÉTIER : Nom du client (Expéditeur vs Destinataire)
-                let clientName = delivery.expediteur || '';
-                const expUpper = clientName.toUpperCase();
-                
-                // Si l'expéditeur est l'agence AMT, on prend le nom du destinataire
-                if (expUpper.includes('AMT TRANSIT') || expUpper.includes('CI FRET') || expUpper.includes('AMT')) {
-                    clientName = delivery.destinataire || 'Client Inconnu';
-                }
-                document.getElementById('scanNom').value = clientName;
-
-                // Pré-remplir la quantité attendue (Le livreur pourra la modifier)
-                document.getElementById('scanQty').value = delivery.quantite || 1;
-
-                // Remplir le Reste à Payer
-                const rawMontant = delivery.montant || '0';
-                const montantVal = parseFloat(rawMontant.replace(/[^\d]/g, '')) || 0;
-                const resteInput = document.getElementById('scanReste');
-                const encaisseInput = document.getElementById('scanEncaisse');
-                if(resteInput) resteInput.value = montantVal;
-                if(encaisseInput) encaisseInput.value = ''; // Vide par défaut
-
-                // Sauvegarder l'ID du document Firestore dans le bouton pour la validation
-                document.getElementById('scanResults').dataset.deliveryId = delivery.id;
-
-                // Afficher le formulaire de validation
-                document.getElementById('scanResults').style.display = 'block';
-                
-                // Reset des preuves supplémentaires
-                const extraContainer = document.getElementById('extraProofsPreview');
-                if(extraContainer) extraContainer.innerHTML = '';
-                if(document.getElementById('extraPhotoInput')) document.getElementById('extraPhotoInput').value = '';
-                if(document.getElementById('extraVideoInput')) document.getElementById('extraVideoInput').value = '';
-
-                showToast('Référence détectée !', 'success');
-            } else {
-                alert(`L'étiquette a été lue (${extractedRef}), mais ce colis est introuvable dans la base de données active.`);
-            }
+            // On lance la recherche avec cette référence nettoyée
+            searchAndFillScan(extractedRef);
+            
         } else {
             alert("Aucune référence valide n'a pu être lue sur la photo.\nAssurez-vous que le code (Ex: BA-233-E2) est bien net et éclairé.");
+            // On affiche quand même le formulaire vide pour que le livreur puisse taper à la main
+            document.getElementById('scanResults').style.display = 'block';
+            document.getElementById('scanRef').readOnly = false;
+            document.getElementById('scanRef').value = "";
         }
     } catch (err) {
         console.error(err);
@@ -3384,6 +3344,54 @@ async function processScan(event) {
         document.getElementById('scanLoading').style.display = 'none';
     }
 }
+
+// Nouvelle fonction séparée pour chercher la réf (utilisable par l'IA et manuellement)
+window.searchAndFillScan = function(extractedRef) {
+    // Chercher le colis dans la base de données locale (En Cours)
+    const delivery = deliveries.find(d => d.ref.toUpperCase().includes(extractedRef.toUpperCase()) && d.containerStatus === 'EN_COURS');
+
+    if (delivery) {
+        // Remplir la Référence
+        document.getElementById('scanRef').value = delivery.ref;
+
+        // LOGIQUE MÉTIER : Nom du client (Expéditeur vs Destinataire)
+        let clientName = delivery.expediteur || '';
+        const expUpper = clientName.toUpperCase();
+        
+        // Si l'expéditeur est l'agence AMT, on prend le nom du destinataire
+        if (expUpper.includes('AMT TRANSIT') || expUpper.includes('CI FRET') || expUpper.includes('AMT')) {
+            clientName = delivery.destinataire || 'Client Inconnu';
+        }
+        document.getElementById('scanNom').value = clientName;
+
+        // Pré-remplir la quantité attendue
+        document.getElementById('scanQty').value = delivery.quantite || 1;
+
+        // Remplir le Reste à Payer s'il existe dans le HTML
+        const rawMontant = delivery.montant || '0';
+        const montantVal = parseFloat(rawMontant.replace(/[^\d]/g, '')) || 0;
+        const resteInput = document.getElementById('scanReste');
+        const encaisseInput = document.getElementById('scanEncaisse');
+        if(resteInput) resteInput.value = montantVal;
+        if(encaisseInput) encaisseInput.value = ''; // Vide par défaut
+
+        // Sauvegarder l'ID
+        document.getElementById('scanResults').dataset.deliveryId = delivery.id;
+
+        // Reset des preuves supplémentaires
+        const extraContainer = document.getElementById('extraProofsPreview');
+        if(extraContainer) extraContainer.innerHTML = '';
+        if(document.getElementById('extraPhotoInput')) document.getElementById('extraPhotoInput').value = '';
+        if(document.getElementById('extraVideoInput')) document.getElementById('extraVideoInput').value = '';
+
+        document.getElementById('scanResults').style.display = 'block';
+        showToast('Référence détectée !', 'success');
+    } else {
+        alert(`L'étiquette a été lue (${extractedRef}), mais ce colis n'est pas dans votre liste "En Cours".\nVérifiez s'il n'est pas déjà livré ou encore en transit.`);
+        document.getElementById('scanRef').value = extractedRef; // On le met quand même pour que le livreur voie ce qui a été lu
+        document.getElementById('scanResults').style.display = 'block';
+    }
+};
 
 window.handleExtraProof = function(event, type) {
     const file = event.target.files[0];

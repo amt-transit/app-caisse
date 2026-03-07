@@ -182,8 +182,11 @@
 
             <div id="scanResults" style="display: none; margin-top: 20px; background: #f8f9fa; padding: 15px; border-radius: 8px; border: 1px solid #dee2e6;">
                 <div class="form-group full-width">
-                    <label>Référence détectée</label>
-                    <input type="text" id="scanRef" readonly style="background: #e9ecef; font-weight: bold; color: #1e40af;">
+                    <label>Référence (Modifiable en cas d'erreur)</label>
+                    <div style="display: flex; gap: 5px;">
+                        <input type="text" id="scanRef" style="background: #fff; font-weight: bold; color: #1e40af; flex-grow: 1;">
+                        <button class="btn btn-warning" onclick="searchAndFillScan(document.getElementById('scanRef').value)">🔍 Chercher</button>
+                    </div>
                 </div>
                 <div class="form-group full-width">
                     <label>Client à Livrer</label>
