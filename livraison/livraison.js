@@ -317,13 +317,19 @@ function updateAvailableContainersList() {
                 const input = document.getElementById('activeContainerInput');
                 if(input) input.value = val;
                 
+                // Mise à jour directe (sans passer par setActiveContainer pour éviter le Toast intempestif)
+                currentContainerName = val ? val.trim() : 'Aucun';
+                localStorage.setItem(`container_filter_${currentTab}`, currentContainerName);
+
                 // Force le filtre pour A_VENIR
                 const cb = document.getElementById('filterByContainerCb');
                 if (cb && currentTab === 'A_VENIR') {
                     cb.checked = !!val;
                     localStorage.setItem(`container_filter_${currentTab}_active`, cb.checked);
                 }
-                setActiveContainer(); // Déclenche la logique existante
+                
+                updateContainerTitle();
+                filterDeliveries();
             });
             wrapper.appendChild(select);
         }
@@ -333,14 +339,31 @@ function updateAvailableContainersList() {
         select.style.display = '';
         // Récupérer les conteneurs uniques de l'onglet actuel
         const relevantDeliveries = deliveries.filter(d => d.containerStatus === currentTab);
-        const containers = [...new Set(relevantDeliveries.map(d => d.conteneur).filter(c => c))].sort();
+        const containers = [...new Set(relevantDeliveries.map(d => d.conteneur ? d.conteneur.trim() : '').filter(c => c))].sort();
         
-        let html = '<option value="">-- Choisir Conteneur --</option>';
+        // AUTO-RESET : Si le conteneur sélectionné n'existe plus (ex: tout transféré), on réinitialise
+        if (currentContainerName !== 'Aucun' && !containers.includes(currentContainerName)) {
+            currentContainerName = 'Aucun';
+            localStorage.setItem(`container_filter_${currentTab}`, 'Aucun');
+            
+            const cb = document.getElementById('filterByContainerCb');
+            if (cb) {
+                cb.checked = false;
+                localStorage.setItem(`container_filter_${currentTab}_active`, 'false');
+            }
+            updateContainerTitle();
+            filterDeliveries(); // Rafraîchir la vue
+        }
+
+        const selectedValue = currentContainerName !== 'Aucun' ? currentContainerName : '';
+
+        let html = '<option value="">-- Tous les colis en mer --</option>';
         containers.forEach(c => {
-            const selected = c === currentContainerName ? 'selected' : '';
+            const selected = c === selectedValue ? 'selected' : '';
             html += `<option value="${c}" ${selected}>${c}</option>`;
         });
         select.innerHTML = html;
+        select.value = selectedValue;
     }
 }
 
@@ -765,12 +788,14 @@ function importExcel(event) {
 
                     if (parentItem) {
                         // Si on trouve le colis dans "À Venir", on copie toutes ses informations vers le scan
-                        item.expediteur = parentItem.expediteur || item.expediteur;
-                        item.destinataire = parentItem.destinataire || item.destinataire;
-                        item.lieuLivraison = parentItem.lieuLivraison || item.lieuLivraison;
-                        item.commune = parentItem.commune || item.commune;
-                        item.montant = parentItem.montant || item.montant;
-                        item.numero = parentItem.numero || item.numero;
+                        // FIX : On privilégie les données du fichier importé (item) si elles existent, sinon on prend le parent
+                        item.expediteur = item.expediteur || parentItem.expediteur;
+                        item.destinataire = item.destinataire || parentItem.destinataire;
+                        item.lieuLivraison = item.lieuLivraison || parentItem.lieuLivraison;
+                        item.commune = item.commune || parentItem.commune;
+                        // Pour le montant, on garde la valeur importée (même 0) si elle existe
+                        item.montant = (item.montant && item.montant.trim() !== '') ? item.montant : parentItem.montant;
+                        item.numero = item.numero || parentItem.numero;
                         // Optionnel : Ajouter le type de carton lu par le scan à la description
                         if (!item.description && parentItem.description) {
                             item.description = parentItem.description;
@@ -2412,7 +2437,7 @@ function filterDeliveries() {
         let matchContainer = true;
         // CORRECTION : On n'applique le filtre conteneur QUE sur les onglets En Cours et À Venir
         if (['EN_COURS', 'A_VENIR'].includes(currentTab) && isContainerFilterActive && currentContainerName !== 'Aucun') {
-            matchContainer = (d.conteneur === currentContainerName);
+            matchContainer = (d.conteneur && d.conteneur.trim() === currentContainerName);
         }
         
         return matchCommune && matchStatus && matchSearch && matchTab && matchLocation && matchContainer;
