@@ -3393,6 +3393,22 @@ window.searchAndFillScan = function(extractedRef) {
     }
 };
 
+// --- NOUVEAU : Mode Saisie Manuelle / Scan Natif ---
+window.enableManualScan = function() {
+    document.getElementById('scanPreview').style.display = 'none';
+    document.getElementById('scanLoading').style.display = 'none';
+    
+    // Afficher le formulaire directement
+    document.getElementById('scanResults').style.display = 'block';
+    
+    // Reset des champs
+    document.getElementById('scanRef').value = '';
+    document.getElementById('scanNom').value = '';
+    
+    // Focus sur le champ référence pour ouvrir le clavier (et permettre le scan natif)
+    setTimeout(() => document.getElementById('scanRef').focus(), 100);
+};
+
 window.handleExtraProof = function(event, type) {
     const file = event.target.files[0];
     if (!file) return;
@@ -3424,7 +3440,8 @@ async function confirmScanDelivery() {
     const resteInput = document.getElementById('scanReste');
     const encaisseInput = document.getElementById('scanEncaisse');
 
-    if (!id || !currentScanFile) return;
+    // MODIFICATION : On autorise la validation sans fichier photo (cas du scan manuel)
+    if (!id) return;
 
     if (!confirm(`Confirmer la remise de ${qty} colis à ${nom} ?`)) return;
 
@@ -3467,7 +3484,7 @@ async function confirmScanDelivery() {
 
         // 3. Ouvrir le partage natif du téléphone AVEC LE FICHIER IMAGE
         // On vérifie d'abord si le téléphone autorise le partage de fichiers
-        if (navigator.canShare && navigator.canShare({ files: [currentScanFile] })) {
+        if (currentScanFile && navigator.canShare && navigator.canShare({ files: [currentScanFile] })) {
             await navigator.share({
                 title: 'Preuve de Livraison',
                 text: message,
@@ -3479,7 +3496,8 @@ async function confirmScanDelivery() {
                 title: 'Preuve de Livraison',
                 text: message
             });
-            alert("Votre navigateur ne supporte pas le partage direct d'image. L'image n'a pas été jointe au message.");
+            // Si on avait une image mais qu'elle n'a pas pu être partagée
+            if (currentScanFile) alert("Votre navigateur ne supporte pas le partage direct d'image.");
         } else {
             // Si sur PC classique, on ouvre WhatsApp Web (texte uniquement)
             window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, '_blank');
