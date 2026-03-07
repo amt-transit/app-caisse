@@ -932,7 +932,15 @@ async function initScanner() {
             videoEl,
             (result, err) => {
                 if (result) {
-                    const text = result.getText().trim().toUpperCase();
+                    let text = result.getText().trim().toUpperCase();
+                    
+                    // Tentative d'extraction intelligente (Regex comme dans livraison.js)
+                    // Cherche motif type BA-123-E2 au milieu d'un texte
+                    const refMatch = text.match(/([A-Z]{2})[-_.\s]*(\d{3})[-_.\s]*([A-Z0-9]{2,3})/i);
+                    if (refMatch) {
+                        text = `${refMatch[1]}-${refMatch[2]}-${refMatch[3]}`.toUpperCase();
+                    }
+
                     // Anti-doublon : ne pas rescanner le même code en < 3s
                     if (text === (window._lastScan || '') && Date.now() - (window._lastScanTime || 0) < 3000) return;
                     window._lastScan = text;
@@ -962,12 +970,16 @@ async function searchDelivery(ref) {
     showLoading(true);
 
     try {
-        // Recherche exacte d'abord
-        let snap = await db.collection('livraisons').where('ref', '==', ref).limit(1).get();
+        // 1. Nettoyage de la référence (Majuscules + Trim)
+        const cleanRef = ref.trim().toUpperCase();
 
-        // Recherche insensible à la casse si rien trouvé
-        if (snap.empty) {
-            snap = await db.collection('livraisons').where('ref', '==', ref.toLowerCase()).limit(1).get();
+        // 2. Recherche exacte
+        let snap = await db.collection('livraisons').where('ref', '==', cleanRef).limit(1).get();
+
+        // 3. Si pas trouvé, essai avec nettoyage de suffixe (ex: BA-123-E2_1_4 -> BA-123-E2)
+        if (snap.empty && cleanRef.includes('_')) {
+             const baseRef = cleanRef.split('_')[0];
+             snap = await db.collection('livraisons').where('ref', '==', baseRef).limit(1).get();
         }
 
         showLoading(false);
@@ -1130,6 +1142,7 @@ async function markDone() {
     try {
         await db.collection('livraisons').doc(currentDelivery.id).update({
             status: 'LIVRE',
+            containerStatus: 'EN_COURS', // Force la présence dans l'onglet En Cours
             dateLivraison: new Date().toISOString(),
             scanProof: true
         });
