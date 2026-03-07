@@ -390,16 +390,16 @@ html, body {
 /* ── ACTION BUTTONS ── */
 .actions-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
   padding: 0 16px 16px;
 }
 
 .action-btn {
-  padding: 14px 10px;
-  border-radius: 14px;
+  padding: 8px 2px;
+  border-radius: 10px;
   border: none;
-  font-size: 0.8rem;
+  font-size: 0.65rem;
   font-weight: 700;
   cursor: pointer;
   display: flex;
@@ -414,7 +414,7 @@ html, body {
 
 .action-btn:active { transform: scale(0.95); opacity: 0.85; }
 
-.action-btn .btn-icon { font-size: 1.4rem; line-height: 1; }
+.action-btn .btn-icon { font-size: 1.2rem; line-height: 1; margin-bottom: 2px; }
 
 .btn-wa {
   background: var(--wa);
@@ -718,7 +718,7 @@ html, body {
 <div id="loading"><div class="spinner"></div></div>
 
 <!-- HIDDEN FILE INPUT FOR PHOTOS -->
-<input type="file" id="photoInput" accept="image/*" capture="environment" multiple>
+<input type="file" id="photoInput" accept="image/*" multiple>
 
 <!-- ═══════════════════════════════════════
      SCREEN 1 : SCAN / RECHERCHE
@@ -732,7 +732,10 @@ html, body {
         <div class="topbar-sub">Mode Livreur</div>
       </div>
     </div>
-    <button class="topbar-btn" onclick="showScreen('history')">Historique</button>
+    <div style="display:flex; gap:8px;">
+        <button class="topbar-btn" onclick="window.location.reload()" style="padding: 6px 10px; font-size: 1.1rem;">↻</button>
+        <button class="topbar-btn" onclick="showScreen('history')">Historique</button>
+    </div>
   </div>
 
   <div class="content" id="scan-content">
