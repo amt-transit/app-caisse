@@ -1015,6 +1015,14 @@ function renderResult(d) {
     // Montant formaté
     const montant = d.montant ? `<span class="result-value amount">${d.montant} FCFA</span>` : '<span class="result-value" style="color:var(--green)">✓ Soldé</span>';
 
+    // Input Quantité
+    const qtyInput = `
+        <div class="result-row" style="align-items: center; margin-top: 5px; padding-top: 5px; border-top: 1px solid var(--border);">
+            <span class="result-label">Qté Livrée</span>
+            <input type="number" id="scan-qty" value="${d.quantite || 1}" min="1" style="width: 80px; padding: 8px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-weight: bold; text-align: center; font-size: 1.1rem;">
+        </div>
+    `;
+
     document.getElementById('result-zone').innerHTML = `
         <div class="result-card">
             <div class="result-header">
@@ -1023,20 +1031,22 @@ function renderResult(d) {
             </div>
             <div class="result-body">
                 <div class="result-row">
-                    <span class="result-label">Destinataire</span>
-                    <span class="result-value">${cleanName(d.destinataire) || '—'}</span>
-                </div>
-                <div class="result-row">
-                    <span class="result-label">Téléphone</span>
-                    <span class="result-value phone">${phone || '⚠️ Non renseigné'}</span>
-                </div>
-                <div class="result-row">
-                    <span class="result-label">Lieu</span>
-                    <span class="result-value">${d.lieuLivraison || '—'}</span>
+                    <span class="result-label">Client</span>
+                    <span class="result-value" style="font-size:1.1rem;">${cleanName(d.destinataire) || '—'}</span>
                 </div>
                 <div class="result-row">
                     <span class="result-label">Conteneur</span>
                     <span class="result-value">${d.conteneur || '—'}</span>
+                </div>
+                <div class="result-row" style="align-items: center;">
+                    <span class="result-label">Lieu</span>
+                    <span class="result-value" id="delivery-location" style="flex:1;">${d.lieuLivraison || '—'}</span>
+                    <button class="topbar-btn" onclick="captureGPS('${d.id}')" style="margin-left: 8px; padding: 6px 10px; font-size: 1.2rem; background: var(--blue-l); border-color: var(--blue); color: var(--blue);">🎯</button>
+                </div>
+                ${qtyInput}
+                <div class="result-row">
+                    <span class="result-label">Téléphone</span>
+                    <span class="result-value phone">${phone || '⚠️ Non renseigné'}</span>
                 </div>
                 <div class="result-row">
                     <span class="result-label">Restant</span>
@@ -1139,11 +1149,15 @@ async function markDone() {
     if (!currentDelivery) return;
     showLoading(true);
 
+    const qtyInput = document.getElementById('scan-qty');
+    const qty = qtyInput ? (parseInt(qtyInput.value) || 1) : 1;
+
     try {
         await db.collection('livraisons').doc(currentDelivery.id).update({
             status: 'LIVRE',
             containerStatus: 'EN_COURS', // Force la présence dans l'onglet En Cours
             dateLivraison: new Date().toISOString(),
+            quantiteLivree: qty,
             scanProof: true
         });
 
@@ -1331,6 +1345,55 @@ function dataURLtoBlob(dataURL) {
 
 function vibrate(pattern) {
     if (navigator.vibrate) navigator.vibrate(pattern);
+}
+
+// ── GPS CAPTURE ──
+async function captureGPS(id) {
+    if (!navigator.geolocation) {
+        showToast("Géolocalisation non supportée.", "error");
+        return;
+    }
+    
+    const btn = event.target;
+    const originalText = btn.textContent;
+    btn.disabled = true; 
+    btn.textContent = "⏳";
+
+    navigator.geolocation.getCurrentPosition(
+        async (position) => {
+            const lat = position.coords.latitude.toFixed(6);
+            const lng = position.coords.longitude.toFixed(6);
+            let gpsCoords = `${lat}, ${lng}`;
+            
+            try {
+                const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`, {
+                    headers: { 'Accept-Language': 'fr' }
+                });
+                const data = await response.json();
+                if (data && data.address) {
+                    const addr = data.address;
+                    const parts = [];
+                    if (addr.road) parts.push(addr.road);
+                    else if (addr.public_building) parts.push(addr.public_building);
+                    if (addr.suburb) parts.push(addr.suburb);
+                    else if (addr.neighbourhood) parts.push(addr.neighbourhood);
+                    if (addr.city || addr.town || addr.village) parts.push(addr.city || addr.town || addr.village);
+                    if (parts.length > 0) gpsCoords = `${parts.join(', ')} [${lat}, ${lng}]`;
+                }
+            } catch (e) { console.warn("Erreur reverse geocoding", e); }
+            
+            try {
+                await db.collection('livraisons').doc(id).update({ lieuLivraison: gpsCoords });
+                const locEl = document.getElementById('delivery-location');
+                if(locEl) locEl.textContent = gpsCoords;
+                if(currentDelivery) currentDelivery.lieuLivraison = gpsCoords;
+                showToast("📍 Adresse mise à jour !", "success");
+            } catch(e) { showToast("Erreur mise à jour", "error"); } 
+            finally { btn.disabled = false; btn.textContent = originalText; }
+        },
+        (error) => { showToast("Erreur GPS: " + error.message, "error"); btn.disabled = false; btn.textContent = originalText; },
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+    );
 }
 
 // ── HISTORIQUE LOCAL ──
