@@ -535,31 +535,6 @@ body.login-page {
         grid-template-columns: 1fr !important;
     }
     .form-grid[style*="grid-template-columns"] { grid-template-columns: 1fr !important; }
-
-    /* --- OPTIMISATION LIVRAISON MOBILE (Scroll Horizontal) --- */
-    /* Au lieu d'empiler les boutons, on les garde sur une ligne défilable */
-    .toolbar {
-        flex-wrap: nowrap !important; /* Force la ligne unique */
-        overflow-x: auto; /* Active le défilement horizontal */
-        padding-bottom: 8px; /* Espace pour le doigt */
-        -webkit-overflow-scrolling: touch; /* Fluidité sur iPhone */
-        gap: 10px;
-    }
-    
-    /* Empêche les boutons de s'écraser */
-    .toolbar > * {
-        flex-shrink: 0;
-    }
-
-    /* Idem pour la barre de stats */
-    .stats-bar {
-        flex-wrap: nowrap !important;
-        overflow-x: auto;
-    }
-    .stat-item {
-        min-width: 90px;
-        flex-shrink: 0;
-    }
 }
 
 /* --- INTEGRATION MODULE LIVRAISON --- */
