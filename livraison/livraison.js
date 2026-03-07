@@ -45,7 +45,6 @@ let itemsPerPage = 100; // Nombre d'éléments par page
 let programDetailsSort = { column: null, direction: 'asc' };
 let currentProgramView = { date: null, livreur: null };
 let isImporting = false;
-let currentScanFile = null;
 
 // --- UTILS (Performance) ---
 function debounce(func, wait) {
@@ -87,16 +86,6 @@ document.addEventListener('DOMContentLoaded', function() {
     if (typeof db === 'undefined') {
         console.error("Firebase DB non initialisé");
         return;
-    }
-
-    // --- GESTION RÔLE LIVREUR (Saisie Limited) ---
-    const userRole = sessionStorage.getItem('userRole');
-    if (userRole === 'saisie_limited') {
-        // Masquer les onglets administratifs pour ne laisser que En Cours, Programme et Scan
-        const tabParis = document.getElementById('tabParis');
-        const tabAVenir = document.getElementById('tabAVenir');
-        if (tabParis) tabParis.style.display = 'none';
-        if (tabAVenir) tabAVenir.style.display = 'none';
     }
 
     initRealtimeSync();
@@ -168,23 +157,13 @@ function switchTab(tab) {
     else if (tab === 'A_VENIR') document.getElementById('tabAVenir').classList.add('active');
     else if (tab === 'PARIS') document.getElementById('tabParis').classList.add('active');
     else if (tab === 'PROGRAMME') document.getElementById('tabProgramme').classList.add('active');
-    else if (tab === 'SCAN') document.getElementById('tabScan').classList.add('active'); // NOUVEAU
 
     // --- GESTION DE L'AFFICHAGE DU CONTENU ---
     const tableContainer = document.querySelector('.table-container');
-    const scanContainer = document.getElementById('scan-container');
     const toolbar = document.querySelector('.toolbar');
     
-    if (tab === 'SCAN') {
-        tableContainer.style.display = 'none'; // Cache le tableau
-        toolbar.style.display = 'none'; // Cache la barre de recherche et filtres
-        scanContainer.style.display = 'block'; // Affiche l'appareil photo
-        return; // On arrête là pour l'onglet Scan
-    } else {
-        tableContainer.style.display = 'block';
-        toolbar.style.display = 'flex';
-        if(scanContainer) scanContainer.style.display = 'none';
-    }
+    tableContainer.style.display = 'block';
+    toolbar.style.display = 'flex';
 
 
     // Mise à jour de la description contextuelle
@@ -3291,250 +3270,4 @@ function permanentlyDeleteSingle(id, skipConfirm = false) {
             console.error("Erreur suppression:", error);
             showToast("Erreur lors de la suppression: " + error.message, "error");
         });
-}
-// ==========================================
-// --- MODULE SCAN LIVREUR (OCR) ---
-// ==========================================
-
-async function processScan(event) {
-    const file = event.target.files[0];
-    if (!file) return;
-    currentScanFile = file;
-
-    // 1. Afficher l'aperçu de la photo
-    const preview = document.getElementById('scanPreview');
-    preview.src = URL.createObjectURL(file);
-    preview.style.display = 'block';
-
-    // 2. Préparer l'interface
-    document.getElementById('scanResults').style.display = 'none';
-    document.getElementById('scanLoading').style.display = 'block';
-
-    try {
-        // 3. Lancer l'IA Tesseract ('eng' est souvent plus précis pour les codes alphanumériques)
-        const result = await Tesseract.recognize(file, 'eng', {
-            logger: m => console.log(m) 
-        });
-        const text = result.data.text;
-        console.log("🔍 TEXTE BRUT LU PAR LA CAMÉRA :\n", text); // Utile pour comprendre les erreurs
-
-        // 4. NOUVELLE REGEX ULTRA TOLÉRANTE
-        // Cherche : (2 Lettres) + séparateurs ou espaces ignorés + (3 Chiffres) + séparateurs ignorés + (2 ou 3 Alphanumériques)
-        const refMatch = text.match(/([A-Z]{2})[-_.\s]*(\d{3})[-_.\s]*([A-Z0-9]{2,3})/i);
-
-        if (refMatch) {
-            // 5. On RECONSTRUIT la référence parfaite. 
-            // Même s'il a lu "B A . 233 E 2 _ 1", ça deviendra "BA-233-E2"
-            let extractedRef = `${refMatch[1]}-${refMatch[2]}-${refMatch[3]}`.toUpperCase();
-            
-            // On lance la recherche avec cette référence nettoyée
-            searchAndFillScan(extractedRef);
-            
-        } else {
-            alert("Aucune référence valide n'a pu être lue sur la photo.\nAssurez-vous que le code (Ex: BA-233-E2) est bien net et éclairé.");
-            // On affiche quand même le formulaire vide pour que le livreur puisse taper à la main
-            document.getElementById('scanResults').style.display = 'block';
-            document.getElementById('scanRef').readOnly = false;
-            document.getElementById('scanRef').value = "";
-        }
-    } catch (err) {
-        console.error(err);
-        alert("Erreur lors de l'analyse de l'image. Veuillez réessayer.");
-    } finally {
-        document.getElementById('scanLoading').style.display = 'none';
-    }
-}
-
-// Nouvelle fonction séparée pour chercher la réf (utilisable par l'IA et manuellement)
-window.searchAndFillScan = function(extractedRef) {
-    // Chercher le colis dans la base de données locale (En Cours)
-    const delivery = deliveries.find(d => d.ref.toUpperCase().includes(extractedRef.toUpperCase()) && d.containerStatus === 'EN_COURS');
-
-    if (delivery) {
-        // Remplir la Référence
-        document.getElementById('scanRef').value = delivery.ref;
-
-        // LOGIQUE MÉTIER : Nom du client (Expéditeur vs Destinataire)
-        let clientName = delivery.expediteur || '';
-        const expUpper = clientName.toUpperCase();
-        
-        // Si l'expéditeur est l'agence AMT, on prend le nom du destinataire
-        if (expUpper.includes('AMT TRANSIT') || expUpper.includes('CI FRET') || expUpper.includes('AMT')) {
-            clientName = delivery.destinataire || 'Client Inconnu';
-        }
-        document.getElementById('scanNom').value = clientName;
-
-        // Pré-remplir la quantité attendue
-        document.getElementById('scanQty').value = delivery.quantite || 1;
-
-        // Remplir le Reste à Payer s'il existe dans le HTML
-        const rawMontant = delivery.montant || '0';
-        const montantVal = parseFloat(rawMontant.replace(/[^\d]/g, '')) || 0;
-        const resteInput = document.getElementById('scanReste');
-        const encaisseInput = document.getElementById('scanEncaisse');
-        if(resteInput) resteInput.value = montantVal;
-        if(encaisseInput) encaisseInput.value = ''; // Vide par défaut
-
-        // Sauvegarder l'ID
-        document.getElementById('scanResults').dataset.deliveryId = delivery.id;
-
-        // Reset des preuves supplémentaires
-        const extraContainer = document.getElementById('extraProofsPreview');
-        if(extraContainer) extraContainer.innerHTML = '';
-        if(document.getElementById('extraPhotoInput')) document.getElementById('extraPhotoInput').value = '';
-        if(document.getElementById('extraVideoInput')) document.getElementById('extraVideoInput').value = '';
-
-        document.getElementById('scanResults').style.display = 'block';
-        showToast('Référence détectée !', 'success');
-    } else {
-        alert(`L'étiquette a été lue (${extractedRef}), mais ce colis n'est pas dans votre liste "En Cours".\nVérifiez s'il n'est pas déjà livré ou encore en transit.`);
-        document.getElementById('scanRef').value = extractedRef; // On le met quand même pour que le livreur voie ce qui a été lu
-        document.getElementById('scanResults').style.display = 'block';
-    }
-};
-
-// --- NOUVEAU : Mode Saisie Manuelle / Scan Natif ---
-window.enableManualScan = function() {
-    document.getElementById('scanPreview').style.display = 'none';
-    document.getElementById('scanLoading').style.display = 'none';
-    
-    // Afficher le formulaire directement
-    document.getElementById('scanResults').style.display = 'block';
-    
-    // Reset des champs
-    document.getElementById('scanRef').value = '';
-    document.getElementById('scanNom').value = '';
-    
-    // Focus sur le champ référence pour ouvrir le clavier (et permettre le scan natif)
-    setTimeout(() => document.getElementById('scanRef').focus(), 100);
-};
-
-window.handleExtraProof = function(event, type) {
-    const file = event.target.files[0];
-    if (!file) return;
-
-    const container = document.getElementById('extraProofsPreview');
-    const wrapper = document.createElement('div');
-    wrapper.style.cssText = "position: relative; flex-shrink: 0; width: 80px; height: 80px; border-radius: 8px; overflow: hidden; border: 1px solid #ddd; background: #000;";
-
-    let element;
-    if (type === 'image') {
-        element = document.createElement('img');
-        element.src = URL.createObjectURL(file);
-    } else {
-        element = document.createElement('video');
-        element.src = URL.createObjectURL(file);
-    }
-    element.style.cssText = "width: 100%; height: 100%; object-fit: cover;";
-    
-    wrapper.appendChild(element);
-    container.appendChild(wrapper);
-};
-
-async function confirmScanDelivery() {
-    const id = document.getElementById('scanResults').dataset.deliveryId;
-    const qtyInput = document.getElementById('scanQty').value;
-    const qty = parseInt(qtyInput) || 1;
-    const ref = document.getElementById('scanRef').value;
-    const nom = document.getElementById('scanNom').value;
-    const resteInput = document.getElementById('scanReste');
-    const encaisseInput = document.getElementById('scanEncaisse');
-
-    // MODIFICATION : On autorise la validation sans fichier photo (cas du scan manuel)
-    if (!id) return;
-
-    if (!confirm(`Confirmer la remise de ${qty} colis à ${nom} ?`)) return;
-
-    const btn = document.querySelector('#scanResults .btn-success');
-    const originalText = btn.innerHTML;
-    btn.innerHTML = "⏳ Validation et Ouverture WhatsApp...";
-    btn.disabled = true;
-
-    // Calcul du nouveau montant
-    let updates = {
-        quantiteLivree: qty,
-        scanProof: true
-    };
-
-    // Si un encaissement est saisi, on met à jour le montant
-    const encaisse = parseFloat(encaisseInput.value) || 0;
-    const reste = parseFloat(resteInput.value) || 0;
-    
-    if (encaisse > 0) {
-        let newReste = reste - encaisse;
-        if (newReste < 0) newReste = 0;
-        updates.montant = newReste + " CFA";
-    }
-
-    try {
-        // 1. Mettre à jour la base de données pour valider la livraison
-        await db.collection(CONSTANTS.COLLECTION).doc(id).update({
-            status: 'LIVRE',
-            dateLivraison: new Date().toISOString(),
-            quantiteLivree: qty,
-            scanProof: true
-        });
-        await db.collection(CONSTANTS.COLLECTION).doc(id).update(updates);
-
-        // 2. Préparer le texte à envoyer
-        let message = `✅ *SCAN EFFECTUÉ*\n📦 Réf: ${ref}\n👤 Client: ${nom}\n🔢 Quantité: ${qty} colis`;
-        if (encaisse > 0) {
-            message += `\n💰 Encaissé: ${encaisse} CFA`;
-        }
-
-        // 3. Ouvrir le partage natif du téléphone AVEC LE FICHIER IMAGE
-        // On vérifie d'abord si le téléphone autorise le partage de fichiers
-        if (currentScanFile && navigator.canShare && navigator.canShare({ files: [currentScanFile] })) {
-            await navigator.share({
-                title: 'Preuve de Livraison',
-                text: message,
-                files: [currentScanFile] // On attache l'image directement ici !
-            });
-        } else if (navigator.share) {
-            // Si le téléphone supporte le partage mais pas les images (anciens modèles)
-            await navigator.share({
-                title: 'Preuve de Livraison',
-                text: message
-            });
-            // Si on avait une image mais qu'elle n'a pas pu être partagée
-            if (currentScanFile) alert("Votre navigateur ne supporte pas le partage direct d'image.");
-        } else {
-            // Si sur PC classique, on ouvre WhatsApp Web (texte uniquement)
-            window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, '_blank');
-        }
-
-        showToast('Colis livré et partagé !', 'success');
-
-        // 4. Réinitialisation de l'interface
-        resetScanInterface();
-
-    } catch (error) {
-        // Ignorer l'erreur si l'utilisateur a juste annulé le menu de partage WhatsApp
-        if (error.name === 'AbortError') {
-            showToast('Colis validé (Partage WhatsApp annulé)', 'success');
-            resetScanInterface();
-        } else {
-            console.error(error);
-            alert("Erreur technique : " + error.message);
-        }
-    } finally {
-        btn.innerHTML = originalText;
-        btn.disabled = false;
-    }
-}
-
-// Petite fonction utilitaire pour nettoyer l'écran après le scan
-function resetScanInterface() {
-    document.getElementById('scanPreview').style.display = 'none';
-    document.getElementById('scanResults').style.display = 'none';
-    document.getElementById('cameraInput').value = '';
-    currentScanFile = null;
-    
-    // Reset des preuves supplémentaires
-    const extraContainer = document.getElementById('extraProofsPreview');
-    if(extraContainer) extraContainer.innerHTML = '';
-    if(document.getElementById('extraPhotoInput')) document.getElementById('extraPhotoInput').value = '';
-    if(document.getElementById('extraVideoInput')) document.getElementById('extraVideoInput').value = '';
-
-    switchTab('EN_COURS'); // Ramène le livreur sur la liste de travail
 }

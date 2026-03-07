@@ -55,7 +55,6 @@
             <a href="#" class="tab-btn" onclick="switchTab('A_VENIR'); return false;" id="tabAVenir">🚢 À venir</a>
             <a href="#" class="tab-btn" onclick="switchTab('PARIS'); return false;" id="tabParis">🇫🇷 Paris</a>
             <a href="#" class="tab-btn" onclick="switchTab('PROGRAMME'); return false;" id="tabProgramme">📅 Programmes</a>
-            <a href="#" class="tab-btn" onclick="switchTab('SCAN'); return false;" id="tabScan" style="background-color: #10b981; color: white;">📷 Scan (Livreur)</a>
             <button class="btn btn-small" onclick="openHelpModal()" style="margin-left: auto; background-color: #64748b; color: white; border: none;" title="Comment ça marche ?">❓ Aide</button>
         </div>
 
@@ -161,62 +160,6 @@
                 </thead>
                 <tbody id="deliveriesBody"><tr><td colspan="14" class="empty-state">Chargement...</td></tr></tbody>
             </table>
-        </div>
-        <div id="scan-container" style="display: none; max-width: 500px; margin: 20px auto; background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
-            <h2 style="text-align: center; color: #333; margin-top: 0;">📷 Preuve de Livraison</h2>
-            <p style="text-align: center; color: #666; font-size: 12px;">Prenez en photo l'étiquette collée sur le colis</p>
-            
-            <div class="form-group full-width">
-                <label class="btn btn-success" style="display: block; text-align: center; padding: 15px; font-size: 1.2em; cursor: pointer;">
-                    📸 Ouvrir l'Appareil Photo
-                    <input type="file" accept="image/*" capture="environment" id="cameraInput" style="display: none;" onchange="processScan(event)">
-                </label>
-                <button class="btn" style="display: block; width: 100%; margin-top: 10px; background-color: #f3f4f6; color: #333; border: 1px solid #ccc; padding: 10px;" onclick="enableManualScan()">
-                    ⌨️ Saisie Manuelle / Scan Clavier
-                </button>
-            </div>
-            
-            <div id="scanLoading" style="display: none; text-align: center; margin: 15px 0; font-weight: bold; color: #f59e0b;">
-                <div class="loading-spinner" style="width: 30px; height: 30px; margin: 0 auto 10px auto;"></div>
-                Analyse de l'étiquette en cours...
-            </div>
-            
-            <img id="scanPreview" style="max-width: 100%; border-radius: 8px; margin-top: 15px; display: none; border: 2px solid #e5e7eb;">
-
-            <div id="scanResults" style="display: none; margin-top: 20px; background: #f8f9fa; padding: 15px; border-radius: 8px; border: 1px solid #dee2e6;">
-                <div class="form-group full-width">
-                    <label>Référence (Modifiable en cas d'erreur)</label>
-                    <div style="display: flex; gap: 5px;">
-                        <input type="text" id="scanRef" style="background: #fff; font-weight: bold; color: #1e40af; flex-grow: 1;">
-                        <button class="btn btn-warning" onclick="searchAndFillScan(document.getElementById('scanRef').value)">🔍 Chercher</button>
-                    </div>
-                </div>
-                <div class="form-group full-width">
-                    <label>Client à Livrer</label>
-                    <input type="text" id="scanNom" readonly style="background: #e9ecef; font-weight: bold;">
-                </div>
-                <div class="form-group full-width">
-                    <label style="color: #dc3545; font-weight: bold;">Combien de colis remettez-vous ? *</label>
-                    <input type="number" id="scanQty" min="1" value="1" style="font-weight: bold; font-size: 1.5em; text-align: center; height: 50px;">
-                </div>
-                
-                <div class="form-group full-width" style="margin-top: 15px; padding-top: 15px; border-top: 1px dashed #ccc;">
-                    <label style="font-weight: bold; color: #555; display: block; margin-bottom: 8px;">Preuves supplémentaires (Optionnel)</label>
-                    <div style="display: flex; gap: 10px;">
-                        <label class="btn btn-small" style="background: #f59e0b; flex: 1; justify-content: center; text-align: center; color: white;">
-                            📷 Photo Ensemble
-                            <input type="file" accept="image/*" id="extraPhotoInput" style="display: none;" onchange="handleExtraProof(event, 'image')">
-                        </label>
-                        <label class="btn btn-small" style="background: #f59e0b; flex: 1; justify-content: center; text-align: center; color: white;">
-                            🎥 Vidéo
-                            <input type="file" accept="video/*" capture="environment" id="extraVideoInput" style="display: none;" onchange="handleExtraProof(event, 'video')">
-                        </label>
-                    </div>
-                    <div id="extraProofsPreview" style="margin-top: 10px; display: flex; gap: 10px; overflow-x: auto; padding-bottom: 5px;"></div>
-                </div>
-
-                <button class="btn btn-success" style="width: 100%; padding: 15px; font-size: 1.2em; margin-top: 15px;" onclick="confirmScanDelivery()">✅ Valider la Remise</button>
-            </div>
         </div>
 
         <!-- MODALES LIVRAISON -->

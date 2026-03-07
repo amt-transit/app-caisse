@@ -825,7 +825,7 @@ html, body {
     <button class="nav-item" id="nav-history" onclick="showScreen('history')">
       <span class="nav-icon">📋</span>Historique
     </button>
-    <button class="nav-item" id="nav-back" onclick="window.location.href='livraison.html'">
+    <button class="nav-item" id="nav-back" onclick="window.location.href='index.html'">
       <span class="nav-icon">🏠</span>Bureau
     </button>
   </div>
@@ -860,7 +860,7 @@ html, body {
     <button class="nav-item active" id="nav-history2" onclick="showScreen('history')">
       <span class="nav-icon">📋</span>Historique
     </button>
-    <button class="nav-item" id="nav-back2" onclick="window.location.href='livraison.html'">
+    <button class="nav-item" id="nav-back2" onclick="window.location.href='index.html'">
       <span class="nav-icon">🏠</span>Bureau
     </button>
   </div>
@@ -1017,7 +1017,7 @@ function renderResult(d) {
             <div class="result-body">
                 <div class="result-row">
                     <span class="result-label">Client</span>
-                    <span class="result-value" style="font-size:1.1rem;">${cleanName(d.destinataire) || '—'}</span>
+                    <span class="result-value" style="font-size:1.1rem;">${getClientName(d)}</span>
                 </div>
                 <div class="result-row">
                     <span class="result-label">Conteneur</span>
@@ -1110,13 +1110,35 @@ function updatePhotosUI() {
 function viewPhoto(index) {
     // Affiche la photo en plein écran
     const overlay = document.createElement('div');
-    overlay.style.cssText = `position:fixed;inset:0;background:rgba(0,0,0,0.92);z-index:9990;display:flex;align-items:center;justify-content:center;`;
+    overlay.style.cssText = `position:fixed;inset:0;background:rgba(0,0,0,0.92);z-index:9990;display:flex;flex-direction:column;align-items:center;justify-content:center;`;
     overlay.innerHTML = `
-        <img src="${capturedPhotos[index].dataUrl}" style="max-width:96%;max-height:90vh;border-radius:12px;object-fit:contain;">
-        <button onclick="this.parentElement.remove()" style="position:absolute;top:20px;right:20px;background:rgba(255,255,255,0.15);border:none;color:white;font-size:1.5rem;width:44px;height:44px;border-radius:50%;cursor:pointer;">✕</button>
+        <img id="overlay-img-${index}" src="${capturedPhotos[index].dataUrl}" style="max-width:96%;max-height:80vh;border-radius:12px;object-fit:contain;margin-bottom:20px;">
+        <div style="display:flex;gap:20px;">
+            <button onclick="rotatePhoto(${index})" style="background:rgba(255,255,255,0.2);border:1px solid rgba(255,255,255,0.5);color:white;font-size:1.5rem;width:50px;height:50px;border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center;">↻</button>
+            <button onclick="this.parentElement.parentElement.remove()" style="background:rgba(255,255,255,0.2);border:1px solid rgba(255,255,255,0.5);color:white;font-size:1.5rem;width:50px;height:50px;border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center;">✕</button>
+        </div>
     `;
     overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
     document.body.appendChild(overlay);
+}
+
+function rotatePhoto(index) {
+    const img = new Image();
+    img.src = capturedPhotos[index].dataUrl;
+    img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        canvas.width = img.height;
+        canvas.height = img.width;
+        ctx.translate(canvas.width/2, canvas.height/2);
+        ctx.rotate(90 * Math.PI / 180);
+        ctx.drawImage(img, -img.width/2, -img.height/2);
+        const newDataUrl = canvas.toDataURL('image/jpeg');
+        capturedPhotos[index].dataUrl = newDataUrl;
+        const overlayImg = document.getElementById(`overlay-img-${index}`);
+        if(overlayImg) overlayImg.src = newDataUrl;
+        updatePhotosUI();
+    };
 }
 
 // ── MARQUER LIVRÉ ──
@@ -1211,7 +1233,7 @@ async function sendToWhatsApp() {
     if (!currentDelivery) return;
 
     const d = currentDelivery;
-    const name = cleanName(d.destinataire) || 'Client';
+    const name = getClientName(d);
     const phone = extractPhone(d);
 
     // Message standard
@@ -1219,9 +1241,8 @@ async function sendToWhatsApp() {
         `📦 *LIVRAISON AMT TRANS'IT*`,
         ``,
         `✅ Colis : *${d.ref}*`,
-        `👤 Destinataire : ${name}`,
+        `👤 Client : ${name}`,
         `📍 Lieu : ${d.lieuLivraison || '—'}`,
-        `🕐 ${new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}`,
     ].join('\n');
 
     // ── CAS 1 : On a des photos → Web Share API ──
@@ -1276,6 +1297,14 @@ async function sendToWhatsApp() {
 }
 
 // ── UTILS ──
+function getClientName(d) {
+    const exp = (d.expediteur || '').toUpperCase();
+    if (exp.includes('AMT')) {
+        return cleanName(d.destinataire) || 'Client';
+    }
+    return cleanName(d.expediteur) || cleanName(d.destinataire) || 'Client';
+}
+
 function extractPhone(d) {
     const phoneRegex = /(?:(?:\+|00)225[\s.-]?)?(?:01|05|07|0)\d(?:[\s.-]?\d{2}){4}|(?:(?:\+|00)225[\s.-]?)?(?:01|05|07|0)\d{8,}/;
     const sources = [d.numero, d.destinataire, d.description, d.info];
@@ -1359,7 +1388,7 @@ async function captureGPS(id) {
 function addToHistory(d, type) {
     const entry = {
         ref: d.ref,
-        dest: cleanName(d.destinataire),
+        dest: getClientName(d),
         lieu: d.lieuLivraison,
         type,
         time: Date.now()
