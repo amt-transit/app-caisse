@@ -84,6 +84,27 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    // --- NOUVEAU : Helper de catégorisation centralisé ---
+    function getExpenseCategory(desc) {
+        desc = (desc || '').toLowerCase();
+        const kwPeage = ['péage', 'peage'];
+        const kwCarburant = ['carburant', 'essence', 'gasoil'];
+        const kwLivraison = ['livraison', 'police', 'douane', 'gendarmerie', 'gendarme', 'achat', 'lavage', 'aide', 'frais', 'transp', 'founi', 'stock'];
+
+        if (kwPeage.some(k => desc.includes(k))) return 'Péage';
+        if (kwCarburant.some(k => desc.includes(k))) return 'Carburant';
+        if (kwLivraison.some(k => desc.includes(k))) return 'Livraison';
+        return 'Autres';
+    }
+
+    let currentCategoryFilter = null;
+
+    window.filterExpensesByCategory = (category) => {
+        // Bascule le filtre (si on reclique sur le même, on annule)
+        currentCategoryFilter = currentCategoryFilter === category ? null : category;
+        renderExpensesTable();
+    };
+
     function updateExpenseCategoryStats() {
         if (!expenseStatsContainer) return;
         // Masquer si on est sur l'onglet Totaux OU Conteneur (car logique mensuelle uniquement)
@@ -119,15 +140,8 @@ document.addEventListener('DOMContentLoaded', () => {
             
             totalView += amount;
 
-            // Mots-clés pour catégorisation automatique
-            const kwPeage = ['péage', 'peage'];
-            const kwCarburant = ['carburant', 'essence', 'gasoil'];
-            const kwLivraison = ['livraison', 'police', 'douane', 'gendarmerie', 'gendarme', 'achat', 'lavage', 'aide', 'frais', 'transp', 'founi', 'stock'];
-
-            if (kwPeage.some(k => desc.includes(k))) stats['Péage'] += amount;
-            else if (kwCarburant.some(k => desc.includes(k))) stats['Carburant'] += amount;
-            else if (kwLivraison.some(k => desc.includes(k))) stats['Livraison'] += amount;
-            else stats['Autres'] += amount;
+            const cat = getExpenseCategory(desc);
+            if (stats[cat] !== undefined) stats[cat] += amount;
         });
 
         // Configuration des couleurs (Fond + Texte)
@@ -141,20 +155,25 @@ document.addEventListener('DOMContentLoaded', () => {
         let html = '';
         
         // 1. Carte TOTAL (Vert)
+        const opacityTotal = currentCategoryFilter ? '0.5' : '1';
         html += `
-            <div style="background:#10b981; color:white; border-radius:8px; padding:10px 15px; min-width:140px; box-shadow:0 4px 6px rgba(0,0,0,0.1);">
+            <div onclick="window.filterExpensesByCategory(null)" style="cursor:pointer; opacity:${opacityTotal}; background:#10b981; color:white; border-radius:8px; padding:10px 15px; min-width:140px; box-shadow:0 4px 6px rgba(0,0,0,0.1); transition: opacity 0.2s;">
                 <div style="font-size:0.8em; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:4px; opacity:0.9;">Total ${currentTab === 'monthly' ? 'Mensuel' : 'Conteneur'}</div>
                 <div style="font-size:1.4em; font-weight:bold;">${formatCFA(totalView)}</div>
             </div>
         `;
 
         // 2. Cartes Catégories
-        html += Object.entries(stats).map(([key, val]) => `
-            <div style="background:${colors[key].bg}; border:1px solid ${colors[key].bg}; border-radius:8px; padding:10px 15px; min-width:140px; box-shadow:0 1px 2px rgba(0,0,0,0.05);">
+        html += Object.entries(stats).map(([key, val]) => {
+            const isActive = currentCategoryFilter === key;
+            const borderStyle = isActive ? '2px solid #000' : `1px solid ${colors[key].bg}`;
+            const transformStyle = isActive ? 'scale(1.05)' : 'scale(1)';
+            return `
+            <div onclick="window.filterExpensesByCategory('${key}')" style="cursor:pointer; transform:${transformStyle}; transition: all 0.2s; background:${colors[key].bg}; border:${borderStyle}; border-radius:8px; padding:10px 15px; min-width:140px; box-shadow:0 1px 2px rgba(0,0,0,0.05);">
                 <div style="font-size:0.8em; color:${colors[key].text}; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:4px;">${key}</div>
                 <div style="font-size:1.2em; font-weight:bold; color:${colors[key].text};">${formatCFA(val)}</div>
             </div>
-        `).join('');
+        `}).join('');
         
         expenseStatsContainer.innerHTML = html;
     }
@@ -325,6 +344,11 @@ document.addEventListener('DOMContentLoaded', () => {
         const filtered = tabFiltered.filter(item => {
             // Filtre Mois
             if (monthFilter && !item.date.startsWith(monthFilter)) return false;
+
+            // Filtre Catégorie (Clic sur carte)
+            if (currentCategoryFilter) {
+                if (getExpenseCategory(item.description) !== currentCategoryFilter) return false;
+            }
 
             if (!term) return true;
             return (item.description || "").toLowerCase().includes(term) || 

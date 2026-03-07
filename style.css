@@ -783,3 +783,9 @@ input[type="checkbox"] {
 .help-arrow {
     text-align: center; font-size: 20px; color: #cbd5e1; margin-bottom: 10px;
 }
+
+/* --- MODALE PROGRAMME (Largeur étendue) --- */
+#programDetailsModal .modal-content {
+    max-width: 95% !important;
+    width: 1200px;
+}

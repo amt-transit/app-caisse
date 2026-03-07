@@ -64,6 +64,50 @@ document.addEventListener('DOMContentLoaded', () => {
     const totalVenteMarchandiseEl = document.getElementById('totalVenteMarchandise');
     const totalAutreEl = document.getElementById('totalAutre');
 
+    // --- NOUVEAU : Helper Catégorie & Filtre ---
+    function getIncomeCategory(desc) {
+        desc = (desc || '').toLowerCase();
+        const kwBenefice = ['bénéfice', 'benefice', 'achat', 'gain', 'profit', 'marge'];
+        const kwVente = ['vente', 'marchandise', 'vendue', 'vendu', 'article', 'produit'];
+
+        if (kwBenefice.some(k => desc.includes(k))) return 'Bénéfice';
+        if (kwVente.some(k => desc.includes(k))) return 'Vente';
+        return 'Autre';
+    }
+
+    let currentIncomeCategoryFilter = null;
+
+    // Configuration des clics sur les cartes de totaux
+    [
+        { el: totalBeneficeAchatEl, cat: 'Bénéfice' },
+        { el: totalVenteMarchandiseEl, cat: 'Vente' },
+        { el: totalAutreEl, cat: 'Autre' }
+    ].forEach(item => {
+        if (item.el) {
+            const card = item.el.closest('.total-card') || item.el.parentElement;
+            if (card) {
+                card.style.cursor = 'pointer';
+                card.onclick = () => {
+                    // Bascule le filtre
+                    currentIncomeCategoryFilter = currentIncomeCategoryFilter === item.cat ? null : item.cat;
+                    renderIncomeTable();
+                    
+                    // Feedback visuel
+                    // Reset tous
+                    [totalBeneficeAchatEl, totalVenteMarchandiseEl, totalAutreEl].forEach(e => {
+                        const c = e?.closest('.total-card') || e?.parentElement;
+                        if(c) { c.style.border = ""; c.style.transform = ""; }
+                    });
+                    // Active le courant
+                    if (currentIncomeCategoryFilter === item.cat) {
+                        card.style.border = "2px solid #000";
+                        card.style.transform = "scale(1.02)";
+                    }
+                };
+            }
+        }
+    });
+
     let unsubscribeIncome = null;
     let allIncome = [];
 
@@ -120,6 +164,12 @@ document.addEventListener('DOMContentLoaded', () => {
         
         const filtered = allIncome.filter(item => {
             if (monthFilter && !item.date.startsWith(monthFilter)) return false;
+            
+            // Filtre Catégorie
+            if (currentIncomeCategoryFilter) {
+                if (getIncomeCategory(item.description) !== currentIncomeCategoryFilter) return false;
+            }
+
             if (!term) return true;
             return (item.description || "").toLowerCase().includes(term);
         });
@@ -188,11 +238,9 @@ document.addEventListener('DOMContentLoaded', () => {
             const desc = (inc.description || '').toLowerCase();
             const montant = inc.montant || 0;
 
-            const kwBenefice = ['bénéfice', 'benefice', 'achat', 'gain', 'profit', 'marge'];
-            const kwVente = ['vente', 'marchandise', 'vendue', 'vendu', 'article', 'produit'];
-
-            if (kwBenefice.some(k => desc.includes(k))) totalBen += montant;
-            else if (kwVente.some(k => desc.includes(k))) totalVente += montant;
+            const cat = getIncomeCategory(desc);
+            if (cat === 'Bénéfice') totalBen += montant;
+            else if (cat === 'Vente') totalVente += montant;
             else totalAutre += montant;
         });
 

@@ -137,7 +137,7 @@ firebase.auth().onAuthStateChanged(async (user) => {
 
         // SAISIE LIMITED
         if (userRole === 'saisie_limited') {
-            if (!currentPage.includes('index.html') && !currentPage.includes('history.html') && !currentPage.includes('magasinage.html')) {
+            if (!currentPage.includes('index.html') && !currentPage.includes('history.html') && !currentPage.includes('magasinage.html') && !currentPage.includes('livraison.html')) {
                  alert("Accès refusé : Votre rôle (Saisie Limited) ne permet pas d'accéder à cette page.");
                  window.location.href = 'index.html'; 
                  return;
@@ -186,7 +186,6 @@ firebase.auth().onAuthStateChanged(async (user) => {
             if (navClients) navClients.style.display = 'none';
             if (navConfirmation) navConfirmation.style.display = 'none';
             if (navSalaire) navSalaire.style.display = 'none';
-            if (navLivraison) navLivraison.style.display = 'none';
         }
 
         document.body.style.display = 'block';

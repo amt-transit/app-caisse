@@ -1141,8 +1141,17 @@ document.addEventListener('DOMContentLoaded', () => {
             const batch = db.batch();
             let deliveryUpdateCount = 0;
 
-            // 1. On récupère les références des transactions de la session en cours
-            const refsToUpdate = currentSessionAllTransactions.map(t => t.data.reference);
+            // 1. On récupère les références ET les données de reste à payer
+            const refsToUpdate = [];
+            const refDataMap = {};
+
+            currentSessionAllTransactions.forEach(t => {
+                const ref = t.data.reference;
+                if (ref) {
+                    refsToUpdate.push(ref);
+                    refDataMap[ref] = t.data.reste || 0;
+                }
+            });
 
             if (refsToUpdate.length > 0) {
                 // 2. On cherche les livraisons correspondantes dans "EN_COURS"
@@ -1160,11 +1169,21 @@ document.addEventListener('DOMContentLoaded', () => {
                     const deliverySnapshot = await deliveryQuery.get();
 
                     deliverySnapshot.forEach(doc => {
+                        const deliveryData = doc.data();
+                        const currentReste = refDataMap[deliveryData.ref];
+                        const updates = {};
+
+                        // LOGIQUE MODIFIÉE : On ne change QUE le montant (Le statut est géré par le Scan)
+                        if (currentReste <= 0) {
+                            // Payé en totalité -> Montant 0 (Vert dans l'UI)
+                            updates.montant = '0 CFA';
+                        } else {
+                            // Paiement partiel -> Montant mis à jour (Orange dans l'UI)
+                            updates.montant = currentReste + ' CFA';
+                        }
+
                         // 3. On ajoute la mise à jour au batch
-                        batch.update(doc.ref, { 
-                            status: 'LIVRE', 
-                            dateLivraison: new Date().toISOString() 
-                        });
+                        batch.update(doc.ref, updates);
                         deliveryUpdateCount++;
                     });
                 }
@@ -1181,7 +1200,7 @@ document.addEventListener('DOMContentLoaded', () => {
             try {
                 await batch.commit();
                 let successMsg = "Journée validée avec succès !";
-                if (deliveryUpdateCount > 0) successMsg += `\n\n✅ ${deliveryUpdateCount} colis mis à jour comme "Livré" dans l'onglet Livraison.`;
+                if (deliveryUpdateCount > 0) successMsg += `\n\n✅ Montants mis à jour pour ${deliveryUpdateCount} colis dans l'onglet Livraison.`;
                 alert(successMsg);
                 detailStatus.textContent = "Validé";
                 detailStatus.style.background = "#10b981";

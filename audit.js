@@ -103,6 +103,14 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     }
 
+    // Helper pour numéro de semaine
+    function getWeekNumber(d) {
+        d = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+        d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay()||7));
+        var yearStart = new Date(Date.UTC(d.getUTCFullYear(),0,1));
+        return Math.ceil(( ( (d - yearStart) / 86400000) + 1)/7);
+    }
+
     function renderTable(data) {
         tableBody.innerHTML = '';
         const term = searchInput.value.toLowerCase();
@@ -122,8 +130,95 @@ document.addEventListener('DOMContentLoaded', async () => {
             return;
         }
 
+        // --- LOGIQUE DE REGROUPEMENT ---
+        const now = new Date();
+        // Début de la semaine en cours (Lundi)
+        const currentWeekStart = new Date(now);
+        const day = currentWeekStart.getDay() || 7; 
+        if (day !== 1) currentWeekStart.setHours(-24 * (day - 1));
+        currentWeekStart.setHours(0,0,0,0);
+
+        const currentWeekItems = [];
+        const olderItems = [];
+
         filtered.forEach(s => {
+            const d = new Date(s.dateValidation);
+            if (d >= currentWeekStart) currentWeekItems.push(s);
+            else olderItems.push(s);
+        });
+
+        // 1. Affichage Semaine En Cours (Détails directs)
+        currentWeekItems.forEach(s => renderSessionRow(s));
+
+        // 2. Affichage Anciennes Sessions (Groupées)
+        if (olderItems.length > 0) {
+            const groups = {};
+            
+            olderItems.forEach(s => {
+                const d = new Date(s.dateValidation);
+                const diffTime = now - d;
+                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                
+                let key, label;
+                
+                // Si < 60 jours -> Par Semaine
+                if (diffDays <= 60) {
+                    const year = d.getFullYear();
+                    const week = getWeekNumber(d);
+                    key = `W-${year}-${week}`;
+                    label = `Semaine ${week} - ${year}`;
+                } else {
+                    // Sinon -> Par Mois
+                    const year = d.getFullYear();
+                    const month = d.getMonth();
+                    key = `M-${year}-${month}`;
+                    label = d.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
+                    label = label.charAt(0).toUpperCase() + label.slice(1);
+                }
+
+                if (!groups[key]) groups[key] = { label: label, items: [], totalIn: 0, totalOut: 0, result: 0 };
+                groups[key].items.push(s);
+                groups[key].totalIn += s.totalIn;
+                groups[key].totalOut += s.totalOut;
+                groups[key].result += s.result;
+            });
+
+            // Tri des groupes (plus récent en haut)
+            const sortedGroups = Object.values(groups).sort((a, b) => new Date(b.items[0].dateValidation) - new Date(a.items[0].dateValidation));
+
+            sortedGroups.forEach(g => {
+                const groupId = 'group-' + Math.random().toString(36).substr(2, 9);
+                
+                // Ligne En-tête Groupe
+                const tr = document.createElement('tr');
+                tr.style.cssText = "background-color: #f1f5f9; cursor: pointer; font-weight: bold; border-top: 2px solid #e2e8f0;";
+                tr.onclick = () => {
+                    document.querySelectorAll('.' + groupId).forEach(el => el.style.display = el.style.display === 'none' ? 'table-row' : 'none');
+                };
+                
+                tr.innerHTML = `
+                    <td colspan="3">📂 ${g.label} <span style="font-weight:normal; font-size:0.9em; color:#666;">(${g.items.length} sessions)</span></td>
+                    <td style="color:#10b981;">${formatCFA(g.totalIn)}</td>
+                    <td style="color:#ef4444;">${formatCFA(g.totalOut)}</td>
+                    <td>${formatCFA(g.result)}</td>
+                    <td colspan="2" style="text-align:center; font-size:0.8em; color:#64748b;">▼ Détails</td>
+                `;
+                tableBody.appendChild(tr);
+
+                // Lignes Détails (Cachées par défaut)
+                g.items.forEach(s => renderSessionRow(s, groupId, true));
+            });
+        }
+    }
+
+    function renderSessionRow(s, groupId = null, hidden = false) {
             const tr = document.createElement('tr');
+            if (groupId) {
+                tr.classList.add(groupId);
+                if (hidden) tr.style.display = 'none';
+                tr.style.backgroundColor = '#fff'; // Fond blanc pour distinguer du header
+            }
+
             const dateVal = new Date(s.dateValidation).toLocaleString('fr-FR');
             const dateSaisie = new Date(s.dateSaisie).toLocaleDateString('fr-FR');
 
@@ -142,7 +237,6 @@ document.addEventListener('DOMContentLoaded', async () => {
                 <td><button class="btn btn-small">👁️ Voir</button></td>
             `;
             tableBody.appendChild(tr);
-        });
     }
 
     // Fonction globale pour le onclick

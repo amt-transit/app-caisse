@@ -45,6 +45,7 @@ let itemsPerPage = 100; // Nombre d'éléments par page
 let programDetailsSort = { column: null, direction: 'asc' };
 let currentProgramView = { date: null, livreur: null };
 let isImporting = false;
+let currentScanFile = null;
 
 // --- UTILS (Performance) ---
 function debounce(func, wait) {
@@ -87,6 +88,17 @@ document.addEventListener('DOMContentLoaded', function() {
         console.error("Firebase DB non initialisé");
         return;
     }
+
+    // --- GESTION RÔLE LIVREUR (Saisie Limited) ---
+    const userRole = sessionStorage.getItem('userRole');
+    if (userRole === 'saisie_limited') {
+        // Masquer les onglets administratifs pour ne laisser que En Cours, Programme et Scan
+        const tabParis = document.getElementById('tabParis');
+        const tabAVenir = document.getElementById('tabAVenir');
+        if (tabParis) tabParis.style.display = 'none';
+        if (tabAVenir) tabAVenir.style.display = 'none';
+    }
+
     initRealtimeSync();
     updateContainerTitle();
     initActiveContainerInput();
@@ -152,15 +164,28 @@ function switchTab(tab) {
     
     // Mise à jour visuelle des boutons
     document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
-    if (tab === 'EN_COURS') {
-        document.getElementById('tabEnCours').classList.add('active');
-    } else if (tab === 'A_VENIR') {
-        document.getElementById('tabAVenir').classList.add('active');
-    } else if (tab === 'PARIS') {
-        document.getElementById('tabParis').classList.add('active');
+    if (tab === 'EN_COURS') document.getElementById('tabEnCours').classList.add('active');
+    else if (tab === 'A_VENIR') document.getElementById('tabAVenir').classList.add('active');
+    else if (tab === 'PARIS') document.getElementById('tabParis').classList.add('active');
+    else if (tab === 'PROGRAMME') document.getElementById('tabProgramme').classList.add('active');
+    else if (tab === 'SCAN') document.getElementById('tabScan').classList.add('active'); // NOUVEAU
+
+    // --- GESTION DE L'AFFICHAGE DU CONTENU ---
+    const tableContainer = document.querySelector('.table-container');
+    const scanContainer = document.getElementById('scan-container');
+    const toolbar = document.querySelector('.toolbar');
+    
+    if (tab === 'SCAN') {
+        tableContainer.style.display = 'none'; // Cache le tableau
+        toolbar.style.display = 'none'; // Cache la barre de recherche et filtres
+        scanContainer.style.display = 'block'; // Affiche l'appareil photo
+        return; // On arrête là pour l'onglet Scan
     } else {
-        document.getElementById('tabProgramme').classList.add('active');
+        tableContainer.style.display = 'block';
+        toolbar.style.display = 'flex';
+        if(scanContainer) scanContainer.style.display = 'none';
     }
+
 
     // Mise à jour de la description contextuelle
     const descEl = document.getElementById('tabDescription');
@@ -1660,6 +1685,15 @@ function renderTable() {
             displayDestinataire = displayDestinataire.replace(/[-–,;:\s]+$/, ''); // Nettoyage fin
         }
 
+        // Gestion Couleur Montant (Vert = Payé, Orange = Reste)
+        const montantVal = parseFloat((d.montant || '0').replace(/[^\d]/g, '')) || 0;
+        let montantStyle = "width: 100%;";
+        if (montantVal === 0) {
+            montantStyle += " background-color: #dcfce7; color: #166534; font-weight: bold;"; // Vert (Payé)
+        } else {
+            montantStyle += " background-color: #ffedd5; color: #9a3412; font-weight: bold;"; // Orange (Dette)
+        }
+
         if (currentTab === 'PARIS') {
             return `
                 <tr class="${rowClass}">
@@ -1668,7 +1702,7 @@ function renderTable() {
                     <td>${d.conteneur || '-'}</td>
                     <td class="ref">${d.ref}</td>
                     <td style="text-align:center;"><input type="number" class="editable-cell" value="${d.quantite || 1}" onchange="updateDeliveryQuantity('${d.id}', this.value)" style="width: 50px; text-align:center; font-weight:bold;"></td>
-                    <td class="montant"><input type="text" class="editable-cell" value="${(d.montant || '').replace(/"/g, '&quot;')}" onchange="updateDeliveryAmount('${d.id}', this.value)" style="width: 100%;"></td>
+                    <td class="montant"><input type="text" class="editable-cell" value="${(d.montant || '').replace(/"/g, '&quot;')}" onchange="updateDeliveryAmount('${d.id}', this.value)" style="${montantStyle}"></td>
                     <td>${d.expediteur}</td>
                     <td><input type="text" class="editable-cell" value="${(d.lieuLivraison || '').replace(/"/g, '&quot;')}" list="sharedLocationsList" onchange="updateDeliveryLocation('${d.id}', this.value)"></td>
                     <td><input type="text" class="editable-cell" value="${displayDestinataire.replace(/"/g, '&quot;')}" onchange="updateDeliveryRecipient('${d.id}', this.value)"></td>
@@ -1685,7 +1719,7 @@ function renderTable() {
                 <td>${d.conteneur || '-'}</td>
                 <td class="ref">${transitIndicator}${d.ref}</td>
                 <td style="text-align:center;"><input type="number" class="editable-cell" value="${d.quantite || 1}" onchange="updateDeliveryQuantity('${d.id}', this.value)" style="width: 50px; text-align:center; font-weight:bold;"></td>
-                <td class="montant"><input type="text" class="editable-cell" value="${(d.montant || '').replace(/"/g, '&quot;')}" onchange="updateDeliveryAmount('${d.id}', this.value)" style="width: 100%;"></td>
+                <td class="montant"><input type="text" class="editable-cell" value="${(d.montant || '').replace(/"/g, '&quot;')}" onchange="updateDeliveryAmount('${d.id}', this.value)" style="${montantStyle}"></td>
                 <td>${d.expediteur}</td>
                 <td><input type="text" class="editable-cell" value="${(d.lieuLivraison || '').replace(/"/g, '&quot;')}" list="sharedLocationsList" onchange="updateDeliveryLocation('${d.id}', this.value)"></td>
                 <td><input type="text" class="editable-cell" value="${displayDestinataire.replace(/"/g, '&quot;')}" onchange="updateDeliveryRecipient('${d.id}', this.value)"></td>
@@ -1744,7 +1778,11 @@ function viewProgramDetails(date, livreur) {
         });
     } else {
         // Tri par ordre personnalisé 'orderInRoute' s'il existe
-        items.sort((a, b) => (a.orderInRoute || 0) - (b.orderInRoute || 0));
+        items.sort((a, b) => {
+            const oA = a.orderInRoute !== undefined ? a.orderInRoute : 9999;
+            const oB = b.orderInRoute !== undefined ? b.orderInRoute : 9999;
+            return oA - oB;
+        });
     }
     
     document.getElementById('detailLivreur').textContent = livreur;
@@ -1783,37 +1821,35 @@ function viewProgramDetails(date, livreur) {
                     statusText = 'EN COURS';
                 }
                 
-                // Afficher les boutons de déplacement uniquement si le tri par défaut est actif
-                const showMoveButtons = !programDetailsSort.column;
 
                 return `
                 <tr class="${d.status === 'LIVRE' ? 'delivered' : ''}">
                     <td>
-                        ${showMoveButtons ? `<div style="display: flex; flex-direction: column; gap: 2px;">
-                            ${index > 0 ? `<button class="btn-small" style="padding: 0 5px;" onclick="moveDeliveryOrder(${d.id}, -1, '${date}', '${livreur}')">▲</button>` : ''}
-                            ${index < items.length - 1 ? `<button class="btn-small" style="padding: 0 5px;" onclick="moveDeliveryOrder(${d.id}, 1, '${date}', '${livreur}')">▼</button>` : ''}
-                        </div>` : `<span style="color:#999;">${index + 1}</span>`}
+                        <input type="number" class="editable-cell" style="width: 50px; text-align: center; font-weight:bold;" value="${d.orderInRoute !== undefined ? d.orderInRoute : ''}" placeholder="${index + 1}" onchange="updateDeliveryOrder('${d.id}', this.value, '${date}', '${livreur}')">
                     </td>
                     <td class="ref">${d.ref}</td>
                     <td class="montant">${d.montant}</td>
                     <td>${d.expediteur}</td>
                     <td style="display: flex; align-items: center; gap: 5px;">
-                        <input type="text" class="editable-cell" value="${(d.lieuLivraison || '').replace(/"/g, '&quot;')}" list="sharedLocationsList" onchange="updateDeliveryLocation(${d.id}, this.value)">
-                        <a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent((d.lieuLivraison || '') + ' ' + d.commune + ' Abidjan')}" target="_blank" title="Voir sur la carte" style="text-decoration: none;">
+                        <input type="text" class="editable-cell" value="${(d.lieuLivraison || '').replace(/"/g, '&quot;')}" list="sharedLocationsList" onchange="updateDeliveryLocation('${d.id}', this.value)">
+                        <a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent((d.lieuLivraison || '') + ' ' + d.commune + ' Abidjan')}" target="_blank" title="Voir sur la carte" style="text-decoration: none; font-size: 1.2em;">
                             📍
                         </a>
+                        <button class="btn-small" onclick="captureGPSLocation('${d.id}')" title="📍 Je suis ici (Enregistrer ma position GPS)" style="padding: 2px 5px; background: #e0f2fe; border: 1px solid #bae6fd; cursor: pointer;">
+                            🎯
+                        </button>
                     </td>
-                    <td><input type="text" class="editable-cell" value="${(d.destinataire || '').replace(/"/g, '&quot;')}" onchange="updateDeliveryRecipient(${d.id}, this.value)"></td>
+                    <td><input type="text" class="editable-cell" value="${(d.destinataire || '').replace(/"/g, '&quot;')}" onchange="updateDeliveryRecipient('${d.id}', this.value)"></td>
                     <td>${d.description || ''}</td>
-                    <td><input type="text" class="editable-cell" value="${(d.info || '').replace(/"/g, '&quot;')}" onchange="updateDeliveryInfo(${d.id}, this.value)"></td>
+                    <td><input type="text" class="editable-cell" value="${(d.info || '').replace(/"/g, '&quot;')}" onchange="updateDeliveryInfo('${d.id}', this.value)"></td>
                     <td><span class="status-badge ${statusClass}">${statusText}</span></td>
                     <td>
                         <div class="actions">
                         ${d.status !== 'LIVRE' ? 
-                            `<button class="btn btn-success btn-small" onclick="markAsDelivered(${d.id}); viewProgramDetails('${date}', '${livreur}')">✅</button>` : 
-                            `<button class="btn btn-warning btn-small" onclick="markAsPending(${d.id}); viewProgramDetails('${date}', '${livreur}')">⏳</button>`
+                            `<button class="btn btn-success btn-small" onclick="markAsDelivered('${d.id}'); viewProgramDetails('${date}', '${livreur}')">✅</button>` : 
+                            `<button class="btn btn-warning btn-small" onclick="markAsPending('${d.id}'); viewProgramDetails('${date}', '${livreur}')">⏳</button>`
                         }
-                        <button class="btn btn-danger btn-small" onclick="removeFromProgram(${d.id}); viewProgramDetails('${date}', '${livreur}')" title="Retirer du programme">❌</button>
+                        <button class="btn btn-danger btn-small" onclick="removeFromProgram('${d.id}'); viewProgramDetails('${date}', '${livreur}')" title="Retirer du programme">❌</button>
                         </div>
                     </td>
                 </tr>
@@ -1946,6 +1982,91 @@ function printDeliverySlip(id) {
 
     doc.save(`BL_${d.ref}.pdf`);
 }
+
+// --- NOUVELLES FONCTIONS : ORDRE & GPS ---
+
+window.updateDeliveryOrder = function(id, val, date, livreur) {
+    const order = parseInt(val);
+    if (!isNaN(order)) {
+        db.collection(CONSTANTS.COLLECTION).doc(id).update({ orderInRoute: order })
+            .then(() => {
+                // Mise à jour locale immédiate pour fluidité
+                const item = deliveries.find(d => d.id === id);
+                if(item) item.orderInRoute = order;
+                // Rafraîchir la vue pour appliquer le tri
+                viewProgramDetails(date, livreur);
+            });
+    }
+};
+
+window.captureGPSLocation = function(id) {
+    if (!navigator.geolocation) {
+        showToast("Géolocalisation non supportée par ce navigateur.", "error");
+        return;
+    }
+    
+    const btn = document.activeElement; // Le bouton cliqué
+    if(btn) { btn.disabled = true; btn.textContent = "⏳"; }
+
+    navigator.geolocation.getCurrentPosition(
+        async (position) => {
+            const lat = position.coords.latitude.toFixed(6);
+            const lng = position.coords.longitude.toFixed(6);
+            let gpsCoords = `${lat}, ${lng}`;
+            
+            // --- CONVERSION INTELLIGENTE EN ADRESSE (Reverse Geocoding) ---
+            try {
+                // Appel à l'API OpenStreetMap (Gratuit, pas de clé requise)
+                const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`, {
+                    headers: { 'Accept-Language': 'fr' } // On demande les résultats en français
+                });
+                const data = await response.json();
+                
+                if (data && data.address) {
+                    const addr = data.address;
+                    const parts = [];
+                    
+                    // Construction de l'adresse du plus précis au plus général
+                    if (addr.road) parts.push(addr.road);
+                    else if (addr.public_building) parts.push(addr.public_building);
+                    
+                    if (addr.suburb) parts.push(addr.suburb); // Quartier
+                    else if (addr.neighbourhood) parts.push(addr.neighbourhood);
+                    
+                    if (addr.city || addr.town || addr.village) parts.push(addr.city || addr.town || addr.village);
+
+                    if (parts.length > 0) {
+                        // Format hybride : Adresse Lisible + [Coordonnées] pour la précision GPS
+                        gpsCoords = `${parts.join(', ')} [${lat}, ${lng}]`;
+                    }
+                }
+            } catch (e) {
+                console.warn("Impossible de convertir les coordonnées en adresse :", e);
+                // En cas d'erreur (pas d'internet), on garde les coordonnées brutes par défaut
+            }
+            
+            // Mise à jour DB
+            updateDeliveryLocation(id, gpsCoords);
+            
+            // Mise à jour visuelle du champ input
+            if(btn) {
+                const row = btn.closest('tr');
+                if(row) {
+                    const input = row.querySelector('input[list="sharedLocationsList"]');
+                    if(input) input.value = gpsCoords;
+                }
+                btn.disabled = false; btn.textContent = "🎯";
+            }
+            showToast("📍 Position GPS enregistrée !", "success");
+        },
+        (error) => {
+            console.error(error);
+            showToast("Erreur GPS : " + error.message, "error");
+            if(btn) { btn.disabled = false; btn.textContent = "🎯"; }
+        },
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+    );
+};
 
 function moveDeliveryOrder(id, direction, date, livreur) {
     // Récupérer tous les items de ce programme
@@ -3170,4 +3291,224 @@ function permanentlyDeleteSingle(id, skipConfirm = false) {
             console.error("Erreur suppression:", error);
             showToast("Erreur lors de la suppression: " + error.message, "error");
         });
+}
+// ==========================================
+// --- MODULE SCAN LIVREUR (OCR) ---
+// ==========================================
+
+async function processScan(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+    currentScanFile = file;
+
+    // 1. Afficher l'aperçu de la photo
+    const preview = document.getElementById('scanPreview');
+    preview.src = URL.createObjectURL(file);
+    preview.style.display = 'block';
+
+    // 2. Préparer l'interface
+    document.getElementById('scanResults').style.display = 'none';
+    document.getElementById('scanLoading').style.display = 'block';
+
+    try {
+        // 3. Lancer l'IA Tesseract pour lire le texte sur l'image
+        const result = await Tesseract.recognize(file, 'fra', {
+            logger: m => console.log(m) // Optionnel : pour voir la progression dans la console
+        });
+        const text = result.data.text;
+
+        // 4. Chercher la référence avec une Regex (Ex: BA-233-E2)
+        // Accepte les formats avec ou sans suffixe
+        const refMatch = text.match(/[A-Z]{2}[-_\s.]\d{3}[-_\s.][A-Z0-9]+/i);
+
+        if (refMatch) {
+            let extractedRef = refMatch[0].toUpperCase();
+            
+            // Nettoyage : Si la photo a lu BA-233-E2_1_480, on garde juste BA-233-E2
+            const baseMatch = extractedRef.match(/^([A-Z]{2}[-_\s.]\d{3}[-_\s.][A-Z0-9]+)/);
+            if (baseMatch) {
+                extractedRef = baseMatch[1];
+            }
+
+            // 5. Chercher le colis dans la base de données locale
+            const delivery = deliveries.find(d => d.ref.toUpperCase().includes(extractedRef));
+
+            if (delivery) {
+                // Remplir la Référence
+                document.getElementById('scanRef').value = delivery.ref;
+
+                // LOGIQUE MÉTIER : Nom du client (Expéditeur vs Destinataire)
+                let clientName = delivery.expediteur || '';
+                const expUpper = clientName.toUpperCase();
+                
+                // Si l'expéditeur est l'agence AMT, on prend le nom du destinataire
+                if (expUpper.includes('AMT TRANSIT') || expUpper.includes('CI FRET') || expUpper.includes('AMT')) {
+                    clientName = delivery.destinataire || 'Client Inconnu';
+                }
+                document.getElementById('scanNom').value = clientName;
+
+                // Pré-remplir la quantité attendue (Le livreur pourra la modifier)
+                document.getElementById('scanQty').value = delivery.quantite || 1;
+
+                // Remplir le Reste à Payer
+                const rawMontant = delivery.montant || '0';
+                const montantVal = parseFloat(rawMontant.replace(/[^\d]/g, '')) || 0;
+                const resteInput = document.getElementById('scanReste');
+                const encaisseInput = document.getElementById('scanEncaisse');
+                if(resteInput) resteInput.value = montantVal;
+                if(encaisseInput) encaisseInput.value = ''; // Vide par défaut
+
+                // Sauvegarder l'ID du document Firestore dans le bouton pour la validation
+                document.getElementById('scanResults').dataset.deliveryId = delivery.id;
+
+                // Afficher le formulaire de validation
+                document.getElementById('scanResults').style.display = 'block';
+                
+                // Reset des preuves supplémentaires
+                const extraContainer = document.getElementById('extraProofsPreview');
+                if(extraContainer) extraContainer.innerHTML = '';
+                if(document.getElementById('extraPhotoInput')) document.getElementById('extraPhotoInput').value = '';
+                if(document.getElementById('extraVideoInput')) document.getElementById('extraVideoInput').value = '';
+
+                showToast('Référence détectée !', 'success');
+            } else {
+                alert(`L'étiquette a été lue (${extractedRef}), mais ce colis est introuvable dans la base de données active.`);
+            }
+        } else {
+            alert("Aucune référence valide n'a pu être lue sur la photo.\nAssurez-vous que le code (Ex: BA-233-E2) est bien net et éclairé.");
+        }
+    } catch (err) {
+        console.error(err);
+        alert("Erreur lors de l'analyse de l'image. Veuillez réessayer.");
+    } finally {
+        document.getElementById('scanLoading').style.display = 'none';
+    }
+}
+
+window.handleExtraProof = function(event, type) {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    const container = document.getElementById('extraProofsPreview');
+    const wrapper = document.createElement('div');
+    wrapper.style.cssText = "position: relative; flex-shrink: 0; width: 80px; height: 80px; border-radius: 8px; overflow: hidden; border: 1px solid #ddd; background: #000;";
+
+    let element;
+    if (type === 'image') {
+        element = document.createElement('img');
+        element.src = URL.createObjectURL(file);
+    } else {
+        element = document.createElement('video');
+        element.src = URL.createObjectURL(file);
+    }
+    element.style.cssText = "width: 100%; height: 100%; object-fit: cover;";
+    
+    wrapper.appendChild(element);
+    container.appendChild(wrapper);
+};
+
+async function confirmScanDelivery() {
+    const id = document.getElementById('scanResults').dataset.deliveryId;
+    const qtyInput = document.getElementById('scanQty').value;
+    const qty = parseInt(qtyInput) || 1;
+    const ref = document.getElementById('scanRef').value;
+    const nom = document.getElementById('scanNom').value;
+    const resteInput = document.getElementById('scanReste');
+    const encaisseInput = document.getElementById('scanEncaisse');
+
+    if (!id || !currentScanFile) return;
+
+    if (!confirm(`Confirmer la remise de ${qty} colis à ${nom} ?`)) return;
+
+    const btn = document.querySelector('#scanResults .btn-success');
+    const originalText = btn.innerHTML;
+    btn.innerHTML = "⏳ Validation et Ouverture WhatsApp...";
+    btn.disabled = true;
+
+    // Calcul du nouveau montant
+    let updates = {
+        quantiteLivree: qty,
+        scanProof: true
+    };
+
+    // Si un encaissement est saisi, on met à jour le montant
+    const encaisse = parseFloat(encaisseInput.value) || 0;
+    const reste = parseFloat(resteInput.value) || 0;
+    
+    if (encaisse > 0) {
+        let newReste = reste - encaisse;
+        if (newReste < 0) newReste = 0;
+        updates.montant = newReste + " CFA";
+    }
+
+    try {
+        // 1. Mettre à jour la base de données pour valider la livraison
+        await db.collection(CONSTANTS.COLLECTION).doc(id).update({
+            status: 'LIVRE',
+            dateLivraison: new Date().toISOString(),
+            quantiteLivree: qty,
+            scanProof: true
+        });
+        await db.collection(CONSTANTS.COLLECTION).doc(id).update(updates);
+
+        // 2. Préparer le texte à envoyer
+        let message = `✅ *SCAN EFFECTUÉ*\n📦 Réf: ${ref}\n👤 Client: ${nom}\n🔢 Quantité: ${qty} colis`;
+        if (encaisse > 0) {
+            message += `\n💰 Encaissé: ${encaisse} CFA`;
+        }
+
+        // 3. Ouvrir le partage natif du téléphone AVEC LE FICHIER IMAGE
+        // On vérifie d'abord si le téléphone autorise le partage de fichiers
+        if (navigator.canShare && navigator.canShare({ files: [currentScanFile] })) {
+            await navigator.share({
+                title: 'Preuve de Livraison',
+                text: message,
+                files: [currentScanFile] // On attache l'image directement ici !
+            });
+        } else if (navigator.share) {
+            // Si le téléphone supporte le partage mais pas les images (anciens modèles)
+            await navigator.share({
+                title: 'Preuve de Livraison',
+                text: message
+            });
+            alert("Votre navigateur ne supporte pas le partage direct d'image. L'image n'a pas été jointe au message.");
+        } else {
+            // Si sur PC classique, on ouvre WhatsApp Web (texte uniquement)
+            window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, '_blank');
+        }
+
+        showToast('Colis livré et partagé !', 'success');
+
+        // 4. Réinitialisation de l'interface
+        resetScanInterface();
+
+    } catch (error) {
+        // Ignorer l'erreur si l'utilisateur a juste annulé le menu de partage WhatsApp
+        if (error.name === 'AbortError') {
+            showToast('Colis validé (Partage WhatsApp annulé)', 'success');
+            resetScanInterface();
+        } else {
+            console.error(error);
+            alert("Erreur technique : " + error.message);
+        }
+    } finally {
+        btn.innerHTML = originalText;
+        btn.disabled = false;
+    }
+}
+
+// Petite fonction utilitaire pour nettoyer l'écran après le scan
+function resetScanInterface() {
+    document.getElementById('scanPreview').style.display = 'none';
+    document.getElementById('scanResults').style.display = 'none';
+    document.getElementById('cameraInput').value = '';
+    currentScanFile = null;
+    
+    // Reset des preuves supplémentaires
+    const extraContainer = document.getElementById('extraProofsPreview');
+    if(extraContainer) extraContainer.innerHTML = '';
+    if(document.getElementById('extraPhotoInput')) document.getElementById('extraPhotoInput').value = '';
+    if(document.getElementById('extraVideoInput')) document.getElementById('extraVideoInput').value = '';
+
+    switchTab('EN_COURS'); // Ramène le livreur sur la liste de travail
 }
