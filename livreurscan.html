@@ -714,7 +714,8 @@ html, body {
 <div id="loading"><div class="spinner"></div></div>
 
 <!-- HIDDEN FILE INPUT FOR PHOTOS -->
-<input type="file" id="photoInput" accept="image/*">
+<input type="file" id="photoInputCamera" accept="image/*" capture="environment" style="display:none">
+<input type="file" id="photoInputGallery" accept="image/*" multiple style="display:none">
 
 <!-- ═══════════════════════════════════════
      SCREEN 1 : SCAN / RECHERCHE
@@ -861,6 +862,21 @@ html, body {
 <!-- ═══════════════════════════════════════
      SCRIPTS
      ═══════════════════════════════════════ -->
+
+<!-- PHOTO CHOICE MODAL -->
+<div id="photo-choice-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.8); z-index:9999; align-items:center; justify-content:center;">
+  <div style="background:#1e293b; padding:20px; border-radius:16px; width:85%; max-width:300px; display:flex; flex-direction:column; gap:12px; border:1px solid rgba(255,255,255,0.1);">
+    <h3 style="margin:0 0 5px; text-align:center; font-size:1.1rem; color:white;">Ajouter une photo</h3>
+    <button onclick="triggerCamera()" style="padding:14px; border-radius:12px; border:none; background:#2563eb; color:white; font-weight:700; font-size:1rem; display:flex; align-items:center; justify-content:center; gap:10px; cursor:pointer;">
+      <span>📷</span> Prendre une photo
+    </button>
+    <button onclick="triggerGallery()" style="padding:14px; border-radius:12px; border:1px solid rgba(255,255,255,0.1); background:#273344; color:white; font-weight:700; font-size:1rem; display:flex; align-items:center; justify-content:center; gap:10px; cursor:pointer;">
+      <span>🖼️</span> Choisir dans la galerie
+    </button>
+    <button onclick="closePhotoChoice()" style="padding:10px; background:transparent; border:none; color:#94a3b8; font-weight:600; margin-top:5px; cursor:pointer;">Annuler</button>
+  </div>
+</div>
+
 <script src="firebase-init.js"></script>
 <script src="auth-guard.js"></script>
 <script>
@@ -888,7 +904,8 @@ document.addEventListener('DOMContentLoaded', () => {
     loadTodayStats();
 
     // Photo input listener
-    document.getElementById('photoInput').addEventListener('change', handlePhotoCapture);
+    document.getElementById('photoInputCamera').addEventListener('change', handlePhotoCapture);
+    document.getElementById('photoInputGallery').addEventListener('change', handlePhotoCapture);
 });
 
 // ── SCANNER (ZXing) ──
@@ -1046,7 +1063,21 @@ function showNotFound(ref) {
 
 // ── PHOTOS ──
 function addPhoto() {
-    document.getElementById('photoInput').click();
+    document.getElementById('photo-choice-modal').style.display = 'flex';
+}
+
+function closePhotoChoice() {
+    document.getElementById('photo-choice-modal').style.display = 'none';
+}
+
+function triggerCamera() {
+    closePhotoChoice();
+    document.getElementById('photoInputCamera').click();
+}
+
+function triggerGallery() {
+    closePhotoChoice();
+    document.getElementById('photoInputGallery').click();
 }
 
 function handlePhotoCapture(event) {
