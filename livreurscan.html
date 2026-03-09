@@ -1231,9 +1231,6 @@ async function sendToWhatsAppAndMarkDone() {
 
     // --- GESTION LIVRAISON PARTIELLE ---
     if (qty < totalQty) {
-        if (!confirm(`⚠️ LIVRAISON PARTIELLE\n\nVous livrez ${qty} colis sur ${totalQty}.\n\nLe système va :\n1. Créer une fiche "PARTIEL" pour les ${qty} colis livrés.\n2. Garder les ${totalQty - qty} autres en "EN COURS".\n\nConfirmer ?`)) {
-            return;
-        }
         isPartial = true;
     }
 
