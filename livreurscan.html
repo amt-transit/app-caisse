@@ -390,16 +390,12 @@ html, body {
 /* ── ACTION BUTTONS ── */
 .actions-grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 6px;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
   padding: 0 16px 16px;
 }
 
 .action-btn {
-  padding: 8px 2px;
-  border-radius: 10px;
-  border: none;
-  font-size: 0.65rem;
   font-weight: 700;
   cursor: pointer;
   display: flex;
@@ -410,15 +406,20 @@ html, body {
   font-family: inherit;
   letter-spacing: 0.01em;
   line-height: 1.2;
+  padding: 12px 4px;
+  border-radius: 12px;
+  border: none;
+  font-size: 0.7rem;
 }
 
 .action-btn:active { transform: scale(0.95); opacity: 0.85; }
 
-.action-btn .btn-icon { font-size: 1.2rem; line-height: 1; margin-bottom: 2px; }
+.action-btn .btn-icon { font-size: 1.4rem; line-height: 1; margin-bottom: 4px; }
 
 .btn-wa {
   background: var(--wa);
   color: white;
+  font-size: 0.8rem;
 }
 
 
@@ -427,17 +428,12 @@ html, body {
   color: white;
 }
 
-.btn-done {
-  background: var(--green);
-  color: white;
-}
-
 .btn-incident {
   background: var(--red);
   color: white;
 }
 
-.btn-wa:disabled, .btn-done:disabled {
+.btn-wa:disabled {
   opacity: 0.4;
   pointer-events: none;
 }
@@ -800,17 +796,13 @@ html, body {
 
   <!-- Action buttons (hors content pour rester visible) -->
   <div class="actions-grid" id="actions-grid" style="display:none; padding:10px 16px 14px;">
-    <button class="action-btn btn-wa" id="btn-wa" onclick="sendToWhatsApp()" disabled>
+    <button class="action-btn btn-wa" id="btn-wa" onclick="sendToWhatsAppAndMarkDone()" disabled>
       <span class="btn-icon">💬</span>
-      WhatsApp
+      WhatsApp & Livrer
     </button>
     <button class="action-btn btn-photo" onclick="addPhoto()">
       <span class="btn-icon">📷</span>
       Photo
-    </button>
-    <button class="action-btn btn-done" id="btn-done" onclick="markDone()" disabled>
-      <span class="btn-icon">✅</span>
-      Livré
     </button>
     <button class="action-btn btn-incident" onclick="markIncident()">
       <span class="btn-icon">⚠️</span>
@@ -1039,8 +1031,7 @@ function renderResult(d) {
 
     // État des boutons
     const isLivre = d.status === 'LIVRE';
-    document.getElementById('btn-done').disabled = isLivre;
-    document.getElementById('btn-wa').disabled = false;
+    document.getElementById('btn-wa').disabled = isLivre;
 
     // Scroll vers résultat
     document.getElementById('result-zone').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
@@ -1141,52 +1132,6 @@ function rotatePhoto(index) {
     };
 }
 
-// ── MARQUER LIVRÉ ──
-async function markDone() {
-    if (!currentDelivery) return;
-    showLoading(true);
-
-    const qtyInput = document.getElementById('scan-qty');
-    const qty = qtyInput ? (parseInt(qtyInput.value) || 1) : 1;
-
-    try {
-        await db.collection('livraisons').doc(currentDelivery.id).update({
-            status: 'LIVRE',
-            containerStatus: 'EN_COURS', // Force la présence dans l'onglet En Cours
-            dateLivraison: new Date().toISOString(),
-            quantiteLivree: qty,
-            scanProof: true
-        });
-
-        currentDelivery.status = 'LIVRE';
-        document.getElementById('btn-done').disabled = true;
-
-        // Flash vert
-        const flash = document.createElement('div');
-        flash.className = 'success-flash';
-        document.body.appendChild(flash);
-        setTimeout(() => flash.remove(), 600);
-
-        vibrate([50, 30, 50, 30, 100]);
-        showToast('✅ Livraison confirmée !', 'success');
-
-        // Mettre à jour le badge statut dans le card
-        const badge = document.querySelector('.result-status-badge');
-        if (badge) {
-            badge.textContent = '✅ Livré';
-            badge.className = 'result-status-badge status-livre';
-        }
-
-        addToHistory(currentDelivery, 'livre');
-        updateCounters();
-        showLoading(false);
-
-    } catch (e) {
-        showLoading(false);
-        showToast('Erreur lors de la mise à jour', 'error');
-    }
-}
-
 // ── SIGNALER INCIDENT ──
 async function markIncident() {
     if (!currentDelivery) return;
@@ -1229,9 +1174,54 @@ async function markIncident() {
 //  TEMPS ESTIMÉ : 8-12 secondes (vs 30-40s avant)
 // ══════════════════════════════════════════════════════════
 
-async function sendToWhatsApp() {
+async function sendToWhatsAppAndMarkDone() {
     if (!currentDelivery) return;
 
+    // --- 1. Marquer comme livré (logique de markDone()) ---
+    showLoading(true);
+    const qtyInput = document.getElementById('scan-qty');
+    const qty = qtyInput ? (parseInt(qtyInput.value) || 1) : 1;
+    const livreurName = sessionStorage.getItem('userName') || 'Scan Livreur';
+
+    try {
+        await db.collection('livraisons').doc(currentDelivery.id).update({
+            status: 'LIVRE',
+            containerStatus: 'EN_COURS', // Force la présence dans l'onglet En Cours
+            dateLivraison: new Date().toISOString(),
+            livreur: livreurName, // Ajout du nom du livreur
+            quantiteLivree: qty,
+            scanProof: true
+        });
+
+        currentDelivery.status = 'LIVRE';
+        document.getElementById('btn-wa').disabled = true; // On désactive le bouton principal
+
+        // Flash vert
+        const flash = document.createElement('div');
+        flash.className = 'success-flash';
+        document.body.appendChild(flash);
+        setTimeout(() => flash.remove(), 600);
+
+        vibrate([50, 30, 50, 30, 100]);
+        showToast('✅ Livraison confirmée !', 'success');
+
+        // Mettre à jour le badge statut dans le card
+        const badge = document.querySelector('.result-status-badge');
+        if (badge) {
+            badge.textContent = '✅ Livré';
+            badge.className = 'result-status-badge status-livre';
+        }
+
+        addToHistory(currentDelivery, 'livre');
+        updateCounters();
+
+    } catch (e) {
+        showLoading(false);
+        showToast('Erreur lors de la mise à jour', 'error');
+        return; // On arrête si la mise à jour DB échoue
+    }
+
+    // --- 2. Envoyer le message WhatsApp ---
     const d = currentDelivery;
     const name = getClientName(d);
     const phone = extractPhone(d);
@@ -1243,11 +1233,14 @@ async function sendToWhatsApp() {
         `✅ Colis : *${d.ref}*`,
         `👤 Client : ${name}`,
         `📍 Lieu : ${d.lieuLivraison || '—'}`,
+        ``,
+        `*LIVRÉ PAR : ${livreurName}*`
     ].join('\n');
 
     // ── CAS 1 : On a des photos → Web Share API ──
     if (capturedPhotos.length > 0 && navigator.share && navigator.canShare) {
         try {
+            showLoading(false); // On cache le spinner avant d'ouvrir le dialogue de partage
             // Convertir les dataUrls en File objects
             const photoFiles = capturedPhotos.map((p, i) => {
                 const blob = dataURLtoBlob(p.dataUrl);
@@ -1262,6 +1255,7 @@ async function sendToWhatsApp() {
                 return;
             }
         } catch (e) {
+            showLoading(false);
             if (e.name !== 'AbortError') console.warn('Share API error:', e);
             else return; // L'utilisateur a annulé
         }
@@ -1270,15 +1264,18 @@ async function sendToWhatsApp() {
     // ── CAS 2 : Partage texte seul via Share API ──
     if (navigator.share) {
         try {
+            showLoading(false);
             await navigator.share({ text: message });
             showToast('📤 Message partagé !', 'success');
             return;
         } catch (e) {
+            showLoading(false);
             if (e.name === 'AbortError') return;
         }
     }
 
     // ── CAS 3 : Fallback → lien wa.me (client direct) ──
+    showLoading(false);
     if (phone) {
         let clean = phone.replace(/[^\d]/g, '');
         if (!clean.startsWith('225') && clean.length === 10) clean = '225' + clean;
