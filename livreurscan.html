@@ -714,7 +714,7 @@ html, body {
 <div id="loading"><div class="spinner"></div></div>
 
 <!-- HIDDEN FILE INPUT FOR PHOTOS -->
-<input type="file" id="photoInput" accept="image/*" multiple>
+<input type="file" id="photoInput" accept="image/*">
 
 <!-- ═══════════════════════════════════════
      SCREEN 1 : SCAN / RECHERCHE
@@ -861,19 +861,9 @@ html, body {
 <!-- ═══════════════════════════════════════
      SCRIPTS
      ═══════════════════════════════════════ -->
+<script src="firebase-init.js"></script>
+<script src="auth-guard.js"></script>
 <script>
-// ── FIREBASE CONFIG (identique à livraison.html) ──
-const firebaseConfig = {
-    apiKey:            "AIzaSyA255n3XWDRKaYZ9kwOYkfovf5lRexoCA4",
-    authDomain:        "caisse-amt-perso.firebaseapp.com",
-    projectId:         "caisse-amt-perso",
-    storageBucket:     "caisse-amt-perso.firebasestorage.app",
-    messagingSenderId: "682789156997",
-    appId:             "1:682789156997:web:9ce3303120851d37be91ec"
-};
-firebase.initializeApp(firebaseConfig);
-const db = firebase.firestore();
-
 // ── NUMÉRO DU GROUPE WHATSAPP ──
 // ⚠️ Remplace par le numéro du téléphone qui héberge le groupe
 // (ce numéro doit être en format international sans +)
@@ -1228,13 +1218,10 @@ async function sendToWhatsAppAndMarkDone() {
 
     // Message standard
     const message = [
-        `📦 *LIVRAISON AMT TRANS'IT*`,
-        ``,
+       
         `✅ Colis : *${d.ref}*`,
         `👤 Client : ${name}`,
         `📍 Lieu : ${d.lieuLivraison || '—'}`,
-        ``,
-        `*LIVRÉ PAR : ${livreurName}*`
     ].join('\n');
 
     // ── CAS 1 : On a des photos → Web Share API ──
@@ -1473,11 +1460,6 @@ function showToast(msg, type = '') {
 function showLoading(show) {
     document.getElementById('loading').classList.toggle('show', show);
 }
-
-// ── AUTH GUARD ──
-firebase.auth().onAuthStateChanged(user => {
-    if (!user) window.location.href = 'index.html';
-});
 </script>
 </body>
 </html>
