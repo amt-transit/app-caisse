@@ -1267,6 +1267,13 @@ async function sendToWhatsAppAndMarkDone() {
             currentDelivery.quantite = totalQty - qty;
             showToast(`✅ Partiel validé ! Reste : ${currentDelivery.quantite}`, 'success');
             
+            // Flash vert et vibration pour feedback, comme pour une livraison complète
+            const flash = document.createElement('div');
+            flash.className = 'success-flash';
+            document.body.appendChild(flash);
+            setTimeout(() => flash.remove(), 600);
+            vibrate([50, 30, 50]);
+            
             // On recharge la vue pour montrer le reste à livrer
             renderResult(currentDelivery); 
 
@@ -1291,10 +1298,6 @@ async function sendToWhatsAppAndMarkDone() {
         return; // On arrête si la mise à jour DB échoue
     }
 
-    // Si partiel, on arrête ici (pas de WhatsApp auto ou message différent ?)
-    // Le prompt demandait juste de mettre à jour le statut.
-    // On continue vers WhatsApp avec les infos du colis livré.
-    
     // Si c'était partiel, currentDelivery a été modifié pour refléter le RESTE.
     // Mais pour le message WhatsApp, on veut parler de ce qu'on vient de livrer.
     // On reconstruit un objet temporaire pour le message.
