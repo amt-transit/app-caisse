@@ -5,7 +5,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // --- SÉCURITÉ : VÉRIFICATION RÔLE (Admin OU Super Admin) ---
     const userRole = sessionStorage.getItem('userRole');
-    if (userRole !== 'admin' && userRole !== 'super_admin') {
+    if (userRole !== 'admin' && userRole !== 'super_admin' && userRole !== 'spectateur') {
         document.body.innerHTML = '<h2 style="text-align:center; margin-top:50px; color:red;">⛔ Accès Refusé<br><small>Réservé aux Administrateurs</small></h2>';
         setTimeout(() => window.location.href = 'index.html', 2000);
         return;

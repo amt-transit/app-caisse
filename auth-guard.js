@@ -104,7 +104,7 @@ firebase.auth().onAuthStateChanged(async (user) => {
 
         // Protection page Points
         if (currentPage.includes('points.html')) {
-            if (userRole !== 'admin' && userRole !== 'super_admin') {
+            if (userRole !== 'admin' && userRole !== 'super_admin' && userRole !== 'spectateur') {
                 alert("Accès refusé : Réservé aux Administrateurs.");
                 window.location.href = 'index.html';
                 return;
@@ -113,7 +113,7 @@ firebase.auth().onAuthStateChanged(async (user) => {
 
         // Protection page Audit
         if (currentPage.includes('audit.html')) {
-            if (userRole !== 'admin' && userRole !== 'super_admin') {
+            if (userRole !== 'admin' && userRole !== 'super_admin' && userRole !== 'spectateur') {
                 alert("Accès refusé : Réservé aux Administrateurs.");
                 window.location.href = 'index.html';
                 return;
@@ -174,18 +174,13 @@ firebase.auth().onAuthStateChanged(async (user) => {
         const navAudit = document.getElementById('nav-audit');
 
         if (navAdmin && userRole !== 'super_admin') navAdmin.style.display = 'none';
-        if (navPoints && (userRole !== 'admin' && userRole !== 'super_admin')) navPoints.style.display = 'none';
-        if (navAudit && (userRole !== 'admin' && userRole !== 'super_admin')) navAudit.style.display = 'none';
+        if (navPoints && (userRole !== 'admin' && userRole !== 'super_admin' && userRole !== 'spectateur')) navPoints.style.display = 'none';
+        if (navAudit && (userRole !== 'admin' && userRole !== 'super_admin' && userRole !== 'spectateur')) navAudit.style.display = 'none';
 
         if (userRole === 'saisie_full') {
             if (navMagasinage) navMagasinage.style.display = 'inline';
             if (navBank) navBank.style.display = 'none';
             if (navSalaire) navSalaire.style.display = 'none';
-        }
-
-        if (userRole === 'spectateur') {
-            // Un spectateur ne peut pas valider de sessions
-            if (navConfirmation) navConfirmation.style.display = 'none';
         }
 
         if (userRole === 'saisie_limited') {
