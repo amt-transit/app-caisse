@@ -36,7 +36,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const cleanUsername = username.toLowerCase().replace(/\s+/g, '');
         let emailTechnique = cleanUsername;
         if (!cleanUsername.includes('@')) {
-            emailTechnique = `${cleanUsername}@amt.local`;
+            emailTechnique = `${cleanUsername}@amt.com`;
         }
 
         console.log("Tentative de connexion avec :", emailTechnique); // Pour débugger
