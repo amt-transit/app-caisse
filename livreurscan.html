@@ -428,6 +428,11 @@ html, body {
   color: white;
 }
 
+.btn-partial {
+  background: var(--orange);
+  color: white;
+}
+
 .btn-incident {
   background: var(--red);
   color: white;
@@ -1003,8 +1008,9 @@ function renderResult(d) {
     const qtyInput = `
         <div class="result-row" style="align-items: center; margin-top: 5px; padding-top: 5px; border-top: 1px solid var(--border);">
             <span class="result-label">Qté Livrée</span>
-            <input type="number" id="scan-qty" value="${d.quantite || 1}" min="1" style="width: 80px; padding: 8px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-weight: bold; text-align: center; font-size: 1.1rem;">
+            <input type="number" id="scan-qty" value="${d.quantite || 1}" min="1" max="${d.quantite || 1}" oninput="checkPartial(this.value, ${d.quantite || 1})" style="width: 80px; padding: 8px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-weight: bold; text-align: center; font-size: 1.1rem;">
         </div>
+        <div id="partial-banner" style="display:none; margin-top:10px; padding:8px; background:var(--orange-l); color:var(--orange); border-radius:8px; font-size:0.8rem; font-weight:bold; text-align:center;"></div>
     `;
 
     document.getElementById('result-zone').innerHTML = `
@@ -1045,6 +1051,25 @@ function renderResult(d) {
 
     // Reset photos UI
     updatePhotosUI();
+}
+
+function checkPartial(val, total) {
+    const btn = document.getElementById('btn-wa');
+    const banner = document.getElementById('partial-banner');
+    const qty = parseInt(val) || 0;
+    
+    if (qty < total && qty > 0) {
+        const remaining = total - qty;
+        banner.style.display = 'block';
+        banner.textContent = `⚠️ Livraison partielle — ${remaining} restant(s)`;
+        
+        btn.innerHTML = `<span class="btn-icon">🌗</span> Confirmer partiel`;
+        btn.className = 'action-btn btn-partial'; // Change couleur orange
+    } else {
+        banner.style.display = 'none';
+        btn.innerHTML = `<span class="btn-icon">💬</span> WhatsApp & Livrer`;
+        btn.className = 'action-btn btn-wa'; // Retour couleur verte
+    }
 }
 
 function showNotFound(ref) {
@@ -1198,42 +1223,66 @@ async function markIncident() {
 async function sendToWhatsAppAndMarkDone() {
     if (!currentDelivery) return;
 
-    // --- 1. Marquer comme livré (logique de markDone()) ---
-    showLoading(true);
     const qtyInput = document.getElementById('scan-qty');
     const qty = qtyInput ? (parseInt(qtyInput.value) || 1) : 1;
+    const totalQty = parseInt(currentDelivery.quantite) || 1;
     const livreurName = sessionStorage.getItem('userName') || 'Scan Livreur';
+    let isPartial = false;
+
+    // --- GESTION LIVRAISON PARTIELLE ---
+    if (qty < totalQty) {
+        if (!confirm(`⚠️ LIVRAISON PARTIELLE\n\nVous livrez ${qty} colis sur ${totalQty}.\n\nLe système va :\n1. Créer une fiche "PARTIEL" pour les ${qty} colis livrés.\n2. Garder les ${totalQty - qty} autres en "EN COURS".\n\nConfirmer ?`)) {
+            return;
+        }
+        isPartial = true;
+    }
+
+    showLoading(true);
 
     try {
-        await db.collection('livraisons').doc(currentDelivery.id).update({
-            status: 'LIVRE',
-            containerStatus: 'EN_COURS', // Force la présence dans l'onglet En Cours
-            dateLivraison: new Date().toISOString(),
-            livreur: livreurName, // Ajout du nom du livreur
-            quantiteLivree: qty,
-            scanProof: true
-        });
+        if (isPartial) {
+            // 1. Créer le duplicata pour la partie LIVRÉE (PARTIEL)
+            const deliveredPart = {
+                ...currentDelivery,
+                quantite: qty,
+                quantiteOriginale: totalQty, // Pour affichage "3/5"
+                status: 'PARTIEL',
+                containerStatus: 'EN_COURS',
+                dateLivraison: new Date().toISOString(),
+                livreur: livreurName,
+                quantiteLivree: qty,
+                scanProof: true
+            };
+            delete deliveredPart.id; // Nouvel ID
 
-        currentDelivery.status = 'LIVRE';
-        document.getElementById('btn-wa').disabled = true; // On désactive le bouton principal
+            await db.collection('livraisons').add(deliveredPart);
 
-        // Flash vert
-        const flash = document.createElement('div');
-        flash.className = 'success-flash';
-        document.body.appendChild(flash);
-        setTimeout(() => flash.remove(), 600);
+            // 2. Mettre à jour l'original pour la partie RESTANTE
+            await db.collection('livraisons').doc(currentDelivery.id).update({
+                quantite: totalQty - qty,
+                status: 'EN_COURS' // Reste en cours
+            });
 
-        vibrate([50, 30, 50, 30, 100]);
-        showToast('✅ Livraison confirmée !', 'success');
+            // Mise à jour locale pour l'affichage
+            currentDelivery.quantite = totalQty - qty;
+            showToast(`✅ Partiel validé ! Reste : ${currentDelivery.quantite}`, 'success');
+            
+            // On recharge la vue pour montrer le reste à livrer
+            renderResult(currentDelivery); 
 
-        // Mettre à jour le badge statut dans le card
-        const badge = document.querySelector('.result-status-badge');
-        if (badge) {
-            badge.textContent = '✅ Livré';
-            badge.className = 'result-status-badge status-livre';
+        } else {
+            // CAS STANDARD (Tout livré)
+            await db.collection('livraisons').doc(currentDelivery.id).update({
+                status: 'LIVRE',
+                containerStatus: 'EN_COURS',
+                dateLivraison: new Date().toISOString(),
+                livreur: livreurName,
+                quantiteLivree: qty,
+                scanProof: true
+            });
+            finalizeDeliveryUI('LIVRE');
         }
 
-        addToHistory(currentDelivery, 'livre');
         updateCounters();
 
     } catch (e) {
@@ -1242,17 +1291,66 @@ async function sendToWhatsAppAndMarkDone() {
         return; // On arrête si la mise à jour DB échoue
     }
 
+    // Si partiel, on arrête ici (pas de WhatsApp auto ou message différent ?)
+    // Le prompt demandait juste de mettre à jour le statut.
+    // On continue vers WhatsApp avec les infos du colis livré.
+    
+    // Si c'était partiel, currentDelivery a été modifié pour refléter le RESTE.
+    // Mais pour le message WhatsApp, on veut parler de ce qu'on vient de livrer.
+    // On reconstruit un objet temporaire pour le message.
+    let deliveryForMsg = currentDelivery;
+    if (isPartial) {
+        deliveryForMsg = {
+            ...currentDelivery,
+            quantite: qty,
+            status: 'PARTIEL'
+        };
+    }
+    
+    sendWhatsAppMessage(deliveryForMsg, livreurName, isPartial, totalQty);
+}
+
+function finalizeDeliveryUI(status) {
+    currentDelivery.status = status;
+    document.getElementById('btn-wa').disabled = true;
+
+    // Flash vert
+    const flash = document.createElement('div');
+    flash.className = 'success-flash';
+    document.body.appendChild(flash);
+    setTimeout(() => flash.remove(), 600);
+
+    vibrate([50, 30, 50, 30, 100]);
+    showToast('✅ Livraison confirmée !', 'success');
+
+    // Mettre à jour le badge statut dans le card
+    const badge = document.querySelector('.result-status-badge');
+    if (badge) {
+        badge.textContent = status === 'PARTIEL' ? '🌗 Partiel' : '✅ Livré';
+        badge.className = `result-status-badge ${status === 'PARTIEL' ? 'status-en-attente' : 'status-livre'}`;
+    }
+
+    addToHistory(currentDelivery, status === 'PARTIEL' ? 'pending' : 'livre');
+}
+
+async function sendWhatsAppMessage(d, livreurName, isPartial, totalQty) {
+
     // --- 2. Envoyer le message WhatsApp ---
-    const d = currentDelivery;
     const name = getClientName(d);
     const phone = extractPhone(d);
 
+    let msgHeader = `✅ Colis : *${d.ref}*`;
+    if (isPartial) {
+        msgHeader += ` (Partiel: ${d.quantite}/${totalQty})`;
+    }
+
     // Message standard
     const message = [
-       
-        `✅ Colis : *${d.ref}*`,
+        msgHeader,
         `👤 Client : ${name}`,
         `📍 Lieu : ${d.lieuLivraison || '—'}`,
+        ``,
+        `*LIVRÉ PAR : ${livreurName}*`
     ].join('\n');
 
     // ── CAS 1 : On a des photos → Web Share API ──

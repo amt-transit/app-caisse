@@ -1571,6 +1571,9 @@ function renderTable() {
         if (d.status === 'LIVRE') {
             statusClass = 'status-livre';
             statusText = '✅ Livré';
+        } else if (d.status === 'PARTIEL') {
+            statusClass = 'status-attente'; // On utilise le style jaune/orange existant
+            statusText = '🌗 Partiel';
         } else if (d.status === 'EN_COURS') {
             statusClass = 'status-en-cours';
             statusText = '🚚 En Cours';
@@ -1697,7 +1700,12 @@ function renderTable() {
                 <td class="col-checkbox"><input type="checkbox" onchange="toggleSelection('${d.id}')" ${selectedIds.has(d.id) ? 'checked' : ''}></td>
                 <td>${d.conteneur || '-'}</td>
                 <td class="ref">${transitIndicator}${d.ref}</td>
-                <td style="text-align:center;"><input type="number" class="editable-cell" value="${d.quantite || 1}" onchange="updateDeliveryQuantity('${d.id}', this.value)" style="width: 50px; text-align:center; font-weight:bold;"></td>
+                <td style="text-align:center;">
+                    ${d.status === 'PARTIEL' && d.quantiteOriginale ? 
+                        `<span style="font-weight:bold; color:#d97706;">${d.quantite}/${d.quantiteOriginale}</span>` : 
+                        `<input type="number" class="editable-cell" value="${d.quantite || 1}" onchange="updateDeliveryQuantity('${d.id}', this.value)" style="width: 50px; text-align:center; font-weight:bold;">`
+                    }
+                </td>
                 <td class="montant"><input type="text" class="editable-cell" value="${(d.montant || '').replace(/"/g, '&quot;')}" onchange="updateDeliveryAmount('${d.id}', this.value)" style="${montantStyle}"></td>
                 <td>${d.expediteur}</td>
                 <td><input type="text" class="editable-cell" value="${(d.lieuLivraison || '').replace(/"/g, '&quot;')}" list="sharedLocationsList" onchange="updateDeliveryLocation('${d.id}', this.value)"></td>
