@@ -1155,10 +1155,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if (refsToUpdate.length > 0) {
                 // 2. On cherche les livraisons correspondantes dans "EN_COURS"
-                // Firestore "in" query is limited to 30 items. We chunk it to be safe.
+                // Firestore "in" query is limited to 10 items. We chunk it to be safe.
                 const chunks = [];
-                for (let i = 0; i < refsToUpdate.length; i += 30) {
-                    chunks.push(refsToUpdate.slice(i, i + 30));
+                for (let i = 0; i < refsToUpdate.length; i += 10) {
+                    chunks.push(refsToUpdate.slice(i, i + 10));
                 }
 
                 for (const chunk of chunks) {

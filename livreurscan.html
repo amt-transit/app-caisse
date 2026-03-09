@@ -1236,6 +1236,9 @@ async function sendToWhatsAppAndMarkDone() {
 
     showLoading(true);
 
+    // --- LOGIQUE PROGRAMME AUTOMATIQUE ---
+    const today = new Date().toISOString().split('T')[0]; // Format YYYY-MM-DD
+
     try {
         if (isPartial) {
             // 1. Créer le duplicata pour la partie LIVRÉE (PARTIEL)
@@ -1247,6 +1250,8 @@ async function sendToWhatsAppAndMarkDone() {
                 containerStatus: 'EN_COURS',
                 dateLivraison: new Date().toISOString(),
                 livreur: livreurName,
+                // Si le colis n'a pas de programme, on l'assigne à celui du jour pour ce livreur
+                dateProgramme: currentDelivery.dateProgramme || today,
                 quantiteLivree: qty,
                 scanProof: true
             };
@@ -1257,7 +1262,10 @@ async function sendToWhatsAppAndMarkDone() {
             // 2. Mettre à jour l'original pour la partie RESTANTE
             await db.collection('livraisons').doc(currentDelivery.id).update({
                 quantite: totalQty - qty,
-                status: 'EN_COURS' // Reste en cours
+                status: 'EN_COURS', // Reste en cours
+                // On s'assure que le reste du colis est aussi dans le programme
+                livreur: currentDelivery.livreur || livreurName,
+                dateProgramme: currentDelivery.dateProgramme || today
             });
 
             // Mise à jour locale pour l'affichage
@@ -1276,14 +1284,22 @@ async function sendToWhatsAppAndMarkDone() {
 
         } else {
             // CAS STANDARD (Tout livré)
-            await db.collection('livraisons').doc(currentDelivery.id).update({
+            const updates = {
                 status: 'LIVRE',
                 containerStatus: 'EN_COURS',
                 dateLivraison: new Date().toISOString(),
                 livreur: livreurName,
                 quantiteLivree: qty,
                 scanProof: true
-            });
+            };
+
+            // Si le colis n'est pas déjà dans un programme, on l'ajoute à celui du jour
+            if (!currentDelivery.dateProgramme) {
+                updates.dateProgramme = today;
+            }
+
+            await db.collection('livraisons').doc(currentDelivery.id).update(updates);
+
             finalizeDeliveryUI('LIVRE');
         }
 

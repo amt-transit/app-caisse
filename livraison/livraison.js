@@ -1716,7 +1716,7 @@ function renderTable() {
                 ${notifiedCell}
                 <td>
                     <strong>${d.livreur || '-'}</strong><br>
-                    <small>${(d.status === 'LIVRE' && d.dateLivraison) ? new Date(d.dateLivraison).toLocaleDateString('fr-FR') : (d.dateProgramme || '')}</small>
+                    <small>${((d.status === 'LIVRE' || d.status === 'PARTIEL') && d.dateLivraison) ? new Date(d.dateLivraison).toLocaleDateString('fr-FR') : (d.dateProgramme || '')}</small>
                 </td>
                 ${statusCell}
                 <td>
