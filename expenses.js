@@ -6,6 +6,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const userRole = sessionStorage.getItem('userRole');
     // Récupération du nom de l'utilisateur (stocké par auth-guard.js)
     const currentUserName = sessionStorage.getItem('userName') || 'Inconnu';
+    const isViewer = userRole === 'spectateur';
 
     const expensesCollection = db.collection("expenses");
     
@@ -263,7 +264,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // 1. AJOUT (AVEC NOM DE L'UTILISATEUR)
-    addExpenseBtn.addEventListener('click', async () => {
+    if (addExpenseBtn && !isViewer) { addExpenseBtn.addEventListener('click', async () => {
         const montant = parseFloat(expenseAmount.value) || 0;
         const action = actionType ? actionType.value : 'Depense'; 
 
@@ -292,7 +293,11 @@ document.addEventListener('DOMContentLoaded', () => {
             expenseMode.value = 'Espèce';
             alert("Dépense enregistrée.");
         }).catch(err => console.error(err));
-    });
+    }); } else if (addExpenseBtn) {
+        // Masquer le formulaire
+        const form = addExpenseBtn.closest('.form-grid') || document.getElementById('caisseForm');
+        if (form) form.style.display = 'none';
+    }
 
     // 3. AFFICHAGE
     function fetchExpenses() {
@@ -406,7 +411,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const mode = expense.mode || 'Espèce';
 
             let deleteButtonHTML = '';
-            if ((userRole === 'admin' || userRole === 'super_admin') && expense.isDeleted !== true) deleteButtonHTML = `<button class="deleteBtn" data-id="${expense.id}">Suppr.</button>`;
+            if ((userRole === 'admin' || userRole === 'super_admin') && expense.isDeleted !== true && !isViewer) deleteButtonHTML = `<button class="deleteBtn" data-id="${expense.id}">Suppr.</button>`;
 
             row.innerHTML = `
                 <td>${expense.date}</td><td>${expense.description}</td><td class="${colorClass}"><b>${sign} ${formatCFA(expense.montant)}</b></td>
@@ -519,6 +524,7 @@ document.addEventListener('DOMContentLoaded', () => {
     fetchExpenses();
 
     expenseTableBody.addEventListener('click', (event) => {
+        if (isViewer) return;
         if (event.target.classList.contains('deleteBtn')) {
             if (confirm("Supprimer cette opération ?")) expensesCollection.doc(event.target.getAttribute('data-id')).update({ isDeleted: true }); 
         }

@@ -32,6 +32,8 @@ document.addEventListener('DOMContentLoaded', () => {
     let currentSessionData = null; // Pour stocker les infos de la session en cours (date, user)
     let currentSessionAllTransactions = []; // Pour la recherche
     let confirmationSearchInput = null; // Pour la recherche
+    const userRole = sessionStorage.getItem('userRole');
+    const isViewer = userRole === 'spectateur';
     let allAgents = []; // Pour la liste déroulante des agents
 
     // --- MODAL ÉDITION (Injection Dynamique) ---
@@ -357,7 +359,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if(deleteSessionBtn) deleteSessionBtn.style.display = 'none';
         } else {
             detailStatus.textContent = "En attente de revue";
-            detailStatus.style.background = "#f59e0b";
+            detailStatus.style.background = isViewer ? "#6c757d" : "#f59e0b"; // Gris pour spectateur
             detailStatus.style.color = "white";
             validateSessionBtn.style.display = 'block';
             if(archiveSessionBtn) archiveSessionBtn.style.display = 'none';
@@ -527,7 +529,7 @@ document.addEventListener('DOMContentLoaded', () => {
             sumDep += (e.montant || 0);
             
             let actions = '';
-            if (logData.status !== "VALIDATED") {
+            if (!isViewer && logData.status !== "VALIDATED") {
                 actions = `<button class="btn-edit-exp" data-id="${e.id}" style="background:#3b82f6; color:white; border:none; padding:2px 6px; border-radius:4px; cursor:pointer; margin-right:5px;">✏️</button>
                            <button class="btn-delete-exp" data-id="${e.id}" style="background:#ef4444; color:white; border:none; padding:2px 6px; border-radius:4px; cursor:pointer;">🗑️</button>`;
             }
@@ -573,7 +575,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const { docId, data: t, payeAbidjanCeJour, payeParisCeJour, sessionModes } = trans;
 
             let actionButtons = '';
-            if (currentSessionData.status !== "VALIDATED") {
+            if (!isViewer && currentSessionData.status !== "VALIDATED") {
                 actionButtons = `
                     <button class="btn-edit" style="background:#3b82f6; color:white; border:none; padding:4px 8px; border-radius:4px; cursor:pointer; margin-right:5px;">✏️</button>
                     <button class="btn-delete" style="background:#ef4444; color:white; border:none; padding:4px 8px; border-radius:4px; cursor:pointer;">🗑️</button>
@@ -711,7 +713,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- ARCHIVAGE DE SESSION ---
     if (archiveSessionBtn) {
-        archiveSessionBtn.addEventListener('click', async () => {
+        archiveSessionBtn.addEventListener('click', async () => { if (isViewer) return;
             if (!currentSessionId) return;
             if (confirm("Voulez-vous archiver cette session ?\n\nElle disparaîtra de la liste principale mais restera accessible via la recherche d'archives par mois.")) {
                 try {
@@ -739,7 +741,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const tr = btn.closest('tr');
         const docId = tr.dataset.id;
         
-        // Vérifier si la session est déjà validée (optionnel : empêcher modif si validé)
+        // Vérifier si la session est déjà validée ou si l'utilisateur est un spectateur
         if (detailStatus.textContent.includes("Validé")) {
             alert("Impossible de modifier une session déjà validée.");
             return;
@@ -755,6 +757,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- GESTION ACTIONS DÉPENSES ---
     detailsDepensesBody.addEventListener('click', (e) => {
         const btn = e.target.closest('button');
+        if (!btn || isViewer) return;
         if (!btn) return;
         const docId = btn.dataset.id;
         if (btn.classList.contains('btn-delete-exp')) {
@@ -1134,7 +1137,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     validateSessionBtn.addEventListener('click', async () => {
-        if (!currentSessionId) return;
+        if (!currentSessionId || isViewer) return;
         if (confirm("Confirmer la validation de cette journée ?")) {
             
             // --- NOUVELLE LOGIQUE : Mise à jour du statut Livraison ---
@@ -1212,6 +1215,11 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
     });
+
+    if (isViewer) {
+        if (validateSessionBtn) validateSessionBtn.style.display = 'none';
+        if (archiveSessionBtn) archiveSessionBtn.style.display = 'none';
+    }
 
     filterDateSession.addEventListener('change', loadSessions);
     loadSessions();

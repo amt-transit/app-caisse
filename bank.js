@@ -89,6 +89,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // CORRECTION : On récupère le nom de l'utilisateur connecté
     const currentUserName = sessionStorage.getItem('userName') || 'Inconnu';
+    const userRole = sessionStorage.getItem('userRole');
+    const isViewer = userRole === 'spectateur';
 
     const bankCollection = db.collection("bank_movements");
 
@@ -166,7 +168,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // 1. AJOUT MANUEL
-    addBankMovementBtn.addEventListener('click', async () => {
+    if (addBankMovementBtn && !isViewer) { addBankMovementBtn.addEventListener('click', async () => {
         const montant = parseFloat(bankAmount.value) || 0;
         const type = bankType.value; 
         const conteneur = bankConteneur ? bankConteneur.value.trim().toUpperCase() : '';
@@ -233,10 +235,16 @@ document.addEventListener('DOMContentLoaded', () => {
             if (err.code === 'resource-exhausted') alert("⚠️ QUOTA ATTEINT : Impossible d'ajouter le mouvement.");
             else alert("Erreur : " + err.message);
         });
-    });
+    }); } else if (addBankMovementBtn) {
+        // Masquer le formulaire pour le spectateur
+        const form = document.getElementById('caisseForm');
+        if (form) form.style.display = 'none';
+        // Masquer le bouton de remise de chèque
+        if (openCheckDepositBtn) openCheckDepositBtn.style.display = 'none';
+    }
 
     // 2. IMPORT CSV
-    if (uploadCsvBtn) {
+    if (uploadCsvBtn && !isViewer) {
         uploadCsvBtn.addEventListener('click', () => {
             if (!csvFile.files.length) return alert("Sélectionnez un fichier.");
             
@@ -277,6 +285,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             });
         });
+    } else if (uploadCsvBtn) {
+        const container = uploadCsvBtn.closest('.import-section') || uploadCsvBtn.parentElement;
+        if (container) container.style.display = 'none';
     }
 
     // 3. AFFICHAGE & RECHERCHE
@@ -442,7 +453,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             
             let deleteButtonHTML = '';
-            if (move.isDeleted !== true) {
+            if (move.isDeleted !== true && !isViewer) {
                 if (move._source === 'transaction') {
                     deleteButtonHTML = `<span style="font-size:0.8em; color:#666;">Via Historique</span>`;
                 } else {
@@ -477,6 +488,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // 4. SUPPRESSION
     bankTableBody.addEventListener('click', async (event) => {
+        if (isViewer) return;
         if (event.target.classList.contains('deleteBtn')) {
             const docId = event.target.getAttribute('data-id');
             if (!confirm("Confirmer la suppression ? Elle sera archivée.")) return;
@@ -521,7 +533,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // 5. GESTION REMISE CHÈQUES
-    if (openCheckDepositBtn) {
+    if (openCheckDepositBtn && !isViewer) {
         openCheckDepositBtn.addEventListener('click', async () => {
             const snapshot = await db.collection("transactions").where("isDeleted", "!=", true).limit(1000).get();
             
@@ -597,7 +609,7 @@ document.addEventListener('DOMContentLoaded', () => {
         totalDepositAmountEl.textContent = formatCFA(total);
     }
 
-    if (confirmDepositBtn) {
+    if (confirmDepositBtn && !isViewer) {
         confirmDepositBtn.addEventListener('click', async () => {
             if (selectedChecks.length === 0) return alert("Sélectionnez au moins un chèque.");
             if (!confirm(`Déposer ces ${selectedChecks.length} chèques pour un total de ${totalDepositAmountEl.textContent} ?`)) return;

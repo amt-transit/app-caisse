@@ -6,6 +6,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const userRole = sessionStorage.getItem('userRole');
     // CORRECTION : On récupère le nom de l'utilisateur
     const currentUserName = sessionStorage.getItem('userName') || 'Inconnu';
+    const isViewer = userRole === 'spectateur';
 
     const incomeCollection = db.collection("other_income"); 
     
@@ -112,7 +113,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let allIncome = [];
 
     // 1. AJOUT MANUEL (AVEC AUTEUR)
-    addIncomeBtn.addEventListener('click', () => {
+    if (addIncomeBtn && !isViewer) { addIncomeBtn.addEventListener('click', () => {
         let finalDesc = incomeDesc.value;
         if (incomeCategory && incomeCategory.value) {
             finalDesc = `${incomeCategory.value} - ${finalDesc}`;
@@ -136,7 +137,11 @@ document.addEventListener('DOMContentLoaded', () => {
             if (incomeCategory) incomeCategory.value = '';
             incomeAmount.value = '';
         }).catch(err => console.error(err));
-    });
+    }); } else if (addIncomeBtn) {
+        // Masquer le formulaire
+        const form = addIncomeBtn.closest('.form-grid') || document.getElementById('caisseForm');
+        if (form) form.style.display = 'none';
+    }
 
     // 2. AFFICHAGE & RECHERCHE
     function fetchIncome() {
@@ -210,7 +215,7 @@ document.addEventListener('DOMContentLoaded', () => {
             
             let deleteButtonHTML = '';
             // Seul l'admin peut supprimer
-            if ((userRole === 'admin' || userRole === 'super_admin') && income.isDeleted !== true) {
+            if ((userRole === 'admin' || userRole === 'super_admin') && income.isDeleted !== true && !isViewer) {
                 deleteButtonHTML = `<button class="deleteBtn" data-id="${income.id}">Suppr.</button>`;
             }
 
@@ -256,6 +261,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // 3. SUPPRESSION
     incomeTableBody.addEventListener('click', (event) => {
+        if (isViewer) return;
         if (event.target.classList.contains('deleteBtn')) {
             const docId = event.target.getAttribute('data-id');
             if (confirm("Confirmer la suppression ? Elle sera archivée.")) {

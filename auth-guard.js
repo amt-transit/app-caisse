@@ -39,6 +39,7 @@ firebase.auth().onAuthStateChanged(async (user) => {
         }
         sessionStorage.setItem('userRole', userRole);
         sessionStorage.setItem('userName', userName || 'Utilisateur');
+        document.body.classList.add('role-' + userRole);
 
         // --- GESTION GLOBALE DU BADGE DE NOTIFICATION (Placé ici pour s'exécuter AVANT les return) ---
         // Vérification des sessions en attente sur toutes les pages
@@ -125,6 +126,12 @@ firebase.auth().onAuthStateChanged(async (user) => {
             return;
         }
 
+        // SPECTATEUR
+        if (userRole === 'spectateur') {
+            document.body.style.display = 'block';
+            // On continue pour masquer les liens de navigation si nécessaire
+        }
+
         // SAISIE FULL
         if (userRole === 'saisie_full') {
             if (currentPage.includes('bank.html') || 
@@ -174,6 +181,11 @@ firebase.auth().onAuthStateChanged(async (user) => {
             if (navMagasinage) navMagasinage.style.display = 'inline';
             if (navBank) navBank.style.display = 'none';
             if (navSalaire) navSalaire.style.display = 'none';
+        }
+
+        if (userRole === 'spectateur') {
+            // Un spectateur ne peut pas valider de sessions
+            if (navConfirmation) navConfirmation.style.display = 'none';
         }
 
         if (userRole === 'saisie_limited') {

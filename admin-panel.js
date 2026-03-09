@@ -22,6 +22,18 @@ document.addEventListener('DOMContentLoaded', async () => {
     const newRoleSelect = document.getElementById('newRole');
     const createUserBtn = document.getElementById('createUserBtn');
 
+    // --- AJOUT AUTOMATIQUE DE L'OPTION SPECTATEUR ---
+    if (newRoleSelect && !newRoleSelect.querySelector('option[value="spectateur"]')) {
+        const opt = document.createElement('option');
+        opt.value = "spectateur";
+        opt.textContent = "👓 Spectateur";
+        newRoleSelect.appendChild(opt);
+    }
+
+// Récupération du rôle pour la gestion des accès
+const userRole = sessionStorage.getItem('userRole');
+const isSuperAdmin = userRole === 'super_admin';
+
     // 1. LISTE DES UTILISATEURS
     function loadUsers() {
         db.collection("users").onSnapshot(snapshot => {
@@ -56,6 +68,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 else if(user.role === 'admin') roleDisplay = '🛡️ Admin';
                 else if(user.role === 'saisie_full') roleDisplay = '✏️ Saisie Complète';
                 else if(user.role === 'saisie_limited') roleDisplay = '👀 Saisie Limitée';
+                else if(user.role === 'spectateur') roleDisplay = '👓 Spectateur';
 
                 // Gestion affichage mot de passe
                 let passwordHtml = '<span style="color:#999; font-style:italic; font-size:0.8em;">Non stocké</span>';
@@ -76,7 +89,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     <td><span class="tag" style="background:#e2e8f0; color:#334155;">${roleDisplay}</span></td>
                     <td>${passwordHtml}</td>
                     <td>
-                        <button class="deleteBtn" data-id="${doc.id}" style="background:#ef4444; color:white; border:none; padding:5px 10px; border-radius:4px; cursor:pointer;">Supprimer</button>
+                        ${isSuperAdmin ? `<button class="deleteBtn" data-id="${doc.id}" style="background:#ef4444; color:white; border:none; padding:5px 10px; border-radius:4px; cursor:pointer;">Supprimer</button>` : ''}
                     </td>
                 `;
                 tbody.appendChild(tr);
@@ -101,7 +114,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             // Listeners suppression
             tbody.querySelectorAll('.deleteBtn').forEach(btn => {
                 btn.addEventListener('click', async (e) => {
-                    if(confirm("Supprimer cet utilisateur ? (L'accès sera révoqué)")) {
+                    if(isSuperAdmin && confirm("Supprimer cet utilisateur ? (L'accès sera révoqué)")) {
                         const uid = e.target.dataset.id;
                         // Note: On supprime seulement de Firestore. Pour Auth, il faudrait une Cloud Function ou Admin SDK.
                         // Ici on casse le lien Firestore -> Auth Guard bloquera l'accès.
@@ -114,7 +127,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     // 2. CRÉATION UTILISATEUR (Via Secondary App pour ne pas déconnecter l'admin)
-    if (createUserBtn) {
+    if (createUserBtn && isSuperAdmin) {
         createUserBtn.addEventListener('click', async () => {
             const username = newUsernameInput.value.trim();
             const password = newPasswordInput.value.trim();
@@ -161,6 +174,12 @@ document.addEventListener('DOMContentLoaded', async () => {
                 createUserBtn.textContent = "Créer Utilisateur";
             }
         });
+    } else if (createUserBtn) {
+        // Si l'utilisateur n'est pas super_admin, on cache le formulaire de création
+        const form = createUserBtn.closest('.card');
+        if (form) {
+            form.style.display = 'none';
+        }
     }
 
     // 3. JOURNAL D'AUDIT

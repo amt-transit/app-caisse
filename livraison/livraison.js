@@ -46,6 +46,10 @@ let programDetailsSort = { column: null, direction: 'asc' };
 let currentProgramView = { date: null, livreur: null };
 let isImporting = false;
 
+// Rôle Utilisateur
+const userRole = sessionStorage.getItem('userRole');
+const isViewer = userRole === 'spectateur';
+
 // --- UTILS (Performance) ---
 function debounce(func, wait) {
     let timeout;
@@ -93,8 +97,8 @@ document.addEventListener('DOMContentLoaded', function() {
     initActiveContainerInput();
     initAutoAddress();
     initBackToTopButton();
-    initDuplicateCleaner(); // Initialisation du bouton de nettoyage
-    initAuditSyncButton(); // Initialisation du bouton Audit
+    if (!isViewer) initDuplicateCleaner(); // Initialisation du bouton de nettoyage
+    if (!isViewer) initAuditSyncButton(); // Initialisation du bouton Audit
 });
 
 // Synchronisation Temps Réel avec Firestore
@@ -175,6 +179,15 @@ function switchTab(tab) {
     const activeToolbar = document.getElementById(`toolbar-${tab}`);
     if (activeToolbar) {
         activeToolbar.style.display = 'flex';
+        
+        // MASQUAGE SPECTATEUR : Boutons d'ajout et d'import
+        if (isViewer) {
+            const addBtn = activeToolbar.querySelector('button[onclick="showAddModal()"]');
+            const labels = activeToolbar.querySelectorAll('label.btn'); // Boutons import
+            
+            if (addBtn) addBtn.style.display = 'none';
+            if (labels) labels.forEach(l => l.style.display = 'none');
+        }
     }
     
     // Gestion de la section Conteneur Actif (Visible uniquement sur l'onglet 3)
@@ -1602,7 +1615,7 @@ function renderTable() {
 
         // Cellule Notification (À VENIR)
         let notifiedCell = '';
-        if (currentTab === 'A_VENIR') {
+        if (currentTab === 'A_VENIR' && !isViewer) {
             const isChecked = d.clientNotified ? 'checked' : '';
             notifiedCell = `<td style="text-align:center;">
                 <input type="checkbox" ${isChecked} onchange="toggleClientNotified('${d.id}', this.checked)" title="Marquer client comme appelé">
@@ -1642,7 +1655,7 @@ function renderTable() {
         let actionButtons = waBtn;
 
         // Boutons BL et Livré uniquement pour EN_COURS (Masqués pour PARIS et A_VENIR)
-        if (currentTab !== 'PARIS' && currentTab !== 'A_VENIR') {
+        if (currentTab !== 'PARIS' && currentTab !== 'A_VENIR' && !isViewer) {
             actionButtons += `<button class="btn btn-small" style="background-color:#64748b; padding:4px 6px;" onclick="printDeliverySlip('${d.id}')" title="Imprimer Bon de Livraison">📄</button>`;
             if (d.status !== 'LIVRE') {
                 actionButtons += `<button class="btn btn-success btn-small" onclick="markAsDelivered('${d.id}')" title="Marquer comme livré">✅</button>`;
@@ -1650,7 +1663,9 @@ function renderTable() {
                 actionButtons += `<button class="btn btn-warning btn-small" onclick="markAsPending('${d.id}')" title="Marquer en attente">⏳</button>`;
             }
         }
-        actionButtons += `<button class="btn btn-danger btn-small" onclick="deleteDelivery('${d.id}')" title="Supprimer">🗑️</button>`;
+        if (!isViewer) {
+            actionButtons += `<button class="btn btn-danger btn-small" onclick="deleteDelivery('${d.id}')" title="Supprimer">🗑️</button>`;
+        }
 
         // Extraction et Nettoyage (Destinataire / Numéro)
         let displayDestinataire = d.destinataire || '';
@@ -1676,19 +1691,25 @@ function renderTable() {
             montantStyle += " background-color: #ffedd5; color: #9a3412; font-weight: bold;"; // Orange (Dette)
         }
 
+        // FONCTIONS D'AFFICHAGE (Input vs Texte pour Spectateur)
+        const renderInput = (val, type, onchange, style = "") => {
+            if (isViewer) return `<span style="${style}; display:block; padding:5px;">${val}</span>`;
+            return `<input type="${type}" class="editable-cell" value="${val}" onchange="${onchange}" style="${style}">`;
+        };
+
         if (currentTab === 'PARIS') {
             return `
                 <tr class="${rowClass}">
-                    <td class="col-checkbox"><input type="checkbox" onchange="toggleSelection('${d.id}')" ${selectedIds.has(d.id) ? 'checked' : ''}></td>
+                    <td class="col-checkbox">${!isViewer ? `<input type="checkbox" onchange="toggleSelection('${d.id}')" ${selectedIds.has(d.id) ? 'checked' : ''}>` : ''}</td>
                     <td>${d.dateAjout ? new Date(d.dateAjout).toLocaleDateString('fr-FR') : '-'}</td>
                     <td>${d.conteneur || '-'}</td>
                     <td class="ref">${d.ref}</td>
-                    <td style="text-align:center;"><input type="number" class="editable-cell" value="${d.quantite || 1}" onchange="updateDeliveryQuantity('${d.id}', this.value)" style="width: 50px; text-align:center; font-weight:bold;"></td>
-                    <td class="montant"><input type="text" class="editable-cell" value="${(d.montant || '').replace(/"/g, '&quot;')}" onchange="updateDeliveryAmount('${d.id}', this.value)" style="${montantStyle}"></td>
+                    <td style="text-align:center;">${renderInput(d.quantite || 1, "number", `updateDeliveryQuantity('${d.id}', this.value)`, "width: 50px; text-align:center; font-weight:bold;")}</td>
+                    <td class="montant">${renderInput((d.montant || '').replace(/"/g, '&quot;'), "text", `updateDeliveryAmount('${d.id}', this.value)`, montantStyle)}</td>
                     <td>${d.expediteur}</td>
-                    <td><input type="text" class="editable-cell" value="${(d.lieuLivraison || '').replace(/"/g, '&quot;')}" list="sharedLocationsList" onchange="updateDeliveryLocation('${d.id}', this.value)"></td>
-                    <td><input type="text" class="editable-cell" value="${displayDestinataire.replace(/"/g, '&quot;')}" onchange="updateDeliveryRecipient('${d.id}', this.value)"></td>
-                    <td><input type="text" class="editable-cell" value="${displayPhone}" onchange="updateDeliveryPhone('${d.id}', this.value)" style="font-weight:bold; color:#0d47a1; width:100%;"></td>
+                    <td>${renderInput((d.lieuLivraison || '').replace(/"/g, '&quot;'), "text", `updateDeliveryLocation('${d.id}', this.value)`, "")}</td>
+                    <td>${renderInput(displayDestinataire.replace(/"/g, '&quot;'), "text", `updateDeliveryRecipient('${d.id}', this.value)`, "")}</td>
+                    <td>${renderInput(displayPhone, "text", `updateDeliveryPhone('${d.id}', this.value)`, "font-weight:bold; color:#0d47a1; width:100%;")}</td>
                     <td>${d.description || '-'}</td>
                     <td><div class="actions">${actionButtons}</div></td>
                 </tr>
@@ -1697,22 +1718,22 @@ function renderTable() {
 
         return `
             <tr class="${rowClass}">
-                <td class="col-checkbox"><input type="checkbox" onchange="toggleSelection('${d.id}')" ${selectedIds.has(d.id) ? 'checked' : ''}></td>
+                <td class="col-checkbox">${!isViewer ? `<input type="checkbox" onchange="toggleSelection('${d.id}')" ${selectedIds.has(d.id) ? 'checked' : ''}>` : ''}</td>
                 <td>${d.conteneur || '-'}</td>
                 <td class="ref">${transitIndicator}${d.ref}</td>
                 <td style="text-align:center;">
                     ${d.status === 'PARTIEL' && d.quantiteOriginale ? 
                         `<span style="font-weight:bold; color:#d97706;">${d.quantite}/${d.quantiteOriginale}</span>` : 
-                        `<input type="number" class="editable-cell" value="${d.quantite || 1}" onchange="updateDeliveryQuantity('${d.id}', this.value)" style="width: 50px; text-align:center; font-weight:bold;">`
+                        renderInput(d.quantite || 1, "number", `updateDeliveryQuantity('${d.id}', this.value)`, "width: 50px; text-align:center; font-weight:bold;")
                     }
                 </td>
-                <td class="montant"><input type="text" class="editable-cell" value="${(d.montant || '').replace(/"/g, '&quot;')}" onchange="updateDeliveryAmount('${d.id}', this.value)" style="${montantStyle}"></td>
+                <td class="montant">${renderInput((d.montant || '').replace(/"/g, '&quot;'), "text", `updateDeliveryAmount('${d.id}', this.value)`, montantStyle)}</td>
                 <td>${d.expediteur}</td>
-                <td><input type="text" class="editable-cell" value="${(d.lieuLivraison || '').replace(/"/g, '&quot;')}" list="sharedLocationsList" onchange="updateDeliveryLocation('${d.id}', this.value)"></td>
-                <td><input type="text" class="editable-cell" value="${displayDestinataire.replace(/"/g, '&quot;')}" onchange="updateDeliveryRecipient('${d.id}', this.value)"></td>
-                <td><input type="text" class="editable-cell" value="${displayPhone}" onchange="updateDeliveryPhone('${d.id}', this.value)" style="font-weight:bold; color:#0d47a1; width:100%;"></td>
+                <td>${renderInput((d.lieuLivraison || '').replace(/"/g, '&quot;'), "text", `updateDeliveryLocation('${d.id}', this.value)`, "")}</td>
+                <td>${renderInput(displayDestinataire.replace(/"/g, '&quot;'), "text", `updateDeliveryRecipient('${d.id}', this.value)`, "")}</td>
+                <td>${renderInput(displayPhone, "text", `updateDeliveryPhone('${d.id}', this.value)`, "font-weight:bold; color:#0d47a1; width:100%;")}</td>
                 <td>${d.description || '-'}</td>
-                <td><input type="text" class="editable-cell" value="${(d.info || '').replace(/"/g, '&quot;')}" onchange="updateDeliveryInfo('${d.id}', this.value)"></td>
+                <td>${renderInput((d.info || '').replace(/"/g, '&quot;'), "text", `updateDeliveryInfo('${d.id}', this.value)`, "")}</td>
                 ${notifiedCell}
                 <td>
                     <strong>${d.livreur || '-'}</strong><br>

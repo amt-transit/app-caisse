@@ -8,6 +8,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Récupération du nom de l'utilisateur connecté
     const currentUserName = sessionStorage.getItem('userName') || 'Utilisateur';
+    const userRole = sessionStorage.getItem('userRole');
+    const isViewer = userRole === 'spectateur';
 
     // --- LOGIQUE DES ONGLETS ---
     const tabs = document.querySelectorAll('.sub-nav a');
@@ -104,7 +106,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // 2. Ajout manuel
-    if (addArrivalBtn) {
+    if (addArrivalBtn && !isViewer) {
         addArrivalBtn.addEventListener('click', async () => {
             const prix = parseFloat(arrivalPrix.value) || 0;
             const montantParis = parseFloat(arrivalMontantParis.value) || 0;
@@ -181,10 +183,16 @@ document.addEventListener('DOMContentLoaded', () => {
                 else alert("Erreur : " + err.message);
             });
         });
+    } else if (addArrivalBtn) {
+        addArrivalBtn.style.display = 'none';
+        const form = addArrivalBtn.closest('.form-grid');
+        if(form) {
+            form.querySelectorAll('input, select').forEach(el => el.disabled = true);
+        }
     }
 
     // 3. Ajout en masse CSV (Abidjan - 5 colonnes)
-    if (uploadCsvBtn) {
+    if (uploadCsvBtn && !isViewer) {
         uploadCsvBtn.addEventListener('click', () => {
             const commonDate = arrivalDate.value;
             const commonConteneur = arrivalConteneur.value.trim().toUpperCase();
@@ -305,10 +313,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             });
         });
+    } else if (uploadCsvBtn) {
+        const form = uploadCsvBtn.closest('.upload-form');
+        if (form) form.style.display = 'none';
     }
     
     // 4. Synchronisation
-    if (syncParisBtn) {
+    if (syncParisBtn && !isViewer) {
         syncParisBtn.addEventListener('click', async () => {
             if (!confirm("Lancer la synchronisation ?")) return;
             const originalText = syncParisBtn.textContent;
@@ -350,6 +361,8 @@ document.addEventListener('DOMContentLoaded', () => {
             } catch (e) { console.error(e); alert("Erreur sync."); } 
             finally { syncParisBtn.disabled = false; syncParisBtn.textContent = originalText; }
         });
+    } else if (syncParisBtn) {
+        syncParisBtn.style.display = 'none';
     }
 
     // --- AFFICHAGE ABIDJAN ---
@@ -449,7 +462,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // ====================================================
 
     // 1. Ajout manuel Paris
-    if (addParisBtn) {
+    if (addParisBtn && !isViewer) {
         addParisBtn.addEventListener('click', async () => {
             const data = {
                 dateAjout: new Date(parisDate.value).toISOString(),
@@ -471,11 +484,17 @@ document.addEventListener('DOMContentLoaded', () => {
                 else console.error(err);
             });
         });
+    } else if (addParisBtn) {
+        addParisBtn.style.display = 'none';
+        const form = addParisBtn.closest('.form-grid');
+        if(form) {
+            form.querySelectorAll('input, select').forEach(el => el.disabled = true);
+        }
     }
 
     
     // 2. Import CSV Paris (Fichier Complet)
-    if (uploadParisCsvBtn) {
+    if (uploadParisCsvBtn && !isViewer) {
         uploadParisCsvBtn.addEventListener('click', () => {
             if (!parisCsvFile.files.length) return alert("Sélectionnez un fichier.");
             parisUploadLog.style.display = 'block'; parisUploadLog.textContent = 'Lecture...';
@@ -532,6 +551,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             });
         });
+    } else if (uploadParisCsvBtn) {
+        const form = uploadParisCsvBtn.closest('.upload-form');
+        if (form) form.style.display = 'none';
     }
 
     // 3. Affichage Paris
@@ -557,6 +579,13 @@ document.addEventListener('DOMContentLoaded', () => {
         if (toShow.length === 0) { parisTableBody.innerHTML = '<tr><td colspan="5">Aucun colis.</td></tr>'; return; }
         
         toShow.forEach(i => {
+            let actionsHtml = '';
+            if (!isViewer) {
+                actionsHtml = `
+                    <button class="receiveBtn" data-ref="${i.ref}" style="background:#10b981; color:white; border:none; padding:4px 8px; border-radius:4px; cursor:pointer; margin-right:5px;">Réceptionner</button>
+                    <button class="deleteBtn" data-id="${i.id}">Annuler</button>
+                `;
+            }
             // NOUVELLE LOGIQUE COLONNES : Date, Ref, Expéditeur, Prix, Destinateur
             parisTableBody.innerHTML += `<tr>
                 <td>${i.dateAjout ? new Date(i.dateAjout).toLocaleDateString() : '-'}</td>
@@ -564,10 +593,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 <td>${i.expediteur}</td>
                 <td>${i.montant || '-'}</td>
                 <td>${i.destinataire || '-'}</td>
-                <td>
-                    <button class="receiveBtn" data-ref="${i.ref}" style="background:#10b981; color:white; border:none; padding:4px 8px; border-radius:4px; cursor:pointer; margin-right:5px;">Réceptionner</button>
-                    <button class="deleteBtn" data-id="${i.id}">Annuler</button>
-                </td>
+                <td>${actionsHtml}</td>
             </tr>`;
         });
     }
@@ -587,6 +613,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Actions Paris (Réceptionner / Supprimer)
     if (parisTableBody) {
         parisTableBody.addEventListener('click', (e) => {
+            if (isViewer) return;
             if (e.target.classList.contains('deleteBtn')) {
                 if(confirm("Supprimer du manifeste ?")) livraisonsCollection.doc(e.target.dataset.id).delete();
             }
