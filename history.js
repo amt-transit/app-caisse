@@ -410,63 +410,144 @@ document.addEventListener('DOMContentLoaded', () => {
         renderTable(cleanTransactions);
     }
 
+    function getWeekNumber(d) {
+        d = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+        d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay() || 7));
+        var yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+        return Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
+    }
+
     function renderTable(transactions) {
-        // tableBody.innerHTML = ''; // On ne vide pas si on ajoute, mais ici applyFiltersAndRender redessine tout le tableau filtré
         tableBody.innerHTML = '';
 
         if (transactions.length === 0) {
-            // Message différent selon le contexte
             const isFiltering = startDateInput.value || endDateInput.value || smartSearchInput.value || agentFilterInput.value;
-            if (!isFiltering) {
-                tableBody.innerHTML = '<tr><td colspan="12" style="text-align:center; padding: 20px;">Aucune donnée chargée.</td></tr>';
-            } else {
-                tableBody.innerHTML = '<tr><td colspan="12">Aucun résultat pour cette recherche.</td></tr>';
-            }
+            tableBody.innerHTML = `<tr><td colspan="13" style="text-align:center; padding: 20px;">${isFiltering ? 'Aucun résultat pour cette recherche.' : 'Aucune donnée chargée.'}</td></tr>`;
             return;
         }
-        
-        // Tri JS pour être sûr (si le tri Firestore a sauté)
-        transactions.sort((a, b) => {
-            // SI la case "Tri par Conteneur" est cochée
-            if (sortByContainerCheckbox && sortByContainerCheckbox.checked) {
-                const getNum = (str) => {
-                    const matches = (str || "").match(/\d+/); // Premier nombre trouvé
-                    return matches ? parseInt(matches[0], 10) : 0;
+
+        // Tri principal par date pour le regroupement
+        transactions.sort((a, b) => new Date(b.lastPaymentDate || b.date) - new Date(a.lastPaymentDate || a.date));
+
+        const now = new Date();
+        // Début de la semaine en cours (Lundi)
+        const currentWeekStart = new Date(now);
+        const day = currentWeekStart.getDay() || 7;
+        if (day !== 1) currentWeekStart.setDate(currentWeekStart.getDate() - day + 1);
+        currentWeekStart.setHours(0, 0, 0, 0);
+
+        const currentWeekItems = [];
+        const olderItems = [];
+
+        transactions.forEach(t => {
+            const tDate = new Date(t.lastPaymentDate || t.date);
+            if (tDate >= currentWeekStart) {
+                currentWeekItems.push(t);
+            } else {
+                olderItems.push(t);
+            }
+        });
+
+        // 1. Affichage Semaine En Cours (Détails directs)
+        if (currentWeekItems.length > 0) {
+            currentWeekItems.forEach(data => insertDataRow(data));
+        }
+
+        // 2. Affichage Anciennes Transactions (Groupées)
+        if (olderItems.length > 0) {
+            const groups = {};
+            
+            olderItems.forEach(t => {
+                const tDate = new Date(t.lastPaymentDate || t.date);
+                const diffTime = now - tDate;
+                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                
+                let key, label;
+                const year = tDate.getFullYear();
+
+                // Si < 60 jours -> Par Semaine
+                if (diffDays <= 60) {
+                    const week = getWeekNumber(tDate);
+                    key = `W-${year}-${week}`;
+                    label = `Semaine ${week} - ${year}`;
+                } else if (diffDays <= 365) {
+                    // Sinon < 1 an -> Par Mois
+                    const month = tDate.getMonth();
+                    key = `M-${year}-${month}`;
+                    label = tDate.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
+                    label = label.charAt(0).toUpperCase() + label.slice(1);
+                } else {
+                    // Sinon -> Par Année
+                    key = `Y-${year}`;
+                    label = `Année ${year}`;
+                }
+
+                if (!groups[key]) {
+                    groups[key] = { 
+                        label: label, 
+                        items: [], 
+                        totals: { prix: 0, montantParis: 0, montantAbidjan: 0, reste: 0 },
+                        sortDate: tDate // Pour le tri des groupes
+                    };
+                }
+                groups[key].items.push(t);
+                
+                if (t.isDeleted !== true) {
+                    groups[key].totals.prix += (t.prix || 0);
+                    groups[key].totals.montantParis += (t.montantParis || 0);
+                    groups[key].totals.montantAbidjan += (t.montantAbidjan || 0);
+                    groups[key].totals.reste += (t.reste || 0);
+                }
+            });
+
+            // Tri des groupes (plus récent en haut)
+            const sortedGroups = Object.values(groups).sort((a, b) => b.sortDate - a.sortDate);
+
+            sortedGroups.forEach(group => {
+                const groupId = 'group-' + Math.random().toString(36).substr(2, 9);
+
+                if (sortByContainerCheckbox && sortByContainerCheckbox.checked) {
+                    group.items.sort((a, b) => {
+                        const getNum = (str) => {
+                            const matches = (str || "").match(/\d+/);
+                            return matches ? parseInt(matches[0], 10) : 0;
+                        };
+                        const cA = getNum(a.conteneur);
+                        const cB = getNum(b.conteneur);
+                        if (cB !== cA) return cB - cA;
+                        const rA = getNum(a.reference);
+                        const rB = getNum(b.reference);
+                        return rA - rB;
+                    });
+                }
+
+                const headerRow = document.createElement('tr');
+                headerRow.style.cssText = "background-color: #f1f5f9; cursor: pointer; font-weight: bold; border-top: 2px solid #e2e8f0;";
+                headerRow.onclick = () => {
+                    document.querySelectorAll('.' + groupId).forEach(el => {
+                        el.style.display = el.style.display === 'none' ? 'table-row' : 'none';
+                    });
                 };
+                headerRow.innerHTML = `
+                    <td colspan="4">📂 <strong>${group.label}</strong> <span style="font-weight:normal; color:#64748b;">(${group.items.length} op.)</span></td>
+                    <td></td>
+                    <td>${formatCFA(group.totals.prix)}</td>
+                    <td>${formatCFA(group.totals.montantParis)}</td>
+                    <td>${formatCFA(group.totals.montantAbidjan)}</td>
+                    <td></td>
+                    <td>${formatCFA(group.totals.reste)}</td>
+                    <td colspan="3" style="text-align:center; font-size:0.8em; color:#64748b;">▼ Détails</td>
+                `;
+                tableBody.appendChild(headerRow);
 
-                const cA = getNum(a.conteneur);
-                const cB = getNum(b.conteneur);
-                if (cB !== cA) return cB - cA; // Tri décroissant Conteneur
-
-                const rA = getNum(a.reference);
-                const rB = getNum(b.reference);
-                return rA - rB; // Tri CROISSANT Référence
-            }
-            // SINON : Tri par Date (Défaut)
-            const dateA = a.lastPaymentDate || a.date;
-            const dateB = b.lastPaymentDate || b.date;
-            return new Date(dateB) - new Date(dateA);
-        });
-
-        let currentSubtotals = { prix: 0, montantParis: 0, montantAbidjan: 0, reste: 0 };
-        let currentDate = transactions[0] ? (transactions[0].lastPaymentDate || transactions[0].date) : null; 
-        
-        transactions.forEach((data) => {
-            const displayDate = data.lastPaymentDate || data.date;
-            if (displayDate !== currentDate && displayDate) {
-                insertSubtotalRow(currentDate, currentSubtotals);
-                currentDate = displayDate;
-                currentSubtotals = { prix: 0, montantParis: 0, montantAbidjan: 0, reste: 0 };
-            }
-            if (data.isDeleted !== true) {
-                currentSubtotals.prix += (data.prix || 0);
-                currentSubtotals.montantParis += (data.montantParis || 0);
-                currentSubtotals.montantAbidjan += (data.montantAbidjan || 0);
-                currentSubtotals.reste += (data.reste || 0);
-            }
-            insertDataRow(data);
-        });
-        insertSubtotalRow(currentDate, currentSubtotals);
+                group.items.forEach(data => {
+                    const dataRow = insertDataRow(data, true);
+                    dataRow.classList.add(groupId);
+                    dataRow.style.display = 'none';
+                    tableBody.appendChild(dataRow);
+                });
+            });
+        }
     }
 
     // --- ÉVÉNEMENTS DE FILTRE ---
@@ -510,7 +591,7 @@ document.addEventListener('DOMContentLoaded', () => {
     
     fetchHistory(); // Lancement initial (Aujourd'hui seulement)
 
-    function insertDataRow(data) {
+    function insertDataRow(data, returnElement = false) {
         const newRow = document.createElement('tr');
         newRow.dataset.id = data.id; 
         newRow.style.cursor = "pointer";
@@ -595,23 +676,11 @@ document.addEventListener('DOMContentLoaded', () => {
             <td>${agentTagsHTML} ${auteurHTML}</td>
             
             <td style="min-width: 100px;">${btns}</td>`;
+        
+        if (returnElement) {
+            return newRow;
+        }
         tableBody.appendChild(newRow);
-    }
-
-    function insertSubtotalRow(date, totals) {
-        const subtotalRow = document.createElement('tr'); 
-        subtotalRow.className = 'subtotal-row';
-        subtotalRow.innerHTML = `
-            <td>${date || 'TOTAL'}</td>
-            <td colspan="3" style="text-align: right;">TOTAL</td> 
-            <td></td>
-            <td>${formatCFA(totals.prix)}</td>
-            <td>${formatCFA(totals.montantParis)}</td>
-            <td>${formatCFA(totals.montantAbidjan)}</td>
-            <td></td>
-            <td>${formatCFA(totals.reste)}</td>
-            <td colspan="3"></td>`;
-        tableBody.appendChild(subtotalRow);
     }
 
     // --- NOUVELLE LOGIQUE MODAL D'ÉDITION ---
