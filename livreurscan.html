@@ -720,8 +720,8 @@ html, body {
 <div id="loading"><div class="spinner"></div></div>
 
 <!-- HIDDEN FILE INPUT FOR PHOTOS -->
-<input type="file" id="photoInputCamera" accept="image/*" capture="environment" style="display:none">
-<input type="file" id="photoInputGallery" accept="image/*" multiple style="display:none">
+<input type="file" id="photoInputCamera" accept="image/*,video/*" capture="environment" style="display:none">
+<input type="file" id="photoInputGallery" accept="image/*,video/*" multiple style="display:none">
 
 <!-- ═══════════════════════════════════════
      SCREEN 1 : SCAN / RECHERCHE
@@ -895,7 +895,7 @@ const WA_GROUP_NUMBER = ''; // Laisser vide pour utiliser le partage natif
 
 // ── STATE ──
 let currentDelivery = null;
-let capturedPhotos = [];   // Array de {dataUrl, blob}
+let capturedPhotos = [];   // Array de {previewUrl, file, type: 'image'|'video'}
 let todayHistory   = [];
 let scannerActive  = false;
 let codeReader     = null;
@@ -1111,20 +1111,33 @@ function handlePhotoCapture(event) {
     if (!files.length) return;
 
     files.forEach(file => {
-        const reader = new FileReader();
-        reader.onload = (e) => {
-            capturedPhotos.push({ dataUrl: e.target.result, file });
+        const isVideo = file.type.startsWith('video/');
+        const isImage = file.type.startsWith('image/');
+
+        if (!isImage && !isVideo) {
+            showToast(`Format ${file.type} non supporté`, 'error');
+            return;
+        }
+
+        if (isImage) {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                capturedPhotos.push({ previewUrl: e.target.result, file: file, type: 'image' });
+                updatePhotosUI();
+                if (capturedPhotos.length > 0) document.getElementById('btn-wa').disabled = false;
+            };
+            reader.readAsDataURL(file);
+        } else { // isVideo
+            const previewUrl = URL.createObjectURL(file);
+            capturedPhotos.push({ previewUrl: previewUrl, file: file, type: 'video' });
             updatePhotosUI();
-
-            // Activer bouton WA dès qu'il y a une photo
-            document.getElementById('btn-wa').disabled = false;
-
-            if (capturedPhotos.length === 1) {
-                showToast('📷 Photo ajoutée !', 'success');
-            }
-        };
-        reader.readAsDataURL(file);
+            if (capturedPhotos.length > 0) document.getElementById('btn-wa').disabled = false;
+        }
     });
+    
+    if(files.length > 0) {
+        showToast(`✅ ${capturedPhotos.length} média(s) prêt(s)`, 'success');
+    }
 
     event.target.value = ''; // Reset pour permettre re-sélection
 }
@@ -1132,37 +1145,79 @@ function handlePhotoCapture(event) {
 function updatePhotosUI() {
     const count = capturedPhotos.length;
     const badge = document.getElementById('photo-count-badge');
-    badge.textContent = `📷 ${count} photo${count > 1 ? 's' : ''}`;
+    badge.innerHTML = `📷 ${count} média${count > 1 ? 's' : ''}`;
 
     const row = document.getElementById('photos-row');
     row.innerHTML = `
         <div class="photo-add-btn" onclick="addPhoto()">
-            <span>📷</span>
+            <span>➕</span>
             <span style="font-size:0.6rem; margin-top:2px;">Ajouter</span>
         </div>
-    ` + capturedPhotos.map((p, i) => `
-        <img src="${p.dataUrl}" class="photo-thumb" onclick="viewPhoto(${i})" title="Photo ${i+1}">
-    `).join('');
+    ` + capturedPhotos.map((p, i) => {
+        if (p.type === 'video') {
+            return `<video src="${p.previewUrl}" class="photo-thumb" onclick="viewPhoto(${i})" title="Vidéo ${i+1}" muted autoplay loop playsinline></video>`;
+        }
+        return `<img src="${p.previewUrl}" class="photo-thumb" onclick="viewPhoto(${i})" title="Photo ${i+1}">`;
+    }).join('');
 }
 
 function viewPhoto(index) {
-    // Affiche la photo en plein écran
+    const media = capturedPhotos[index];
+    if (!media) return;
+
     const overlay = document.createElement('div');
     overlay.style.cssText = `position:fixed;inset:0;background:rgba(0,0,0,0.92);z-index:9990;display:flex;flex-direction:column;align-items:center;justify-content:center;`;
+    
+    let mediaElement;
+    let actionButtons = '';
+
+    if (media.type === 'image') {
+        mediaElement = `<img id="overlay-img-${index}" src="${media.previewUrl}" style="max-width:96%;max-height:80vh;border-radius:12px;object-fit:contain;">`;
+        actionButtons += `<button onclick="rotatePhoto(${index})" style="background:rgba(255,255,255,0.2);border:1px solid rgba(255,255,255,0.5);color:white;font-size:1.5rem;width:50px;height:50px;border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center;">↻</button>`;
+    } else { // video
+        mediaElement = `<video src="${media.previewUrl}" style="max-width:96%;max-height:80vh;border-radius:12px;" controls autoplay></video>`;
+    }
+
     overlay.innerHTML = `
-        <img id="overlay-img-${index}" src="${capturedPhotos[index].dataUrl}" style="max-width:96%;max-height:80vh;border-radius:12px;object-fit:contain;margin-bottom:20px;">
-        <div style="display:flex;gap:20px;">
-            <button onclick="rotatePhoto(${index})" style="background:rgba(255,255,255,0.2);border:1px solid rgba(255,255,255,0.5);color:white;font-size:1.5rem;width:50px;height:50px;border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center;">↻</button>
+        <div style="position:relative;">${mediaElement}</div>
+        <div style="display:flex;gap:20px; margin-top: 15px;">
+            ${actionButtons}
+            <button onclick="deletePhoto(${index}, true)" style="background:#b91c1c;border:none;color:white;font-size:1.2rem;width:50px;height:50px;border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center;">🗑️</button>
             <button onclick="this.parentElement.parentElement.remove()" style="background:rgba(255,255,255,0.2);border:1px solid rgba(255,255,255,0.5);color:white;font-size:1.5rem;width:50px;height:50px;border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center;">✕</button>
         </div>
     `;
+
     overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
     document.body.appendChild(overlay);
 }
 
+function deletePhoto(index, fromOverlay = false) {
+    const media = capturedPhotos[index];
+    if (!media) return;
+
+    if (media.type === 'video') {
+        URL.revokeObjectURL(media.previewUrl);
+    }
+    capturedPhotos.splice(index, 1);
+    updatePhotosUI();
+
+    if (fromOverlay) {
+        const overlay = document.querySelector('div[style*="background:rgba(0,0,0,0.92)"]');
+        if (overlay) overlay.remove();
+    }
+    
+    if (capturedPhotos.length === 0) {
+        document.getElementById('btn-wa').disabled = true;
+    }
+    showToast('Média supprimé', 'success');
+}
+
 function rotatePhoto(index) {
+    const media = capturedPhotos[index];
+    if (!media || media.type !== 'image') return;
+
     const img = new Image();
-    img.src = capturedPhotos[index].dataUrl;
+    img.src = media.previewUrl;
     img.onload = () => {
         const canvas = document.createElement('canvas');
         const ctx = canvas.getContext('2d');
@@ -1171,11 +1226,21 @@ function rotatePhoto(index) {
         ctx.translate(canvas.width/2, canvas.height/2);
         ctx.rotate(90 * Math.PI / 180);
         ctx.drawImage(img, -img.width/2, -img.height/2);
-        const newDataUrl = canvas.toDataURL('image/jpeg');
-        capturedPhotos[index].dataUrl = newDataUrl;
-        const overlayImg = document.getElementById(`overlay-img-${index}`);
-        if(overlayImg) overlayImg.src = newDataUrl;
-        updatePhotosUI();
+        const newPreviewUrl = canvas.toDataURL('image/jpeg');
+        
+        canvas.toBlob(newBlob => {
+            const newFile = new File([newBlob], media.file.name, {type: 'image/jpeg', lastModified: Date.now()});
+            capturedPhotos[index] = { ...media, previewUrl: newPreviewUrl, file: newFile };
+
+            const overlayImg = document.getElementById(`overlay-img-${index}`);
+            if(overlayImg) overlayImg.src = newPreviewUrl;
+            
+            // We need to find the thumbnail and update it too
+            const thumbs = document.querySelectorAll('.photo-thumb');
+            const thumbToUpdate = Array.from(thumbs).find(t => t.title.includes(index+1));
+            if(thumbToUpdate) thumbToUpdate.src = newPreviewUrl;
+
+        }, 'image/jpeg');
     };
 }
 
@@ -1242,45 +1307,34 @@ async function sendToWhatsAppAndMarkDone() {
 
     try {
         if (isPartial) {
-            // 1. Créer le duplicata pour la partie LIVRÉE (PARTIEL)
-            const deliveredPart = {
-                ...currentDelivery,
-                quantite: qty,
-                quantiteOriginale: totalQty, // Pour affichage "3/5"
-                status: 'PARTIEL',
-                containerStatus: 'EN_COURS',
-                dateLivraison: new Date().toISOString(),
-                livreur: livreurName,
-                // Si le colis n'a pas de programme, on l'assigne à celui du jour pour ce livreur
-                dateProgramme: currentDelivery.dateProgramme || today,
-                quantiteLivree: qty,
-                scanProof: true
-            };
-            delete deliveredPart.id; // Nouvel ID
+            const remainingQty = totalQty - qty;
 
-            await db.collection('livraisons').add(deliveredPart);
-
-            // 2. Mettre à jour l'original pour la partie RESTANTE
+            // On ne crée pas de nouveau document. On met à jour l'original.
             await db.collection('livraisons').doc(currentDelivery.id).update({
-                quantite: totalQty - qty,
-                status: 'EN_COURS', // Reste en cours
-                // On s'assure que le reste du colis est aussi dans le programme
-                livreur: currentDelivery.livreur || livreurName,
-                dateProgramme: currentDelivery.dateProgramme || today
+                quantite: remainingQty, // La nouvelle quantité est ce qu'il reste à livrer
+                status: 'EN_COURS',      // Le statut global reste 'EN_COURS'
+                // On ajoute un enregistrement dans un tableau pour garder l'historique
+                historiquePartiel: firebase.firestore.FieldValue.arrayUnion({
+                    quantiteLivree: qty,
+                    date: new Date().toISOString(),
+                    livreur: livreurName
+                }),
+                scanProof: true // Marquer comme scanné même si partiel
             });
 
-            // Mise à jour locale pour l'affichage
-            currentDelivery.quantite = totalQty - qty;
-            showToast(`✅ Partiel validé ! Reste : ${currentDelivery.quantite}`, 'success');
+            // Mise à jour de l'objet local pour l'affichage
+            currentDelivery.quantite = remainingQty;
             
-            // Flash vert et vibration pour feedback, comme pour une livraison complète
+            showToast(`✅ Partiel validé ! Reste à livrer : ${remainingQty}`, 'success');
+            
+            // Feedback visuel et haptique
             const flash = document.createElement('div');
             flash.className = 'success-flash';
             document.body.appendChild(flash);
             setTimeout(() => flash.remove(), 600);
             vibrate([50, 30, 50]);
             
-            // On recharge la vue pour montrer le reste à livrer
+            // On rafraîchit la carte pour afficher la quantité restante
             renderResult(currentDelivery); 
 
         } else {
@@ -1370,31 +1424,27 @@ async function sendWhatsAppMessage(d, livreurName, isPartial, totalQty) {
         `*LIVRÉ PAR : ${livreurName}*`
     ].join('\n');
 
-    // ── CAS 1 : On a des photos → Web Share API ──
+    // ── CAS 1 : On a des médias → Web Share API ──
     if (capturedPhotos.length > 0 && navigator.share && navigator.canShare) {
-        try {
-            showLoading(false); // On cache le spinner avant d'ouvrir le dialogue de partage
-            // Convertir les dataUrls en File objects
-            const photoFiles = capturedPhotos.map((p, i) => {
-                const blob = dataURLtoBlob(p.dataUrl);
-                return new File([blob], `livraison_${d.ref}_${i+1}.jpg`, { type: 'image/jpeg' });
-            });
+        const filesToShare = capturedPhotos.map(p => p.file);
+        const shareData = { files: filesToShare, text: message };
 
-            const shareData = { text: message, files: photoFiles };
-
-            if (navigator.canShare(shareData)) {
+        if (navigator.canShare(shareData)) {
+            try {
+                showLoading(false);
                 await navigator.share(shareData);
                 showToast('📤 Partagé avec succès !', 'success');
-                return;
+                return; // Succès, on sort
+            } catch (e) {
+                showLoading(false);
+                if (e.name === 'AbortError') return; // L'utilisateur a annulé, on ne fait rien
+                // Si le partage échoue pour une autre raison, on continue aux fallbacks
+                console.warn('Share API with files error:', e);
             }
-        } catch (e) {
-            showLoading(false);
-            if (e.name !== 'AbortError') console.warn('Share API error:', e);
-            else return; // L'utilisateur a annulé
         }
     }
 
-    // ── CAS 2 : Partage texte seul via Share API ──
+    // ── CAS 2 : Partage texte seul (fallback si pas de photo ou si partage de fichiers a échoué) ──
     if (navigator.share) {
         try {
             showLoading(false);
@@ -1403,11 +1453,11 @@ async function sendWhatsAppMessage(d, livreurName, isPartial, totalQty) {
             return;
         } catch (e) {
             showLoading(false);
-            if (e.name === 'AbortError') return;
+            if (e.name === 'AbortError') return; // Annulé
         }
     }
 
-    // ── CAS 3 : Fallback → lien wa.me (client direct) ──
+    // ── CAS 3 : Fallback final → lien wa.me ou presse-papier ──
     showLoading(false);
     if (phone) {
         let clean = phone.replace(/[^\d]/g, '');
@@ -1416,7 +1466,6 @@ async function sendWhatsAppMessage(d, livreurName, isPartial, totalQty) {
         window.open(url, '_blank');
         showToast('📱 WhatsApp ouvert', 'success');
     } else {
-        // Copier dans le presse-papier si pas de numéro
         try {
             await navigator.clipboard.writeText(message);
             showToast('📋 Message copié ! Colle-le dans WhatsApp', 'success');
@@ -1449,16 +1498,6 @@ function extractPhone(d) {
 function cleanName(str) {
     if (!str) return '';
     return str.replace(/(?:(?:\+|00)225[\s.-]?)?(?:01|05|07|0)\d(?:[\s.-]?\d{2}){4}|(?:(?:\+|00)225[\s.-]?)?(?:01|05|07|0)\d{8,}/g, '').trim().replace(/[-–,;:\s]+$/, '');
-}
-
-function dataURLtoBlob(dataURL) {
-    const arr = dataURL.split(',');
-    const mime = arr[0].match(/:(.*?);/)[1];
-    const bstr = atob(arr[1]);
-    let n = bstr.length;
-    const u8arr = new Uint8Array(n);
-    while (n--) u8arr[n] = bstr.charCodeAt(n);
-    return new Blob([u8arr], { type: mime });
 }
 
 function vibrate(pattern) {

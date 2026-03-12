@@ -64,9 +64,31 @@
                 <option value="Dépenses Livraison">Dépenses Livraison</option>
                 <option value="Dépenses Péage">Dépenses Péage</option>
                 <option value="Dépenses Carburant">Dépenses Carburant</option>
+                <option value="Dépenses Personnel">Dépenses Personnel</option>
+                <option value="Dépenses Entretien Véhicules">Dépenses Entretien Véhicules</option>
             </select>
             <input type="text" id="expenseContainer" placeholder="Nom du Conteneur (ex: D35)" style="display:none;">
         </div>
+        <!-- Bloc à ajouter dans expenses.html -->
+        <div class="card" id="pendingExpensesCard" style="display: none; border-left: 4px solid #3b82f6;">
+            <h3 style="color: #3b82f6;"><i class="fa-solid fa-clock-rotate-left"></i> Dépenses en attente d'enregistrement</h3>
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Description</th>
+                        <th>Montant</th>
+                        <th>Type</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody id="pendingExpensesBody"></tbody>
+            </table>
+            <button id="commitExpensesBtn" class="btn btn-success" style="margin-top: 10px; width: 100%; padding: 10px; font-size: 1.1em;">
+                <i class="fa-solid fa-save"></i> Tout Enregistrer
+            </button>
+        </div>
+
         <div class="form-buttons">
             <button id="addExpenseBtn" class="primary">Valider</button>
         </div>

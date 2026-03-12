@@ -111,6 +111,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     let unsubscribeIncome = null;
     let allIncome = [];
+    let pendingIncome = []; // Pour les enregistrements multiples
 
     // 1. AJOUT MANUEL (AVEC AUTEUR)
     if (addIncomeBtn && !isViewer) { addIncomeBtn.addEventListener('click', () => {
@@ -132,11 +133,19 @@ document.addEventListener('DOMContentLoaded', () => {
             return alert("Veuillez remplir la date, la description et un montant valide.");
         }
         
-        incomeCollection.add(data).then(() => {
-            incomeDesc.value = '';
-            if (incomeCategory) incomeCategory.value = '';
-            incomeAmount.value = '';
-        }).catch(err => console.error(err));
+        // --- CONFIGURATION DE L'UTILISATEUR SANS CONFIRMATION ---
+        const USER_NO_CONFIRM = "aziz"; // Remplacez par le nom exact de l'utilisateur
+
+        if (currentUserName === USER_NO_CONFIRM) {
+            // Enregistrement DIRECT
+            incomeCollection.add(data).then(() => {
+                alert("Entrée enregistrée (Mode Direct).");
+                resetIncomeForm();
+            }).catch(err => alert("Erreur : " + err.message));
+        } else {
+            // Ajout à la LISTE D'ATTENTE
+            addIncomeToPendingList(data);
+        }
     }); } else if (addIncomeBtn) {
         // Masquer le formulaire
         const form = addIncomeBtn.closest('.form-grid') || document.getElementById('caisseForm');
@@ -269,6 +278,73 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
     });
+
+    // --- GESTION DES ENREGISTREMENTS MULTIPLES ---
+
+    function resetIncomeForm() {
+        // Reset champs
+        incomeDesc.value = '';
+        if (incomeCategory) incomeCategory.value = '';
+        incomeAmount.value = '';
+        incomeDesc.focus();
+    }
+
+    function addIncomeToPendingList(data) {
+        pendingIncome.push(data);
+        renderPendingIncome();
+        resetIncomeForm();
+    }
+
+    function renderPendingIncome() {
+        const container = document.getElementById('pendingIncomeCard');
+        const tbody = document.getElementById('pendingIncomeBody');
+        if (!container || !tbody) return;
+
+        if (pendingIncome.length === 0) {
+            container.style.display = 'none';
+            return;
+        }
+
+        container.style.display = 'block';
+        tbody.innerHTML = pendingIncome.map((inc, index) => `
+            <tr>
+                <td>${inc.date}</td>
+                <td>${inc.description}</td>
+                <td>${formatCFA(inc.montant)}</td>
+                <td>${inc.mode || '-'}</td>
+                <td><button class="deleteBtn" onclick="removePendingIncome(${index})">X</button></td>
+            </tr>
+        `).join('');
+    }
+
+    window.removePendingIncome = (index) => {
+        pendingIncome.splice(index, 1);
+        renderPendingIncome();
+    };
+
+    const commitBtn = document.getElementById('commitIncomeBtn');
+    if (commitBtn) {
+        commitBtn.addEventListener('click', async () => {
+            if (pendingIncome.length === 0) return;
+            if (!confirm(`Enregistrer ${pendingIncome.length} entrée(s) ?`)) return;
+
+            const batch = db.batch();
+            pendingIncome.forEach(inc => {
+                const docRef = incomeCollection.doc();
+                batch.set(docRef, inc);
+            });
+
+            try {
+                await batch.commit();
+                pendingIncome = [];
+                renderPendingIncome();
+                alert("Entrées enregistrées avec succès !");
+            } catch (err) {
+                console.error(err);
+                alert("Erreur lors de l'enregistrement : " + err.message);
+            }
+        });
+    }
 
     initBackToTopButton();
 });

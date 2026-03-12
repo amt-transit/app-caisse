@@ -62,6 +62,26 @@
         </div>
     </div>
 
+    <!-- Bloc pour l'enregistrement multiple -->
+    <div class="card" id="pendingIncomeCard" style="display: none; border-left: 4px solid #3b82f6; margin: 20px auto; max-width: 1200px; background: white; padding: 15px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+        <h3 style="color: #3b82f6; margin-top: 0;">Entrées en attente d'enregistrement</h3>
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Date</th>
+                    <th>Description</th>
+                    <th>Montant</th>
+                    <th>Mode</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+            <tbody id="pendingIncomeBody"></tbody>
+        </table>
+        <button id="commitIncomeBtn" class="btn primary" style="margin-top: 10px; width: 100%; padding: 10px; font-size: 1.1em; background-color: #10b981;">
+            Tout Enregistrer
+        </button>
+    </div>
+
     <!-- SECTION STATISTIQUES -->
     <div class="dashboard-container" style="margin-bottom: 20px; padding: 15px;">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; flex-wrap: wrap; gap: 10px;">

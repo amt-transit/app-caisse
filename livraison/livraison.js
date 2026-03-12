@@ -1722,10 +1722,10 @@ function renderTable() {
                 <td>${d.conteneur || '-'}</td>
                 <td class="ref">${transitIndicator}${d.ref}</td>
                 <td style="text-align:center;">
-                    ${d.status === 'PARTIEL' && d.quantiteOriginale ? 
-                        `<span style="font-weight:bold; color:#d97706;">${d.quantite}/${d.quantiteOriginale}</span>` : 
-                        renderInput(d.quantite || 1, "number", `updateDeliveryQuantity('${d.id}', this.value)`, "width: 50px; text-align:center; font-weight:bold;")
-                    }
+                    ${renderInput(d.quantite || 1, "number", `updateDeliveryQuantity('${d.id}', this.value)`, "width: 50px; text-align:center; font-weight:bold;")}
+                    ${d.historiquePartiel && d.historiquePartiel.length > 0 ? 
+                        `<span style="cursor:help; font-size:1.2em; margin-left:5px;" title="Historique partiel:\n${d.historiquePartiel.map(h => `- ${new Date(h.date).toLocaleDateString()} : ${h.quantiteLivree} livré(s) par ${h.livreur}`).join('\n')}">📦</span>` 
+                    : ''}
                 </td>
                 <td class="montant">${renderInput((d.montant || '').replace(/"/g, '&quot;'), "text", `updateDeliveryAmount('${d.id}', this.value)`, montantStyle)}</td>
                 <td>${d.expediteur}</td>

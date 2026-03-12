@@ -91,7 +91,11 @@ document.addEventListener('DOMContentLoaded', () => {
         const kwPeage = ['péage', 'peage'];
         const kwCarburant = ['carburant', 'essence', 'gasoil'];
         const kwLivraison = ['livraison', 'police', 'douane', 'gendarmerie', 'gendarme', 'achat', 'lavage', 'aide', 'frais', 'transp', 'founi', 'stock'];
+        const kwPersonnel = ['personnel']; // Salaire, prime, avance sont gérés dans le module RH
+        const kwEntretien = ['entretien', 'vidange', 'pneu', 'mecanicien', 'mécano', 'reparation', 'réparation', 'visite technique'];
 
+        if (kwPersonnel.some(k => desc.includes(k))) return 'Personnel';
+        if (kwEntretien.some(k => desc.includes(k))) return 'Entretien Véhicules';
         if (kwPeage.some(k => desc.includes(k))) return 'Péage';
         if (kwCarburant.some(k => desc.includes(k))) return 'Carburant';
         if (kwLivraison.some(k => desc.includes(k))) return 'Livraison';
@@ -119,6 +123,8 @@ document.addEventListener('DOMContentLoaded', () => {
             'Livraison': 0,
             'Péage': 0,
             'Carburant': 0,
+            'Personnel': 0,
+            'Entretien Véhicules': 0,
             'Autres': 0
         };
         let totalView = 0;
@@ -150,6 +156,8 @@ document.addEventListener('DOMContentLoaded', () => {
             'Livraison': { bg: '#e0f2fe', text: '#0369a1' }, // Bleu clair
             'Péage': { bg: '#fef3c7', text: '#b45309' }, // Orange clair
             'Carburant': { bg: '#fee2e2', text: '#b91c1c' }, // Rouge clair
+            'Personnel': { bg: '#e0e7ff', text: '#3730a3' }, // Indigo
+            'Entretien Véhicules': { bg: '#d1fae5', text: '#065f46' }, // Vert
             'Autres': { bg: '#e2e8f0', text: '#475569' } // Gris (Slate-200)
         };
         
@@ -182,6 +190,8 @@ document.addEventListener('DOMContentLoaded', () => {
     let unsubscribeExpenses = null; 
     let allExpenses = [];
     let unconfirmedSessions = new Set(); // Stocke les IDs de sessions non validées
+    let pendingExpenses = []; // Pour les enregistrements multiples
+
 
     // --- GESTION DES SOUS-ONGLETS (Dépenses Mensuelles vs Conteneurs) ---
     let currentTab = 'monthly'; // 'monthly' | 'container'
@@ -265,9 +275,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // 1. AJOUT (AVEC NOM DE L'UTILISATEUR)
     if (addExpenseBtn && !isViewer) { addExpenseBtn.addEventListener('click', async () => {
-        const montant = parseFloat(expenseAmount.value) || 0;
-        const action = actionType ? actionType.value : 'Depense'; 
+        // --- CONFIGURATION DE L'UTILISATEUR SANS CONFIRMATION ---
+        const USER_NO_CONFIRM = "aziz";
 
+        // 1. Récupération des données
+        const montant = parseFloat(expenseAmount.value) || 0;
+        const action = actionType ? actionType.value : 'Depense';
         let finalDesc = expenseDesc.value;
         if (expenseType.value === 'Mensuelle' && expenseSubtype && expenseSubtype.value) {
             finalDesc = `${expenseSubtype.value} - ${finalDesc}`;
@@ -275,24 +288,29 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const data = {
             date: expenseDate.value,
-            // CORRECTION : Ajout du nom de l'utilisateur dans la description
-            description: `${finalDesc} (${currentUserName})`, 
+            description: `${finalDesc} (${currentUserName})`,
             montant: montant,
-            action: action, 
+            action: action,
             type: (action === 'Depense') ? expenseType.value : 'Budget',
             mode: (action === 'Depense') ? expenseMode.value : 'Virement',
             conteneur: (expenseType.value === 'Conteneur' && action === 'Depense') ? expenseContainer.value.trim().toUpperCase() : '',
-            isDeleted: false 
+            isDeleted: false
         };
 
-        if (!data.date || !expenseDesc.value || data.montant <= 0) return alert("Veuillez remplir les champs.");
+        // 2. Validation
+        if (!data.date || !expenseDesc.value || data.montant <= 0) return alert("Veuillez remplir les champs correctement.");
 
-        expensesCollection.add(data).then(() => {
-            expenseDesc.value = ''; expenseAmount.value = ''; expenseContainer.value = '';
-            if(expenseSubtype) expenseSubtype.value = '';
-            expenseMode.value = 'Espèce';
-            alert("Dépense enregistrée.");
-        }).catch(err => console.error(err));
+        // 3. Décision : Enregistrement Direct ou Liste D'attente
+        if (currentUserName === USER_NO_CONFIRM) {
+            // Enregistrement DIRECT
+            expensesCollection.add(data).then(() => {
+                alert("Dépense enregistrée (Mode Direct).");
+                resetExpenseForm();
+            }).catch(err => alert("Erreur : " + err.message));
+        } else {
+            // Ajout à la LISTE D'ATTENTE
+            addExpenseToPendingList(data);
+        }
     }); } else if (addExpenseBtn) {
         // Masquer le formulaire
         const form = addExpenseBtn.closest('.form-grid') || document.getElementById('caisseForm');
@@ -399,8 +417,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 const kwPeage = ['péage', 'peage'];
                 const kwCarburant = ['carburant', 'essence', 'gasoil'];
                 const kwLivraison = ['livraison', 'police', 'douane', 'gendarmerie', 'gendarme', 'achat', 'lavage', 'aide', 'frais', 'transp', 'founi', 'stock'];
+                const kwPersonnel = ['salaire', 'prime', 'avance', 'personnel'];
+                const kwEntretien = ['entretien', 'vidange', 'pneu', 'mecanicien', 'mécano', 'reparation', 'réparation', 'visite technique'];
 
-                if (kwPeage.some(k => desc.includes(k))) row.style.backgroundColor = '#fef3c7'; // Orange clair (Péage)
+                if (kwPersonnel.some(k => desc.includes(k))) row.style.backgroundColor = '#e0e7ff'; // Indigo
+                else if (kwEntretien.some(k => desc.includes(k))) row.style.backgroundColor = '#d1fae5'; // Vert
+                else if (kwPeage.some(k => desc.includes(k))) row.style.backgroundColor = '#fef3c7'; // Orange clair (Péage)
                 else if (kwCarburant.some(k => desc.includes(k))) row.style.backgroundColor = '#fee2e2'; // Rouge clair (Carburant)
                 else if (kwLivraison.some(k => desc.includes(k))) row.style.backgroundColor = '#e0f2fe'; // Bleu clair (Livraison)
                 else row.style.backgroundColor = '#f1f5f9'; // Gris très clair (Autres)
@@ -432,6 +454,8 @@ document.addEventListener('DOMContentLoaded', () => {
             'Dépenses Livraison': 0,
             'Dépenses Péage': 0,
             'Dépenses Carburant': 0,
+            'Dépenses Personnel': 0,
+            'Dépenses Entretien Véhicules': 0,
             'Autres': 0
         };
 
@@ -467,7 +491,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const desc = (e.description || '').toLowerCase();
 
                 // 1. Vérification préfixe standard
-                for (const cat of ['Dépenses Livraison', 'Dépenses Péage', 'Dépenses Carburant']) {
+                for (const cat of ['Dépenses Livraison', 'Dépenses Péage', 'Dépenses Carburant', 'Dépenses Personnel', 'Dépenses Entretien Véhicules']) {
                     if ((e.description || '').startsWith(cat)) {
                         categories[cat] += (e.montant || 0);
                         matchedCat = true;
@@ -480,8 +504,16 @@ document.addEventListener('DOMContentLoaded', () => {
                     const kwPeage = ['péage', 'peage'];
                     const kwCarburant = ['carburant', 'essence', 'gasoil'];
                     const kwLivraison = ['livraison', 'police', 'douane', 'gendarmerie', 'gendarme', 'achat', 'lavage', 'aide', 'frais', 'transp', 'founi', 'stock'];
+                    const kwPersonnel = ['personnel'];
+                    const kwEntretien = ['entretien', 'vidange', 'pneu', 'mecanicien', 'mécano', 'reparation', 'réparation', 'visite technique'];
 
-                    if (kwPeage.some(k => desc.includes(k))) {
+                    if (kwPersonnel.some(k => desc.includes(k))) {
+                        categories['Dépenses Personnel'] += (e.montant || 0);
+                        matchedCat = true;
+                    } else if (kwEntretien.some(k => desc.includes(k))) {
+                        categories['Dépenses Entretien Véhicules'] += (e.montant || 0);
+                        matchedCat = true;
+                    } else if (kwPeage.some(k => desc.includes(k))) {
                         categories['Dépenses Péage'] += (e.montant || 0);
                         matchedCat = true;
                     } else if (kwCarburant.some(k => desc.includes(k))) {
@@ -588,6 +620,73 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         }
         expenseDetailsModal.classList.add('active');
+    }
+
+    // --- GESTION DES ENREGISTREMENTS MULTIPLES ---
+
+    function resetExpenseForm() {
+        expenseDesc.value = '';
+        expenseAmount.value = '';
+        expenseContainer.value = '';
+        if (expenseSubtype) expenseSubtype.value = '';
+        expenseDesc.focus();
+    }
+
+    function addExpenseToPendingList(data) {
+        pendingExpenses.push(data);
+        renderPendingExpenses();
+        resetExpenseForm();
+    }
+
+    function renderPendingExpenses() {
+        const container = document.getElementById('pendingExpensesCard');
+        const tbody = document.getElementById('pendingExpensesBody');
+        if (!container || !tbody) return;
+
+        if (pendingExpenses.length === 0) {
+            container.style.display = 'none';
+            return;
+        }
+
+        container.style.display = 'block';
+        tbody.innerHTML = pendingExpenses.map((exp, index) => `
+            <tr>
+                <td>${exp.date}</td>
+                <td>${exp.description}</td>
+                <td>${formatCFA(exp.montant)}</td>
+                <td>${exp.type} ${exp.conteneur ? `(${exp.conteneur})` : ''}</td>
+                <td><button class="deleteBtn" onclick="removePendingExpense(${index})">X</button></td>
+            </tr>
+        `).join('');
+    }
+
+    window.removePendingExpense = (index) => {
+        pendingExpenses.splice(index, 1);
+        renderPendingExpenses();
+    };
+
+    const commitBtn = document.getElementById('commitExpensesBtn');
+    if (commitBtn) {
+        commitBtn.addEventListener('click', async () => {
+            if (pendingExpenses.length === 0) return;
+            if (!confirm(`Enregistrer ${pendingExpenses.length} dépense(s) ?`)) return;
+
+            const batch = db.batch();
+            pendingExpenses.forEach(exp => {
+                const docRef = expensesCollection.doc();
+                batch.set(docRef, exp);
+            });
+
+            try {
+                await batch.commit();
+                pendingExpenses = [];
+                renderPendingExpenses();
+                alert("Dépenses enregistrées avec succès !");
+            } catch (err) {
+                console.error(err);
+                alert("Erreur lors de l'enregistrement : " + err.message);
+            }
+        });
     }
 
     initBackToTopButton();
