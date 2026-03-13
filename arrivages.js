@@ -114,8 +114,8 @@ document.addEventListener('DOMContentLoaded', () => {
             const reste = (montantParis + montantAbidjan) - prix;
 
             const data = {
-                date: arrivalDate.value, reference: arrivalRef.value.trim().toUpperCase(), nom: arrivalNom.value.trim(),
-                conteneur: arrivalConteneur.value.trim().toUpperCase(), prix: prix,
+                date: arrivalDate.value, reference: cleanString(arrivalRef.value).toUpperCase(), nom: cleanString(arrivalNom.value),
+                conteneur: cleanString(arrivalConteneur.value).toUpperCase(), prix: prix,
                 montantParis: montantParis, montantAbidjan: montantAbidjan, reste: reste,
                 isDeleted: false, agent: '', agentMobileMoney: '', commune: '',
                 dateParis: arrivalRef.dataset.dateParis || "",
@@ -213,12 +213,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
                     for (const row of rows) {
                         // NOUVELLE LOGIQUE CSV ABIDJAN : reference, restant, expéditeur, adresse, destinataire, description
-                        const ref = (row.reference || row.Reference || '').trim().toUpperCase();
+                        const ref = cleanString(row.reference || row.Reference || '').toUpperCase();
                         const restant = parseFloat(row.restant || row.Restant || 0);
-                        let sender = (row['expéditeur'] || row['Expéditeur'] || row.nom || '').trim();
-                        const addr = (row.adresse || row.Adresse || row.adresseDestinataire || '').trim();
-                        const dest = (row.destinataire || row.Destinataire || '').trim();
-                        const desc = (row.description || row.Description || '').trim();
+                        let sender = cleanString(row['expéditeur'] || row['Expéditeur'] || row.nom || '');
+                        const addr = cleanString(row.adresse || row.Adresse || row.adresseDestinataire || '');
+                        const dest = cleanString(row.destinataire || row.Destinataire || '');
+                        const desc = cleanString(row.description || row.Description || '');
 
                         if (!ref) {
                             log += `\nIgnoré (Données): ${ref}`; continue;
@@ -510,8 +510,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     for (const row of rows) {
                         // NOUVELLE LOGIQUE CSV PARIS : DATE DU TRANSFERT, REFERENCE, EXPEDITEUR, PRIX, DESTINATEUR
                         const date = row["DATE DU TRANSFERT"];
-                        const ref = row["REFERENCE"]?.trim();
-                        const exp = row["EXPEDITEUR"]?.trim();
+                        const ref = cleanString(row["REFERENCE"]);
+                        const exp = cleanString(row["EXPEDITEUR"]);
                         if (!ref) { log += `\nIgnoré (Ref manquante)`; continue; }
 
                         const check = await parisManifestCollection.where("reference", "==", ref).limit(1).get();
@@ -520,9 +520,9 @@ document.addEventListener('DOMContentLoaded', () => {
                         const prixE = parseFloat((row["PRIX"]||"0").replace(',','.'));
                         const payeE = parseFloat((row["MONTANT PAYER"]||"0").replace(',','.'));
                         const resteE = parseFloat((row["RENSTANT A PAYER"]||row["RESTANT A PAYER"]||"0").replace(',','.'));
-                        const dest = row["DESTINATEUR"]?.trim() || "";
-                        const typeColis = row["TYPE COLIS"]?.trim() || "";
-                        const adresse = row["ADRESSES"]?.trim() || "";
+                        const dest = cleanString(row["DESTINATEUR"]);
+                        const typeColis = cleanString(row["TYPE COLIS"]);
+                        const adresse = cleanString(row["ADRESSES"]);
                         const qte = parseInt(row["QUANTITE"]) || 1;
                         
                         const docRef = livraisonsCollection.doc();

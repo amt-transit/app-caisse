@@ -591,11 +591,11 @@ function parsePDFText(text) {
                 id: Date.now() + i,
                 ref: ref,
                 montant: montant,
-                expediteur: fixEncoding(expediteur),
+                expediteur: cleanString(fixEncoding(expediteur)),
                 commune: detectCommune(fixEncoding(lieu)),
-                lieuLivraison: fixEncoding(lieu),
-                destinataire: fixEncoding(destinataire),
-                description: fixEncoding(description),
+                lieuLivraison: cleanString(fixEncoding(lieu)),
+                destinataire: cleanString(fixEncoding(destinataire)),
+                description: cleanString(fixEncoding(description)),
                 status: 'EN_ATTENTE',
                 dateAjout: new Date().toISOString()
             });
@@ -671,7 +671,7 @@ function importExcel(event) {
                         let refIdx = -1;
                         
                         for (let j = 0; j < row.length; j++) {
-                            const val = String(row[j] || '').trim().toUpperCase();
+                            const val = cleanString(row[j]).toUpperCase();
                             if (refRegex.test(val)) {
                                 ref = val;
                                 refIdx = j;
@@ -707,7 +707,7 @@ function importExcel(event) {
                         let numero = '';
 
                         // On analyse les autres cellules de la ligne
-                        const otherCells = row.map((c, idx) => ({ val: String(c || '').trim(), idx })).filter(c => c.idx !== refIdx && c.val !== '');
+                        const otherCells = row.map((c, idx) => ({ val: cleanString(c), idx })).filter(c => c.idx !== refIdx && c.val !== '');
                         
                         for (const cell of otherCells) {
                             const val = cell.val;
@@ -743,11 +743,11 @@ function importExcel(event) {
                             id: Date.now() + i,
                             ref: ref,
                             montant: montant,
-                            expediteur: fixEncoding(expediteur),
-                            commune: detectCommune(fixEncoding(lieu || expediteur || destinataire)),
-                            lieuLivraison: fixEncoding(lieu),
-                            destinataire: fixEncoding(destinataire),
-                            description: fixEncoding(description),
+                            expediteur: cleanString(fixEncoding(expediteur)),
+                            commune: detectCommune(cleanString(fixEncoding(lieu || expediteur || destinataire))),
+                            lieuLivraison: cleanString(fixEncoding(lieu)),
+                            destinataire: cleanString(fixEncoding(destinataire)),
+                            description: cleanString(fixEncoding(description)),
                             numero: numero,
                             status: 'EN_ATTENTE',
                             dateAjout: new Date().toISOString(),
@@ -759,19 +759,19 @@ function importExcel(event) {
                     const jsonData = XLSX.utils.sheet_to_json(firstSheet, { range: headerRowIndex });
                     imported = jsonData.map((row, i) => {
                         const r = {};
-                        Object.keys(row).forEach(k => r[k.toUpperCase().trim()] = row[k]);
+                        Object.keys(row).forEach(k => r[cleanString(k).toUpperCase()] = row[k]);
                         return {
                             id: Date.now() + i,
-                        ref: String(r.REF || r.REFERENCE || r.CODE || '').trim().toUpperCase(), // Force Majuscule pour correspondance
-                            prixOriginal: String(r.PRIX || r.VALEUR || r['PRIX TOTAL'] || r['MONTANT TOTAL'] || ''), // Capture du Prix Total pour calcul
-                            montant: String(r.RESTANT || r.MONTANT || r.PRIX || r['RESTANT A PAYER'] || r['RENSTANT A PAYER'] || r['MONTANT A PAYER'] || ''),
-                            expediteur: fixEncoding(String(r.EXPEDITEUR || r['EXPÉDITEUR'] || r.EXP || '')),
-                            commune: detectCommune(fixEncoding(String(r.LIVRE || r.LIEU || r.COMMUNE || r['LIEU DE LIVRAISON'] || r.ADRESSE || r.ADRESSES || ''))),
-                            lieuLivraison: fixEncoding(String(r.LIVRE || r.LIEU || r['LIEU DE LIVRAISON'] || r.ADRESSE || r.ADRESSES || '')),
-                            destinataire: fixEncoding(String(r.DESTINATAIRE || r.CLIENT || r.DESTINATEUR || '')),
-                            description: fixEncoding(String(r.DESCRIPTION || r.NATURE || r['TYPE COLIS'] || '')),
-                            info: fixEncoding(String(r.INFO || r.INFORMATION || r.COMMENTAIRE || '')),
-                            numero: String(r.NUMERO || r.TEL || r.TELEPHONE || r.CONTACT || ''),
+                            ref: cleanString(r.REF || r.REFERENCE || r.CODE || '').toUpperCase(), // Force Majuscule pour correspondance
+                            prixOriginal: cleanString(r.PRIX || r.VALEUR || r['PRIX TOTAL'] || r['MONTANT TOTAL'] || ''), // Capture du Prix Total pour calcul
+                            montant: cleanString(r.RESTANT || r.MONTANT || r.PRIX || r['RESTANT A PAYER'] || r['RENSTANT A PAYER'] || r['MONTANT A PAYER'] || ''),
+                            expediteur: cleanString(fixEncoding(String(r.EXPEDITEUR || r['EXPÉDITEUR'] || r.EXP || ''))),
+                            commune: detectCommune(cleanString(fixEncoding(String(r.LIVRE || r.LIEU || r.COMMUNE || r['LIEU DE LIVRAISON'] || r.ADRESSE || r.ADRESSES || '')))),
+                            lieuLivraison: cleanString(fixEncoding(String(r.LIVRE || r.LIEU || r['LIEU DE LIVRAISON'] || r.ADRESSE || r.ADRESSES || ''))),
+                            destinataire: cleanString(fixEncoding(String(r.DESTINATAIRE || r.CLIENT || r.DESTINATEUR || ''))),
+                            description: cleanString(fixEncoding(String(r.DESCRIPTION || r.NATURE || r['TYPE COLIS'] || ''))),
+                            info: cleanString(fixEncoding(String(r.INFO || r.INFORMATION || r.COMMENTAIRE || ''))),
+                            numero: cleanString(r.NUMERO || r.TEL || r.TELEPHONE || r.CONTACT || ''),
                             quantite: parseInt(r.QTE || r.QUANTITE || r.QUANTITÉ || 1), // Récupération Quantité
                             status: 'EN_ATTENTE',
                             dateAjout: new Date().toISOString()
@@ -2643,6 +2643,7 @@ function getSortIcon(column) {
 
 // Mise à jour du lieu de livraison en direct
 function updateDeliveryLocation(id, newLocation) {
+    newLocation = cleanString(newLocation);
     const detected = detectCommune(newLocation);
     const updates = { lieuLivraison: newLocation };
     if (detected !== 'AUTRE') updates.commune = detected;
@@ -2681,17 +2682,17 @@ function updateDeliveryLocation(id, newLocation) {
 
 // Mise à jour du destinataire en direct
 function updateDeliveryRecipient(id, newRecipient) {
-    db.collection(CONSTANTS.COLLECTION).doc(id).update({ destinataire: newRecipient });
+    db.collection(CONSTANTS.COLLECTION).doc(id).update({ destinataire: cleanString(newRecipient) });
 }
 
 // Mise à jour du numéro en direct
 function updateDeliveryPhone(id, newPhone) {
-    db.collection(CONSTANTS.COLLECTION).doc(id).update({ numero: newPhone });
+    db.collection(CONSTANTS.COLLECTION).doc(id).update({ numero: cleanString(newPhone) });
 }
 
 // Mise à jour du montant en direct
 function updateDeliveryAmount(id, newAmount) {
-    db.collection(CONSTANTS.COLLECTION).doc(id).update({ montant: newAmount });
+    db.collection(CONSTANTS.COLLECTION).doc(id).update({ montant: cleanString(newAmount) });
 }
 
 // Mise à jour de la quantité en direct
@@ -2701,7 +2702,7 @@ function updateDeliveryQuantity(id, newQty) {
 
 // Mise à jour de l'info manuelle en direct
 function updateDeliveryInfo(id, newInfo) {
-    db.collection(CONSTANTS.COLLECTION).doc(id).update({ info: newInfo });
+    db.collection(CONSTANTS.COLLECTION).doc(id).update({ info: cleanString(newInfo) });
 }
 
 // Mise à jour du statut "Client Notifié" (Onglet À Venir)
@@ -2749,23 +2750,23 @@ function closeAddModal() {
 document.getElementById('deliveryForm').addEventListener('submit', function(e) {
     e.preventDefault();
     
-    const refInput = document.getElementById('ref').value.trim();
+    const refInput = cleanString(document.getElementById('ref').value).toUpperCase();
     
     // 1. Vérification Doublon (Référence Unique)
     const existingItem = deliveries.find(d => d.ref === refInput);
 
     const newItem = {
         containerStatus: document.getElementById('newContainerStatus').value,
-        conteneur: document.getElementById('conteneur').value.trim(),
+        conteneur: cleanString(document.getElementById('conteneur').value).toUpperCase(),
         quantite: parseInt(document.getElementById('quantite').value) || 1, // Récupération de la saisie
         ref: refInput,
-        montant: document.getElementById('montant').value.trim(),
-        expediteur: document.getElementById('expediteur').value.trim(),
+        montant: cleanString(document.getElementById('montant').value),
+        expediteur: cleanString(document.getElementById('expediteur').value),
         commune: document.getElementById('commune').value,
-        numero: document.getElementById('numero').value.trim(),
-        lieuLivraison: document.getElementById('lieuLivraison').value.trim(),
-        destinataire: document.getElementById('destinataire').value.trim(),
-        description: document.getElementById('description').value.trim(),
+        numero: cleanString(document.getElementById('numero').value),
+        lieuLivraison: cleanString(document.getElementById('lieuLivraison').value),
+        destinataire: cleanString(document.getElementById('destinataire').value),
+        description: cleanString(document.getElementById('description').value),
         status: 'EN_ATTENTE',
         dateAjout: new Date().toISOString()
     };

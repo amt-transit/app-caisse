@@ -11,6 +11,17 @@ function textToClassName(t) {
     return t ? t.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, '-') : '';
 }
 
+// --- NETTOYAGE DES CHAÎNES DE CARACTÈRES ---
+function cleanString(str) {
+    if (str === null || str === undefined) return '';
+    return String(str)
+        // Supprime les caractères invisibles de largeur nulle (Zero-width spaces)
+        .replace(/[\u200B-\u200D\uFEFF]/g, '')
+        // Remplace tous les types d'espaces (y compris les espaces insécables \u00A0) et sauts de ligne par un espace unique
+        .replace(/\s+/g, ' ')
+        .trim();
+}
+
 // --- DÉTECTION COMMUNE ---
 // Liste utilisée par detectCommune
 const UTILS_COMMUNES = {
