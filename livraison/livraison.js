@@ -2105,17 +2105,15 @@ function moveDeliveryOrder(id, direction, date, livreur) {
 
 function removeFromProgram(id) {
     if (confirm('Retirer ce colis du programme ? Il repassera "En attente".')) {
-        const delivery = deliveries.find(d => d.id === id);
-        if (delivery) {
-            delivery.livreur = '';
-            delivery.dateProgramme = '';
-            delivery.status = 'EN_ATTENTE';
-            delivery.orderInRoute = null;
-            saveDeliveries();
-            filterDeliveries();
-            updateStats();
+        db.collection(CONSTANTS.COLLECTION).doc(id).update({
+            status: 'EN_ATTENTE',
+            livreur: firebase.firestore.FieldValue.delete(),
+            dateProgramme: firebase.firestore.FieldValue.delete(),
+            dateLivraison: firebase.firestore.FieldValue.delete(),
+            orderInRoute: firebase.firestore.FieldValue.delete()
+        }).then(() => {
             showToast('Colis retiré du programme', 'success');
-        }
+        });
     }
 }
 
@@ -2319,7 +2317,14 @@ function confirmBulkStatusChange() {
     const newStatus = document.getElementById('bulkStatusSelect').value;
     const batch = db.batch();
     selectedIds.forEach(id => {
-        batch.update(db.collection(CONSTANTS.COLLECTION).doc(id), { status: newStatus });
+        const updates = { status: newStatus };
+        if (newStatus === 'EN_ATTENTE') {
+            updates.livreur = firebase.firestore.FieldValue.delete();
+            updates.dateProgramme = firebase.firestore.FieldValue.delete();
+            updates.dateLivraison = firebase.firestore.FieldValue.delete();
+            updates.orderInRoute = firebase.firestore.FieldValue.delete();
+        }
+        batch.update(db.collection(CONSTANTS.COLLECTION).doc(id), updates);
     });
     batch.commit().then(() => {
         closeBulkStatusModal();
@@ -2719,7 +2724,13 @@ function markAsDelivered(id) {
 }
 
 function markAsPending(id) {
-    db.collection(CONSTANTS.COLLECTION).doc(id).update({ status: 'EN_ATTENTE' });
+    db.collection(CONSTANTS.COLLECTION).doc(id).update({ 
+        status: 'EN_ATTENTE',
+        livreur: firebase.firestore.FieldValue.delete(),
+        dateProgramme: firebase.firestore.FieldValue.delete(),
+        dateLivraison: firebase.firestore.FieldValue.delete(),
+        orderInRoute: firebase.firestore.FieldValue.delete()
+    }).then(() => showToast('Repassé en attente et désassigné', 'success'));
 }
 
 function deleteDelivery(id) {
