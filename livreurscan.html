@@ -898,6 +898,7 @@ let currentDelivery = null;
 let capturedPhotos = [];   // Array de {previewUrl, file, type: 'image'|'video'}
 let todayHistory   = [];
 let scannerActive  = false;
+let isScanningPaused = false; // <-- NOUVELLE VARIABLE POUR PAUSER LE SCAN
 let codeReader     = null;
 let currentScreen  = 'scan';
 
@@ -925,6 +926,8 @@ async function initScanner() {
             videoEl,
             (result, err) => {
                 if (result) {
+                    if (isScanningPaused) return; // Ignore la caméra si en pause
+
                     let text = result.getText().trim().toUpperCase();
                     
                     // Tentative d'extraction intelligente (Regex comme dans livraison.js)
@@ -960,6 +963,9 @@ async function initScanner() {
 // ── RECHERCHE LIVRAISON ──
 async function searchDelivery(ref) {
     if (!ref || ref.length < 2) return;
+    
+    isScanningPaused = true; // <-- PAUSE LE SCANNER IMMÉDIATEMENT
+    
     showLoading(true);
 
     try {
@@ -1018,7 +1024,10 @@ function renderResult(d) {
         <div class="result-card">
             <div class="result-header">
                 <div class="result-ref">${d.ref || '—'}</div>
-                <span class="result-status-badge ${statusClass}">${statusLabel}</span>
+                <div style="display:flex; align-items:center; gap:10px;">
+                    <span class="result-status-badge ${statusClass}">${statusLabel}</span>
+                    <button onclick="resetScannerUI()" style="background:var(--card); border:1px solid var(--border); color:var(--text); border-radius:50%; width:28px; height:28px; display:flex; align-items:center; justify-content:center; cursor:pointer;" title="Fermer et scanner le prochain">✕</button>
+                </div>
             </div>
             <div class="result-body">
                 <div class="result-row">
@@ -1085,6 +1094,9 @@ function showNotFound(ref) {
     document.getElementById('photos-section').style.display = 'none';
     document.getElementById('actions-grid').style.display = 'none';
     vibrate([100, 50, 100]); // Vibration erreur
+    
+    // Auto-débloque le scanner après 3 secondes en cas d'erreur de colis
+    setTimeout(() => { isScanningPaused = false; }, 3000);
 }
 
 // ── PHOTOS ──
@@ -1618,8 +1630,27 @@ function updateCounters() {
     }
 }
 
+// ── RESET SCANNER ──
+function resetScannerUI() {
+    currentDelivery = null;
+    capturedPhotos = [];
+    document.getElementById('result-zone').innerHTML = '';
+    document.getElementById('photos-section').style.display = 'none';
+    document.getElementById('actions-grid').style.display = 'none';
+    document.getElementById('manual-ref').value = '';
+    document.getElementById('scan-label').textContent = 'Pointez vers un code-barres';
+    
+    isScanningPaused = false; // Réactive le scanner
+    window._lastScan = ''; 
+    window._lastScanTime = 0;
+}
+
 // ── NAVIGATION ÉCRANS ──
 function showScreen(name) {
+    if (name === 'scan' && currentScreen === 'scan') {
+        resetScannerUI(); // Réinitialise si on clique sur l'onglet Scanner alors qu'on y est déjà
+    }
+
     document.querySelectorAll('.screen').forEach(s => s.classList.add('hidden'));
     document.getElementById('screen-' + name).classList.remove('hidden');
     currentScreen = name;
