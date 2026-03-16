@@ -1418,80 +1418,157 @@ function finalizeDeliveryUI(status) {
 
 async function sendWhatsAppMessage(d, livreurName, isPartial, totalQty) {
 
-    // --- 2. Envoyer le message WhatsApp ---
-    const name = getClientName(d);
+    const name  = getClientName(d);
     const phone = extractPhone(d);
 
-    let msgHeader = `✅ Colis : *${d.ref}*`;
-    if (isPartial) {
-        msgHeader += ` (Partiel: ${d.quantite}/${totalQty})`;
-    }
+    let msgHeader = `✅ Colis : ${d.ref}`;
+    if (isPartial) msgHeader += ` (Partiel: ${d.quantite}/${totalQty})`;
 
-    // Message standard
-    const message = [
+    // Texte propre (sans * Markdown) pour l'overlay image
+    const plainMessage = [
         msgHeader,
+        `👤 Client : ${name}`,
+        `📍 Lieu : ${d.lieuLivraison || '—'}`,
+        `LIVRÉ PAR : ${livreurName}`
+    ].filter(Boolean).join('\n');
+
+    // Texte avec Markdown pour WhatsApp texte seul
+    const richMessage = [
+        `✅ Colis : *${d.ref}*` + (isPartial ? ` (Partiel: ${d.quantite}/${totalQty})` : ''),
         `👤 Client : ${name}`,
         `📍 Lieu : ${d.lieuLivraison || '—'}`,
         ``,
         `*LIVRÉ PAR : ${livreurName}*`
     ].join('\n');
 
-    // ── CAS 1 : On a des médias → Web Share API ──
-    if (capturedPhotos.length > 0 && navigator.share && navigator.canShare) {
-        const filesToShare = capturedPhotos.map(p => p.file);
-        
-        // FIX : WhatsApp duplique le texte sur chaque image s'il y en a plusieurs.
-        // Si on a plus d'une photo, on ne passe que les fichiers, et on copie le texte.
-        const shareData = { files: filesToShare };
-        if (filesToShare.length === 1) {
-            shareData.text = message;
-        }
+    // ── FONCTION : Stamp du texte en overlay sur une image ──
+    async function stampTextOnImage(photoItem, text) {
+        return new Promise((resolve) => {
+            const img = new Image();
+            img.onload = () => {
+                const canvas  = document.createElement('canvas');
+                canvas.width  = img.width;
+                canvas.height = img.height;
+                const ctx     = canvas.getContext('2d');
 
-        if (navigator.canShare(shareData)) {
-            try {
-                showLoading(false);
-                if (filesToShare.length > 1) {
-                    try { await navigator.clipboard.writeText(message); } catch(e) {}
-                    showToast('📋 Photos envoyées. Le texte est copié, vous pouvez le coller !', 'success');
+                // Image originale
+                ctx.drawImage(img, 0, 0);
+
+                // Paramètres typographiques adaptés à la taille de l'image
+                const lines    = text.split('\n').filter(l => l.trim() !== '');
+                const fontSize = Math.max(28, Math.round(img.width * 0.034));
+                const pad      = Math.round(fontSize * 0.9);
+                const lineH    = Math.round(fontSize * 1.6);
+                const boxH     = lines.length * lineH + pad * 2;
+                const margin   = Math.round(img.height * 0.018);
+                const boxX     = margin;
+                const boxY     = img.height - boxH - margin;
+                const boxW     = img.width  - margin * 2;
+                const r        = 20; // border-radius
+
+                // Fond noir semi-transparent arrondi
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.75)';
+                ctx.beginPath();
+                ctx.moveTo(boxX + r, boxY);
+                ctx.lineTo(boxX + boxW - r, boxY);
+                ctx.quadraticCurveTo(boxX + boxW, boxY,         boxX + boxW, boxY + r);
+                ctx.lineTo(boxX + boxW,           boxY + boxH - r);
+                ctx.quadraticCurveTo(boxX + boxW, boxY + boxH,  boxX + boxW - r, boxY + boxH);
+                ctx.lineTo(boxX + r,              boxY + boxH);
+                ctx.quadraticCurveTo(boxX,        boxY + boxH,  boxX, boxY + boxH - r);
+                ctx.lineTo(boxX,                  boxY + r);
+                ctx.quadraticCurveTo(boxX,        boxY,         boxX + r, boxY);
+                ctx.closePath();
+                ctx.fill();
+
+                // Écriture des lignes avec couleurs distinctes
+                ctx.font         = `700 ${fontSize}px 'Plus Jakarta Sans', Arial, sans-serif`;
+                ctx.textBaseline = 'top';
+
+                lines.forEach((line, i) => {
+                    const yTxt = boxY + pad + i * lineH;
+                    // Ligne 1 (référence colis) → vert vif
+                    if (i === 0) {
+                        ctx.fillStyle = '#4ade80';
+                    // Dernière ligne (livreur) → doré
+                    } else if (i === lines.length - 1) {
+                        ctx.fillStyle = '#fbbf24';
+                    // Lignes client/lieu → blanc
+                    } else {
+                        ctx.fillStyle = '#ffffff';
+                    }
+                    ctx.fillText(line, boxX + pad, yTxt);
+                });
+
+                canvas.toBlob(blob => {
+                    resolve(new File([blob], `livraison_${d.ref || 'photo'}.jpg`, { type: 'image/jpeg' }));
+                }, 'image/jpeg', 0.93);
+            };
+            img.onerror = () => resolve(photoItem.file); // fallback : fichier original si erreur
+            img.src = photoItem.previewUrl;
+        });
+    }
+
+    // ── CAS 1 : Médias disponibles → stamp + Web Share API ──
+    if (capturedPhotos.length > 0 && navigator.share) {
+        try {
+            showToast('⏳ Préparation des photos...', '');
+
+            const filesToShare = [];
+            for (const p of capturedPhotos) {
+                if (p.type === 'image') {
+                    // Stamp sur TOUTES les images : le texte voyage toujours avec la photo
+                    const stamped = await stampTextOnImage(p, plainMessage);
+                    filesToShare.push(stamped);
+                } else {
+                    // Vidéo : impossible de stamper, on envoie telle quelle
+                    filesToShare.push(p.file);
                 }
-                await navigator.share(shareData);
-                if (filesToShare.length === 1) {
-                    showToast('📤 Partagé avec succès !', 'success');
-                }
-                return; // Succès, on sort
-            } catch (e) {
-                showLoading(false);
-                if (e.name === 'AbortError') return; // L'utilisateur a annulé, on ne fait rien
-                // Si le partage échoue pour une autre raison, on continue aux fallbacks
-                console.warn('Share API with files error:', e);
             }
+
+            // Tenter avec texte (iOS le supporte bien, Android parfois)
+            const shareWithText = { files: filesToShare, text: richMessage };
+            const shareNoText   = { files: filesToShare };
+            const canWithText   = navigator.canShare && navigator.canShare(shareWithText);
+            const canNoText     = navigator.canShare && navigator.canShare(shareNoText);
+
+            if (canWithText || canNoText) {
+                showLoading(false);
+                await navigator.share(canWithText ? shareWithText : shareNoText);
+                showToast('📤 Photos partagées avec les infos !', 'success');
+                return;
+            }
+        } catch (e) {
+            showLoading(false);
+            if (e.name === 'AbortError') return; // Annulé par l'utilisateur
+            console.warn('Share API error:', e);
+            // Continuer vers les fallbacks
         }
     }
 
-    // ── CAS 2 : Partage texte seul (fallback si pas de photo ou si partage de fichiers a échoué) ──
+    // ── CAS 2 : Pas de médias ou share a échoué → texte seul ──
     if (navigator.share) {
         try {
             showLoading(false);
-            await navigator.share({ text: message });
+            await navigator.share({ text: richMessage });
             showToast('📤 Message partagé !', 'success');
             return;
         } catch (e) {
             showLoading(false);
-            if (e.name === 'AbortError') return; // Annulé
+            if (e.name === 'AbortError') return;
         }
     }
 
-    // ── CAS 3 : Fallback final → lien wa.me ou presse-papier ──
+    // ── CAS 3 : Fallback final → wa.me direct ou presse-papier ──
     showLoading(false);
     if (phone) {
         let clean = phone.replace(/[^\d]/g, '');
         if (!clean.startsWith('225') && clean.length === 10) clean = '225' + clean;
-        const url = `https://wa.me/${clean}?text=${encodeURIComponent(message)}`;
-        window.open(url, '_blank');
+        window.open(`https://wa.me/${clean}?text=${encodeURIComponent(richMessage)}`, '_blank');
         showToast('📱 WhatsApp ouvert', 'success');
     } else {
         try {
-            await navigator.clipboard.writeText(message);
+            await navigator.clipboard.writeText(richMessage);
             showToast('📋 Message copié ! Colle-le dans WhatsApp', 'success');
         } catch {
             showToast('⚠️ Pas de numéro disponible', 'error');
