@@ -1439,13 +1439,25 @@ async function sendWhatsAppMessage(d, livreurName, isPartial, totalQty) {
     // ── CAS 1 : On a des médias → Web Share API ──
     if (capturedPhotos.length > 0 && navigator.share && navigator.canShare) {
         const filesToShare = capturedPhotos.map(p => p.file);
-        const shareData = { files: filesToShare, text: message };
+        
+        // FIX : WhatsApp duplique le texte sur chaque image s'il y en a plusieurs.
+        // Si on a plus d'une photo, on ne passe que les fichiers, et on copie le texte.
+        const shareData = { files: filesToShare };
+        if (filesToShare.length === 1) {
+            shareData.text = message;
+        }
 
         if (navigator.canShare(shareData)) {
             try {
                 showLoading(false);
+                if (filesToShare.length > 1) {
+                    try { await navigator.clipboard.writeText(message); } catch(e) {}
+                    showToast('📋 Photos envoyées. Le texte est copié, vous pouvez le coller !', 'success');
+                }
                 await navigator.share(shareData);
-                showToast('📤 Partagé avec succès !', 'success');
+                if (filesToShare.length === 1) {
+                    showToast('📤 Partagé avec succès !', 'success');
+                }
                 return; // Succès, on sort
             } catch (e) {
                 showLoading(false);

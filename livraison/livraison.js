@@ -961,6 +961,7 @@ async function confirmImport() {
 
     // --- NOUVEAU : Pré-traitement pour fusionner les doublons DANS le fichier importé ---
     const uniqueImports = new Map();
+        const seenOriginalRefs = new Set(); // Pour éliminer les doublons stricts (ex: double scan)
     const pickBest = (oldV, newV) => {
         const o = String(oldV || '').trim();
         const n = String(newV || '').trim();
@@ -971,7 +972,15 @@ async function confirmImport() {
     };
 
     for (const item of pendingImport) {
-        let ref = item.ref.toUpperCase();
+            let originalRef = item.ref.toUpperCase();
+            
+            // Élimination des doublons stricts (ex: deux fois AB-031-E6_2_486 scannés par erreur)
+            if (seenOriginalRefs.has(originalRef)) {
+                continue; // On ignore la ligne si c'est un doublon parfait (même code exact)
+            }
+            seenOriginalRefs.add(originalRef);
+
+            let ref = originalRef;
         
         // LOGIQUE DE REGROUPEMENT (En Cours) : On nettoie les suffixes _1_512 pour grouper sur la racine
         // Ex: KA-086-D41_1_512 -> KA-086-D41
