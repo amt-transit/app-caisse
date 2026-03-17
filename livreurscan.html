@@ -1419,7 +1419,6 @@ function finalizeDeliveryUI(status) {
 async function sendWhatsAppMessage(d, livreurName, isPartial, totalQty) {
 
     const name  = getClientName(d);
-    const phone = extractPhone(d);
 
     let msgHeader = `✅ Colis : ${d.ref}`;
     if (isPartial) msgHeader += ` (Partiel: ${d.quantite}/${totalQty})`;
@@ -1561,18 +1560,14 @@ async function sendWhatsAppMessage(d, livreurName, isPartial, totalQty) {
 
     // ── CAS 3 : Fallback final → wa.me direct ou presse-papier ──
     showLoading(false);
-    if (phone) {
-        let clean = phone.replace(/[^\d]/g, '');
-        if (!clean.startsWith('225') && clean.length === 10) clean = '225' + clean;
-        window.open(`https://wa.me/${clean}?text=${encodeURIComponent(richMessage)}`, '_blank');
-        showToast('📱 WhatsApp ouvert', 'success');
-    } else {
-        try {
-            await navigator.clipboard.writeText(richMessage);
-            showToast('📋 Message copié ! Colle-le dans WhatsApp', 'success');
-        } catch {
-            showToast('⚠️ Pas de numéro disponible', 'error');
-        }
+    // On ouvre WhatsApp globalement pour que le livreur choisisse le groupe de livraison
+    try {
+        window.open(`https://wa.me/?text=${encodeURIComponent(richMessage)}`, '_blank');
+        showToast('📱 WhatsApp ouvert. Choisissez le groupe !', 'success');
+    } catch (e) {
+        // Fallback en cas de blocage des pop-ups par le navigateur
+        navigator.clipboard.writeText(richMessage).catch(() => console.log("Clipboard error"));
+        showToast('📋 Message copié ! Colle-le dans le groupe WhatsApp.', 'success');
     }
 }
 

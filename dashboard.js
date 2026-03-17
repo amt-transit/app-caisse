@@ -211,56 +211,64 @@ document.addEventListener('DOMContentLoaded', async () => {
     // --- 4. CALCULS FINANCIERS ---
 
     function calculateTotals(transactions, expenses, incomes, bank) {
-        // A. Recettes (Basées sur les paiements effectifs dans la période)
-        let totalAbidjan = 0, totalParis = 0, totalCheques = 0, totalVirements = 0;
-        let totalVentesCash = 0; // Pour la caisse physique
+        // --- NOUVELLE LOGIQUE DE CALCUL (PLUS STRICTE) ---
 
+        // A. Initialisation des totaux
+        let totalCA_Abidjan_Cash = 0; // CA encaissé en espèces/mobile money
+        let totalCA_Paris = 0;        // CA encaissé à Paris
+        let totalPendingChecks = 0;   // Chèques en attente de dépôt
+        let totalVirementsIn = 0;     // Virements entrants
+        let totalOtherIncome_Cash = 0;// Autres entrées en espèces
+        let totalDep_Cash = 0;        // Dépenses en espèces
+        let totalDep_Conteneur = 0;   // Dépenses liées aux conteneurs
+        let totalDep_Mensuelle = 0;   // Dépenses mensuelles
+        let totalReste = 0;           // Total des dettes clients
+
+        // B. Traitement des Transactions (Ventes)
         transactions.forEach(t => {
             const payments = t.paymentHistory || [{ ...t, date: t.date }]; // Fallback legacy
             payments.forEach(p => {
                 if (isInDateRange(p.date)) {
-                    totalAbidjan += (p.montantAbidjan || 0);
-                    totalParis += (p.montantParis || 0);
+                    totalCA_Paris += (p.montantParis || 0);
 
-                    // Ventilation par mode
+                    // Ventilation par mode de paiement pour Abidjan
                     const mode = p.modePaiement || t.modePaiement || 'Espèce';
-                    if (['Espèce', 'Wave', 'OM', 'Mobile Money'].includes(mode)) totalVentesCash += (p.montantAbidjan || 0);
-                    if (mode === 'Chèque' && p.checkStatus === 'Pending') totalCheques += (p.montantAbidjan || 0);
-                    if (mode === 'Virement') totalVirements += ((p.montantAbidjan || 0) + (p.montantParis || 0));
+                    if (['Espèce', 'Wave', 'OM', 'Mobile Money'].includes(mode)) {
+                        totalCA_Abidjan_Cash += (p.montantAbidjan || 0);
+                    } else if (mode === 'Chèque' && p.checkStatus === 'Pending') {
+                        totalPendingChecks += (p.montantAbidjan || 0) + (p.montantParis || 0);
+                    } else if (mode === 'Virement') {
+                        totalVirementsIn += (p.montantAbidjan || 0) + (p.montantParis || 0);
+                    }
                 }
             });
+            totalReste += (t.reste || 0);
         });
 
-        // B. Autres Entrées
+        // C. Traitement des Autres Entrées
         const totalOther = incomes.reduce((sum, i) => sum + (i.montant || 0), 0);
-        const totalOtherCash = incomes.filter(i => i.mode !== 'Chèque' && i.mode !== 'Virement').reduce((sum, i) => sum + (i.montant || 0), 0);
+        totalOtherIncome_Cash = incomes.filter(i => i.mode !== 'Chèque' && i.mode !== 'Virement').reduce((sum, i) => sum + (i.montant || 0), 0);
 
-        // C. Dépenses
+        // D. Traitement des Dépenses
         const realExpenses = expenses.filter(e => e.action !== 'Allocation'); // On exclut les recharges budget
         const totalDep = realExpenses.reduce((sum, e) => sum + (e.montant || 0), 0);
-        const totalDepCash = realExpenses.filter(e => e.mode !== 'Chèque' && e.mode !== 'Virement').reduce((sum, e) => sum + (e.montant || 0), 0);
+        totalDep_Cash = realExpenses.filter(e => e.mode !== 'Chèque' && e.mode !== 'Virement').reduce((sum, e) => sum + (e.montant || 0), 0);
+        totalDep_Conteneur = realExpenses.filter(e => e.type === 'Conteneur' || e.conteneur).reduce((sum, e) => sum + e.montant, 0);
+        totalDep_Mensuelle = totalDep - totalDep_Conteneur;
 
-        // Détail Dépenses
-        const depConteneur = realExpenses.filter(e => e.type === 'Conteneur' || e.conteneur).reduce((sum, e) => sum + e.montant, 0);
-        const depMensuelle = totalDep - depConteneur;
-
-        // D. Banque
+        // E. Traitement des Mouvements Bancaires
         const retraits = bank.filter(m => m.type === 'Retrait' || m.type === 'Paiement').reduce((sum, m) => sum + m.montant, 0);
-        const depots = bank.filter(m => m.type === 'Depot' && m.source !== 'Remise Chèques' && m.source !== 'Solde Initial').reduce((sum, m) => sum + m.montant, 0); // On exclut remises chèques et solde initial du flux caisse
+        const depotsCash = bank.filter(m => m.type === 'Depot' && m.source !== 'Remise Chèques' && m.source !== 'Solde Initial').reduce((sum, m) => sum + m.montant, 0);
         const depotsAll = bank.filter(m => m.type === 'Depot').reduce((sum, m) => sum + m.montant, 0);
         
-        // E. Soldes
-        const benefice = (totalAbidjan + totalOther) - totalDep;
-        // Solde Caisse = (Ventes Cash + Autres Cash + Retraits Banque) - (Dépenses Cash + Dépôts Espèces Banque)
-        const soldeCaisse = (totalVentesCash + totalOtherCash + retraits) - (totalDepCash + depots);
-        // Solde Banque = (Dépôts Totaux + Virements Reçus) - Retraits
-        const soldeBanque = (depotsAll + totalVirements) - retraits;
-        
-        const resteTotal = transactions.reduce((sum, t) => sum + (t.reste || 0), 0);
+        // F. Calcul des Soldes Finaux
+        const benefice = (totalCA_Abidjan_Cash + totalCA_Paris + totalOther) - totalDep;
+        const soldeCaisse = (totalCA_Abidjan_Cash + totalOtherIncome_Cash + retraits) - (totalDep_Cash + depotsCash);
+        const soldeBanque = (depotsAll + totalVirementsIn) - retraits;
 
-        // F. Affichage
-        if(els.percu) els.percu.textContent = formatCFA(totalAbidjan);
-        if(els.parisHidden) els.parisHidden.textContent = `Dont Paris: ${formatCFA(totalParis)}`;
+        // G. Affichage
+        if(els.percu) els.percu.textContent = formatCFA(totalCA_Abidjan_Cash);
+        if(els.parisHidden) els.parisHidden.textContent = `Dont Paris: ${formatCFA(totalCA_Paris)}`;
         if(els.other) els.other.textContent = formatCFA(totalOther);
         if(els.depenses) els.depenses.textContent = formatCFA(totalDep);
         if(els.benefice) {
@@ -269,12 +277,12 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
         if(els.caisse) els.caisse.textContent = formatCFA(soldeCaisse);
         if(els.banque) els.banque.textContent = formatCFA(soldeBanque);
-        if(els.cheques) els.cheques.textContent = formatCFA(totalCheques);
-        if(els.virements) els.virements.textContent = formatCFA(totalVirements);
+        if(els.cheques) els.cheques.textContent = formatCFA(totalPendingChecks);
+        if(els.virements) els.virements.textContent = formatCFA(totalVirementsIn);
         if(els.count) els.count.textContent = transactions.length;
-        if(els.reste) els.reste.textContent = formatCFA(resteTotal);
-        if(els.depContainer) els.depContainer.textContent = `Conteneurs: ${formatCFA(depConteneur)}`;
-        if(els.depMensuelle) els.depMensuelle.textContent = `Mensuelles: ${formatCFA(depMensuelle)}`;
+        if(els.reste) els.reste.textContent = formatCFA(totalReste);
+        if(els.depContainer) els.depContainer.textContent = `Conteneurs: ${formatCFA(totalDep_Conteneur)}`;
+        if(els.depMensuelle) els.depMensuelle.textContent = `Mensuelles: ${formatCFA(totalDep_Mensuelle)}`;
     }
 
     function isInDateRange(dateStr) {
