@@ -218,6 +218,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         transactions.forEach(t => {
             const payments = t.paymentHistory || [{ ...t, date: t.date }]; // Fallback legacy
             payments.forEach(p => {
+                // SÉCURITÉ STRICTE : On ignore complètement tout paiement non validé en Confirmation
+                if (p.sessionId && !validatedSessions.has(p.sessionId)) return;
+
                 if (isInDateRange(p.date)) {
                     totalAbidjan += (p.montantAbidjan || 0);
                     totalParis += (p.montantParis || 0);
@@ -253,8 +256,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         const benefice = (totalAbidjan + totalOther) - totalDep;
         // Solde Caisse = (Ventes Cash + Autres Cash + Retraits Banque) - (Dépenses Cash + Dépôts Espèces Banque)
         const soldeCaisse = (totalVentesCash + totalOtherCash + retraits) - (totalDepCash + depots);
-        // Solde Banque = (Dépôts Totaux + Virements Reçus) - Retraits
-        const soldeBanque = (depotsAll + totalVirements) - retraits;
+        // Solde Banque : Repose UNIQUEMENT sur l'onglet Banque pour éviter toute double validation (Virements exclus du calcul auto)
+        const soldeBanque = depotsAll - retraits;
         
         const resteTotal = transactions.reduce((sum, t) => sum + (t.reste || 0), 0);
 
