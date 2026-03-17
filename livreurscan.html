@@ -720,7 +720,6 @@ html, body {
 <div id="loading"><div class="spinner"></div></div>
 
 <!-- HIDDEN FILE INPUT FOR PHOTOS -->
-<input type="file" id="photoInputCamera" accept="image/*" capture="environment" style="display:none">
 <input type="file" id="photoInputGallery" accept="image/*,video/*" multiple style="display:none">
 
 <!-- ═══════════════════════════════════════
@@ -869,19 +868,6 @@ html, body {
      SCRIPTS
      ═══════════════════════════════════════ -->
 
-<!-- PHOTO CHOICE MODAL -->
-<div id="photo-choice-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.8); z-index:9999; align-items:center; justify-content:center;">
-  <div style="background:#1e293b; padding:20px; border-radius:16px; width:85%; max-width:300px; display:flex; flex-direction:column; gap:12px; border:1px solid rgba(255,255,255,0.1);">
-    <h3 style="margin:0 0 5px; text-align:center; font-size:1.1rem; color:white;">Ajouter une photo</h3>
-    <button onclick="triggerCamera()" style="padding:14px; border-radius:12px; border:none; background:#2563eb; color:white; font-weight:700; font-size:1rem; display:flex; align-items:center; justify-content:center; gap:10px; cursor:pointer;">
-      <span>📷</span> Prendre une photo
-    </button>
-    <button onclick="triggerGallery()" style="padding:14px; border-radius:12px; border:1px solid rgba(255,255,255,0.1); background:#273344; color:white; font-weight:700; font-size:1rem; display:flex; align-items:center; justify-content:center; gap:10px; cursor:pointer;">
-      <span>🖼️</span> Choisir dans la galerie
-    </button>
-    <button onclick="closePhotoChoice()" style="padding:10px; background:transparent; border:none; color:#94a3b8; font-weight:600; margin-top:5px; cursor:pointer;">Annuler</button>
-  </div>
-</div>
 
 <script src="firebase-init.js"></script>
 <script src="auth-guard.js"></script>
@@ -911,7 +897,6 @@ document.addEventListener('DOMContentLoaded', () => {
     loadTodayStats();
 
     // Photo input listener
-    document.getElementById('photoInputCamera').addEventListener('change', handlePhotoCapture);
     document.getElementById('photoInputGallery').addEventListener('change', handlePhotoCapture);
 });
 
@@ -1101,20 +1086,6 @@ function showNotFound(ref) {
 
 // ── PHOTOS ──
 function addPhoto() {
-    document.getElementById('photo-choice-modal').style.display = 'flex';
-}
-
-function closePhotoChoice() {
-    document.getElementById('photo-choice-modal').style.display = 'none';
-}
-
-function triggerCamera() {
-    closePhotoChoice();
-    document.getElementById('photoInputCamera').click();
-}
-
-function triggerGallery() {
-    closePhotoChoice();
     document.getElementById('photoInputGallery').click();
 }
 
@@ -1423,14 +1394,6 @@ async function sendWhatsAppMessage(d, livreurName, isPartial, totalQty) {
     let msgHeader = `✅ Colis : ${d.ref}`;
     if (isPartial) msgHeader += ` (Partiel: ${d.quantite}/${totalQty})`;
 
-    // Texte propre (sans * Markdown) pour l'overlay image
-    const plainMessage = [
-        msgHeader,
-        `👤 Client : ${name}`,
-        `📍 Lieu : ${d.lieuLivraison || '—'}`,
-        `LIVRÉ PAR : ${livreurName}`
-    ].filter(Boolean).join('\n');
-
     // Texte avec Markdown pour WhatsApp texte seul
     const richMessage = [
         `✅ Colis : *${d.ref}*` + (isPartial ? ` (Partiel: ${d.quantite}/${totalQty})` : ''),
@@ -1440,90 +1403,12 @@ async function sendWhatsAppMessage(d, livreurName, isPartial, totalQty) {
         `*LIVRÉ PAR : ${livreurName}*`
     ].join('\n');
 
-    // ── FONCTION : Stamp du texte en overlay sur une image ──
-    async function stampTextOnImage(photoItem, text) {
-        return new Promise((resolve) => {
-            const img = new Image();
-            img.onload = () => {
-                const canvas  = document.createElement('canvas');
-                canvas.width  = img.width;
-                canvas.height = img.height;
-                const ctx     = canvas.getContext('2d');
-
-                // Image originale
-                ctx.drawImage(img, 0, 0);
-
-                // Paramètres typographiques adaptés à la taille de l'image
-                const lines    = text.split('\n').filter(l => l.trim() !== '');
-                const fontSize = Math.max(28, Math.round(img.width * 0.034));
-                const pad      = Math.round(fontSize * 0.9);
-                const lineH    = Math.round(fontSize * 1.6);
-                const boxH     = lines.length * lineH + pad * 2;
-                const margin   = Math.round(img.height * 0.018);
-                const boxX     = margin;
-                const boxY     = img.height - boxH - margin;
-                const boxW     = img.width  - margin * 2;
-                const r        = 20; // border-radius
-
-                // Fond noir semi-transparent arrondi
-                ctx.fillStyle = 'rgba(0, 0, 0, 0.75)';
-                ctx.beginPath();
-                ctx.moveTo(boxX + r, boxY);
-                ctx.lineTo(boxX + boxW - r, boxY);
-                ctx.quadraticCurveTo(boxX + boxW, boxY,         boxX + boxW, boxY + r);
-                ctx.lineTo(boxX + boxW,           boxY + boxH - r);
-                ctx.quadraticCurveTo(boxX + boxW, boxY + boxH,  boxX + boxW - r, boxY + boxH);
-                ctx.lineTo(boxX + r,              boxY + boxH);
-                ctx.quadraticCurveTo(boxX,        boxY + boxH,  boxX, boxY + boxH - r);
-                ctx.lineTo(boxX,                  boxY + r);
-                ctx.quadraticCurveTo(boxX,        boxY,         boxX + r, boxY);
-                ctx.closePath();
-                ctx.fill();
-
-                // Écriture des lignes avec couleurs distinctes
-                ctx.font         = `700 ${fontSize}px 'Plus Jakarta Sans', Arial, sans-serif`;
-                ctx.textBaseline = 'top';
-
-                lines.forEach((line, i) => {
-                    const yTxt = boxY + pad + i * lineH;
-                    // Ligne 1 (référence colis) → vert vif
-                    if (i === 0) {
-                        ctx.fillStyle = '#4ade80';
-                    // Dernière ligne (livreur) → doré
-                    } else if (i === lines.length - 1) {
-                        ctx.fillStyle = '#fbbf24';
-                    // Lignes client/lieu → blanc
-                    } else {
-                        ctx.fillStyle = '#ffffff';
-                    }
-                    ctx.fillText(line, boxX + pad, yTxt);
-                });
-
-                canvas.toBlob(blob => {
-                    resolve(new File([blob], `livraison_${d.ref || 'photo'}.jpg`, { type: 'image/jpeg' }));
-                }, 'image/jpeg', 0.93);
-            };
-            img.onerror = () => resolve(photoItem.file); // fallback : fichier original si erreur
-            img.src = photoItem.previewUrl;
-        });
-    }
-
-    // ── CAS 1 : Médias disponibles → stamp + Web Share API ──
+    // ── CAS 1 : Médias disponibles → Web Share API natif avec les fichiers bruts ──
     if (capturedPhotos.length > 0 && navigator.share) {
         try {
-            showToast('⏳ Préparation des photos...', '');
+            showToast('⏳ Ouverture de WhatsApp...', '');
 
-            const filesToShare = [];
-            for (const p of capturedPhotos) {
-                if (p.type === 'image') {
-                    // Stamp sur TOUTES les images : le texte voyage toujours avec la photo
-                    const stamped = await stampTextOnImage(p, plainMessage);
-                    filesToShare.push(stamped);
-                } else {
-                    // Vidéo : impossible de stamper, on envoie telle quelle
-                    filesToShare.push(p.file);
-                }
-            }
+            const filesToShare = capturedPhotos.map(p => p.file);
 
             // Tenter avec texte (iOS le supporte bien, Android parfois)
             const shareWithText = { files: filesToShare, text: richMessage };
