@@ -494,7 +494,6 @@ document.addEventListener('DOMContentLoaded', async () => {
                 saisiPar: currentUserName,
                 modePaiement: t.modePaiement,
                 agentMobileMoney: t.agentMobileMoney,
-                checkStatus: (t.modePaiement === 'Chèque') ? 'Pending' : 'Cleared',
                 sessionId: currentSessionId // <-- AJOUT CLÉ : On lie le paiement à cette session précise
             }));
 

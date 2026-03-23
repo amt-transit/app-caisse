@@ -119,14 +119,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const totalBridgeEl = document.getElementById('totalBridge');
     const totalOrangeEl = document.getElementById('totalOrange');
 
-    // ÉLÉMENTS REMISE CHÈQUE
-    const openCheckDepositBtn = document.getElementById('openCheckDepositBtn');
-    const checkModal = document.getElementById('checkDepositModal');
-    const pendingChecksBody = document.getElementById('pendingChecksBody');
-    const totalDepositAmountEl = document.getElementById('totalDepositAmount');
-    const confirmDepositBtn = document.getElementById('confirmDepositBtn');
-    let selectedChecks = [];
-
     let unsubscribeBank = null;
     let unsubscribeVirements = null;
     let allBankMovements = [];
@@ -239,8 +231,6 @@ document.addEventListener('DOMContentLoaded', () => {
         // Masquer le formulaire pour le spectateur
         const form = document.getElementById('caisseForm');
         if (form) form.style.display = 'none';
-        // Masquer le bouton de remise de chèque
-        if (openCheckDepositBtn) openCheckDepositBtn.style.display = 'none';
     }
 
     // 2. IMPORT CSV
@@ -333,11 +323,11 @@ document.addEventListener('DOMContentLoaded', () => {
                         // FILTRE SÉCURITÉ : Ignorer paiement si session non validée
                         if (pay.sessionId && unconfirmedSessions.has(pay.sessionId)) return;
 
-                        if (pay.modePaiement === 'Virement') {
+                        if (pay.modePaiement === 'Virement' || pay.modePaiement === 'Chèque') {
                             extracted.push({
                                 id: `${doc.id}_${idx}`,
                                 date: pay.date,
-                                description: `VIREMENT REÇU: ${t.reference} - ${t.nom} (${pay.agentMobileMoney || 'N/A'})`,
+                                description: `${pay.modePaiement.toUpperCase()} REÇU: ${t.reference} - ${t.nom} (${pay.agentMobileMoney || 'N/A'})`,
                                 type: 'Depot',
                                 montant: (pay.montantAbidjan || 0) + (pay.montantParis || 0),
                                 isDeleted: t.isDeleted,
@@ -348,11 +338,11 @@ document.addEventListener('DOMContentLoaded', () => {
                         }
                     });
                 } else {
-                    if (t.modePaiement === 'Virement') {
+                    if (t.modePaiement === 'Virement' || t.modePaiement === 'Chèque') {
                         extracted.push({
                             id: doc.id,
                             date: t.date,
-                            description: `VIREMENT REÇU: ${t.reference} - ${t.nom} (${t.agentMobileMoney || 'N/A'})`,
+                            description: `${t.modePaiement.toUpperCase()} REÇU: ${t.reference} - ${t.nom} (${t.agentMobileMoney || 'N/A'})`,
                             type: 'Depot',
                             montant: (t.montantAbidjan || 0) + (t.montantParis || 0),
                             isDeleted: t.isDeleted,
@@ -498,183 +488,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 snap.forEach(doc => doc.ref.update({ isDeleted: true }));
             });
 
-            // LOGIQUE D'ANNULATION DE REMISE DE CHÈQUE
-            const move = allBankMovements.find(m => m.id === docId);
-            
-            if (move && move.source === 'Remise Chèques' && move.checks && move.checks.length > 0) {
-                try {
-                    const batch = db.batch();
-                    // 1. Supprimer le mouvement banque
-                    batch.update(bankCollection.doc(docId), { isDeleted: true });
-
-                    // 2. Rétablir les chèques en "Pending" (En attente)
-                    const updates = {};
-                    move.checks.forEach(c => {
-                        if(!updates[c.docId]) updates[c.docId] = [];
-                        updates[c.docId].push(c.index);
-                    });
-
-                    for (const [tid, indices] of Object.entries(updates)) {
-                        const tRef = db.collection("transactions").doc(tid);
-                        const tDoc = await tRef.get();
-                        if(tDoc.exists) {
-                            const h = tDoc.data().paymentHistory;
-                            indices.forEach(idx => { if(h[idx]) h[idx].checkStatus = 'Pending'; });
-                            batch.update(tRef, { paymentHistory: h });
-                        }
-                    }
-                    await batch.commit();
-                    alert("Mouvement supprimé et chèques rétablis en 'En attente'.");
-                } catch(e) { console.error(e); alert("Erreur lors de l'annulation."); }
-            } else {
                 bankCollection.doc(docId).update({ isDeleted: true });
-            }
         }
     });
-
-    // 5. GESTION REMISE CHÈQUES
-    if (openCheckDepositBtn && !isViewer) {
-        openCheckDepositBtn.addEventListener('click', async () => {
-            const snapshot = await db.collection("transactions").where("isDeleted", "!=", true).limit(1000).get();
-            
-            let pendingChecks = [];
-            snapshot.forEach(doc => {
-                const data = doc.data();
-                
-                if (data.paymentHistory) {
-                    data.paymentHistory.forEach((pay, index) => {
-                        // FILTRE SÉCURITÉ
-                        if (pay.sessionId && unconfirmedSessions.has(pay.sessionId)) return;
-
-                        if (pay.modePaiement === 'Chèque' && pay.checkStatus === 'Pending') {
-                            pendingChecks.push({
-                                docId: doc.id,
-                                index: index,
-                                date: pay.date,
-                                client: data.nom || "Non spécifié",
-                                reference: data.reference || "",
-                                destinataire: data.nomDestinataire || "Non spécifié",
-                                montant: pay.montantAbidjan || pay.montantParis || 0, // Montant du chèque (Abidjan par défaut)
-                                info: pay.agentMobileMoney
-                            });
-                        }
-                    });
-                }
-            });
-
-            pendingChecksBody.innerHTML = '';
-            selectedChecks = [];
-            updateTotalDeposit();
-
-            if (pendingChecks.length === 0) {
-                pendingChecksBody.innerHTML = '<tr><td colspan="4">Aucun chèque en attente.</td></tr>';
-            } else {
-                pendingChecks.forEach(chk => {
-                    const tr = document.createElement('tr');
-                    tr.innerHTML = `
-                        <td><input type="checkbox" class="check-select" data-amount="${chk.montant}" data-docid="${chk.docId}" data-index="${chk.index}" data-bank="${chk.info || ''}"></td>
-                        <td>${chk.date}</td>
-                        <td>
-                            <strong>${chk.reference}</strong><br>
-                            Exp: ${chk.client}<br>
-                            Dest: ${chk.destinataire}
-                            ${chk.info ? `<br><small>${chk.info}</small>` : ''}
-                        </td>
-                        <td>${formatCFA(chk.montant)}</td>
-                    `;
-                    pendingChecksBody.appendChild(tr);
-                });
-            }
-            checkModal.style.display = 'block';
-
-            document.querySelectorAll('.check-select').forEach(box => {
-                box.addEventListener('change', updateTotalDeposit);
-            });
-        });
-    }
-
-    function updateTotalDeposit() {
-        let total = 0;
-        selectedChecks = [];
-        document.querySelectorAll('.check-select:checked').forEach(box => {
-            const amt = parseFloat(box.dataset.amount);
-            total += amt;
-            selectedChecks.push({
-                docId: box.dataset.docid,
-                index: parseInt(box.dataset.index),
-                amount: amt,
-                bank: box.dataset.bank
-            });
-        });
-        totalDepositAmountEl.textContent = formatCFA(total);
-    }
-
-    if (confirmDepositBtn && !isViewer) {
-        confirmDepositBtn.addEventListener('click', async () => {
-            if (selectedChecks.length === 0) return alert("Sélectionnez au moins un chèque.");
-            if (!confirm(`Déposer ces ${selectedChecks.length} chèques pour un total de ${totalDepositAmountEl.textContent} ?`)) return;
-
-            confirmDepositBtn.disabled = true;
-            confirmDepositBtn.textContent = "Traitement...";
-
-            const batch = db.batch();
-
-            // A. Créer l'entrée "Dépôt Banque"
-            const bankRef = bankCollection.doc();
-            let totalAmount = 0;
-            
-            // Détermination de la banque (Si tous les chèques sont de la même banque, on l'affiche)
-            const uniqueBanks = [...new Set(selectedChecks.map(c => c.bank).filter(b => b))];
-            const depositBank = uniqueBanks.length === 1 ? uniqueBanks[0] : (uniqueBanks.length > 1 ? "Multi-Banques" : "");
-
-            selectedChecks.forEach(c => totalAmount += c.amount);
-            
-            batch.set(bankRef, {
-                date: new Date().toISOString().split('T')[0],
-                description: `Remise de ${selectedChecks.length} chèques (${currentUserName})`, // Auteur ajouté ici aussi
-                montant: totalAmount,
-                type: 'Depot',
-                bank: depositBank,
-                isDeleted: false,
-                source: 'Remise Chèques',
-                checks: selectedChecks // Sauvegarde des chèques pour pouvoir annuler plus tard
-            });
-
-            // B. Mettre à jour les transactions
-            const docsToUpdate = {};
-            selectedChecks.forEach(chk => {
-                if (!docsToUpdate[chk.docId]) docsToUpdate[chk.docId] = [];
-                docsToUpdate[chk.docId].push(chk.index);
-            });
-
-            try {
-                for (const [docId, indices] of Object.entries(docsToUpdate)) {
-                    const docRef = db.collection("transactions").doc(docId);
-                    const docSnap = await docRef.get();
-                    const data = docSnap.data();
-                    const history = data.paymentHistory;
-
-                    indices.forEach(idx => {
-                        if (history[idx]) history[idx].checkStatus = 'Deposited';
-                    });
-
-                    batch.update(docRef, { paymentHistory: history });
-                }
-
-                await batch.commit();
-                alert("Remise effectuée avec succès !");
-                checkModal.style.display = 'none';
-                fetchBankMovements(); 
-
-            } catch (err) {
-                console.error(err);
-                alert("Erreur lors de la remise.");
-            } finally {
-                confirmDepositBtn.disabled = false;
-                confirmDepositBtn.textContent = "Valider le Dépôt"; 
-            }
-        });
-    }
 
     initBackToTopButton();
 });

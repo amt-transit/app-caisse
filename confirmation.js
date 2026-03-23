@@ -998,13 +998,8 @@ document.addEventListener('DOMContentLoaded', () => {
             // On garde le sessionId original s'il existe
             if (original.sessionId) paymentData.sessionId = original.sessionId;
             
-            // Gestion Chèque
-            if (paymentData.modePaiement === 'Chèque') {
-                paymentData.checkStatus = (original.modePaiement === 'Chèque' && original.checkStatus) ? original.checkStatus : 'Pending';
-            }
             currentEditingTransaction.paymentHistory[index] = { ...original, ...paymentData };
         } else {
-            if (paymentData.modePaiement === 'Chèque') paymentData.checkStatus = 'Pending';
             currentEditingTransaction.paymentHistory.push(paymentData);
         }
         renderPaymentHistoryTable();

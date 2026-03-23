@@ -775,42 +775,10 @@ document.addEventListener('DOMContentLoaded', () => {
             // Mise à jour
             const originalPayment = currentEditingTransaction.paymentHistory[index];
             
-            // GESTION INTELLIGENTE DU STATUT CHÈQUE
-            if (paymentData.modePaiement === 'Chèque') {
-                // Si c'était déjà un chèque avec un statut (ex: Deposited), on le garde. Sinon 'Pending'.
-                if (originalPayment.modePaiement === 'Chèque' && originalPayment.checkStatus) {
-                    paymentData.checkStatus = originalPayment.checkStatus;
-                } else {
-                    paymentData.checkStatus = 'Pending';
-                }
-            } else {
-                // Si ce n'est plus un chèque, on retire le statut pour nettoyer
-                delete paymentData.checkStatus;
-                delete originalPayment.checkStatus;
-            }
 
-            currentEditingTransaction.paymentHistory[index] = { ...originalPayment, ...paymentData };
-        } else {
-            // Ajout
-            if (paymentData.modePaiement === 'Chèque') {
-                paymentData.checkStatus = 'Pending';
-            }
-            currentEditingTransaction.paymentHistory.push(paymentData);
-        }
-        renderPaymentHistoryTable();
-        resetPaymentForm();
-    });
+        ChangesBtn.textContent = "Enregistrement...";
 
-    saveChangesBtn.addEventListener('click', async () => {
-        if (!currentEditingTransaction) return;
-
-        saveChangesBtn.disabled = true;
-        saveChangesBtn.textContent = "Enregistrement...";
-
-        try {
-            const updates = {
-                date: editHistMainDate.value,
-                nom: editHistNom.value.trim(),
+        try {   nom: editHistNom.value.trim(),
                 conteneur: editHistConteneur.value.trim().toUpperCase(),
                 prix: parseFloat(editHistPrix.value) || 0,
                 paymentHistory: currentEditingTransaction.paymentHistory
