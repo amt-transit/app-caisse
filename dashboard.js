@@ -248,16 +248,17 @@ document.addEventListener('DOMContentLoaded', async () => {
         const depMensuelle = totalDep - depConteneur;
 
         // D. Banque
-        const retraits = bank.filter(m => m.type === 'Retrait' || m.type === 'Paiement').reduce((sum, m) => sum + m.montant, 0);
         const depots = bank.filter(m => m.type === 'Depot' && m.source !== 'Remise Chèques' && m.source !== 'Solde Initial').reduce((sum, m) => sum + m.montant, 0); // On exclut remises chèques et solde initial du flux caisse
         const depotsAll = bank.filter(m => m.type === 'Depot').reduce((sum, m) => sum + m.montant, 0);
+        const retraitsEspeces = bank.filter(m => m.type === 'Retrait').reduce((sum, m) => sum + m.montant, 0);
+        const totalSortiesBanque = bank.filter(m => m.type === 'Retrait' || m.type === 'Paiement').reduce((sum, m) => sum + m.montant, 0);
         
         // E. Soldes
         const benefice = (totalAbidjan + totalOther) - totalDep;
-        // Solde Caisse = (Ventes Cash + Autres Cash + Retraits Banque) - (Dépenses Cash + Dépôts Espèces Banque)
-        const soldeCaisse = (totalVentesCash + totalOtherCash + retraits) - (totalDepCash + depots);
+        // Solde Caisse = (Ventes Cash + Autres Cash + Retraits Espèces Banque) - (Dépenses Cash + Dépôts Espèces Banque)
+        const soldeCaisse = (totalVentesCash + totalOtherCash + retraitsEspeces) - (totalDepCash + depots);
         // Solde Banque : Repose UNIQUEMENT sur l'onglet Banque pour éviter toute double validation (Virements exclus du calcul auto)
-        const soldeBanque = depotsAll - retraits;
+        const soldeBanque = depotsAll - totalSortiesBanque;
         
         const resteTotal = transactions.reduce((sum, t) => sum + (t.reste || 0), 0);
 
@@ -416,6 +417,9 @@ document.addEventListener('DOMContentLoaded', async () => {
             const benef = c.ca - c.dep;
             const percu = c.paris + c.abidjan;
             
+            const pctReste = c.ca ? Math.round((c.reste / c.ca) * 100) : 0;
+            const pctBenef = c.ca ? Math.round((benef / c.ca) * 100) : 0;
+            
             const tr = document.createElement('tr');
             tr.style.cursor = 'pointer';
             tr.onclick = () => openContainerDetails(c.name); // Ouvre le modal détails conteneur (existant)
@@ -428,9 +432,10 @@ document.addEventListener('DOMContentLoaded', async () => {
                 <td>${formatCFA(c.paris)}</td>
                 <td>${formatCFA(c.abidjan)}</td>
                 <td style="font-weight:bold">${formatCFA(percu)}</td>
-                <td class="${c.reste < 0 ? 'reste-negatif' : 'reste-positif'}">${formatCFA(c.reste)}</td>
                 <td>${formatCFA(c.dep)}</td>
-                <td class="${benef < 0 ? 'reste-negatif' : 'reste-positif'}"><b>${formatCFA(benef)}</b></td>
+                <td class="${c.reste < 0 ? 'reste-negatif' : 'reste-positif'}">${formatCFA(c.reste)} <span style="font-size:0.8em">(${pctReste}%)</span></td>
+                <td>${formatCFA(c.dep)}</td>
+                <td class="${benef < 0 ? 'reste-negatif' : 'reste-positif'}"><b>${formatCFA(benef)}</b> <span style="font-size:0.8em; font-weight:normal;">(${pctBenef}%)</span></td>
             `;
             tbody.appendChild(tr);
         });
