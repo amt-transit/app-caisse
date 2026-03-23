@@ -774,11 +774,25 @@ document.addEventListener('DOMContentLoaded', () => {
         if (index !== '') {
             // Mise à jour
             const originalPayment = currentEditingTransaction.paymentHistory[index];
-            
+            currentEditingTransaction.paymentHistory[index] = { ...originalPayment, ...paymentData };
+        } else {
+            // Ajout
+            currentEditingTransaction.paymentHistory.push(paymentData);
+        }
+        renderPaymentHistoryTable();
+        resetPaymentForm();
+    });
 
-        ChangesBtn.textContent = "Enregistrement...";
+    saveChangesBtn.addEventListener('click', async () => {
+        if (!currentEditingTransaction) return;
+        
+        saveChangesBtn.disabled = true;
+        saveChangesBtn.textContent = "Enregistrement...";
 
-        try {   nom: editHistNom.value.trim(),
+        try {
+            const updates = {
+                date: editHistMainDate.value,
+                nom: editHistNom.value.trim(),
                 conteneur: editHistConteneur.value.trim().toUpperCase(),
                 prix: parseFloat(editHistPrix.value) || 0,
                 paymentHistory: currentEditingTransaction.paymentHistory
