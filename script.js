@@ -7,8 +7,17 @@ document.addEventListener('DOMContentLoaded', async () => {
     const transactionService = {
         getCleanTransactions(transactions, validatedSessions) {
             return transactions.reduce((acc, t) => {
+                let effectivePrix = t.prix || 0;
+                if (t.adjustmentType && String(t.adjustmentType).toLowerCase() === 'reduction') {
+                    effectivePrix -= (t.adjustmentVal || 0);
+                }
+
                 if (!t.paymentHistory || !Array.isArray(t.paymentHistory) || t.paymentHistory.length === 0) {
-                    acc.push(t);
+                    acc.push({
+                        ...t,
+                        prix: effectivePrix,
+                        reste: ((t.montantParis || 0) + (t.montantAbidjan || 0)) - effectivePrix
+                    });
                     return acc;
                 }
                 const validPayments = t.paymentHistory.filter(p => !p.sessionId || validatedSessions.has(p.sessionId));
@@ -16,10 +25,11 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const newAbidjan = validPayments.reduce((sum, p) => sum + (p.montantAbidjan || 0), 0);
                 const tClean = {
                     ...t,
+                    prix: effectivePrix,
                     paymentHistory: validPayments,
                     montantParis: newParis,
                     montantAbidjan: newAbidjan,
-                    reste: (newParis + newAbidjan) - (t.prix || 0)
+                    reste: (newParis + newAbidjan) - effectivePrix
                 };
                 acc.push(tClean);
                 return acc;
@@ -745,6 +755,13 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (!query.empty) {
             if (query.size > 1) return alert("Plusieurs résultats. Soyez plus précis.");
             const data = query.docs[0].data();
+
+            // NOUVEAU: Appliquer dynamiquement la réduction pour l'affichage Caisse (Sécurité)
+            if (data.adjustmentType && String(data.adjustmentType).toLowerCase() === 'reduction') {
+                data.prix = (data.prix || 0) - (data.adjustmentVal || 0);
+                const paye = (data.montantParis || 0) + (data.montantAbidjan || 0);
+                data.reste = paye - data.prix;
+            }
 
             // LOGIQUE MAGASINAGE : Si dette (reste < 0) et pas encore annulé
             if ((data.reste || 0) < 0 && !data.storageFeeWaived) {

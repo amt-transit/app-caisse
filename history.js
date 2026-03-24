@@ -35,6 +35,16 @@ document.addEventListener('DOMContentLoaded', () => {
         sortByContainerCheckbox.addEventListener('change', () => applyFiltersAndRender());
     }
 
+    // --- AJOUT DYNAMIQUE : Checkbox Filtre Réductions ---
+    let showReductionsCheckbox = document.getElementById('showReductionsCheckbox');
+    if (!showReductionsCheckbox && showDeletedCheckbox && showDeletedCheckbox.parentNode) {
+        const spanReduc = document.createElement('span');
+        spanReduc.style.marginLeft = "15px";
+        spanReduc.innerHTML = `<input type="checkbox" id="showReductionsCheckbox" style="width:auto; vertical-align:middle;"> <label for="showReductionsCheckbox" style="cursor:pointer; font-size:12px; color:#10b981; font-weight:bold;">🎁 Réductions</label>`;
+        showDeletedCheckbox.parentNode.appendChild(spanReduc);
+        showReductionsCheckbox = document.getElementById('showReductionsCheckbox');
+    }
+
     // --- MODAL DE VISUALISATION (EXISTANT) ---
     const viewModal = document.getElementById('paymentHistoryModal');
     const viewModalList = document.getElementById('paymentHistoryList');
@@ -223,7 +233,7 @@ document.addEventListener('DOMContentLoaded', () => {
         
         let query = transactionsCollection;
 
-        const isFiltering = startDateInput.value || endDateInput.value || smartSearchInput.value || agentFilterInput.value || showDeletedCheckbox.checked;
+        const isFiltering = startDateInput.value || endDateInput.value || smartSearchInput.value || agentFilterInput.value || showDeletedCheckbox.checked || (showReductionsCheckbox && showReductionsCheckbox.checked);
 
         if (showDeletedCheckbox.checked) {
              query = transactionsCollection.where("isDeleted", "==", true).orderBy("isDeleted").orderBy("date", "desc");
@@ -352,6 +362,11 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (!ref.includes(searchTerm) && !nom.includes(searchTerm) && !conteneur.includes(searchTerm) && !description.includes(searchTerm) && !prixStr.includes(searchTerm) && !payeAbjStr.includes(searchTerm) && !payeParStr.includes(searchTerm)) return false;
                 }
             }
+
+            if (showReductionsCheckbox && showReductionsCheckbox.checked) {
+                if (!data.adjustmentType || String(data.adjustmentType).toLowerCase() !== 'reduction') return false;
+            }
+
             return true;
         });
 
@@ -367,42 +382,49 @@ document.addEventListener('DOMContentLoaded', () => {
         
         // NETTOYAGE DES TRANSACTIONS NON CONFIRMÉES
         const cleanTransactions = filteredTransactions.reduce((acc, t) => {
+            
+            let effectivePrix = t.prix || 0;
+            if (t.adjustmentType && String(t.adjustmentType).toLowerCase() === 'reduction') {
+                effectivePrix -= (t.adjustmentVal || 0);
+            }
+            const tBase = { ...t, prix: effectivePrix };
+
             // FIX : Si on affiche les supprimés, on ne filtre pas (on veut tout voir)
             if (showDeletedCheckbox.checked) {
-                if (t.deletedBy === currentUserName) {
-                    acc.push(t);
+                if (tBase.deletedBy === currentUserName) {
+                    acc.push({ ...tBase, reste: ((tBase.montantParis || 0) + (tBase.montantAbidjan || 0)) - effectivePrix });
                 }
                 return acc;
             }
 
-            if (!t.paymentHistory || !Array.isArray(t.paymentHistory) || t.paymentHistory.length === 0) {
+            if (!tBase.paymentHistory || !Array.isArray(tBase.paymentHistory) || tBase.paymentHistory.length === 0) {
                 // MODIFICATION : On ne garde que les transactions ayant un montant Abidjan > 0 (Legacy)
                 // OU montantParis > 0 (Pour afficher aussi les paiements Paris seuls)
                 // Les Arrivages non payés (qui ne sont pas dans Confirmation) sont masqués.
                 // CAS 1 : PAS D'HISTORIQUE (Legacy ou Arrivages bruts)
                 // Si 'saisiPar' existe, c'est une donnée récente (Arrivages) qui n'a pas encore été validée en Caisse -> ON MASQUE
-                if (t.saisiPar && (t.montantParis || 0) === 0) return acc;
+                if (tBase.saisiPar && (tBase.montantParis || 0) === 0) return acc;
 
                 // Si Legacy (pas de saisiPar), on affiche si montant > 0
-                if ((t.montantAbidjan || 0) > 0 || (t.montantParis || 0) > 0) {
-                    acc.push(t);
+                if ((tBase.montantAbidjan || 0) > 0 || (tBase.montantParis || 0) > 0) {
+                    acc.push({ ...tBase, reste: ((tBase.montantParis || 0) + (tBase.montantAbidjan || 0)) - effectivePrix });
                 }
                 return acc;
             }
             // On garde seulement les paiements confirmés
-            const validPayments = t.paymentHistory.filter(p => !p.sessionId || !unconfirmedSessions.has(p.sessionId));
+            const validPayments = tBase.paymentHistory.filter(p => !p.sessionId || !unconfirmedSessions.has(p.sessionId));
 
             // Si tout est non confirmé (Nouvelle transaction en attente) -> On masque
-            if (validPayments.length === 0 && t.paymentHistory.length > 0) return acc;
+            if (validPayments.length === 0 && tBase.paymentHistory.length > 0) return acc;
 
             // Si partiel (Update en attente) -> On recalcule pour l'affichage
-            if (validPayments.length < t.paymentHistory.length) {
+            if (validPayments.length < tBase.paymentHistory.length) {
                 const newParis = validPayments.reduce((sum, p) => sum + (p.montantParis || 0), 0);
                 const newAbidjan = validPayments.reduce((sum, p) => sum + (p.montantAbidjan || 0), 0);
-                const tClean = { ...t, paymentHistory: validPayments, montantParis: newParis, montantAbidjan: newAbidjan, reste: (t.prix || 0) - (newParis + newAbidjan) };
+                const tClean = { ...tBase, paymentHistory: validPayments, montantParis: newParis, montantAbidjan: newAbidjan, reste: (newParis + newAbidjan) - effectivePrix };
                 acc.push(tClean);
             } else {
-                acc.push(t);
+                acc.push({ ...tBase, reste: ((tBase.montantParis || 0) + (tBase.montantAbidjan || 0)) - effectivePrix });
             }
             return acc;
         }, []);
@@ -421,7 +443,7 @@ document.addEventListener('DOMContentLoaded', () => {
         tableBody.innerHTML = '';
 
         if (transactions.length === 0) {
-            const isFiltering = startDateInput.value || endDateInput.value || smartSearchInput.value || agentFilterInput.value;
+            const isFiltering = startDateInput.value || endDateInput.value || smartSearchInput.value || agentFilterInput.value || (showReductionsCheckbox && showReductionsCheckbox.checked);
             tableBody.innerHTML = `<tr><td colspan="13" style="text-align:center; padding: 20px;">${isFiltering ? 'Aucun résultat pour cette recherche.' : 'Aucune donnée chargée.'}</td></tr>`;
             return;
         }
@@ -570,7 +592,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let hasLoadedFullHistory = false;
 
     const triggerFilter = () => {
-        const isFiltering = startDateInput.value || endDateInput.value || smartSearchInput.value || agentFilterInput.value;
+        const isFiltering = startDateInput.value || endDateInput.value || smartSearchInput.value || agentFilterInput.value || (showReductionsCheckbox && showReductionsCheckbox.checked);
         
         if (isFiltering && !hasLoadedFullHistory) {
             // Premier filtre : on charge tout
@@ -584,6 +606,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
     showDeletedCheckbox.addEventListener('change', () => fetchHistory(false)); // Lui il recharge forcément
     
+    if (showReductionsCheckbox) {
+        showReductionsCheckbox.addEventListener('change', triggerFilter);
+    }
+
     smartSearchInput.addEventListener('input', triggerFilter);
     agentFilterInput.addEventListener('change', triggerFilter);
     startDateInput.addEventListener('change', triggerFilter);
@@ -666,7 +692,10 @@ document.addEventListener('DOMContentLoaded', () => {
             <td>${data.nom || ''}</td>
             <td>${data.conteneur || ''}</td>
             <td>${magasinageDisplay}</td>
-            <td>${formatCFA(data.prix)}</td>
+            <td>
+                ${formatCFA(data.prix)}
+                ${data.adjustmentType && String(data.adjustmentType).toLowerCase() === 'reduction' ? `<br><span title="Réduction appliquée" style="color:#10b981; font-size:0.8em; font-weight:bold; background:#d1fae5; padding:2px 4px; border-radius:4px; display:inline-block; margin-top:2px;">⬇️ -${formatCFA(data.adjustmentVal)}</span>` : ''}
+            </td>
             <td>${formatCFA(data.montantParis)}</td>
             <td>${formatCFA(data.montantAbidjan)}</td>
             <td>${paymentDisplayHTML}</td>

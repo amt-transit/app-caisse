@@ -7,8 +7,17 @@ document.addEventListener('DOMContentLoaded', async () => {
     const transactionService = {
         getCleanTransactions(transactions, validatedSessions) {
             return transactions.reduce((acc, t) => {
+                let effectivePrix = t.prix || 0;
+                if (t.adjustmentType && String(t.adjustmentType).toLowerCase() === 'reduction') {
+                    effectivePrix -= (t.adjustmentVal || 0);
+                }
+
                 if (!t.paymentHistory || !Array.isArray(t.paymentHistory) || t.paymentHistory.length === 0) {
-                    acc.push(t);
+                    acc.push({
+                        ...t,
+                        prix: effectivePrix,
+                        reste: ((t.montantParis || 0) + (t.montantAbidjan || 0)) - effectivePrix
+                    });
                     return acc;
                 }
                 const validPayments = t.paymentHistory.filter(p => !p.sessionId || validatedSessions.has(p.sessionId));
@@ -16,10 +25,11 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const newAbidjan = validPayments.reduce((sum, p) => sum + (p.montantAbidjan || 0), 0);
                 const tClean = {
                     ...t,
+                    prix: effectivePrix,
                     paymentHistory: validPayments,
                     montantParis: newParis,
                     montantAbidjan: newAbidjan,
-                    reste: (newParis + newAbidjan) - (t.prix || 0)
+                    reste: (newParis + newAbidjan) - effectivePrix
                 };
                 acc.push(tClean);
                 return acc;
@@ -244,7 +254,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         const totalDepCash = realExpenses.filter(e => e.mode !== 'Chèque' && e.mode !== 'Virement').reduce((sum, e) => sum + (e.montant || 0), 0);
 
         // Détail Dépenses
-        const depConteneur = realExpenses.filter(e => e.type === 'Conteneur' || e.conteneur).reduce((sum, e) => sum + e.montant, 0);
+        const depConteneur = realExpenses.filter(e => {
+            return e.conteneur && e.conteneur.trim() !== '';
+        }).reduce((sum, e) => sum + e.montant, 0);
         const depMensuelle = totalDep - depConteneur;
 
         // D. Banque
@@ -346,13 +358,13 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         // 3. Agréger Dépenses (En utilisant la date d'origine du conteneur)
         expenses.forEach(e => {
-            if (e.type === 'Conteneur' || e.conteneur) {
-                const cName = (e.conteneur || "Non spécifié").trim().toUpperCase();
+            const cName = (e.conteneur || "").trim().toUpperCase();
+            if (cName !== "") {
 
                 // On utilise la date d'origine du conteneur si elle existe, sinon la date de dépense
                 let refDate = String(e.date || '');
                 const originDate = containerOrigins[cName];
-                if (cName !== "NON SPÉCIFIÉ" && originDate) {
+                if (originDate) {
                     refDate = String(originDate);
                 }
 
@@ -539,7 +551,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         adjustmentsBody.innerHTML = adj.map(t => `
             <tr>
                 <td>${t.date}</td><td>${t.nom}</td><td>${t.reference}</td>
-                <td><span class="tag" style="background:${t.adjustmentType==='reduction'?'#10b981':'#ef4444'}">${t.adjustmentType}</span></td>
+                <td><span class="tag" style="background:${t.adjustmentType && String(t.adjustmentType).toLowerCase()==='reduction'?'#10b981':'#ef4444'}">${t.adjustmentType}</span></td>
                 <td>${formatCFA(t.adjustmentVal)}</td>
             </tr>
         `).join('');
@@ -664,8 +676,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                 
                 // Dépenses
                 expenses.forEach(e => {
-                    if (e.type === 'Conteneur' || e.conteneur) {
-                        const c = (e.conteneur || "Inconnu").trim().toUpperCase();
+                    const c = (e.conteneur || "").trim().toUpperCase();
+                    if (c !== "") {
                         if (!containerStats[c]) containerStats[c] = { ca: 0, dep: 0 };
                         containerStats[c].dep += (e.montant || 0);
                     }
@@ -747,6 +759,56 @@ document.addEventListener('DOMContentLoaded', async () => {
                     }
                 });
             }
+
+            // 7. Evolution Encaissements (Abidjan vs Paris)
+            let ctxAbidjanParis = document.getElementById('abidjanVsParisChart');
+            if (!ctxAbidjanParis) {
+                const firstChartCard = document.querySelector('.chart-card');
+                if (firstChartCard && firstChartCard.parentNode) {
+                    const newCard = document.createElement('div');
+                    newCard.className = 'chart-card';
+                    newCard.innerHTML = '<h3>Évolution Encaissements (Abidjan vs Paris)</h3><canvas id="abidjanVsParisChart"></canvas>';
+                    firstChartCard.parentNode.appendChild(newCard);
+                    ctxAbidjanParis = document.getElementById('abidjanVsParisChart');
+                }
+            }
+
+            if (ctxAbidjanParis) {
+                if (charts.abidjanParis) charts.abidjanParis.destroy();
+                const abidjanParisStats = {};
+                
+                transactions.forEach(t => {
+                    // On se base sur l'historique des paiements pour avoir les dates exactes d'encaissement
+                    const payments = t.paymentHistory || [{ date: t.date, montantAbidjan: t.montantAbidjan, montantParis: t.montantParis }];
+                    payments.forEach(p => {
+                        const dateStr = String(p.date || '');
+                        if (dateStr.length < 7) return;
+                        const m = dateStr.substring(0, 7);
+                        if (!abidjanParisStats[m]) abidjanParisStats[m] = { abidjan: 0, paris: 0 };
+                        abidjanParisStats[m].abidjan += (p.montantAbidjan || 0);
+                        abidjanParisStats[m].paris += (p.montantParis || 0);
+                    });
+                });
+
+                const labels = Object.keys(abidjanParisStats).sort();
+                
+                charts.abidjanParis = new Chart(ctxAbidjanParis, {
+                    type: 'line',
+                    data: {
+                        labels: labels,
+                        datasets: [
+                            { label: 'Abidjan (Arrivée)', data: labels.map(l => abidjanParisStats[l].abidjan), borderColor: '#f59e0b', backgroundColor: 'rgba(245, 158, 11, 0.1)', tension: 0.4, fill: true, pointRadius: 4 },
+                            { label: 'Paris (Départ)', data: labels.map(l => abidjanParisStats[l].paris), borderColor: '#3b82f6', backgroundColor: 'rgba(59, 130, 246, 0.1)', tension: 0.4, fill: true, pointRadius: 4 }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        interaction: { mode: 'index', intersect: false },
+                        plugins: { legend: { position: 'top' } },
+                        scales: { y: { beginAtZero: true } }
+                    }
+                });
+            }
         } catch (e) {
             console.error("Erreur lors de l'affichage des graphiques :", e);
         }
@@ -783,8 +845,15 @@ document.addEventListener('DOMContentLoaded', async () => {
         tbody.innerHTML = '';
 
         // Récupérer les données propres
-        const cleanTrans = getCleanTransactions(allTransactions).filter(t => t.conteneur === containerName);
-        const cleanExp = allExpenses.filter(e => e.conteneur === containerName && (!e.sessionId || validatedSessions.has(e.sessionId)));
+        const cleanTrans = getCleanTransactions(allTransactions).filter(t => {
+            const cName = (t.conteneur || "Non spécifié").trim().toUpperCase();
+            return cName === containerName;
+        });
+        const cleanExp = allExpenses.filter(e => {
+            const cName = (e.conteneur || "").trim().toUpperCase();
+            if (cName === "") return false;
+            return cName === containerName && (!e.sessionId || validatedSessions.has(e.sessionId));
+        });
 
         // TRI DES COLIS (Ordre croissant par référence : Suffixe puis Nombre)
         cleanTrans.sort((a, b) => {

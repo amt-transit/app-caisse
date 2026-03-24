@@ -7,8 +7,17 @@ document.addEventListener('DOMContentLoaded', () => {
     const transactionService = {
         getCleanTransactions(transactions, validatedSessions) {
             return transactions.reduce((acc, t) => {
+                let effectivePrix = t.prix || 0;
+                if (t.adjustmentType && String(t.adjustmentType).toLowerCase() === 'reduction') {
+                    effectivePrix -= (t.adjustmentVal || 0);
+                }
+
                 if (!t.paymentHistory || !Array.isArray(t.paymentHistory) || t.paymentHistory.length === 0) {
-                    acc.push(t);
+                    acc.push({
+                        ...t,
+                        prix: effectivePrix,
+                        reste: ((t.montantParis || 0) + (t.montantAbidjan || 0)) - effectivePrix
+                    });
                     return acc;
                 }
                 const validPayments = t.paymentHistory.filter(p => !p.sessionId || validatedSessions.has(p.sessionId));
@@ -16,10 +25,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 const newAbidjan = validPayments.reduce((sum, p) => sum + (p.montantAbidjan || 0), 0);
                 const tClean = {
                     ...t,
+                    prix: effectivePrix,
                     paymentHistory: validPayments,
                     montantParis: newParis,
                     montantAbidjan: newAbidjan,
-                    reste: (newParis + newAbidjan) - (t.prix || 0)
+                    reste: (newParis + newAbidjan) - effectivePrix
                 };
                 acc.push(tClean);
                 return acc;
@@ -106,6 +116,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     <th>Conteneur</th>
                     <th>Durée</th>
                     <th>Frais</th>
+                    <th>Actions</th>
                 `;
             }
         }
@@ -141,6 +152,13 @@ document.addEventListener('DOMContentLoaded', () => {
                    (t.conteneur || "").toLowerCase().includes(term);
         });
 
+        // Tri décroissant par durée (les plus anciens colis s'affichent en premier)
+        filtered.sort((a, b) => {
+            const dateA = a.date ? new Date(a.date).getTime() : new Date().getTime();
+            const dateB = b.date ? new Date(b.date).getTime() : new Date().getTime();
+            return dateA - dateB; 
+        });
+
         tableBody.innerHTML = '';
         let totalPotentialFees = 0;
 
@@ -173,6 +191,35 @@ document.addEventListener('DOMContentLoaded', () => {
                 row.style.backgroundColor = "#fff1f2"; 
             }
 
+            // Logique WhatsApp (Relance Magasinage)
+            let phoneCandidate = t.numero;
+            if (!phoneCandidate) {
+                const phoneRegex = /(?:(?:\+|00)225[\s.-]?)?(?:01|05|07|0)\d(?:[\s.-]?\d{2}){4}|(?:(?:\+|00)225[\s.-]?)?(?:01|05|07|0)\d{8,}/;
+                const match = (t.nomDestinataire || t.nom || '').match(phoneRegex) || (t.description || '').match(phoneRegex);
+                if (match) phoneCandidate = match[0];
+            }
+
+            // Calcul des jours restants avant mise au rebut (90 jours max)
+            const daysLeft = 90 - days;
+            let message = '';
+            if (daysLeft > 0) {
+                message = `Bonjour ${t.nom || 'Client(e)'},\n\nCeci est une relance d'AMT TRANSIT concernant votre colis Réf: *${t.reference}* (Conteneur ${t.conteneur}).\n\nLe délai de stockage gratuit étant expiré, vos frais de magasinage s'élèvent actuellement à *${formatCFA(fee)}*.\n\n⚠️ *ATTENTION* : Conformément à nos conditions, il vous reste *${daysLeft} jour(s)* avant la mise au rebut (abandon) définitive de votre colis.\n\nMerci de nous contacter urgemment pour régulariser votre situation et récupérer votre colis.`;
+            } else {
+                message = `🚨 *DERNIER AVERTISSEMENT - MISE AU REBUS* 🚨\n\nBonjour ${t.nom || 'Client(e)'},\n\nVotre colis Réf: *${t.reference}* (Conteneur ${t.conteneur}) est dans nos entrepôts depuis plus de 3 mois (${days} jours).\n\nConformément à nos conditions, il a dépassé le délai de stockage et va être *mis au rebut (abandonné)*.\n\nVos frais de magasinage impayés s'élèvent à *${formatCFA(fee)}*.\n\nCeci est votre dernière chance. Veuillez nous contacter *IMMÉDIATEMENT* avant la destruction ou revente de votre colis.`;
+            }
+            
+            let waLink = '';
+            if (phoneCandidate) {
+                let phone = phoneCandidate.replace(/[^\d]/g, '');
+                if (phone.length === 10 && phone.startsWith('0')) phone = '225' + phone.substring(1);
+                else if (phone.length === 10) phone = '225' + phone;
+                waLink = `https://wa.me/${phone}?text=${encodeURIComponent(message)}`;
+            } else {
+                waLink = `https://wa.me/?text=${encodeURIComponent(message)}`;
+            }
+
+            let waBtn = `<a href="${waLink}" target="_blank" class="btn btn-success btn-small" style="background-color:#25D366; border:none; padding:4px 8px; border-radius:4px; color:white; text-decoration:none; display:inline-block;" title="Envoyer un rappel WhatsApp">📱 Relancer</a>`;
+
             row.innerHTML = `
                 <td>${t.date}</td>
                 <td>${t.reference}</td>
@@ -181,6 +228,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 <td>${t.conteneur}</td>
                 <td><span class="tag" style="background:#e2e8f0; color:#334155;">${days} jours</span></td>
                 <td style="${feeStyle}">${feeText}</td>
+                <td>${waBtn}</td>
             `;
             tableBody.appendChild(row);
         });

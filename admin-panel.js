@@ -34,6 +34,56 @@ document.addEventListener('DOMContentLoaded', async () => {
 const userRole = sessionStorage.getItem('userRole');
 const isSuperAdmin = userRole === 'super_admin';
 
+    // --- BOUTON DE RÉPARATION DE LA BASE DE DONNÉES (POUR LES ANCIENNES RÉDUCTIONS) ---
+    if (isSuperAdmin && usersListEl) {
+        const repairBtn = document.createElement('button');
+        repairBtn.className = "btn";
+        repairBtn.style.cssText = "background-color: #f59e0b; color: white; margin-bottom: 20px; padding: 10px 15px; border-radius: 6px; cursor: pointer; border: none; font-weight: bold; width: 100%;";
+        repairBtn.innerHTML = "🛠️ Réparer le Reste à Payer des Anciennes Réductions (Base de Données)";
+        repairBtn.onclick = async () => {
+            if (!confirm("Voulez-vous analyser et corriger définitivement le reste à payer des anciens colis ayant bénéficié d'une réduction dans la base de données ?\n\nCette action est recommandée pour nettoyer l'onglet Impayés.")) return;
+            repairBtn.disabled = true;
+            repairBtn.textContent = "Analyse en cours...";
+
+            try {
+                const snapshot = await db.collection("transactions").get();
+                const batch = db.batch();
+                let count = 0;
+
+                snapshot.forEach(doc => {
+                    const data = doc.data();
+                    if (data.adjustmentType && String(data.adjustmentType).toLowerCase() === 'reduction') {
+                        const expectedPrix = (data.prix || 0);
+                        const reduction = (data.adjustmentVal || 0);
+                        const effectivePrix = expectedPrix - reduction;
+                        const totalPaye = (data.montantParis || 0) + (data.montantAbidjan || 0);
+                        const expectedReste = totalPaye - effectivePrix;
+
+                        // Si la base de données contient toujours l'ancien calcul erroné
+                        if (data.reste !== expectedReste) {
+                            batch.update(doc.ref, { reste: expectedReste });
+                            count++;
+                        }
+                    }
+                });
+
+                if (count > 0) {
+                    await batch.commit();
+                    alert(`Succès ! ${count} anciens colis ont été corrigés définitivement dans la base de données.`);
+                } else {
+                    alert("Aucune anomalie détectée. Tous les colis sont déjà à jour.");
+                }
+            } catch (e) {
+                console.error(e);
+                alert("Erreur lors de la réparation : " + e.message);
+            } finally {
+                repairBtn.disabled = false;
+                repairBtn.innerHTML = "🛠️ Réparer le Reste à Payer des Anciennes Réductions (Base de Données)";
+            }
+        };
+        usersListEl.parentNode.insertBefore(repairBtn, usersListEl);
+    }
+
     // 1. LISTE DES UTILISATEURS
     function loadUsers() {
         db.collection("users").onSnapshot(snapshot => {

@@ -7,8 +7,17 @@ document.addEventListener('DOMContentLoaded', () => {
     const transactionService = {
         getCleanTransactions(transactions, validatedSessions) {
             return transactions.reduce((acc, t) => {
+                let effectivePrix = t.prix || 0;
+                if (t.adjustmentType && String(t.adjustmentType).toLowerCase() === 'reduction') {
+                    effectivePrix -= (t.adjustmentVal || 0);
+                }
+
                 if (!t.paymentHistory || !Array.isArray(t.paymentHistory) || t.paymentHistory.length === 0) {
-                    acc.push(t);
+                    acc.push({
+                        ...t,
+                        prix: effectivePrix,
+                        reste: ((t.montantParis || 0) + (t.montantAbidjan || 0)) - effectivePrix
+                    });
                     return acc;
                 }
                 const validPayments = t.paymentHistory.filter(p => !p.sessionId || validatedSessions.has(p.sessionId));
@@ -16,10 +25,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 const newAbidjan = validPayments.reduce((sum, p) => sum + (p.montantAbidjan || 0), 0);
                 const tClean = {
                     ...t,
+                    prix: effectivePrix,
                     paymentHistory: validPayments,
                     montantParis: newParis,
                     montantAbidjan: newAbidjan,
-                    reste: (newParis + newAbidjan) - (t.prix || 0)
+                    reste: (newParis + newAbidjan) - effectivePrix
                 };
                 acc.push(tClean);
                 return acc;

@@ -605,6 +605,27 @@ function parsePDFText(text) {
     return deliveries;
 }
 
+// Helper pour parser les dates Excel (Numéro de série ou Texte)
+function parseImportDate(val) {
+    if (!val) return null;
+    if (typeof val === 'number' && !isNaN(val)) {
+        return new Date(Math.round((val - 25569) * 86400 * 1000)).toISOString();
+    }
+    const strVal = String(val).trim();
+    const parts = strVal.split('/');
+    if (parts.length === 3) {
+        const day = parseInt(parts[0], 10);
+        const month = parseInt(parts[1], 10) - 1;
+        let year = parseInt(parts[2], 10);
+        if (year < 100) year += 2000;
+        const date = new Date(year, month, day);
+        if (!isNaN(date.getTime())) return date.toISOString();
+    }
+    const date = new Date(strVal);
+    if (!isNaN(date.getTime())) return date.toISOString();
+    return null;
+}
+
 // Import Excel
 function importExcel(event) {
     console.log("Début importExcel");
@@ -760,6 +781,9 @@ function importExcel(event) {
                     imported = jsonData.map((row, i) => {
                         const r = {};
                         Object.keys(row).forEach(k => r[cleanString(k).toUpperCase()] = row[k]);
+
+                            const dateRaw = r.DATE || r['DATE AJOUT'] || r['DATE ARRIVEE'] || r['DATE DU TRANSFERT'] || '';
+                            const parsedDate = parseImportDate(dateRaw) || new Date().toISOString();
                         return {
                             id: Date.now() + i,
                             ref: cleanString(r.REF || r.REFERENCE || r.CODE || '').toUpperCase(), // Force Majuscule pour correspondance
@@ -772,9 +796,9 @@ function importExcel(event) {
                             description: cleanString(fixEncoding(String(r.DESCRIPTION || r.NATURE || r['TYPE COLIS'] || ''))),
                             info: cleanString(fixEncoding(String(r.INFO || r.INFORMATION || r.COMMENTAIRE || ''))),
                             numero: cleanString(r.NUMERO || r.TEL || r.TELEPHONE || r.CONTACT || ''),
-                            quantite: parseInt(r.QTE || r.QUANTITE || r.QUANTITÉ || 1), // Récupération Quantité
+                                quantite: parseInt(r.QTE || r.QUANTITE || r.QUANTITÉ || r['NOMBRE COLIS'] || 1), // Récupération Quantité
                             status: 'EN_ATTENTE',
-                            dateAjout: new Date().toISOString()
+                                dateAjout: parsedDate
                         };
                     }).filter(d => d.ref && d.ref.trim() !== '');
                 }
@@ -1202,11 +1226,14 @@ async function confirmImport() {
                     mParis = totalPrix - restant; // La différence a été payée
                 }
 
+                const importDateStr = importItem.dateAjout ? importItem.dateAjout.split('T')[0] : new Date().toISOString().split('T')[0];
+
                 // --- AJOUT : Historique Paiement pour Paris ---
                 const paymentHistory = [];
                 if (mParis > 0) {
                     paymentHistory.push({
                         date: new Date().toISOString().split('T')[0],
+                        date: importDateStr,
                         montantParis: mParis,
                         montantAbidjan: 0,
                         modePaiement: 'Espèce',
@@ -1219,6 +1246,7 @@ async function confirmImport() {
                 
                 operations.push({ type: 'set', ref: transRef, data: {
                     date: new Date().toISOString().split('T')[0],
+                    date: importDateStr,
                     reference: importItem.ref,
                     nom: importItem.destinataire || importItem.expediteur || 'Client', // Client principal
                     conteneur: conteneur || importItem.conteneur || '',
