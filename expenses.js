@@ -317,6 +317,128 @@ document.addEventListener('DOMContentLoaded', () => {
         if (form) form.style.display = 'none';
     }
 
+    // --- MODAL ÉDITION DÉPENSE (Injection Dynamique) ---
+    const expenseEditModalHTML = `
+    <div id="expenseEditModal" class="modal" style="display:none; position:fixed; z-index:1000; left:0; top:0; width:100%; height:100%; background-color:rgba(0,0,0,0.8); align-items:center; justify-content:center;">
+        <div class="modal-content" style="background:#fff; padding:20px; width:90%; max-width:500px; border-radius:12px;">
+            <span class="close-modal" id="closeExpenseEditModal" style="float:right; cursor:pointer; font-size:24px;">&times;</span>
+            <h2 style="margin-top:0;">Modifier Dépense</h2>
+            
+            <div style="margin-bottom:15px;">
+                <label style="display:block; margin-bottom:5px; font-weight:bold;">Date</label>
+                <input type="date" id="expenseEditDate" style="width:100%; padding:8px; box-sizing:border-box;">
+            </div>
+            
+            <div style="margin-bottom:15px;">
+                <label style="display:block; margin-bottom:5px; font-weight:bold;">Description</label>
+                <input type="text" id="expenseEditDesc" style="width:100%; padding:8px; box-sizing:border-box;">
+            </div>
+            
+            <div style="margin-bottom:15px;">
+                <label style="display:block; margin-bottom:5px; font-weight:bold;">Montant</label>
+                <input type="number" id="expenseEditAmount" style="width:100%; padding:8px; box-sizing:border-box;">
+            </div>
+            
+            <div style="margin-bottom:15px;">
+                <label style="display:block; margin-bottom:5px; font-weight:bold;">Type</label>
+                <select id="expenseEditType" style="width:100%; padding:8px; box-sizing:border-box;">
+                    <option value="Mensuelle">Mensuelle</option>
+                    <option value="Conteneur">Conteneur</option>
+                    <option value="Budget">Budget (Allocation)</option>
+                </select>
+            </div>
+            
+            <div style="margin-bottom:15px;" id="expenseEditContainerGroup">
+                <label style="display:block; margin-bottom:5px; font-weight:bold;">Conteneur</label>
+                <input type="text" id="expenseEditContainer" style="width:100%; padding:8px; box-sizing:border-box;">
+            </div>
+
+            <div style="margin-bottom:15px;">
+                <label style="display:block; margin-bottom:5px; font-weight:bold;">Mode de Paiement</label>
+                <select id="expenseEditMode" style="width:100%; padding:8px; box-sizing:border-box;">
+                    <option value="Espèce">Espèce</option>
+                    <option value="Wave">Wave</option>
+                    <option value="OM">OM</option>
+                    <option value="Chèque">Chèque</option>
+                    <option value="Virement">Virement</option>
+                </select>
+            </div>
+
+            <div style="text-align:right; margin-top:20px;">
+                <button id="cancelExpenseEditBtn" class="btn" style="background: #6c757d; color:white; margin-right:10px; border:none; padding:8px 15px; border-radius:6px; cursor:pointer;">Annuler</button>
+                <button id="saveExpenseEditBtn" class="btn btn-success" style="background: #10b981; color:white; border:none; padding:8px 15px; border-radius:6px; cursor:pointer;">Enregistrer</button>
+            </div>
+        </div>
+    </div>
+    `;
+    document.body.insertAdjacentHTML('beforeend', expenseEditModalHTML);
+
+    const expenseEditModal = document.getElementById('expenseEditModal');
+    const closeExpenseEditModalBtn = document.getElementById('closeExpenseEditModal');
+    const cancelExpenseEditBtn = document.getElementById('cancelExpenseEditBtn');
+    const saveExpenseEditBtn = document.getElementById('saveExpenseEditBtn');
+
+    const expenseEditDate = document.getElementById('expenseEditDate');
+    const expenseEditDesc = document.getElementById('expenseEditDesc');
+    const expenseEditAmount = document.getElementById('expenseEditAmount');
+    const expenseEditType = document.getElementById('expenseEditType');
+    const expenseEditContainerGroup = document.getElementById('expenseEditContainerGroup');
+    const expenseEditContainer = document.getElementById('expenseEditContainer');
+    const expenseEditMode = document.getElementById('expenseEditMode');
+
+    let currentEditingExpenseId = null;
+
+    function closeExpenseEditModal() {
+        expenseEditModal.style.display = 'none';
+        currentEditingExpenseId = null;
+    }
+
+    if(closeExpenseEditModalBtn) closeExpenseEditModalBtn.onclick = closeExpenseEditModal;
+    if(cancelExpenseEditBtn) cancelExpenseEditBtn.onclick = closeExpenseEditModal;
+    
+    window.addEventListener('click', (e) => {
+        if (e.target == expenseEditModal) closeExpenseEditModal();
+    });
+
+    expenseEditType.addEventListener('change', () => {
+        if (expenseEditType.value === 'Conteneur') {
+            expenseEditContainerGroup.style.display = 'block';
+        } else {
+            expenseEditContainerGroup.style.display = 'none';
+        }
+    });
+
+    saveExpenseEditBtn.onclick = async () => {
+        if (!currentEditingExpenseId) return;
+        saveExpenseEditBtn.disabled = true;
+        saveExpenseEditBtn.textContent = 'Enregistrement...';
+
+        try {
+            const updates = {
+                date: expenseEditDate.value,
+                description: expenseEditDesc.value,
+                montant: parseFloat(expenseEditAmount.value) || 0,
+                type: expenseEditType.value,
+                mode: expenseEditMode.value
+            };
+            
+            if (updates.type === 'Conteneur') {
+                updates.conteneur = expenseEditContainer.value.trim().toUpperCase();
+            } else {
+                updates.conteneur = ''; // clear if not conteneur
+            }
+
+            await db.collection("expenses").doc(currentEditingExpenseId).update(updates);
+            closeExpenseEditModal();
+        } catch (e) {
+            console.error(e);
+            alert("Erreur lors de la modification : " + e.message);
+        } finally {
+            saveExpenseEditBtn.disabled = false;
+            saveExpenseEditBtn.textContent = 'Enregistrer';
+        }
+    };
+
     // 3. AFFICHAGE
     function fetchExpenses() {
         if (unsubscribeExpenses) unsubscribeExpenses();
@@ -432,12 +554,17 @@ document.addEventListener('DOMContentLoaded', () => {
             const sign = '-';
             const mode = expense.mode || 'Espèce';
 
-            let deleteButtonHTML = '';
-            if ((userRole === 'admin' || userRole === 'super_admin') && expense.isDeleted !== true && !isViewer) deleteButtonHTML = `<button class="deleteBtn" data-id="${expense.id}">Suppr.</button>`;
+            let actionButtonsHTML = '';
+            if ((userRole === 'admin' || userRole === 'super_admin') && expense.isDeleted !== true && !isViewer) {
+                actionButtonsHTML = `
+                    <button class="editBtn" data-id="${expense.id}">Modif.</button>
+                    <button class="deleteBtn" data-id="${expense.id}">Suppr.</button>
+                `;
+            }
 
             row.innerHTML = `
                 <td>${expense.date}</td><td>${expense.description}</td><td class="${colorClass}"><b>${sign} ${formatCFA(expense.montant)}</b></td>
-                <td>${expense.type}</td><td>${mode}</td><td>${expense.conteneur || '-'}</td><td>${deleteButtonHTML}</td>
+                <td>${expense.type}</td><td>${mode}</td><td>${expense.conteneur || '-'}</td><td>${actionButtonsHTML}</td>
             `;
             expenseTableBody.appendChild(row);
         });
@@ -559,6 +686,26 @@ document.addEventListener('DOMContentLoaded', () => {
         if (isViewer) return;
         if (event.target.classList.contains('deleteBtn')) {
             if (confirm("Supprimer cette opération ?")) expensesCollection.doc(event.target.getAttribute('data-id')).update({ isDeleted: true }); 
+        } else if (event.target.classList.contains('editBtn')) {
+            const docId = event.target.getAttribute('data-id');
+            const expense = allExpenses.find(e => e.id === docId);
+            if (!expense) return;
+
+            currentEditingExpenseId = docId;
+            expenseEditDate.value = expense.date || '';
+            expenseEditDesc.value = expense.description || '';
+            expenseEditAmount.value = expense.montant || 0;
+            expenseEditType.value = expense.type || 'Mensuelle';
+            expenseEditMode.value = expense.mode || 'Espèce';
+            expenseEditContainer.value = expense.conteneur || '';
+
+            if (expenseEditType.value === 'Conteneur') {
+                expenseEditContainerGroup.style.display = 'block';
+            } else {
+                expenseEditContainerGroup.style.display = 'none';
+            }
+
+            expenseEditModal.style.display = 'flex';
         }
     });
 
