@@ -9,8 +9,11 @@
     loader.id = 'global-loader';
     loader.style.cssText = "position:fixed; top:0; left:0; width:100%; height:100%; background:#f8fafc; z-index:99999; display:flex; flex-direction:column; justify-content:center; align-items:center; transition:opacity 0.4s ease;";
     loader.innerHTML = `
-        <div style="width:50px; height:50px; border:4px solid #cbd5e1; border-top-color:#3b82f6; border-radius:50%; animation:spinLoader 1s linear infinite;"></div>
-        <p style="margin-top:15px; color:#475569; font-family:sans-serif; font-weight:600; font-size:16px;">Chargement des données...</p>
+        <div style="position: relative; width: 70px; height: 70px; display: flex; justify-content: center; align-items: center;">
+            <div style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; border: 4px solid #cbd5e1; border-top-color: #3b82f6; border-radius: 50%; animation: spinLoader 1s linear infinite; box-sizing: border-box;"></div>
+            <img src="favicon.png" alt="Favicon" style="width: 32px; height: 32px; object-fit: contain;">
+        </div>
+        <p style="margin-top:20px; color:#475569; font-family:sans-serif; font-weight:600; font-size:16px;">Chargement en cours...</p>
         <style>@keyframes spinLoader { 100% { transform: rotate(360deg); } }</style>
     `;
         
