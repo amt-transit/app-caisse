@@ -1,5 +1,43 @@
 // c:\Users\JEANAFFA\Desktop\MonAppli Gemini\utils.js
 
+// --- ECRAN DE CHARGEMENT GLOBAL ---
+// Injecte l'écran IMMÉDIATEMENT dès que le script est lu (plus rapide que DOMContentLoaded)
+(function initLoader() {
+    if (document.getElementById('global-loader')) return;
+
+    const loader = document.createElement('div');
+    loader.id = 'global-loader';
+    loader.style.cssText = "position:fixed; top:0; left:0; width:100%; height:100%; background:#f8fafc; z-index:99999; display:flex; flex-direction:column; justify-content:center; align-items:center; transition:opacity 0.4s ease;";
+    loader.innerHTML = `
+        <div style="width:50px; height:50px; border:4px solid #cbd5e1; border-top-color:#3b82f6; border-radius:50%; animation:spinLoader 1s linear infinite;"></div>
+        <p style="margin-top:15px; color:#475569; font-family:sans-serif; font-weight:600; font-size:16px;">Chargement des données...</p>
+        <style>@keyframes spinLoader { 100% { transform: rotate(360deg); } }</style>
+    `;
+        
+    if (document.body) {
+        document.body.appendChild(loader);
+    } else {
+        const observer = new MutationObserver(() => {
+            if (document.body) {
+                document.body.appendChild(loader);
+                observer.disconnect();
+            }
+        });
+        observer.observe(document.documentElement, { childList: true });
+    }
+})();
+
+window.addEventListener('load', () => {
+    // Délai supplémentaire (600ms) pour laisser le temps à Firebase d'afficher les premiers résultats
+    setTimeout(() => {
+        const loader = document.getElementById('global-loader');
+        if (loader) {
+            loader.style.opacity = '0';
+            setTimeout(() => loader.remove(), 400); // Suppression du DOM après le fondu
+        }
+    }, 600);
+});
+
 // --- FORMATAGE MONÉTAIRE (CFA) ---
 function formatCFA(n) {
     return new Intl.NumberFormat('fr-CI', { style: 'currency', currency: 'XOF' }).format(n || 0);
