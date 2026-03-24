@@ -186,8 +186,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // Règle REBUS : > 90 jours (3 mois)
             if (days > 90) {
-                feeStyle = 'font-weight:bold; color:#fff; background-color:#ef4444; padding: 4px 8px; border-radius: 4px; display:inline-block;';
-                feeText = "⚠️ REBUS (Abandonné)";
+                feeStyle = 'font-weight:bold; color:#dc3545;';
+                feeText = `${formatCFA(fee)} <br><span style="background-color:#ef4444; color:#fff; padding: 2px 4px; border-radius: 4px; font-size: 0.8em; margin-top: 4px; display:inline-block;">⚠️ REBUS (Abandonné)</span>`;
                 row.style.backgroundColor = "#fff1f2"; 
             }
 
