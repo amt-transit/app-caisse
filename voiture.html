@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=1000">
+    <title>Gestion Véhicules - Caisse</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Comfortaa:wght@400;700&display=swap" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+    <link rel="icon" type="image/png" href="favicon.png">
+</head>
+<body style="display:none">
+    <header class="app-header">
+        <img src="LOGOAMT.png" alt="Logo" class="app-logo">
+        <h1>Gestion Flotte & Véhicules</h1>
+        <button id="logoutBtn" style="position: absolute; right: 20px; padding: 8px 15px; cursor: pointer;">Déconnexion</button>
+    </header>
+
+    <nav class="navigation">
+        <a href="index.html">Saisie</a>
+        <a href="confirmation.html" id="nav-confirmation">Confirmation</a>
+        <a href="audit.html" id="nav-audit">Audit</a>
+        <a href="dashboard.html" id="nav-dashboard">Tableau de Bord</a>
+        <a href="history.html">Historique</a>
+        <a href="expenses.html" id="nav-expenses">Dépenses</a>
+        <a href="other-income.html" id="nav-other-income">Autres Entrées</a>
+        <a href="bank.html" id="nav-bank">Banque</a>
+        <a href="clients.html" id="nav-clients">Clients</a>
+        <a href="magasinage.html" id="nav-magasinage">Magasinage</a>
+        <a href="salaire.html" id="nav-salaire">Salaire</a>
+        <a href="livraison.html" id="nav-livraison">LIVRAISON</a>
+        <a href="livreurscan.html" style="background:#16a34a; color:white;">📱 MODE LIVREUR</a>
+        <a href="voiture.html" id="nav-voiture" class="active"><i class="fa-solid fa-truck"></i> Gestion Véhicules</a>
+        <a href="points.html" id="nav-points">Points</a>
+        <a href="admin-panel.html" id="nav-admin" style="background-color: #6f42c1; color: white;">ADMIN</a>
+    </nav>
+
+    <div class="dashboard-container">
+        <section class="voiture-section" style="padding: 20px;">
+    <h2>Gestion de la Flotte (Rentabilité)</h2>
+    <p style="color:#666; margin-bottom: 20px;">Analysez la rentabilité de vos véhicules en comparant le coût d'une location externe (Entrée/Location Fictive) avec les coûts réels d'entretien.</p>
+
+    <!-- Résumé -->
+    <div class="summary-cards" style="display:flex; gap:15px; margin-bottom:20px;">
+        <div class="total-card colored-card" style="background-color: #3b82f6;">
+            <h3>Total Location (Économisée)</h3>
+            <p id="statIncome">0 CFA</p>
+        </div>
+        <div class="total-card colored-card" style="background-color: #ef4444;">
+            <h3>Dépenses Réelles (Entretien/Carburant)</h3>
+            <p id="statExpense">0 CFA</p>
+        </div>
+        <div class="total-card" id="profitCard">
+            <h3>Rentabilité Nette (Bénéfice/Perte)</h3>
+            <p id="statProfit">0 CFA</p>
+        </div>
+    </div>
+
+    <!-- Formulaires Ajout (Flexbox pour les aligner) -->
+    <div style="display: flex; gap: 20px; margin-bottom: 20px;">
+        <!-- Nouveau Véhicule -->
+        <div class="card" style="flex:1; padding:15px; background: white; border-radius: 8px; border-top: 4px solid #3b82f6; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+            <h3>Ajouter un Véhicule</h3>
+            <div class="form-grid">
+                <div>
+                    <label>Nom / Modèle</label>
+                    <input type="text" id="newVehicleName" placeholder="Ex: Kia Bongo">
+                </div>
+                <div>
+                    <label>Immatriculation</label>
+                    <input type="text" id="newVehiclePlate" placeholder="Ex: 1234 AB 01">
+                </div>
+            </div>
+            <button id="addVehicleBtn" class="btn" style="margin-top:10px;">Enregistrer le véhicule</button>
+        </div>
+
+        <!-- Nouvelle Opération -->
+        <div class="card" style="flex:2; padding:15px; background: white; border-radius: 8px; border-top: 4px solid #10b981; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+            <h3>Ajouter une Opération</h3>
+            <div class="form-grid" style="grid-template-columns: repeat(3, 1fr);">
+                <div><label>Date</label><input type="date" id="transDate"></div>
+                <div><label>Véhicule</label><select id="vehicleSelect"><option>Chargement...</option></select></div>
+                <div><label>Type d'opération</label>
+                    <select id="transType">
+                        <option value="Entrée">Entrée (Location Fictive)</option>
+                        <option value="Dépense">Dépense (Coût Réel)</option>
+                    </select>
+                </div>
+                <div><label>Catégorie</label>
+                    <select id="transCategory"><option value="Location Fictive">Location Fictive (Facturation Trajet)</option></select>
+                </div>
+                <div><label>Montant</label><input type="number" id="transAmount" placeholder="Ex: 25000"></div>
+                <div><label>Description / Détail</label><input type="text" id="transDesc" placeholder="Ex: Trajet Cocody, Vidange..."></div>
+            </div>
+            <button id="addTransBtn" class="btn btn-success" style="margin-top:10px;">Enregistrer l'opération</button>
+        </div>
+    </div>
+
+    <!-- Filtres et Tableau -->
+    <div class="card" style="background: white; padding: 15px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom:15px;">
+            <h3>Historique des Opérations</h3>
+            <div style="display:flex; gap:10px;">
+                <input type="month" id="monthFilter" class="form-control">
+                <select id="filterVehicleSelect" class="form-control"><option value="">Tous les véhicules</option></select>
+            </div>
+        </div>
+
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Date</th>
+                    <th>Véhicule</th>
+                    <th>Type</th>
+                    <th>Catégorie</th>
+                    <th>Description</th>
+                    <th>Montant</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody id="fleetTableBody">
+                <tr><td colspan="7">Chargement...</td></tr>
+            </tbody>
+        </table>
+    </div>
+        </section>
+    </div>
+
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+    <script src="firebase-init.js"></script>
+    <script src="auth-guard.js"></script>
+    <script src="voiture.js"></script>
+    <script src="utils.js"></script>
+    <script>
+        document.getElementById('logoutBtn').addEventListener('click', () => {
+            if (confirm("Voulez-vous vous déconnecter ?")) firebase.auth().signOut();
+        });
+    </script>
+</body>
+</html>
