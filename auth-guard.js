@@ -182,6 +182,7 @@ firebase.auth().onAuthStateChanged(async (user) => {
             if (navMagasinage) navMagasinage.style.display = 'inline';
             if (navBank) navBank.style.display = 'none';
             if (navSalaire) navSalaire.style.display = 'none';
+            if (navVoiture) navVoiture.style.display = 'inline';
         }
 
         if (userRole === 'saisie_limited') {
