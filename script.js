@@ -925,14 +925,26 @@ document.addEventListener('DOMContentLoaded', async () => {
     prixInput.addEventListener('input', calculateAndStyleReste);
     montantParisInput.addEventListener('input', calculateAndStyleReste);
     montantAbidjanInput.addEventListener('input', calculateAndStyleReste);
+    if (adjustmentTypeInput) adjustmentTypeInput.addEventListener('change', calculateAndStyleReste);
+    if (adjustmentValInput) adjustmentValInput.addEventListener('input', calculateAndStyleReste);
 
     function calculateAndStyleReste() {
-        const prix = parseFloat(prixInput.value) || 0;
+        let prix = parseFloat(prixInput.value) || 0;
         const paris = parseFloat(montantParisInput.value) || 0;
         const abidjan = parseFloat(montantAbidjanInput.value) || 0;
+        
+        const adjType = adjustmentTypeInput ? adjustmentTypeInput.value : '';
+        const adjVal = adjustmentValInput ? (parseFloat(adjustmentValInput.value) || 0) : 0;
+        
+        if (adjType === 'reduction' && adjVal > 0) {
+            prix -= adjVal;
+        } else if (adjType === 'augmentation' && adjVal > 0) {
+            prix += adjVal;
+        }
+        
         const reste = (paris + abidjan) - prix;
         resteInput.value = reste;
-        resteInput.className = reste > 0 ? 'reste-positif' : 'reste-negatif';
+        resteInput.className = reste >= 0 ? 'reste-positif' : 'reste-negatif'; // Utilisation de >= 0 pour que "0" soit en vert (Soldé)
     }
 
     function formatCFA(n) { return new Intl.NumberFormat('fr-CI', { style: 'currency', currency: 'XOF' }).format(n || 0); }
