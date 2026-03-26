@@ -279,25 +279,38 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (!newData.date || !newData.reference) return alert("Remplissez la date et la référence/nom.");
         if (newData.prix <= 0) return alert("Prix invalide.");
 
+        let effectivePrix = newData.prix;
+        if (newData.adjustmentType === 'reduction' && newData.adjustmentVal > 0) {
+            effectivePrix -= newData.adjustmentVal;
+        }
+
         const totalPaye = newData.montantParis + newData.montantAbidjan;
-        if (totalPaye > newData.prix) return alert(`IMPOSSIBLE : Trop perçu.`);
-        newData.reste = totalPaye - newData.prix;
+        if (totalPaye > effectivePrix) return alert(`IMPOSSIBLE : Trop perçu (le paiement dépasse le prix après réduction).`);
+        newData.reste = totalPaye - effectivePrix;
 
         // CORRECTION : On vérifie la Référence ET le Mode de Paiement pour permettre le fractionnement
         const existingIndex = dailyTransactions.findIndex(t => t.reference === newData.reference && t.modePaiement === newData.modePaiement);
         if (existingIndex > -1) {
             const t = dailyTransactions[existingIndex];
+
+            // On met à jour l'ajustement si présent dans la nouvelle saisie
+            if (newData.adjustmentType) { t.adjustmentType = newData.adjustmentType; t.adjustmentVal = newData.adjustmentVal; }
+            if (newData.isNewAdjustment) t.isNewAdjustment = true;
+
+            let effectivePrixExistant = t.prix;
+            if (t.adjustmentType === 'reduction' && t.adjustmentVal > 0) {
+                effectivePrixExistant -= t.adjustmentVal;
+            }
+
             const nouveauTotal = t.montantParis + t.montantAbidjan + newData.montantParis + newData.montantAbidjan;
-            if (nouveauTotal > t.prix) return alert("IMPOSSIBLE : Cumul trop élevé.");
+            if (nouveauTotal > effectivePrixExistant) return alert("IMPOSSIBLE : Cumul trop élevé (dépasse le prix après réduction).");
             
             t.montantParis += newData.montantParis;
             t.montantAbidjan += newData.montantAbidjan;
             if (newData.agentMobileMoney) t.agentMobileMoney = newData.agentMobileMoney;
             t.modePaiement = newData.modePaiement; 
-            t.reste = (t.montantParis + t.montantAbidjan) - t.prix;
-            // On met à jour l'ajustement si présent dans la nouvelle saisie
-            if (newData.adjustmentType) { t.adjustmentType = newData.adjustmentType; t.adjustmentVal = newData.adjustmentVal; }
-            if (newData.isNewAdjustment) t.isNewAdjustment = true;
+            t.reste = (t.montantParis + t.montantAbidjan) - effectivePrixExistant;
+
         } else {
             dailyTransactions.push(newData);
         }
@@ -512,11 +525,31 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (!query.empty) {
                 const docRef = query.docs[0].ref;
                 const oldData = query.docs[0].data();
+                const dailyMetadata = group[group.length - 1];
+
+                let finalPrix = oldData.prix || 0;
+                let finalAdjustmentType = dailyMetadata.adjustmentType || oldData.adjustmentType;
+                let finalAdjustmentVal = dailyMetadata.adjustmentVal || oldData.adjustmentVal || 0;
+
+                // GESTION AUGMENTATION PRIX (MAGASINAGE)
+                const augmentationItem = group.find(t => t.isNewAdjustment === true && t.adjustmentType === 'augmentation');
+                if (augmentationItem) {
+                    finalPrix += augmentationItem.adjustmentVal;
+                }
+
+                let effectivePrix = finalPrix;
+                if (finalAdjustmentType === 'reduction') {
+                    effectivePrix -= finalAdjustmentVal;
+                }
+
+                const newTotalParis = (oldData.montantParis || 0) + totalParis;
+                const newTotalAbidjan = (oldData.montantAbidjan || 0) + totalAbidjan;
+                const newReste = newTotalParis + newTotalAbidjan - effectivePrix;
 
                 const updates = {
-                    montantParis: (oldData.montantParis || 0) + totalParis,
-                    montantAbidjan: (oldData.montantAbidjan || 0) + totalAbidjan,
-                    reste: (oldData.reste || 0) + totalParis + totalAbidjan,
+                    montantParis: newTotalParis,
+                    montantAbidjan: newTotalAbidjan,
+                    reste: newReste,
                     paymentHistory: firebase.firestore.FieldValue.arrayUnion(...newPaymentEntries),
                     lastPaymentDate: baseTransac.date,
                     saisiPar: currentUserName,
@@ -537,19 +570,18 @@ document.addEventListener('DOMContentLoaded', async () => {
                 }
 
                 // Mise à jour infos (Commune, etc.) depuis la dernière entrée du groupe
-                const lastTransac = group[group.length - 1];
-                if (lastTransac.commune && lastTransac.commune !== oldData.commune) updates.commune = lastTransac.commune;
-                if (lastTransac.agentMobileMoney) updates.agentMobileMoney = lastTransac.agentMobileMoney;
+                if (dailyMetadata.commune && dailyMetadata.commune !== oldData.commune) updates.commune = dailyMetadata.commune;
+                if (dailyMetadata.agentMobileMoney) updates.agentMobileMoney = dailyMetadata.agentMobileMoney;
                 
                 // GESTION AUGMENTATION PRIX (MAGASINAGE)
                 // On cherche si une des transactions du groupe contient une augmentation de prix NOUVELLE
-                const augmentationItem = group.find(t => t.isNewAdjustment === true && t.adjustmentType === 'augmentation');
                 if (augmentationItem) {
-                    const fee = augmentationItem.adjustmentVal;
-                    updates.prix = (oldData.prix || 0) + fee;
-                    updates.reste = updates.reste - fee; // On déduit le frais du reste (car le prix augmente)
+                    updates.prix = finalPrix;
                     updates.adjustmentType = 'augmentation';
                     updates.adjustmentVal = fee;
+                } else if (dailyMetadata.adjustmentType) {
+                    updates.adjustmentType = finalAdjustmentType;
+                    updates.adjustmentVal = finalAdjustmentVal;
                 }
 
                 batch.update(docRef, updates);
@@ -557,15 +589,19 @@ document.addEventListener('DOMContentLoaded', async () => {
             } else {
                 const docRef = transactionsCollection.doc();
                 
-                // Pour un nouveau doc, on fusionne les agents du groupe
                 const groupAgents = group.map(t => t.agent).join(', ').split(',').map(a => a.trim()).filter(Boolean);
                 const combinedAgents = [...new Set(groupAgents)].join(', ');
+
+                let effectivePrix = baseTransac.prix;
+                if (baseTransac.adjustmentType === 'reduction' && baseTransac.adjustmentVal > 0) {
+                    effectivePrix -= baseTransac.adjustmentVal;
+                }
 
                 batch.set(docRef, { 
                     ...baseTransac, // Reprend date, ref, nom, conteneur, prix...
                     montantParis: totalParis,
                     montantAbidjan: totalAbidjan,
-                    reste: (totalParis + totalAbidjan) - baseTransac.prix, // Reste calculé sur le total payé vs prix
+                    reste: (totalParis + totalAbidjan) - effectivePrix,
                     agent: combinedAgents,
                     isDeleted: false, 
                     saisiPar: currentUserName, 
@@ -756,12 +792,13 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (query.size > 1) return alert("Plusieurs résultats. Soyez plus précis.");
             const data = query.docs[0].data();
 
-            // NOUVEAU: Appliquer dynamiquement la réduction pour l'affichage Caisse (Sécurité)
+            // NOUVEAU: Appliquer dynamiquement la réduction pour l'affichage Caisse (Sécurité) - NE PAS MODIFIER data.prix
+            let effectivePrixForDisplay = data.prix || 0;
             if (data.adjustmentType && String(data.adjustmentType).toLowerCase() === 'reduction') {
-                data.prix = (data.prix || 0) - (data.adjustmentVal || 0);
-                const paye = (data.montantParis || 0) + (data.montantAbidjan || 0);
-                data.reste = paye - data.prix;
+                effectivePrixForDisplay -= (data.adjustmentVal || 0);
             }
+            const paye = (data.montantParis || 0) + (data.montantAbidjan || 0);
+            data.reste = paye - effectivePrixForDisplay; // On met à jour le reste pour l'affichage, mais pas le prix.
 
             // LOGIQUE MAGASINAGE : Si dette (reste < 0) et pas encore annulé
             if ((data.reste || 0) < 0 && !data.storageFeeWaived) {
