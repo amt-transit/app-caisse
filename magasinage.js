@@ -251,12 +251,12 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             
             const { jsPDF } = window.jspdf;
-            const doc = new jsPDF();
+            const doc = new jsPDF({ orientation: "landscape" });
             
             doc.setFontSize(18);
             doc.text("État des Frais de Magasinage", 14, 22);
             
-            const tableColumn = ["Date", "Référence", "Qté", "Client", "Conteneur", "Durée", "Frais"];
+            const tableColumn = ["Date", "Référence", "Qté", "Client", "Conteneur", "Durée", "Fret", "Magasinage"];
             const tableRows = [];
             
             currentFiltered.forEach(t => {
@@ -268,7 +268,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     t.nom || '',
                     t.conteneur || '',
                     `${days} jours`,
-                    formatCFA(fee).replace(/\u202F/g, ' ') // Nettoyage espaces insécables pour le PDF
+                    formatCFA(t.prix || 0).replace(/\u202F/g, ' '), // Coût du fret
+                    formatCFA(fee).replace(/\u202F/g, ' ') // Frais de magasinage
                 ]);
             });
             
