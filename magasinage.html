@@ -9,6 +9,8 @@
     <link href="https://fonts.googleapis.com/css2?family=Comfortaa:wght@400;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
     <link rel="icon" type="image/png" href="favicon.png">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.29/jspdf.plugin.autotable.min.js"></script>
 </head>
 <body style="display:none">
     <header class="app-header">
@@ -46,11 +48,12 @@
             </div>
         </div>
 
-        <div class="filter-container" style="margin-bottom: 20px;">
+        <div class="filter-container" style="margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
             <div class="filter-fields">
                 <label>Rechercher un colis :</label>
                 <input type="text" id="magasinageSearch" placeholder="Référence, Nom ou Conteneur...">
             </div>
+            <button id="exportPdfBtn" class="btn" style="background-color: #d32f2f; color: white;">📄 Exporter PDF</button>
         </div>
 
         <div style="overflow-x: auto;">

@@ -123,6 +123,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     let allTransactions = [];
+    let currentFiltered = [];
+    const exportPdfBtn = document.getElementById('exportPdfBtn');
 
     // 1. Chargement des données
     transactionsCollection.where("isDeleted", "!=", true).orderBy("isDeleted").orderBy("date", "desc").onSnapshot(snapshot => {
@@ -158,6 +160,8 @@ document.addEventListener('DOMContentLoaded', () => {
             const dateB = b.date ? new Date(b.date).getTime() : new Date().getTime();
             return dateA - dateB; 
         });
+
+        currentFiltered = filtered;
 
         tableBody.innerHTML = '';
         let totalPotentialFees = 0;
@@ -237,6 +241,48 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     if(searchInput) searchInput.addEventListener('input', renderTable);
+
+    // 4. Export PDF
+    if (exportPdfBtn) {
+        exportPdfBtn.addEventListener('click', () => {
+            if (currentFiltered.length === 0) {
+                alert("Aucune donnée à exporter.");
+                return;
+            }
+            
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF();
+            
+            doc.setFontSize(18);
+            doc.text("État des Frais de Magasinage", 14, 22);
+            
+            const tableColumn = ["Date", "Référence", "Qté", "Client", "Conteneur", "Durée", "Frais"];
+            const tableRows = [];
+            
+            currentFiltered.forEach(t => {
+                const { days, fee } = transactionService.calculateStorageFee(t.date, t.quantite);
+                tableRows.push([
+                    t.date || '',
+                    t.reference || '',
+                    t.quantite || 1,
+                    t.nom || '',
+                    t.conteneur || '',
+                    `${days} jours`,
+                    formatCFA(fee).replace(/\u202F/g, ' ') // Nettoyage espaces insécables pour le PDF
+                ]);
+            });
+            
+            doc.autoTable({
+                head: [tableColumn],
+                body: tableRows,
+                startY: 30,
+                theme: 'grid',
+                headStyles: { fillColor: [217, 119, 6] } // Couleur Orange
+            });
+            
+            doc.save(`Magasinage_${new Date().toLocaleDateString('fr-FR').replace(/\//g, '-')}.pdf`);
+        });
+    }
 
     initBackToTopButton();
 });
