@@ -86,7 +86,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    if (addVehicleBtn && !isViewer) {
+    if (addVehicleBtn && (userRole === 'admin' || userRole === 'super_admin')) {
         addVehicleBtn.addEventListener('click', async () => {
             const name = newVehicleName.value.trim();
             const plate = newVehiclePlate.value.trim();
@@ -156,7 +156,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // --- 2. GESTION DES TRANSACTIONS ---
-    if (addTransBtn && !isViewer) {
+    if (addTransBtn && (userRole === 'admin' || userRole === 'super_admin')) {
         addTransBtn.addEventListener('click', async () => {
             const date = transDate.value;
             const vehicleId = vehicleSelect.value;
