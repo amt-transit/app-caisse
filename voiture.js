@@ -39,6 +39,56 @@ document.addEventListener('DOMContentLoaded', () => {
     let allVehicles = [];
     let allTransactions = [];
 
+    // --- INJECTION DYNAMIQUE DE LA MODALE DE SUPPRESSION ---
+    const deleteModalHTML = `
+    <div id="vehicleDeleteModal" class="modal">
+        <div class="modal-content" style="max-width: 400px; text-align: center; border-radius: 12px; padding: 25px;">
+            <h3 style="margin-top: 0; color: #ef4444;">⚠️ Confirmation de suppression</h3>
+            <p id="vehicleDeleteMessage" style="color: #475569; margin: 20px 0; font-size: 14px;"></p>
+            <div style="display: flex; justify-content: center; gap: 15px; margin-top: 25px;">
+                <button id="cancelVehicleDeleteBtn" class="btn" style="background: #e2e8f0; color: #334155; border: none; padding: 8px 20px; border-radius: 6px; cursor: pointer; font-weight: bold;">Annuler</button>
+                <button id="confirmVehicleDeleteBtn" class="btn" style="background: #ef4444; color: white; border: none; padding: 8px 20px; border-radius: 6px; cursor: pointer; font-weight: bold;">Confirmer</button>
+            </div>
+        </div>
+    </div>
+    `;
+    document.body.insertAdjacentHTML('beforeend', deleteModalHTML);
+
+    const deleteModal = document.getElementById('vehicleDeleteModal');
+    const deleteMessage = document.getElementById('vehicleDeleteMessage');
+    const confirmDeleteBtn = document.getElementById('confirmVehicleDeleteBtn');
+    const cancelDeleteBtn = document.getElementById('cancelVehicleDeleteBtn');
+
+    let pendingDeleteId = null;
+    let pendingDeleteType = null; // 'vehicle' ou 'transaction'
+
+    function closeDeleteModal() {
+        deleteModal.classList.remove('active');
+        pendingDeleteId = null;
+        pendingDeleteType = null;
+    }
+
+    cancelDeleteBtn.addEventListener('click', closeDeleteModal);
+    window.addEventListener('click', (e) => {
+        if (e.target == deleteModal) closeDeleteModal();
+    });
+
+    confirmDeleteBtn.addEventListener('click', async () => {
+        if (!pendingDeleteId || !pendingDeleteType) return;
+        
+        try {
+            if (pendingDeleteType === 'vehicle') {
+                await fleetVehiclesCollection.doc(pendingDeleteId).update({ isDeleted: true });
+            } else if (pendingDeleteType === 'transaction') {
+                await fleetTransactionsCollection.doc(pendingDeleteId).update({ isDeleted: true });
+            }
+        } catch (error) {
+            alert("Erreur lors de la suppression : " + error.message);
+        } finally {
+            closeDeleteModal();
+        }
+    });
+
     // --- INITIALISATION FILTRE MOIS ---
     if (monthFilter) {
         const now = new Date();
@@ -125,13 +175,10 @@ document.addEventListener('DOMContentLoaded', () => {
             const btn = e.target.closest('.deleteVehicleBtn');
             if (btn) {
                 const id = btn.getAttribute('data-id');
-                if (confirm("Voulez-vous vraiment supprimer ce véhicule ?\n(Ses opérations resteront dans l'historique mais il n'apparaîtra plus dans les choix)")) {
-                    try {
-                        await fleetVehiclesCollection.doc(id).update({ isDeleted: true });
-                    } catch (error) {
-                        alert("Erreur lors de la suppression : " + error.message);
-                    }
-                }
+                pendingDeleteId = id;
+                pendingDeleteType = 'vehicle';
+                deleteMessage.innerHTML = "Voulez-vous vraiment supprimer ce véhicule ?<br><br><small style='color:#64748b;'>(Ses opérations resteront dans l'historique mais il n'apparaîtra plus dans les choix)</small>";
+                deleteModal.classList.add('active');
             }
         });
     }
@@ -271,9 +318,10 @@ document.addEventListener('DOMContentLoaded', () => {
             if (isViewer) return;
             if (e.target.classList.contains('deleteBtn')) {
                 const id = e.target.getAttribute('data-id');
-                if (confirm("Supprimer cette opération ?")) {
-                    await fleetTransactionsCollection.doc(id).update({ isDeleted: true });
-                }
+                pendingDeleteId = id;
+                pendingDeleteType = 'transaction';
+                deleteMessage.innerHTML = "Voulez-vous vraiment supprimer cette opération de l'historique ?";
+                deleteModal.classList.add('active');
             }
         });
     }
