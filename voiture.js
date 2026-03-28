@@ -156,7 +156,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // --- 2. GESTION DES TRANSACTIONS ---
-    if (addTransBtn && (userRole === 'admin' || userRole === 'super_admin')) {
+    if (addTransBtn && (userRole === 'admin' || userRole === 'super_admin' || userRole === 'saisie_full')) {
         addTransBtn.addEventListener('click', async () => {
             const date = transDate.value;
             const vehicleId = vehicleSelect.value;
