@@ -76,7 +76,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 li.style.borderBottom = '1px solid #e2e8f0';
 
                 let delBtn = '';
-                if (!isViewer && (userRole === 'admin' || userRole === 'super_admin')) {
+                if (!isViewer && (userRole === 'admin' || userRole === 'super_admin' || userRole === 'saisie_full')) {
                     delBtn = `<button class="deleteVehicleBtn" data-id="${v.id}" style="background: #ef4444; color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 11px;" title="Supprimer">🗑️</button>`;
                 }
                 
@@ -233,7 +233,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const sign = t.type === 'Entrée' ? '+' : '-';
 
                 let delBtn = '';
-                if (!isViewer && (userRole === 'admin' || userRole === 'super_admin')) {
+                if (!isViewer && (userRole === 'admin' || userRole === 'super_admin' || userRole === 'saisie_full')) {
                     delBtn = `<button class="deleteBtn" data-id="${t.id}" style="padding: 4px 8px; font-size:12px;">Suppr.</button>`;
                 }
 
