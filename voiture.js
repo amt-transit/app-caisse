@@ -24,6 +24,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const newVehicleName = document.getElementById('newVehicleName');
     const newVehiclePlate = document.getElementById('newVehiclePlate');
     const addVehicleBtn = document.getElementById('addVehicleBtn');
+    const vehiclesList = document.getElementById('vehiclesList');
 
     // DOM Elements - Filtres & Table
     const monthFilter = document.getElementById('monthFilter');
@@ -62,6 +63,27 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (vehicleSelect) vehicleSelect.innerHTML = options;
         if (filterVehicleSelect) filterVehicleSelect.innerHTML = filterOptions;
+        
+        // MAJ de la liste visible des véhicules
+        if (vehiclesList) {
+            vehiclesList.innerHTML = '';
+            allVehicles.forEach(v => {
+                const li = document.createElement('li');
+                li.style.display = 'flex';
+                li.style.justifyContent = 'space-between';
+                li.style.alignItems = 'center';
+                li.style.padding = '8px 0';
+                li.style.borderBottom = '1px solid #e2e8f0';
+
+                let delBtn = '';
+                if (!isViewer && (userRole === 'admin' || userRole === 'super_admin')) {
+                    delBtn = `<button class="deleteVehicleBtn" data-id="${v.id}" style="background: #ef4444; color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 11px;" title="Supprimer">🗑️</button>`;
+                }
+                
+                li.innerHTML = `<span><strong>${v.name}</strong> <span style="color:#64748b;">(${v.plate})</span></span> ${delBtn}`;
+                vehiclesList.appendChild(li);
+            });
+        }
     }
 
     if (addVehicleBtn && !isViewer) {
@@ -70,6 +92,13 @@ document.addEventListener('DOMContentLoaded', () => {
             const plate = newVehiclePlate.value.trim();
             if (!name || !plate) return alert("Veuillez saisir un nom et une immatriculation.");
             
+            // Vérification des doublons (basé sur l'immatriculation, en ignorant les espaces et la casse)
+            const normalizedPlate = plate.toLowerCase().replace(/\s+/g, '');
+            const isDuplicate = allVehicles.some(v => v.plate.toLowerCase().replace(/\s+/g, '') === normalizedPlate);
+            if (isDuplicate) {
+                return alert("⚠️ Un véhicule avec cette immatriculation est déjà enregistré dans la flotte.");
+            }
+
             try {
                 await fleetVehiclesCollection.add({
                     name: name,
@@ -87,6 +116,24 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     } else if (addVehicleBtn) {
         addVehicleBtn.style.display = 'none';
+    }
+
+    // --- SUPPRESSION VÉHICULE ---
+    if (vehiclesList) {
+        vehiclesList.addEventListener('click', async (e) => {
+            if (isViewer) return;
+            const btn = e.target.closest('.deleteVehicleBtn');
+            if (btn) {
+                const id = btn.getAttribute('data-id');
+                if (confirm("Voulez-vous vraiment supprimer ce véhicule ?\n(Ses opérations resteront dans l'historique mais il n'apparaîtra plus dans les choix)")) {
+                    try {
+                        await fleetVehiclesCollection.doc(id).update({ isDeleted: true });
+                    } catch (error) {
+                        alert("Erreur lors de la suppression : " + error.message);
+                    }
+                }
+            }
+        });
     }
 
     // --- CHANGEMENT DE TYPE (Entrée vs Dépense) ---
