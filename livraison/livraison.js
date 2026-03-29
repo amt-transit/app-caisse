@@ -45,6 +45,7 @@ let itemsPerPage = 100; // Nombre d'éléments par page
 let programDetailsSort = { column: null, direction: 'asc' };
 let currentProgramView = { date: null, livreur: null };
 let isImporting = false;
+let transactionsMap = new Map(); // NOUVEAU : Mémoire des dettes de la Caisse
 
 // Rôle Utilisateur
 const userRole = sessionStorage.getItem('userRole');
@@ -111,7 +112,7 @@ function initRealtimeSync() {
             const batch = db.batch();
             parsed.forEach(item => {
                 const docRef = db.collection(CONSTANTS.COLLECTION).doc();
-                const { id, ...data } = item; // On laisse Firestore générer l'ID
+                const { id, ...data } = item; 
                 batch.set(docRef, data);
             });
             batch.commit().then(() => {
@@ -124,22 +125,47 @@ function initRealtimeSync() {
     // 2. Écouteur sur la collection 'livraisons'
     db.collection(CONSTANTS.COLLECTION)
         .orderBy('dateAjout', 'desc')
-        .limit(2000) // Augmentation de la limite pour voir plus de données
+        .limit(2000)
         .onSnapshot((snapshot) => {
             deliveries = [];
             snapshot.forEach((doc) => {
                 deliveries.push({ id: doc.id, ...doc.data() });
             });
             
-            // Mise à jour de l'interface
             filterDeliveries();
             updateStats();
             updateAutocomplete();
             updateLocationFilterOptions();
             updateAvailableContainersList();
         }, (error) => {
-            console.error("Erreur sync:", error);
+            console.error("Erreur sync livraisons:", error);
             showToast("Erreur de synchronisation !", "error");
+        });
+
+    // --- NOUVEAU : 3. Écouteur sur la Caisse (Transactions) ---
+    // On écoute la caisse en permanence pour avoir les vrais montants
+    db.collection('transactions')
+        .where('isDeleted', '==', false)
+        .onSnapshot((snap) => {
+            transactionsMap.clear();
+            snap.forEach(doc => {
+                const t = doc.data();
+                if (t.reference) {
+                    // Dans la caisse, la dette est un chiffre négatif (ex: -15000). 
+                    // Si c'est 0, c'est payé.
+                    let resteAPayer = 0;
+                    if (t.reste < 0) {
+                        resteAPayer = Math.abs(t.reste); // Transforme -15000 en 15000
+                    }
+                    // On stocke le montant sous forme de texte pour la livraison
+                    transactionsMap.set(t.reference.toUpperCase().trim(), resteAPayer + " CFA");
+                }
+            });
+            
+            // Rafraîchir l'affichage instantanément si on est dans l'onglet En Cours
+            if (currentTab === 'EN_COURS') filterDeliveries();
+        }, (error) => {
+            console.error("Erreur sync Transactions:", error);
         });
 }
 
@@ -308,7 +334,6 @@ function initActiveContainerInput() {
 
 // --- NOUVEAU : Gestionnaire de liste des conteneurs (Pour l'onglet À VENIR) ---
 function updateAvailableContainersList() {
-    // On ne l'affiche que pour À VENIR
     if (currentTab !== 'A_VENIR') {
         const select = document.getElementById('quickContainerSelect');
         if (select) select.style.display = 'none';
@@ -318,69 +343,61 @@ function updateAvailableContainersList() {
     const containerSelectId = 'quickContainerSelect';
     let select = document.getElementById(containerSelectId);
 
-    // Création dynamique du sélecteur s'il n'existe pas dans la toolbar active
-    if (!select) {
-        // On essaie de trouver l'endroit où l'injecter (à côté du champ conteneur actif)
-        const wrapper = document.getElementById('activeContainerSection');
-        if (wrapper) {
-            select = document.createElement('select');
-            select.id = containerSelectId;
-            select.className = 'form-control';
-            select.style.maxWidth = '200px';
-            select.style.marginLeft = '10px';
-            select.innerHTML = '<option value="">-- Sélectionner un Conteneur --</option>';
-            select.addEventListener('change', (e) => {
-                const val = e.target.value;
-                const input = document.getElementById('activeContainerInput');
-                if(input) input.value = val;
-                
-                // Mise à jour directe (sans passer par setActiveContainer pour éviter le Toast intempestif)
-                currentContainerName = val ? val.trim() : 'Aucun';
-                localStorage.setItem(`container_filter_${currentTab}`, currentContainerName);
-
-                // Force le filtre pour A_VENIR
-                const cb = document.getElementById('filterByContainerCb');
-                if (cb && currentTab === 'A_VENIR') {
-                    cb.checked = !!val;
-                    localStorage.setItem(`container_filter_${currentTab}_active`, cb.checked);
-                }
-                
-                updateContainerTitle();
-                filterDeliveries();
-            });
-            wrapper.appendChild(select);
-        }
-    }
-
     if (select) {
         select.style.display = '';
-        // Récupérer les conteneurs uniques de l'onglet actuel
+        
+        // 1. On force l'attachement de l'événement (Correction du bug de clic)
+        select.onchange = (e) => {
+            const val = e.target.value;
+            const input = document.getElementById('activeContainerInput');
+            if(input) input.value = val === 'SANS_CONTENEUR' ? '' : val;
+            
+            currentContainerName = val ? val.trim() : 'Aucun';
+            localStorage.setItem(`container_filter_${currentTab}`, currentContainerName);
+
+            const cb = document.getElementById('filterByContainerCb');
+            if (cb && currentTab === 'A_VENIR') {
+                cb.checked = !!val;
+                localStorage.setItem(`container_filter_${currentTab}_active`, cb.checked);
+            }
+            
+            updateContainerTitle();
+            filterDeliveries();
+        };
+
+        // 2. Extraire les données
         const relevantDeliveries = deliveries.filter(d => d.containerStatus === currentTab);
         const containers = [...new Set(relevantDeliveries.map(d => d.conteneur ? d.conteneur.trim() : '').filter(c => c))].sort();
         
-        // AUTO-RESET : Si le conteneur sélectionné n'existe plus (ex: tout transféré), on réinitialise
-        if (currentContainerName !== 'Aucun' && !containers.includes(currentContainerName)) {
+        // Compter combien de colis sont "Orphelins" (sans conteneur)
+        const sansConteneurCount = relevantDeliveries.filter(d => !d.conteneur || d.conteneur.trim() === '').length;
+
+        // 3. Auto-Reset si le conteneur n'existe plus
+        if (currentContainerName !== 'Aucun' && currentContainerName !== 'SANS_CONTENEUR' && !containers.includes(currentContainerName)) {
             currentContainerName = 'Aucun';
             localStorage.setItem(`container_filter_${currentTab}`, 'Aucun');
-            
             const cb = document.getElementById('filterByContainerCb');
             if (cb) {
                 cb.checked = false;
                 localStorage.setItem(`container_filter_${currentTab}_active`, 'false');
             }
-            updateContainerTitle();
-            filterDeliveries(); // Rafraîchir la vue
         }
 
         const selectedValue = currentContainerName !== 'Aucun' ? currentContainerName : '';
 
+        // 4. Construction du menu
         let html = '<option value="">-- Tous les colis en mer --</option>';
+        if (sansConteneurCount > 0) {
+            // NOUVEAU : Option d'alerte pour les colis sans conteneur
+            html += `<option value="SANS_CONTENEUR" ${selectedValue === 'SANS_CONTENEUR' ? 'selected' : ''}>⚠️ Sans Conteneur (${sansConteneurCount} colis)</option>`;
+        }
+        
         containers.forEach(c => {
             const selected = c === selectedValue ? 'selected' : '';
             html += `<option value="${c}" ${selected}>${c}</option>`;
         });
+        
         select.innerHTML = html;
-        select.value = selectedValue;
     }
 }
 
@@ -1613,6 +1630,19 @@ function renderTable() {
     if(selectAllCheckbox) selectAllCheckbox.checked = filteredDeliveries.length > 0 && filteredDeliveries.every(d => selectedIds.has(d.id));
 
     let tableRows = filteredDeliveries.slice(0, itemsPerPage).map(d => {
+        // --- NOUVEAU : SYNCHRONISATION ET SÉCURITÉ DU MONTANT ---
+        // Si le colis est à Abidjan (En Cours), on VÉRIFIE la Caisse
+        if (d.containerStatus === 'EN_COURS' && d.ref) {
+            const realCaisseAmount = transactionsMap.get(d.ref.toUpperCase().trim());
+            
+            // Si la Caisse a un montant différent de celui du colis (ex: le client vient de payer)
+            if (realCaisseAmount !== undefined && realCaisseAmount !== d.montant) {
+                // 1. On corrige silencieusement la base de données Livraison en arrière-plan
+                db.collection(CONSTANTS.COLLECTION).doc(d.id).update({ montant: realCaisseAmount });
+                // 2. On corrige l'affichage immédiatement
+                d.montant = realCaisseAmount;
+            }
+        }
         const rowClass = d.status === 'LIVRE' ? 'delivered' : '';
         
         let statusClass = 'status-attente';
@@ -1733,6 +1763,10 @@ function renderTable() {
             if (isViewer) return `<span style="${style}; display:block; padding:5px;">${val}</span>`;
             return `<input type="${type}" class="editable-cell" value="${val}" onchange="${onchange}" style="${style}">`;
         };
+        // --- NOUVEAU : VERROUILLAGE SÉCURITÉ ---
+        // Si le colis est dans "En Cours", le champ devient "readonly" (Lecture seule).
+        // Le livreur ne peut pas modifier le montant avec son clavier !
+        const readonlyAttr = currentTab === 'EN_COURS' ? 'readonly title="Montant sécurisé. Modifiable uniquement à la Caisse."' : '';
 
         if (currentTab === 'PARIS') {
             return `
@@ -2606,9 +2640,15 @@ function filterDeliveries() {
         
         // Match Conteneur Actif
         let matchContainer = true;
-        // CORRECTION : On n'applique le filtre conteneur QUE sur les onglets En Cours et À Venir
-        if (['EN_COURS', 'A_VENIR'].includes(currentTab) && isContainerFilterActive && currentContainerName !== 'Aucun') {
-            matchContainer = (d.conteneur && d.conteneur.trim() === currentContainerName);
+        if (['EN_COURS', 'A_VENIR'].includes(currentTab) && isContainerFilterActive) {
+            if (currentContainerName && currentContainerName !== 'Aucun' && currentContainerName !== 'SANS_CONTENEUR') {
+                // Filtre classique sur un vrai conteneur
+                matchContainer = (d.conteneur && d.conteneur.trim() === currentContainerName);
+            } else if (currentContainerName === 'SANS_CONTENEUR') {
+                // NOUVEAU : Filtre pour retrouver les colis sans conteneur
+                matchContainer = (!d.conteneur || d.conteneur.trim() === '');
+            }
+            // Si c'est 'Aucun', matchContainer reste à true (affiche tout)
         }
         
         return matchCommune && matchStatus && matchSearch && matchTab && matchLocation && matchContainer;
