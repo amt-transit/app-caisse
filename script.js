@@ -282,6 +282,13 @@ document.addEventListener('DOMContentLoaded', async () => {
         let effectivePrix = newData.prix;
         if (newData.adjustmentType === 'reduction' && newData.adjustmentVal > 0) {
             effectivePrix -= newData.adjustmentVal;
+        } else if (newData.adjustmentType === 'augmentation' && newData.adjustmentVal > 0) {
+            // Si c'est une augmentation manuelle, on l'incorpore au prix pour la validation et l'enregistrement
+            if (!newData.isNewAdjustment) {
+                newData.prix += newData.adjustmentVal;
+                effectivePrix = newData.prix;
+                newData.isNewAdjustment = true;
+            }
         }
 
         const totalPaye = newData.montantParis + newData.montantAbidjan;
@@ -294,8 +301,16 @@ document.addEventListener('DOMContentLoaded', async () => {
             const t = dailyTransactions[existingIndex];
 
             // On met à jour l'ajustement si présent dans la nouvelle saisie
-            if (newData.adjustmentType) { t.adjustmentType = newData.adjustmentType; t.adjustmentVal = newData.adjustmentVal; }
-            if (newData.isNewAdjustment) t.isNewAdjustment = true;
+            if (newData.adjustmentType) { 
+                t.adjustmentType = newData.adjustmentType; 
+                t.adjustmentVal = newData.adjustmentVal; 
+            }
+            if (newData.isNewAdjustment && !t.isNewAdjustment) { 
+                t.isNewAdjustment = true; 
+                if (newData.adjustmentType === 'augmentation') {
+                    t.prix += newData.adjustmentVal;
+                }
+            }
 
             let effectivePrixExistant = t.prix;
             if (t.adjustmentType === 'reduction' && t.adjustmentVal > 0) {
@@ -578,7 +593,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 if (augmentationItem) {
                     updates.prix = finalPrix;
                     updates.adjustmentType = 'augmentation';
-                    updates.adjustmentVal = fee;
+                    updates.adjustmentVal = augmentationItem.adjustmentVal;
                 } else if (dailyMetadata.adjustmentType) {
                     updates.adjustmentType = finalAdjustmentType;
                     updates.adjustmentVal = finalAdjustmentVal;
