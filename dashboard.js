@@ -269,8 +269,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         const benefice = (totalAbidjan + totalOther) - totalDep;
         // Solde Caisse = (Ventes Cash + Autres Cash + Retraits Espèces Banque) - (Dépenses Cash + Dépôts Espèces Banque)
         const soldeCaisse = (totalVentesCash + totalOtherCash + retraitsEspeces) - (totalDepCash + depots);
-        // Solde Banque : Repose UNIQUEMENT sur l'onglet Banque pour éviter toute double validation (Virements exclus du calcul auto)
-        const soldeBanque = depotsAll - totalSortiesBanque;
+        // Solde Banque : Dépôts manuels + Virements auto + Chèques auto - Sorties (Retraits/Paiements)
+        const soldeBanque = depotsAll + totalVirements + totalCheques - totalSortiesBanque;
         
         const resteTotal = transactions.reduce((sum, t) => sum + (t.reste || 0), 0);
 
