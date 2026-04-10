@@ -699,18 +699,24 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
         if (!realEntryDate) realEntryDate = new Date().toISOString().split('T')[0];
 
+        let detailsStr = `Encaissements: ${dailyTransactions.length}, Dépenses: ${dailyExpenses.length} | Espèces: ${totalEspAbidjan}`;
+        for (const [m, a] of Object.entries(totalsByMode)) {
+            if (m !== 'Espèce') detailsStr += `, ${m}: ${a}`;
+        }
+
         batch.set(auditRef, {
             date: new Date().toISOString(),
             entryDate: realEntryDate, // Utilisation de la date réelle des opérations
             user: currentUserName,
             action: "VALIDATION_JOURNEE",
-            details: `Encaissements: ${dailyTransactions.length}, Dépenses: ${dailyExpenses.length}, Total Esp: ${totalEspAbidjan}`,
+            details: detailsStr, // Affiche tous les modes de paiement pour rassurer l'administrateur
             targetId: "BATCH",
             status: "PENDING", // Statut initial
             transactionIds: touchedTransactionIds, // LA CLÉ DE LA ROBUSTESSE
             expenseIds: touchedExpenseIds,
             agents: sessionAgentsStr, // <-- AJOUT DU CHAMP AGENTS
             totalIn: totalEspAbidjan, // OPTIMISATION AUDIT : Stockage direct des totaux
+            totalGlobalIn: Object.values(totalsByMode).reduce((sum, val) => sum + val, 0), // Total tous modes confondus
             totalOut: totalDep,
             result: totalEspAbidjan - totalDep
         });

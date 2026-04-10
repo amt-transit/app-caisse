@@ -320,7 +320,7 @@ document.addEventListener('DOMContentLoaded', () => {
         } else {
              transQuery = transQuery.where("isDeleted", "!=", true).orderBy("isDeleted");
         }
-        transQuery = transQuery.orderBy("date", "desc").limit(200); // OPTIMISATION QUOTA
+        transQuery = transQuery.orderBy("date", "desc").limit(2000); // Augmenté à 2000 pour inclure les vieux colis (ex: avec magasinage)
 
         unsubscribeVirements = transQuery.onSnapshot(snapshot => {
             const extracted = [];
