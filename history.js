@@ -142,12 +142,12 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     // --- GESTION CLICS TABLEAU ---
-    tableBody.addEventListener('click', (event) => {
+    tableBody.addEventListener('click', async (event) => {
         const target = event.target;
         const row = target.closest('tr');
 
         if (target.classList.contains('deleteBtn')) {
-            if (confirm("Supprimer ?")) {
+            if (await AppModal.confirm("Voulez-vous vraiment supprimer cette transaction ?", "Suppression", true)) {
                 transactionsCollection.doc(target.dataset.id).update({ isDeleted: true, deletedBy: currentUserName })
                 .then(() => {
                     row.remove(); // Mise à jour visuelle immédiate
@@ -714,9 +714,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- NOUVELLE LOGIQUE MODAL D'ÉDITION ---
 
-    function openEditModal(docId) {
+    async function openEditModal(docId) {
         const transaction = allTransactions.find(t => t.id === docId);
-        if (!transaction) return alert("Transaction introuvable.");
+        if (!transaction) return AppModal.error("Transaction introuvable.");
 
         // Copie profonde pour éviter de modifier l'original
         currentEditingTransaction = JSON.parse(JSON.stringify(transaction));
@@ -779,8 +779,8 @@ document.addEventListener('DOMContentLoaded', () => {
         addOrUpdatePaymentBtn.textContent = "Mettre à jour ce paiement";
     };
 
-    window.deleteHistoryPayment = (index) => {
-        if (confirm("Supprimer ce paiement de l'historique ?")) {
+    window.deleteHistoryPayment = async (index) => {
+        if (await AppModal.confirm("Supprimer ce paiement de l'historique ?", "Suppression", true)) {
             currentEditingTransaction.paymentHistory.splice(index, 1);
             renderPaymentHistoryTable();
         }
@@ -797,7 +797,7 @@ document.addEventListener('DOMContentLoaded', () => {
             saisiPar: currentUserName // L'éditeur est le "saisiPar"
         };
 
-        if (!paymentData.date) return alert("La date du paiement est obligatoire.");
+        if (!paymentData.date) return AppModal.error("La date du paiement est obligatoire.");
 
         const index = editHistPaymentIndex.value;
         if (index !== '') {
@@ -867,13 +867,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
             logAudit("MODIFICATION_COMPLÈTE", `Transaction ${currentEditingTransaction.reference} modifiée`, currentEditingTransaction.id);
 
-            alert("Transaction modifiée avec succès !");
+            await AppModal.success("Transaction modifiée avec succès !");
             editModal.style.display = 'none';
             fetchHistory(); // Recharger la table principale
 
         } catch (error) {
             console.error("Erreur sauvegarde:", error);
-            alert("Une erreur est survenue lors de la sauvegarde.");
+            AppModal.error("Une erreur est survenue lors de la sauvegarde.");
         } finally {
             saveChangesBtn.disabled = false;
             saveChangesBtn.textContent = "Enregistrer les modifications";
@@ -884,13 +884,13 @@ document.addEventListener('DOMContentLoaded', () => {
     batchDateBtn.addEventListener('click', async () => {
         if (currentFilteredTransactions.length === 0) return;
         
-        const newDate = prompt(`Voulez-vous changer la date de ces ${currentFilteredTransactions.length} transactions ?\n\nEntrez la nouvelle date (AAAA-MM-JJ) :`);
+        const newDate = await AppModal.prompt(`Voulez-vous changer la date de ces ${currentFilteredTransactions.length} transactions ?\n\nEntrez la nouvelle date (AAAA-MM-JJ) :`, "", "Correction Date");
         if (!newDate) return;
         
         // Validation format date simple
-        if (!/^\d{4}-\d{2}-\d{2}$/.test(newDate)) return alert("Format invalide. Utilisez AAAA-MM-JJ (ex: 2026-03-04)");
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(newDate)) return AppModal.error("Format invalide. Utilisez AAAA-MM-JJ (ex: 2026-03-04)");
 
-        if (!confirm(`⚠️ ATTENTION : Vous allez modifier la date de ${currentFilteredTransactions.length} opérations pour le ${newDate}.\n\nConfirmer ?`)) return;
+        if (!await AppModal.confirm(`⚠️ ATTENTION : Vous allez modifier la date de ${currentFilteredTransactions.length} opérations pour le ${newDate}.\n\nConfirmer ?`, "Action de Masse", true)) return;
 
         batchDateBtn.disabled = true;
         batchDateBtn.textContent = "Traitement...";
@@ -906,11 +906,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
         try {
             await batch.commit();
-            alert(`Succès ! ${count} dates mises à jour.`);
+            AppModal.success(`Succès ! ${count} dates mises à jour.`);
             fetchHistory(); // Recharger
         } catch (e) {
             console.error(e);
-            alert("Erreur lors de la mise à jour : " + e.message);
+            AppModal.error("Erreur lors de la mise à jour : " + e.message);
         } finally {
             batchDateBtn.disabled = false;
         }

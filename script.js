@@ -133,10 +133,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
 
     if (addAgentBtn) {
-        addAgentBtn.addEventListener('click', () => {
-            const newName = prompt("Nom du nouvel agent :");
+        addAgentBtn.addEventListener('click', async () => {
+            const newName = await AppModal.prompt("Nom du nouvel agent :", "", "Nouvel Agent");
             if (newName && newName.trim()) {
-                db.collection("agents").add({ name: newName.trim() }).then(() => alert("Agent ajouté !")).catch(e => alert(e));
+                db.collection("agents").add({ name: newName.trim() }).then(() => AppModal.success("Agent ajouté !")).catch(e => AppModal.error(e.message));
             }
         });
     }
@@ -254,7 +254,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         let detailPaiement = agentMobileMoneyInput.value;
         if (bankSelect.style.display !== 'none') {
             detailPaiement = bankSelect.value;
-            if (!detailPaiement) return alert("Veuillez sélectionner une Banque.");
+            if (!detailPaiement) return AppModal.error("Veuillez sélectionner une Banque.");
         }
 
         const newData = {
@@ -276,8 +276,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             isNewAdjustment: currentIsNewAdjustment // On stocke si c'est un nouveau frais
         };
 
-        if (!newData.date || !newData.reference) return alert("Remplissez la date et la référence/nom.");
-        if (newData.prix <= 0) return alert("Prix invalide.");
+        if (!newData.date || !newData.reference) return AppModal.error("Veuillez remplir la date et la référence/nom.");
+        if (newData.prix <= 0) return AppModal.error("Le prix saisi est invalide.");
 
         let effectivePrix = newData.prix;
         if (newData.adjustmentType === 'reduction' && newData.adjustmentVal > 0) {
@@ -292,7 +292,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
 
         const totalPaye = newData.montantParis + newData.montantAbidjan;
-        if (totalPaye > effectivePrix) return alert(`IMPOSSIBLE : Trop perçu (le paiement dépasse le prix après réduction).`);
+        if (totalPaye > effectivePrix) return AppModal.error(`IMPOSSIBLE : Trop perçu (le paiement dépasse le prix après réduction).`);
         newData.reste = totalPaye - effectivePrix;
 
         // CORRECTION : On vérifie la Référence ET le Mode de Paiement pour permettre le fractionnement
@@ -318,7 +318,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
 
             const nouveauTotal = t.montantParis + t.montantAbidjan + newData.montantParis + newData.montantAbidjan;
-            if (nouveauTotal > effectivePrixExistant) return alert("IMPOSSIBLE : Cumul trop élevé (dépasse le prix après réduction).");
+            if (nouveauTotal > effectivePrixExistant) return AppModal.error("IMPOSSIBLE : Cumul trop élevé (dépasse le prix après réduction).");
             
             t.montantParis += newData.montantParis;
             t.montantAbidjan += newData.montantAbidjan;
@@ -355,8 +355,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             
             // Dépenses livreur = Mensuelles (Pas de conteneur)
             
-            if (!date) return alert("Veuillez sélectionner la date en haut.");
-            if (!desc || isNaN(amount) || amount <= 0) return alert("Motif ou Montant invalide.");
+            if (!date) return AppModal.error("Veuillez sélectionner la date en haut.");
+            if (!desc || isNaN(amount) || amount <= 0) return AppModal.error("Motif ou Montant invalide.");
 
             dailyExpenses.push({
                 date: date,
@@ -475,7 +475,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // --- 4. ENREGISTREMENT FINAL ---
     saveDayBtn.addEventListener('click', async () => {
-        if (dailyTransactions.length === 0 && dailyExpenses.length === 0) return alert("Rien à enregistrer.");
+        if (dailyTransactions.length === 0 && dailyExpenses.length === 0) return AppModal.error("Rien à enregistrer, la session est vide.");
         
         let totalsByMode = {};
         let totalEspAbidjan = 0;
@@ -495,7 +495,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (Object.keys(totalsByMode).length === 0) msg += "Aucun encaissement.\n";
         msg += `Dépenses Livreur : ${formatCFA(totalDep)}\n\nNET À VERSER (Espèces) : ${formatCFA(totalEspAbidjan - totalDep)}\n\nEnregistrer ?`;
 
-        if (!confirm(msg)) return;
+        if (!await AppModal.confirm(msg, "Validation de la Journée")) return;
 
         const batch = db.batch();
         // CRÉATION ID SESSION UNIQUE (Pour distinguer les sessions du même jour)
@@ -726,9 +726,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         } catch (error) {
             console.error("Erreur Enregistrement:", error);
             if (error.code === 'resource-exhausted') {
-                alert("⚠️ ALERTE QUOTA FIREBASE ATTEINT !\n\nImpossible d'enregistrer la journée : Vous avez dépassé la limite d'écriture quotidienne (20 000 opérations).\n\nVeuillez réessayer demain.");
+                AppModal.error("⚠️ Vous avez dépassé la limite d'écriture quotidienne Firebase (20 000 opérations).\n\nVeuillez réessayer demain.", "QUOTA ATTEINT");
             } else {
-                alert("Erreur lors de l'enregistrement : " + error.message);
+                AppModal.error("Erreur lors de l'enregistrement : " + error.message);
             }
             return; // Arrêt si erreur
         }
@@ -768,7 +768,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         const net = totalEspAbidjan - totalDep;
         waMsg += `\n💵 *NET À VERSER :* ${formatCFA(net)}`;
 
-        if (confirm("Journée enregistrée !\n\nVoulez-vous envoyer le bilan par WhatsApp ?")) {
+        await AppModal.success("Les opérations de la journée ont été validées avec succès.", "Journée enregistrée");
+        if (await AppModal.confirm("Voulez-vous envoyer le bilan récapitulatif par WhatsApp ?", "Bilan WhatsApp")) {
             window.open(`https://wa.me/?text=${encodeURIComponent(waMsg)}`, '_blank');
         }
         
@@ -810,7 +811,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (query.empty) query = await transactionsCollection.where("nom", "==", searchValue).limit(10).get();
 
         if (!query.empty) {
-            if (query.size > 1) return alert("Plusieurs résultats. Soyez plus précis.");
+            if (query.size > 1) return AppModal.error("Plusieurs résultats correspondent à cette recherche. Soyez plus précis.");
             const data = query.docs[0].data();
 
             // NOUVEAU: Appliquer dynamiquement la réduction pour l'affichage Caisse (Sécurité) - NE PAS MODIFIER data.prix
@@ -827,31 +828,30 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const compareDate = inputDateVal ? new Date(inputDateVal) : new Date();
                 const { fee } = transactionService.calculateStorageFee(data.date, 1, compareDate);
                 if (fee > 0) {
-                    const userResponse = prompt(
+                    const userResponse = await AppModal.prompt(
                         `⚠️ FRAIS DE MAGASINAGE : ${formatCFA(fee)}\n\n` +
                         `Veuillez confirmer l'action :\n` +
                         `1. OUI (Payer) : Gardez le montant ${fee}\n` +
                         `2. NON (Offrir) : Mettez 0\n` +
                         `3. RÉDUIRE : Modifiez le montant\n` +
-                        `4. ANNULER : Cliquez sur Annuler`,
-                        fee
+                        `4. ANNULER : Cliquez sur Annuler`, fee, "Action Requise"
                     );
 
                     if (userResponse === null) { referenceInput.value = ''; return; }
 
                     const amount = parseFloat(userResponse);
-                    if (isNaN(amount)) { alert("Montant invalide."); referenceInput.value = ''; return; }
+                    if (isNaN(amount)) { AppModal.error("Le montant saisi est invalide."); referenceInput.value = ''; return; }
 
                     if (amount === 0) {
                         currentStorageFeeWaived = true;
-                        alert("Frais de magasinage OFFERTS.");
+                        AppModal.success("Frais de magasinage OFFERTS.");
                     } else {
                         data.prix = (data.prix || 0) + amount;
                         data.reste = ((data.montantParis || 0) + (data.montantAbidjan || 0)) - data.prix;
                         data.adjustmentType = 'augmentation';
                         data.adjustmentVal = amount;
                         currentIsNewAdjustment = true;
-                        alert(`Frais de magasinage de ${formatCFA(amount)} ajoutés au prix.`);
+                        AppModal.success(`Frais de magasinage de ${formatCFA(amount)} ajoutés au prix.`);
                     }
                 }
             }

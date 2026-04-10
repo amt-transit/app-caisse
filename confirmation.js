@@ -340,7 +340,7 @@ document.addEventListener('DOMContentLoaded', () => {
             validateSessionBtn.parentNode.insertBefore(deleteSessionBtn, validateSessionBtn.nextSibling);
             
             deleteSessionBtn.addEventListener('click', async () => {
-                if(confirm("Voulez-vous vraiment supprimer cette session et l'historique associé ?\n(Les transactions seront retirées de l'historique des paiements)")) {
+                if(await AppModal.confirm("Voulez-vous vraiment supprimer cette session et l'historique associé ?\n\n(Les transactions seront retirées de l'historique des paiements)", "Suppression de Session", true)) {
                     await deleteEntireSession(currentSessionId, currentSessionData);
                 }
             });
@@ -715,26 +715,26 @@ document.addEventListener('DOMContentLoaded', () => {
     if (archiveSessionBtn) {
         archiveSessionBtn.addEventListener('click', async () => { if (isViewer) return;
             if (!currentSessionId) return;
-            if (confirm("Voulez-vous archiver cette session ?\n\nElle disparaîtra de la liste principale mais restera accessible via la recherche d'archives par mois.")) {
+            if (await AppModal.confirm("Voulez-vous archiver cette session ?\n\nElle disparaîtra de la liste principale mais restera accessible via la recherche d'archives par mois.", "Archivage")) {
                 try {
                     await db.collection("audit_logs").doc(currentSessionId).update({
                         status: "ARCHIVED"
                     });
-                    alert("Session archivée avec succès.");
+                    AppModal.success("Session archivée avec succès.");
                     sessionDetailsEl.style.display = 'none';
                     noSelectionMsg.style.display = 'block';
                     // On recharge la liste pour faire disparaître la session
                     loadSessions();
                 } catch (error) {
                     console.error(error);
-                    alert("Erreur lors de l'archivage.");
+                    AppModal.error("Erreur lors de l'archivage.");
                 }
             }
         });
     }
 
     // --- GESTION DES ACTIONS (MODIFIER / SUPPRIMER) ---
-    detailsEncaissementsBody.addEventListener('click', (e) => {
+    detailsEncaissementsBody.addEventListener('click', async (e) => {
         const btn = e.target.closest('button');
         if (!btn) return;
         
@@ -743,32 +743,32 @@ document.addEventListener('DOMContentLoaded', () => {
         
         // Vérifier si la session est déjà validée ou si l'utilisateur est un spectateur
         if (detailStatus.textContent.includes("Validé")) {
-            alert("Impossible de modifier une session déjà validée.");
+            AppModal.error("Impossible de modifier une session déjà validée.");
             return;
         }
 
         if (btn.classList.contains('btn-delete')) {
-            handleDelete(docId);
+            await handleDelete(docId);
         } else if (btn.classList.contains('btn-edit')) {
-            handleEdit(docId);
+            await handleEdit(docId);
         }
     });
 
     // --- GESTION ACTIONS DÉPENSES ---
-    detailsDepensesBody.addEventListener('click', (e) => {
+    detailsDepensesBody.addEventListener('click', async (e) => {
         const btn = e.target.closest('button');
         if (!btn || isViewer) return;
         if (!btn) return;
         const docId = btn.dataset.id;
         if (btn.classList.contains('btn-delete-exp')) {
-            handleDeleteExpense(docId);
+            await handleDeleteExpense(docId);
         } else if (btn.classList.contains('btn-edit-exp')) {
-            handleEditExpense(docId);
+            await handleEditExpense(docId);
         }
     });
 
     async function handleDelete(docId) {
-        if (!confirm("Voulez-vous vraiment supprimer cet encaissement de la journée ?")) return;
+        if (!await AppModal.confirm("Voulez-vous vraiment supprimer cet encaissement de la journée ?", "Suppression", true)) return;
         
         try {
             const docRef = db.collection("transactions").doc(docId);
@@ -835,12 +835,12 @@ document.addEventListener('DOMContentLoaded', () => {
             loadSessionDetails(currentSessionId, currentSessionData);
         } catch (error) {
             console.error(error);
-            alert("Erreur lors de la suppression.");
+            AppModal.error("Erreur lors de la suppression.");
         }
     }
 
     async function handleDeleteExpense(docId) {
-        if (!confirm("Supprimer cette dépense ?")) return;
+        if (!await AppModal.confirm("Supprimer cette dépense ?", "Suppression", true)) return;
         try {
             // 1. Marquer supprimé
             await db.collection("expenses").doc(docId).update({ isDeleted: true });
@@ -855,7 +855,7 @@ document.addEventListener('DOMContentLoaded', () => {
             loadSessionDetails(currentSessionId, currentSessionData);
         } catch (e) {
             console.error(e);
-            alert("Erreur suppression dépense.");
+            AppModal.error("Erreur suppression dépense.");
         }
     }
 
@@ -884,7 +884,7 @@ document.addEventListener('DOMContentLoaded', () => {
             });
             closeExpenseModalFunc();
             loadSessionDetails(currentSessionId, currentSessionData);
-        } catch (e) { alert("Erreur enregistrement dépense."); }
+        } catch (e) { AppModal.error("Erreur lors de l'enregistrement de la dépense."); }
     };
 
     async function handleEdit(docId) {
@@ -912,7 +912,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         } catch (error) {
             console.error(error);
-            alert("Erreur lors de l'ouverture de la modification.");
+            AppModal.error("Erreur technique lors de l'ouverture de la modification.");
         }
     }
 
@@ -967,8 +967,8 @@ document.addEventListener('DOMContentLoaded', () => {
         addOrUpdatePaymentBtn.textContent = "Mettre à jour ce paiement";
     };
 
-    window.deleteConfPayment = (index) => {
-        if (confirm("Supprimer ce paiement ?")) {
+    window.deleteConfPayment = async (index) => {
+        if (await AppModal.confirm("Supprimer ce paiement de l'historique ?", "Suppression", true)) {
             currentEditingTransaction.paymentHistory.splice(index, 1);
             renderPaymentHistoryTable();
         }
@@ -990,7 +990,7 @@ document.addEventListener('DOMContentLoaded', () => {
             sessionId: (editPayDate.value === currentSessionData.date.split('T')[0]) ? currentSessionId : null
         };
 
-        if (!paymentData.date) return alert("Date obligatoire.");
+        if (!paymentData.date) return AppModal.error("La date est obligatoire.");
 
         const index = editPaymentIndex.value;
         if (index !== '') {
@@ -1059,7 +1059,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         } catch (error) {
             console.error(error);
-            alert("Erreur lors de l'enregistrement.");
+            AppModal.error("Une erreur s'est produite lors de l'enregistrement.");
         } finally {
             saveEditBtn.disabled = false;
             saveEditBtn.textContent = "Enregistrer";
@@ -1123,17 +1123,17 @@ document.addEventListener('DOMContentLoaded', () => {
             
             sessionDetailsEl.style.display = 'none';
             noSelectionMsg.style.display = 'block';
-            alert("Session supprimée et montants rétablis.");
+            AppModal.success("La session a été supprimée et les montants rétablis.");
             loadSessions(); // Rafraîchir la liste
         } catch (e) {
             console.error(e);
-            alert("Erreur lors de la suppression de la session.");
+            AppModal.error("Erreur technique lors de la suppression de la session.");
         }
     }
 
     validateSessionBtn.addEventListener('click', async () => {
         if (!currentSessionId || isViewer) return;
-        if (confirm("Confirmer la validation de cette journée ?")) {
+        if (await AppModal.confirm("Confirmer la validation et la clôture de cette journée ?", "Validation Globale")) {
             
             // --- NOUVELLE LOGIQUE : Mise à jour du statut Livraison ---
             const batch = db.batch();
@@ -1199,14 +1199,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 await batch.commit();
                 let successMsg = "Journée validée avec succès !";
                 if (deliveryUpdateCount > 0) successMsg += `\n\n✅ Montants mis à jour pour ${deliveryUpdateCount} colis dans l'onglet Livraison.`;
-                alert(successMsg);
+                AppModal.success(successMsg, "Succès");
                 detailStatus.textContent = "Validé";
                 detailStatus.style.background = "#10b981";
                 detailStatus.style.color = "white";
                 validateSessionBtn.style.display = 'none';
             } catch (error) {
                 console.error("Erreur lors de la validation :", error);
-                alert("Une erreur est survenue lors de la validation.");
+                AppModal.error("Une erreur est survenue lors de la validation finale.");
             }
         }
     });

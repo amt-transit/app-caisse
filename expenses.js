@@ -298,15 +298,15 @@ document.addEventListener('DOMContentLoaded', () => {
         };
 
         // 2. Validation
-        if (!data.date || !expenseDesc.value || data.montant <= 0) return alert("Veuillez remplir les champs correctement.");
+        if (!data.date || !expenseDesc.value || data.montant <= 0) return AppModal.error("Veuillez remplir les champs correctement.");
 
         // 3. Décision : Enregistrement Direct ou Liste D'attente
         if (currentUserName === USER_NO_CONFIRM) {
             // Enregistrement DIRECT
             expensesCollection.add(data).then(() => {
-                alert("Dépense enregistrée (Mode Direct).");
+                AppModal.success("Dépense enregistrée (Mode Direct).");
                 resetExpenseForm();
-            }).catch(err => alert("Erreur : " + err.message));
+            }).catch(err => AppModal.error("Erreur : " + err.message));
         } else {
             // Ajout à la LISTE D'ATTENTE
             addExpenseToPendingList(data);
@@ -432,7 +432,7 @@ document.addEventListener('DOMContentLoaded', () => {
             closeExpenseEditModal();
         } catch (e) {
             console.error(e);
-            alert("Erreur lors de la modification : " + e.message);
+            AppModal.error("Erreur lors de la modification : " + e.message);
         } finally {
             saveExpenseEditBtn.disabled = false;
             saveExpenseEditBtn.textContent = 'Enregistrer';
@@ -682,10 +682,10 @@ document.addEventListener('DOMContentLoaded', () => {
     if(expenseSearchInput) expenseSearchInput.addEventListener('input', renderExpensesTable); 
     fetchExpenses();
 
-    expenseTableBody.addEventListener('click', (event) => {
+    expenseTableBody.addEventListener('click', async (event) => {
         if (isViewer) return;
         if (event.target.classList.contains('deleteBtn')) {
-            if (confirm("Supprimer cette opération ?")) expensesCollection.doc(event.target.getAttribute('data-id')).update({ isDeleted: true }); 
+            if (await AppModal.confirm("Supprimer définitivement cette opération ?", "Suppression", true)) expensesCollection.doc(event.target.getAttribute('data-id')).update({ isDeleted: true }); 
         } else if (event.target.classList.contains('editBtn')) {
             const docId = event.target.getAttribute('data-id');
             const expense = allExpenses.find(e => e.id === docId);
@@ -816,7 +816,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (commitBtn) {
         commitBtn.addEventListener('click', async () => {
             if (pendingExpenses.length === 0) return;
-            if (!confirm(`Enregistrer ${pendingExpenses.length} dépense(s) ?`)) return;
+            if (!await AppModal.confirm(`Voulez-vous enregistrer ces ${pendingExpenses.length} dépense(s) ?`, "Validation en Masse")) return;
 
             const batch = db.batch();
             pendingExpenses.forEach(exp => {
@@ -828,10 +828,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 await batch.commit();
                 pendingExpenses = [];
                 renderPendingExpenses();
-                alert("Dépenses enregistrées avec succès !");
+                AppModal.success("Toutes les dépenses ont été enregistrées avec succès !");
             } catch (err) {
                 console.error(err);
-                alert("Erreur lors de l'enregistrement : " + err.message);
+                AppModal.error("Erreur lors de l'enregistrement : " + err.message);
             }
         });
     }

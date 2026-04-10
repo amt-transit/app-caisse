@@ -190,7 +190,7 @@ document.addEventListener('DOMContentLoaded', () => {
         };
 
         if (!data.date || !data.bank || !bankDesc.value || data.montant <= 0) {
-            return alert("Veuillez remplir tous les champs (Banque incluse) avec un montant valide.");
+            return AppModal.error("Veuillez remplir tous les champs (Banque incluse) avec un montant valide.");
         }
 
         // Sécurité solde
@@ -200,7 +200,7 @@ document.addEventListener('DOMContentLoaded', () => {
             try {
                 const soldeCaisse = await transactionService.calculateAvailableBalance(db, unconfirmedSessions);
                 if (data.montant > soldeCaisse) {
-                    alert(`ERREUR : Solde de caisse insuffisant (${formatCFA(soldeCaisse)}) !`);
+                    AppModal.error(`ERREUR : Solde de caisse insuffisant (${formatCFA(soldeCaisse)}) !`);
                     addBankMovementBtn.disabled = false;
                     addBankMovementBtn.textContent = "Enregistrer le Mouvement";
                     return;
@@ -234,8 +234,8 @@ document.addEventListener('DOMContentLoaded', () => {
             if(bankConteneur) bankConteneur.value = '';
         }).catch(err => {
             console.error(err);
-            if (err.code === 'resource-exhausted') alert("⚠️ QUOTA ATTEINT : Impossible d'ajouter le mouvement.");
-            else alert("Erreur : " + err.message);
+            if (err.code === 'resource-exhausted') AppModal.error("⚠️ QUOTA ATTEINT : Impossible d'ajouter le mouvement.");
+            else AppModal.error("Erreur : " + err.message);
         });
     }); } else if (addBankMovementBtn) {
         // Masquer le formulaire pour le spectateur
@@ -245,8 +245,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // 2. IMPORT CSV
     if (uploadCsvBtn && !isViewer) {
-        uploadCsvBtn.addEventListener('click', () => {
-            if (!csvFile.files.length) return alert("Sélectionnez un fichier.");
+        uploadCsvBtn.addEventListener('click', async () => {
+            if (!csvFile.files.length) return AppModal.error("Sélectionnez un fichier CSV.");
             
             uploadLog.style.display = 'block';
             uploadLog.textContent = 'Lecture...';
@@ -277,8 +277,8 @@ document.addEventListener('DOMContentLoaded', () => {
                             await batch.commit();
                             uploadLog.textContent = `Succès : ${count} mouvements importés.`;
                         } catch (err) {
-                            if (err.code === 'resource-exhausted') alert("⚠️ QUOTA ATTEINT.");
-                            else alert("Erreur : " + err.message);
+                            if (err.code === 'resource-exhausted') AppModal.error("⚠️ QUOTA ATTEINT.");
+                            else AppModal.error("Erreur : " + err.message);
                         }
                     }
                     csvFile.value = '';
@@ -491,7 +491,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (isViewer) return;
         if (event.target.classList.contains('deleteBtn')) {
             const docId = event.target.getAttribute('data-id');
-            if (!confirm("Confirmer la suppression ? Elle sera archivée.")) return;
+            if (!await AppModal.confirm("Confirmer la suppression ? Elle sera archivée.", "Suppression", true)) return;
 
             // SUPPRESSION EN CASCADE : Si une dépense est liée à ce mouvement, on la supprime aussi
             db.collection("expenses").where("linkedBankMovementId", "==", docId).get().then(snap => {
