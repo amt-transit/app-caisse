@@ -36,7 +36,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             }, []);
         },
         async calculateAvailableBalance(db, unconfirmedSessions) {
-            const transSnap = await db.collection("transactions").where("isDeleted", "!=", true).limit(2000).get();
+            const transSnap = await db.collection("transactions").where("isDeleted", "!=", true).get();
             let totalVentes = 0;
             transSnap.forEach(doc => {
                 const d = doc.data();
@@ -53,7 +53,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     }
                 }
             });
-            const incSnap = await db.collection("other_income").where("isDeleted", "!=", true).limit(1000).get();
+            const incSnap = await db.collection("other_income").where("isDeleted", "!=", true).get();
             let totalAutres = 0;
             incSnap.forEach(doc => {
                 const d = doc.data();
@@ -61,7 +61,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     totalAutres += (d.montant || 0);
                 }
             });
-            const expSnap = await db.collection("expenses").where("isDeleted", "!=", true).limit(1000).get();
+            const expSnap = await db.collection("expenses").where("isDeleted", "!=", true).get();
             let totalDepenses = 0;
             expSnap.forEach(doc => {
                 const d = doc.data();
@@ -70,7 +70,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     totalDepenses += (d.montant || 0);
                 }
             });
-            const bankSnap = await db.collection("bank_movements").where("isDeleted", "!=", true).limit(1000).get();
+            const bankSnap = await db.collection("bank_movements").where("isDeleted", "!=", true).get();
             let totalRetraits = 0;
             let totalDepots = 0;
             bankSnap.forEach(doc => {
@@ -143,6 +143,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         virements: document.getElementById('grandTotalVirements'),
         count: document.getElementById('grandTotalCount'),
         reste: document.getElementById('grandTotalReste'),
+        retraits: document.getElementById('grandTotalRetraits'),
+        depots: document.getElementById('grandTotalDepots'),
         depContainer: document.getElementById('detailDepensesConteneur'),
         depMensuelle: document.getElementById('detailDepensesMensuelles')
     };
@@ -287,6 +289,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         if(els.banque) els.banque.textContent = formatCFA(soldeBanque);
         if(els.cheques) els.cheques.textContent = formatCFA(totalCheques);
         if(els.virements) els.virements.textContent = formatCFA(totalVirements);
+        if(els.retraits) els.retraits.textContent = formatCFA(retraitsEspeces);
+        if(els.depots) els.depots.textContent = formatCFA(depots);
         if(els.count) els.count.textContent = transactions.length;
         if(els.reste) els.reste.textContent = formatCFA(resteTotal);
         if(els.depContainer) els.depContainer.textContent = `Conteneurs: ${formatCFA(depConteneur)}`;

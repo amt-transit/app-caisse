@@ -21,14 +21,13 @@ document.addEventListener('DOMContentLoaded', async () => {
                 .where("action", "==", "VALIDATION_JOURNEE")
                 .where("status", "==", "VALIDATED")
                 .orderBy("date", "asc") // Tri chronologique pour le cumul
-                .limit(500)
                 .get();
 
             // 2. Récupérer TOUTES les transactions et dépenses (pour calculer les montants réels)
             // C'est lourd mais nécessaire pour un audit précis si les montants ne sont pas stockés dans le log
             const [transSnap, expSnap] = await Promise.all([
-                db.collection("transactions").where("isDeleted", "!=", true).limit(2000).get(),
-                db.collection("expenses").where("isDeleted", "!=", true).limit(2000).get()
+                db.collection("transactions").where("isDeleted", "!=", true).get(),
+                db.collection("expenses").where("isDeleted", "!=", true).get()
             ]);
 
             // Indexation par SessionID pour rapidité

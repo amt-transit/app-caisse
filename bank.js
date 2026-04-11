@@ -36,7 +36,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }, []);
         },
         async calculateAvailableBalance(db, unconfirmedSessions) {
-            const transSnap = await db.collection("transactions").where("isDeleted", "!=", true).limit(2000).get();
+            const transSnap = await db.collection("transactions").where("isDeleted", "!=", true).get();
             let totalVentes = 0;
             transSnap.forEach(doc => {
                 const d = doc.data();
@@ -53,7 +53,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                 }
             });
-            const incSnap = await db.collection("other_income").where("isDeleted", "!=", true).limit(1000).get();
+            const incSnap = await db.collection("other_income").where("isDeleted", "!=", true).get();
             let totalAutres = 0;
             incSnap.forEach(doc => {
                 const d = doc.data();
@@ -61,7 +61,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     totalAutres += (d.montant || 0);
                 }
             });
-            const expSnap = await db.collection("expenses").where("isDeleted", "!=", true).limit(1000).get();
+            const expSnap = await db.collection("expenses").where("isDeleted", "!=", true).get();
             let totalDepenses = 0;
             expSnap.forEach(doc => {
                 const d = doc.data();
@@ -70,7 +70,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     totalDepenses += (d.montant || 0);
                 }
             });
-            const bankSnap = await db.collection("bank_movements").where("isDeleted", "!=", true).limit(1000).get();
+            const bankSnap = await db.collection("bank_movements").where("isDeleted", "!=", true).get();
             let totalRetraits = 0;
             let totalDepots = 0;
             bankSnap.forEach(doc => {
@@ -135,6 +135,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let allVirements = [];
     let allCombinedMovements = [];
     let unconfirmedSessions = new Set(); // Pour filtrer virements et chèques
+    let currentLimit = 50;
 
     // 0. INJECTION DYNAMIQUE DE L'OPTION "PAIEMENT"
     if (bankType && !bankType.querySelector('option[value="Paiement"]')) {
@@ -306,7 +307,6 @@ document.addEventListener('DOMContentLoaded', () => {
         
         // Ensuite on trie par date
         query = query.orderBy("date", "desc");
-        query = query.limit(200); // OPTIMISATION QUOTA
 
         unsubscribeBank = query.onSnapshot(snapshot => {
             allBankMovements = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data(), _source: 'bank' }));
@@ -320,7 +320,7 @@ document.addEventListener('DOMContentLoaded', () => {
         } else {
              transQuery = transQuery.where("isDeleted", "!=", true).orderBy("isDeleted");
         }
-        transQuery = transQuery.orderBy("date", "desc").limit(2000); // Augmenté à 2000 pour inclure les vieux colis (ex: avec magasinage)
+        transQuery = transQuery.orderBy("date", "desc");
 
         unsubscribeVirements = transQuery.onSnapshot(snapshot => {
             const extracted = [];
@@ -431,12 +431,23 @@ document.addEventListener('DOMContentLoaded', () => {
         if (totalOrangeEl) totalOrangeEl.textContent = formatCFA(soldeOrange);
     }
 
+    // Fonction globale pour filtrer au clic sur les cartes
+    window.filterByBank = function(bankName) {
+        if (bankSearchInput) {
+            bankSearchInput.value = bankName;
+            renderBankTable();
+            // Défilement fluide jusqu'au tableau pour montrer le résultat
+            document.getElementById('bankTable')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+    };
+
     function renderBankTable() {
         const term = bankSearchInput ? bankSearchInput.value.toLowerCase().trim() : "";
         const filtered = allCombinedMovements.filter(item => {
             if (!term) return true;
             return (item.description || "").toLowerCase().includes(term) ||
-                   (item.type || "").toLowerCase().includes(term);
+                   (item.type || "").toLowerCase().includes(term) ||
+                   (item.bank || "").toLowerCase().includes(term);
         });
 
         bankTableBody.innerHTML = ''; 
@@ -444,7 +455,8 @@ document.addEventListener('DOMContentLoaded', () => {
             bankTableBody.innerHTML = '<tr><td colspan="5">Aucun résultat.</td></tr>';
             return;
         }
-        filtered.forEach(move => {
+        const toShow = filtered.slice(0, currentLimit);
+        toShow.forEach(move => {
             const row = document.createElement('tr');
             if (move.isDeleted === true) row.classList.add('deleted-row');
             
@@ -480,6 +492,14 @@ document.addEventListener('DOMContentLoaded', () => {
             `;
             bankTableBody.appendChild(row);
         });
+
+        // Bouton Charger Plus
+        if (filtered.length > currentLimit) {
+            const moreRow = document.createElement('tr');
+            moreRow.innerHTML = `<td colspan="6" style="text-align: center; padding: 15px;"><button id="loadMoreBankBtn" class="btn" style="background:#f1f5f9; color:#475569; border:1px solid #cbd5e1;">⬇️ Charger plus de résultats</button></td>`;
+            bankTableBody.appendChild(moreRow);
+            document.getElementById('loadMoreBankBtn').addEventListener('click', () => { currentLimit += 50; renderBankTable(); });
+        }
     }
     
     showDeletedCheckbox.addEventListener('change', fetchBankMovements);

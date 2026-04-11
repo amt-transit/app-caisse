@@ -125,7 +125,6 @@ function initRealtimeSync() {
     // 2. Écouteur sur la collection 'livraisons'
     db.collection(CONSTANTS.COLLECTION)
         .orderBy('dateAjout', 'desc')
-        .limit(2000)
         .onSnapshot((snapshot) => {
             deliveries = [];
             snapshot.forEach((doc) => {
@@ -924,7 +923,6 @@ async function findAddressForRecipient(name) {
     try {
         const snapActive = await db.collection(CONSTANTS.COLLECTION)
             .where('destinataire', '==', val)
-            .limit(10)
             .get();
         
         for (const doc of snapActive.docs) {
@@ -2504,7 +2502,6 @@ function openArchivesModal() {
     
     db.collection(CONSTANTS.ARCHIVE_COLLECTION)
         .orderBy('dateArchivage', 'desc')
-        .limit(100)
         .get()
         .then(snapshot => {
             archivedDeliveries = [];
@@ -2740,7 +2737,6 @@ function updateDeliveryLocation(id, newLocation) {
         // REQUÊTE FIRESTORE pour toucher TOUS les onglets (même ceux non chargés localement)
         db.collection(CONSTANTS.COLLECTION)
             .where('destinataire', '==', recipientName)
-            .limit(500)
             .get()
             .then(snapshot => {
                 const batch = db.batch();

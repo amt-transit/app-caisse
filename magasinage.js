@@ -36,7 +36,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }, []);
         },
         async calculateAvailableBalance(db, unconfirmedSessions) {
-            const transSnap = await db.collection("transactions").where("isDeleted", "!=", true).limit(2000).get();
+            const transSnap = await db.collection("transactions").where("isDeleted", "!=", true).get();
             let totalVentes = 0;
             transSnap.forEach(doc => {
                 const d = doc.data();
@@ -53,7 +53,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                 }
             });
-            const incSnap = await db.collection("other_income").where("isDeleted", "!=", true).limit(1000).get();
+            const incSnap = await db.collection("other_income").where("isDeleted", "!=", true).get();
             let totalAutres = 0;
             incSnap.forEach(doc => {
                 const d = doc.data();
@@ -61,7 +61,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     totalAutres += (d.montant || 0);
                 }
             });
-            const expSnap = await db.collection("expenses").where("isDeleted", "!=", true).limit(1000).get();
+            const expSnap = await db.collection("expenses").where("isDeleted", "!=", true).get();
             let totalDepenses = 0;
             expSnap.forEach(doc => {
                 const d = doc.data();
@@ -70,7 +70,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     totalDepenses += (d.montant || 0);
                 }
             });
-            const bankSnap = await db.collection("bank_movements").where("isDeleted", "!=", true).limit(1000).get();
+            const bankSnap = await db.collection("bank_movements").where("isDeleted", "!=", true).get();
             let totalRetraits = 0;
             let totalDepots = 0;
             bankSnap.forEach(doc => {
@@ -172,8 +172,7 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        // On limite l'affichage aux 100 premiers pour la performance si pas de recherche précise
-        const toShow = filtered.slice(0, 100);
+        const toShow = filtered;
 
         toShow.forEach(t => {
             const { days, fee } = transactionService.calculateStorageFee(t.date, t.quantite);

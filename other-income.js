@@ -112,6 +112,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let unsubscribeIncome = null;
     let allIncome = [];
     let pendingIncome = []; // Pour les enregistrements multiples
+    let currentLimit = 50; // Limite de pagination
 
     // 1. AJOUT MANUEL (AVEC AUTEUR)
     if (addIncomeBtn && !isViewer) { addIncomeBtn.addEventListener('click', () => {
@@ -163,7 +164,7 @@ document.addEventListener('DOMContentLoaded', () => {
             query = query.where("isDeleted", "!=", true).orderBy("isDeleted");
         }
         query = query.orderBy("date", "desc");
-        query = query.limit(200); // OPTIMISATION QUOTA
+        query = query.limit(currentLimit);
 
         unsubscribeIncome = query.onSnapshot(snapshot => {
             allIncome = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -236,6 +237,14 @@ document.addEventListener('DOMContentLoaded', () => {
             `;
             incomeTableBody.appendChild(row); 
         });
+
+        // Bouton Charger Plus
+        if (filtered.length >= currentLimit || allIncome.length >= currentLimit) {
+            const moreRow = document.createElement('tr');
+            moreRow.innerHTML = `<td colspan="4" style="text-align: center; padding: 15px;"><button id="loadMoreIncBtn" class="btn" style="background:#f1f5f9; color:#475569; border:1px solid #cbd5e1;">⬇️ Charger plus de résultats</button></td>`;
+            incomeTableBody.appendChild(moreRow);
+            document.getElementById('loadMoreIncBtn').addEventListener('click', () => { currentLimit += 50; fetchIncome(); });
+        }
     }
 
     function updateStats() {

@@ -184,12 +184,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // 1. Charger la liste des sessions (Basé sur les logs de validation)
     function loadSessions() {
-        // OPTIMISATION : On charge les 100 dernières sessions (au lieu de 20)
-        // Cela évite que les sessions en attente ne "disparaissent" visuellement si de nombreuses sessions validées s'ajoutent.
         let query = db.collection("audit_logs")
             .where("action", "==", "VALIDATION_JOURNEE")
-            .orderBy("date", "desc")
-            .limit(100); 
+            .orderBy("date", "desc"); 
 
         query.onSnapshot(snapshot => {
             sessionsListPendingEl.innerHTML = '';
@@ -303,7 +300,6 @@ document.addEventListener('DOMContentLoaded', () => {
             .where("date", ">=", start)
             .where("date", "<=", end)
             .orderBy("date", "desc")
-            .limit(500)
             .get()
             .then(snapshot => {
                 sessionsListArchivesEl.innerHTML = '';
@@ -383,7 +379,6 @@ document.addEventListener('DOMContentLoaded', () => {
             const transSnap = await db.collection("transactions")
                 .where("saisiPar", "==", logData.user)
                 .where("lastPaymentDate", "==", dateOnly)
-                .limit(500)
                 .get();
             transactionsDocs = transSnap.docs;
         }
@@ -398,7 +393,6 @@ document.addEventListener('DOMContentLoaded', () => {
             const expSnap = await db.collection("expenses")
                 .where("description", ">=", "")
                 .orderBy("description")
-                .limit(500)
                 .get();
             expensesDocs = expSnap.docs
                 .map(d => ({ id: d.id, ...d.data() }))
@@ -634,20 +628,20 @@ document.addEventListener('DOMContentLoaded', () => {
             let matchingDocs = [];
 
             // A. Match Exact (Rapide)
-            let tSnaps = await db.collection("transactions").where("reference", "==", term).limit(5).get();
+            let tSnaps = await db.collection("transactions").where("reference", "==", term).get();
             if (!tSnaps.empty) matchingDocs = tSnaps.docs;
             
             // B. Si pas trouvé, Match Nom Exact
             if (matchingDocs.length === 0) {
-                tSnaps = await db.collection("transactions").where("nom", "==", term).limit(5).get();
+                tSnaps = await db.collection("transactions").where("nom", "==", term).get();
                 if (!tSnaps.empty) matchingDocs = tSnaps.docs;
             }
 
             // C. Si toujours rien, Recherche Partielle (Scan des 2000 derniers éléments)
             // Permet de trouver "023" dans "ML-023-D53"
             if (matchingDocs.length === 0) {
-                sessionsListPendingEl.innerHTML = '<p style="padding:10px; color:#666;">Recherche approfondie (Scan)...</p>';
-                const snapshot = await db.collection("transactions").orderBy("date", "desc").limit(2000).get();
+                sessionsListPendingEl.innerHTML = '<p style="padding:10px; color:#666;">Recherche approfondie...</p>';
+                const snapshot = await db.collection("transactions").orderBy("date", "desc").get();
                 
                 matchingDocs = snapshot.docs.filter(doc => {
                     const d = doc.data();
@@ -662,8 +656,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             const foundSessions = new Map();
-            // On limite à 20 transactions pour ne pas surcharger les requêtes suivantes
-            const transIds = matchingDocs.slice(0, 20).map(d => d.id);
+            const transIds = matchingDocs.map(d => d.id);
 
             // 2. Trouver les sessions contenant ces transactions
             // Stratégie A : Nouveau système (transactionIds contient l'ID)

@@ -326,7 +326,7 @@ document.addEventListener('DOMContentLoaded', () => {
             syncParisBtn.disabled = true; syncParisBtn.textContent = "Analyse...";
             
             try {
-                const parisSnap = await livraisonsCollection.where("containerStatus", "==", "PARIS").limit(1000).get();
+                const parisSnap = await livraisonsCollection.where("containerStatus", "==", "PARIS").get();
                 if (parisSnap.empty) { alert("Manifeste vide."); return; }
 
                 const batch = db.batch();
@@ -368,7 +368,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- AFFICHAGE ABIDJAN ---
     // MODIFICATION : On écoute désormais la collection 'livraisons' (En Cours) au lieu de 'transactions'
     // pour refléter fidèlement l'onglet Livraison > En Cours.
-    livraisonsCollection.where("containerStatus", "==", "EN_COURS").orderBy("dateAjout", "desc").limit(100).onSnapshot(snapshot => {
+    livraisonsCollection.where("containerStatus", "==", "EN_COURS").orderBy("dateAjout", "desc").onSnapshot(snapshot => {
         allArrivals = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         renderAbidjanTable();
     }, error => console.error(error));
@@ -403,8 +403,7 @@ document.addEventListener('DOMContentLoaded', () => {
             return rA - rB; // Tri CROISSANT Référence
         });
 
-        // === OPTIMISATION : On ne prend que les 50 premiers pour l'affichage ===
-        const toShow = filtered.slice(0, 50);
+        const toShow = filtered;
 
         arrivalsTableBody.innerHTML = '';
         if (toShow.length === 0) {
@@ -632,7 +631,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function removeFromParisManifest(ref, conteneur, newRestant = null) {
         // MODIFICATION : Recherche élargie pour inclure A_VENIR
-        const q = await livraisonsCollection.where("ref", "==", ref).limit(5).get();
+        const q = await livraisonsCollection.where("ref", "==", ref).get();
         if (!q.empty) {
             // On cible en priorité les colis qui sont à PARIS ou A_VENIR
             const targetDoc = q.docs.find(d => ['PARIS', 'A_VENIR'].includes(d.data().containerStatus));

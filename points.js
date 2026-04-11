@@ -53,7 +53,6 @@ document.addEventListener('DOMContentLoaded', async () => {
                 .where("action", "==", "VALIDATION_JOURNEE")
                 .where("date", ">=", start)
                 .where("date", "<=", end + "T23:59:59")
-                .limit(1000)
                 .get();
 
             // 1b. Identifier les sessions NON VALIDÉES (En attente)
@@ -72,14 +71,12 @@ document.addEventListener('DOMContentLoaded', async () => {
             const transSnap = await db.collection("transactions")
                 .where("date", ">=", start)
                 .where("date", "<=", end)
-                .limit(2000)
                 .get();
 
             // 3. Récupérer les Dépenses
             const expSnap = await db.collection("expenses")
                 .where("date", ">=", start)
                 .where("date", "<=", end)
-                .limit(2000)
                 .get();
 
             // --- TRAITEMENT DES DONNÉES ---

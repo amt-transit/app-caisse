@@ -257,8 +257,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 query = query.where("isDeleted", "!=", true).orderBy("isDeleted").orderBy("date", "desc");
              } else {
                 // Si on filtre, on charge tout le "non supprimé" et on filtre en JS
-                // OPTIMISATION : On ajoute une limite de sécurité pour ne pas exploser le quota
-                query = query.where("isDeleted", "!=", true).orderBy("isDeleted").orderBy("date", "desc").limit(1000);
+                // OPTIMISATION CRITIQUE : Limiter à 500 pour éviter de saturer Firebase à chaque frappe au clavier
+                query = query.where("isDeleted", "!=", true).orderBy("isDeleted").orderBy("date", "desc").limit(500);
              }
         }
         

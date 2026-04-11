@@ -220,15 +220,15 @@ td button.editBtn { background-color: #007bff; color: white; border: none; paddi
 .totals-container { display: flex; gap: 10px; margin-bottom: 15px; flex-wrap: wrap; }
 .total-card { 
     flex-grow: 1; background: #fff;
-    border-radius: 12px; padding: 15px;
+    border-radius: 10px; padding: 10px 12px;
     text-align: center; border: 1px solid var(--border-color);
     box-shadow: var(--shadow-sm);
     transition: transform 0.2s;
     cursor: pointer;
 }
 .total-card:hover { transform: translateY(-3px); box-shadow: var(--shadow-md); border-color: var(--primary); }
-.total-card h3 { margin-top: 0; font-size: 13px; color: var(--text-muted); margin-bottom: 5px; text-transform: uppercase; }
-.total-card p { margin-bottom: 0; font-size: 24px; font-weight: 700; color: var(--text-main); }
+.total-card h3 { margin-top: 0; font-size: 11px; color: var(--text-muted); margin-bottom: 4px; text-transform: uppercase; }
+.total-card p { margin-bottom: 0; font-size: 19px; font-weight: 700; color: var(--text-main); }
 
 /* Bouton Actualiser Stats */
 .btn-refresh-stats {
@@ -246,28 +246,102 @@ td button.editBtn { background-color: #007bff; color: white; border: none; paddi
 .btn-refresh-stats:hover { background-color: #bae6fd; }
 .btn-refresh-stats:disabled { opacity: 0.6; cursor: not-allowed; }
 
-/* --- COULEURS GRANDS TOTAUX DASHBOARD --- */
-/* Inversion : Background coloré, texte blanc */
-#card-prix, #card-percu { background-color: var(--primary); }
-#card-other { background-color: #64748b; }
-#card-depenses { background-color: var(--danger); }
-#card-reste { background-color: var(--warning); }
-#card-retraits { background-color: #8b5cf6; }
-#card-depots { background-color: #f43f5e; }
-#card-cheques { background-color: #6f42c1; }
-
-/* Texte blanc pour les cartes colorées */
-.total-card.colored-card h3,
-.total-card.colored-card p,
-.total-card.colored-card span {
-    color: #fff !important;
+/* --- DASHBOARD MODERNISATION (SaaS Style) --- */
+.modern-dashboard {
+    padding: 25px;
+    background: #ffffff;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.05);
 }
-.total-card.colored-card { border: none; }
+.dashboard-header-modern {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 30px; padding-bottom: 20px; border-bottom: 1px solid #f1f5f9;
+    flex-wrap: wrap; gap: 15px;
+}
+.header-titles h2 { margin: 0; font-size: 24px; color: #0f172a; text-align: left; font-weight: 800; letter-spacing: -0.5px; }
+.header-titles p { margin: 5px 0 0 0; color: #64748b; font-size: 14px; }
 
-/* Classes dynamiques pour Bénéfice et Caisse */
-.card-positif { background-color: var(--success) !important; border: none; }
-.card-negatif { background-color: var(--danger) !important; border: none; }
-.card-positif h3, .card-positif p, .card-negatif h3, .card-negatif p { color: #fff !important; }
+.filter-controls-modern {
+    display: flex; align-items: center; gap: 12px;
+    background: #f8fafc; padding: 8px 16px;
+    border-radius: 12px; border: 1px solid #e2e8f0;
+    box-shadow: inset 0 2px 4px rgba(0,0,0,0.02);
+}
+.date-filter-modern { display: flex; align-items: center; gap: 10px; font-weight: 600; font-size: 13px; color: #64748b; }
+.date-filter-modern input[type="date"] { 
+    border: none; background: #ffffff; color: #0f172a; 
+    padding: 6px 10px; border-radius: 6px; box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+    font-weight: 600; cursor: pointer;
+}
+.btn-modern-reset { 
+    background: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px; 
+    width: 36px; height: 36px; cursor: pointer; display: flex; align-items: center; justify-content: center; 
+    color: #ef4444; font-weight: bold; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+}
+.btn-modern-reset:hover { background: #ef4444; color: white; border-color: #ef4444; transform: rotate(180deg); }
+
+.kpi-section-title {
+    font-size: 16px; color: #1e293b; margin: 0 0 15px 0;
+    display: flex; align-items: center; gap: 10px; font-weight: 700;
+    letter-spacing: -0.3px;
+}
+.kpi-section-title span.icon-bg {
+    background: #f1f5f9; width: 32px; height: 32px;
+    display: flex; align-items: center; justify-content: center;
+    border-radius: 8px; font-size: 16px; border: 1px solid #e2e8f0;
+}
+
+/* Redéfinition des cartes pour le look SaaS */
+.totals-container {
+    display: grid !important;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)) !important;
+    gap: 20px !important;
+}
+.total-card {
+    position: relative; overflow: hidden; text-align: left !important;
+    padding: 20px 24px !important; border-radius: 16px !important; border: none !important;
+    box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -4px rgba(0,0,0,0.05) !important;
+    display: flex; flex-direction: column; justify-content: space-between; z-index: 1;
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+.total-card:hover {
+    transform: translateY(-5px) scale(1.02);
+    box-shadow: 0 20px 25px -5px rgba(0,0,0,0.15), 0 8px 10px -6px rgba(0,0,0,0.1) !important;
+}
+.total-card h3 { font-size: 14px !important; opacity: 0.9; margin-bottom: 10px !important; text-transform: none !important; font-weight: 600; letter-spacing: -0.3px; }
+.total-card p { font-size: 26px !important; font-weight: 800 !important; letter-spacing: -1px; margin: 0; }
+
+.card-watermark {
+    position: absolute; right: -15px; bottom: -20px; font-size: 80px;
+    opacity: 0.15; z-index: -1; line-height: 1;
+    transform: rotate(-15deg); transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.4s;
+}
+.total-card:hover .card-watermark { transform: rotate(0deg) scale(1.15); opacity: 0.25; }
+.card-subtext { display: block; font-size: 12px; opacity: 0.85; margin-top: 8px; font-weight: 500; }
+
+/* COULEURS GRANDS TOTAUX DASHBOARD - Gradients Premium */
+#card-percu { background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%) !important; }
+#card-other { background: linear-gradient(135deg, #14b8a6 0%, #0f766e 100%) !important; }
+#card-depenses { background: linear-gradient(135deg, #f43f5e 0%, #be123c 100%) !important; }
+#card-caisse-especes { background: linear-gradient(135deg, #10b981 0%, #047857 100%) !important; }
+#card-solde-banque { background: linear-gradient(135deg, #6366f1 0%, #4338ca 100%) !important; }
+#card-reste { background: linear-gradient(135deg, #f97316 0%, #c2410c 100%) !important; }
+#card-retraits { background: linear-gradient(135deg, #a855f7 0%, #7e22ce 100%) !important; }
+#card-depots { background: linear-gradient(135deg, #ec4899 0%, #be185d 100%) !important; }
+#card-cheques { background: linear-gradient(135deg, #8b5cf6 0%, #6d28d9 100%) !important; }
+#card-virements { background: linear-gradient(135deg, #0ea5e9 0%, #0369a1 100%) !important; }
+#card-operations { background: linear-gradient(135deg, #64748b 0%, #334155 100%) !important; }
+
+.card-positif { background: linear-gradient(135deg, #10b981 0%, #059669 100%) !important; border: none !important; }
+.card-negatif { background: linear-gradient(135deg, #ef4444 0%, #b91c1c 100%) !important; border: none !important; }
+
+/* Texte blanc pour le contraste */
+.total-card.colored-card h3, .total-card.colored-card p, .total-card.colored-card span, .total-card.colored-card div,
+.card-positif h3, .card-positif p, .card-positif div,
+.card-negatif h3, .card-negatif p, .card-negatif div {
+    color: #ffffff !important;
+}
+.total-card.colored-card { border: none !important; }
 
 /* Ajustement layout sous-titre Paris */
 #grandTotalParisHidden { display: block; font-size: 0.75em; margin-top: 4px; font-weight: 500; }

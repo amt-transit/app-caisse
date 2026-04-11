@@ -191,6 +191,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let allExpenses = [];
     let unconfirmedSessions = new Set(); // Stocke les IDs de sessions non validées
     let pendingExpenses = []; // Pour les enregistrements multiples
+    let currentLimit = 50; // Limite de pagination
 
 
     // --- GESTION DES SOUS-ONGLETS (Dépenses Mensuelles vs Conteneurs) ---
@@ -446,7 +447,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (showDeletedCheckbox.checked) query = query.where("isDeleted", "==", true).orderBy("isDeleted");
         else query = query.where("isDeleted", "!=", true).orderBy("isDeleted");
         query = query.orderBy("date", "desc");
-        query = query.limit(200); // OPTIMISATION QUOTA
+        query = query.limit(currentLimit);
         unsubscribeExpenses = query.onSnapshot(snapshot => {
             allExpenses = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
             renderExpensesTable();
@@ -568,6 +569,14 @@ document.addEventListener('DOMContentLoaded', () => {
             `;
             expenseTableBody.appendChild(row);
         });
+
+        // Bouton Charger Plus si la limite est atteinte
+        if (filtered.length >= currentLimit || allExpenses.length >= currentLimit) {
+            const moreRow = document.createElement('tr');
+            moreRow.innerHTML = `<td colspan="7" style="text-align: center; padding: 15px;"><button id="loadMoreExpBtn" class="btn" style="background:#f1f5f9; color:#475569; border:1px solid #cbd5e1;">⬇️ Charger plus de résultats</button></td>`;
+            expenseTableBody.appendChild(moreRow);
+            document.getElementById('loadMoreExpBtn').addEventListener('click', () => { currentLimit += 50; fetchExpenses(); });
+        }
     }
 
     function renderTotals() {

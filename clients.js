@@ -74,10 +74,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         topClientsTableBody.innerHTML = '<tr><td colspan="4">Chargement des données...</td></tr>';
         
         // Charger les noms pour l'autocomplete
-        const livraisonsSnap = await livraisonsCollection.orderBy("dateAjout", "desc").limit(2000).get();
+        const livraisonsSnap = await livraisonsCollection.orderBy("dateAjout", "desc").get();
         allLivraisonsCache = livraisonsSnap.docs.map(doc => doc.data());
         
-        const transSnap = await transactionsCollection.where("isDeleted", "!=", true).limit(2000).get();
+        const transSnap = await transactionsCollection.where("isDeleted", "!=", true).get();
         allTransactionsCache = transSnap.docs.map(doc => doc.data());
 
         // Remplir la liste des noms

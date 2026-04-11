@@ -46,7 +46,6 @@ firebase.auth().onAuthStateChanged(async (user) => {
         firebase.firestore().collection("audit_logs")
             .where("action", "==", "VALIDATION_JOURNEE")
             .orderBy("date", "desc")
-            .limit(20)
             .onSnapshot(snapshot => {
                 let pendingCount = 0;
                 snapshot.forEach(doc => {

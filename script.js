@@ -36,7 +36,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             }, []);
         },
         async calculateAvailableBalance(db, unconfirmedSessions) {
-            const transSnap = await db.collection("transactions").where("isDeleted", "!=", true).limit(2000).get();
+            const transSnap = await db.collection("transactions").where("isDeleted", "!=", true).get();
             let totalVentes = 0;
             transSnap.forEach(doc => {
                 const d = doc.data();
@@ -53,7 +53,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     }
                 }
             });
-            const incSnap = await db.collection("other_income").where("isDeleted", "!=", true).limit(1000).get();
+            const incSnap = await db.collection("other_income").where("isDeleted", "!=", true).get();
             let totalAutres = 0;
             incSnap.forEach(doc => {
                 const d = doc.data();
@@ -61,7 +61,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     totalAutres += (d.montant || 0);
                 }
             });
-            const expSnap = await db.collection("expenses").where("isDeleted", "!=", true).limit(1000).get();
+            const expSnap = await db.collection("expenses").where("isDeleted", "!=", true).get();
             let totalDepenses = 0;
             expSnap.forEach(doc => {
                 const d = doc.data();
@@ -70,7 +70,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     totalDepenses += (d.montant || 0);
                 }
             });
-            const bankSnap = await db.collection("bank_movements").where("isDeleted", "!=", true).limit(1000).get();
+            const bankSnap = await db.collection("bank_movements").where("isDeleted", "!=", true).get();
             let totalRetraits = 0;
             let totalDepots = 0;
             bankSnap.forEach(doc => {
@@ -807,8 +807,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
 
         // 2. Vérifier dans la Base de Données
-        let query = await transactionsCollection.where("reference", "==", searchValue).limit(10).get();
-        if (query.empty) query = await transactionsCollection.where("nom", "==", searchValue).limit(10).get();
+        let query = await transactionsCollection.where("reference", "==", searchValue).get();
+        if (query.empty) query = await transactionsCollection.where("nom", "==", searchValue).get();
 
         if (!query.empty) {
             if (query.size > 1) return AppModal.error("Plusieurs résultats correspondent à cette recherche. Soyez plus précis.");
@@ -971,8 +971,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     function formatCFA(n) { return new Intl.NumberFormat('fr-CI', { style: 'currency', currency: 'XOF' }).format(n || 0); }
     
     function populateDatalist() {
-        // OPTIMISATION : On réduit la liste d'autocomplétion aux 200 derniers éléments
-        transactionsCollection.where("isDeleted", "!=", true).orderBy("isDeleted").orderBy("date", "desc").limit(200).get().then(snapshot => {
+        transactionsCollection.where("isDeleted", "!=", true).orderBy("isDeleted").orderBy("date", "desc").get().then(snapshot => {
             const references = new Set(); 
             snapshot.forEach(doc => {
                 const d = doc.data();

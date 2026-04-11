@@ -234,8 +234,8 @@ const isSuperAdmin = userRole === 'super_admin';
 
     // 3. JOURNAL D'AUDIT
     function loadAuditLogs() {
-        // Charger les 50 derniers logs
-        db.collection("audit_logs").orderBy("date", "desc").limit(50).onSnapshot(snapshot => {
+        // Charger tous les logs
+        db.collection("audit_logs").orderBy("date", "desc").onSnapshot(snapshot => {
             auditLogBody.innerHTML = '';
             if (snapshot.empty) {
                 auditLogBody.innerHTML = '<tr><td colspan="4">Aucun log.</td></tr>';
