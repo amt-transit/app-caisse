@@ -505,7 +505,16 @@ document.addEventListener('DOMContentLoaded', () => {
         if (breakdownDiv) {
             let html = '<strong>Répartition des Encaissements :</strong><div style="display:flex; gap:15px; flex-wrap:wrap; margin-top:5px;">';
             for (const [m, amount] of Object.entries(totalsByMode)) {
-                if (amount > 0) html += `<div><span class="tag" style="background:#fff; border:1px solid #ccc;">${m}</span> : <b>${formatCFA(amount)}</b></div>`;
+                if (amount > 0) {
+                    let bg = '#fff', color = '#333', border = '#ccc';
+                    const lowerM = m.toLowerCase();
+                    if (lowerM.includes('espèce') || lowerM.includes('espece')) { bg = '#d1fae5'; color = '#065f46'; border = '#34d399'; }
+                    else if (lowerM.includes('wave')) { bg = '#e0f2fe'; color = '#0369a1'; border = '#7dd3fc'; }
+                    else if (lowerM.includes('om') || lowerM.includes('orange')) { bg = '#ffedd5'; color = '#c2410c'; border = '#fdba74'; }
+                    else if (lowerM.includes('chèque') || lowerM.includes('cheque')) { bg = '#f3f4f6'; color = '#374151'; border = '#d1d5db'; }
+                    else if (lowerM.includes('virement')) { bg = '#ede9fe'; color = '#4f46e5'; border = '#c4b5fd'; }
+                    html += `<div><span class="tag" style="background:${bg}; color:${color}; border:1px solid ${border};">${m}</span> : <b>${formatCFA(amount)}</b></div>`;
+                }
             }
             breakdownDiv.innerHTML = html + '</div>';
         }
