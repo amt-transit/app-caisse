@@ -25,19 +25,17 @@ console.log("✅ Mode Production (Salaire) : Connecté");
         const authLoading = ref(true);
         const loginForm = ref({ email: '', password: '' });
         const loginError = ref('');
-        // ADAPTATION : Utilisation du rôle stocké en session par auth-guard.js
         const isAdmin = computed(() => {
             const role = sessionStorage.getItem('userRole');
             return role === 'admin' || role === 'super_admin';
         });
-        // AJOUT : Super Admin pour modifications
         const isSuperAdmin = computed(() => {
             const role = sessionStorage.getItem('userRole');
             return role === 'super_admin';
         });
 
         const currentSalaireView = ref('dashboard'); 
- const employeesList = ref([]);
+        const employeesList = ref([]);
         const salaryHistory = ref([]);
         const salaryFunds = ref([]); 
         const paiePeriod = ref("15"); 
@@ -62,9 +60,9 @@ console.log("✅ Mode Production (Salaire) : Connecté");
         const selectedTontineMonth = ref(new Date().toISOString().slice(0, 7));
         const selectedTontinePeriod = ref("15");
         const selectedHistoryMonth = ref(null);
-        const searchQuery = ref(''); // Pour la recherche employé
-        const toast = ref({ show: false, message: '', type: 'success' }); // État notification
-        const actionLoading = ref(false); // État chargement global
+        const searchQuery = ref('');
+        const toast = ref({ show: false, message: '', type: 'success' });
+        const actionLoading = ref(false);
 
         // --- CHARGEMENT DES DONNÉES ---
         const loadEmployees = () => {
@@ -87,9 +85,12 @@ console.log("✅ Mode Production (Salaire) : Connecté");
             });
         };
 
-        // --- COEUR DU SYSTÈME : CALCULS ROBUSTES ---
-
-        // 1. Fonction utilitaire pour savoir ce qui a DÉJÀ été payé ce mois-ci
+        // ============================================================
+        // CORRECTION 1 — getMonthlySummary : distinguer les périodes
+        // On calcule séparément ce qui a été payé à l'acompte (15)
+        // et au solde (30), pour éviter que la tontine du 15 efface
+        // celle du 30 dans le calcul de la base.
+        // ============================================================
         const getMonthlySummary = (emp, month) => {
             const payments = salaryHistory.value.filter(p => p.employeeId === emp.id && p.month === month);
             
@@ -97,69 +98,97 @@ console.log("✅ Mode Production (Salaire) : Connecté");
             const totalLoanPaid = payments.reduce((sum, p) => sum + (p.loan || 0), 0);
             const totalTontinePaid = payments.reduce((sum, p) => sum + (p.tontine || 0), 0);
             
-            // Le salaire "Brut" déjà couvert = Net perçu + Dettes remboursées + Tontine payée
-            const totalGrossPaid = totalNetPaid + totalLoanPaid + totalTontinePaid;
+            // FIX : Le montant brut consommé correspond à la base cible enregistrée (p.base).
+            // Il faut utiliser p.base pour inclure indirectement les absences, sinon une 
+            // absence déduite le 15 sera remboursée par erreur lors du calcul du solde le 30 !
+            const totalGrossPaid = payments.reduce((sum, p) => sum + (p.base || 0), 0);
 
             return { totalNetPaid, totalLoanPaid, totalTontinePaid, totalGrossPaid };
         };
 
-        // 2. Calcul du salaire de base (Ce qu'il reste à payer BRUT)
+        // ============================================================
+        // CORRECTION 2 — calculateBase : La base de paie ne doit
+        // concerner que le salaire. La tontine est une DÉDUCTION.
+        //
+        // Règle métier :
+        //   Acompte (15) → base = 50% du salaire
+        //   Solde   (30) → base = 100% du salaire
+        //
+        // Le montant déjà payé (totalGrossPaid) est ensuite soustrait
+        // pour déterminer ce qu'il reste à verser sur cette base.
+        // ============================================================
         const calculateBase = (emp) => {
             const summary = getMonthlySummary(emp, selectedPaieMonth.value);
-            
-            // Si période Acompte (15) : Cible = 50% du salaire
+
             if (paiePeriod.value === '15') {
+                // Cible brute acompte = 50% du salaire
                 const target = Math.round(emp.salary / 2);
                 const remaining = target - summary.totalGrossPaid;
                 return Math.max(0, remaining);
             }
             
-            // Si période Solde (30) : Cible = 100% du salaire
             if (paiePeriod.value === '30') {
-                const remaining = emp.salary - summary.totalGrossPaid;
+                // Cible brute mois entier = 100% du salaire
+                const target = emp.salary;
+                const remaining = target - summary.totalGrossPaid;
                 return Math.max(0, remaining);
             }
             return 0;
         };
 
-        // 3. Calcul Tontine (Ne payer que si pas encore fait ce mois-ci)
+        // ============================================================
+        // CORRECTION 3 — calculateTontineDeduc : Gère le rattrapage.
+        // Règle métier :
+        // - Le 15 : on prélève 1 part de tontine.
+        // - Le 30 : on prélève le reste pour atteindre 2 parts sur le mois.
+        //   Si la part du 15 a été manquée, on prélève 2 parts le 30.
+        // ============================================================
         const calculateTontineDeduc = (emp) => {
             const count = parseInt(emp.tontineCount || (emp.isTontine ? 1 : 0));
             if (count <= 0) return 0;
             
-            const target = count * globalTontineAmount.value;
+            const tontinePerPeriod = count * (parseFloat(globalTontineAmount.value) || 0);
             const currentP = paiePeriod.value; // '15' ou '30'
 
-            // On vérifie si la tontine a été payée pour CETTE période spécifique (15 ou 30)
-            const paid = salaryHistory.value.filter(p => 
-                p.employeeId === emp.id && 
-                p.month === selectedPaieMonth.value && 
-                (p.period === currentP || (p.type === 'Acompte (15)' && currentP === '15') || (p.type === 'Solde (Fin)' && currentP === '30') || (p.type === 'Cotisation Tontine' && p.period === currentP))
-            ).reduce((sum, p) => sum + (p.tontine || 0), 0);
+            if (currentP === '15') {
+                // Pour l'acompte, on ne prélève que la tontine de la 1ère période si elle n'a pas été payée.
+                const paidThisPeriod = salaryHistory.value.filter(p => 
+                    p.employeeId === emp.id && 
+                    p.month === selectedPaieMonth.value && 
+                    p.period === '15'
+                ).reduce((sum, p) => sum + (parseFloat(p.tontine) || 0), 0);
 
-            // Si payé pour cette quinzaine, reste = 0, sinon montant cible
-            return Math.max(0, target - paid);
+                return Math.max(0, tontinePerPeriod - paidThisPeriod);
+            }
+
+            if (currentP === '30') {
+                // Pour le solde, on s'assure que le total des 2 tontines du mois est bien prélevé.
+                const totalMonthlyTarget = tontinePerPeriod * 2;
+
+                // On calcule tout ce qui a déjà été payé en tontine pour ce mois (périodes 15 et 30 confondues)
+                const totalPaidThisMonth = salaryHistory.value.filter(p => 
+                    p.employeeId === emp.id && 
+                    p.month === selectedPaieMonth.value
+                ).reduce((sum, p) => sum + (parseFloat(p.tontine) || 0), 0);
+
+                // La déduction est ce qui reste à payer pour atteindre la cible mensuelle.
+                return Math.max(0, totalMonthlyTarget - totalPaidThisMonth);
+            }
+
+            return 0; // Ne devrait pas arriver
         };
 
-        // 4. Calcul Prêt (Plafond 10k mais intelligent)
+        // Calcul Prêt (inchangé)
         const calculateLoanDeduc = (emp) => {
             if (!emp.loan || emp.loan <= 0) return 0;
-            
-            // On propose 10.000 ou le reste de la dette
             const standardDeduc = Math.min(emp.loan, 10000);
-            
-            // MAIS on vérifie qu'il reste assez de salaire pour payer ça
             const base = calculateBase(emp);
             const tontine = calculateTontineDeduc(emp);
-            
-            // Reste disponible après tontine
             const available = Math.max(0, base - tontine);
-            
-            // On ne prend pas plus que ce qui est disponible
             return Math.min(standardDeduc, available);
         };
 
-        // 5. Calcul du Net
+        // Calcul du Net
         const calculateNet = (emp) => {
             const base = calculateBase(emp);
             const loan = calculateLoanDeduc(emp);
@@ -167,14 +196,11 @@ console.log("✅ Mode Production (Salaire) : Connecté");
             return Math.max(0, base - loan - tontine);
         };
 
-        // 6. Liste des impayés (CORRIGÉE : Ne disparaît que si tout est payé)
+        // Liste des impayés
         const unpaidEmployees = computed(() => {
             return employeesList.value.filter(emp => {
-                // On garde l'employé tant qu'il reste de l'argent à verser pour la cible
-                // Si Acompte (15) : Tant qu'on n'a pas atteint 50%
-                // Si Solde (30) : Tant qu'on n'a pas atteint 100%
                 const remaining = calculateBase(emp);
-                return remaining > 0; // Si reste > 0, il s'affiche
+                return remaining > 0;
             });
         });
 
@@ -194,12 +220,12 @@ console.log("✅ Mode Production (Salaire) : Connecté");
                 acc.salary += (parseFloat(emp.salary) || 0);
                 acc.loan += (parseFloat(emp.loan) || 0);
                 const count = parseInt(emp.tontineCount || (emp.isTontine ? 1 : 0));
-                acc.tontine += count * (parseFloat(globalTontineAmount.value) || 0);
+                // CORRECTION 4 : la tontine mensuelle = 2 × le montant unitaire
+                acc.tontine += count * (parseFloat(globalTontineAmount.value) || 0) * 2;
                 return acc;
             }, { salary: 0, loan: 0, tontine: 0 });
         });
 
-        // 7. Filtrage des employés (Recherche)
         const filteredEmployees = computed(() => {
             if (!searchQuery.value) return employeesList.value;
             const q = searchQuery.value.toLowerCase();
@@ -208,7 +234,6 @@ console.log("✅ Mode Production (Salaire) : Connecté");
             );
         });
 
-        // Fonction utilitaire pour afficher un Toast
         const showToast = (msg, type = 'success') => {
             toast.value = { show: true, message: msg, type };
             setTimeout(() => toast.value.show = false, 3000);
@@ -221,7 +246,6 @@ console.log("✅ Mode Production (Salaire) : Connecté");
             const suggestedLoan = calculateLoanDeduc(emp);
             const tontineAmount = calculateTontineDeduc(emp);
 
-            // Calcul du montant théorique total de la tontine pour affichage
             const count = parseInt(emp.tontineCount || (emp.isTontine ? 1 : 0));
             const tontineTotal = count * (parseFloat(globalTontineAmount.value) || 0);
 
@@ -242,12 +266,6 @@ console.log("✅ Mode Production (Salaire) : Connecté");
 
         const recalcNet = () => {
             if (payForm.value.loan > payForm.value.maxLoan) payForm.value.loan = payForm.value.maxLoan;
-            // Sécurité pour ne pas avoir de net négatif
-            const deductions = (payForm.value.loan || 0) + (payForm.value.tontine || 0) + (payForm.value.absence || 0);
-            if (deductions > payForm.value.base) {
-                // On bloque visuellement ou on laisse faire (choix utilisateur), ici on laisse faire mais le net sera négatif ou on bloque
-                // payForm.value.net = 0; 
-            }
             payForm.value.net = payForm.value.base - (payForm.value.loan || 0) - (payForm.value.tontine || 0) - (payForm.value.absence || 0);
         };
 
@@ -257,18 +275,15 @@ console.log("✅ Mode Production (Salaire) : Connecté");
 
         const confirmSalaryPayment = async () => {
             if(!isSuperAdmin.value) return;
-            // VERIFICATION BUDGET : On ne peut pas payer si le mois n'a pas de dotation
             const hasBudget = salaryFunds.value.some(f => f.targetMonth === payForm.value.month);
             if (!hasBudget) {
-                alert(`Impossible d'effectuer un paiement pour ${payForm.value.month} : Aucun fonds n'a été alloué pour ce mois. Veuillez ajouter une dotation dans l'onglet "Fonds & Budget".`);
+                alert(`Impossible d'effectuer un paiement pour ${payForm.value.month} : Aucun fonds n'a été alloué pour ce mois.`);
                 return;
             }
             actionLoading.value = true;
 
             try {
-                // UTILISATION D'UNE TRANSACTION POUR SÉCURISER LE PAIEMENT ET LA DETTE
                 await runTransaction(db, async (transaction) => {
-                    // 1. Lecture fraîche de l'employé (pour la dette actuelle)
                     const empRef = doc(db, "employees", payForm.value.id);
                     const empDoc = await transaction.get(empRef);
                     if (!empDoc.exists()) throw "Employé introuvable !";
@@ -276,7 +291,6 @@ console.log("✅ Mode Production (Salaire) : Connecté");
                     const currentLoan = empDoc.data().loan || 0;
                     const newLoan = Math.max(0, currentLoan - payForm.value.loan);
 
-                    // 2. Création du document de paiement
                     const newPaymentRef = doc(collection(db, "salary_payments"));
                     transaction.set(newPaymentRef, {
                         employeeId: payForm.value.id, 
@@ -292,21 +306,16 @@ console.log("✅ Mode Production (Salaire) : Connecté");
                         timestamp: Timestamp.now()
                     });
 
-                    // 3. Mise à jour de la dette (si remboursement)
                     if (payForm.value.loan > 0) {
                         transaction.update(empRef, { loan: newLoan });
                     }
                 });
-                
                 
                 showPayModal.value = false;
                 showToast("Paiement enregistré avec succès !", "success");
             } catch(e) { showToast("Erreur: " + e.message, "error"); }
             finally { actionLoading.value = false; }
         };
-
-        // --- RESTE DU CODE (GESTION RH, TONTINE, PDF...) ---
-        // (Identique à votre logique existante pour ne pas tout casser)
 
         const saveGlobalTontine = async () => {
             if(!isSuperAdmin.value) return;
@@ -349,14 +358,9 @@ console.log("✅ Mode Production (Salaire) : Connecté");
 
         const cancelTontine = async (emp) => {
             if(!isSuperAdmin.value) return;
-            if (!confirm(`Voulez-vous vraiment annuler toutes les parts de tontine pour ${emp.name} ? Cette action est irréversible.`)) {
-                return;
-            }
+            if (!confirm(`Voulez-vous vraiment annuler toutes les parts de tontine pour ${emp.name} ?`)) return;
             try {
-                await updateDoc(doc(db, "employees", emp.id), {
-                    tontineCount: 0,
-                    isTontine: false
-                });
+                await updateDoc(doc(db, "employees", emp.id), { tontineCount: 0, isTontine: false });
                 showToast(`La tontine pour ${emp.name} a été annulée.`);
             } catch (e) { showToast("Erreur : " + e.message, "error"); }
         };
@@ -376,33 +380,50 @@ console.log("✅ Mode Production (Salaire) : Connecté");
 
         const openIndividualHistory = (emp) => { selectedEmployeeHistoryId.value = emp.id; selectedEmployeeHistoryName.value = emp.name; showIndividualHistoryModal.value = true; };
         
-        // CORRECTION : Tri par date décroissante pour mieux retracer l'historique
         const individualHistory = computed(() => {
             if (!selectedEmployeeHistoryId.value) return [];
             return salaryHistory.value
                 .filter(p => p.employeeId === selectedEmployeeHistoryId.value)
-                .sort((a, b) => {
-                    const tA = a.timestamp?.seconds || 0;
-                    const tB = b.timestamp?.seconds || 0;
-                    return tB - tA;
-                });
+                .sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0));
         });
 
-        // Regroupement Historique (Corrigé selon demande précédente)
+        // ============================================================
+        // CORRECTION 5 — groupedSalaryHistory : décomposer le solde
+        // On distingue maintenant : totalNet (net payé aux employés),
+        // totalTontine (retenues tontine collectées), totalLoan
+        // (remboursements de prêts), et on calcule le balance correct.
+        // ============================================================
         const groupedSalaryHistory = computed(() => {
             const groups = {};
             salaryHistory.value.forEach(pay => {
-                if (!groups[pay.month]) groups[pay.month] = { month: pay.month, payments: [], totalNet: 0, totalLoan: 0, totalFund: 0 };
+                if (!groups[pay.month]) groups[pay.month] = { 
+                    month: pay.month, 
+                    payments: [], 
+                    totalNet: 0,      // Net versé à l'employé
+                    totalTontine: 0,  // Tontine collectée (retenues)
+                    totalLoan: 0,     // Remboursements prêts
+                    totalFund: 0      // Budget alloué
+                };
                 groups[pay.month].payments.push(pay);
-                groups[pay.month].totalNet += pay.net;
+                groups[pay.month].totalNet += (pay.net || 0);
+                groups[pay.month].totalTontine += (pay.tontine || 0);
                 groups[pay.month].totalLoan += (pay.loan || 0);
             });
             salaryFunds.value.forEach(fund => {
                 const m = fund.targetMonth;
-                if (!groups[m]) groups[m] = { month: m, payments: [], totalNet: 0, totalLoan: 0, totalFund: 0 };
+                if (!groups[m]) groups[m] = { month: m, payments: [], totalNet: 0, totalTontine: 0, totalLoan: 0, totalFund: 0 };
                 groups[m].totalFund += fund.amount;
             });
-            return Object.values(groups).sort((a, b) => b.month.localeCompare(a.month)).map(group => ({ ...group, balance: group.totalFund - group.totalNet }));
+            return Object.values(groups)
+                .sort((a, b) => b.month.localeCompare(a.month))
+                .map(group => ({ 
+                    ...group, 
+                    // Le budget consommé = net versé + tontine retenue
+                    // (les remboursements de prêt ne consomment pas le budget, 
+                    //  ils transitent par l'employé)
+                    totalSpent: group.totalNet + group.totalTontine,
+                    balance: group.totalFund - group.totalNet - group.totalTontine
+                }));
         });
 
         const openMonthDetails = (group) => { group.payments.sort((a, b) => b.timestamp.seconds - a.timestamp.seconds); selectedHistoryMonth.value = group; };
@@ -423,12 +444,22 @@ console.log("✅ Mode Production (Salaire) : Connecté");
             if(confirm("Supprimer ?")) await deleteDoc(doc(db, "salary_funds", id)); 
         };
 
+        // ============================================================
+        // CORRECTION 6 — salaryStats : inclure la tontine dans
+        // le total dépensé pour un bilan budget correct.
+        // ============================================================
         const salaryStats = computed(() => {
             const target = selectedBudgetMonth.value;
-            const totalReceived = salaryFunds.value.filter(f => (f.targetMonth || (f.timestamp?.toDate ? f.timestamp.toDate().toISOString().slice(0, 7) : '')) === target).reduce((acc, curr) => acc + (curr.amount || 0), 0);
-            const totalPaid = salaryHistory.value.filter(p => p.month === target).reduce((acc, curr) => acc + (curr.net || 0), 0);
+            const targetPayments = salaryHistory.value.filter(p => p.month === target);
+            const totalReceived = salaryFunds.value
+                .filter(f => (f.targetMonth || (f.timestamp?.toDate ? f.timestamp.toDate().toISOString().slice(0, 7) : '')) === target)
+                .reduce((acc, curr) => acc + (curr.amount || 0), 0);
+            // CORRECTION : totalPaid = net versé + tontines retenues
+            const totalNet = targetPayments.reduce((acc, curr) => acc + (curr.net || 0), 0);
+            const totalTontine = targetPayments.reduce((acc, curr) => acc + (curr.tontine || 0), 0);
+            const totalPaid = totalNet + totalTontine;
             const totalLoans = employeesList.value.reduce((acc, curr) => acc + (curr.loan || 0), 0);
-            return { totalReceived, totalPaid, balance: totalReceived - totalPaid, totalLoans };
+            return { totalReceived, totalNet, totalTontine, totalPaid, balance: totalReceived - totalPaid, totalLoans };
         });
 
         const tontineMembers = computed(() => {
@@ -441,19 +472,48 @@ console.log("✅ Mode Production (Salaire) : Connecté");
             });
             return list;
         });
+
+        // ============================================================
+        // CORRECTION 7 — hasPaidTontine : utilise selectedTontineMonth
+        // ET selectedTontinePeriod (déjà correct en soi), mais on
+        // s'assure que la comparaison est bien sur p.period.
+        // ============================================================
         const hasPaidTontine = (empId, shareIndex = 1) => {
             const currentMonth = selectedTontineMonth.value;
             const currentPeriod = selectedTontinePeriod.value;
             const totalPaid = salaryHistory.value
-                .filter(p => p.employeeId === empId && p.month === currentMonth && p.period === currentPeriod)
+                .filter(p => 
+                    p.employeeId === empId && 
+                    p.month === currentMonth && 
+                    p.period === currentPeriod  // comparaison stricte sur la période
+                )
                 .reduce((sum, p) => sum + (parseFloat(p.tontine) || 0), 0);
             return totalPaid >= (shareIndex * (parseFloat(globalTontineAmount.value) || 0));
         };
 
-        // NOUVEAU : Calcul de la cagnotte totale (Montant à gagner)
+        // ============================================================
+        // CORRECTION 8 — hasPaidTontineForPaie : nouvelle fonction
+        // utilisée dans l'onglet Employés pour afficher le badge
+        // "Payé/Non Payé" basé sur le MOIS DE PAIE (selectedPaieMonth)
+        // et non le mois tontine.
+        // ============================================================
+        const hasPaidTontineForPaie = (empId, shareIndex = 1) => {
+            const currentMonth = selectedPaieMonth.value;
+            // On vérifie les deux périodes (le 15 et le 30)
+            const totalPaid = salaryHistory.value
+                .filter(p => p.employeeId === empId && p.month === currentMonth)
+                .reduce((sum, p) => sum + (parseFloat(p.tontine) || 0), 0);
+            const expectedPerMonth = shareIndex * (parseFloat(globalTontineAmount.value) || 0) * 2;
+            return totalPaid >= expectedPerMonth;
+        };
+
+        // ============================================================
+        // CORRECTION 9 — tontinePot : la cagnotte = 2 prélèvements/mois
+        // ============================================================
         const tontinePot = computed(() => {
             const totalShares = employeesList.value.reduce((sum, e) => sum + (parseInt(e.tontineCount || (e.isTontine ? 1 : 0))), 0);
-            return totalShares * (parseFloat(globalTontineAmount.value) || 0);
+            // Cagnotte mensuelle = 2 périodes × montant unitaire × nombre de parts
+            return totalShares * (parseFloat(globalTontineAmount.value) || 0) * 2;
         });
 
         const getTontinePaidAmount = (empId) => {
@@ -464,6 +524,13 @@ console.log("✅ Mode Production (Salaire) : Connecté");
                 .reduce((sum, p) => sum + (parseFloat(p.tontine) || 0), 0);
         };
 
+        // ============================================================
+        // CORRECTION 10 — markTontinePayment : stocker la tontine dans
+        // le budget (inclure le montant dans net pour que salaryStats
+        // le comptabilise correctement, ou utiliser un champ dédié).
+        // On utilise désormais net = 0 et tontine = amount, et la
+        // correction de salaryStats (ci-dessus) s'en charge.
+        // ============================================================
         const markTontinePayment = async (emp) => {
             if(!isSuperAdmin.value) return;
             let amount = prompt("Montant de la cotisation pour " + emp.name + " ?", globalTontineAmount.value);
@@ -481,7 +548,7 @@ console.log("✅ Mode Production (Salaire) : Connecté");
                     type: 'Cotisation Tontine',
                     base: 0, 
                     loan: 0, 
-                    tontine: amount, 
+                    tontine: amount,  // Correctement enregistré dans tontine
                     net: 0,
                     timestamp: Timestamp.now()
                 });
@@ -505,25 +572,19 @@ console.log("✅ Mode Production (Salaire) : Connecté");
 
         const markTontineBeneficiary = async (emp) => {
             if(!isSuperAdmin.value) return;
-            
-            // Vérification : Un participant ne peut gagner qu'une fois par part (main)
             const wins = salaryHistory.value.filter(p => p.employeeId === emp.id && p.type === 'Gain Tontine').length;
             const allowed = parseInt(emp.tontineCount || (emp.isTontine ? 1 : 0));
-            
             if (wins >= allowed) {
                 return alert(`Impossible : Cet employé a déjà récupéré la tontine ${wins} fois (Nombre de parts : ${allowed}).`);
             }
-
             if (!confirm(`Confirmer que ${emp.name} récupère la tontine du mois (${selectedTontineMonth.value}) ?`)) return;
-            
             const totalShares = employeesList.value.reduce((sum, e) => sum + (parseInt(e.tontineCount || (e.isTontine ? 1 : 0))), 0);
-            const defaultAmount = totalShares * globalTontineAmount.value;
-
+            // Gain = cagnotte du mois (2 périodes)
+            const defaultAmount = totalShares * globalTontineAmount.value * 2;
             let amount = prompt("Montant récupéré ?", defaultAmount);
             if (amount === null) return;
             amount = parseFloat(amount);
             if (isNaN(amount) || amount <= 0) return alert("Montant invalide");
-
             try {
                 await addDoc(collection(db, "salary_payments"), {
                     employeeId: emp.id, employeeName: emp.name, month: selectedTontineMonth.value, period: selectedTontinePeriod.value,
@@ -540,127 +601,95 @@ console.log("✅ Mode Production (Salaire) : Connecté");
 
         const exportSalaryHistoryPDF = () => {
             const doc = new jspdf.jsPDF();
-            
-            // 1. En-tête Principal du Document
             doc.setFontSize(18);
             doc.setTextColor(40);
             doc.text("Rapport Détaillé des Salaires", 14, 20);
-            
             doc.setFontSize(10);
             doc.setTextColor(100);
             doc.text("Généré le : " + new Date().toLocaleString(), 14, 28);
-            
-            let currentY = 35; // Position verticale de départ
+            let currentY = 35;
 
-            // 2. On boucle sur CHAQUE MOIS de l'historique
             groupedSalaryHistory.value.forEach(group => {
-                
-                // Vérifier s'il reste assez de place sur la page, sinon nouvelle page
-                if (currentY > 250) {
-                    doc.addPage();
-                    currentY = 20;
-                }
+                if (currentY > 250) { doc.addPage(); currentY = 20; }
 
-                // --- CADRE RÉSUMÉ DU MOIS ---
-                doc.setFillColor(245, 247, 250); // Fond gris très clair
-                doc.setDrawColor(200, 200, 200); // Bordure grise
-                doc.roundedRect(14, currentY, 182, 18, 2, 2, 'FD'); // Rectangle rempli
+                doc.setFillColor(245, 247, 250);
+                doc.setDrawColor(200, 200, 200);
+                doc.roundedRect(14, currentY, 182, 22, 2, 2, 'FD');
                 
                 doc.setFontSize(12);
                 doc.setTextColor(0);
                 doc.setFont("helvetica", "bold");
                 doc.text(`Période : ${group.month}`, 20, currentY + 8);
                 
-                doc.setFontSize(10);
+                doc.setFontSize(9);
                 doc.setFont("helvetica", "normal");
                 
-                // Ligne des Totaux (Budget / Payé / Solde)
-                // On formate les montants proprement
                 const budgetTxt = `Budget: ${formatMoney(group.totalFund)}`;
-                const payeTxt = `Payé: ${formatMoney(group.totalNet)}`;
+                const payeTxt = `Net versé: ${formatMoney(group.totalNet)}`;
+                // CORRECTION PDF : afficher la tontine collectée séparément
+                const tontineTxt = `Tontine collectée: ${formatMoney(group.totalTontine)}`;
                 const soldeTxt = `Reste: ${formatMoney(group.balance)}`;
                 
-                doc.text(budgetTxt, 20, currentY + 14);
-                doc.setTextColor(75, 85, 99); // Gris
-                doc.text(payeTxt, 80, currentY + 14);
-                
-                // Couleur dynamique pour le Solde
-                if (group.balance < 0) doc.setTextColor(220, 38, 38); // Rouge
-                else doc.setTextColor(22, 163, 74); // Vert
-                doc.text(soldeTxt, 140, currentY + 14);
+                doc.text(budgetTxt, 20, currentY + 15);
+                doc.setTextColor(75, 85, 99);
+                doc.text(payeTxt, 65, currentY + 15);
+                doc.setTextColor(234, 88, 12); // Orange
+                doc.text(tontineTxt, 110, currentY + 15);
+                if (group.balance < 0) doc.setTextColor(220, 38, 38);
+                else doc.setTextColor(22, 163, 74);
+                doc.text(soldeTxt, 160, currentY + 15);
 
-                // --- TABLEAU DÉTAILLÉ DES EMPLOYÉS ---
-                // On prépare les lignes (Triées par date)
                 const sortedPayments = [...group.payments].sort((a, b) => b.timestamp.seconds - a.timestamp.seconds);
-                
                 const tableBody = sortedPayments.map(p => [
                     formatDate(p.timestamp),
                     p.employeeName,
                     p.type,
-                    p.loan > 0 ? formatMoney(p.loan) : '-', // Afficher '-' si pas de prêt
+                    p.tontine > 0 ? formatMoney(p.tontine) : '-', // CORRECTION : afficher tontine
+                    p.loan > 0 ? formatMoney(p.loan) : '-',
                     p.absence > 0 ? formatMoney(p.absence) : '-',
                     formatMoney(p.net)
                 ]);
 
-                // Si le mois n'a pas de paiement, on met une ligne vide
                 if (tableBody.length === 0) {
-                    tableBody.push(['-', 'Aucun paiement enregistré', '-', '-', '-', '-']);
+                    tableBody.push(['-', 'Aucun paiement enregistré', '-', '-', '-', '-', '-']);
                 }
 
                 doc.autoTable({
-                    startY: currentY + 20, // Juste en dessous du cadre résumé
-                    head: [['Date', 'Employé', 'Type', 'Prêt', 'Abs.', 'Net Payé']],
+                    startY: currentY + 26,
+                    head: [['Date', 'Employé', 'Type', 'Tontine', 'Prêt', 'Abs.', 'Net Payé']],
                     body: tableBody,
                     theme: 'grid',
-                    headStyles: { 
-                        fillColor: [79, 70, 229], // Couleur Indigo (comme votre site)
-                        textColor: 255,
-                        fontStyle: 'bold'
-                    },
-                    styles: { 
-                        fontSize: 9, 
-                        cellPadding: 3 
-                    },
+                    headStyles: { fillColor: [79, 70, 229], textColor: 255, fontStyle: 'bold' },
+                    styles: { fontSize: 9, cellPadding: 3 },
                     columnStyles: {
-                        0: { cellWidth: 25 }, // Date
-                        3: { halign: 'right', cellWidth: 20 }, // Prêt aligné droite
-                        4: { halign: 'right', cellWidth: 20 }, // Absence aligné droite
-                        5: { halign: 'right', fontStyle: 'bold', cellWidth: 30 } // Net aligné droite
+                        0: { cellWidth: 22 },
+                        3: { halign: 'right', cellWidth: 22, textColor: [234, 88, 12] },
+                        4: { halign: 'right', cellWidth: 20 },
+                        5: { halign: 'right', cellWidth: 16 },
+                        6: { halign: 'right', fontStyle: 'bold', cellWidth: 28 }
                     },
                     margin: { left: 14, right: 14 },
-                    // Important : Mise à jour de la position Y après le tableau
-                    didDrawPage: (data) => {
-                        // Si le tableau coupe la page, on met à jour currentY pour la suite
-                        currentY = data.cursor.y;
-                    }
+                    didDrawPage: (data) => { currentY = data.cursor.y; }
                 });
 
-                // Ajouter un espace avant le prochain mois
                 currentY = doc.lastAutoTable.finalY + 15;
             });
 
             doc.save("Rapport_Salaires_Complet.pdf");
         };
 
-        // Génération Bulletin de Paie Individuel
         const printPayslip = (payment) => {
             const doc = new jspdf.jsPDF();
-            
-            // En-tête
             doc.setFontSize(16);
-            doc.setTextColor(79, 70, 229); // Indigo
+            doc.setTextColor(79, 70, 229);
             doc.text("BULLETIN DE PAIE", 105, 20, null, null, "center");
-            
             doc.setFontSize(10);
             doc.setTextColor(0);
             doc.text(`Date : ${formatDate(payment.timestamp)}`, 14, 35);
             doc.text(`Période : ${payment.month}`, 14, 40);
             doc.text(`Type : ${payment.type}`, 14, 45);
-            
             doc.setFontSize(12);
             doc.text(`Employé : ${payment.employeeName}`, 14, 55);
-
-            // Tableau Détails
             const body = [
                 ['Salaire de Base / Avance', formatMoney(payment.base)],
                 ['Remboursement Prêt', `-${formatMoney(payment.loan)}`],
@@ -668,7 +697,6 @@ console.log("✅ Mode Production (Salaire) : Connecté");
                 ['Absence / Autre', `-${formatMoney(payment.absence)}`],
                 [{content: 'NET À PAYER', styles: {fontStyle: 'bold', fillColor: [240, 240, 240]}}, {content: formatMoney(payment.net), styles: {fontStyle: 'bold', fillColor: [240, 240, 240], textColor: [79, 70, 229]}}]
             ];
-
             doc.autoTable({
                 startY: 65,
                 head: [['Désignation', 'Montant']],
@@ -676,31 +704,22 @@ console.log("✅ Mode Production (Salaire) : Connecté");
                 theme: 'grid',
                 columnStyles: { 1: { halign: 'right' } }
             });
-
-            // Pied de page
             const finalY = doc.lastAutoTable.finalY + 20;
             doc.setFontSize(10);
             doc.text("Signature Employé :", 140, finalY);
             doc.text("Signature Direction :", 14, finalY);
-
             doc.save(`Bulletin_${payment.employeeName}_${payment.month}.pdf`);
         };
 
         // --- GESTION CRÉANCES ---
         const selectedDebtEmployee = ref(null);
-        
-        const openDebtModal = (emp) => {
-            selectedDebtEmployee.value = emp;
-            showDebtModal.value = true;
-        };
-
+        const openDebtModal = (emp) => { selectedDebtEmployee.value = emp; showDebtModal.value = true; };
         const debtRepaymentHistory = computed(() => {
             if (!selectedDebtEmployee.value) return [];
             return salaryHistory.value
                 .filter(p => p.employeeId === selectedDebtEmployee.value.id && (p.loan || 0) > 0)
                 .sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0));
         });
-
         const getEmployeeRepaidTotal = (empId) => salaryHistory.value.filter(p => p.employeeId === empId).reduce((sum, p) => sum + (p.loan || 0), 0);
 
         // --- DASHBOARD DATA ---
@@ -715,10 +734,8 @@ console.log("✅ Mode Production (Salaire) : Connecté");
 
         const recentActivity = computed(() => salaryHistory.value.slice(0, 8));
 
-        // Fonction qui remplace l'espace insécable (problématique en PDF) par un espace normal
         const formatMoney = (m) => {
             if (!m && m !== 0) return '0 F';
-            // On formate en FR, puis on remplace le caractère invisible (\u202f ou \u00a0) par un espace simple
             return new Intl.NumberFormat('fr-FR').format(m).replace(/\s/g, ' ') + ' F';
         };
         const formatDate = (ts) => { if (!ts) return '-'; const d = ts.toDate ? ts.toDate() : new Date(ts); const day = d.getDate().toString().padStart(2, '0'); let month = d.toLocaleString('fr-FR', { month: 'short' }).replace('.', ''); month = month.charAt(0).toUpperCase() + month.slice(1); const year = d.getFullYear(); return `${day}-${month}-${year}`; };
@@ -743,13 +760,15 @@ console.log("✅ Mode Production (Salaire) : Connecté");
             newEmp, editingEmp, payForm, newFund, unpaidEmployees, selectedEmployeeHistoryName, individualHistory,
             groupedSalaryHistory, selectedHistoryMonth, openMonthDetails, closeMonthDetails, searchQuery, filteredEmployees,
             saveNewEmployee, updateEmployee, deleteEmployee, openEditEmployee, openIndividualHistory, selectedBudgetMonth, cancelTontine,
-            openPayModal, confirmSalaryPayment, deleteSalaryPayment, recalcNet, updateBaseFromNet, hasPaidTontine, getTontinePaidAmount, markTontinePayment, tontineMembers, globalTontineAmount, saveGlobalTontine, selectedTontineMonth, tontinePot,
+            openPayModal, confirmSalaryPayment, deleteSalaryPayment, recalcNet, updateBaseFromNet, 
+            hasPaidTontine, hasPaidTontineForPaie, // AJOUT : nouvelle fonction pour l'onglet employés
+            getTontinePaidAmount, markTontinePayment, tontineMembers, globalTontineAmount, saveGlobalTontine, selectedTontineMonth, tontinePot,
             calculateBase, calculateLoanDeduc, calculateTontineDeduc, calculateNet, exportSalaryHistoryPDF, printPayslip, paieTotals, employeesTotals,
             saveSalaryFund, deleteSalaryFund, salaryStats, selectedTontinePeriod,
             tontineBeneficiaries, markTontineBeneficiary, deleteTontineBeneficiary, hasReceivedTontine,
-            toast, actionLoading, // Export des états UX
-            showDebtModal, selectedDebtEmployee, openDebtModal, debtRepaymentHistory, getEmployeeRepaidTotal, // Export Créances
-            dashboardStats, recentActivity // Export Dashboard
+            toast, actionLoading,
+            showDebtModal, selectedDebtEmployee, openDebtModal, debtRepaymentHistory, getEmployeeRepaidTotal,
+            dashboardStats, recentActivity
         };
     }
  }).mount('#app');
