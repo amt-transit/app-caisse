@@ -802,7 +802,7 @@ function importExcel(event) {
                             const parsedDate = parseImportDate(dateRaw) || new Date().toISOString();
                         return {
                             id: Date.now() + i,
-                            ref: cleanString(r.REF || r.REFERENCE || r.CODE || '').toUpperCase(), // Force Majuscule pour correspondance
+                            ref: cleanString(r.REF || r.REFERENCE || r.CODE || r['N° COLIS'] || r['NUMERO COLIS'] || r.TRACKING || r['N°'] || '').toUpperCase(), // Force Majuscule pour correspondance
                             prixOriginal: cleanString(r.PRIX || r.VALEUR || r['PRIX TOTAL'] || r['MONTANT TOTAL'] || ''), // Capture du Prix Total pour calcul
                             montant: cleanString(r.RESTANT || r.MONTANT || r.PRIX || r['RESTANT A PAYER'] || r['RENSTANT A PAYER'] || r['MONTANT A PAYER'] || ''),
                             expediteur: cleanString(fixEncoding(String(r.EXPEDITEUR || r['EXPÉDITEUR'] || r.EXP || ''))),
@@ -996,7 +996,13 @@ function closePreviewModal() {
 
 async function confirmImport() {
     const conteneur = document.getElementById('importConteneur').value;
-    const containerStatus = document.getElementById('importContainerStatus').value;
+    let containerStatus = document.getElementById('importContainerStatus').value;
+
+    // SÉCURITÉ : Forcer la destination selon l'onglet actif. 
+    // Si le menu HTML n'a pas l'option 'PARIS', il force 'EN_COURS' par erreur.
+    if (currentTab === 'PARIS') containerStatus = 'PARIS';
+    else if (currentTab === 'A_VENIR') containerStatus = 'A_VENIR';
+    else if (currentTab === 'EN_COURS') containerStatus = 'EN_COURS';
 
     // --- NOUVEAU : Pré-traitement pour fusionner les doublons DANS le fichier importé ---
     const uniqueImports = new Map();
@@ -1157,6 +1163,7 @@ async function confirmImport() {
                     updates.directFromParis = false; // Flux normal
                 }
                 updates.importedFromTransit = true;
+                updates.dateAjout = new Date().toISOString(); // Fait remonter le colis en haut de la liste
             } else {
                 // LOGIQUE STANDARD (Fusion) pour les autres onglets (PARIS, A_VENIR)
                 
@@ -1183,6 +1190,7 @@ async function confirmImport() {
                 if (targetStatus !== 'EN_COURS') {
                     updates.importedFromTransit = firebase.firestore.FieldValue.delete();
                 }
+                updates.dateAjout = new Date().toISOString(); // Fait remonter le colis en haut de la liste
             }
             
             operations.push({ type: 'update', ref: docRef, data: updates });
@@ -1201,7 +1209,7 @@ async function confirmImport() {
                 conteneur: conteneur || importItem.conteneur || '', 
                 quantite: importItem.quantite || 1, // Stockage de la quantité
                 containerStatus: containerStatus,
-                dateAjout: new Date().toISOString()
+            dateAjout: itemData.dateAjout || new Date().toISOString() // Respecte la date du fichier Excel
             }});
             createdCount++;
         }
@@ -2885,6 +2893,7 @@ document.getElementById('deliveryForm').addEventListener('submit', function(e) {
         if (updates.lieuLivraison !== existingItem.lieuLivraison) {
             updates.commune = newItem.commune;
         }
+        updates.dateAjout = new Date().toISOString(); // Fait remonter le colis en haut de la liste
 
         docRef.update(updates).then(() => {
             showToast('Livraison fusionnée avec succès !', 'success');
