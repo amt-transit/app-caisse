@@ -8,20 +8,234 @@
     <link href="https://fonts.googleapis.com/css2?family=Comfortaa:wght@400;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
     <link rel="icon" type="image/png" href="favicon.png">
-    <!-- Bibliothèques pour Livraison -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/tesseract.js@4/dist/tesseract.min.js"></script>
+    <style>
+    :root {
+        --lv-blue:#3b82f6; --lv-blue-d:#1d4ed8;
+        --lv-green:#10b981; --lv-green-d:#059669;
+        --lv-amber:#f59e0b; --lv-red:#ef4444; --lv-red-d:#dc2626;
+        --lv-purple:#8b5cf6; --lv-slate:#64748b;
+        --lv-bg:#f8fafc; --lv-surface:#fff;
+        --lv-border:#e2e8f0; --lv-border2:#cbd5e1;
+        --lv-text:#1e293b; --lv-muted:#64748b;
+        --lv-shadow:0 1px 3px rgba(0,0,0,.08),0 1px 2px rgba(0,0,0,.04);
+        --lv-shadow2:0 4px 12px rgba(0,0,0,.1);
+    }
+    /* masque les éléments originaux (conservés pour la logique JS) */
+    .stats-bar,.delivery-tabs,#tabDescription,.toolbar { display:none!important; }
+
+    #livraison-content { padding:0; background:var(--lv-bg); }
+
+    /* ── COMMAND BAR ── */
+    .lv-command-bar {
+        background:var(--lv-surface); border-bottom:1px solid var(--lv-border);
+        padding:0 16px; position:sticky; top:0; z-index:100;
+        box-shadow:var(--lv-shadow);
+    }
+    .lv-toprow {
+        display:flex; align-items:center; gap:12px;
+        padding:8px 0 6px; border-bottom:1px solid var(--lv-border);
+        flex-wrap:wrap;
+    }
+    .lv-stat-chips { display:flex; gap:6px; align-items:center; flex-wrap:wrap; }
+    .lv-chip {
+        display:inline-flex; align-items:center; gap:5px;
+        padding:3px 9px; border-radius:20px; font-size:11.5px;
+        font-weight:700; border:1px solid; white-space:nowrap;
+    }
+    .lv-chip .n { font-size:14px; font-weight:800; line-height:1; }
+    .lv-chip.total   { background:#eff6ff; color:#1d4ed8; border-color:#bfdbfe; }
+    .lv-chip.attente { background:#fffbeb; color:#b45309; border-color:#fde68a; }
+    .lv-chip.livre   { background:#f0fdf4; color:#166534; border-color:#bbf7d0; }
+    .lv-chip.partiel { background:#fff7ed; color:#c2410c; border-color:#fed7aa; }
+    .lv-toprow-right { margin-left:auto; display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+    .lv-container-badge {
+        display:inline-flex; align-items:center; gap:5px;
+        background:#eff6ff; border:1px solid #bfdbfe; border-radius:6px;
+        padding:4px 9px; font-size:12px; font-weight:700; color:#1565c0;
+        cursor:pointer; transition:background .15s; white-space:nowrap;
+    }
+    .lv-container-badge:hover { background:#dbeafe; }
+
+    /* ── ONGLETS ── */
+    .lv-tabs { display:flex; align-items:center; gap:2px; padding:5px 0 0; overflow-x:auto; }
+    .lv-tab {
+        padding:7px 14px; border:none; background:none;
+        font-size:13px; font-weight:600; color:var(--lv-muted); cursor:pointer;
+        border-bottom:2px solid transparent; margin-bottom:-1px;
+        border-radius:6px 6px 0 0; white-space:nowrap;
+        display:inline-flex; align-items:center; gap:5px; transition:color .15s;
+        font-family:inherit;
+    }
+    .lv-tab:hover { color:var(--lv-blue); background:#f1f5f9; }
+    .lv-tab.active { color:var(--lv-blue); border-bottom-color:var(--lv-blue); }
+    .lv-badge {
+        background:#e0e7ff; color:#3730a3; border-radius:10px;
+        padding:1px 6px; font-size:10px; font-weight:700;
+    }
+    .lv-tab.active .lv-badge { background:#dbeafe; color:#1d4ed8; }
+    .lv-tabs-spacer { flex:1; min-width:8px; }
+    .lv-help-btn {
+        padding:5px 10px; border-radius:6px; border:1px solid var(--lv-border2);
+        background:transparent; color:var(--lv-muted); font-size:12px; font-weight:600;
+        cursor:pointer; display:inline-flex; align-items:center; gap:4px;
+        white-space:nowrap; transition:all .15s; font-family:inherit;
+    }
+    .lv-help-btn:hover { background:#f1f5f9; color:var(--lv-text); }
+
+    /* ── TOOLBAR ── */
+    .lv-toolbar {
+        background:var(--lv-surface); border-bottom:1px solid var(--lv-border);
+        padding:7px 16px; display:flex; align-items:center; gap:5px;
+        flex-wrap:wrap; position:sticky; top:95px; z-index:99;
+    }
+    .lv-grp {
+        display:inline-flex; align-items:center; gap:1px;
+        padding:2px; background:#f8fafc; border:1px solid var(--lv-border);
+        border-radius:8px; flex-shrink:0;
+    }
+    .lv-sep { width:1px; height:22px; background:var(--lv-border); margin:0 4px; flex-shrink:0; }
+    .lv-btn {
+        display:inline-flex; align-items:center; gap:4px;
+        padding:5px 9px; border-radius:6px; border:none;
+        background:transparent; color:var(--lv-text); font-size:12px;
+        font-weight:600; cursor:pointer; transition:all .15s;
+        white-space:nowrap; font-family:inherit; line-height:1;
+    }
+    .lv-btn:hover { background:#e2e8f0; }
+    .lv-btn:active { transform:scale(.97); }
+    .lv-btn.ok     { background:var(--lv-blue);   color:#fff; }
+    .lv-btn.ok:hover { background:var(--lv-blue-d); }
+    .lv-btn.go     { background:var(--lv-green);  color:#fff; }
+    .lv-btn.go:hover { background:var(--lv-green-d); }
+    .lv-btn.rm     { background:var(--lv-red);    color:#fff; }
+    .lv-btn.rm:hover { background:var(--lv-red-d); }
+    .lv-btn.warn   { background:var(--lv-amber);  color:#fff; }
+    .lv-btn.purp   { background:var(--lv-purple); color:#fff; }
+    .lv-btn.ghost  { border:1px solid var(--lv-border2); }
+    .lv-btn.ghost:hover { background:#f1f5f9; border-color:var(--lv-blue); color:var(--lv-blue); }
+    .lv-import-lbl {
+        display:inline-flex; align-items:center; gap:4px;
+        padding:5px 9px; border-radius:6px; background:transparent;
+        color:var(--lv-text); font-size:12px; font-weight:600;
+        cursor:pointer; transition:background .15s; white-space:nowrap;
+    }
+    .lv-import-lbl:hover { background:#e2e8f0; }
+
+    /* ── MORE MENU ── */
+    .lv-more { position:relative; }
+    .lv-more-drop {
+        display:none; position:absolute; top:calc(100% + 4px); right:0;
+        background:var(--lv-surface); border:1px solid var(--lv-border);
+        border-radius:10px; box-shadow:var(--lv-shadow2); min-width:185px;
+        z-index:300; padding:4px; overflow:hidden;
+    }
+    .lv-more-drop.open { display:block; animation:lvSlide .12s ease-out; }
+    @keyframes lvSlide { from{opacity:0;transform:translateY(-4px)} to{opacity:1;transform:none} }
+    .lv-mi {
+        display:flex; align-items:center; gap:9px; padding:8px 11px;
+        border-radius:6px; font-size:13px; font-weight:500; color:var(--lv-text);
+        cursor:pointer; transition:background .1s; border:none; background:none;
+        width:100%; text-align:left; font-family:inherit;
+    }
+    .lv-mi:hover { background:#f1f5f9; }
+    .lv-mi.red { color:var(--lv-red); }
+    .lv-mi.red:hover { background:#fef2f2; }
+    .lv-mi-sec { padding:4px 11px 2px; font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:var(--lv-muted); }
+    .lv-mi-div { height:1px; background:var(--lv-border); margin:3px 0; }
+
+    /* ── FILTRE BAR ── */
+    .lv-filter-bar {
+        background:#f8fafc; border-bottom:1px solid var(--lv-border);
+        padding:6px 16px; display:flex; align-items:center; gap:7px; flex-wrap:wrap;
+    }
+    .lv-search-w { position:relative; flex:1; min-width:160px; max-width:300px; }
+    .lv-search-w .ico { position:absolute; left:9px; top:50%; transform:translateY(-50%); color:var(--lv-muted); font-size:12px; pointer-events:none; }
+    .lv-search {
+        width:100%; padding:6px 10px 6px 27px; border:1px solid var(--lv-border2);
+        border-radius:6px; font-size:13px; background:var(--lv-surface); color:var(--lv-text);
+        transition:border-color .15s;
+    }
+    .lv-search:focus { outline:none; border-color:var(--lv-blue); box-shadow:0 0 0 3px rgba(59,130,246,.12); }
+    .lv-cont-sec {
+        display:inline-flex; align-items:center; gap:5px;
+        background:#eff6ff; border:1px solid #bfdbfe; border-radius:7px; padding:3px 7px;
+    }
+    .lv-cont-label { font-size:11px; font-weight:700; color:#1565c0; white-space:nowrap; }
+    .lv-cont-input {
+        padding:3px 7px; border:1px solid #bfdbfe; border-radius:5px;
+        font-size:12px; font-weight:600; width:105px; background:#fff; color:#1565c0;
+    }
+    .lv-cont-input:focus { outline:none; border-color:var(--lv-blue); }
+    .lv-cont-ok {
+        padding:3px 7px; border-radius:5px; border:none;
+        background:var(--lv-blue); color:#fff; font-size:11px; font-weight:700;
+        cursor:pointer; transition:background .15s;
+    }
+    .lv-cont-ok:hover { background:var(--lv-blue-d); }
+    .lv-fcb { display:inline-flex; align-items:center; gap:4px; font-size:11px; font-weight:600; color:#0284c7; cursor:pointer; }
+    /* overrides sur les dropdown-toggle dans ce contexte */
+    .lv-filter-bar .dropdown-toggle {
+        font-size:12px; padding:5px 10px; font-weight:600;
+        border-radius:6px; border:1px solid var(--lv-border2);
+        background:var(--lv-surface); color:var(--lv-muted); transition:all .15s;
+    }
+    .lv-filter-bar .dropdown-toggle:hover { border-color:var(--lv-blue); color:var(--lv-blue); background:#eff6ff; }
+
+    /* ── BARRE DE SÉLECTION ── */
+    .lv-sel-bar {
+        display:none; align-items:center; gap:8px; padding:5px 16px;
+        background:#1e293b; color:#fff; font-size:12px; font-weight:600;
+        border-bottom:1px solid #334155; flex-wrap:wrap;
+    }
+    .lv-sel-bar.show { display:flex; }
+    .lv-sel-count { background:var(--lv-blue); border-radius:10px; padding:2px 7px; font-size:11px; font-weight:700; }
+    .lv-sel-sep { opacity:.3; }
+    .lv-sb {
+        padding:3px 9px; border-radius:5px; border:1px solid rgba(255,255,255,.2);
+        background:transparent; color:#fff; font-size:11px; font-weight:600;
+        cursor:pointer; transition:background .15s; font-family:inherit;
+        display:inline-flex; align-items:center; gap:3px; white-space:nowrap;
+    }
+    .lv-sb:hover { background:rgba(255,255,255,.15); }
+    .lv-sb.red   { color:#fca5a5; border-color:rgba(252,165,165,.4); }
+    .lv-sb.red:hover { background:rgba(239,68,68,.25); }
+    .lv-sb.green { color:#86efac; }
+    .lv-sel-x { margin-left:auto; opacity:.5; cursor:pointer; background:none; border:none; color:#fff; font-size:14px; line-height:1; }
+    .lv-sel-x:hover { opacity:1; }
+
+    /* ── MODALE CONTENEUR RAPIDE ── */
+    .lv-qmodal { position:fixed; inset:0; background:rgba(0,0,0,.4); z-index:3000; display:none; align-items:center; justify-content:center; backdrop-filter:blur(2px); }
+    .lv-qmodal.active { display:flex; }
+    .lv-qbox { background:#fff; border-radius:14px; padding:22px; min-width:300px; max-width:90vw; box-shadow:0 20px 40px rgba(0,0,0,.15); }
+    .lv-qbox-title { font-size:15px; font-weight:700; color:var(--lv-text); margin-bottom:14px; display:flex; align-items:center; gap:7px; }
+
+    /* ── CONTEXT DESC ── */
+    .lv-ctx {
+        background:linear-gradient(to right,#eff6ff,#f8fafc);
+        border-left:3px solid var(--lv-blue);
+        padding:7px 16px; font-size:12px; color:var(--lv-muted);
+        border-bottom:1px solid var(--lv-border); display:none;
+    }
+    .lv-ctx.show { display:block; }
+
+    @media(max-width:768px){
+        .lv-toolbar{top:78px;padding:5px 8px;}
+        .lv-btn .lv-l{display:none;}
+        .lv-chip{padding:2px 6px;font-size:11px;}
+    }
+    </style>
 </head>
 <body style="display:none">
     <header class="app-header">
         <img src="LOGOAMT.png" alt="Logo" class="app-logo">
         <h1>Gestion des Livraisons</h1>
-        <button id="logoutBtn" style="position: absolute; right: 20px; padding: 8px 15px; cursor: pointer;">Déconnexion</button>
+        <button id="logoutBtn" style="position:absolute;right:20px;padding:8px 15px;cursor:pointer;">Déconnexion</button>
     </header>
-
     <nav class="navigation">
         <a href="index.html">Saisie</a>
         <a href="confirmation.html" id="nav-confirmation">Confirmation</a>
@@ -35,72 +249,193 @@
         <a href="magasinage.html" id="nav-magasinage">Magasinage</a>
         <a href="salaire.html" id="nav-salaire">Salaire</a>
         <a href="livraison.html" id="nav-livraison" class="active">LIVRAISON</a>
-        <a href="livreurscan.html" style="background:#16a34a; color:white;">📱 MODE LIVREUR</a>
-        <a href="voiture.html" id="nav-voiture"><i class="fa-solid fa-truck"></i> Gestion Véhicules</a>
+        <a href="livreurscan.html" style="background:#16a34a;color:white;">📱 MODE LIVREUR</a>
+        <a href="voiture.html" id="nav-voiture">Gestion Véhicules</a>
         <a href="points.html" id="nav-points">Points</a>
-        <a href="admin-panel.html" id="nav-admin" style="background-color: #6f42c1; color: white;">ADMIN</a>
+        <a href="admin-panel.html" id="nav-admin" style="background-color:#6f42c1;color:white;">ADMIN</a>
     </nav>
 
-    <!-- CONTENU LIVRAISON -->
-    <div id="livraison-content" style="padding: 10px;">
-        <!-- En-tête Statistiques -->
-        <div class="stats-bar">
+    <div id="livraison-content">
+
+        <!-- ÉLÉMENTS ORIGINAUX MASQUÉS (conservés pour livraison.js) -->
+        <div class="stats-bar" style="display:none!important">
             <div class="stat-item"><div class="stat-number" id="totalDeliveries">0</div><div class="stat-label">Total</div></div>
             <div class="stat-item"><div class="stat-number" id="pendingDeliveries">0</div><div class="stat-label">En Attente</div></div>
             <div class="stat-item"><div class="stat-number" id="completedDeliveries">0</div><div class="stat-label">Livrées</div></div>
         </div>
-
-        <!-- Sous-onglets Livraison -->
-        <div class="delivery-tabs">
-            <a href="#" class="tab-btn active" onclick="switchTab('EN_COURS'); return false;" id="tabEnCours">📦 En cours</a>
-            <a href="#" class="tab-btn" onclick="switchTab('A_VENIR'); return false;" id="tabAVenir">🚢 À venir</a>
-            <a href="#" class="tab-btn" onclick="switchTab('PARIS'); return false;" id="tabParis">🇫🇷 Paris</a>
-            <a href="#" class="tab-btn" onclick="switchTab('PROGRAMME'); return false;" id="tabProgramme">📅 Programmes</a>
-            <button class="btn btn-small" onclick="openHelpModal()" style="margin-left: auto; background-color: #64748b; color: white; border: none;" title="Comment ça marche ?">❓ Aide</button>
+        <div class="delivery-tabs" style="display:none!important">
+            <a href="#" class="tab-btn active" onclick="switchTab('EN_COURS');return false;" id="tabEnCours">📦 En cours</a>
+            <a href="#" class="tab-btn" onclick="switchTab('A_VENIR');return false;" id="tabAVenir">🚢 À venir</a>
+            <a href="#" class="tab-btn" onclick="switchTab('PARIS');return false;" id="tabParis">🇫🇷 Paris</a>
+            <a href="#" class="tab-btn" onclick="switchTab('PROGRAMME');return false;" id="tabProgramme">📅 Programmes</a>
         </div>
-
-        <!-- Description contextuelle (Guidance) -->
-        <div id="tabDescription" class="tab-description"></div>
-
-        <!-- Barres d'outils et Filtres -->
-        <div class="toolbar">
-            <div id="activeContainerSection" style="display: flex; align-items: center; gap: 5px; background: #e3f2fd; padding: 5px 10px; border-radius: 6px; border: 1px solid #bbdefb;">
-                    <span style="font-weight: bold; color: #1565c0; font-size: 12px;">📦 Actif :</span>
-                    <input type="text" id="activeContainerInput" placeholder="N° Conteneur" style="padding: 5px; width: 120px; border: 1px solid #bbdefb;">
-                    <div id="filterContainerWrapper" style="display: inline-flex; align-items: center; margin-left: 10px; background-color: rgb(224, 242, 254); padding: 4px 8px; border-radius: 6px; border: 1px solid rgb(186, 230, 253);"></div>
-                    <select id="quickContainerSelect" class="form-control" style="max-width: 200px; margin-left: 10px; display: none;"></select>
-                    <button class="btn btn-small btn-success" onclick="setActiveContainer()">OK</button>
+        <div id="tabDescription" style="display:none!important"></div>
+        <div class="toolbar" style="display:none!important">
+            <div id="activeContainerSection" style="display:flex;align-items:center;gap:5px;background:#e3f2fd;padding:5px 10px;border-radius:6px;border:1px solid #bbdefb;">
+                <span style="font-weight:bold;color:#1565c0;font-size:12px;">📦 Actif :</span>
+                <input type="text" id="activeContainerInput" placeholder="N° Conteneur" style="padding:5px;width:120px;border:1px solid #bbdefb;">
+                <div id="filterContainerWrapper" style="display:inline-flex;align-items:center;margin-left:10px;background-color:rgb(224,242,254);padding:4px 8px;border-radius:6px;border:1px solid rgb(186,230,253);"></div>
+                <select id="quickContainerSelect" class="form-control" style="max-width:200px;margin-left:10px;display:none;"></select>
+                <button class="btn btn-small btn-success" onclick="setActiveContainer()">OK</button>
             </div>
-            <div id="toolbar-EN_COURS" class="tab-toolbar" style="display: flex; gap: 10px; align-items: center;">
-                <label class="btn btn-small">📊 Import <input type="file" accept=".xlsx,.xls,.csv" onchange="importExcel(event)"></label>
+            <div id="toolbar-EN_COURS" class="tab-toolbar" style="display:flex;gap:10px;align-items:center;">
+                <label class="btn btn-small">📊 Import<input type="file" accept=".xlsx,.xls,.csv" onchange="importExcel(event)"></label>
                 <button class="btn btn-small" onclick="openProgramModal()">📅 Programmer</button>
                 <button class="btn btn-small" onclick="openAssignContainerModal()">📦 Attribuer</button>
                 <button class="btn btn-small" onclick="openBulkStatusModal()">🔄 Statut</button>
-                <button class="btn btn-small" onclick="forceSyncTransactions()" style="background-color: #8b5cf6; color: white;">🔄 Synchro Saisie</button>
+                <button class="btn btn-small" onclick="forceSyncTransactions()" style="background-color:#8b5cf6;color:white;">🔄 Synchro Saisie</button>
                 <button class="btn btn-small btn-danger" onclick="deleteSelectedDeliveries()">🗑️ Supprimer</button>
                 <button class="btn btn-small btn-success" onclick="exportToExcel()">📥 Export</button>
                 <button class="btn btn-small" onclick="showAddModal()">➕ Ajouter</button>
                 <button class="btn btn-small btn-warning" onclick="archiveCompletedDeliveries()">📦 Archiver</button>
                 <button class="btn btn-small" onclick="openArchivesModal()">🗄️ Archives</button>
             </div>
-            <div id="toolbar-A_VENIR" class="tab-toolbar" style="display: none; gap: 10px;">
-                <label class="btn btn-small">📊 Import <input type="file" accept=".xlsx,.xls,.csv" onchange="importExcel(event)"></label>
+            <div id="toolbar-A_VENIR" class="tab-toolbar" style="display:none;gap:10px;">
+                <label class="btn btn-small">📊 Import<input type="file" accept=".xlsx,.xls,.csv" onchange="importExcel(event)"></label>
                 <button class="btn btn-small" onclick="openAssignContainerModal()">📦 Attribuer</button>
                 <button class="btn btn-small btn-danger" onclick="deleteSelectedDeliveries()">🗑️ Supprimer</button>
                 <button class="btn btn-small btn-success" onclick="exportToExcel()">📥 Export</button>
                 <button class="btn btn-small" onclick="showAddModal()">➕ Ajouter</button>
             </div>
-            <div id="toolbar-PARIS" class="tab-toolbar" style="display: none; gap: 10px;">
-                <label class="btn btn-small">📊 Import <input type="file" accept=".xlsx,.xls,.csv" onchange="importExcel(event)"></label>
+            <div id="toolbar-PARIS" class="tab-toolbar" style="display:none;gap:10px;">
+                <label class="btn btn-small">📊 Import<input type="file" accept=".xlsx,.xls,.csv" onchange="importExcel(event)"></label>
                 <button class="btn btn-small btn-danger" onclick="deleteSelectedDeliveries()">🗑️ Supprimer</button>
                 <button class="btn btn-small btn-success" onclick="exportToExcel()">📥 Export</button>
                 <button class="btn btn-small" onclick="showAddModal()">➕ Ajouter</button>
             </div>
-            <div id="toolbar-PROGRAMME" class="tab-toolbar" style="display: none; gap: 10px;">
+            <div id="toolbar-PROGRAMME" class="tab-toolbar" style="display:none;gap:10px;">
                 <button class="btn btn-small btn-success" onclick="exportToExcel()">📥 Export</button>
                 <button class="btn btn-small" onclick="openArchivesModal()">🗄️ Archives</button>
             </div>
-            
+        </div>
+
+        <!-- ══════════════════════════════════════
+             NOUVELLE COMMAND BAR
+        ══════════════════════════════════════ -->
+        <div class="lv-command-bar">
+            <div class="lv-toprow">
+                <div class="lv-stat-chips">
+                    <div class="lv-chip total"><span class="n" id="lv-n-total">0</span><span>colis</span></div>
+                    <div class="lv-chip attente"><span class="n" id="lv-n-attente">0</span><span>en attente</span></div>
+                    <div class="lv-chip livre"><span class="n" id="lv-n-livre">0</span><span>livrés</span></div>
+                    <div class="lv-chip partiel" id="lv-chip-partiel" style="display:none"><span class="n" id="lv-n-partiel">0</span><span>partiels</span></div>
+                </div>
+                <div class="lv-toprow-right">
+                    <div class="lv-container-badge" id="lvBadge" onclick="lvOpenContModal()" title="Changer le conteneur actif">
+                        📦 <span id="lvBadgeTxt">Aucun conteneur</span> <span style="opacity:.4;font-size:10px">▼</span>
+                    </div>
+                    <a href="livreurscan.html" class="lv-btn go" style="text-decoration:none">
+                        <span>📱</span><span class="lv-l">Mode Livreur</span>
+                    </a>
+                </div>
+            </div>
+            <div class="lv-tabs">
+                <button class="lv-tab active" id="lvT-EN_COURS"  onclick="lvTab('EN_COURS')">📦 En cours <span class="lv-badge" id="lvC-EN_COURS">0</span></button>
+                <button class="lv-tab"        id="lvT-A_VENIR"   onclick="lvTab('A_VENIR')">🚢 À venir <span class="lv-badge" id="lvC-A_VENIR">0</span></button>
+                <button class="lv-tab"        id="lvT-PARIS"     onclick="lvTab('PARIS')">🇫🇷 Paris <span class="lv-badge" id="lvC-PARIS">0</span></button>
+                <button class="lv-tab"        id="lvT-PROGRAMME" onclick="lvTab('PROGRAMME')">📅 Programmes <span class="lv-badge" id="lvC-PROGRAMME">0</span></button>
+                <div class="lv-tabs-spacer"></div>
+                <button class="lv-help-btn" onclick="openHelpModal()">❓ Guide</button>
+            </div>
+        </div>
+
+        <!-- TOOLBARS CONTEXTUELLES PAR ONGLET -->
+
+        <!-- EN COURS -->
+        <div class="lv-toolbar" id="lv-tb-EN_COURS">
+            <div class="lv-grp">
+                <label class="lv-import-lbl"><span>📊</span><span class="lv-l">Import</span><input type="file" accept=".xlsx,.xls,.csv" onchange="importExcel(event)" style="display:none"></label>
+                <button class="lv-btn" onclick="showAddModal()"><span>➕</span><span class="lv-l">Ajouter</span></button>
+                <button class="lv-btn go" onclick="exportToExcel()"><span>📥</span><span class="lv-l">Export</span></button>
+            </div>
+            <div class="lv-sep"></div>
+            <div class="lv-grp">
+                <button class="lv-btn" onclick="openProgramModal()" title="Programmer les colis sélectionnés"><span>📅</span><span class="lv-l">Programmer</span></button>
+                <button class="lv-btn" onclick="openAssignContainerModal()" title="Attribuer un conteneur"><span>📦</span><span class="lv-l">Attribuer</span></button>
+                <button class="lv-btn" onclick="openBulkStatusModal()" title="Changer le statut en masse"><span>🔄</span><span class="lv-l">Statut</span></button>
+            </div>
+            <div class="lv-sep"></div>
+            <div class="lv-grp">
+                <button class="lv-btn warn" onclick="archiveCompletedDeliveries()" title="Archiver les livrés"><span>📦</span><span class="lv-l">Archiver</span></button>
+                <button class="lv-btn ghost" onclick="openArchivesModal()" title="Voir les archives"><span>🗄️</span><span class="lv-l">Archives</span></button>
+            </div>
+            <div class="lv-more">
+                <button class="lv-btn ghost" onclick="lvToggleMore('EN_COURS')"><span>⋯</span><span class="lv-l">Plus</span></button>
+                <div class="lv-more-drop" id="lvDrop-EN_COURS">
+                    <div class="lv-mi-sec">Synchronisation</div>
+                    <button class="lv-mi purp" style="color:#8b5cf6" onclick="forceSyncTransactions();lvCloseMore()"><span>🔄</span>Synchro Caisse</button>
+                    <div class="lv-mi-div"></div>
+                    <div class="lv-mi-sec">Sélection</div>
+                    <button class="lv-mi red" onclick="deleteSelectedDeliveries();lvCloseMore()"><span>🗑️</span>Supprimer sélection</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- A VENIR -->
+        <div class="lv-toolbar" id="lv-tb-A_VENIR" style="display:none">
+            <div class="lv-grp">
+                <label class="lv-import-lbl"><span>📊</span><span class="lv-l">Import</span><input type="file" accept=".xlsx,.xls,.csv" onchange="importExcel(event)" style="display:none"></label>
+                <button class="lv-btn" onclick="showAddModal()"><span>➕</span><span class="lv-l">Ajouter</span></button>
+                <button class="lv-btn go" onclick="exportToExcel()"><span>📥</span><span class="lv-l">Export</span></button>
+            </div>
+            <div class="lv-sep"></div>
+            <div class="lv-grp">
+                <button class="lv-btn" onclick="openAssignContainerModal()"><span>📦</span><span class="lv-l">Attribuer conteneur</span></button>
+            </div>
+            <div class="lv-more" style="margin-left:auto">
+                <button class="lv-btn ghost" onclick="lvToggleMore('A_VENIR')"><span>⋯</span></button>
+                <div class="lv-more-drop" id="lvDrop-A_VENIR">
+                    <button class="lv-mi red" onclick="deleteSelectedDeliveries();lvCloseMore()"><span>🗑️</span>Supprimer sélection</button>
+                </div>
+            </div>
+            <div style="display:inline-flex;align-items:center;gap:5px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:7px;padding:3px 8px;margin-left:8px">
+                <span style="font-size:11px;font-weight:700;color:#1565c0">🚢 Filtre :</span>
+                <select id="quickContainerSelect2" style="padding:3px 7px;border:1px solid #bfdbfe;border-radius:5px;font-size:12px;font-weight:600;color:#1565c0;background:#fff" onchange="lvSyncQS(this.value)">
+                    <option value="">Tous les conteneurs</option>
+                </select>
+            </div>
+        </div>
+
+        <!-- PARIS -->
+        <div class="lv-toolbar" id="lv-tb-PARIS" style="display:none">
+            <div class="lv-grp">
+                <label class="lv-import-lbl"><span>📊</span><span class="lv-l">Import</span><input type="file" accept=".xlsx,.xls,.csv" onchange="importExcel(event)" style="display:none"></label>
+                <button class="lv-btn" onclick="showAddModal()"><span>➕</span><span class="lv-l">Ajouter</span></button>
+                <button class="lv-btn go" onclick="exportToExcel()"><span>📥</span><span class="lv-l">Export</span></button>
+            </div>
+            <div class="lv-more">
+                <button class="lv-btn ghost" onclick="lvToggleMore('PARIS')"><span>⋯</span></button>
+                <div class="lv-more-drop" id="lvDrop-PARIS">
+                    <button class="lv-mi red" onclick="deleteSelectedDeliveries();lvCloseMore()"><span>🗑️</span>Supprimer sélection</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- PROGRAMME -->
+        <div class="lv-toolbar" id="lv-tb-PROGRAMME" style="display:none">
+            <div class="lv-grp">
+                <button class="lv-btn go" onclick="exportToExcel()"><span>📥</span><span class="lv-l">Export Excel</span></button>
+                <button class="lv-btn ghost" onclick="openArchivesModal()"><span>🗄️</span><span class="lv-l">Archives</span></button>
+            </div>
+        </div>
+
+        <!-- FILTRE BAR -->
+        <div class="lv-filter-bar">
+            <!-- Conteneur actif (EN_COURS seulement) -->
+            <div class="lv-cont-sec" id="lv-cont-sec">
+                <span class="lv-cont-label">📦 Actif :</span>
+                <input class="lv-cont-input" id="lv-ci" placeholder="N° Conteneur"
+                    oninput="lvSyncCI(this.value)"
+                    onkeydown="if(event.key==='Enter'){setActiveContainer()}">
+                <label class="lv-fcb">
+                    <input type="checkbox" id="lv-fcb" style="width:auto" onchange="lvSyncFCB(this.checked)">
+                    Filtrer
+                </label>
+                <button class="lv-cont-ok" onclick="setActiveContainer()">OK</button>
+            </div>
+            <div class="lv-sep" id="lv-cont-sep"></div>
+
+            <!-- Filtres -->
             <div class="dropdown-filter" id="communeFilter">
                 <button class="dropdown-toggle" onclick="toggleCommuneDropdown()" id="communeFilterBtn">📍 Communes</button>
                 <div class="dropdown-menu" id="communeDropdownList">
@@ -136,51 +471,88 @@
                     <label><input type="checkbox" value="ABANDONNE" onchange="filterDeliveries()"> ⚫ Abandonné</label>
                 </div>
             </div>
-            <input type="text" class="search-filter" id="searchBox" placeholder="🔍 Rechercher..." oninput="debouncedFilterDeliveries()" style="min-width: 150px;">
+            <div class="lv-sep"></div>
+            <div class="lv-search-w">
+                <span class="ico">🔍</span>
+                <input type="text" class="lv-search" id="searchBox" placeholder="Rechercher réf, client, lieu..." oninput="debouncedFilterDeliveries()">
+            </div>
         </div>
 
-        <!-- Tableau Principal -->
-        <div class="table-container">
-            <h3 id="currentContainerTitle" style="margin-bottom: 10px; color: var(--text-main); display: none;">Conteneur en cours : Aucun</h3>
+        <!-- BARRE DE SÉLECTION CONTEXTUELLE -->
+        <div class="lv-sel-bar" id="lv-sel-bar">
+            <span class="lv-sel-count" id="lv-sel-n">0</span>
+            <span class="lv-sel-sep">|</span>
+            <button class="lv-sb" id="lv-sb-prog"   onclick="openProgramModal()">📅 Programmer</button>
+            <button class="lv-sb" id="lv-sb-attrib" onclick="openAssignContainerModal()">📦 Attribuer</button>
+            <button class="lv-sb" id="lv-sb-stat"   onclick="openBulkStatusModal()">🔄 Statut</button>
+            <button class="lv-sb red" onclick="deleteSelectedDeliveries()">🗑️ Supprimer</button>
+            <button class="lv-sel-x" onclick="lvDeselAll()">✕</button>
+        </div>
+
+        <!-- DESCRIPTION CONTEXTUELLE -->
+        <div class="lv-ctx" id="lv-ctx"></div>
+
+        <!-- TABLEAU -->
+        <div class="table-container" style="padding:0">
+            <h3 id="currentContainerTitle" style="display:none;margin:10px 16px;color:#1e293b">Conteneur en cours : Aucun</h3>
             <table id="deliveriesTable">
-                <thead>
-                    <tr>
-                        <th class="col-checkbox"><input type="checkbox" id="selectAll" onchange="toggleSelectAll()"></th>
-                        <th class="sortable" onclick="sortTable('conteneur')">CONTENEUR ↕</th>
-                        <th class="sortable" onclick="sortTable('ref')">REF ↕</th>
-                        <th>Qté</th>
-                        <th class="sortable" onclick="sortTable('montant')">MONTANT ↕</th>
-                        <th class="sortable" onclick="sortTable('expediteur')">EXPEDITEUR ↕</th>
-                        <th class="sortable" onclick="sortTable('lieuLivraison')">LIEU DE LIVRAISON ↕</th>
-                        <th class="sortable" onclick="sortTable('destinataire')">DESTINATAIRE ↕</th>
-                        <th>NUMÉRO</th>
-                        <th>DESCRIPTION</th>
-                        <th>INFO</th>
-                        <th class="sortable" onclick="sortTable('livreur')">LIVREUR (DATE) ↕</th>
-                        <th>STATUT</th>
-                        <th>ACTIONS</th>
-                    </tr>
-                </thead>
+                <thead><tr>
+                    <th class="col-checkbox"><input type="checkbox" id="selectAll" onchange="toggleSelectAll()"></th>
+                    <th class="sortable" onclick="sortTable('conteneur')">CONTENEUR ↕</th>
+                    <th class="sortable" onclick="sortTable('ref')">REF ↕</th>
+                    <th>Qté</th>
+                    <th class="sortable" onclick="sortTable('montant')">MONTANT ↕</th>
+                    <th class="sortable" onclick="sortTable('expediteur')">EXPEDITEUR ↕</th>
+                    <th class="sortable" onclick="sortTable('lieuLivraison')">LIEU DE LIVRAISON ↕</th>
+                    <th class="sortable" onclick="sortTable('destinataire')">DESTINATAIRE ↕</th>
+                    <th>NUMÉRO</th>
+                    <th>DESCRIPTION</th>
+                    <th>INFO</th>
+                    <th class="sortable" onclick="sortTable('livreur')">LIVREUR (DATE) ↕</th>
+                    <th>STATUT</th>
+                    <th>ACTIONS</th>
+                </tr></thead>
                 <tbody id="deliveriesBody"><tr><td colspan="14" class="empty-state">Chargement...</td></tr></tbody>
             </table>
         </div>
 
-        <!-- MODALES LIVRAISON -->
+        <!-- MODALE CONTENEUR RAPIDE -->
+        <div class="lv-qmodal" id="lv-qm">
+            <div class="lv-qbox">
+                <div class="lv-qbox-title">📦 Conteneur actif</div>
+                <div style="margin-bottom:10px">
+                    <label style="font-size:12px;font-weight:600;color:#64748b;display:block;margin-bottom:4px">Numéro de conteneur</label>
+                    <input type="text" id="lv-qm-input" placeholder="Ex: CONT-2024-01"
+                        style="width:100%;padding:10px 12px;border:1.5px solid #cbd5e1;border-radius:8px;font-size:14px;font-weight:600"
+                        onkeydown="if(event.key==='Enter'){lvApplyCont()}">
+                </div>
+                <div style="display:flex;align-items:center;gap:6px;margin-bottom:14px">
+                    <input type="checkbox" id="lv-qm-cb" style="width:auto">
+                    <label for="lv-qm-cb" style="font-size:13px;color:#475569;cursor:pointer">Filtrer la vue sur ce conteneur</label>
+                </div>
+                <div style="display:flex;gap:8px">
+                    <button class="lv-btn ok" style="flex:1;justify-content:center;padding:10px" onclick="lvApplyCont()">✅ Appliquer</button>
+                    <button class="lv-btn ghost" style="padding:10px 14px" onclick="lvCloseContModal()">Annuler</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- TOUTES LES MODALES (inchangées) -->
         <div id="addModal" class="modal">
             <div class="modal-content modal-xl">
                 <h2 class="modal-header">➕ Nouvelle Livraison</h2>
                 <form id="deliveryForm">
                     <div class="form-grid">
-                        <div class="form-group full-width" style="background: #e3f2fd; padding: 10px; border-radius: 5px;">
+                        <div class="form-group full-width" style="background:#e3f2fd;padding:10px;border-radius:5px">
                             <label>Statut du Conteneur</label>
                             <select id="newContainerStatus">
-                                <option value="PARIS">🇫🇷 Stock Paris (Non chargé)</option>
+                                <option value="PARIS">🇫🇷 Stock Paris</option>
                                 <option value="EN_COURS">📦 En cours (Arrivé)</option>
                                 <option value="A_VENIR">🚢 À venir (En transit)</option>
                             </select>
                         </div>
                         <div class="form-group"><label>N° Conteneur</label><input type="text" id="conteneur"></div>
-                        <div class="form-group"><label>Quantité</label><input type="number" id="quantite" value="1" min="1" style="font-weight: bold;"></div>
+                        <div class="form-group"><label>Quantité</label><input type="number" id="quantite" value="1" min="1" style="font-weight:bold"></div>
                         <div class="form-group"><label>Référence *</label><input type="text" id="ref" required></div>
                         <div class="form-group"><label>Montant Restant</label><input type="text" id="montant"></div>
                         <div class="form-group"><label>Expéditeur *</label><input type="text" id="expediteur" required></div>
@@ -200,238 +572,147 @@
                         <div class="form-group full-width"><label>Destinataire & Téléphone *</label><input type="text" id="destinataire" required></div>
                         <div class="form-group full-width"><label>Description</label><textarea id="description" rows="2"></textarea></div>
                     </div>
-                    <div style="display: flex; gap: 10px; margin-top: 20px;">
+                    <div style="display:flex;gap:10px;margin-top:20px">
                         <button type="submit" class="btn btn-success">✅ Ajouter</button>
                         <button type="button" class="btn btn-danger" onclick="closeAddModal()">❌ Annuler</button>
                     </div>
                 </form>
             </div>
         </div>
-
         <div id="previewModal" class="modal">
             <div class="modal-content modal-xl">
                 <h2 class="modal-header">📋 Aperçu de l'import</h2>
-                <div class="form-grid" style="margin-bottom: 20px; background: #f8f9fa; padding: 15px; border-radius: 8px;">
-                    <div class="form-group full-width">
-                        <label>Destination</label>
-                        <select id="importContainerStatus" style="width: 100%;">
-                            <option value="PARIS">🇫🇷 Stock PARIS</option>
-                            <option value="EN_COURS">📦 EN COURS</option>
-                            <option value="A_VENIR">🚢 À VENIR</option>
-                        </select>
-                    </div>
+                <div class="form-grid" style="margin-bottom:20px;background:#f8f9fa;padding:15px;border-radius:8px">
+                    <div class="form-group full-width"><label>Destination</label><select id="importContainerStatus" style="width:100%"><option value="PARIS">🇫🇷 Stock PARIS</option><option value="EN_COURS">📦 EN COURS</option><option value="A_VENIR">🚢 À VENIR</option></select></div>
                     <div class="form-group"><label>N° Conteneur (Lot)</label><input type="text" id="importConteneur"></div>
-                    <!-- BL supprimé, Quantité gérée par ligne -->
                 </div>
                 <p id="previewCount"></p>
-                <div class="preview-table">
-                    <table><thead><tr><th>REF</th><th>QTE</th><th>EXPEDITEUR</th><th>COMMUNE</th><th>LIEU</th><th>INFO</th></tr></thead><tbody id="previewBody"></tbody></table>
-                </div>
-                <div style="display: flex; gap: 10px; margin-top: 20px;">
+                <div class="preview-table"><table><thead><tr><th>REF</th><th>QTE</th><th>EXPEDITEUR</th><th>COMMUNE</th><th>LIEU</th><th>INFO</th></tr></thead><tbody id="previewBody"></tbody></table></div>
+                <div style="display:flex;gap:10px;margin-top:20px">
                     <button class="btn btn-success" onclick="confirmImport()">✅ Confirmer</button>
                     <button class="btn btn-danger" onclick="closePreviewModal()">❌ Annuler</button>
                 </div>
             </div>
         </div>
-
         <div id="programModal" class="modal">
             <div class="modal-content">
                 <h2 class="modal-header">📅 Programmer Livraison</h2>
                 <p>Pour <strong id="selectedCount">0</strong> colis :</p>
                 <div class="form-grid">
-                    <div class="form-group full-width">
-                        <label>Programme Existant</label>
-                        <select id="existingProgramSelect" onchange="fillProgramFields()"><option value="">-- Nouveau --</option></select>
-                    </div>
+                    <div class="form-group full-width"><label>Programme Existant</label><select id="existingProgramSelect" onchange="fillProgramFields()"><option value="">-- Nouveau --</option></select></div>
                     <div class="form-group full-width"><label>Livreur</label><input type="text" id="progLivreur"></div>
                     <div class="form-group full-width"><label>Date</label><input type="date" id="progDate"></div>
                 </div>
-                <div style="display: flex; gap: 10px; margin-top: 20px;">
+                <div style="display:flex;gap:10px;margin-top:20px">
                     <button class="btn btn-success" onclick="confirmProgram()">💾 Enregistrer</button>
                     <button class="btn btn-danger" onclick="closeProgramModal()">❌ Annuler</button>
                 </div>
             </div>
         </div>
-
         <div id="assignContainerModal" class="modal">
             <div class="modal-content">
                 <h2 class="modal-header">📦 Attribuer Conteneur</h2>
                 <p>Pour <strong id="assignSelectedCount">0</strong> colis :</p>
-                <div class="form-group full-width">
-                    <label>Nouvelle Position</label>
-                    <select id="assignContainerStatus">
-                        <option value="">-- Ne pas changer --</option>
-                        <option value="PARIS">🇫🇷 Stock Paris</option>
-                        <option value="A_VENIR">🚢 En Transit</option>
-                        <option value="EN_COURS">📦 Arrivé</option>
-                    </select>
-                </div>
+                <div class="form-group full-width"><label>Nouvelle Position</label><select id="assignContainerStatus"><option value="">-- Ne pas changer --</option><option value="PARIS">🇫🇷 Stock Paris</option><option value="A_VENIR">🚢 En Transit</option><option value="EN_COURS">📦 Arrivé</option></select></div>
                 <div class="form-group full-width"><label>N° Conteneur</label><input type="text" id="assignConteneurInput"></div>
-                <div style="display: flex; gap: 10px; margin-top: 20px;">
+                <div style="display:flex;gap:10px;margin-top:20px">
                     <button class="btn btn-success" onclick="confirmAssignContainer()">💾 Enregistrer</button>
                     <button class="btn btn-danger" onclick="closeAssignContainerModal()">❌ Annuler</button>
                 </div>
             </div>
         </div>
-
-    <!-- Modal Changement Statut Groupé -->
-    <div id="bulkStatusModal" class="modal">
-        <div class="modal-content">
-            <h2 class="modal-header">🔄 Changer le statut</h2>
-            <p>Pour <strong id="bulkStatusCount">0</strong> colis sélectionnés :</p>
-            <div class="form-group full-width">
-                <label>Nouveau Statut</label>
-                <select id="bulkStatusSelect">
-                    <option value="EN_ATTENTE">⏳ En Attente</option>
-                    <option value="EN_COURS">🚚 En Cours</option>
-                    <option value="LIVRE">✅ Livré</option>
-                    <option value="INCIDENT">⚠️ Incident</option>
-                    <option value="RETOUR">↩️ Retour</option>
-                    <option value="ABANDONNE">⚫ Abandonné</option>
-                </select>
-            </div>
-            <div style="display: flex; gap: 10px; margin-top: 20px;">
-                <button class="btn btn-success" onclick="confirmBulkStatusChange()">💾 Enregistrer</button>
-                <button class="btn btn-danger" onclick="closeBulkStatusModal()">❌ Annuler</button>
+        <div id="bulkStatusModal" class="modal">
+            <div class="modal-content">
+                <h2 class="modal-header">🔄 Changer le statut</h2>
+                <p>Pour <strong id="bulkStatusCount">0</strong> colis sélectionnés :</p>
+                <div class="form-group full-width"><label>Nouveau Statut</label><select id="bulkStatusSelect"><option value="EN_ATTENTE">⏳ En Attente</option><option value="EN_COURS">🚚 En Cours</option><option value="LIVRE">✅ Livré</option><option value="INCIDENT">⚠️ Incident</option><option value="RETOUR">↩️ Retour</option><option value="ABANDONNE">⚫ Abandonné</option></select></div>
+                <div style="display:flex;gap:10px;margin-top:20px">
+                    <button class="btn btn-success" onclick="confirmBulkStatusChange()">💾 Enregistrer</button>
+                    <button class="btn btn-danger" onclick="closeBulkStatusModal()">❌ Annuler</button>
+                </div>
             </div>
         </div>
-    </div>
-
         <div id="programDetailsModal" class="modal">
             <div class="modal-content modal-xl">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-                    <h2 class="modal-header" style="margin:0;">📋 Feuille de route</h2>
-                    <div style="display: flex; gap: 10px;">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
+                    <h2 class="modal-header" style="margin:0">📋 Feuille de route</h2>
+                    <div style="display:flex;gap:10px">
                         <button id="btnOpenMap" class="btn btn-warning btn-small">🗺️ Carte</button>
                         <button id="btnExportPdf" class="btn btn-success btn-small">📄 PDF</button>
                         <button class="btn btn-danger btn-small" onclick="closeProgramDetailsModal()">Fermer</button>
                     </div>
                 </div>
-                <div style="background: #f8f9fa; padding: 10px; border-radius: 8px; margin-bottom: 15px;">
+                <div style="background:#f8f9fa;padding:10px;border-radius:8px;margin-bottom:15px">
                     <p><strong>Livreur :</strong> <span id="detailLivreur"></span> | <strong>Date :</strong> <span id="detailDate"></span></p>
                 </div>
                 <div class="preview-table"><table id="programDetailsTable"></table></div>
             </div>
         </div>
-
-        <!-- Modal Aide / Guide -->
         <div id="helpModal" class="modal">
-            <div class="modal-content" style="max-width: 600px;">
-                <div class="modal-header">
-                    <h2 style="margin:0;">📘 Guide du Flux Logistique</h2>
-                    <span class="close-modal" onclick="document.getElementById('helpModal').classList.remove('active')">&times;</span>
-                </div>
-                <div style="padding: 10px 0;">
-                    <div class="help-step">
-                        <div class="help-icon">1</div>
-                        <div class="help-content">
-                            <h4>🇫🇷 PARIS (Départ)</h4>
-                            <p>Saisissez ou importez les colis reçus en France. À cette étape, aucune dette n'est créée. C'est votre "Brouillon" ou Manifeste de départ.</p>
-                        </div>
-                    </div>
+            <div class="modal-content" style="max-width:600px">
+                <div class="modal-header"><h2 style="margin:0">📘 Guide du Flux Logistique</h2><span class="close-modal" onclick="document.getElementById('helpModal').classList.remove('active')">&times;</span></div>
+                <div style="padding:10px 0">
+                    <div class="help-step"><div class="help-icon">1</div><div class="help-content"><h4>🇫🇷 PARIS (Départ)</h4><p>Saisissez ou importez les colis reçus en France. Aucune dette créée. C'est votre manifeste de départ.</p></div></div>
                     <div class="help-arrow">⬇️</div>
-                    <div class="help-step">
-                        <div class="help-icon">2</div>
-                        <div class="help-content">
-                            <h4>🚢 À VENIR (Transit)</h4>
-                            <p>Attribuez un N° de Conteneur aux colis. Ils sont en mer. Vous pouvez notifier les clients de l'arrivée prochaine.</p>
-                        </div>
-                    </div>
+                    <div class="help-step"><div class="help-icon">2</div><div class="help-content"><h4>🚢 À VENIR (Transit)</h4><p>Attribuez un N° de Conteneur. Notifiez les clients de l'arrivée prochaine.</p></div></div>
                     <div class="help-arrow">⬇️</div>
-                    <div class="help-step">
-                        <div class="help-icon">3</div>
-                        <div class="help-content">
-                            <h4>📦 EN COURS (Arrivée Abidjan)</h4>
-                            <p>C'est l'étape clé. Quand un colis arrive ici (via Import Scanner ou déplacement manuel), <strong>la dette financière est créée</strong> dans la Caisse. Le colis est prêt à être livré.</p>
-                        </div>
-                    </div>
+                    <div class="help-step"><div class="help-icon">3</div><div class="help-content"><h4>📦 EN COURS (Arrivée Abidjan)</h4><p>Étape clé : <strong>la dette financière est créée</strong> dans la Caisse. Le colis est prêt à être livré.</p></div></div>
                 </div>
-                <div style="text-align: right; margin-top: 10px;">
-                    <button class="btn" onclick="document.getElementById('helpModal').classList.remove('active')">Fermer</button>
+                <div style="text-align:right;margin-top:10px"><button class="btn" onclick="document.getElementById('helpModal').classList.remove('active')">Fermer</button></div>
+            </div>
+        </div>
+        <div id="archivesModal" class="modal">
+            <div class="modal-content modal-xl" style="height:90vh">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px"><h2 class="modal-header" style="margin:0">🗄️ Archives</h2><button class="btn btn-danger btn-small" onclick="closeArchivesModal()">Fermer</button></div>
+                <input type="text" id="archiveSearch" class="search-filter" placeholder="🔍 Rechercher..." oninput="searchArchives()" style="margin-bottom:15px;width:100%">
+                <div class="preview-table" style="max-height:calc(90vh - 150px)">
+                    <table id="archivesTable"><thead><tr><th>DATE</th><th>REF</th><th>CONTENEUR</th><th>DESTINATAIRE</th><th>LIVREUR</th><th>ACTIONS</th></tr></thead><tbody id="archivesBody"></tbody></table>
                 </div>
             </div>
         </div>
-
-        <div id="archivesModal" class="modal">
-            <div class="modal-content modal-xl" style="height: 90vh;">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-                    <h2 class="modal-header" style="margin:0;">🗄️ Archives</h2>
-                    <button class="btn btn-danger btn-small" onclick="closeArchivesModal()">Fermer</button>
-                </div>
-                <input type="text" id="archiveSearch" class="search-filter" placeholder="🔍 Rechercher..." oninput="searchArchives()" style="margin-bottom: 15px; width: 100%;">
-                <div class="preview-table" style="max-height: calc(90vh - 150px);">
-                    <table id="archivesTable">
-                        <thead><tr><th>DATE</th><th>REF</th><th>CONTENEUR</th><th>DESTINATAIRE</th><th>LIVREUR</th><th>ACTIONS</th></tr></thead>
-                        <tbody id="archivesBody"></tbody>
-                    </table>
+        <div id="abandonModal" class="modal">
+            <div class="modal-content">
+                <h2 class="modal-header">⚫ Déclarer un Abandon</h2>
+                <p style="margin-bottom:15px">Pour le colis Réf : <strong id="abandonRefDisplay" style="color:#ef4444"></strong></p>
+                <input type="hidden" id="abandonDeliveryId">
+                <div class="form-group full-width"><label style="font-weight:bold;margin-bottom:5px;display:block">Raison de l'abandon</label><select id="abandonTypeSelect" style="width:100%;padding:10px;border-radius:6px;border:1px solid #ccc"><option value="DELAI">⏳ Expiration du délai</option><option value="VOLONTAIRE">🗣️ Abandon Volontaire</option></select></div>
+                <div style="display:flex;gap:10px;margin-top:25px">
+                    <button class="btn btn-danger" onclick="confirmAbandonment()" style="flex:1;justify-content:center">✅ Valider et Générer PDF</button>
+                    <button class="btn" onclick="closeAbandonModal()" style="background:#e2e8f0;color:#333;flex:1;justify-content:center">❌ Annuler</button>
                 </div>
             </div>
         </div>
         <datalist id="sharedLocationsList"></datalist>
     </div>
 
-    <!-- Modal Abandon de Colis -->
-    <div id="abandonModal" class="modal">
-        <div class="modal-content">
-            <h2 class="modal-header">⚫ Déclarer un Abandon</h2>
-            <p style="margin-bottom: 15px;">Pour le colis Réf : <strong id="abandonRefDisplay" style="color: #ef4444;"></strong></p>
-            <input type="hidden" id="abandonDeliveryId">
-            <div class="form-group full-width">
-                <label style="font-weight: bold; margin-bottom: 5px; display: block;">Raison de l'abandon</label>
-                <select id="abandonTypeSelect" style="width: 100%; padding: 10px; border-radius: 6px; border: 1px solid #ccc;">
-                    <option value="DELAI">⏳ Expiration du délai de stockage (Non réclamé)</option>
-                    <option value="VOLONTAIRE">🗣️ Abandon Volontaire (Anticipé par le client)</option>
-                </select>
-            </div>
-            <div style="display: flex; gap: 10px; margin-top: 25px;">
-                <button class="btn btn-danger" onclick="confirmAbandonment()" style="flex: 1; justify-content: center;">✅ Valider l'abandon et Générer le PDF</button>
-                <button class="btn" onclick="closeAbandonModal()" style="background:#e2e8f0; color:#333; flex: 1; justify-content: center;">❌ Annuler</button>
+    <div id="importProgressModal" class="modal" style="z-index:2000">
+        <div class="modal-content" style="max-width:400px;text-align:center;padding:30px">
+            <h3 style="margin-top:0;color:#333">Importation en cours...</h3>
+            <div style="margin:20px 0;background:#f3f4f6;border-radius:10px;height:20px;width:100%;overflow:hidden;border:1px solid #e5e7eb"><div id="importProgressBar" style="background:#10b981;height:100%;width:0%;transition:width .3s ease"></div></div>
+            <p id="importProgressText" style="margin:0;color:#6b7280;font-weight:bold">0%</p>
+            <p style="font-size:.85em;color:#9ca3af;margin-top:10px">Veuillez ne pas fermer la page.</p>
+        </div>
+    </div>
+    <div id="importResultModal" class="modal" style="z-index:2000">
+        <div class="modal-content" style="max-width:500px">
+            <div class="modal-header"><h2 style="margin:0">Rapport d'Importation</h2><span class="close-modal" onclick="document.getElementById('importResultModal').classList.remove('active')">&times;</span></div>
+            <div id="importResultContent" style="padding:20px;font-size:1.1em;line-height:1.6"></div>
+            <div style="text-align:right;margin-top:10px"><button class="btn btn-success" onclick="document.getElementById('importResultModal').classList.remove('active')">Fermer</button></div>
+        </div>
+    </div>
+    <div id="deleteChoiceModal" class="modal" style="z-index:2001">
+        <div class="modal-content" style="max-width:400px;text-align:center;padding:30px">
+            <h3 style="margin-top:0;color:#333">Action de Suppression</h3>
+            <p style="color:#666;margin-bottom:25px">Que voulez-vous faire de ces colis ?</p>
+            <div style="display:flex;flex-direction:column;gap:10px">
+                <button class="btn btn-warning" onclick="confirmDeleteAction('MOVE')" style="justify-content:center">🚢 Renvoyer vers "À VENIR"</button>
+                <button class="btn btn-danger" onclick="confirmDeleteAction('DELETE')" style="justify-content:center">🗑️ Supprimer Définitivement</button>
+                <button class="btn" style="background:#e5e7eb;color:#333;justify-content:center" onclick="closeDeleteChoiceModal()">Annuler</button>
             </div>
         </div>
     </div>
-
-    <!-- Modal Progression Import -->
-    <div id="importProgressModal" class="modal" style="z-index: 2000;">
-        <div class="modal-content" style="max-width: 400px; text-align: center; padding: 30px;">
-            <h3 style="margin-top: 0; color: #333;">Importation en cours...</h3>
-            <div style="margin: 20px 0; background-color: #f3f4f6; border-radius: 10px; height: 20px; width: 100%; overflow: hidden; border: 1px solid #e5e7eb;">
-                <div id="importProgressBar" style="background-color: #10b981; height: 100%; width: 0%; transition: width 0.3s ease;"></div>
-            </div>
-            <p id="importProgressText" style="margin: 0; color: #6b7280; font-weight: bold;">0%</p>
-            <p style="font-size: 0.85em; color: #9ca3af; margin-top: 10px;">Veuillez ne pas fermer la page.</p>
-        </div>
-    </div>
-
-    <!-- Modal Résultat Import -->
-    <div id="importResultModal" class="modal" style="z-index: 2000;">
-        <div class="modal-content" style="max-width: 500px;">
-            <div class="modal-header">
-                <h2 style="margin: 0;">Rapport d'Importation</h2>
-                <span class="close-modal" onclick="document.getElementById('importResultModal').classList.remove('active')">&times;</span>
-            </div>
-            <div id="importResultContent" style="padding: 20px; font-size: 1.1em; line-height: 1.6;"></div>
-            <div style="text-align: right; margin-top: 10px;">
-                <button class="btn btn-success" onclick="document.getElementById('importResultModal').classList.remove('active')">Fermer</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- Modal Choix Suppression (En Cours) -->
-    <div id="deleteChoiceModal" class="modal" style="z-index: 2001;">
-        <div class="modal-content" style="max-width: 400px; text-align: center; padding: 30px;">
-            <h3 style="margin-top: 0; color: #333;">Action de Suppression</h3>
-            <p style="color: #666; margin-bottom: 25px;">Que voulez-vous faire de ces colis ?</p>
-            <div style="display: flex; flex-direction: column; gap: 10px;">
-                <button class="btn btn-warning" onclick="confirmDeleteAction('MOVE')" style="justify-content: center;">🚢 Renvoyer vers "À VENIR"</button>
-                <button class="btn btn-danger" onclick="confirmDeleteAction('DELETE')" style="justify-content: center;">🗑️ Supprimer Définitivement</button>
-                <button class="btn" style="background: #e5e7eb; color: #333; justify-content: center;" onclick="closeDeleteChoiceModal()">Annuler</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- Écran de chargement Import -->
-    <div id="loadingOverlay" class="loading-overlay" style="display: none;">
-        <div class="loading-spinner" style="width: 60px; height: 60px; border-width: 6px;"></div>
+    <div id="loadingOverlay" class="loading-overlay" style="display:none">
+        <div class="loading-spinner" style="width:60px;height:60px;border-width:6px"></div>
         <div class="loading-text">Importation du fichier en cours...</div>
     </div>
 
@@ -442,5 +723,176 @@
     <script src="auth-guard.js"></script>
     <script src="livraison/livraison.js"></script>
     <script src="utils.js"></script>
+
+    <!-- BRIDGE SCRIPT — colle la nouvelle UI à livraison.js sans le modifier -->
+    <script>
+    const LV_DESC = {
+        EN_COURS: '📍 <strong>ABIDJAN (Réception)</strong> — Colis arrivés, prêts à livrer. <span style="color:#b45309">⚠️ La dette financière est calculée ici.</span>',
+        A_VENIR:  '🌊 <strong>TRANSIT</strong> — Colis en mer. Vérifiez les conteneurs et notifiez les clients.',
+        PARIS:    '🇫🇷 <strong>DÉPART France</strong> — Aucune transaction financière créée à ce stade.',
+        PROGRAMME:'🚚 <strong>TOURNÉES</strong> — Organisez les livraisons par livreur et par date.'
+    };
+
+    function lvTab(t) {
+        switchTab(t);  // appel livraison.js original
+        // Onglets visuels
+        document.querySelectorAll('.lv-tab').forEach(e=>e.classList.remove('active'));
+        document.getElementById('lvT-'+t)?.classList.add('active');
+        // Toolbars
+        ['EN_COURS','A_VENIR','PARIS','PROGRAMME'].forEach(k=>{
+            const el = document.getElementById('lv-tb-'+k);
+            if(el) el.style.display = k===t?'flex':'none';
+        });
+        // Context desc
+        const ctx = document.getElementById('lv-ctx');
+        if(ctx){ ctx.innerHTML = LV_DESC[t]||''; ctx.classList.toggle('show',!!LV_DESC[t]); }
+        // Section conteneur actif : visible EN_COURS seulement
+        const cs = document.getElementById('lv-cont-sec');
+        const csep = document.getElementById('lv-cont-sep');
+        if(cs){ cs.style.display = t==='EN_COURS'?'inline-flex':'none'; }
+        if(csep){ csep.style.display = t==='EN_COURS'?'inline-block':'none'; }
+        // Boutons barre sélection
+        const vis = {
+            'lv-sb-prog':   t==='EN_COURS',
+            'lv-sb-attrib': t==='EN_COURS'||t==='A_VENIR',
+            'lv-sb-stat':   t==='EN_COURS'
+        };
+        Object.entries(vis).forEach(([id,show])=>{ const el=document.getElementById(id); if(el) el.style.display=show?'':'none'; });
+        lvUpdateStats(); lvUpdateCounts();
+    }
+
+    function lvUpdateStats() {
+        if(typeof filteredDeliveries==='undefined') return;
+        const s = {t:0,a:0,l:0,p:0};
+        filteredDeliveries.forEach(d=>{
+            s.t++;
+            if(d.status==='EN_ATTENTE'||d.status==='EN_COURS') s.a++;
+            if(d.status==='LIVRE')   s.l++;
+            if(d.status==='PARTIEL') s.p++;
+        });
+        const $=(id,v)=>{const e=document.getElementById(id);if(e)e.textContent=v;};
+        $('lv-n-total',s.t); $('lv-n-attente',s.a); $('lv-n-livre',s.l); $('lv-n-partiel',s.p);
+        const pc=document.getElementById('lv-chip-partiel');
+        if(pc) pc.style.display=s.p>0?'inline-flex':'none';
+    }
+
+    function lvUpdateCounts() {
+        if(typeof deliveries==='undefined') return;
+        const c={EN_COURS:0,A_VENIR:0,PARIS:0,PROGRAMME:0};
+        deliveries.forEach(d=>{
+            const cs=d.containerStatus||'EN_COURS';
+            if(c[cs]!==undefined) c[cs]++;
+            if(d.dateProgramme) c.PROGRAMME++;
+        });
+        Object.entries(c).forEach(([k,n])=>{const e=document.getElementById('lvC-'+k);if(e)e.textContent=n;});
+    }
+
+    function lvUpdateSelBar() {
+        if(typeof selectedIds==='undefined') return;
+        const n=selectedIds.size;
+        const bar=document.getElementById('lv-sel-bar');
+        if(bar) bar.classList.toggle('show',n>0);
+        const el=document.getElementById('lv-sel-n');
+        if(el) el.textContent=n+' sélectionné'+(n>1?'s':'');
+    }
+
+    function lvDeselAll() {
+        if(typeof selectedIds!=='undefined') selectedIds.clear();
+        const sa=document.getElementById('selectAll'); if(sa) sa.checked=false;
+        if(typeof renderTable==='function') renderTable();
+        lvUpdateSelBar();
+    }
+
+    // More menus
+    function lvToggleMore(t) { lvCloseMore(); document.getElementById('lvDrop-'+t)?.classList.toggle('open'); }
+    function lvCloseMore() { document.querySelectorAll('.lv-more-drop').forEach(d=>d.classList.remove('open')); }
+    document.addEventListener('click',e=>{ if(!e.target.closest('.lv-more')) lvCloseMore(); });
+
+    // Modale conteneur rapide
+    function lvOpenContModal() {
+        const m=document.getElementById('lv-qm');
+        const i=document.getElementById('lv-qm-input');
+        const cb=document.getElementById('lv-qm-cb');
+        const cur=localStorage.getItem('container_filter_EN_COURS')||'';
+        if(i) i.value=cur!=='Aucun'?cur:'';
+        if(cb) cb.checked=localStorage.getItem('container_filter_EN_COURS_active')==='true';
+        if(m){ m.classList.add('active'); setTimeout(()=>i&&i.focus(),50); }
+    }
+    function lvCloseContModal() { document.getElementById('lv-qm')?.classList.remove('active'); }
+    function lvApplyCont() {
+        const val=(document.getElementById('lv-qm-input')?.value||'').trim();
+        const cb=document.getElementById('lv-qm-cb');
+        lvSyncCI(val);
+        const fcb=document.getElementById('filterByContainerCb');
+        if(fcb&&cb){ fcb.checked=cb.checked; fcb.dispatchEvent(new Event('change')); }
+        if(val) setActiveContainer();
+        lvCloseContModal();
+    }
+
+    // Sync inputs conteneur
+    function lvSyncCI(val) {
+        const h=document.getElementById('activeContainerInput');
+        const p=document.getElementById('lv-ci');
+        if(h) h.value=val; if(p&&p.value!==val) p.value=val;
+        lvUpdateBadge(val);
+    }
+    function lvSyncFCB(c) {
+        const h=document.getElementById('filterByContainerCb');
+        if(h){ h.checked=c; h.dispatchEvent(new Event('change')); }
+    }
+    function lvSyncQS(val) {
+        const h=document.getElementById('quickContainerSelect');
+        if(h){ h.value=val; h.dispatchEvent(new Event('change')); }
+    }
+    function lvUpdateBadge(val) {
+        const b=document.getElementById('lvBadgeTxt');
+        if(b) b.textContent=val||'Aucun conteneur';
+    }
+
+    // Sync sélect2 (À VENIR)
+    function lvSyncQS2() {
+        const src=document.getElementById('quickContainerSelect');
+        const dst=document.getElementById('quickContainerSelect2');
+        if(src&&dst){ dst.innerHTML=src.innerHTML; dst.value=src.value; }
+    }
+
+    // Intercepts
+    const _us=window.updateStats;
+    window.updateStats=function(){ if(_us)_us(); lvUpdateStats(); lvUpdateCounts(); };
+    const _fd=window.filterDeliveries;
+    window.filterDeliveries=function(){ if(_fd)_fd(); lvUpdateStats(); lvUpdateSelBar(); };
+    const _rt=window.renderTable;
+    window.renderTable=function(){ if(_rt)_rt(); lvUpdateSelBar(); };
+    const _ts=window.toggleSelection;
+    window.toggleSelection=function(id){ if(_ts)_ts(id); lvUpdateSelBar(); };
+    const _ta=window.toggleSelectAll;
+    window.toggleSelectAll=function(){ if(_ta)_ta(); lvUpdateSelBar(); };
+    const _uct=window.updateContainerTitle;
+    window.updateContainerTitle=function(){
+        if(_uct)_uct();
+        const c=typeof currentContainerName!=='undefined'?currentContainerName:'';
+        lvUpdateBadge(c!=='Aucun'?c:'');
+    };
+    const _ual=window.updateAvailableContainersList;
+    window.updateAvailableContainersList=function(){ if(_ual)_ual(); setTimeout(lvSyncQS2,120); };
+
+    // Init
+    document.addEventListener('DOMContentLoaded',()=>{
+        setTimeout(()=>{
+            lvTab('EN_COURS');
+            const h=document.getElementById('activeContainerInput');
+            const p=document.getElementById('lv-ci');
+            if(h&&p) p.value=h.value;
+            lvUpdateBadge(h?h.value:'');
+            
+            // Sync l'état de la checkbox du filtre au démarrage
+            const fcb_h = document.getElementById('filterByContainerCb');
+            const fcb_v = document.getElementById('lv-fcb');
+            if (fcb_h && fcb_v) fcb_v.checked = fcb_h.checked;
+
+            lvUpdateStats(); lvUpdateCounts();
+        },600);
+    });
+    </script>
 </body>
 </html>
