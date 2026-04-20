@@ -824,7 +824,7 @@ function importExcel(event) {
                     const item = imported[i];
 
                     // Feedback visuel tous les 5 items pour ne pas bloquer l'UI et montrer la progression
-                    if (i % 5 === 0) {
+                    if (i % 50 === 0) { // OPTIMISATION : Mise à jour moins fréquente
                         const pct = Math.round(((i + 1) / imported.length) * 100);
                         if (progressModal) {
                              document.getElementById('importProgressBar').style.width = `${pct}%`;
@@ -861,10 +861,14 @@ function importExcel(event) {
                     // --- FIN MODIFICATION ---
 
                     if ((!item.lieuLivraison || !item.lieuLivraison.trim()) && item.destinataire) {
-                        const foundAddr = await findAddressForRecipient(item.destinataire);
-                        if (foundAddr) {
-                            item.lieuLivraison = foundAddr;
-                            item.commune = detectCommune(foundAddr);
+                        // OPTIMISATION : Recherche uniquement LOCALE pendant l'import massif
+                        const val = item.destinataire.trim().toLowerCase();
+                        const localMatch = deliveries.find(d => 
+                            d.destinataire && d.destinataire.toLowerCase() === val && d.lieuLivraison
+                        );
+                        if (localMatch) {
+                            item.lieuLivraison = localMatch.lieuLivraison;
+                            item.commune = detectCommune(localMatch.lieuLivraison);
                         }
                     }
                     // Extraction Numéro si manquant (Regex)
@@ -1086,11 +1090,26 @@ async function confirmImport() {
     let createdCount = 0;
     let updatedCount = 0;
     
+    // --- OPTIMISATION ---
+    // Pré-charger l'existence des transactions pour éviter 1 requête Firestore par ligne
+    const existingTransRefs = new Set();
+    if (containerStatus === 'EN_COURS' && finalImportList.length > 0) {
+        if (progressModal) document.getElementById('importProgressText').textContent = 'Vérification des transactions existantes...';
+        const allRefs = finalImportList.map(item => item.ref);
+        const chunks = [];
+        for (let i = 0; i < allRefs.length; i += 10) chunks.push(allRefs.slice(i, i + 10));
+        
+        // Exécuter les requêtes en parallèle (très rapide)
+        const transPromises = chunks.map(chunk => db.collection('transactions').where('reference', 'in', chunk).get());
+        const transSnapshots = await Promise.all(transPromises);
+        transSnapshots.forEach(snap => snap.forEach(doc => existingTransRefs.add(doc.data().reference)));
+    }
+
     for (let i = 0; i < finalImportList.length; i++) {
         const importItem = finalImportList[i];
 
-        // Feedback visuel Préparation (Mise à jour tous les 5 items pour fluidité)
-        if (progressModal && i % 5 === 0) {
+        // Feedback visuel Préparation (Mise à jour tous les 50 items pour fluidité)
+        if (progressModal && i % 50 === 0) {
              const pct = Math.round(((i + 1) / finalImportList.length) * 100);
              document.getElementById('importProgressBar').style.width = `${pct}%`;
              document.getElementById('importProgressText').textContent = `Préparation ${i + 1}/${finalImportList.length} (${pct}%)`;
@@ -1216,10 +1235,10 @@ async function confirmImport() {
 
         // --- TRANSFERT VERS RÉCEPTION ABIDJAN (TRANSACTIONS) ---
         if (containerStatus === 'EN_COURS') {
-            // On vérifie si la transaction existe déjà pour éviter les doublons
-            const transQuery = await db.collection('transactions').where('reference', '==', importItem.ref).get();
+            // OPTIMISATION : Utilisation du cache pré-chargé (Instantané)
+            const transExists = existingTransRefs.has(importItem.ref);
             
-            if (transQuery.empty) {
+            if (!transExists) {
                 // LOGIQUE FINANCIÈRE AVANCÉE (Comme Arrivages)
                 
                 let restant = 0;
