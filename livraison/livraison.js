@@ -100,6 +100,12 @@ document.addEventListener('DOMContentLoaded', function() {
     initBackToTopButton();
     if (!isViewer) initDuplicateCleaner(); // Initialisation du bouton de nettoyage
     if (!isViewer) initAuditSyncButton(); // Initialisation du bouton Audit
+
+    const searchBox = document.getElementById('searchBox');
+    if (searchBox) {
+        searchBox.removeAttribute('oninput');
+        searchBox.addEventListener('input', debouncedFilterDeliveries);
+    }
 });
 
 // Synchronisation Temps Réel avec Firestore
@@ -160,6 +166,25 @@ function initRealtimeSync() {
                     transactionsMap.set(t.reference.toUpperCase().trim(), resteAPayer + " CFA");
                 }
             });
+            
+            // NOUVEAU : Synchronisation en arrière-plan (Issue 4) sans boucle infinie dans renderTable
+            if (deliveries.length > 0) {
+                const batch = db.batch();
+                let batchCount = 0;
+                deliveries.forEach(d => {
+                    if (d.containerStatus === 'EN_COURS' && d.ref) {
+                        const realCaisseAmount = transactionsMap.get(d.ref.toUpperCase().trim());
+                        if (realCaisseAmount !== undefined && realCaisseAmount !== d.montant) {
+                            batch.update(db.collection(CONSTANTS.COLLECTION).doc(d.id), { montant: realCaisseAmount });
+                            d.montant = realCaisseAmount; // Maj locale pour éviter décalage
+                            batchCount++;
+                        }
+                    }
+                });
+                if (batchCount > 0 && batchCount <= 500) {
+                    batch.commit().catch(e => console.error("Erreur auto-sync transactions", e));
+                }
+            }
             
             // Rafraîchir l'affichage instantanément si on est dans l'onglet En Cours
             if (currentTab === 'EN_COURS') filterDeliveries();
@@ -1182,7 +1207,9 @@ async function confirmImport() {
                     updates.directFromParis = false; // Flux normal
                 }
                 updates.importedFromTransit = true;
-                updates.dateAjout = new Date().toISOString(); // Fait remonter le colis en haut de la liste
+                if (targetStatus !== currentStatus) {
+                    updates.dateAjout = new Date().toISOString(); // Ne met à jour la date que si le statut change (préserve la date d'arrivée)
+                }
             } else {
                 // LOGIQUE STANDARD (Fusion) pour les autres onglets (PARIS, A_VENIR)
                 
@@ -1209,7 +1236,9 @@ async function confirmImport() {
                 if (targetStatus !== 'EN_COURS') {
                     updates.importedFromTransit = firebase.firestore.FieldValue.delete();
                 }
-                updates.dateAjout = new Date().toISOString(); // Fait remonter le colis en haut de la liste
+                if (targetStatus !== currentStatus) {
+                    updates.dateAjout = new Date().toISOString(); // Ne met à jour la date que si le statut change
+                }
             }
             
             operations.push({ type: 'update', ref: docRef, data: updates });
@@ -1274,7 +1303,6 @@ async function confirmImport() {
                 const paymentHistory = [];
                 if (mParis > 0) {
                     paymentHistory.push({
-                        date: new Date().toISOString().split('T')[0],
                         date: importDateStr,
                         montantParis: mParis,
                         montantAbidjan: 0,
@@ -1287,7 +1315,6 @@ async function confirmImport() {
                 const transRef = db.collection('transactions').doc();
                 
                 operations.push({ type: 'set', ref: transRef, data: {
-                    date: new Date().toISOString().split('T')[0],
                     date: importDateStr,
                     reference: importItem.ref,
                     nom: importItem.destinataire || importItem.expediteur || 'Client', // Client principal
@@ -1688,6 +1715,9 @@ function renderTable() {
         } else if (d.status === 'RETOUR') {
             statusClass = 'status-retour';
             statusText = '↩️ Retour';
+        } else if (d.status === 'ABANDONNE') {
+            statusClass = 'status-abandonne';
+            statusText = '⚫ Abandonné';
         }
 
         let transitIndicator = '';
@@ -1749,10 +1779,15 @@ function renderTable() {
         // Boutons BL et Livré uniquement pour EN_COURS (Masqués pour PARIS et A_VENIR)
         if (currentTab !== 'PARIS' && currentTab !== 'A_VENIR' && !isViewer) {
             actionButtons += `<button class="btn btn-small" style="background-color:#64748b; padding:4px 6px;" onclick="printDeliverySlip('${d.id}')" title="Imprimer Bon de Livraison">📄</button>`;
-            if (d.status !== 'LIVRE') {
+            if (d.status !== 'LIVRE' && d.status !== 'ABANDONNE') {
                 actionButtons += `<button class="btn btn-success btn-small" onclick="markAsDelivered('${d.id}')" title="Marquer comme livré">✅</button>`;
-            } else {
+                actionButtons += `<button class="btn btn-small" style="background-color:#1e293b; color:white; padding:4px 6px; margin-left:4px;" onclick="openAbandonModal('${d.id}')" title="Déclarer comme Abandonné">⚫</button>`;
+            } else if (d.status === 'LIVRE') {
                 actionButtons += `<button class="btn btn-warning btn-small" onclick="markAsPending('${d.id}')" title="Marquer en attente">⏳</button>`;
+            } else if (d.status === 'ABANDONNE') {
+                // Si c'est déjà abandonné, on peut le remettre en attente ou re-télécharger le PDF
+                actionButtons += `<button class="btn btn-warning btn-small" onclick="markAsPending('${d.id}')" title="Annuler l'abandon (Repasser en attente)">⏳</button>`;
+                actionButtons += `<button class="btn btn-small" style="background-color:#1e293b; color:white; padding:4px 6px; margin-left:4px;" onclick="generateAbandonmentPDFFromId('${d.id}')" title="Re-télécharger l'Acte d'Abandon">📄</button>`;
             }
         }
         if (!isViewer) {
@@ -2195,7 +2230,7 @@ function moveDeliveryOrder(id, direction, date, livreur) {
     itemA.orderInRoute = itemB.orderInRoute;
     itemB.orderInRoute = tempOrder;
 
-    saveDeliveries();
+    saveDeliveries([itemA, itemB]);
     viewProgramDetails(date, livreur);
 }
 
@@ -2340,27 +2375,74 @@ function closeAssignContainerModal() {
     document.getElementById('assignConteneurInput').value = '';
 }
 
-function confirmAssignContainer() {
+async function confirmAssignContainer() {
     const newConteneur = document.getElementById('assignConteneurInput').value;
     const newStatus = document.getElementById('assignContainerStatus').value;
 
+    const becomingEnCours = [];
+    if (newStatus === 'EN_COURS') {
+        selectedIds.forEach(id => {
+            const item = deliveries.find(d => d.id === id);
+            if (item && item.containerStatus !== 'EN_COURS') becomingEnCours.push(item);
+        });
+    }
+
     const batch = db.batch();
     selectedIds.forEach(id => {
+        const item = deliveries.find(d => d.id === id);
         const updates = { conteneur: newConteneur };
         if (newStatus) {
             updates.containerStatus = newStatus;
-                updates.dateAjout = new Date().toISOString(); // Fait remonter le colis en haut du nouvel onglet
-            // Logique transit simplifiée pour batch (suppose lecture locale à jour)
-            // Pour être puriste, on devrait lire chaque doc, mais ici on fait confiance à l'état local synchronisé
+            if (item && item.containerStatus !== newStatus) {
+                updates.dateAjout = new Date().toISOString(); // Préserve la date d'arrivée si le statut ne change pas
+            }
         }
         batch.update(db.collection(CONSTANTS.COLLECTION).doc(id), updates);
     });
 
-    batch.commit().then(() => {
+    // Création des transactions si on assigne manuellement vers EN_COURS
+    for (const item of becomingEnCours) {
+        const check = await db.collection('transactions').where('reference', '==', item.ref).limit(1).get();
+        if (check.empty) {
+            const price = parseFloat((item.prixOriginal || item.montant || '0').replace(/[^\d]/g, '')) || 0;
+            let restant = parseFloat((item.montant || '0').replace(/[^\d]/g, '')) || 0;
+            let mParis = price > restant ? price - restant : 0;
+            if (price === 0 && restant > 0) { mParis = 0; }
+            
+            const transRef = db.collection('transactions').doc();
+            batch.set(transRef, {
+                date: new Date().toISOString().split('T')[0],
+                reference: item.ref,
+                nom: item.destinataire || item.expediteur || 'Client',
+                conteneur: newConteneur || item.conteneur || '',
+                prix: price > 0 ? price : restant,
+                montantParis: mParis,
+                montantAbidjan: 0,
+                reste: -restant,
+                isDeleted: false,
+                description: item.description || '',
+                adresseDestinataire: item.lieuLivraison || '',
+                nomDestinataire: item.destinataire || '',
+                numero: item.numero || '',
+                saisiPar: sessionStorage.getItem('userName') || 'Attribution Manuelle',
+                quantite: item.quantite || 1,
+                paymentHistory: mParis > 0 ? [{
+                    date: new Date().toISOString().split('T')[0],
+                    montantParis: mParis,
+                    montantAbidjan: 0,
+                    modePaiement: 'Espèce',
+                    agent: '',
+                    saisiPar: sessionStorage.getItem('userName') || 'Attribution Manuelle'
+                }] : []
+            });
+        }
+    }
+
+    await batch.commit().then(() => {
         closeAssignContainerModal();
         selectedIds.clear();
         showToast('Attribution terminée !', 'success');
-    });
+    }).catch(e => showToast('Erreur: ' + e.message, 'error'));
 }
 
 // --- ACTIONS GROUPÉES (Suppression & Statut) ---
@@ -2441,20 +2523,26 @@ async function forceSyncTransactions() {
     document.body.appendChild(loadingToast);
 
     try {
-        const enCoursItems = deliveries.filter(d => d.containerStatus === 'EN_COURS');
-        let batch = db.batch();
-        let count = 0;
+        const enCoursItems = deliveries.filter(d => d.containerStatus === 'EN_COURS' && d.ref);
         let updatedCount = 0;
 
-        for (const item of enCoursItems) {
-            if (!item.ref) continue;
+        const chunks = [];
+        for (let i = 0; i < enCoursItems.length; i += 10) {
+            chunks.push(enCoursItems.slice(i, i + 10));
+        }
 
-            // On cherche la transaction correspondante
-            const q = await db.collection('transactions').where('reference', '==', item.ref).get();
+        for (const chunk of chunks) {
+            const refs = chunk.map(item => item.ref);
+            if (refs.length === 0) continue;
+            const q = await db.collection('transactions').where('reference', 'in', refs).get();
             
             if (!q.empty) {
+                const batch = db.batch();
                 q.forEach(doc => {
                     const t = doc.data();
+                    const item = chunk.find(c => c.ref === t.reference);
+                    if (!item) return;
+
                     const updates = {};
                     
                     // On met à jour avec les données fiables de Livraison
@@ -2485,13 +2573,11 @@ async function forceSyncTransactions() {
                     if (Object.keys(updates).length > 0) {
                         batch.update(doc.ref, updates);
                         updatedCount++;
-                        count++;
                     }
                 });
+                await batch.commit();
             }
-            if (count >= 400) { await batch.commit(); batch = db.batch(); count = 0; }
         }
-        if (count > 0) await batch.commit();
         loadingToast.remove();
         alert(`✅ Synchronisation terminée !\n${updatedCount} fiches corrigées dans la Caisse.`);
     } catch (e) { console.error(e); loadingToast.remove(); alert("Erreur : " + e.message); }
@@ -2499,8 +2585,7 @@ async function forceSyncTransactions() {
 
 // --- GESTION DES ARCHIVES ---
 
-function archiveCompletedDeliveries() {
-    // Identifier les colis livrés
+async function archiveCompletedDeliveries() {
     const completed = deliveries.filter(d => d.status === 'LIVRE');
     
     if (completed.length === 0) {
@@ -2509,18 +2594,29 @@ function archiveCompletedDeliveries() {
     }
 
     if (confirm(`Voulez-vous archiver ${completed.length} colis livrés ?\nIls seront retirés de la liste principale mais resteront consultables dans les archives.`)) {
-        // Ajouter la date d'archivage
         const now = new Date().toISOString();
-        const batch = db.batch();
         
-        completed.forEach(d => {
-            const archiveRef = db.collection(CONSTANTS.ARCHIVE_COLLECTION).doc(d.id);
-            batch.set(archiveRef, { ...d, dateArchivage: now });
-            const activeRef = db.collection(CONSTANTS.COLLECTION).doc(d.id);
-            batch.delete(activeRef);
-        });
+        const chunks = [];
+        for (let i = 0; i < completed.length; i += 250) {
+            chunks.push(completed.slice(i, i + 250));
+        }
         
-        batch.commit().then(() => showToast('Archivage terminé !', 'success'));
+        try {
+            for (const chunk of chunks) {
+                const batch = db.batch();
+                chunk.forEach(d => {
+                    const archiveRef = db.collection(CONSTANTS.ARCHIVE_COLLECTION).doc(d.id);
+                    batch.set(archiveRef, { ...d, dateArchivage: now });
+                    const activeRef = db.collection(CONSTANTS.COLLECTION).doc(d.id);
+                    batch.delete(activeRef);
+                });
+                await batch.commit();
+            }
+            showToast('Archivage terminé !', 'success');
+        } catch (error) {
+            console.error(error);
+            showToast('Erreur lors de l\'archivage', 'error');
+        }
     }
 }
 
@@ -2628,7 +2724,7 @@ function filterDeliveries() {
     if (selectedStatuses.length === 0) {
         statusBtn.textContent = '📊 Tous les statuts';
     } else if (selectedStatuses.length === 1) {
-        const map = { 'EN_ATTENTE': '⏳ En Attente', 'EN_COURS': '🚚 En Cours', 'LIVRE': '✅ Livré' };
+        const map = { 'EN_ATTENTE': '⏳ En Attente', 'EN_COURS': '🚚 En Cours', 'LIVRE': '✅ Livré', 'ABANDONNE': '⚫ Abandonné' };
         statusBtn.textContent = map[selectedStatuses[0]] || selectedStatuses[0];
     } else {
         statusBtn.textContent = `📊 ${selectedStatuses.length} statuts`;
@@ -2846,6 +2942,366 @@ function deleteDelivery(id) {
     permanentlyDeleteSingle(id, false);
 }
 
+// --- GESTION DES ABANDONS DE COLIS ---
+function openAbandonModal(id) {
+    const item = deliveries.find(d => d.id === id);
+    if (!item) return;
+    document.getElementById('abandonDeliveryId').value = id;
+    document.getElementById('abandonRefDisplay').textContent = item.ref;
+    document.getElementById('abandonTypeSelect').value = 'DELAI'; // Par défaut
+    document.getElementById('abandonModal').classList.add('active');
+}
+
+function closeAbandonModal() {
+    document.getElementById('abandonModal').classList.remove('active');
+    document.getElementById('abandonDeliveryId').value = '';
+}
+
+async function confirmAbandonment() {
+    const id = document.getElementById('abandonDeliveryId').value;
+    const typeAbandon = document.getElementById('abandonTypeSelect').value;
+    if (!id) return;
+    await processAbandonment(id, typeAbandon);
+}
+
+async function processAbandonment(id, typeAbandon) {
+    const item = deliveries.find(d => d.id === id);
+    if (!item) return;
+
+    const btn = document.querySelector('#abandonModal .btn-danger');
+    const originalText = btn ? btn.textContent : "Valider";
+    if (btn) {
+        btn.textContent = "Traitement...";
+        btn.disabled = true;
+    }
+
+    try {
+        // --- CORRECTION : Récupération de la vraie date d'arrivée depuis la Caisse ---
+        // Si le colis a été mis à jour récemment, sa dateAjout a pu être écrasée (affichant 0 jours de magasinage).
+        // On va chercher la date de création de sa transaction dans la caisse pour réparer cela.
+        if (item.ref) {
+            const transQ = await db.collection('transactions').where('reference', '==', item.ref).limit(1).get();
+            if (!transQ.empty) {
+                const tData = transQ.docs[0].data();
+                if (tData.date) {
+                    const tDate = new Date(tData.date);
+                    const iDate = item.dateAjout ? new Date(item.dateAjout) : new Date();
+                    // Si la date en caisse est plus ancienne que la date en logistique, on restaure l'ancienne
+                    if (tDate < iDate) {
+                        item.dateAjout = tDate.toISOString();
+                    }
+                }
+            }
+        }
+
+        // 1. Mise à jour de la base de données Firestore
+        await db.collection(CONSTANTS.COLLECTION).doc(id).update({
+            status: 'ABANDONNE',
+            abandonType: typeAbandon,
+            dateAbandon: new Date().toISOString(),
+            dateAjout: item.dateAjout, // Sauvegarde de la date d'arrivée corrigée
+            livreur: firebase.firestore.FieldValue.delete(), // Retire d'une éventuelle tournée
+            dateProgramme: firebase.firestore.FieldValue.delete()
+        });
+
+        // 2. Génération du PDF
+        generateAbandonmentPDF(item, typeAbandon);
+
+        showToast("Le colis a été marqué comme ABANDONNÉ", "success");
+        closeAbandonModal();
+    } catch (error) {
+        console.error("Erreur lors de l'abandon:", error);
+        showToast("Erreur: " + error.message, "error");
+    } finally {
+        if (btn) {
+            btn.textContent = originalText;
+            btn.disabled = false;
+        }
+    }
+}
+
+function generateAbandonmentPDFFromId(id) {
+    const item = deliveries.find(d => d.id === id);
+    if (item) generateAbandonmentPDF(item, item.abandonType || 'DELAI');
+}
+
+function generateAbandonmentPDF(data, typeAbandon) {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF('p', 'mm', 'a4');
+    const pageWidth = doc.internal.pageSize.getWidth();
+    let y = 0;
+
+    // Helper pour formater les montants en remplaçant l'espace insécable invisible (\u202F) par un espace standard
+    const formatMontant = (num) => new Intl.NumberFormat('fr-CI').format(num).replace(/[\u202F\u00A0]/g, ' ');
+
+    // --- EN-TÊTE GRAPHIQUE (Premium) ---
+    // Fond Bleu Foncé Ardoise
+    doc.setFillColor(30, 41, 59);
+    doc.rect(0, 0, pageWidth, 35, 'F');
+    // Accent Ligne Orange/Rouge
+    doc.setFillColor(234, 88, 12);
+    doc.rect(0, 35, pageWidth, 2, 'F');
+
+    // Tentative d'insertion automatique du Logo (depuis la page web)
+    try {
+        const logoElement = document.querySelector('.app-logo');
+        if (logoElement && logoElement.complete && logoElement.naturalWidth > 0) {
+            const ratio = logoElement.naturalWidth / logoElement.naturalHeight;
+            let imgW = 20 * ratio;
+            if (imgW > 50) imgW = 50; // Limite de largeur
+            doc.addImage(logoElement, 'PNG', 15, 7, imgW, 20);
+        } else {
+            doc.setTextColor(255, 255, 255);
+            doc.setFont("helvetica", "bold");
+            doc.setFontSize(20);
+            doc.text("AMT TRANS'IT", 15, 22);
+        }
+    } catch(e) {
+        doc.setTextColor(255, 255, 255);
+        doc.setFontSize(20);
+        doc.text("AMT TRANS'IT", 15, 22);
+    }
+
+    // Textes de l'en-tête (Droite)
+    doc.setTextColor(255, 255, 255);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(18);
+    doc.text("ACTE D'ABANDON", pageWidth - 15, 16, { align: 'right' });
+    
+    doc.setFontSize(9);
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(148, 163, 184); // Gris clair
+    doc.text("DÉCISION DE MISE AU REBUT DU COLIS", pageWidth - 15, 22, { align: 'right' });
+
+    // --- BLOC META INFORMATIONS ---
+    y = 42;
+    doc.setDrawColor(226, 232, 240); // Bordure douce
+    doc.setFillColor(248, 250, 252); // Fond gris très clair
+    doc.roundedRect(15, y, pageWidth - 30, 18, 3, 3, 'FD');
+
+    doc.setFontSize(9);
+    doc.setTextColor(100, 116, 139);
+    doc.text("Émis le :", 20, y + 7);
+    doc.text("N° Référence Tracking :", pageWidth / 2, y + 7);
+
+    doc.setFontSize(12);
+    doc.setTextColor(15, 23, 42);
+    doc.setFont("helvetica", "bold");
+    doc.text(new Date().toLocaleDateString('fr-FR'), 20, y + 13);
+    
+    doc.setTextColor(220, 38, 38); // Rouge vif pour la Ref
+    doc.text(data.ref || 'NON SPÉCIFIÉE', pageWidth / 2, y + 13);
+    y += 24;
+
+    // Fonction utilitaire pour les titres de section stylisés
+    function drawSectionTitle(title, posY) {
+        doc.setFillColor(241, 245, 249);
+        doc.rect(15, posY, pageWidth - 30, 8, 'F');
+        doc.setDrawColor(59, 130, 246); // Ligne accentuée bleue
+        doc.setLineWidth(1.2);
+        doc.line(15, posY, 15, posY + 8);
+        doc.setLineWidth(0.1); // Reset
+        
+        doc.setFontSize(10);
+        doc.setTextColor(15, 23, 42);
+    doc.setFont("helvetica", "bold");
+        doc.text(title, 20, posY + 6.5);
+        return posY + 12;
+    }
+
+    // --- 1. IDENTIFICATION DU COLIS ---
+    y = drawSectionTitle("1. IDENTIFICATION DES PARTIES ET DU COLIS", y);
+    
+    doc.setFontSize(9);
+    doc.setFont("helvetica", "normal");
+    
+    const dateArrivee = data.dateAjout ? new Date(data.dateAjout).toLocaleDateString('fr-FR') : '___ / ___ / 202__';
+
+    // Colonne Gauche
+    doc.setTextColor(100, 116, 139);
+    doc.text("Destinataire :", 15, y);
+    doc.text("Contact (Tél) :", 15, y + 6);
+    doc.text("Expéditeur :", 15, y + 12);
+
+    doc.setTextColor(15, 23, 42);
+    doc.setFont("helvetica", "bold");
+    doc.text(`${data.destinataire || 'Non spécifié'}`, 45, y);
+    doc.text(`${data.numero || 'Non spécifié'}`, 45, y + 6);
+    doc.text(`${data.expediteur || 'Non spécifié'}`, 45, y + 12);
+
+    // Colonne Droite
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(100, 116, 139);
+    doc.text("Date d'arrivée :", 110, y);
+    doc.text("Conteneur :", 110, y + 6);
+    doc.text("Contenu :", 110, y + 12);
+
+    doc.setTextColor(15, 23, 42);
+    doc.setFont("helvetica", "bold");
+    doc.text(`${dateArrivee}`, 140, y);
+    doc.text(`${data.conteneur || 'Non spécifié'}`, 140, y + 6);
+    
+    doc.setFont("helvetica", "normal");
+    const descText = doc.splitTextToSize(data.description || 'Non spécifié', 55);
+    doc.text(descText, 140, y + 12);
+
+    y += 12 + (descText.length * 4) + 4;
+
+    // --- 2. SITUATION FINANCIÈRE ---
+    y = drawSectionTitle("2. SITUATION FINANCIÈRE ET MAGASINAGE", y);
+
+    const resteStr = data.montant || '0 CFA';
+    const resteVal = parseFloat(resteStr.replace(/[^\d]/g, '')) || 0;
+
+    let fee = 0;
+    let diffDays = 0;
+    if (data.dateAjout) {
+        const diffTime = new Date() - new Date(data.dateAjout);
+        diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        const qte = parseInt(data.quantite) || 1;
+        if (diffDays > 7) {
+            if (diffDays <= 14) fee = 10000 * qte;
+            else fee = (10000 + (diffDays - 14) * 1000) * qte;
+        }
+    }
+    const totalVal = resteVal + fee;
+
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(71, 85, 105);
+    doc.text("Délai de conservation écoulé :", 15, y);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(220, 38, 38); // Rouge
+    doc.text(`${diffDays} jours`, 80, y);
+
+    y += 6;
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(71, 85, 105);
+    doc.text("Fret et Douane impayés :", 15, y);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(15, 23, 42);
+    doc.text(`${resteStr}`, 80, y);
+
+    y += 6;
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(71, 85, 105);
+    doc.text("Pénalités de magasinage :", 15, y);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(15, 23, 42);
+    doc.text(`${formatMontant(fee)} CFA`, 80, y);
+    
+    doc.setFont("helvetica", "italic");
+    doc.setFontSize(8);
+    doc.setTextColor(148, 163, 184);
+    doc.text("(Conditions : Franchise 7j, puis 10 000 CFA/semaine, puis 1 000 CFA/j/colis)", 100, y);
+
+    y += 8;
+    
+    // Boîte Totale Sombre / Rouge
+    doc.setFillColor(254, 242, 242);
+    doc.setDrawColor(252, 165, 165);
+    doc.roundedRect(15, y, pageWidth - 30, 14, 2, 2, 'FD');
+    doc.setFontSize(10);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(153, 27, 27);
+    doc.text("TOTAL DES CRÉANCES DUES A L'ENTREPRISE :", 20, y + 9);
+    doc.setFontSize(12);
+    doc.text(`${formatMontant(totalVal)} CFA`, pageWidth - 20, y + 9.5, { align: 'right' });
+
+    y += 20;
+
+    // --- 3. MOTIF D'ABANDON ---
+    y = drawSectionTitle("3. MOTIF D'ABANDON DÉFINITIF", y);
+    
+    doc.setFontSize(9);
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(15, 23, 42);
+
+    // Dessin de cases à cocher personnalisées
+    doc.setDrawColor(148, 163, 184);
+    doc.rect(20, y - 3, 3, 3);
+    doc.text("Abandon volontaire et anticipé expressément formulé par le client.", 26, y - 0.5);
+    
+    y += 6;
+    doc.rect(20, y - 3, 3, 3);
+    doc.text("Expiration du délai légal et réglementaire de stockage (Non réclamé ou Injoignable).", 26, y - 0.5);
+
+    // On coche la bonne case
+    doc.setTextColor(220, 38, 38);
+    doc.setFont("helvetica", "bold");
+    if (typeAbandon === 'VOLONTAIRE') {
+        doc.text("X", 20.7, y - 6.5); // Check première case (centré dans la box du haut)
+    } else {
+        doc.text("X", 20.7, y - 0.5); // Check deuxième case (centré dans la box du bas)
+    }
+
+    y += 10;
+
+    // --- 4. CADRE LÉGAL ET DÉCISION ---
+    y = drawSectionTitle("4. CADRE LÉGAL ET DÉCISION DE LA DIRECTION", y);
+
+    doc.setFont("helvetica", "italic");
+    doc.setFontSize(8);
+    doc.setTextColor(71, 85, 105);
+    const clauseText = `Conformément à nos Conditions Générales de Vente et de Transport, tout colis dont les frais de logistique et de douane ne sont pas intégralement acquittés et qui n'est pas réclamé à l'expiration de son délai de conservation est formellement considéré comme ABANDONNÉ par l'expéditeur et le destinataire.\nEn conséquence, l'entreprise AMT TRANS'IT se décharge de toute obligation de conservation. Elle acquiert la pleine et entière disposition de la marchandise pour procéder à sa destruction, son don, ou sa mise en vente afin de recouvrer le préjudice financier (frais d'exploitation et de magasinage impayés). Aucune indemnité, poursuite ni remboursement ne pourra être exigé ultérieurement par le client.`;
+    const splitClause = doc.splitTextToSize(clauseText, pageWidth - 30);
+    doc.text(splitClause, 15, y);
+    y += (splitClause.length * 3.5) + 4;
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(9);
+    doc.setTextColor(15, 23, 42);
+    doc.text("ACTION ORDONNÉE POUR CE COLIS :", 15, y);
+    
+    y += 6;
+    doc.setFont("helvetica", "normal");
+    doc.setDrawColor(203, 213, 225);
+    doc.rect(20, y - 3, 4, 4); doc.text("Destruction / Rebus", 26, y);
+    doc.rect(75, y - 3, 4, 4); doc.text("Mise en vente", 81, y);
+    doc.rect(120, y - 3, 4, 4); doc.text("Don associatif", 126, y);
+
+    y += 12;
+    
+    // --- SIGNATURES ---
+    doc.setDrawColor(226, 232, 240);
+    doc.setLineWidth(0.5);
+    doc.line(15, y, pageWidth - 15, y);
+    y += 6;
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(9);
+    doc.setTextColor(15, 23, 42);
+    doc.text("Signature du Client", 35, y, { align: 'center' });
+    doc.text("L'Agent Constatant", 105, y, { align: 'center' });
+    doc.text("La Direction AMT TRANS'IT", pageWidth - 35, y, { align: 'center' });
+
+    doc.setFont("helvetica", "italic");
+    doc.setFontSize(8);
+    doc.setTextColor(148, 163, 184);
+    doc.text(`(Saisi par : ${sessionStorage.getItem('userName') || 'Système'})`, 105, y + 4, { align: 'center' });
+
+    // Cadre de signature (Direction)
+    doc.setDrawColor(59, 130, 246); // Ligne bleue
+    doc.setLineDashPattern([2, 2], 0);
+    doc.rect(pageWidth - 65, y + 4, 60, 20);
+    doc.setLineDashPattern([], 0);
+    
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(10);
+    doc.setTextColor(226, 232, 240);
+    doc.text("CACHET & SIGNATURE", pageWidth - 35, y + 15, { align: 'center' });
+
+    // --- PIED DE PAGE ---
+    const pageHeight = doc.internal.pageSize.getHeight();
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(8);
+    doc.setTextColor(100, 116, 139);
+    doc.text("CI FRET INTER/AMT TRANSIT", pageWidth / 2, pageHeight - 12, { align: 'center' });
+    doc.setFont("helvetica", "normal");
+    doc.text("81 AVENUE ARISTIDE BRIAND 93240 STAINS | Tel. 0186900380 | amt.transit@gmail.com | Siret: 929 865 103 R.C.S. Paris |", pageWidth / 2, pageHeight - 8, { align: 'center' });
+
+    doc.save(`Acte_Abandon_${data.ref}.pdf`);
+}
+
 // Modal ajout
 function showAddModal() {
     if (['EN_COURS', 'A_VENIR', 'PARIS'].includes(currentTab)) {
@@ -2913,7 +3369,9 @@ document.getElementById('deliveryForm').addEventListener('submit', function(e) {
         if (updates.lieuLivraison !== existingItem.lieuLivraison) {
             updates.commune = newItem.commune;
         }
-        updates.dateAjout = new Date().toISOString(); // Fait remonter le colis en haut de la liste
+        if (newItem.containerStatus !== existingItem.containerStatus) {
+            updates.dateAjout = new Date().toISOString(); // Préserve la date d'arrivée si on met juste à jour les infos
+        }
 
         docRef.update(updates).then(() => {
             showToast('Livraison fusionnée avec succès !', 'success');
@@ -3045,18 +3503,23 @@ function updateLocationFilterOptions() {
 
 // Stats
 function updateStats() {
-    // Calcul des stats basé sur filteredDeliveries (donc l'onglet actif) ou deliveries global selon préférence.
-    // Ici on affiche les stats de l'onglet actif pour que ce soit cohérent avec la vue.
     document.getElementById('totalDeliveries').textContent = filteredDeliveries.length;
     document.getElementById('pendingDeliveries').textContent = 
-        filteredDeliveries.filter(d => d.status === 'EN_ATTENTE' || d.status === 'EN_COURS').length;
+        filteredDeliveries.filter(d => d.status === 'EN_ATTENTE' || d.status === 'EN_COURS' || d.status === 'PARTIEL').length;
     document.getElementById('completedDeliveries').textContent = 
         filteredDeliveries.filter(d => d.status === 'LIVRE').length;
 }
 
 // Sauvegarde
-function saveDeliveries() {
-    // Obsolète avec Firestore
+function saveDeliveries(itemsToUpdate = null) {
+    if (!itemsToUpdate || !Array.isArray(itemsToUpdate)) return;
+    const batch = db.batch();
+    let count = 0;
+    itemsToUpdate.forEach(item => {
+        batch.update(db.collection(CONSTANTS.COLLECTION).doc(item.id), { orderInRoute: item.orderInRoute });
+        count++;
+    });
+    if (count > 0) batch.commit().catch(e => console.error("Save deliveries error:", e));
 }
 
 // Toast

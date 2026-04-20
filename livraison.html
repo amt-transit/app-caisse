@@ -133,6 +133,7 @@
                     <label><input type="checkbox" value="PARTIEL" onchange="filterDeliveries()"> 🌗 Partiel</label>
                     <label><input type="checkbox" value="INCIDENT" onchange="filterDeliveries()"> ⚠️ Incident</label>
                     <label><input type="checkbox" value="RETOUR" onchange="filterDeliveries()"> ↩️ Retour</label>
+                    <label><input type="checkbox" value="ABANDONNE" onchange="filterDeliveries()"> ⚫ Abandonné</label>
                 </div>
             </div>
             <input type="text" class="search-filter" id="searchBox" placeholder="🔍 Rechercher..." oninput="debouncedFilterDeliveries()" style="min-width: 150px;">
@@ -286,6 +287,7 @@
                     <option value="LIVRE">✅ Livré</option>
                     <option value="INCIDENT">⚠️ Incident</option>
                     <option value="RETOUR">↩️ Retour</option>
+                    <option value="ABANDONNE">⚫ Abandonné</option>
                 </select>
             </div>
             <div style="display: flex; gap: 10px; margin-top: 20px;">
@@ -366,6 +368,26 @@
             </div>
         </div>
         <datalist id="sharedLocationsList"></datalist>
+    </div>
+
+    <!-- Modal Abandon de Colis -->
+    <div id="abandonModal" class="modal">
+        <div class="modal-content">
+            <h2 class="modal-header">⚫ Déclarer un Abandon</h2>
+            <p style="margin-bottom: 15px;">Pour le colis Réf : <strong id="abandonRefDisplay" style="color: #ef4444;"></strong></p>
+            <input type="hidden" id="abandonDeliveryId">
+            <div class="form-group full-width">
+                <label style="font-weight: bold; margin-bottom: 5px; display: block;">Raison de l'abandon</label>
+                <select id="abandonTypeSelect" style="width: 100%; padding: 10px; border-radius: 6px; border: 1px solid #ccc;">
+                    <option value="DELAI">⏳ Expiration du délai de stockage (Non réclamé)</option>
+                    <option value="VOLONTAIRE">🗣️ Abandon Volontaire (Anticipé par le client)</option>
+                </select>
+            </div>
+            <div style="display: flex; gap: 10px; margin-top: 25px;">
+                <button class="btn btn-danger" onclick="confirmAbandonment()" style="flex: 1; justify-content: center;">✅ Valider l'abandon et Générer le PDF</button>
+                <button class="btn" onclick="closeAbandonModal()" style="background:#e2e8f0; color:#333; flex: 1; justify-content: center;">❌ Annuler</button>
+            </div>
+        </div>
     </div>
 
     <!-- Modal Progression Import -->

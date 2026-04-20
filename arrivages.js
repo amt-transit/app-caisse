@@ -61,6 +61,15 @@ document.addEventListener('DOMContentLoaded', () => {
     let allArrivals = [];
     let allParisManifest = [];
 
+    // Fonction de debounce
+    function debounce(func, wait) {
+        let timeout;
+        return function(...args) {
+            clearTimeout(timeout);
+            timeout = setTimeout(() => func(...args), wait);
+        };
+    }
+
     // --- CRÉATION DATALIST POUR AUTOCOMPLÉTION (Paris -> Abidjan) ---
     const parisRefList = document.createElement('datalist');
     parisRefList.id = 'parisRefList';
@@ -453,7 +462,7 @@ document.addEventListener('DOMContentLoaded', () => {
             arrivalsTableBody.appendChild(row);
         });
     }
-    if(abidjanSearchInput) abidjanSearchInput.addEventListener('input', renderAbidjanTable);
+    if(abidjanSearchInput) abidjanSearchInput.addEventListener('input', debounce(renderAbidjanTable, 300));
 
 
     // ====================================================
@@ -596,7 +605,7 @@ document.addEventListener('DOMContentLoaded', () => {
             </tr>`;
         });
     }
-    if(parisSearchInput) parisSearchInput.addEventListener('input', renderParisTable);
+    if(parisSearchInput) parisSearchInput.addEventListener('input', debounce(renderParisTable, 300));
 
     // Mise à jour de la liste d'autocomplétion
     function updateParisDatalist() {
