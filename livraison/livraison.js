@@ -2349,6 +2349,7 @@ function confirmAssignContainer() {
         const updates = { conteneur: newConteneur };
         if (newStatus) {
             updates.containerStatus = newStatus;
+                updates.dateAjout = new Date().toISOString(); // Fait remonter le colis en haut du nouvel onglet
             // Logique transit simplifiée pour batch (suppose lecture locale à jour)
             // Pour être puriste, on devrait lire chaque doc, mais ici on fait confiance à l'état local synchronisé
         }
@@ -3355,7 +3356,8 @@ function moveSelectedToAVenir() {
             livreur: firebase.firestore.FieldValue.delete(),
             dateProgramme: firebase.firestore.FieldValue.delete(),
             importedFromTransit: firebase.firestore.FieldValue.delete(),
-            directFromParis: firebase.firestore.FieldValue.delete()
+                directFromParis: firebase.firestore.FieldValue.delete(),
+                dateAjout: new Date().toISOString() // Fait remonter en haut de la liste
         });
         const item = deliveries.find(d => d.id === id);
         if (item && item.ref) deleteTransactionByRef(item.ref);
@@ -3392,7 +3394,8 @@ function moveSingleToAVenir(id) {
         livreur: firebase.firestore.FieldValue.delete(),
         dateProgramme: firebase.firestore.FieldValue.delete(),
         importedFromTransit: firebase.firestore.FieldValue.delete(),
-        directFromParis: firebase.firestore.FieldValue.delete()
+        directFromParis: firebase.firestore.FieldValue.delete(),
+        dateAjout: new Date().toISOString() // Fait remonter en haut de la liste
     }).then(() => {
         if (d && d.ref) deleteTransactionByRef(d.ref);
         showToast('Colis renvoyé vers À VENIR', 'success');

@@ -213,7 +213,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                     for (const row of rows) {
                         // NOUVELLE LOGIQUE CSV ABIDJAN : reference, restant, expéditeur, adresse, destinataire, description
-                        const ref = cleanString(row.reference || row.Reference || '').toUpperCase();
+                        const ref = cleanString(row.reference || row.Reference || row.REF || row.CODE || row['N° COLIS'] || row['NUMERO COLIS'] || row.TRACKING || '').toUpperCase();
                         const restant = parseFloat(row.restant || row.Restant || 0);
                         let sender = cleanString(row['expéditeur'] || row['Expéditeur'] || row.nom || '');
                         const addr = cleanString(row.adresse || row.Adresse || row.adresseDestinataire || '');
@@ -509,11 +509,11 @@ document.addEventListener('DOMContentLoaded', () => {
                     for (const row of rows) {
                         // NOUVELLE LOGIQUE CSV PARIS : DATE DU TRANSFERT, REFERENCE, EXPEDITEUR, PRIX, DESTINATEUR
                         const date = row["DATE DU TRANSFERT"];
-                        const ref = cleanString(row["REFERENCE"]);
-                        const exp = cleanString(row["EXPEDITEUR"]);
+                        const ref = cleanString(row["REFERENCE"] || row["REF"] || row['N° COLIS'] || row['CODE'] || '');
+                        const exp = cleanString(row["EXPEDITEUR"] || row["EXP"] || '');
                         if (!ref) { log += `\nIgnoré (Ref manquante)`; continue; }
 
-                        const check = await parisManifestCollection.where("reference", "==", ref).limit(1).get();
+                        const check = await livraisonsCollection.where("ref", "==", ref).limit(1).get();
                         if (!check.empty) { log += `\nIgnoré (Existe): ${ref}`; continue; }
 
                         const prixE = parseFloat((row["PRIX"]||"0").replace(',','.'));
