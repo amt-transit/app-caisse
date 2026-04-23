@@ -34,6 +34,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     let allVehicles = [];
     let allTransactions = [];
+    let allExpenses = [];
+    let combinedTransactions = [];
 
     // --- INJECTION DYNAMIQUE DE LA MODALE DE SUPPRESSION ---
     const deleteModalHTML = `
@@ -77,6 +79,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 await updateDoc(doc(db, "fleet_vehicles", pendingDeleteId), { isDeleted: true });
             } else if (pendingDeleteType === 'transaction') {
                 await updateDoc(doc(db, "fleet_transactions", pendingDeleteId), { isDeleted: true });
+            } else if (pendingDeleteType === 'expense') {
+                await updateDoc(doc(db, "expenses", pendingDeleteId), { isDeleted: true });
             }
         } catch (error) {
             alert("Erreur lors de la suppression : " + error.message);
@@ -99,7 +103,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     function updateVehicleSelects() {
-        let options = '<option value="">-- Sélectionner un véhicule --</option>';
+        let options = '<option value="">-- Véhicule (Optionnel) --</option>';
         let filterOptions = '<option value="">Tous les véhicules</option>';
         
         allVehicles.forEach(v => {
@@ -209,8 +213,8 @@ document.addEventListener('DOMContentLoaded', () => {
             const amount = parseFloat(transAmount.value) || 0;
             const desc = transDesc.value.trim();
 
-            if (!date || !vehicleId || !type || !category || amount <= 0) {
-                return alert("Veuillez remplir correctement tous les champs obligatoires.");
+            if (!date || !type || !category || amount <= 0) {
+                return alert("Veuillez remplir correctement la date, le type, la catégorie et le montant.");
             }
 
             const selectedVehicle = allVehicles.find(v => v.id === vehicleId);
@@ -218,7 +222,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const data = {
                 date: date,
                 vehicleId: vehicleId,
-                vehicleName: `${selectedVehicle.name} (${selectedVehicle.plate})`,
+                vehicleName: selectedVehicle ? `${selectedVehicle.name} (${selectedVehicle.plate})` : 'Véhicule non spécifié',
                 type: type,
                 category: category,
                 amount: amount,
@@ -244,12 +248,54 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- 3. AFFICHAGE ET ANALYSE ---
     const qTrans = query(collection(db, "fleet_transactions"), where("isDeleted", "!=", true), orderBy("isDeleted"), orderBy("date", "desc"));
     onSnapshot(qTrans, snap => {
-        allTransactions = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        renderTableAndStats();
+        allTransactions = snap.docs.map(doc => ({ id: doc.id, ...doc.data(), _source: 'fleet' }));
+        mergeAndRenderTransactions();
+    });
+
+    // Écoute des Dépenses générales (Caisse)
+    const qExp = query(collection(db, "expenses"), where("isDeleted", "!=", true));
+    onSnapshot(qExp, snap => {
+        allExpenses = [];
+        snap.docs.forEach(docSnap => {
+            const exp = docSnap.data();
+            const desc = (exp.description || '');
+            const lowerDesc = desc.toLowerCase();
+            
+            // Détection large : vehicleId présent OU mot-clé dans la description
+            const isVehicleExp = exp.vehicleId || lowerDesc.includes('péage') || lowerDesc.includes('peage') || lowerDesc.includes('carburant') || lowerDesc.includes('essence') || lowerDesc.includes('gasoil') || lowerDesc.includes('entretien') || lowerDesc.includes('vidange') || lowerDesc.includes('réparation') || lowerDesc.includes('reparation');
+            
+            if (isVehicleExp) {
+                let cat = 'Autre Dépense';
+                if (lowerDesc.includes('carburant') || lowerDesc.includes('essence') || lowerDesc.includes('gasoil')) cat = 'Carburant';
+                else if (lowerDesc.includes('péage') || lowerDesc.includes('peage')) cat = 'Péage'; 
+                else if (lowerDesc.includes('entretien') || lowerDesc.includes('réparation') || lowerDesc.includes('reparation') || lowerDesc.includes('vidange')) cat = 'Entretien / Réparation';
+
+                allExpenses.push({
+                    id: docSnap.id,
+                    date: exp.date,
+                    vehicleId: exp.vehicleId || '',
+                    vehicleName: exp.vehicleName || 'Véhicule non spécifié',
+                    type: 'Dépense',
+                    category: cat,
+                    amount: exp.montant,
+                    description: desc + ' (Via Caisse)',
+                    author: '',
+                    isDeleted: exp.isDeleted,
+                    _source: 'expenses'
+                });
+            }
+        });
+        mergeAndRenderTransactions();
     });
 
     if (monthFilter) monthFilter.addEventListener('change', renderTableAndStats);
     if (filterVehicleSelect) filterVehicleSelect.addEventListener('change', renderTableAndStats);
+
+    function mergeAndRenderTransactions() {
+        combinedTransactions = [...allTransactions, ...allExpenses];
+        combinedTransactions.sort((a, b) => new Date(b.date) - new Date(a.date));
+        renderTableAndStats();
+    }
 
     function renderTableAndStats() {
         const month = monthFilter ? monthFilter.value : '';
@@ -258,7 +304,7 @@ document.addEventListener('DOMContentLoaded', () => {
         let totalIncome = 0;
         let totalExpense = 0;
 
-        const filtered = allTransactions.filter(t => {
+        const filtered = combinedTransactions.filter(t => {
             if (month && !t.date.startsWith(month)) return false;
             if (vehicleFilter && t.vehicleId !== vehicleFilter) return false;
             return true;
@@ -279,7 +325,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 let delBtn = '';
                 if (!isViewer && (userRole === 'admin' || userRole === 'super_admin' || userRole === 'saisie_full')) {
-                    delBtn = `<button class="deleteBtn" data-id="${t.id}" style="padding: 4px 8px; font-size:12px;">Suppr.</button>`;
+                    if (t._source === 'expenses') {
+                        delBtn = `<button class="deleteBtn" data-id="${t.id}" data-source="expenses" style="padding: 4px 8px; font-size:12px; background:#f59e0b; border:none; color:white; border-radius:4px; cursor:pointer;" title="Supprimer de la Caisse">🗑️ Caisse</button>`;
+                    } else {
+                        delBtn = `<button class="deleteBtn" data-id="${t.id}" data-source="fleet" style="padding: 4px 8px; font-size:12px;">Suppr.</button>`;
+                    }
                 }
 
                 row.innerHTML = `
@@ -316,9 +366,10 @@ document.addEventListener('DOMContentLoaded', () => {
             if (isViewer) return;
             if (e.target.classList.contains('deleteBtn')) {
                 const id = e.target.getAttribute('data-id');
+                const source = e.target.getAttribute('data-source');
                 pendingDeleteId = id;
-                pendingDeleteType = 'transaction';
-                deleteMessage.innerHTML = "Voulez-vous vraiment supprimer cette opération de l'historique ?";
+                pendingDeleteType = source === 'expenses' ? 'expense' : 'transaction';
+                deleteMessage.innerHTML = source === 'expenses' ? "Voulez-vous vraiment supprimer cette dépense ? (Elle sera aussi supprimée de la Caisse Générale)" : "Voulez-vous vraiment supprimer cette opération de l'historique ?";
                 deleteModal.classList.add('active');
             }
         });

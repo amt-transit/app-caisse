@@ -14,6 +14,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const expenseAmount = document.getElementById('expenseAmount');
     const expenseType = document.getElementById('expenseType');
     const expenseSubtype = document.getElementById('expenseSubtype');
+    const expenseVehicle = document.getElementById('expenseVehicle');
     const expenseMode = document.getElementById('expenseMode'); 
     const expenseContainer = document.getElementById('expenseContainer');
     const actionType = document.getElementById('actionType');
@@ -190,6 +191,23 @@ document.addEventListener('DOMContentLoaded', () => {
     let unconfirmedSessions = new Set(); // Stocke les IDs de sessions non validées
     let pendingExpenses = []; // Pour les enregistrements multiples
     let currentLimit = 50; // Limite de pagination
+    let fleetVehicles = [];
+
+    // --- CHARGEMENT DES VÉHICULES ---
+    onSnapshot(query(collection(db, "fleet_vehicles"), where("isDeleted", "!=", true)), snap => {
+        fleetVehicles = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        let options = '<option value="">-- Véhicule (Optionnel) --</option>';
+        fleetVehicles.forEach(v => {
+            options += `<option value="${v.id}">${v.name} (${v.plate})</option>`;
+        });
+        if (expenseVehicle) expenseVehicle.innerHTML = options;
+        const eev = document.getElementById('expenseEditVehicle');
+        if (eev) {
+            const currentVal = eev.value;
+            eev.innerHTML = options;
+            eev.value = currentVal;
+        }
+    });
 
 
     // --- GESTION DES SOUS-ONGLETS (Dépenses Mensuelles vs Conteneurs) ---
@@ -266,11 +284,25 @@ document.addEventListener('DOMContentLoaded', () => {
         if (expenseType.value === 'Conteneur' && (!actionType || actionType.value !== 'Allocation')) {
             expenseContainer.style.display = 'block';
             if(expenseSubtype) expenseSubtype.style.display = 'none';
+            if(expenseVehicle) expenseVehicle.style.display = 'none';
         } else {
             expenseContainer.style.display = 'none';
             if(expenseSubtype) expenseSubtype.style.display = 'block';
+            // Simule un changement pour évaluer la catégorie
+            if(expenseSubtype) expenseSubtype.dispatchEvent(new Event('change'));
         }
     });
+
+    if (expenseSubtype) {
+        expenseSubtype.addEventListener('change', () => {
+            const val = expenseSubtype.value;
+            if (['Dépenses Péage', 'Dépenses Carburant', 'Dépenses Entretien Véhicules'].includes(val)) {
+                if(expenseVehicle) expenseVehicle.style.display = 'inline-block';
+            } else {
+                if(expenseVehicle) expenseVehicle.style.display = 'none';
+            }
+        });
+    }
 
     // 1. AJOUT (AVEC NOM DE L'UTILISATEUR)
     if (addExpenseBtn && !isViewer) { addExpenseBtn.addEventListener('click', async () => {
@@ -284,6 +316,9 @@ document.addEventListener('DOMContentLoaded', () => {
         if (expenseType.value === 'Mensuelle' && expenseSubtype && expenseSubtype.value) {
             finalDesc = `${expenseSubtype.value} - ${finalDesc}`;
         }
+        
+        const vId = (expenseVehicle && expenseVehicle.style.display !== 'none') ? expenseVehicle.value : '';
+        const selectedV = fleetVehicles.find(v => v.id === vId);
 
         const data = {
             date: expenseDate.value,
@@ -293,6 +328,8 @@ document.addEventListener('DOMContentLoaded', () => {
             type: (action === 'Depense') ? expenseType.value : 'Budget',
             mode: (action === 'Depense') ? expenseMode.value : 'Virement',
             conteneur: (expenseType.value === 'Conteneur' && action === 'Depense') ? expenseContainer.value.trim().toUpperCase() : '',
+            vehicleId: vId,
+            vehicleName: selectedV ? `${selectedV.name} (${selectedV.plate})` : '',
             isDeleted: false
         };
 
@@ -347,6 +384,25 @@ document.addEventListener('DOMContentLoaded', () => {
                 </select>
             </div>
             
+            <div style="margin-bottom:15px;" id="expenseEditSubtypeGroup" style="display:none;">
+                <label style="display:block; margin-bottom:5px; font-weight:bold;">Catégorie (Optionnel)</label>
+                <select id="expenseEditSubtype" style="width:100%; padding:8px; box-sizing:border-box;">
+                    <option value="">-- Aucune --</option>
+                    <option value="Dépenses Livraison">Dépenses Livraison</option>
+                    <option value="Dépenses Péage">Dépenses Péage</option>
+                    <option value="Dépenses Carburant">Dépenses Carburant</option>
+                    <option value="Dépenses Personnel">Dépenses Personnel</option>
+                    <option value="Dépenses Entretien Véhicules">Dépenses Entretien Véhicules</option>
+                </select>
+            </div>
+
+            <div style="margin-bottom:15px;" id="expenseEditVehicleGroup" style="display:none;">
+                <label style="display:block; margin-bottom:5px; font-weight:bold;">Véhicule</label>
+                <select id="expenseEditVehicle" style="width:100%; padding:8px; box-sizing:border-box;">
+                    <option value="">-- Aucun --</option>
+                </select>
+            </div>
+            
             <div style="margin-bottom:15px;" id="expenseEditContainerGroup">
                 <label style="display:block; margin-bottom:5px; font-weight:bold;">Conteneur</label>
                 <input type="text" id="expenseEditContainer" style="width:100%; padding:8px; box-sizing:border-box;">
@@ -381,6 +437,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const expenseEditDesc = document.getElementById('expenseEditDesc');
     const expenseEditAmount = document.getElementById('expenseEditAmount');
     const expenseEditType = document.getElementById('expenseEditType');
+    const expenseEditSubtypeGroup = document.getElementById('expenseEditSubtypeGroup');
+    const expenseEditSubtype = document.getElementById('expenseEditSubtype');
+    const expenseEditVehicleGroup = document.getElementById('expenseEditVehicleGroup');
+    const expenseEditVehicle = document.getElementById('expenseEditVehicle');
     const expenseEditContainerGroup = document.getElementById('expenseEditContainerGroup');
     const expenseEditContainer = document.getElementById('expenseEditContainer');
     const expenseEditMode = document.getElementById('expenseEditMode');
@@ -402,9 +462,23 @@ document.addEventListener('DOMContentLoaded', () => {
     expenseEditType.addEventListener('change', () => {
         if (expenseEditType.value === 'Conteneur') {
             expenseEditContainerGroup.style.display = 'block';
+            expenseEditSubtypeGroup.style.display = 'none';
+            expenseEditVehicleGroup.style.display = 'none';
         } else {
             expenseEditContainerGroup.style.display = 'none';
+            if (expenseEditType.value === 'Mensuelle') {
+                expenseEditSubtypeGroup.style.display = 'block';
+                expenseEditSubtype.dispatchEvent(new Event('change'));
+            } else {
+                expenseEditSubtypeGroup.style.display = 'none';
+                expenseEditVehicleGroup.style.display = 'none';
+            }
         }
+    });
+    expenseEditSubtype.addEventListener('change', () => {
+        const val = expenseEditSubtype.value;
+        if (['Dépenses Péage', 'Dépenses Carburant', 'Dépenses Entretien Véhicules'].includes(val)) expenseEditVehicleGroup.style.display = 'block';
+        else { expenseEditVehicleGroup.style.display = 'none'; expenseEditVehicle.value = ''; }
     });
 
     saveExpenseEditBtn.onclick = async () => {
@@ -706,6 +780,21 @@ document.addEventListener('DOMContentLoaded', () => {
             expenseEditType.value = expense.type || 'Mensuelle';
             expenseEditMode.value = expense.mode || 'Espèce';
             expenseEditContainer.value = expense.conteneur || '';
+
+            if (expense.type === 'Mensuelle') {
+                expenseEditSubtypeGroup.style.display = 'block';
+                let matchedSub = '';
+                ['Dépenses Livraison', 'Dépenses Péage', 'Dépenses Carburant', 'Dépenses Personnel', 'Dépenses Entretien Véhicules'].forEach(sub => {
+                    if ((expense.description || '').includes(sub)) matchedSub = sub;
+                });
+                expenseEditSubtype.value = matchedSub;
+                if (['Dépenses Péage', 'Dépenses Carburant', 'Dépenses Entretien Véhicules'].includes(matchedSub)) {
+                    expenseEditVehicleGroup.style.display = 'block';
+                    expenseEditVehicle.value = expense.vehicleId || '';
+                } else {
+                    expenseEditVehicleGroup.style.display = 'none';
+                }
+            }
 
             if (expenseEditType.value === 'Conteneur') {
                 expenseEditContainerGroup.style.display = 'block';

@@ -186,6 +186,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const addQuickExpenseBtn = document.getElementById('addQuickExpenseBtn');
     const quickExpenseDesc = document.getElementById('quickExpenseDesc');
     const quickExpenseAmount = document.getElementById('quickExpenseAmount');
+    const quickExpenseVehicle = document.getElementById('quickExpenseVehicle');
     const dailyExpensesTableBody = document.getElementById('dailyExpensesTableBody');
     // GESTION AFFICHAGE AVANCÉ
     const toggleAdvancedBtn = document.getElementById('toggleAdvancedBtn');
@@ -354,11 +355,16 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (!date) return AppModal.error("Veuillez sélectionner la date en haut.");
             if (!desc || isNaN(amount) || amount <= 0) return AppModal.error("Motif ou Montant invalide.");
 
+            const vId = quickExpenseVehicle ? quickExpenseVehicle.value : '';
+            const selectedV = fleetVehicles.find(v => v.id === vId);
+
             dailyExpenses.push({
                 date: date,
                 description: desc,
                 montant: amount,
-                conteneur: ''
+                conteneur: '',
+                vehicleId: vId,
+                vehicleName: selectedV ? `${selectedV.name} (${selectedV.plate})` : ''
             });
 
             saveAllToLocalStorage();
@@ -366,6 +372,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             quickExpenseDesc.value = '';
             quickExpenseAmount.value = '';
+            if (quickExpenseVehicle) quickExpenseVehicle.value = '';
             quickExpenseDesc.focus();
         });
     }
@@ -398,9 +405,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (dailyExpensesTableBody) {
             dailyExpensesTableBody.innerHTML = '';
             dailyExpenses.forEach((exp, index) => {
+                const vehicleInfo = exp.vehicleName ? `<span class="tag" style="background:#3b82f6; font-size:10px;">🚗 ${exp.vehicleName}</span>` : '';
                 dailyExpensesTableBody.innerHTML += `
                     <tr>
-                        <td>${exp.description} ${exp.conteneur ? '<span class="tag" style="background:#64748b; font-size:10px;">'+exp.conteneur+'</span>' : ''}</td><td>${formatCFA(exp.montant)}</td>
+                        <td>${exp.description} ${exp.conteneur ? '<span class="tag" style="background:#64748b; font-size:10px;">'+exp.conteneur+'</span>' : ''} ${vehicleInfo}</td><td>${formatCFA(exp.montant)}</td>
                         <td><button class="deleteBtn" onclick="removeExpense(${index})">X</button></td>
                     </tr>`;
             });
@@ -658,7 +666,9 @@ document.addEventListener('DOMContentLoaded', async () => {
                 type: typeDepense,
                 isDeleted: false,
                 conteneur: exp.conteneur || "",
-                sessionId: currentSessionId // <-- AJOUT CLÉ
+                sessionId: currentSessionId, // <-- AJOUT CLÉ
+                vehicleId: exp.vehicleId || "",
+                vehicleName: exp.vehicleName || ""
             });
             touchedExpenseIds.push(docRef.id); // Sauvegarde ID dépense
         });
