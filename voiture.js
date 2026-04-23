@@ -324,11 +324,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 const sign = t.type === 'Entrée' ? '+' : '-';
 
                 let delBtn = '';
-                if (!isViewer && (userRole === 'admin' || userRole === 'super_admin' || userRole === 'saisie_full')) {
+                if (!isViewer) {
                     if (t._source === 'expenses') {
-                        delBtn = `<button class="deleteBtn" data-id="${t.id}" data-source="expenses" style="padding: 4px 8px; font-size:12px; background:#f59e0b; border:none; color:white; border-radius:4px; cursor:pointer;" title="Supprimer de la Caisse">🗑️ Caisse</button>`;
+                        if (userRole === 'admin' || userRole === 'super_admin') {
+                            delBtn = `<button class="deleteBtn" data-id="${t.id}" data-source="expenses" style="padding: 4px 8px; font-size:12px; background:#f59e0b; border:none; color:white; border-radius:4px; cursor:pointer;" title="Supprimer de la Caisse">🗑️ Caisse</button>`;
+                        }
                     } else {
-                        delBtn = `<button class="deleteBtn" data-id="${t.id}" data-source="fleet" style="padding: 4px 8px; font-size:12px;">Suppr.</button>`;
+                        if (userRole === 'admin' || userRole === 'super_admin' || userRole === 'saisie_full') {
+                            delBtn = `<button class="deleteBtn" data-id="${t.id}" data-source="fleet" style="padding: 4px 8px; font-size:12px;">Suppr.</button>`;
+                        }
                     }
                 }
 
@@ -367,6 +371,12 @@ document.addEventListener('DOMContentLoaded', () => {
             if (e.target.classList.contains('deleteBtn')) {
                 const id = e.target.getAttribute('data-id');
                 const source = e.target.getAttribute('data-source');
+                
+                if (source === 'expenses' && userRole !== 'admin' && userRole !== 'super_admin') {
+                    alert("Accès refusé : Seuls les administrateurs peuvent supprimer cette opération provenant de la Caisse.");
+                    return;
+                }
+                
                 pendingDeleteId = id;
                 pendingDeleteType = source === 'expenses' ? 'expense' : 'transaction';
                 deleteMessage.innerHTML = source === 'expenses' ? "Voulez-vous vraiment supprimer cette dépense ? (Elle sera aussi supprimée de la Caisse Générale)" : "Voulez-vous vraiment supprimer cette opération de l'historique ?";
