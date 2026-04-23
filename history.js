@@ -1,11 +1,10 @@
+import { db } from './firebase-config.js';
+import { collection, doc, updateDoc, getDocs, query, where, orderBy, onSnapshot, limit, startAfter, writeBatch } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
+
 document.addEventListener('DOMContentLoaded', () => {
-    if (typeof firebase === 'undefined' || typeof db === 'undefined') {
-        alert("Erreur: Connexion échouée."); return;
-    }
 
     const userRole = sessionStorage.getItem('userRole');
     const currentUserName = sessionStorage.getItem('userName') || 'Utilisateur';
-    const transactionsCollection = db.collection("transactions");
     const tableBody = document.getElementById('tableBody');
     
     const showDeletedCheckbox = document.getElementById('showDeletedCheckbox');
@@ -148,7 +147,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (target.classList.contains('deleteBtn')) {
             if (await AppModal.confirm("Voulez-vous vraiment supprimer cette transaction ?", "Suppression", true)) {
-                transactionsCollection.doc(target.dataset.id).update({ isDeleted: true, deletedBy: currentUserName })
+                updateDoc(doc(db, "transactions", target.dataset.id), { isDeleted: true, deletedBy: currentUserName })
                 .then(() => {
                     row.remove(); // Mise à jour visuelle immédiate
                     logAudit("SUPPRESSION", `Transaction ${target.dataset.id} supprimée`, target.dataset.id);
@@ -188,7 +187,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- FONCTION JOURNAL D'AUDIT (SÉCURITÉ) ---
     function logAudit(action, details, docId) {
-        db.collection("audit_logs").add({
+        addDoc(collection(db, "audit_logs"), {
             date: new Date().toISOString(),
             user: currentUserName,
             action: action,
@@ -198,15 +197,13 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // --- CHARGEMENT AGENTS (POUR MODAL) ---
-    db.collection("agents").orderBy("name").get().then(snap => {
+    getDocs(query(collection(db, "agents"), orderBy("name"))).then(snap => {
         allAgents = snap.docs.map(doc => doc.data().name);
         editHistPayAgent.innerHTML = '<option value="">- Aucun -</option>' + allAgents.map(a => `<option value="${a}">${a}</option>`).join('');
     });
 
     // --- LISTENER SESSIONS NON VALIDÉES ---
-    db.collection("audit_logs")
-        .where("action", "==", "VALIDATION_JOURNEE")
-        .onSnapshot(snapshot => {
+    onSnapshot(query(collection(db, "audit_logs"), where("action", "==", "VALIDATION_JOURNEE")), snapshot => {
             unconfirmedSessions.clear();
             snapshot.forEach(doc => {
                 if (doc.data().status !== "VALIDATED") unconfirmedSessions.add(doc.id);
@@ -231,47 +228,30 @@ document.addEventListener('DOMContentLoaded', () => {
             tableBody.innerHTML = '';
         }
         
-        let query = transactionsCollection;
+        let constraints = [];
 
         const isFiltering = startDateInput.value || endDateInput.value || smartSearchInput.value || agentFilterInput.value || showDeletedCheckbox.checked || (showReductionsCheckbox && showReductionsCheckbox.checked);
 
         if (showDeletedCheckbox.checked) {
-             query = transactionsCollection.where("isDeleted", "==", true).orderBy("isDeleted").orderBy("date", "desc");
+             constraints.push(where("isDeleted", "==", true), orderBy("isDeleted"), orderBy("date", "desc"));
         } else {
              // Cas normal : Non supprimés
              if (!isFiltering) {
-                // PAR DÉFAUT : SEMAINE EN COURS
-                const curr = new Date();
-                const day = curr.getDay();
-                const diff = curr.getDate() - day + (day === 0 ? -6 : 1);
-                const monday = new Date(curr.setDate(diff));
-                const mondayStr = monday.toISOString().split('T')[0];
-
-                // On filtre par date (Inegalité). On ne peut pas filtrer isDeleted (Inegalité) en même temps.
-                // On filtrera les supprimés en JS dans le onSnapshot.
-                // CORRECTION : On filtre sur lastPaymentDate pour voir les paiements récents même sur les vieux colis
-                // query = query.where("lastPaymentDate", ">=", mondayStr).orderBy("lastPaymentDate", "desc");
-                
-                // PERFORMANCE & CORRECTION PAGINATION :
-                // On filtre les supprimés DÈS LA REQUÊTE pour ne pas charger 50 docs vides si on a fait du nettoyage.
-                query = query.where("isDeleted", "!=", true).orderBy("isDeleted").orderBy("date", "desc");
+                constraints.push(where("isDeleted", "!=", true), orderBy("isDeleted"), orderBy("date", "desc"));
              } else {
-                // Si on filtre, on charge tout le "non supprimé" et on filtre en JS
-                // OPTIMISATION CRITIQUE : Limiter à 500 pour éviter de saturer Firebase à chaque frappe au clavier
-                query = query.where("isDeleted", "!=", true).orderBy("isDeleted").orderBy("date", "desc").limit(500);
+                constraints.push(where("isDeleted", "!=", true), orderBy("isDeleted"), orderBy("date", "desc"), limit(500));
              }
-        }
+         }
         
         // APPLICATION PAGINATION
         if (!isFiltering) {
-            query = query.limit(PAGE_SIZE);
+            constraints.push(limit(PAGE_SIZE));
             if (isLoadMore && lastVisibleDoc) {
-                query = query.startAfter(lastVisibleDoc);
+                constraints.push(startAfter(lastVisibleDoc));
             }
         }
 
-        // Utilisation de .get() au lieu de onSnapshot pour la pagination (Performance)
-        query.get().then(snapshot => {
+        getDocs(query(collection(db, "transactions"), ...constraints)).then(snapshot => {
             if (!snapshot.empty) {
                 lastVisibleDoc = snapshot.docs[snapshot.docs.length - 1];
                 if (loadMoreBtn) {
@@ -852,13 +832,13 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             updates.agent = Array.from(uniqueAgents).join(', ');
 
-            await transactionsCollection.doc(currentEditingTransaction.id).update(updates);
+            await updateDoc(doc(db, "transactions", currentEditingTransaction.id), updates);
 
             // --- SYNCHRONISATION AVEC LIVRAISON ---
             try {
-                const livQuery = await db.collection("livraisons").where("ref", "==", currentEditingTransaction.reference).limit(1).get();
+                const livQuery = await getDocs(query(collection(db, "livraisons"), where("ref", "==", currentEditingTransaction.reference), limit(1)));
                 if (!livQuery.empty) {
-                    await livQuery.docs[0].ref.update({
+                    await updateDoc(livQuery.docs[0].ref, {
                         conteneur: updates.conteneur,
                         destinataire: updates.nom
                     });
@@ -895,11 +875,11 @@ document.addEventListener('DOMContentLoaded', () => {
         batchDateBtn.disabled = true;
         batchDateBtn.textContent = "Traitement...";
 
-        const batch = db.batch();
+        const batch = writeBatch(db);
         let count = 0;
 
         currentFilteredTransactions.forEach(t => {
-            const ref = transactionsCollection.doc(t.id);
+            const ref = doc(db, "transactions", t.id);
             batch.update(ref, { date: newDate, lastPaymentDate: newDate }); // On met à jour la date principale et le tri
             count++;
         });

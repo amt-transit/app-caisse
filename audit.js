@@ -1,8 +1,8 @@
 // c:\Users\JEANAFFA\Desktop\MonAppli Gemini\audit.js
+import { db } from './firebase-config.js';
+import { collection, getDocs, query, where, orderBy } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
+
 document.addEventListener('DOMContentLoaded', async () => {
-    if (typeof firebase === 'undefined' || typeof db === 'undefined') {
-        alert("Erreur: Connexion BDD échouée."); return;
-    }
 
     const tableBody = document.getElementById('auditTableBody');
     const searchInput = document.getElementById('auditSearch');
@@ -17,17 +17,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     async function loadAuditData() {
         try {
             // 1. Récupérer toutes les sessions VALIDÉES
-            const logsSnap = await db.collection("audit_logs")
-                .where("action", "==", "VALIDATION_JOURNEE")
-                .where("status", "==", "VALIDATED")
-                .orderBy("date", "asc") // Tri chronologique pour le cumul
-                .get();
+            const logsQuery = query(collection(db, "audit_logs"), where("action", "==", "VALIDATION_JOURNEE"), where("status", "==", "VALIDATED"), orderBy("date", "asc"));
+            const logsSnap = await getDocs(logsQuery);
 
             // 2. Récupérer TOUTES les transactions et dépenses (pour calculer les montants réels)
             // C'est lourd mais nécessaire pour un audit précis si les montants ne sont pas stockés dans le log
             const [transSnap, expSnap] = await Promise.all([
-                db.collection("transactions").where("isDeleted", "!=", true).get(),
-                db.collection("expenses").where("isDeleted", "!=", true).get()
+                getDocs(query(collection(db, "transactions"), where("isDeleted", "!=", true))),
+                getDocs(query(collection(db, "expenses"), where("isDeleted", "!=", true)))
             ]);
 
             // Indexation par SessionID pour rapidité

@@ -1,14 +1,12 @@
+import { db } from './firebase-config.js';
+import { collection, doc, addDoc, updateDoc, query, where, orderBy, onSnapshot, writeBatch, limit } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
+
 document.addEventListener('DOMContentLoaded', () => {
-    if (typeof firebase === 'undefined' || typeof db === 'undefined') {
-        alert("Erreur: La connexion à la base de données a échoué."); return;
-    }
 
     const userRole = sessionStorage.getItem('userRole');
     // CORRECTION : On récupère le nom de l'utilisateur
     const currentUserName = sessionStorage.getItem('userName') || 'Inconnu';
     const isViewer = userRole === 'spectateur';
-
-    const incomeCollection = db.collection("other_income"); 
     
     const addIncomeBtn = document.getElementById('addIncomeBtn');
     const incomeDate = document.getElementById('incomeDate');
@@ -156,17 +154,18 @@ document.addEventListener('DOMContentLoaded', () => {
     // 2. AFFICHAGE & RECHERCHE
     function fetchIncome() {
         if (unsubscribeIncome) unsubscribeIncome();
-        let query = incomeCollection;
+        let constraints = [];
         
         if (showDeletedCheckbox.checked) {
-            query = query.where("isDeleted", "==", true).orderBy("isDeleted");
+            constraints.push(where("isDeleted", "==", true), orderBy("isDeleted"));
         } else {
-            query = query.where("isDeleted", "!=", true).orderBy("isDeleted");
+            constraints.push(where("isDeleted", "!=", true), orderBy("isDeleted"));
         }
-        query = query.orderBy("date", "desc");
-        query = query.limit(currentLimit);
+        constraints.push(orderBy("date", "desc"));
+        constraints.push(limit(currentLimit));
 
-        unsubscribeIncome = query.onSnapshot(snapshot => {
+        const q = query(collection(db, "other_income"), ...constraints);
+        unsubscribeIncome = onSnapshot(q, snapshot => {
             allIncome = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
             renderIncomeTable();
             updateStats(); // Mettre à jour les stats à chaque changement
@@ -283,7 +282,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (event.target.classList.contains('deleteBtn')) {
             const docId = event.target.getAttribute('data-id');
             if (confirm("Confirmer la suppression ? Elle sera archivée.")) {
-                incomeCollection.doc(docId).update({ isDeleted: true });
+                updateDoc(doc(db, "other_income", docId), { isDeleted: true });
             }
         }
     });
@@ -337,9 +336,9 @@ document.addEventListener('DOMContentLoaded', () => {
             if (pendingIncome.length === 0) return;
             if (!confirm(`Enregistrer ${pendingIncome.length} entrée(s) ?`)) return;
 
-            const batch = db.batch();
+            const batch = writeBatch(db);
             pendingIncome.forEach(inc => {
-                const docRef = incomeCollection.doc();
+                const docRef = doc(collection(db, "other_income"));
                 batch.set(docRef, inc);
             });
 

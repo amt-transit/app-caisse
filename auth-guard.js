@@ -1,4 +1,8 @@
-firebase.auth().onAuthStateChanged(async (user) => {
+import { auth, db } from './firebase-config.js';
+import { onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-auth.js";
+import { doc, getDoc, collection, query, where, orderBy, onSnapshot } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
+
+onAuthStateChanged(auth, async (user) => {
     
     if (!user) {
         // Pas connecté, redirection normale vers login
@@ -9,18 +13,16 @@ firebase.auth().onAuthStateChanged(async (user) => {
     }
 
     try {
-        console.log("Utilisateur connecté :", user.uid); // DEBUG
-
-        const userDocRef = firebase.firestore().collection('users').doc(user.uid);
-        const userDoc = await userDocRef.get();
+        const userDocRef = doc(db, 'users', user.uid);
+        const userDocSnap = await getDoc(userDocRef);
 
         // DIAGNOSTIC 1 : Le document existe-t-il ?
-        if (!userDoc.exists) {
+        if (!userDocSnap.exists()) {
             alert("ERREUR CRITIQUE :\n\nVotre compte de connexion existe, mais votre 'Fiche Utilisateur' (Rôle) est introuvable dans la base de données.\n\nID cherché : " + user.uid);
             throw new Error("Profil utilisateur introuvable dans Firestore.");
         }
 
-        const userData = userDoc.data();
+        const userData = userDocSnap.data();
         const userRole = userData.role; 
         
         // DIAGNOSTIC 2 : Le rôle est-il valide ?
@@ -28,8 +30,6 @@ firebase.auth().onAuthStateChanged(async (user) => {
             alert("ERREUR CRITIQUE :\n\nVotre fiche utilisateur existe, mais le champ 'role' est vide.");
             throw new Error("Champ 'role' manquant.");
         }
-
-        console.log("Rôle trouvé :", userRole); // DEBUG
 
         // Stockage session
         let userName = userData.displayName;
@@ -43,10 +43,10 @@ firebase.auth().onAuthStateChanged(async (user) => {
 
         // --- GESTION GLOBALE DU BADGE DE NOTIFICATION (Placé ici pour s'exécuter AVANT les return) ---
         // Vérification des sessions en attente sur toutes les pages
-        firebase.firestore().collection("audit_logs")
-            .where("action", "==", "VALIDATION_JOURNEE")
-            .orderBy("date", "desc")
-            .onSnapshot(snapshot => {
+        const logsRef = collection(db, "audit_logs");
+        const badgeQuery = query(logsRef, where("action", "==", "VALIDATION_JOURNEE"), orderBy("date", "desc"));
+        
+        onSnapshot(badgeQuery, snapshot => {
                 let pendingCount = 0;
                 snapshot.forEach(doc => {
                     if (doc.data().status !== "VALIDATED") {
@@ -206,7 +206,7 @@ firebase.auth().onAuthStateChanged(async (user) => {
         if (error.code === 'permission-denied') {
              alert("ERREUR PERMISSION : Les règles de sécurité de Firestore bloquent la lecture de votre profil.\nVérifiez l'onglet 'Règles' dans la console Firebase.");
         }
-        firebase.auth().signOut();
+        signOut(auth);
         window.location.href = 'login.html';
     }
 });

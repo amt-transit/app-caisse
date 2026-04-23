@@ -1,7 +1,7 @@
+import { db } from './firebase-config.js';
+import { collection, getDocs, query, where, orderBy } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
+
 document.addEventListener('DOMContentLoaded', async () => {
-    if (typeof firebase === 'undefined' || typeof db === 'undefined') {
-        alert("Erreur: Connexion BDD échouée."); return;
-    }
 
     // --- SÉCURITÉ : VÉRIFICATION RÔLE (Admin OU Super Admin) ---
     const userRole = sessionStorage.getItem('userRole');
@@ -49,11 +49,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         try {
             // 1. Récupérer les Sessions (Audit Logs) pour mapper SessionID -> Utilisateur
             // C'est crucial pour attribuer les dépenses au bon utilisateur
-            const sessionsSnap = await db.collection("audit_logs")
-                .where("action", "==", "VALIDATION_JOURNEE")
-                .where("date", ">=", start)
-                .where("date", "<=", end + "T23:59:59")
-                .get();
+            const sessionsSnap = await getDocs(query(collection(db, "audit_logs"), where("action", "==", "VALIDATION_JOURNEE"), where("date", ">=", start), where("date", "<=", end + "T23:59:59")));
 
             // 1b. Identifier les sessions NON VALIDÉES (En attente)
             const pendingSessions = new Set();
@@ -68,16 +64,10 @@ document.addEventListener('DOMContentLoaded', async () => {
             });
 
             // 2. Récupérer les Transactions (Encaissements)
-            const transSnap = await db.collection("transactions")
-                .where("date", ">=", start)
-                .where("date", "<=", end)
-                .get();
+            const transSnap = await getDocs(query(collection(db, "transactions"), where("date", ">=", start), where("date", "<=", end)));
 
             // 3. Récupérer les Dépenses
-            const expSnap = await db.collection("expenses")
-                .where("date", ">=", start)
-                .where("date", "<=", end)
-                .get();
+            const expSnap = await getDocs(query(collection(db, "expenses"), where("date", ">=", start), where("date", "<=", end)));
 
             // --- TRAITEMENT DES DONNÉES ---
             currentStats = {};

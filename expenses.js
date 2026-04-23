@@ -1,14 +1,12 @@
+import { db } from './firebase-config.js';
+import { collection, doc, addDoc, updateDoc, query, where, orderBy, onSnapshot, writeBatch, limit } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
+
 document.addEventListener('DOMContentLoaded', () => {
-    if (typeof firebase === 'undefined' || typeof db === 'undefined') {
-        alert("Erreur: La connexion à la base de données a échoué."); return;
-    }
 
     const userRole = sessionStorage.getItem('userRole');
     // Récupération du nom de l'utilisateur (stocké par auth-guard.js)
     const currentUserName = sessionStorage.getItem('userName') || 'Inconnu';
     const isViewer = userRole === 'spectateur';
-
-    const expensesCollection = db.collection("expenses");
     
     const addExpenseBtn = document.getElementById('addExpenseBtn');
     const expenseDate = document.getElementById('expenseDate');
@@ -304,7 +302,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // 3. Décision : Enregistrement Direct ou Liste D'attente
         if (currentUserName === USER_NO_CONFIRM) {
             // Enregistrement DIRECT
-            expensesCollection.add(data).then(() => {
+            addDoc(collection(db, "expenses"), data).then(() => {
                 AppModal.success("Dépense enregistrée (Mode Direct).");
                 resetExpenseForm();
             }).catch(err => AppModal.error("Erreur : " + err.message));
@@ -429,7 +427,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 updates.conteneur = ''; // clear if not conteneur
             }
 
-            await db.collection("expenses").doc(currentEditingExpenseId).update(updates);
+            await updateDoc(doc(db, "expenses", currentEditingExpenseId), updates);
             closeExpenseEditModal();
         } catch (e) {
             console.error(e);
@@ -443,21 +441,22 @@ document.addEventListener('DOMContentLoaded', () => {
     // 3. AFFICHAGE
     function fetchExpenses() {
         if (unsubscribeExpenses) unsubscribeExpenses();
-        let query = expensesCollection;
-        if (showDeletedCheckbox.checked) query = query.where("isDeleted", "==", true).orderBy("isDeleted");
-        else query = query.where("isDeleted", "!=", true).orderBy("isDeleted");
-        query = query.orderBy("date", "desc");
-        query = query.limit(currentLimit);
-        unsubscribeExpenses = query.onSnapshot(snapshot => {
+        let constraints = [];
+        if (showDeletedCheckbox.checked) constraints.push(where("isDeleted", "==", true), orderBy("isDeleted"));
+        else constraints.push(where("isDeleted", "!=", true), orderBy("isDeleted"));
+        constraints.push(orderBy("date", "desc"));
+        constraints.push(limit(currentLimit));
+        
+        const q = query(collection(db, "expenses"), ...constraints);
+        unsubscribeExpenses = onSnapshot(q, snapshot => {
             allExpenses = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
             renderExpensesTable();
         }, error => console.error(error));
     }
 
     // --- LISTENER SESSIONS NON VALIDÉES ---
-    db.collection("audit_logs")
-        .where("action", "==", "VALIDATION_JOURNEE")
-        .onSnapshot(snapshot => {
+    const qAudit = query(collection(db, "audit_logs"), where("action", "==", "VALIDATION_JOURNEE"));
+    onSnapshot(qAudit, snapshot => {
             unconfirmedSessions.clear();
             snapshot.forEach(doc => {
                 if (doc.data().status !== "VALIDATED") unconfirmedSessions.add(doc.id);
@@ -694,7 +693,7 @@ document.addEventListener('DOMContentLoaded', () => {
     expenseTableBody.addEventListener('click', async (event) => {
         if (isViewer) return;
         if (event.target.classList.contains('deleteBtn')) {
-            if (await AppModal.confirm("Supprimer définitivement cette opération ?", "Suppression", true)) expensesCollection.doc(event.target.getAttribute('data-id')).update({ isDeleted: true }); 
+            if (await AppModal.confirm("Supprimer définitivement cette opération ?", "Suppression", true)) updateDoc(doc(db, "expenses", event.target.getAttribute('data-id')), { isDeleted: true }); 
         } else if (event.target.classList.contains('editBtn')) {
             const docId = event.target.getAttribute('data-id');
             const expense = allExpenses.find(e => e.id === docId);
@@ -827,9 +826,9 @@ document.addEventListener('DOMContentLoaded', () => {
             if (pendingExpenses.length === 0) return;
             if (!await AppModal.confirm(`Voulez-vous enregistrer ces ${pendingExpenses.length} dépense(s) ?`, "Validation en Masse")) return;
 
-            const batch = db.batch();
+            const batch = writeBatch(db);
             pendingExpenses.forEach(exp => {
-                const docRef = expensesCollection.doc();
+                const docRef = doc(collection(db, "expenses"));
                 batch.set(docRef, exp);
             });
 

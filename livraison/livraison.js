@@ -1,4 +1,7 @@
 
+import { db } from '../firebase-config.js';
+import { collection, doc, getDoc, getDocs, addDoc, updateDoc, deleteDoc, query, where, orderBy, limit, onSnapshot, writeBatch, deleteField } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
+
 // --- CONFIGURATION & CONSTANTES (Refactorisation) ---
 const CONSTANTS = {
     COLLECTION: 'livraisons',
@@ -88,10 +91,6 @@ function fixEncoding(str) {
 
 // Initialisation
 document.addEventListener('DOMContentLoaded', function() {
-    if (typeof db === 'undefined') {
-        console.error("Firebase DB non initialisé");
-        return;
-    }
 
     initRealtimeSync();
     updateContainerTitle();
@@ -115,9 +114,9 @@ function initRealtimeSync() {
     if (localData) {
         const parsed = JSON.parse(localData);
         if (parsed.length > 0 && confirm(`MIGRATION : ${parsed.length} livraisons trouvées en local. Migrer vers le serveur ?`)) {
-            const batch = db.batch();
+            const batch = writeBatch(db);
             parsed.forEach(item => {
-                const docRef = db.collection(CONSTANTS.COLLECTION).doc();
+                const docRef = doc(collection(db, CONSTANTS.COLLECTION));
                 const { id, ...data } = item; 
                 batch.set(docRef, data);
             });
@@ -129,9 +128,8 @@ function initRealtimeSync() {
     }
 
     // 2. Écouteur sur la collection 'livraisons'
-    db.collection(CONSTANTS.COLLECTION)
-        .orderBy('dateAjout', 'desc')
-        .onSnapshot((snapshot) => {
+    const qLivraisons = query(collection(db, CONSTANTS.COLLECTION), orderBy('dateAjout', 'desc'));
+    onSnapshot(qLivraisons, (snapshot) => {
             deliveries = [];
             snapshot.forEach((doc) => {
                 deliveries.push({ id: doc.id, ...doc.data() });
@@ -149,9 +147,8 @@ function initRealtimeSync() {
 
     // --- NOUVEAU : 3. Écouteur sur la Caisse (Transactions) ---
     // On écoute la caisse en permanence pour avoir les vrais montants
-    db.collection('transactions')
-        .where('isDeleted', '==', false)
-        .onSnapshot((snap) => {
+    const qTrans = query(collection(db, 'transactions'), where('isDeleted', '==', false));
+    onSnapshot(qTrans, (snap) => {
             transactionsMap.clear();
             snap.forEach(doc => {
                 const t = doc.data();
@@ -169,13 +166,13 @@ function initRealtimeSync() {
             
             // NOUVEAU : Synchronisation en arrière-plan (Issue 4) sans boucle infinie dans renderTable
             if (deliveries.length > 0) {
-                const batch = db.batch();
+                const batch = writeBatch(db);
                 let batchCount = 0;
                 deliveries.forEach(d => {
                     if (d.containerStatus === 'EN_COURS' && d.ref) {
                         const realCaisseAmount = transactionsMap.get(d.ref.toUpperCase().trim());
                         if (realCaisseAmount !== undefined && realCaisseAmount !== d.montant) {
-                            batch.update(db.collection(CONSTANTS.COLLECTION).doc(d.id), { montant: realCaisseAmount });
+                            batch.update(doc(db, CONSTANTS.COLLECTION, d.id), { montant: realCaisseAmount });
                             d.montant = realCaisseAmount; // Maj locale pour éviter décalage
                             batchCount++;
                         }
@@ -950,30 +947,21 @@ async function findAddressForRecipient(name) {
 
     // 2. Recherche Firestore Active (Pour les items hors limite 500)
     try {
-        const snapActive = await db.collection(CONSTANTS.COLLECTION)
-            .where('destinataire', '==', val)
-            .get();
+        const snapActive = await getDocs(query(collection(db, CONSTANTS.COLLECTION), where('destinataire', '==', val)));
         
-        for (const doc of snapActive.docs) {
-            const d = doc.data();
+        for (const docSnap of snapActive.docs) {
+            const d = docSnap.data();
             if (d.lieuLivraison && d.lieuLivraison.trim() !== "") return d.lieuLivraison;
         }
     } catch (e) { console.error("Erreur recherche adresse active", e); }
 
     // 3. Recherche Archives (Firestore)
     try {
-        // Essai 1 : Recherche Exacte
-        let snap = await db.collection(CONSTANTS.ARCHIVE_COLLECTION)
-            .where('destinataire', '==', val)
-            .limit(1)
-            .get();
+        let snap = await getDocs(query(collection(db, CONSTANTS.ARCHIVE_COLLECTION), where('destinataire', '==', val), limit(1)));
         
         // Essai 2 : Recherche en Majuscules (Si pas trouvé)
         if (snap.empty) {
-            snap = await db.collection(CONSTANTS.ARCHIVE_COLLECTION)
-                .where('destinataire', '==', val.toUpperCase())
-                .limit(1)
-                .get();
+            snap = await getDocs(query(collection(db, CONSTANTS.ARCHIVE_COLLECTION), where('destinataire', '==', val.toUpperCase()), limit(1)));
         }
 
         if (!snap.empty) return snap.docs[0].data().lieuLivraison;
@@ -1430,56 +1418,6 @@ async function confirmImport() {
     });
 }
 
-// --- FONCTION DE SYNCHRONISATION FORCÉE (Réparation) ---
-async function forceSyncTransactions() {
-    if (!confirm("Voulez-vous forcer la synchronisation des transactions ?\n\nCela va copier les Noms, Adresses et Numéros corrects de l'onglet 'En Cours' vers la Caisse (Saisie) pour corriger les erreurs.")) return;
-
-    const loadingToast = document.createElement('div');
-    loadingToast.className = 'toast';
-    loadingToast.textContent = "Synchronisation en cours...";
-    loadingToast.style.background = "#3b82f6";
-    document.body.appendChild(loadingToast);
-
-    try {
-        const enCoursItems = deliveries.filter(d => d.containerStatus === 'EN_COURS');
-        let batch = db.batch();
-        let count = 0;
-        let updatedCount = 0;
-
-        for (const item of enCoursItems) {
-            if (!item.ref) continue;
-
-            // On cherche la transaction correspondante
-            const q = await db.collection('transactions').where('reference', '==', item.ref).get();
-            
-            if (!q.empty) {
-                q.forEach(doc => {
-                    const t = doc.data();
-                    const updates = {};
-                    
-                    // On met à jour avec les données fiables de Livraison
-                    const newNom = item.destinataire || item.expediteur || 'Client';
-                    if (newNom && t.nom !== newNom) updates.nom = newNom;
-                    if (item.destinataire && t.nomDestinataire !== item.destinataire) updates.nomDestinataire = item.destinataire;
-                    if (item.lieuLivraison && t.adresseDestinataire !== item.lieuLivraison) updates.adresseDestinataire = item.lieuLivraison;
-                    if (item.numero && t.numero !== item.numero) updates.numero = item.numero;
-                    if (item.description && t.description !== item.description) updates.description = item.description;
-
-                    if (Object.keys(updates).length > 0) {
-                        batch.update(doc.ref, updates);
-                        updatedCount++;
-                        count++;
-                    }
-                });
-            }
-            if (count >= 400) { await batch.commit(); batch = db.batch(); count = 0; }
-        }
-        if (count > 0) await batch.commit();
-        loadingToast.remove();
-        alert(`✅ Synchronisation terminée !\n${updatedCount} fiches corrigées dans la Caisse.`);
-    } catch (e) { console.error(e); loadingToast.remove(); alert("Erreur : " + e.message); }
-}
-
 // Export Excel
 function exportToExcel() {
     if (deliveries.length === 0) {
@@ -1690,7 +1628,7 @@ function renderTable() {
             // Si la Caisse a un montant différent de celui du colis (ex: le client vient de payer)
             if (realCaisseAmount !== undefined && realCaisseAmount !== d.montant) {
                 // 1. On corrige silencieusement la base de données Livraison en arrière-plan
-                db.collection(CONSTANTS.COLLECTION).doc(d.id).update({ montant: realCaisseAmount });
+                updateDoc(doc(db, CONSTANTS.COLLECTION, d.id), { montant: realCaisseAmount });
                 // 2. On corrige l'affichage immédiatement
                 d.montant = realCaisseAmount;
             }
@@ -2127,7 +2065,7 @@ function printDeliverySlip(id) {
 window.updateDeliveryOrder = function(id, val, date, livreur) {
     const order = parseInt(val);
     if (!isNaN(order)) {
-        db.collection(CONSTANTS.COLLECTION).doc(id).update({ orderInRoute: order })
+        updateDoc(doc(db, CONSTANTS.COLLECTION, id), { orderInRoute: order })
             .then(() => {
                 // Mise à jour locale immédiate pour fluidité
                 const item = deliveries.find(d => d.id === id);
@@ -2236,12 +2174,12 @@ function moveDeliveryOrder(id, direction, date, livreur) {
 
 function removeFromProgram(id) {
     if (confirm('Retirer ce colis du programme ? Il repassera "En attente".')) {
-        db.collection(CONSTANTS.COLLECTION).doc(id).update({
+        updateDoc(doc(db, CONSTANTS.COLLECTION, id), {
             status: 'EN_ATTENTE',
-            livreur: firebase.firestore.FieldValue.delete(),
-            dateProgramme: firebase.firestore.FieldValue.delete(),
-            dateLivraison: firebase.firestore.FieldValue.delete(),
-            orderInRoute: firebase.firestore.FieldValue.delete()
+            livreur: deleteField(),
+            dateProgramme: deleteField(),
+            dateLivraison: deleteField(),
+            orderInRoute: deleteField()
         }).then(() => {
             showToast('Colis retiré du programme', 'success');
         });
@@ -2342,9 +2280,9 @@ function confirmProgram() {
         return;
     }
 
-    const batch = db.batch();
+    const batch = writeBatch(db);
     selectedIds.forEach(id => {
-        batch.update(db.collection(CONSTANTS.COLLECTION).doc(id), {
+        batch.update(doc(db, CONSTANTS.COLLECTION, id), {
             livreur: livreur, dateProgramme: dateProg, status: 'EN_COURS'
         });
     });
@@ -2387,7 +2325,7 @@ async function confirmAssignContainer() {
         });
     }
 
-    const batch = db.batch();
+    const batch = writeBatch(db);
     selectedIds.forEach(id => {
         const item = deliveries.find(d => d.id === id);
         const updates = { conteneur: newConteneur };
@@ -2397,19 +2335,19 @@ async function confirmAssignContainer() {
                 updates.dateAjout = new Date().toISOString(); // Préserve la date d'arrivée si le statut ne change pas
             }
         }
-        batch.update(db.collection(CONSTANTS.COLLECTION).doc(id), updates);
+        batch.update(doc(db, CONSTANTS.COLLECTION, id), updates);
     });
 
     // Création des transactions si on assigne manuellement vers EN_COURS
     for (const item of becomingEnCours) {
-        const check = await db.collection('transactions').where('reference', '==', item.ref).limit(1).get();
+        const check = await getDocs(query(collection(db, 'transactions'), where('reference', '==', item.ref), limit(1)));
         if (check.empty) {
             const price = parseFloat((item.prixOriginal || item.montant || '0').replace(/[^\d]/g, '')) || 0;
             let restant = parseFloat((item.montant || '0').replace(/[^\d]/g, '')) || 0;
             let mParis = price > restant ? price - restant : 0;
             if (price === 0 && restant > 0) { mParis = 0; }
             
-            const transRef = db.collection('transactions').doc();
+            const transRef = doc(collection(db, 'transactions'));
             batch.set(transRef, {
                 date: new Date().toISOString().split('T')[0],
                 reference: item.ref,
@@ -2468,9 +2406,9 @@ function deleteSelectedDeliveries() {
 // Fonction utilitaire pour supprimer la transaction associée (Arrivages)
 function deleteTransactionByRef(ref) {
     if (!ref) return;
-    db.collection('transactions').where('reference', '==', ref).get()
+    getDocs(query(collection(db, 'transactions'), where('reference', '==', ref)))
         .then(snapshot => {
-            const batch = db.batch();
+            const batch = writeBatch(db);
             snapshot.forEach(doc => {
                 batch.delete(doc.ref);
             });
@@ -2494,16 +2432,16 @@ function closeBulkStatusModal() {
 
 function confirmBulkStatusChange() {
     const newStatus = document.getElementById('bulkStatusSelect').value;
-    const batch = db.batch();
+    const batch = writeBatch(db);
     selectedIds.forEach(id => {
         const updates = { status: newStatus };
         if (newStatus === 'EN_ATTENTE') {
-            updates.livreur = firebase.firestore.FieldValue.delete();
-            updates.dateProgramme = firebase.firestore.FieldValue.delete();
-            updates.dateLivraison = firebase.firestore.FieldValue.delete();
-            updates.orderInRoute = firebase.firestore.FieldValue.delete();
+            updates.livreur = deleteField();
+            updates.dateProgramme = deleteField();
+            updates.dateLivraison = deleteField();
+            updates.orderInRoute = deleteField();
         }
-        batch.update(db.collection(CONSTANTS.COLLECTION).doc(id), updates);
+        batch.update(doc(db, CONSTANTS.COLLECTION, id), updates);
     });
     batch.commit().then(() => {
         closeBulkStatusModal();
@@ -2534,12 +2472,12 @@ async function forceSyncTransactions() {
         for (const chunk of chunks) {
             const refs = chunk.map(item => item.ref);
             if (refs.length === 0) continue;
-            const q = await db.collection('transactions').where('reference', 'in', refs).get();
+            const q = await getDocs(query(collection(db, 'transactions'), where('reference', 'in', refs)));
             
             if (!q.empty) {
-                const batch = db.batch();
-                q.forEach(doc => {
-                    const t = doc.data();
+                const batch = writeBatch(db);
+                q.forEach(docSnap => {
+                    const t = docSnap.data();
                     const item = chunk.find(c => c.ref === t.reference);
                     if (!item) return;
 
@@ -2571,7 +2509,7 @@ async function forceSyncTransactions() {
                     }
 
                     if (Object.keys(updates).length > 0) {
-                        batch.update(doc.ref, updates);
+                        batch.update(docSnap.ref, updates);
                         updatedCount++;
                     }
                 });
@@ -2603,11 +2541,11 @@ async function archiveCompletedDeliveries() {
         
         try {
             for (const chunk of chunks) {
-                const batch = db.batch();
+                const batch = writeBatch(db);
                 chunk.forEach(d => {
-                    const archiveRef = db.collection(CONSTANTS.ARCHIVE_COLLECTION).doc(d.id);
+                    const archiveRef = doc(db, CONSTANTS.ARCHIVE_COLLECTION, d.id);
                     batch.set(archiveRef, { ...d, dateArchivage: now });
-                    const activeRef = db.collection(CONSTANTS.COLLECTION).doc(d.id);
+                    const activeRef = doc(db, CONSTANTS.COLLECTION, d.id);
                     batch.delete(activeRef);
                 });
                 await batch.commit();
@@ -2624,12 +2562,10 @@ function openArchivesModal() {
     document.getElementById('archivesModal').classList.add('active');
     document.getElementById('archivesBody').innerHTML = '<tr><td colspan="7">Chargement...</td></tr>';
     
-    db.collection(CONSTANTS.ARCHIVE_COLLECTION)
-        .orderBy('dateArchivage', 'desc')
-        .get()
+    getDocs(query(collection(db, CONSTANTS.ARCHIVE_COLLECTION), orderBy('dateArchivage', 'desc')))
         .then(snapshot => {
             archivedDeliveries = [];
-            snapshot.forEach(doc => archivedDeliveries.push({ id: doc.id, ...doc.data() }));
+            snapshot.forEach(docSnap => archivedDeliveries.push({ id: docSnap.id, ...docSnap.data() }));
             renderArchivesTable(archivedDeliveries);
         });
 }
@@ -2648,13 +2584,13 @@ function searchArchives() {
 
 function restoreFromArchive(id) {
     if (confirm('Êtes-vous sûr de vouloir restaurer ce colis vers la liste principale ?')) {
-        db.collection(CONSTANTS.ARCHIVE_COLLECTION).doc(id).get().then(doc => {
-            if(doc.exists) {
-                const data = doc.data();
+        getDoc(doc(db, CONSTANTS.ARCHIVE_COLLECTION, id)).then(docSnap => {
+            if(docSnap.exists()) {
+                const data = docSnap.data();
                 delete data.dateArchivage;
-                const batch = db.batch();
-                batch.set(db.collection(CONSTANTS.COLLECTION).doc(id), data);
-                batch.delete(db.collection(CONSTANTS.ARCHIVE_COLLECTION).doc(id));
+                const batch = writeBatch(db);
+                batch.set(doc(db, CONSTANTS.COLLECTION, id), data);
+                batch.delete(doc(db, CONSTANTS.ARCHIVE_COLLECTION, id));
                 batch.commit().then(() => {
                     showToast("Restauré !", "success");
                     openArchivesModal();
@@ -2851,7 +2787,7 @@ function updateDeliveryLocation(id, newLocation) {
     const updates = { lieuLivraison: newLocation };
     if (detected !== 'AUTRE') updates.commune = detected;
     
-    db.collection(CONSTANTS.COLLECTION).doc(id).update(updates);
+    updateDoc(doc(db, CONSTANTS.COLLECTION, id), updates);
 
     // PROPAGATION : Mettre à jour tous les colis du même destinataire (tous onglets confondus)
     const currentItem = deliveries.find(d => d.id === id);
@@ -2859,17 +2795,15 @@ function updateDeliveryLocation(id, newLocation) {
         const recipientName = currentItem.destinataire.trim();
         
         // REQUÊTE FIRESTORE pour toucher TOUS les onglets (même ceux non chargés localement)
-        db.collection(CONSTANTS.COLLECTION)
-            .where('destinataire', '==', recipientName)
-            .get()
+        getDocs(query(collection(db, CONSTANTS.COLLECTION), where('destinataire', '==', recipientName)))
             .then(snapshot => {
-                const batch = db.batch();
+                const batch = writeBatch(db);
                 let count = 0;
                 
-                snapshot.forEach(doc => {
+                snapshot.forEach(docSnap => {
                     // On ne met à jour que si l'ID est différent ET que le lieu est différent (pour économiser des écritures)
-                    if (doc.id !== id && doc.data().lieuLivraison !== newLocation) {
-                        batch.update(doc.ref, updates);
+                    if (docSnap.id !== id && docSnap.data().lieuLivraison !== newLocation) {
+                        batch.update(docSnap.ref, updates);
                         count++;
                     }
                 });
@@ -2884,49 +2818,49 @@ function updateDeliveryLocation(id, newLocation) {
 
 // Mise à jour du destinataire en direct
 function updateDeliveryRecipient(id, newRecipient) {
-    db.collection(CONSTANTS.COLLECTION).doc(id).update({ destinataire: cleanString(newRecipient) });
+    updateDoc(doc(db, CONSTANTS.COLLECTION, id), { destinataire: cleanString(newRecipient) });
 }
 
 // Mise à jour du numéro en direct
 function updateDeliveryPhone(id, newPhone) {
-    db.collection(CONSTANTS.COLLECTION).doc(id).update({ numero: cleanString(newPhone) });
+    updateDoc(doc(db, CONSTANTS.COLLECTION, id), { numero: cleanString(newPhone) });
 }
 
 // Mise à jour du montant en direct
 function updateDeliveryAmount(id, newAmount) {
-    db.collection(CONSTANTS.COLLECTION).doc(id).update({ montant: cleanString(newAmount) });
+    updateDoc(doc(db, CONSTANTS.COLLECTION, id), { montant: cleanString(newAmount) });
 }
 
 // Mise à jour de la quantité en direct
 function updateDeliveryQuantity(id, newQty) {
-    db.collection(CONSTANTS.COLLECTION).doc(id).update({ quantite: parseInt(newQty) || 1 });
+    updateDoc(doc(db, CONSTANTS.COLLECTION, id), { quantite: parseInt(newQty) || 1 });
 }
 
 // Mise à jour de l'info manuelle en direct
 function updateDeliveryInfo(id, newInfo) {
-    db.collection(CONSTANTS.COLLECTION).doc(id).update({ info: cleanString(newInfo) });
+    updateDoc(doc(db, CONSTANTS.COLLECTION, id), { info: cleanString(newInfo) });
 }
 
 // Mise à jour du statut "Client Notifié" (Onglet À Venir)
 function toggleClientNotified(id, isChecked) {
-    db.collection(CONSTANTS.COLLECTION).doc(id).update({ clientNotified: isChecked });
+    updateDoc(doc(db, CONSTANTS.COLLECTION, id), { clientNotified: isChecked });
 }
 
 // Actions
 function markAsDelivered(id) {
-    db.collection(CONSTANTS.COLLECTION).doc(id).update({
+    updateDoc(doc(db, CONSTANTS.COLLECTION, id), {
         status: 'LIVRE',
         dateLivraison: new Date().toISOString()
     }).then(() => showToast('Marqué comme LIVRÉ', 'success'));
 }
 
 function markAsPending(id) {
-    db.collection(CONSTANTS.COLLECTION).doc(id).update({ 
+    updateDoc(doc(db, CONSTANTS.COLLECTION, id), { 
         status: 'EN_ATTENTE',
-        livreur: firebase.firestore.FieldValue.delete(),
-        dateProgramme: firebase.firestore.FieldValue.delete(),
-        dateLivraison: firebase.firestore.FieldValue.delete(),
-        orderInRoute: firebase.firestore.FieldValue.delete()
+        livreur: deleteField(),
+        dateProgramme: deleteField(),
+        dateLivraison: deleteField(),
+        orderInRoute: deleteField()
     }).then(() => showToast('Repassé en attente et désassigné', 'success'));
 }
 
@@ -2980,7 +2914,7 @@ async function processAbandonment(id, typeAbandon) {
         // Si le colis a été mis à jour récemment, sa dateAjout a pu être écrasée (affichant 0 jours de magasinage).
         // On va chercher la date de création de sa transaction dans la caisse pour réparer cela.
         if (item.ref) {
-            const transQ = await db.collection('transactions').where('reference', '==', item.ref).limit(1).get();
+            const transQ = await getDocs(query(collection(db, 'transactions'), where('reference', '==', item.ref), limit(1)));
             if (!transQ.empty) {
                 const tData = transQ.docs[0].data();
                 if (tData.date) {
@@ -2995,13 +2929,13 @@ async function processAbandonment(id, typeAbandon) {
         }
 
         // 1. Mise à jour de la base de données Firestore
-        await db.collection(CONSTANTS.COLLECTION).doc(id).update({
+        await updateDoc(doc(db, CONSTANTS.COLLECTION, id), {
             status: 'ABANDONNE',
             abandonType: typeAbandon,
             dateAbandon: new Date().toISOString(),
             dateAjout: item.dateAjout, // Sauvegarde de la date d'arrivée corrigée
-            livreur: firebase.firestore.FieldValue.delete(), // Retire d'une éventuelle tournée
-            dateProgramme: firebase.firestore.FieldValue.delete()
+            livreur: deleteField(), // Retire d'une éventuelle tournée
+            dateProgramme: deleteField()
         });
 
         // 2. Génération du PDF
@@ -3344,7 +3278,7 @@ document.getElementById('deliveryForm').addEventListener('submit', function(e) {
             return;
         }
 
-        const docRef = db.collection(CONSTANTS.COLLECTION).doc(existingItem.id);
+        const docRef = doc(db, CONSTANTS.COLLECTION, existingItem.id);
         const updates = {};
 
         // Fonction de fusion intelligente (Garder le plus long = plus d'infos)
@@ -3373,19 +3307,19 @@ document.getElementById('deliveryForm').addEventListener('submit', function(e) {
             updates.dateAjout = new Date().toISOString(); // Préserve la date d'arrivée si on met juste à jour les infos
         }
 
-        docRef.update(updates).then(() => {
+        updateDoc(docRef, updates).then(() => {
             showToast('Livraison fusionnée avec succès !', 'success');
             closeAddModal();
             if (newItem.containerStatus !== currentTab) switchTab(newItem.containerStatus);
         });
 
     } else {
-        db.collection(CONSTANTS.COLLECTION).add(newItem).then(() => {
+        addDoc(collection(db, CONSTANTS.COLLECTION), newItem).then(() => {
             // --- SYNC TRANSACTION (Si En Cours) ---
             // Si on ajoute manuellement un colis "En Cours", on crée la transaction financière correspondante
             if (newItem.containerStatus === 'EN_COURS') {
                 const price = parseFloat((newItem.montant || '0').replace(/[^\d]/g, '')) || 0;
-                db.collection('transactions').add({
+                addDoc(collection(db, 'transactions'), {
                     date: newItem.dateAjout.split('T')[0],
                     reference: newItem.ref,
                     nom: newItem.destinataire || newItem.expediteur || 'Client',
@@ -3501,6 +3435,26 @@ function updateLocationFilterOptions() {
     }
 }
 
+// Exposition globale pour l'interface HTML
+Object.assign(window, {
+    switchTab, setActiveContainer, importExcel, openProgramModal, openAssignContainerModal,
+    openBulkStatusModal, forceSyncTransactions, deleteSelectedDeliveries, exportToExcel,
+    showAddModal, archiveCompletedDeliveries, openArchivesModal, closeArchivesModal,
+    searchArchives, restoreFromArchive, filterDeliveries, sortTable, updateDeliveryLocation,
+    updateDeliveryRecipient, updateDeliveryPhone, updateDeliveryAmount, updateDeliveryQuantity,
+    updateDeliveryInfo, toggleClientNotified, markAsDelivered, markAsPending, deleteDelivery,
+    openAbandonModal, closeAbandonModal, confirmAbandonment, generateAbandonmentPDFFromId,
+    closeAddModal, updateContainerTitle, updateAvailableContainersList, toggleCommuneDropdown,
+    toggleLocationDropdown, toggleStatusDropdown, filterLocationOptions, toggleAllLocations,
+    showPreviewModal, closePreviewModal, confirmImport, updateStats, loadMoreItems,
+    removeDuplicatesFromDatabase, openDeleteChoiceModal, closeDeleteChoiceModal,
+    confirmDeleteAction, checkAuditForDeliveries, toggleSelection, toggleSelectAll,
+    closeProgramModal, openHelpModal, fillProgramFields, confirmProgram, closeAssignContainerModal,
+    confirmAssignContainer, closeBulkStatusModal, confirmBulkStatusChange, viewProgramDetails,
+    sortProgramDetails, openBingMapsRoute, exportRoadmapPDF, printDeliverySlip, updateDeliveryOrder,
+    captureGPSLocation, removeFromProgram, closeProgramDetailsModal, renderTable, debouncedFilterDeliveries
+});
+
 // Stats
 function updateStats() {
     document.getElementById('totalDeliveries').textContent = filteredDeliveries.length;
@@ -3513,10 +3467,10 @@ function updateStats() {
 // Sauvegarde
 function saveDeliveries(itemsToUpdate = null) {
     if (!itemsToUpdate || !Array.isArray(itemsToUpdate)) return;
-    const batch = db.batch();
+    const batch = writeBatch(db);
     let count = 0;
     itemsToUpdate.forEach(item => {
-        batch.update(db.collection(CONSTANTS.COLLECTION).doc(item.id), { orderInRoute: item.orderInRoute });
+        batch.update(doc(db, CONSTANTS.COLLECTION, item.id), { orderInRoute: item.orderInRoute });
         count++;
     });
     if (count > 0) batch.commit().catch(e => console.error("Save deliveries error:", e));
@@ -3600,7 +3554,7 @@ async function removeDuplicatesFromDatabase() {
             groups[key].push(d);
         });
 
-        let batch = db.batch();
+        let batch = writeBatch(db);
         let opCount = 0;
         let deletedCount = 0;
         let updatedCount = 0;
@@ -3640,16 +3594,16 @@ async function removeDuplicatesFromDatabase() {
                         }
                     });
                     // Suppression du doublon
-                    batch.delete(db.collection(CONSTANTS.COLLECTION).doc(dup.id));
+                    batch.delete(doc(db, CONSTANTS.COLLECTION, dup.id));
                     opCount++; deletedCount++;
                 });
 
                 if (hasUpdates) {
-                    batch.update(db.collection(CONSTANTS.COLLECTION).doc(master.id), updates);
+                    batch.update(doc(db, CONSTANTS.COLLECTION, master.id), updates);
                     opCount++; updatedCount++;
                 }
 
-                if (opCount >= 400) { await batch.commit(); batch = db.batch(); opCount = 0; }
+                if (opCount >= 400) { await batch.commit(); batch = writeBatch(db); opCount = 0; }
             }
         }
         if (opCount > 0) await batch.commit();
@@ -3665,12 +3619,12 @@ function openDeleteChoiceModal(context) {
     document.getElementById('deleteChoiceModal').classList.add('active');
 }
 
-window.closeDeleteChoiceModal = function() {
+function closeDeleteChoiceModal() {
     document.getElementById('deleteChoiceModal').classList.remove('active');
     pendingDeleteContext = null;
-};
+}
 
-window.confirmDeleteAction = function(action) {
+function confirmDeleteAction(action) {
     const context = pendingDeleteContext; // FIX: Sauvegarder le contexte avant de le nettoyer
     closeDeleteChoiceModal();
     if (!context) return;
@@ -3731,10 +3685,7 @@ async function checkAuditForDeliveries() {
 
     try {
         // 1. Récupérer les sessions validées
-        const sessionsSnap = await db.collection("audit_logs")
-            .where("action", "==", "VALIDATION_JOURNEE")
-            .where("status", "==", "VALIDATED")
-            .get();
+        const sessionsSnap = await getDocs(query(collection(db, "audit_logs"), where("action", "==", "VALIDATION_JOURNEE"), where("status", "==", "VALIDATED")));
         
         const validatedSessionIds = new Set(sessionsSnap.docs.map(d => d.id));
 
@@ -3754,9 +3705,9 @@ async function checkAuditForDeliveries() {
         for (let i = 0; i < refsToCheck.length; i += 10) chunks.push(refsToCheck.slice(i, i + 10));
 
         for (const chunk of chunks) {
-            const q = await db.collection("transactions").where("reference", "in", chunk).get();
-            q.forEach(doc => {
-                const t = doc.data();
+            const q = await getDocs(query(collection(db, "transactions"), where("reference", "in", chunk)));
+            q.forEach(docSnap => {
+                const t = docSnap.data();
                 // Est validé si lié à une session validée
                 if (t.paymentHistory && t.paymentHistory.some(p => p.sessionId && validatedSessionIds.has(p.sessionId))) {
                     validatedRefs.add(t.reference);
@@ -3778,7 +3729,7 @@ async function checkAuditForDeliveries() {
             }
         }
 
-        let batch = db.batch();
+        let batch = writeBatch(db);
         let opCount = 0;
         let movedCount = 0;
         let updatedCount = 0;
@@ -3787,7 +3738,7 @@ async function checkAuditForDeliveries() {
         if (moveCandidates.length > 0) {
             if (confirm(`${moveCandidates.length} colis validés sont encore dans 'Paris' ou 'À Venir'.\n\nTout déplacer vers 'EN COURS' et marquer 'LIVRÉ' ?`)) {
                 moveCandidates.forEach(item => {
-                    batch.update(db.collection(CONSTANTS.COLLECTION).doc(item.id), {
+                    batch.update(doc(db, CONSTANTS.COLLECTION, item.id), {
                         containerStatus: 'EN_COURS', status: 'LIVRE', dateLivraison: new Date().toISOString(), importedFromTransit: true
                     });
                     movedCount++; opCount++;
@@ -3797,7 +3748,7 @@ async function checkAuditForDeliveries() {
 
         // Traitement des mises à jour simples
         updateCandidates.forEach(item => {
-            batch.update(db.collection(CONSTANTS.COLLECTION).doc(item.id), { status: 'LIVRE', dateLivraison: new Date().toISOString() });
+            batch.update(doc(db, CONSTANTS.COLLECTION, item.id), { status: 'LIVRE', dateLivraison: new Date().toISOString() });
             updatedCount++; opCount++;
         });
 
@@ -3811,15 +3762,15 @@ async function checkAuditForDeliveries() {
 
 // Fonctions utilitaires de suppression/déplacement
 function moveSelectedToAVenir() {
-    const batch = db.batch();
+    const batch = writeBatch(db);
     selectedIds.forEach(id => {
-        batch.update(db.collection(CONSTANTS.COLLECTION).doc(id), {
+        batch.update(doc(db, CONSTANTS.COLLECTION, id), {
             containerStatus: 'A_VENIR',
             status: 'EN_ATTENTE',
-            livreur: firebase.firestore.FieldValue.delete(),
-            dateProgramme: firebase.firestore.FieldValue.delete(),
-            importedFromTransit: firebase.firestore.FieldValue.delete(),
-                directFromParis: firebase.firestore.FieldValue.delete(),
+            livreur: deleteField(),
+            dateProgramme: deleteField(),
+            importedFromTransit: deleteField(),
+            directFromParis: deleteField(),
                 dateAjout: new Date().toISOString() // Fait remonter en haut de la liste
         });
         const item = deliveries.find(d => d.id === id);
@@ -3834,9 +3785,9 @@ function moveSelectedToAVenir() {
 function permanentlyDeleteSelected(skipConfirm = false) {
     if (!skipConfirm && !confirm(`Voulez-vous vraiment supprimer ces ${selectedIds.size} livraisons ?`)) return;
 
-    const batch = db.batch();
+    const batch = writeBatch(db);
     selectedIds.forEach(id => {
-        batch.delete(db.collection(CONSTANTS.COLLECTION).doc(id));
+        batch.delete(doc(db, CONSTANTS.COLLECTION, id));
         const item = deliveries.find(d => d.id === id);
         if (item && item.ref) deleteTransactionByRef(item.ref);
     });
@@ -3851,13 +3802,13 @@ function permanentlyDeleteSelected(skipConfirm = false) {
 
 function moveSingleToAVenir(id) {
     const d = deliveries.find(item => item.id === id);
-    db.collection(CONSTANTS.COLLECTION).doc(id).update({
+    updateDoc(doc(db, CONSTANTS.COLLECTION, id), {
         containerStatus: 'A_VENIR',
         status: 'EN_ATTENTE',
-        livreur: firebase.firestore.FieldValue.delete(),
-        dateProgramme: firebase.firestore.FieldValue.delete(),
-        importedFromTransit: firebase.firestore.FieldValue.delete(),
-        directFromParis: firebase.firestore.FieldValue.delete(),
+        livreur: deleteField(),
+        dateProgramme: deleteField(),
+        importedFromTransit: deleteField(),
+        directFromParis: deleteField(),
         dateAjout: new Date().toISOString() // Fait remonter en haut de la liste
     }).then(() => {
         if (d && d.ref) deleteTransactionByRef(d.ref);
@@ -3869,7 +3820,7 @@ function permanentlyDeleteSingle(id, skipConfirm = false) {
     if (!skipConfirm && !confirm('⚠️ ATTENTION : Êtes-vous sûr de vouloir supprimer définitivement cette livraison ?\nCette action est irréversible.')) return;
 
     const d = deliveries.find(item => item.id === id);
-    db.collection(CONSTANTS.COLLECTION).doc(id).delete()
+    deleteDoc(doc(db, CONSTANTS.COLLECTION, id))
         .then(() => {
             if (d && d.ref) deleteTransactionByRef(d.ref);
             showToast('Livraison supprimée', 'success');

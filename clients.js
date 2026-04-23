@@ -1,10 +1,7 @@
-document.addEventListener('DOMContentLoaded', async () => {
-    if (typeof firebase === 'undefined' || typeof db === 'undefined') {
-        alert("Erreur: Connexion BDD échouée."); return;
-    }
+import { db } from './firebase-config.js';
+import { collection, getDocs, query, where, orderBy } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 
-    const transactionsCollection = db.collection("transactions");
-    const livraisonsCollection = db.collection("livraisons"); // Remplacement de paris_manifest par livraisons
+document.addEventListener('DOMContentLoaded', async () => {
 
     const clientSearchInput = document.getElementById('clientSearch');
     const clientsList = document.getElementById('clientsList');
@@ -74,10 +71,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         topClientsTableBody.innerHTML = '<tr><td colspan="4">Chargement des données...</td></tr>';
         
         // Charger les noms pour l'autocomplete
-        const livraisonsSnap = await livraisonsCollection.orderBy("dateAjout", "desc").get();
+        const livraisonsSnap = await getDocs(query(collection(db, "livraisons"), orderBy("dateAjout", "desc")));
         allLivraisonsCache = livraisonsSnap.docs.map(doc => doc.data());
         
-        const transSnap = await transactionsCollection.where("isDeleted", "!=", true).get();
+        const transSnap = await getDocs(query(collection(db, "transactions"), where("isDeleted", "!=", true)));
         allTransactionsCache = transSnap.docs.map(doc => doc.data());
 
         // Remplir la liste des noms

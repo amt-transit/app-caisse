@@ -13,10 +13,6 @@
 <!-- ZXing pour scan codes-barres/QR via caméra -->
 <script src="https://unpkg.com/@zxing/library@latest/umd/index.min.js"></script>
 
-<!-- Firebase (même config que livraison.js) -->
-<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
-<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
-<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
 
 <style>
 :root {
@@ -868,10 +864,11 @@ html, body {
      SCRIPTS
      ═══════════════════════════════════════ -->
 
+<script type="module" src="auth-guard.js"></script>
+<script type="module">
+import { db } from './firebase-config.js';
+import { collection, doc, updateDoc, getDocs, query, where, limit, arrayUnion } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 
-<script src="firebase-init.js"></script>
-<script src="auth-guard.js"></script>
-<script>
 // ── NUMÉRO DU GROUPE WHATSAPP ──
 // ⚠️ Remplace par le numéro du téléphone qui héberge le groupe
 // (ce numéro doit être en format international sans +)
@@ -906,42 +903,58 @@ async function initScanner() {
         codeReader = new ZXing.BrowserMultiFormatReader();
         const videoEl = document.getElementById('video-preview');
 
-        codeReader.decodeFromConstraints(
-            { video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } } },
-            videoEl,
-            (result, err) => {
-                if (result) {
-                    if (isScanningPaused) return; // Ignore la caméra si en pause
+        const callback = (result, err) => {
+            if (result) {
+                if (isScanningPaused) return; // Ignore la caméra si en pause
 
-                    let text = result.getText().trim().toUpperCase();
-                    
-                    // Tentative d'extraction intelligente (Regex comme dans livraison.js)
-                    // Cherche motif type BA-123-E2 au milieu d'un texte
-                    const refMatch = text.match(/([A-Z]{2})[-_.\s]*(\d{3})[-_.\s]*([A-Z0-9]{2,3})/i);
-                    if (refMatch) {
-                        text = `${refMatch[1]}-${refMatch[2]}-${refMatch[3]}`.toUpperCase();
-                    }
-
-                    // Anti-doublon : ne pas rescanner le même code en < 3s
-                    if (text === (window._lastScan || '') && Date.now() - (window._lastScanTime || 0) < 3000) return;
-                    window._lastScan = text;
-                    window._lastScanTime = Date.now();
-
-                    vibrate([30, 20, 30]); // Vibration courte = scan réussi
-                    document.getElementById('scan-label').textContent = `✓ ${text}`;
-                    document.getElementById('manual-ref').value = text;
-                    searchDelivery(text);
+                let text = result.getText().trim().toUpperCase();
+                
+                // Tentative d'extraction intelligente (Regex comme dans livraison.js)
+                // Cherche motif type BA-123-E2 au milieu d'un texte
+                const refMatch = text.match(/([A-Z]{2})[-_.\s]*(\d{3})[-_.\s]*([A-Z0-9]{2,3})/i);
+                if (refMatch) {
+                    text = `${refMatch[1]}-${refMatch[2]}-${refMatch[3]}`.toUpperCase();
                 }
+
+                // Anti-doublon : ne pas rescanner le même code en < 3s
+                if (text === (window._lastScan || '') && Date.now() - (window._lastScanTime || 0) < 3000) return;
+                window._lastScan = text;
+                window._lastScanTime = Date.now();
+
+                vibrate([30, 20, 30]); // Vibration courte = scan réussi
+                document.getElementById('scan-label').textContent = `✓ ${text}`;
+                document.getElementById('manual-ref').value = text;
+                searchDelivery(text);
             }
-        );
+        };
+
+        try {
+            // On attend (`await`) que la promesse de la caméra soit résolue ou rejetée
+            await codeReader.decodeFromConstraints({ video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } } }, videoEl, callback);
+        } catch (e) {
+            // Si la caméra arrière n'est pas trouvée, on essaie avec n'importe quelle caméra
+            if (e.name === 'NotFoundError' || e.name === 'OverconstrainedError') {
+                console.warn("Caméra arrière non trouvée, essai avec la caméra par défaut.");
+                await codeReader.decodeFromConstraints({ video: { width: { ideal: 1280 }, height: { ideal: 720 } } }, videoEl, callback);
+            } else {
+                // On propage les autres erreurs (ex: permissions refusées)
+                throw e;
+            }
+        }
 
         document.getElementById('scan-status-text').textContent = 'Caméra active — prête à scanner';
         scannerActive = true;
 
     } catch (e) {
-        console.warn('Scanner caméra non disponible:', e);
+        console.warn('Erreur scanner:', e);
+        let message = '⚠️ Caméra non disponible — saisir manuellement';
+        if (e.name === 'NotAllowedError' || e.name === 'PermissionDeniedError') {
+            message = '⛔ Accès caméra refusé. Vérifiez les autorisations du navigateur.';
+        } else if (e.name === 'NotFoundError') {
+            message = '⚠️ Aucune caméra trouvée sur cet appareil.';
+        }
         document.getElementById('viewfinder-wrap').style.display = 'none';
-        document.getElementById('scan-status-text').textContent = '⚠️ Caméra non disponible — saisir manuellement';
+        document.getElementById('scan-status-text').textContent = message;
     }
 }
 
@@ -958,12 +971,12 @@ async function searchDelivery(ref) {
         const cleanRef = ref.trim().toUpperCase();
 
         // 2. Recherche exacte
-        let snap = await db.collection('livraisons').where('ref', '==', cleanRef).limit(1).get();
+        let snap = await getDocs(query(collection(db, 'livraisons'), where('ref', '==', cleanRef), limit(1)));
 
         // 3. Si pas trouvé, essai avec nettoyage de suffixe (ex: BA-123-E2_1_4 -> BA-123-E2)
         if (snap.empty && cleanRef.includes('_')) {
              const baseRef = cleanRef.split('_')[0];
-             snap = await db.collection('livraisons').where('ref', '==', baseRef).limit(1).get();
+             snap = await getDocs(query(collection(db, 'livraisons'), where('ref', '==', baseRef), limit(1)));
         }
 
         showLoading(false);
@@ -1236,7 +1249,7 @@ async function markIncident() {
 
     showLoading(true);
     try {
-        await db.collection('livraisons').doc(currentDelivery.id).update({
+        await updateDoc(doc(db, 'livraisons', currentDelivery.id), {
             status: 'INCIDENT',
             incidentNote: reason,
             dateIncident: new Date().toISOString()
@@ -1293,11 +1306,11 @@ async function sendToWhatsAppAndMarkDone() {
             const remainingQty = totalQty - qty;
 
             // On ne crée pas de nouveau document. On met à jour l'original.
-            await db.collection('livraisons').doc(currentDelivery.id).update({
+        await updateDoc(doc(db, 'livraisons', currentDelivery.id), {
                 quantite: remainingQty, // La nouvelle quantité est ce qu'il reste à livrer
                 status: 'EN_COURS',      // Le statut global reste 'EN_COURS'
                 // On ajoute un enregistrement dans un tableau pour garder l'historique
-                historiquePartiel: firebase.firestore.FieldValue.arrayUnion({
+            historiquePartiel: arrayUnion({
                     quantiteLivree: qty,
                     date: new Date().toISOString(),
                     livreur: livreurName
@@ -1336,7 +1349,7 @@ async function sendToWhatsAppAndMarkDone() {
                 updates.dateProgramme = today;
             }
 
-            await db.collection('livraisons').doc(currentDelivery.id).update(updates);
+        await updateDoc(doc(db, 'livraisons', currentDelivery.id), updates);
 
             finalizeDeliveryUI('LIVRE');
         }
@@ -1521,7 +1534,7 @@ async function captureGPS(id) {
             } catch (e) { console.warn("Erreur reverse geocoding", e); }
             
             try {
-                await db.collection('livraisons').doc(id).update({ lieuLivraison: gpsCoords });
+                await updateDoc(doc(db, 'livraisons', id), { lieuLivraison: gpsCoords });
                 const locEl = document.getElementById('delivery-location');
                 if(locEl) locEl.textContent = gpsCoords;
                 if(currentDelivery) currentDelivery.lieuLivraison = gpsCoords;
@@ -1570,9 +1583,7 @@ async function loadTodayStats() {
     try {
         const today = new Date();
         today.setHours(0,0,0,0);
-        const snap = await db.collection('livraisons')
-            .where('dateLivraison', '>=', today.toISOString())
-            .get();
+        const snap = await getDocs(query(collection(db, 'livraisons'), where('dateLivraison', '>=', today.toISOString())));
 
         let livre = 0, incident = 0, pending = 0;
         snap.forEach(doc => {
@@ -1645,6 +1656,10 @@ function showToast(msg, type = '') {
 function showLoading(show) {
     document.getElementById('loading').classList.toggle('show', show);
 }
+
+Object.assign(window, {
+    showScreen, searchDelivery, resetScannerUI, captureGPS, checkPartial, addPhoto, sendToWhatsAppAndMarkDone, markIncident, viewPhoto, deletePhoto, rotatePhoto
+});
 </script>
 </body>
 </html>

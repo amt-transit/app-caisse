@@ -1,7 +1,9 @@
+import { db } from './firebase-config.js';
+import { collection, doc, setDoc, deleteDoc, getDocs, onSnapshot, writeBatch, query, orderBy } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
+import { initializeApp, deleteApp } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js";
+import { getAuth, createUserWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-auth.js";
+
 document.addEventListener('DOMContentLoaded', async () => {
-    if (typeof firebase === 'undefined' || typeof db === 'undefined') {
-        alert("Erreur: Connexion BDD échouée."); return;
-    }
 
     // Configuration nécessaire pour l'app secondaire (Création utilisateur)
     const firebaseConfig = {
@@ -46,8 +48,8 @@ const isSuperAdmin = userRole === 'super_admin';
             repairBtn.textContent = "Analyse en cours...";
 
             try {
-                const snapshot = await db.collection("transactions").get();
-                const batch = db.batch();
+                const snapshot = await getDocs(collection(db, "transactions"));
+                const batch = writeBatch(db);
                 let count = 0;
 
                 snapshot.forEach(doc => {
@@ -86,7 +88,7 @@ const isSuperAdmin = userRole === 'super_admin';
 
     // 1. LISTE DES UTILISATEURS
     function loadUsers() {
-        db.collection("users").onSnapshot(snapshot => {
+        onSnapshot(collection(db, "users"), snapshot => {
             usersListEl.innerHTML = '';
             if (snapshot.empty) {
                 usersListEl.innerHTML = '<p>Aucun utilisateur trouvé.</p>';
@@ -168,7 +170,7 @@ const isSuperAdmin = userRole === 'super_admin';
                         const uid = e.target.dataset.id;
                         // Note: On supprime seulement de Firestore. Pour Auth, il faudrait une Cloud Function ou Admin SDK.
                         // Ici on casse le lien Firestore -> Auth Guard bloquera l'accès.
-                        await db.collection("users").doc(uid).delete();
+                        await deleteDoc(doc(db, "users", uid));
                         alert("Utilisateur supprimé (Accès révoqué).");
                     }
                 });
@@ -195,13 +197,14 @@ const isSuperAdmin = userRole === 'super_admin';
 
             try {
                 // Initialisation d'une app secondaire pour créer l'user sans déconnecter l'admin
-                const secondaryApp = firebase.initializeApp(firebaseConfig, "Secondary");
+                const secondaryApp = initializeApp(firebaseConfig, "Secondary");
+                const secondaryAuth = getAuth(secondaryApp);
 
-                const userCred = await secondaryApp.auth().createUserWithEmailAndPassword(email, password);
+                const userCred = await createUserWithEmailAndPassword(secondaryAuth, email, password);
                 const uid = userCred.user.uid;
 
                 // Création fiche Firestore
-                await db.collection("users").doc(uid).set({
+                await setDoc(doc(db, "users", uid), {
                     email: email,
                     displayName: username,
                     role: role,
@@ -210,8 +213,8 @@ const isSuperAdmin = userRole === 'super_admin';
                 });
 
                 // Déconnexion de l'app secondaire et nettoyage
-                await secondaryApp.auth().signOut();
-                await secondaryApp.delete();
+                await signOut(secondaryAuth);
+                await deleteApp(secondaryApp);
 
                 alert(`Utilisateur créé avec succès !\nEmail de connexion : ${email}\nMot de passe : ${password}`);
                 newUsernameInput.value = '';
@@ -235,7 +238,7 @@ const isSuperAdmin = userRole === 'super_admin';
     // 3. JOURNAL D'AUDIT
     function loadAuditLogs() {
         // Charger tous les logs
-        db.collection("audit_logs").orderBy("date", "desc").onSnapshot(snapshot => {
+        onSnapshot(query(collection(db, "audit_logs"), orderBy("date", "desc")), snapshot => {
             auditLogBody.innerHTML = '';
             if (snapshot.empty) {
                 auditLogBody.innerHTML = '<tr><td colspan="4">Aucun log.</td></tr>';

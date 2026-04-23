@@ -7,6 +7,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Comfortaa:wght@400;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="livraison/style.css">
     <link rel="icon" type="image/png" href="favicon.png">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
@@ -716,16 +717,12 @@
         <div class="loading-text">Importation du fichier en cours...</div>
     </div>
 
-    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
-    <script src="firebase-init.js"></script>
-    <script src="auth-guard.js"></script>
-    <script src="livraison/livraison.js"></script>
+    <script type="module" src="auth-guard.js"></script>
+    <script type="module" src="livraison/livraison.js"></script>
     <script src="utils.js"></script>
 
     <!-- BRIDGE SCRIPT — colle la nouvelle UI à livraison.js sans le modifier -->
-    <script>
+    <script type="module">
     const LV_DESC = {
         EN_COURS: '📍 <strong>ABIDJAN (Réception)</strong> — Colis arrivés, prêts à livrer. <span style="color:#b45309">⚠️ La dette financière est calculée ici.</span>',
         A_VENIR:  '🌊 <strong>TRANSIT</strong> — Colis en mer. Vérifiez les conteneurs et notifiez les clients.',
@@ -892,6 +889,25 @@
 
             lvUpdateStats(); lvUpdateCounts();
         },600);
+    });
+    
+    // EXPOSITION GLOBALE DES FONCTIONS DU BRIDGE
+    Object.assign(window, {
+        lvTab,
+        lvUpdateStats,
+        lvUpdateCounts,
+        lvUpdateSelBar,
+        lvDeselAll,
+        lvToggleMore,
+        lvCloseMore,
+        lvOpenContModal,
+        lvCloseContModal,
+        lvApplyCont,
+        lvSyncCI,
+        lvSyncFCB,
+        lvSyncQS,
+        lvSyncQS2,
+        lvUpdateBadge
     });
     </script>
 </body>

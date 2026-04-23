@@ -1,15 +1,11 @@
+import { db } from './firebase-config.js';
+import { collection, doc, addDoc, updateDoc, query, where, orderBy, onSnapshot } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
+
 document.addEventListener('DOMContentLoaded', () => {
-    if (typeof firebase === 'undefined' || typeof db === 'undefined') {
-        alert("Erreur: La connexion à la base de données a échoué."); return;
-    }
 
     const currentUserName = sessionStorage.getItem('userName') || 'Inconnu';
     const userRole = sessionStorage.getItem('userRole');
     const isViewer = userRole === 'spectateur';
-
-    // Nouvelles collections indépendantes
-    const fleetTransactionsCollection = db.collection("fleet_transactions");
-    const fleetVehiclesCollection = db.collection("fleet_vehicles");
 
     // DOM Elements - Formulaire Transaction
     const transDate = document.getElementById('transDate');
@@ -78,9 +74,9 @@ document.addEventListener('DOMContentLoaded', () => {
         
         try {
             if (pendingDeleteType === 'vehicle') {
-                await fleetVehiclesCollection.doc(pendingDeleteId).update({ isDeleted: true });
+                await updateDoc(doc(db, "fleet_vehicles", pendingDeleteId), { isDeleted: true });
             } else if (pendingDeleteType === 'transaction') {
-                await fleetTransactionsCollection.doc(pendingDeleteId).update({ isDeleted: true });
+                await updateDoc(doc(db, "fleet_transactions", pendingDeleteId), { isDeleted: true });
             }
         } catch (error) {
             alert("Erreur lors de la suppression : " + error.message);
@@ -96,7 +92,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // --- 1. GESTION DES VÉHICULES ---
-    fleetVehiclesCollection.where("isDeleted", "!=", true).onSnapshot(snap => {
+    const qVehicles = query(collection(db, "fleet_vehicles"), where("isDeleted", "!=", true));
+    onSnapshot(qVehicles, snap => {
         allVehicles = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         updateVehicleSelects();
     });
@@ -150,7 +147,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             try {
-                await fleetVehiclesCollection.add({
+                await addDoc(collection(db, "fleet_vehicles"), {
                     name: name,
                     plate: plate,
                     createdAt: new Date().toISOString(),
@@ -232,7 +229,7 @@ document.addEventListener('DOMContentLoaded', () => {
             };
 
             try {
-                await fleetTransactionsCollection.add(data);
+                await addDoc(collection(db, "fleet_transactions"), data);
                 transAmount.value = '';
                 transDesc.value = '';
                 alert("Opération enregistrée !");
@@ -245,7 +242,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // --- 3. AFFICHAGE ET ANALYSE ---
-    fleetTransactionsCollection.where("isDeleted", "!=", true).orderBy("isDeleted").orderBy("date", "desc").onSnapshot(snap => {
+    const qTrans = query(collection(db, "fleet_transactions"), where("isDeleted", "!=", true), orderBy("isDeleted"), orderBy("date", "desc"));
+    onSnapshot(qTrans, snap => {
         allTransactions = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         renderTableAndStats();
     });

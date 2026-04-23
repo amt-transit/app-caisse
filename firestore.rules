@@ -61,8 +61,7 @@ service cloud.firestore {
     
     // Autres collections : Appliquer le même principe
     match /{document=**} {
-      allow read, write: if isAuthenticated(); // Par défaut, tous les utilisateurs connectés peuvent tout lire/écrire
-      // À ajuster selon vos besoins
+      allow read, write: if false; // Refus explicite par défaut
     }
   }
 }

@@ -1,7 +1,7 @@
+import { db } from './firebase-config.js';
+import { collection, doc, updateDoc, deleteDoc, getDoc, getDocs, query, where, orderBy, onSnapshot, writeBatch, arrayRemove, limit } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
+
 document.addEventListener('DOMContentLoaded', () => {
-    if (typeof firebase === 'undefined' || typeof db === 'undefined') {
-        alert("Erreur: Connexion BDD échouée."); return;
-    }
 
     const sessionsListPendingEl = document.getElementById('sessionsListPending');
     const sessionsListValidatedEl = document.getElementById('sessionsListValidated');
@@ -176,7 +176,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // --- CHARGEMENT AGENTS ---
-    db.collection("agents").orderBy("name").get().then(snap => {
+    getDocs(query(collection(db, "agents"), orderBy("name"))).then(snap => {
         allAgents = snap.docs.map(doc => doc.data().name);
         if(editPayAgent) editPayAgent.innerHTML = '<option value="">- Aucun -</option>' + allAgents.map(a => `<option value="${a}">${a}</option>`).join('');
     });
@@ -184,11 +184,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // 1. Charger la liste des sessions (Basé sur les logs de validation)
     function loadSessions() {
-        let query = db.collection("audit_logs")
-            .where("action", "==", "VALIDATION_JOURNEE")
-            .orderBy("date", "desc"); 
+        const qLogs = query(collection(db, "audit_logs"), where("action", "==", "VALIDATION_JOURNEE"), orderBy("date", "desc"));
 
-        query.onSnapshot(snapshot => {
+        onSnapshot(qLogs, snapshot => {
             sessionsListPendingEl.innerHTML = '';
             sessionsListValidatedEl.innerHTML = '';
             
@@ -295,12 +293,9 @@ document.addEventListener('DOMContentLoaded', () => {
         const lastDay = new Date(year, month, 0).getDate();
         const end = `${monthVal}-${lastDay}T23:59:59`;
 
-        db.collection("audit_logs")
-            .where("action", "==", "VALIDATION_JOURNEE")
-            .where("date", ">=", start)
-            .where("date", "<=", end)
-            .orderBy("date", "desc")
-            .get()
+        const qArchives = query(collection(db, "audit_logs"), where("action", "==", "VALIDATION_JOURNEE"), where("date", ">=", start), where("date", "<=", end), orderBy("date", "desc"));
+
+        getDocs(qArchives)
             .then(snapshot => {
                 sessionsListArchivesEl.innerHTML = '';
                 if (snapshot.empty) {
@@ -369,31 +364,26 @@ document.addEventListener('DOMContentLoaded', () => {
         // CAS 1 : NOUVEAU SYSTÈME (IDs stockés dans le log)
         if (logData.transactionIds && Array.isArray(logData.transactionIds)) {
             // On charge exactement les documents concernés par cette session
-            // Promise.all permet de charger en parallèle, c'est rapide et sûr.
-            const tPromises = logData.transactionIds.map(id => db.collection("transactions").doc(id).get());
+            const tPromises = logData.transactionIds.map(id => getDoc(doc(db, "transactions", id)));
             const tSnapshots = await Promise.all(tPromises);
-            transactionsDocs = tSnapshots.filter(doc => doc.exists);
+            transactionsDocs = tSnapshots.filter(doc => doc.exists());
         } 
         // CAS 2 : ANCIEN SYSTÈME (Fallback sur la date/user)
         else {
-            const transSnap = await db.collection("transactions")
-                .where("saisiPar", "==", logData.user)
-                .where("lastPaymentDate", "==", dateOnly)
-                .get();
+            const qTransFallback = query(collection(db, "transactions"), where("saisiPar", "==", logData.user), where("lastPaymentDate", "==", dateOnly));
+            const transSnap = await getDocs(qTransFallback);
             transactionsDocs = transSnap.docs;
         }
 
         // IDEM POUR LES DÉPENSES
         if (logData.expenseIds && Array.isArray(logData.expenseIds)) {
-            const ePromises = logData.expenseIds.map(id => db.collection("expenses").doc(id).get());
+            const ePromises = logData.expenseIds.map(id => getDoc(doc(db, "expenses", id)));
             const eSnapshots = await Promise.all(ePromises);
-            expensesDocs = eSnapshots.filter(doc => doc.exists).map(d => ({ id: d.id, ...d.data() }));
+            expensesDocs = eSnapshots.filter(doc => doc.exists()).map(d => ({ id: d.id, ...d.data() }));
         } else {
             // Fallback ancien système
-            const expSnap = await db.collection("expenses")
-                .where("description", ">=", "")
-                .orderBy("description")
-                .get();
+            const qExpFallback = query(collection(db, "expenses"), where("description", ">=", ""), orderBy("description"));
+            const expSnap = await getDocs(qExpFallback);
             expensesDocs = expSnap.docs
                 .map(d => ({ id: d.id, ...d.data() }))
                 .filter(e => e.date === dateOnly && e.description.includes(logData.user));
@@ -674,10 +664,7 @@ document.addEventListener('DOMContentLoaded', () => {
             for (let i=0; i<transIds.length; i+=10) chunks.push(transIds.slice(i, i+10));
 
             for (const chunk of chunks) {
-                const q = await db.collection("audit_logs")
-                    .where("action", "==", "VALIDATION_JOURNEE")
-                    .where("transactionIds", "array-contains-any", chunk)
-                    .get();
+                const q = await getDocs(query(collection(db, "audit_logs"), where("action", "==", "VALIDATION_JOURNEE"), where("transactionIds", "array-contains-any", chunk)));
                 q.forEach(doc => foundSessions.set(doc.id, doc));
             }
 
@@ -687,12 +674,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 for (const docT of docsToCheck) {
                     const tData = docT.data();
                     // On cherche une session validée par cet utilisateur à cette date (entryDate)
-                    const q = await db.collection("audit_logs")
-                        .where("action", "==", "VALIDATION_JOURNEE")
-                        .where("user", "==", tData.saisiPar)
-                        .where("entryDate", "==", tData.date)
-                        .limit(1)
-                        .get();
+                    const qFallback = query(collection(db, "audit_logs"), where("action", "==", "VALIDATION_JOURNEE"), where("user", "==", tData.saisiPar), where("entryDate", "==", tData.date), limit(1));
+                    const q = await getDocs(qFallback);
                     q.forEach(doc => foundSessions.set(doc.id, doc));
                 }
             }
@@ -719,9 +702,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!currentSessionId) return;
             if (await AppModal.confirm("Voulez-vous archiver cette session ?\n\nElle disparaîtra de la liste principale mais restera accessible via la recherche d'archives par mois.", "Archivage")) {
                 try {
-                    await db.collection("audit_logs").doc(currentSessionId).update({
-                        status: "ARCHIVED"
-                    });
+                    await updateDoc(doc(db, "audit_logs", currentSessionId), { status: "ARCHIVED" });
                     AppModal.success("Session archivée avec succès.");
                     sessionDetailsEl.style.display = 'none';
                     noSelectionMsg.style.display = 'block';
@@ -773,11 +754,11 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!await AppModal.confirm("Voulez-vous vraiment supprimer cet encaissement de la journée ?", "Suppression", true)) return;
         
         try {
-            const docRef = db.collection("transactions").doc(docId);
-            const doc = await docRef.get();
-            if (!doc.exists) return;
+            const docRef = doc(db, "transactions", docId);
+            const docSnap = await getDoc(docRef);
+            if (!docSnap.exists()) return;
             
-            const data = doc.data();
+            const data = docSnap.data();
             const sessionDate = currentSessionData.date.split('T')[0];
             const sessionUser = currentSessionData.user;
 
@@ -801,7 +782,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 
                 const newReste = (data.prix || 0) - (newAbj + newPar);
                 
-                await docRef.update({
+                await updateDoc(docRef, {
                     paymentHistory: newHistory,
                     montantAbidjan: newAbj,
                     montantParis: newPar,
@@ -809,24 +790,24 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
             } else {
                 // Fallback (Anciennes données sans historique) : On marque supprimé
-                await docRef.update({ isDeleted: true });
+                await updateDoc(docRef, { isDeleted: true });
             }
             
             // MISE À JOUR DU LOG D'AUDIT (Pour que la session sache qu'elle a perdu une transaction)
             if (currentSessionData.transactionIds) {
-                const auditRef = db.collection("audit_logs").doc(currentSessionId);
-                await auditRef.update({
-                    transactionIds: firebase.firestore.FieldValue.arrayRemove(docId)
+                const auditRef = doc(db, "audit_logs", currentSessionId);
+                await updateDoc(auditRef, {
+                    transactionIds: arrayRemove(docId)
                 });
                 
                 // Vérifier si la session est devenue vide
-                const updatedLog = await auditRef.get();
+                const updatedLog = await getDoc(auditRef);
                 const d = updatedLog.data();
                 const tEmpty = !d.transactionIds || d.transactionIds.length === 0;
                 const eEmpty = !d.expenseIds || d.expenseIds.length === 0;
                 
                 if (tEmpty && eEmpty) {
-                    await auditRef.delete();
+                    await deleteDoc(auditRef);
                     sessionDetailsEl.style.display = 'none';
                     noSelectionMsg.style.display = 'block';
                     return; // Fin, plus rien à afficher
@@ -845,13 +826,13 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!await AppModal.confirm("Supprimer cette dépense ?", "Suppression", true)) return;
         try {
             // 1. Marquer supprimé
-            await db.collection("expenses").doc(docId).update({ isDeleted: true });
+            await updateDoc(doc(db, "expenses", docId), { isDeleted: true });
             
             // 2. Retirer du log de session
             if (currentSessionData.expenseIds) {
-                const auditRef = db.collection("audit_logs").doc(currentSessionId);
-                await auditRef.update({
-                    expenseIds: firebase.firestore.FieldValue.arrayRemove(docId)
+                const auditRef = doc(db, "audit_logs", currentSessionId);
+                await updateDoc(auditRef, {
+                    expenseIds: arrayRemove(docId)
                 });
             }
             loadSessionDetails(currentSessionId, currentSessionData);
@@ -863,9 +844,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function handleEditExpense(docId) {
         try {
-            const doc = await db.collection("expenses").doc(docId).get();
-            if (!doc.exists) return;
-            const data = doc.data();
+            const docSnap = await getDoc(doc(db, "expenses", docId));
+            if (!docSnap.exists()) return;
+            const data = docSnap.data();
             currentEditingExpenseId = docId;
             editExpDate.value = data.date;
             editExpDesc.value = data.description;
@@ -878,7 +859,7 @@ document.addEventListener('DOMContentLoaded', () => {
     saveExpenseBtn.onclick = async () => {
         if (!currentEditingExpenseId) return;
         try {
-            await db.collection("expenses").doc(currentEditingExpenseId).update({
+            await updateDoc(doc(db, "expenses", currentEditingExpenseId), {
                 date: editExpDate.value,
                 description: editExpDesc.value,
                 montant: parseFloat(editExpAmount.value) || 0,
@@ -891,11 +872,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function handleEdit(docId) {
         try {
-            const docRef = db.collection("transactions").doc(docId);
-            const doc = await docRef.get();
-            if (!doc.exists) return;
+            const docRef = doc(db, "transactions", docId);
+            const docSnap = await getDoc(docRef);
+            if (!docSnap.exists()) return;
             
-            const data = doc.data();
+            const data = docSnap.data();
             
             // Copie profonde
             currentEditingTransaction = JSON.parse(JSON.stringify({ id: doc.id, ...data }));
@@ -1043,13 +1024,13 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             updates.agent = Array.from(uniqueAgents).join(', ');
 
-            await db.collection("transactions").doc(currentEditingTransaction.id).update(updates);
+            await updateDoc(doc(db, "transactions", currentEditingTransaction.id), updates);
 
             // --- SYNCHRONISATION AVEC LIVRAISON ---
             try {
-                const livQuery = await db.collection("livraisons").where("ref", "==", currentEditingTransaction.reference).limit(1).get();
+                const livQuery = await getDocs(query(collection(db, "livraisons"), where("ref", "==", currentEditingTransaction.reference), limit(1)));
                 if (!livQuery.empty) {
-                    await livQuery.docs[0].ref.update({
+                    await updateDoc(livQuery.docs[0].ref, {
                         conteneur: updates.conteneur,
                         destinataire: updates.nom
                     });
@@ -1085,11 +1066,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // 2. TRAITEMENT DES TRANSACTIONS (Rétablissement des montants)
             for (const docId of transactionIds) {
-                const docRef = db.collection("transactions").doc(docId);
-                const doc = await docRef.get();
+                const docRef = doc(db, "transactions", docId);
+                const docSnap = await getDoc(docRef);
                 
-                if (doc.exists) {
-                    const data = doc.data();
+                if (docSnap.exists()) {
+                    const data = docSnap.data();
                     if (data.paymentHistory) {
                         let newHistory;
                         
@@ -1108,7 +1089,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         
                         const newReste = (data.prix||0) - (newAbj + newPar);
                         
-                        await docRef.update({ paymentHistory: newHistory, montantAbidjan: newAbj, montantParis: newPar, reste: newReste });
+                        await updateDoc(docRef, { paymentHistory: newHistory, montantAbidjan: newAbj, montantParis: newPar, reste: newReste });
                     }
                 }
             }
@@ -1116,12 +1097,12 @@ document.addEventListener('DOMContentLoaded', () => {
             // 3. Supprimer les dépenses associées (Si IDs disponibles)
             if (sessionData.expenseIds && Array.isArray(sessionData.expenseIds)) {
                 for (const expId of sessionData.expenseIds) {
-                    await db.collection("expenses").doc(expId).update({ isDeleted: true });
+                    await updateDoc(doc(db, "expenses", expId), { isDeleted: true });
                 }
             }
 
             // 4. Supprimer le log
-            await db.collection("audit_logs").doc(sessionId).delete();
+            await deleteDoc(doc(db, "audit_logs", sessionId));
             
             sessionDetailsEl.style.display = 'none';
             noSelectionMsg.style.display = 'block';
@@ -1138,7 +1119,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (await AppModal.confirm("Confirmer la validation et la clôture de cette journée ?", "Validation Globale")) {
             
             // --- NOUVELLE LOGIQUE : Mise à jour du statut Livraison ---
-            const batch = db.batch();
+            const batch = writeBatch(db);
             let deliveryUpdateCount = 0;
 
             // 1. On récupère les références ET les données de reste à payer
@@ -1162,11 +1143,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
 
                 for (const chunk of chunks) {
-                    const deliveryQuery = db.collection("livraisons")
-                        .where("ref", "in", chunk)
-                        .where("containerStatus", "==", "EN_COURS");
+                    const deliveryQuery = query(collection(db, "livraisons"), where("ref", "in", chunk), where("containerStatus", "==", "EN_COURS"));
                     
-                    const deliverySnapshot = await deliveryQuery.get();
+                    const deliverySnapshot = await getDocs(deliveryQuery);
 
                     deliverySnapshot.forEach(doc => {
                         const deliveryData = doc.data();
@@ -1190,7 +1169,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             // On met à jour le log d'audit (dans le même batch pour l'atomicité)
-            const auditLogRef = db.collection("audit_logs").doc(currentSessionId);
+            const auditLogRef = doc(db, "audit_logs", currentSessionId);
             batch.update(auditLogRef, {
                 status: "VALIDATED",
                 validatedBy: sessionStorage.getItem('userName'),

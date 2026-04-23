@@ -1,7 +1,7 @@
+import { db } from './firebase-config.js';
+import { collection, getDocs, query, where, onSnapshot } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
+
 document.addEventListener('DOMContentLoaded', async () => {
-    if (typeof firebase === 'undefined' || typeof db === 'undefined') {
-        alert("Erreur: Connexion BDD échouée."); return;
-    }
 
     // SERVICE TRANSACTION (Injecté localement car non chargé via HTML)
     const transactionService = {
@@ -36,7 +36,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             }, []);
         },
         async calculateAvailableBalance(db, unconfirmedSessions) {
-            const transSnap = await db.collection("transactions").where("isDeleted", "!=", true).get();
+            const transSnap = await getDocs(query(collection(db, "transactions"), where("isDeleted", "!=", true)));
             let totalVentes = 0;
             transSnap.forEach(doc => {
                 const d = doc.data();
@@ -53,7 +53,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     }
                 }
             });
-            const incSnap = await db.collection("other_income").where("isDeleted", "!=", true).get();
+            const incSnap = await getDocs(query(collection(db, "other_income"), where("isDeleted", "!=", true)));
             let totalAutres = 0;
             incSnap.forEach(doc => {
                 const d = doc.data();
@@ -61,7 +61,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     totalAutres += (d.montant || 0);
                 }
             });
-            const expSnap = await db.collection("expenses").where("isDeleted", "!=", true).get();
+            const expSnap = await getDocs(query(collection(db, "expenses"), where("isDeleted", "!=", true)));
             let totalDepenses = 0;
             expSnap.forEach(doc => {
                 const d = doc.data();
@@ -70,7 +70,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     totalDepenses += (d.montant || 0);
                 }
             });
-            const bankSnap = await db.collection("bank_movements").where("isDeleted", "!=", true).get();
+            const bankSnap = await getDocs(query(collection(db, "bank_movements"), where("isDeleted", "!=", true)));
             let totalRetraits = 0;
             let totalDepots = 0;
             bankSnap.forEach(doc => {
@@ -950,7 +950,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     // --- 8. DATA LOADING (LISTENERS) ---
     
     // A. Sessions Validées (Liste Blanche)
-    db.collection("audit_logs").where("action", "==", "VALIDATION_JOURNEE").onSnapshot(snap => {
+    onSnapshot(query(collection(db, "audit_logs"), where("action", "==", "VALIDATION_JOURNEE")), snap => {
         validatedSessions.clear();
         snap.forEach(doc => {
             if (doc.data().status === "VALIDATED") validatedSessions.add(doc.id);
@@ -959,19 +959,19 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
 
     // B. Données
-    db.collection("transactions").where("isDeleted", "!=", true).onSnapshot(snap => {
+    onSnapshot(query(collection(db, "transactions"), where("isDeleted", "!=", true)), snap => {
         allTransactions = snap.docs.map(d => ({ id: d.id, ...d.data() }));
         updateDashboard();
     });
-    db.collection("expenses").where("isDeleted", "!=", true).onSnapshot(snap => {
+    onSnapshot(query(collection(db, "expenses"), where("isDeleted", "!=", true)), snap => {
         allExpenses = snap.docs.map(d => ({ id: d.id, ...d.data() }));
         updateDashboard();
     });
-    db.collection("other_income").where("isDeleted", "!=", true).onSnapshot(snap => {
+    onSnapshot(query(collection(db, "other_income"), where("isDeleted", "!=", true)), snap => {
         allOtherIncome = snap.docs.map(d => ({ id: d.id, ...d.data() }));
         updateDashboard();
     });
-    db.collection("bank_movements").where("isDeleted", "!=", true).onSnapshot(snap => {
+    onSnapshot(query(collection(db, "bank_movements"), where("isDeleted", "!=", true)), snap => {
         allBankMovements = snap.docs.map(d => ({ id: d.id, ...d.data() }));
         updateDashboard();
     });

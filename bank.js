@@ -1,7 +1,7 @@
+import { db } from './firebase-config.js';
+import { collection, doc, addDoc, updateDoc, getDocs, query, where, orderBy, onSnapshot, writeBatch } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
+
 document.addEventListener('DOMContentLoaded', () => {
-    if (typeof firebase === 'undefined' || typeof db === 'undefined') {
-        alert("Erreur: La connexion à la base de données a échoué."); return;
-    }
 
     // SERVICE TRANSACTION (Injecté localement car non chargé via HTML)
     const transactionService = {
@@ -36,7 +36,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }, []);
         },
         async calculateAvailableBalance(db, unconfirmedSessions) {
-            const transSnap = await db.collection("transactions").where("isDeleted", "!=", true).get();
+            const transSnap = await getDocs(query(collection(db, "transactions"), where("isDeleted", "!=", true)));
             let totalVentes = 0;
             transSnap.forEach(doc => {
                 const d = doc.data();
@@ -53,7 +53,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                 }
             });
-            const incSnap = await db.collection("other_income").where("isDeleted", "!=", true).get();
+            const incSnap = await getDocs(query(collection(db, "other_income"), where("isDeleted", "!=", true)));
             let totalAutres = 0;
             incSnap.forEach(doc => {
                 const d = doc.data();
@@ -61,7 +61,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     totalAutres += (d.montant || 0);
                 }
             });
-            const expSnap = await db.collection("expenses").where("isDeleted", "!=", true).get();
+            const expSnap = await getDocs(query(collection(db, "expenses"), where("isDeleted", "!=", true)));
             let totalDepenses = 0;
             expSnap.forEach(doc => {
                 const d = doc.data();
@@ -70,7 +70,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     totalDepenses += (d.montant || 0);
                 }
             });
-            const bankSnap = await db.collection("bank_movements").where("isDeleted", "!=", true).get();
+            const bankSnap = await getDocs(query(collection(db, "bank_movements"), where("isDeleted", "!=", true)));
             let totalRetraits = 0;
             let totalDepots = 0;
             bankSnap.forEach(doc => {
@@ -101,8 +101,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const currentUserName = sessionStorage.getItem('userName') || 'Inconnu';
     const userRole = sessionStorage.getItem('userRole');
     const isViewer = userRole === 'spectateur';
-
-    const bankCollection = db.collection("bank_movements");
 
     const addBankMovementBtn = document.getElementById('addBankMovementBtn');
     const bankDate = document.getElementById('bankDate');
@@ -213,10 +211,10 @@ document.addEventListener('DOMContentLoaded', () => {
             addBankMovementBtn.textContent = "Enregistrer le Mouvement";
         }
 
-        bankCollection.add(data).then((docRef) => {
+        addDoc(collection(db, "bank_movements"), data).then((docRef) => {
             // AUTOMATISATION : Si c'est un Paiement lié à un Conteneur, on crée la dépense automatiquement
             if (type === 'Paiement' && conteneur) {
-                db.collection("expenses").add({
+                addDoc(collection(db, "expenses"), {
                     date: data.date,
                     description: `${data.description} (Virement Bancaire)`,
                     montant: data.montant,
@@ -255,7 +253,7 @@ document.addEventListener('DOMContentLoaded', () => {
             Papa.parse(csvFile.files[0], {
                 header: true, skipEmptyLines: true,
                 complete: async (results) => {
-                    const batch = db.batch();
+                    const batch = writeBatch(db);
                     let count = 0;
                     
                     results.data.forEach(row => {
@@ -265,7 +263,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         const montant = parseFloat(row.montant);
 
                         if (date && desc && type && !isNaN(montant)) {
-                            const docRef = bankCollection.doc();
+                            const docRef = doc(collection(db, "bank_movements"));
                             batch.set(docRef, {
                                 date, description: desc, type, montant, isDeleted: false
                             });
@@ -295,42 +293,41 @@ document.addEventListener('DOMContentLoaded', () => {
     function fetchBankMovements() {
         if (unsubscribeBank) unsubscribeBank();
         if (unsubscribeVirements) unsubscribeVirements();
-        let query = bankCollection;
+
+        let bankConstraints = [];
         
         if (showDeletedCheckbox.checked) {
-            // Si on veut voir les supprimés
-            query = query.where("isDeleted", "==", true).orderBy("isDeleted");
+            bankConstraints.push(where("isDeleted", "==", true), orderBy("isDeleted"));
         } else {
-            // Si on veut voir les actifs (défaut)
-            query = query.where("isDeleted", "!=", true).orderBy("isDeleted");
+            bankConstraints.push(where("isDeleted", "!=", true), orderBy("isDeleted"));
         }
-        
-        // Ensuite on trie par date
-        query = query.orderBy("date", "desc");
+        bankConstraints.push(orderBy("date", "desc"));
 
-        unsubscribeBank = query.onSnapshot(snapshot => {
+        const qBank = query(collection(db, "bank_movements"), ...bankConstraints);
+
+        unsubscribeBank = onSnapshot(qBank, snapshot => {
             allBankMovements = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data(), _source: 'bank' }));
             mergeAndRender();
         }, error => console.error(error));
 
         // B. Virements depuis Transactions
-        let transQuery = db.collection("transactions");
+        let transConstraints = [];
         if (showDeletedCheckbox.checked) {
-             transQuery = transQuery.where("isDeleted", "==", true);
+             transConstraints.push(where("isDeleted", "==", true));
         } else {
-             transQuery = transQuery.where("isDeleted", "!=", true).orderBy("isDeleted");
+             transConstraints.push(where("isDeleted", "!=", true), orderBy("isDeleted"));
         }
-        transQuery = transQuery.orderBy("date", "desc");
+        transConstraints.push(orderBy("date", "desc"));
 
-        unsubscribeVirements = transQuery.onSnapshot(snapshot => {
+        const qTrans = query(collection(db, "transactions"), ...transConstraints);
+
+        unsubscribeVirements = onSnapshot(qTrans, snapshot => {
             const extracted = [];
             snapshot.docs.forEach(doc => {
                 const t = doc.data();
                 
-                // Logique identique au Dashboard pour extraire les paiements
                 if (t.paymentHistory && t.paymentHistory.length > 0) {
                     t.paymentHistory.forEach((pay, idx) => {
-                        // FILTRE SÉCURITÉ : Ignorer paiement si session non validée
                         if (pay.sessionId && unconfirmedSessions.has(pay.sessionId)) return;
 
                         if (pay.modePaiement === 'Virement' || pay.modePaiement === 'Chèque') {
@@ -369,9 +366,9 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // LISTENER : Sessions non validées
-    db.collection("audit_logs")
-        .where("action", "==", "VALIDATION_JOURNEE")
-        .onSnapshot(snapshot => {
+    const qAudit = query(collection(db, "audit_logs"), where("action", "==", "VALIDATION_JOURNEE"));
+    
+    onSnapshot(qAudit, snapshot => {
             unconfirmedSessions.clear();
             snapshot.forEach(doc => {
                 const data = doc.data();
@@ -514,11 +511,12 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!await AppModal.confirm("Confirmer la suppression ? Elle sera archivée.", "Suppression", true)) return;
 
             // SUPPRESSION EN CASCADE : Si une dépense est liée à ce mouvement, on la supprime aussi
-            db.collection("expenses").where("linkedBankMovementId", "==", docId).get().then(snap => {
-                snap.forEach(doc => doc.ref.update({ isDeleted: true }));
+            const expensesQ = query(collection(db, "expenses"), where("linkedBankMovementId", "==", docId));
+            getDocs(expensesQ).then(snap => {
+                snap.forEach(d => updateDoc(d.ref, { isDeleted: true }));
             });
 
-                bankCollection.doc(docId).update({ isDeleted: true });
+            updateDoc(doc(db, "bank_movements", docId), { isDeleted: true });
         }
     });
 

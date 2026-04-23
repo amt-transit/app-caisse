@@ -1,3 +1,7 @@
+import { auth, db } from './firebase-config.js';
+import { onAuthStateChanged, setPersistence, browserLocalPersistence, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-auth.js";
+import { doc, getDoc } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
+
 document.addEventListener('DOMContentLoaded', () => {
     const loginBtn = document.getElementById('loginBtn');
     
@@ -8,11 +12,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // CORRECTION : On ne redirige QUE si le profil existe déjà
     // Cela évite de couper l'herbe sous le pied à la création automatique
-    firebase.auth().onAuthStateChanged(async user => {
+    onAuthStateChanged(auth, async user => {
         if (user) {
             try {
-                const doc = await db.collection("users").doc(user.uid).get(); 
-                if (doc.exists) {
+                const docRef = doc(db, "users", user.uid);
+                const docSnap = await getDoc(docRef); 
+                if (docSnap.exists()) {
                     window.location.href = 'index.html';
                 }
             } catch (e) { console.error(e); }
@@ -43,19 +48,20 @@ document.addEventListener('DOMContentLoaded', () => {
 
         try {
             // FORCE LA PERSISTANCE DE SESSION (Important pour le local)
-            await firebase.auth().setPersistence(firebase.auth.Auth.Persistence.LOCAL);
+            await setPersistence(auth, browserLocalPersistence);
 
-            const userCredential = await firebase.auth().signInWithEmailAndPassword(emailTechnique, password);
+            const userCredential = await signInWithEmailAndPassword(auth, emailTechnique, password);
             const uid = userCredential.user.uid;
 
             // Vérification supplémentaire : le document users existe-t-il ?
-            let userDoc = await db.collection("users").doc(uid).get();
+            const userDocRef = doc(db, "users", uid);
+            let userDocSnap = await getDoc(userDocRef);
 
             // --- AUTO-RÉPARATION SUPPRIMÉE POUR PROD ---
 
-            if (!userDoc.exists) {
+            if (!userDocSnap.exists()) {
                 // Oups, l'utilisateur a un compte Auth mais pas de profil Firestore (Cas Prod)
-                await firebase.auth().signOut();
+                await signOut(auth);
                 showError("Compte utilisateur corrompu. Contactez l'admin.");
                 loginBtn.disabled = false;
                 loginBtn.textContent = "Se connecter";

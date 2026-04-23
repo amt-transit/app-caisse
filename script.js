@@ -1,7 +1,7 @@
+import { db } from './firebase-config.js';
+import { collection, doc, addDoc, updateDoc, getDocs, query, where, orderBy, limit, onSnapshot, writeBatch, arrayUnion } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
+
 document.addEventListener('DOMContentLoaded', async () => {
-    if (typeof firebase === 'undefined' || typeof db === 'undefined') {
-        alert("Erreur: Connexion BDD échouée."); return;
-    }
 
     // SERVICE TRANSACTION (Injecté localement car non chargé via HTML)
     const transactionService = {
@@ -36,7 +36,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             }, []);
         },
         async calculateAvailableBalance(db, unconfirmedSessions) {
-            const transSnap = await db.collection("transactions").where("isDeleted", "!=", true).get();
+            const transSnap = await getDocs(query(collection(db, "transactions"), where("isDeleted", "!=", true)));
             let totalVentes = 0;
             transSnap.forEach(doc => {
                 const d = doc.data();
@@ -53,7 +53,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     }
                 }
             });
-            const incSnap = await db.collection("other_income").where("isDeleted", "!=", true).get();
+            const incSnap = await getDocs(query(collection(db, "other_income"), where("isDeleted", "!=", true)));
             let totalAutres = 0;
             incSnap.forEach(doc => {
                 const d = doc.data();
@@ -61,7 +61,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     totalAutres += (d.montant || 0);
                 }
             });
-            const expSnap = await db.collection("expenses").where("isDeleted", "!=", true).get();
+            const expSnap = await getDocs(query(collection(db, "expenses"), where("isDeleted", "!=", true)));
             let totalDepenses = 0;
             expSnap.forEach(doc => {
                 const d = doc.data();
@@ -70,7 +70,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     totalDepenses += (d.montant || 0);
                 }
             });
-            const bankSnap = await db.collection("bank_movements").where("isDeleted", "!=", true).get();
+            const bankSnap = await getDocs(query(collection(db, "bank_movements"), where("isDeleted", "!=", true)));
             let totalRetraits = 0;
             let totalDepots = 0;
             bankSnap.forEach(doc => {
@@ -97,11 +97,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     };
 
-    const transactionsCollection = db.collection("transactions");
-    const expensesCollection = db.collection("expenses");
-    const bankCollection = db.collection("bank_movements");
-    const livraisonsCollection = db.collection("livraisons");
-
     // Récupération du nom de l'utilisateur connecté
     const currentUserName = sessionStorage.getItem('userName') || 'Utilisateur';
 
@@ -114,13 +109,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
 
     // --- GESTION DYNAMIQUE DES AGENTS (Firestore) ---
-    db.collection("agents").orderBy("name").onSnapshot(snapshot => {
+    const qAgents = query(collection(db, "agents"), orderBy("name"));
+    onSnapshot(qAgents, snapshot => {
         if (snapshot.empty) {
             // MIGRATION AUTOMATIQUE : Si la liste est vide, on ajoute les agents par défaut
             const defaults = ["Adboul Paris", "Ali Paris", "Autres Paris", "AZIZ", "Bakary Paris", "Cesar", "Cheick Paris", "Lauraine", "Coulibaly Traoré Mah", "Demba Paris", "Drissa Paris", "Fatim Paris", "Hamza", "JB", "Julien", "Kady Paris", "Maley", "Males", "Mohamed Paris", "Moussa Paris", "Salif", "Samba", "Touré", "Blanche"];
-            const batch = db.batch();
+            const batch = writeBatch(db);
             defaults.forEach(name => {
-                const ref = db.collection("agents").doc();
+                const ref = doc(collection(db, "agents"));
                 batch.set(ref, { name: name });
             });
             batch.commit().then(() => console.log("Liste agents initialisée."));
@@ -136,7 +132,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         addAgentBtn.addEventListener('click', async () => {
             const newName = await AppModal.prompt("Nom du nouvel agent :", "", "Nouvel Agent");
             if (newName && newName.trim()) {
-                db.collection("agents").add({ name: newName.trim() }).then(() => AppModal.success("Agent ajouté !")).catch(e => AppModal.error(e.message));
+                addDoc(collection(db, "agents"), { name: newName.trim() }).then(() => AppModal.success("Agent ajouté !")).catch(e => AppModal.error(e.message));
             }
         });
     }
@@ -497,9 +493,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         if (!await AppModal.confirm(msg, "Validation de la Journée")) return;
 
-        const batch = db.batch();
+        const batch = writeBatch(db);
         // CRÉATION ID SESSION UNIQUE (Pour distinguer les sessions du même jour)
-        const auditRef = db.collection("audit_logs").doc();
+        const auditRef = doc(collection(db, "audit_logs"));
         const currentSessionId = auditRef.id;
 
         // TABLEAUX POUR STOCKER LES IDs FIXES (Pour la confirmation robuste)
@@ -535,11 +531,11 @@ document.addEventListener('DOMContentLoaded', async () => {
                 sessionId: currentSessionId // <-- AJOUT CLÉ : On lie le paiement à cette session précise
             }));
 
-            const query = await transactionsCollection.where("reference", "==", ref).get();
+            const qTrans = await getDocs(query(collection(db, "transactions"), where("reference", "==", ref)));
 
-            if (!query.empty) {
-                const docRef = query.docs[0].ref;
-                const oldData = query.docs[0].data();
+            if (!qTrans.empty) {
+                const docRef = qTrans.docs[0].ref;
+                const oldData = qTrans.docs[0].data();
                 const dailyMetadata = group[group.length - 1];
 
                 let finalPrix = oldData.prix || 0;
@@ -565,7 +561,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     montantParis: newTotalParis,
                     montantAbidjan: newTotalAbidjan,
                     reste: newReste,
-                    paymentHistory: firebase.firestore.FieldValue.arrayUnion(...newPaymentEntries),
+                    paymentHistory: arrayUnion(...newPaymentEntries),
                     lastPaymentDate: baseTransac.date,
                     saisiPar: currentUserName,
                     isDeleted: false, // Réactivation automatique si le dossier était supprimé
@@ -602,7 +598,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 batch.update(docRef, updates);
                 touchedTransactionIds.push(docRef.id); // Sauvegarde ID existant
             } else {
-                const docRef = transactionsCollection.doc();
+                const docRef = doc(collection(db, "transactions"));
                 
                 const groupAgents = group.map(t => t.agent).join(', ').split(',').map(a => a.trim()).filter(Boolean);
                 const combinedAgents = [...new Set(groupAgents)].join(', ');
@@ -629,7 +625,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             // --- SYNCHRONISATION AVEC LIVRAISON ---
             // Si on modifie/crée une transaction, on met à jour le colis correspondant dans Livraison
-            const livQuery = await livraisonsCollection.where("ref", "==", ref).limit(1).get();
+            const livQuery = await getDocs(query(collection(db, "livraisons"), where("ref", "==", ref), limit(1)));
             if (!livQuery.empty) {
                 const livDoc = livQuery.docs[0];
                 const livUpdates = {};
@@ -651,7 +647,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         // B. Enregistrer Dépenses
         dailyExpenses.forEach(exp => {
-            const docRef = expensesCollection.doc();
+            const docRef = doc(collection(db, "expenses"));
             // Si un conteneur est renseigné, on définit le type sur "Conteneur"
             const typeDepense = exp.conteneur ? "Conteneur" : "Mensuelle";
 
@@ -807,12 +803,12 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
 
         // 2. Vérifier dans la Base de Données
-        let query = await transactionsCollection.where("reference", "==", searchValue).get();
-        if (query.empty) query = await transactionsCollection.where("nom", "==", searchValue).get();
+        let qT = await getDocs(query(collection(db, "transactions"), where("reference", "==", searchValue)));
+        if (qT.empty) qT = await getDocs(query(collection(db, "transactions"), where("nom", "==", searchValue)));
 
-        if (!query.empty) {
-            if (query.size > 1) return AppModal.error("Plusieurs résultats correspondent à cette recherche. Soyez plus précis.");
-            const data = query.docs[0].data();
+        if (!qT.empty) {
+            if (qT.size > 1) return AppModal.error("Plusieurs résultats correspondent à cette recherche. Soyez plus précis.");
+            const data = qT.docs[0].data();
 
             // NOUVEAU: Appliquer dynamiquement la réduction pour l'affichage Caisse (Sécurité) - NE PAS MODIFIER data.prix
             let effectivePrixForDisplay = data.prix || 0;
@@ -860,7 +856,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             // Mode création
             
             // --- SAISIE INTELLIGENTE : Recherche dans Livraisons (Paris / À Venir) ---
-            const livQuery = await livraisonsCollection.where("ref", "==", searchValue).limit(1).get();
+            const livQuery = await getDocs(query(collection(db, "livraisons"), where("ref", "==", searchValue), limit(1)));
             
             if (!livQuery.empty) {
                 const livData = livQuery.docs[0].data();
@@ -971,7 +967,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     function formatCFA(n) { return new Intl.NumberFormat('fr-CI', { style: 'currency', currency: 'XOF' }).format(n || 0); }
     
     function populateDatalist() {
-        transactionsCollection.where("isDeleted", "!=", true).orderBy("isDeleted").orderBy("date", "desc").get().then(snapshot => {
+        const qDatalist = query(collection(db, "transactions"), where("isDeleted", "!=", true), orderBy("isDeleted"), orderBy("date", "desc"));
+        getDocs(qDatalist).then(snapshot => {
             const references = new Set(); 
             snapshot.forEach(doc => {
                 const d = doc.data();
