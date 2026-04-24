@@ -627,12 +627,12 @@ document.addEventListener('DOMContentLoaded', () => {
             let matchingDocs = [];
 
             // A. Match Exact (Rapide)
-            let tSnaps = await db.collection("transactions").where("reference", "==", term).get();
+            let tSnaps = await getDocs(query(collection(db, "transactions"), where("reference", "==", term)));
             if (!tSnaps.empty) matchingDocs = tSnaps.docs;
             
             // B. Si pas trouvé, Match Nom Exact
             if (matchingDocs.length === 0) {
-                tSnaps = await db.collection("transactions").where("nom", "==", term).get();
+                tSnaps = await getDocs(query(collection(db, "transactions"), where("nom", "==", term)));
                 if (!tSnaps.empty) matchingDocs = tSnaps.docs;
             }
 
@@ -640,7 +640,7 @@ document.addEventListener('DOMContentLoaded', () => {
             // Permet de trouver "023" dans "ML-023-D53"
             if (matchingDocs.length === 0) {
                 sessionsListPendingEl.innerHTML = '<p style="padding:10px; color:#666;">Recherche approfondie...</p>';
-                const snapshot = await db.collection("transactions").orderBy("date", "desc").get();
+                const snapshot = await getDocs(query(collection(db, "transactions"), orderBy("date", "desc")));
                 
                 matchingDocs = snapshot.docs.filter(doc => {
                     const d = doc.data();

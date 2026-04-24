@@ -1113,7 +1113,7 @@ async function confirmImport() {
         for (let i = 0; i < allRefs.length; i += 10) chunks.push(allRefs.slice(i, i + 10));
         
         // Exécuter les requêtes en parallèle (très rapide)
-        const transPromises = chunks.map(chunk => db.collection('transactions').where('reference', 'in', chunk).get());
+        const transPromises = chunks.map(chunk => getDocs(query(collection(db, 'transactions'), where('reference', 'in', chunk))));
         const transSnapshots = await Promise.all(transPromises);
         transSnapshots.forEach(snap => snap.forEach(doc => existingTransRefs.add(doc.data().reference)));
     }
@@ -1154,7 +1154,7 @@ async function confirmImport() {
 
         if (existingItem) {
             // CAS 1 : La référence existe -> On déplace le colis existant
-            const docRef = db.collection(CONSTANTS.COLLECTION).doc(existingItem.id);
+            const docRef = doc(db, CONSTANTS.COLLECTION, existingItem.id);
             
             // --- PROTECTION CONTRE LA RÉGRESSION (Ne pas faire reculer un colis) ---
             // Si le colis est déjà "EN_COURS" (Arrivé), on ne le renvoie pas vers "PARIS" ou "A_VENIR".
@@ -1222,7 +1222,7 @@ async function confirmImport() {
                 // On ne supprime le flag de transit que si le colis n'est PAS "En Cours"
                 // (Si on est protégé et qu'on reste En Cours, on garde l'historique et l'icône bateau)
                 if (targetStatus !== 'EN_COURS') {
-                    updates.importedFromTransit = firebase.firestore.FieldValue.delete();
+                    updates.importedFromTransit = deleteField();
                 }
                 if (targetStatus !== currentStatus) {
                     updates.dateAjout = new Date().toISOString(); // Ne met à jour la date que si le statut change
@@ -1233,7 +1233,7 @@ async function confirmImport() {
             updatedCount++;
         } else {
             // CAS 2 : La référence n'existe pas -> On crée un nouveau colis
-            const docRef = db.collection(CONSTANTS.COLLECTION).doc();
+            const docRef = doc(collection(db, CONSTANTS.COLLECTION));
             // On retire l'ID temporaire (numérique) avant l'envoi
             const { id: _tempId, ...itemData } = importItem;
 
@@ -1300,7 +1300,7 @@ async function confirmImport() {
                     });
                 }
 
-                const transRef = db.collection('transactions').doc();
+                const transRef = doc(collection(db, 'transactions'));
                 
                 operations.push({ type: 'set', ref: transRef, data: {
                     date: importDateStr,
@@ -1326,7 +1326,7 @@ async function confirmImport() {
 
     // EXÉCUTION DES BATCHS PAR PAQUETS DE 400 (Pour éviter la limite de 500)
     const BATCH_SIZE = 400;
-    let batch = db.batch();
+    let batch = writeBatch(db);
     let opCount = 0;
     let batchPromises = [];
 
@@ -1338,7 +1338,7 @@ async function confirmImport() {
         opCount++;
         if (opCount >= BATCH_SIZE) {
             batchPromises.push(batch.commit());
-            batch = db.batch();
+            batch = writeBatch(db);
             opCount = 0;
         }
     }

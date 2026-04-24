@@ -1,18 +1,10 @@
+/* DEPRECATED : Ce module a été déprécié et remplacé par l'onglet Livraison (livraison.js).
+Toutes les fonctionnalités d'arrivage ont été fusionnées.
+
+import { db } from './firebase-config.js';
+import { collection, doc, addDoc, updateDoc, deleteDoc, getDocs, query, where, orderBy, limit, onSnapshot, writeBatch } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
+
 document.addEventListener('DOMContentLoaded', () => {
-    if (typeof firebase === 'undefined' || typeof db === 'undefined') {
-        alert("Erreur: Connexion BDD échouée."); return;
-    }
-
-    const transactionsCollection = db.collection("transactions");
-    const livraisonsCollection = db.collection("livraisons"); // Connexion directe à Livraison
-
-    // Récupération du nom de l'utilisateur connecté
-    const currentUserName = sessionStorage.getItem('userName') || 'Utilisateur';
-    const userRole = sessionStorage.getItem('userRole');
-    const isViewer = userRole === 'spectateur';
-
-    // --- LOGIQUE DES ONGLETS ---
-    const tabs = document.querySelectorAll('.sub-nav a');
     const panels = document.querySelectorAll('.tab-panel');
     tabs.forEach(tab => {
         tab.addEventListener('click', (e) => {
@@ -86,14 +78,13 @@ document.addEventListener('DOMContentLoaded', () => {
             const refValue = arrivalRef.value.trim().toUpperCase();
             if (!refValue) return;
 
-            const checkTrans = await transactionsCollection.where("reference", "==", refValue).get();
+            const checkTrans = await getDocs(query(collection(db, "transactions"), where("reference", "==", refValue)));
             if (!checkTrans.empty) {
                 alert("Attention : Cette référence existe DÉJÀ dans l'historique.");
                 arrivalNom.value = checkTrans.docs[0].data().nom;
                 return;
             }
 
-            // Recherche dans le cache local de Paris (plus rapide)
             const manifestData = allParisManifest.find(p => p.ref === refValue);
             
             if (manifestData) {
@@ -137,7 +128,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 return alert("Veuillez remplir Date, Conteneur, Référence, Nom et Prix.");
             }
             
-            const check = await transactionsCollection.where("reference", "==", data.reference).limit(1).get();
+            const check = await getDocs(query(collection(db, "transactions"), where("reference", "==", data.reference), limit(1)));
             if (!check.empty) {
                 const existing = check.docs[0].data();
                 
@@ -145,8 +136,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (confirm(`⚠️ Cette référence existe DÉJÀ (Client: ${existing.nom}, Conteneur: ${existing.conteneur}).\n\nS'agit-il d'un colis PRÉ-PAYÉ qui vient d'arriver ?\n\n✅ OK : Valider l'arrivée (Mise à jour Conteneur + Statut Logistique)\n❌ Annuler : Ne rien faire`)) {
                     
                     // 1. Mise à jour de la transaction (Conteneur)
-                    await check.docs[0].ref.update({
-                        conteneur: data.conteneur
+                    await updatedata.conteneur
                     });
 
                     // 2. Mise à jour Logistique (Livraisons -> En Cours)
@@ -154,7 +144,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
                     alert("✅ Arrivée validée ! Le colis est maintenant 'En Cours'.");
                     
-                    // Reset du formulaire
                     arrivalRef.value = ''; arrivalNom.value = ''; arrivalPrix.value = '';
                     arrivalRef.dataset.dateParis = '';
                     arrivalMontantParis.value = ''; arrivalMontantAbidjan.value = '';
@@ -177,7 +166,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
             }
 
-            transactionsCollection.add(data).then(() => {
+            addDoc(collection(db, "transactions"), data).then(() => {
                 alert("Colis ajouté !");
                 // Mise à jour de la livraison avec le reste à payer (Dette)
                 removeFromParisManifest(data.reference, data.conteneur, Math.abs(data.reste)); 
@@ -187,8 +176,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 arrivalNom.style.backgroundColor = ""; arrivalPrix.style.backgroundColor = ""; arrivalMontantParis.style.backgroundColor = "";
                 arrivalRef.focus();
             }).catch(err => {
-                console.error(err);
-                if (err.code === 'resource-exhausted') alert("⚠️ QUOTA ATTEINT : Impossible d'ajouter ce colis aujourd'hui.");
+              if (err.code === 'resource-exhausted') alert("⚠️ QUOTA ATTEINT : Impossible d'ajouter ce colis aujourd'hui.");
                 else alert("Erreur : " + err.message);
             });
         });
@@ -215,7 +203,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 header: true, skipEmptyLines: true, delimiter: ",",
                 complete: async (results) => {
                     const rows = results.data;
-                    const batch = db.batch();
+                    const batch = writeBatch(db);
                     let count = 0; let log = "";
                     const refsToRemove = [];
                     const processedRefs = new Set(); // Pour éviter les doublons dans le fichier lui-même
@@ -226,8 +214,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         const restant = parseFloat(row.restant || row.Restant || 0);
                         let sender = cleanString(row['expéditeur'] || row['Expéditeur'] || row.nom || '');
                         const addr = cleanString(row.adresse || row.Adresse || row.adresseDestinataire || '');
-                        const dest = cleanString(row.destinataire || row.Destinataire || '');
-                        const desc = cleanString(row.description || row.Description || '');
+                        const dest = cleanString(row.description || row.Description || '');
 
                         if (!ref) {
                             log += `\nIgnoré (Données): ${ref}`; continue;
@@ -242,7 +229,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         // RECUPERATION DONNEES PARIS (Si Nom manquant OU Prix manquant pour un colis soldé)
                         let manifestData = null;
                         if (!sender || (restant === 0 && prix === 0)) {
-                            const q = await livraisonsCollection.where("ref", "==", ref).where("containerStatus", "==", "PARIS").limit(1).get();
+                            const q = await getDocs(query(collection(db, "livraisons"), where("ref", "==", ref), where("containerStatus", "==", "PARIS"), limit(1)));
                             if (!q.empty) manifestData = q.docs[0].data();
                         }
 
@@ -254,7 +241,6 @@ document.addEventListener('DOMContentLoaded', () => {
                             }
                         }
 
-                        // Logique Prix/Reste :
                         if (prix === 0 && restant > 0) prix = restant; 
                         
                         // LOGIQUE FINANCIÈRE :
@@ -267,7 +253,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             mParis = prix - restant;
                         }
 
-                        const check = await transactionsCollection.where("reference", "==", ref).limit(1).get();
+                        const check = await getDocs(query(collection(db, "transactions"), where("reference", "==", ref), limit(1)));
                         if (!check.empty) { log += `\nDoublon (Base): ${ref}`; continue; }
 
                         // MODIFICATION : Le Destinataire est le client principal (nom)
@@ -279,14 +265,13 @@ document.addEventListener('DOMContentLoaded', () => {
                             paymentHistory.push({
                                 date: commonDate,
                                 montantParis: mParis,
-                                montantAbidjan: 0,
-                                modePaiement: 'Espèce',
+
                                 agent: '',
                                 saisiPar: currentUserName
                             });
                         }
 
-                        const docRef = transactionsCollection.doc();
+                        const docRef = doc(collection(db, "transactions"));
                         batch.set(docRef, {
                             date: commonDate, reference: ref, nom: mainClientName || "", conteneur: commonConteneur,
                             prix: prix, montantParis: mParis, montantAbidjan: 0, 
@@ -300,8 +285,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         refsToRemove.push({ ref: ref, debt: prix - mParis });
                         processedRefs.add(ref);
                         count++;
-                    }
-                    if (count > 0) {
+                    }co
                         try {
                             await batch.commit();
                             refsToRemove.forEach(item => removeFromParisManifest(item.ref, commonConteneur, item.debt));
@@ -335,34 +319,31 @@ document.addEventListener('DOMContentLoaded', () => {
             syncParisBtn.disabled = true; syncParisBtn.textContent = "Analyse...";
             
             try {
-                const parisSnap = await livraisonsCollection.where("containerStatus", "==", "PARIS").get();
+                const parisSnap = await getDocs(query(collection(db, "livraisons"), where("containerStatus", "==", "PARIS")));
                 if (parisSnap.empty) { alert("Manifeste vide."); return; }
 
-                const batch = db.batch();
+                const batch = writeBatch(db);
                 let updated = 0, cleaned = 0, bCount = 0;
 
                 for (const docP of parisSnap.docs) {
                     const pData = docP.data();
                     const ref = pData.ref.trim();
-                    const transSnap = await transactionsCollection.where("reference", "==", ref).limit(1).get();
+                    const transSnap = await getDocs(query(collection(db, "transactions"), where("reference", "==", ref), limit(1)));
 
                     if (!transSnap.empty) {
                         const docT = transSnap.docs[0];
                         const tData = docT.data();
-                        const updates = {};
-
+                 
                         // On complète les infos manquantes depuis Paris (Nom, Adresse, Description)
                         if (!tData.nom || tData.nom.trim() === "") updates.nom = pData.destinataire || pData.expediteur;
                         if (!tData.adresseDestinataire && pData.lieuLivraison) updates.adresseDestinataire = pData.lieuLivraison;
-                        if ((!tData.description && !tData.article) && pData.description) updates.description = pData.description;
-                        if (!tData.dateParis && pData.dateAjout) updates.dateParis = pData.dateAjout.split('T')[0];
+                        if (( Data.dateParis && pData.dateAjout) updates.dateParis = pData.dateAjout.split('T')[0];
 
                         if (Object.keys(updates).length > 0) { batch.update(docT.ref, updates); updated++; bCount++; }
                         
                         // Au lieu de supprimer, on passe en EN_COURS (car reçu en transaction)
                         batch.update(docP.ref, { containerStatus: 'EN_COURS' });
-                        cleaned++; bCount++;
-                        if (bCount >= 400) { await batch.commit(); bCount = 0; }
+                        cleaned++; bCounait batch.commit(); bCount = 0; }
                     }
                 }
                 if (bCount > 0) await batch.commit();
@@ -377,7 +358,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- AFFICHAGE ABIDJAN ---
     // MODIFICATION : On écoute désormais la collection 'livraisons' (En Cours) au lieu de 'transactions'
     // pour refléter fidèlement l'onglet Livraison > En Cours.
-    livraisonsCollection.where("containerStatus", "==", "EN_COURS").orderBy("dateAjout", "desc").onSnapshot(snapshot => {
+    onSnapshot(query(collection(db, "livraisons"), where("containerStatus", "==", "EN_COURS"), orderBy("dateAjout", "desc")), snapshot => {
         allArrivals = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         renderAbidjanTable();
     }, error => console.error(error));
@@ -394,8 +375,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         // Mise à jour du compteur (Affiche le nombre total trouvé)
-        if (abidjanCountEl) abidjanCountEl.textContent = filtered.length;
-
+        if (abidjanCountEl) abidjanCountEl.textContent = fi
         // TRI : Conteneur DÉCROISSANT, Référence CROISSANTE
         filtered.sort((a, b) => {
             const getNum = (str) => {
@@ -484,9 +464,9 @@ document.addEventListener('DOMContentLoaded', () => {
             
             if (!parisDate.value || !data.ref || !data.expediteur) return alert("Champs manquants.");
             
-            const check = await livraisonsCollection.where("ref", "==", data.ref).limit(1).get();
+            const check = await getDocs(query(collection(db, "livraisons"), where("ref", "==", data.ref), limit(1)));
             if (!check.empty) return alert("Déjà dans le manifeste.");
-            livraisonsCollection.add(data).then(() => { parisRef.value = ''; parisNom.value = ''; parisRef.focus(); })
+            addDoc(collection(db, "livraisons"), data).then(() => { parisRef.value = ''; parisNom.value = ''; parisRef.focus(); })
             .catch(err => {
                 if (err.code === 'resource-exhausted') alert("⚠️ QUOTA ATTEINT.");
                 else console.error(err);
@@ -502,16 +482,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
     
     // 2. Import CSV Paris (Fichier Complet)
-    if (uploadParisCsvBtn && !isViewer) {
-        uploadParisCsvBtn.addEventListener('click', () => {
+uplo      
             if (!parisCsvFile.files.length) return alert("Sélectionnez un fichier.");
             parisUploadLog.style.display = 'block'; parisUploadLog.textContent = 'Lecture...';
-
-            Papa.parse(parisCsvFile.files[0], {
+a.parse(parisCsvFile.files[0], {
                 header: true, skipEmptyLines: true, delimiter: ",", // Virgule
                 complete: async (results) => {
                     const rows = results.data;
-                    const batch = db.batch();
+                    const batch = writeBatch(db);
                     let count = 0, log = "";
                     const TAUX = 1;
 
@@ -522,7 +500,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         const exp = cleanString(row["EXPEDITEUR"] || row["EXP"] || '');
                         if (!ref) { log += `\nIgnoré (Ref manquante)`; continue; }
 
-                        const check = await livraisonsCollection.where("ref", "==", ref).limit(1).get();
+                        const check = await getDocs(query(collection(db, "livraisons"), where("ref", "==", ref), limit(1)));
                         if (!check.empty) { log += `\nIgnoré (Existe): ${ref}`; continue; }
 
                         const prixE = parseFloat((row["PRIX"]||"0").replace(',','.'));
@@ -531,9 +509,8 @@ document.addEventListener('DOMContentLoaded', () => {
                         const dest = cleanString(row["DESTINATEUR"]);
                         const typeColis = cleanString(row["TYPE COLIS"]);
                         const adresse = cleanString(row["ADRESSES"]);
-                        const qte = parseInt(row["QUANTITE"]) || 1;
-                        
-                        const docRef = livraisonsCollection.doc();
+                        const qte = parseI
+                        const docRef = doc(collection(db, "livraisons"));
                         batch.set(docRef, {
                             dateAjout: new Date().toISOString(), // Date import
                             ref: ref,
@@ -543,8 +520,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             description: typeColis,
                             montant: resteE > 0 ? resteE : (prixE > 0 ? prixE : ''), // On stocke le montant pertinent
                             containerStatus: 'PARIS', status: 'EN_ATTENTE'
-                        });
-                        count++;
+
                     }
                     if (count > 0) {
                         try {
@@ -557,7 +533,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                     parisCsvFile.value = '';
                 }
-            });
         });
     } else if (uploadParisCsvBtn) {
         const form = uploadParisCsvBtn.closest('.upload-form');
@@ -565,7 +540,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // 3. Affichage Paris
-    livraisonsCollection.where("containerStatus", "==", "PARIS").orderBy("dateAjout", "desc").onSnapshot(snap => {
+    onSnapshot(query(collection(db, "livraisons"), where("containerStatus", "==", "PARIS"), orderBy("dateAjout", "desc")), snap => {
         allParisManifest = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         renderParisTable();
         updateParisDatalist();
@@ -588,8 +563,7 @@ document.addEventListener('DOMContentLoaded', () => {
         
         toShow.forEach(i => {
             let actionsHtml = '';
-            if (!isViewer) {
-                actionsHtml = `
+            if (!isViewe
                     <button class="receiveBtn" data-ref="${i.ref}" style="background:#10b981; color:white; border:none; padding:4px 8px; border-radius:4px; cursor:pointer; margin-right:5px;">Réceptionner</button>
                     <button class="deleteBtn" data-id="${i.id}">Annuler</button>
                 `;
@@ -623,7 +597,7 @@ document.addEventListener('DOMContentLoaded', () => {
         parisTableBody.addEventListener('click', (e) => {
             if (isViewer) return;
             if (e.target.classList.contains('deleteBtn')) {
-                if(confirm("Supprimer du manifeste ?")) livraisonsCollection.doc(e.target.dataset.id).delete();
+                if(confirm("Supprimer du manifeste ?")) deleteDoc(doc(db, "livraisons", e.target.dataset.id));
             }
             if (e.target.classList.contains('receiveBtn')) {
                 // Basculer vers l'onglet Abidjan et remplir
@@ -640,7 +614,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function removeFromParisManifest(ref, conteneur, newRestant = null) {
         // MODIFICATION : Recherche élargie pour inclure A_VENIR
-        const q = await livraisonsCollection.where("ref", "==", ref).get();
+        const q = await getDocs(query(collection(db, "livraisons"), where("ref", "==", ref)));
         if (!q.empty) {
             // On cible en priorité les colis qui sont à PARIS ou A_VENIR
             const targetDoc = q.docs.find(d => ['PARIS', 'A_VENIR'].includes(d.data().containerStatus));
@@ -649,17 +623,17 @@ document.addEventListener('DOMContentLoaded', () => {
                 const currentData = targetDoc.data();
                 const updates = { containerStatus: 'EN_COURS', conteneur: conteneur || currentData.conteneur || '' };
                 
-                if (newRestant !== null) {
                     updates.montant = newRestant + " CFA";
                     // Sauvegarde du prix original si non existant (pour compatibilité avec Livraison.js)
                     if (currentData.montant && !currentData.prixOriginal) {
                         updates.prixOriginal = currentData.montant;
                     }
                 }
-                await targetDoc.ref.update(updates);
+                await updateDoc(targetDoc.ref, updates);
             }
         }
     }
 
     initBackToTopButton();
 });
+*/
