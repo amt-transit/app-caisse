@@ -212,6 +212,21 @@ document.addEventListener('DOMContentLoaded', async () => {
     let dailyExpenses = JSON.parse(localStorage.getItem('dailyExpenses')) || [];
     let currentStorageFeeWaived = false; // État pour savoir si le magasinage est annulé pour la saisie en cours
     let currentIsNewAdjustment = false; // État pour savoir si un frais a été ajouté
+    let fleetVehicles = [];
+
+    // --- CHARGEMENT DES VÉHICULES ---
+    onSnapshot(query(collection(db, "fleet_vehicles"), where("isDeleted", "!=", true)), snap => {
+        fleetVehicles = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        if (quickExpenseVehicle) {
+            let options = '<option value="">-- Véhicule (Optionnel) --</option>';
+            fleetVehicles.forEach(v => {
+                options += `<option value="${v.id}">${v.name} (${v.plate})</option>`;
+            });
+            const currentVal = quickExpenseVehicle.value;
+            quickExpenseVehicle.innerHTML = options;
+            quickExpenseVehicle.value = currentVal;
+        }
+    });
 
     // --- GESTION DYNAMIQUE BANQUE (VIREMENT/CHÈQUE) ---
     // On crée le sélecteur de banque dynamiquement pour ne pas toucher au HTML
