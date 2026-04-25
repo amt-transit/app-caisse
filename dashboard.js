@@ -80,9 +80,14 @@ document.addEventListener('DOMContentLoaded', async () => {
             });
             return (totalVentes + totalAutres + totalRetraits) - (totalDepenses + totalDepots);
         },
-        calculateStorageFee(dateString, quantity = 1, compareDate = new Date()) {
+        calculateStorageFee(dateString, quantityOrItem = 1, compareDate = new Date()) {
             if (!dateString) return { days: 0, fee: 0 };
-            const qte = parseInt(quantity) || 1;
+            let qte = 1;
+            if (typeof quantityOrItem === 'object' && quantityOrItem !== null) {
+                qte = quantityOrItem.quantiteRestante !== undefined ? parseInt(quantityOrItem.quantiteRestante) : (parseInt(quantityOrItem.quantite) || 1);
+            } else {
+                qte = parseInt(quantityOrItem) || 1;
+            }
             const arrivalDate = new Date(dateString);
             const diffTime = compareDate - arrivalDate;
             if (diffTime < 0) return { days: 0, fee: 0 };

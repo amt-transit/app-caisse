@@ -72,13 +72,29 @@
         display:inline-flex; align-items:center; gap:5px; transition:color .15s;
         font-family:inherit;
     }
-    .lv-tab:hover { color:var(--lv-blue); background:#f1f5f9; }
-    .lv-tab.active { color:var(--lv-blue); border-bottom-color:var(--lv-blue); }
+    .lv-tab:not(.active):hover { background:#f1f5f9; }
+    #lvT-EN_COURS:not(.active):hover { color:var(--lv-blue); }
+    #lvT-A_VENIR:not(.active):hover { color:var(--lv-amber); }
+    #lvT-PARIS:not(.active):hover { color:var(--lv-red); }
+    #lvT-PROGRAMME:not(.active):hover { color:var(--lv-purple); }
+
     .lv-badge {
         background:#e0e7ff; color:#3730a3; border-radius:10px;
         padding:1px 6px; font-size:10px; font-weight:700;
     }
-    .lv-tab.active .lv-badge { background:#dbeafe; color:#1d4ed8; }
+    
+    /* Couleurs spécifiques par onglet actif (Encadrés) */
+    #lvT-EN_COURS.active { background-color:var(--lv-blue); color:#fff; border-bottom-color:var(--lv-blue); }
+    #lvT-EN_COURS.active .lv-badge { background:rgba(255,255,255,0.25); color:#fff; }
+    
+    #lvT-A_VENIR.active { background-color:var(--lv-amber); color:#fff; border-bottom-color:var(--lv-amber); }
+    #lvT-A_VENIR.active .lv-badge { background:rgba(255,255,255,0.25); color:#fff; }
+    
+    #lvT-PARIS.active { background-color:var(--lv-red); color:#fff; border-bottom-color:var(--lv-red); }
+    #lvT-PARIS.active .lv-badge { background:rgba(255,255,255,0.25); color:#fff; }
+    
+    #lvT-PROGRAMME.active { background-color:var(--lv-purple); color:#fff; border-bottom-color:var(--lv-purple); }
+    #lvT-PROGRAMME.active .lv-badge { background:rgba(255,255,255,0.25); color:#fff; }
     .lv-tabs-spacer { flex:1; min-width:8px; }
     .lv-help-btn {
         padding:5px 10px; border-radius:6px; border:1px solid var(--lv-border2);
@@ -595,6 +611,33 @@
                 </div>
             </div>
         </div>
+        
+        <div id="rapprochementModal" class="modal" style="z-index: 2005;">
+            <div class="modal-content" style="max-width: 600px;">
+                <span class="close-modal" id="closeRapModal" style="float:right; cursor:pointer; font-size:24px;">&times;</span>
+                <h2 class="modal-header" style="color: #1e293b; margin-top: 0;">📊 Rapport de Dépotage</h2>
+                <div style="background: #f8fafc; padding: 15px; border-radius: 8px; margin-bottom: 15px; border: 1px solid #e2e8f0;">
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 10px; font-size: 14px;">
+                        <span><strong>Conteneur :</strong> <span id="rapConteneur" style="color: #3b82f6;"></span></span>
+                        <span><strong>Scannés (Total) :</strong> <span id="rapScannes" style="font-weight:bold;">0</span></span>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; font-size: 14px;">
+                        <span><strong>Attendus (À Venir) :</strong> <span id="rapAttendus" style="font-weight:bold;">0</span></span>
+                        <span><strong style="color:#10b981;">Conformes :</strong> <span id="rapConformes" style="color:#10b981; font-weight:bold;">0</span></span>
+                    </div>
+                </div>
+                <h3 style="color: #ef4444; margin-bottom: 5px; margin-top: 0;">⚠️ Colis Manquants (<span id="rapMissingCount">0</span>)</h3>
+                <p style="font-size: 12px; color: #64748b; margin-top: 0; margin-bottom: 10px;">Ces colis étaient attendus dans ce conteneur mais n'ont pas été scannés. Ils passeront en statut "INCIDENT".</p>
+                <div style="max-height: 200px; overflow-y: auto; border: 1px solid #fca5a5; background: #fef2f2; border-radius: 6px; padding: 10px;">
+                    <ul id="rapMissingList" style="margin: 0; padding-left: 20px; color: #b91c1c; font-weight: bold; font-family: monospace; font-size: 13px;"></ul>
+                </div>
+                <div style="display:flex; gap:10px; margin-top:20px;">
+                    <button id="rapConfirmBtn" class="btn btn-success" style="flex:1; justify-content:center;">✅ Valider le dépotage</button>
+                    <button id="rapCancelBtn" class="btn btn-danger" style="flex:1; justify-content:center;">❌ Annuler</button>
+                </div>
+            </div>
+        </div>
+
         <div id="programModal" class="modal">
             <div class="modal-content">
                 <h2 class="modal-header">📅 Programmer Livraison</h2>

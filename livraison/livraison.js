@@ -1,6 +1,6 @@
 
 import { db } from '../firebase-config.js';
-import { collection, doc, getDoc, getDocs, addDoc, updateDoc, deleteDoc, query, where, orderBy, limit, onSnapshot, writeBatch, deleteField } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
+import { collection, doc, getDoc, getDocs, addDoc, updateDoc, deleteDoc, query, where, orderBy, limit, onSnapshot, writeBatch, deleteField, arrayUnion } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 
 // --- CONFIGURATION & CONSTANTES (Refactorisation) ---
 const CONSTANTS = {
@@ -99,6 +99,7 @@ document.addEventListener('DOMContentLoaded', function() {
     initBackToTopButton();
     if (!isViewer) initDuplicateCleaner(); // Initialisation du bouton de nettoyage
     if (!isViewer) initAuditSyncButton(); // Initialisation du bouton Audit
+    initScanHistoryModal();
 
     const searchBox = document.getElementById('searchBox');
     if (searchBox) {
@@ -826,11 +827,11 @@ function importExcel(event) {
                             id: Date.now() + i,
                             ref: cleanString(r.REF || r.REFERENCE || r.CODE || r['N° COLIS'] || r['NUMERO COLIS'] || r.TRACKING || r['N°'] || '').toUpperCase(), // Force Majuscule pour correspondance
                             prixOriginal: cleanString(r.PRIX || r.VALEUR || r['PRIX TOTAL'] || r['MONTANT TOTAL'] || ''), // Capture du Prix Total pour calcul
-                            montant: cleanString(r.RESTANT || r.MONTANT || r.PRIX || r['RESTANT A PAYER'] || r['RENSTANT A PAYER'] || r['MONTANT A PAYER'] || ''),
+                            montant: cleanString(r.RESTANT || r.MONTANT || r.PRIX || r['RESTANT A PAYER'] || r['RENSTANT A PAYER'] || r['MONTANT A PAYER'] || r.COLONNE3 || ''),
                             expediteur: cleanString(fixEncoding(String(r.EXPEDITEUR || r['EXPÉDITEUR'] || r.EXP || ''))),
                             commune: detectCommune(cleanString(fixEncoding(String(r.LIVRE || r.LIEU || r.COMMUNE || r['LIEU DE LIVRAISON'] || r.ADRESSE || r.ADRESSES || '')))),
                             lieuLivraison: cleanString(fixEncoding(String(r.LIVRE || r.LIEU || r['LIEU DE LIVRAISON'] || r.ADRESSE || r.ADRESSES || ''))),
-                            destinataire: cleanString(fixEncoding(String(r.DESTINATAIRE || r.CLIENT || r.DESTINATEUR || ''))),
+                            destinataire: cleanString(fixEncoding(String(r.DESTINATAIRE || r.CLIENT || r.DESTINATEUR || r.COLONNE2 || ''))),
                             description: cleanString(fixEncoding(String(r.DESCRIPTION || r.NATURE || r['TYPE COLIS'] || ''))),
                             info: cleanString(fixEncoding(String(r.INFO || r.INFORMATION || r.COMMENTAIRE || ''))),
                             numero: cleanString(r.NUMERO || r.TEL || r.TELEPHONE || r.CONTACT || ''),
@@ -1055,6 +1056,8 @@ async function confirmImport() {
 
         if (!ref) continue;
 
+        const scanData = { scanRef: originalRef, date: new Date().toISOString() };
+
         if (uniqueImports.has(ref)) {
             // Le doublon existe, on fusionne les données
             const existing = uniqueImports.get(ref);
@@ -1077,6 +1080,9 @@ async function confirmImport() {
             existing.numero = pickBest(existing.numero, item.numero);
             existing.quantite = (existing.quantite || 1) + (item.quantite || 1); // Cumul des quantités si doublon exact
             
+            if (!existing.scanHistory) existing.scanHistory = [];
+            existing.scanHistory.push(scanData);
+            
             if (existing.lieuLivraison !== originalLieu) {
                  existing.commune = detectCommune(existing.lieuLivraison);
             }
@@ -1085,10 +1091,47 @@ async function confirmImport() {
             existing.ref = ref;
         } else {
             // Première fois qu'on voit cette référence, on l'ajoute
-            uniqueImports.set(ref, { ...item, ref: ref });
+            uniqueImports.set(ref, { ...item, ref: ref, scanHistory: [scanData] });
         }
     }
     const finalImportList = Array.from(uniqueImports.values());
+
+    // --- NOUVEAU : RAPPROCHEMENT / DÉPOTAGE ---
+    let missingExpectedItems = [];
+    if (containerStatus === 'EN_COURS' && conteneur) {
+        const expectedItems = deliveries.filter(d => d.containerStatus === 'A_VENIR' && (d.conteneur || '').trim().toUpperCase() === conteneur.toUpperCase());
+        
+        if (expectedItems.length > 0) {
+            const scannedRefsSet = new Set(finalImportList.map(item => item.ref.toUpperCase()));
+            missingExpectedItems = expectedItems.filter(item => !scannedRefsSet.has(item.ref.toUpperCase()));
+
+            const modal = document.getElementById('rapprochementModal');
+            if (modal) {
+                document.getElementById('rapConteneur').textContent = conteneur.toUpperCase();
+                document.getElementById('rapScannes').textContent = finalImportList.length;
+                document.getElementById('rapAttendus').textContent = expectedItems.length;
+                document.getElementById('rapConformes').textContent = expectedItems.length - missingExpectedItems.length;
+                document.getElementById('rapMissingCount').textContent = missingExpectedItems.length;
+
+                const ul = document.getElementById('rapMissingList');
+                if (missingExpectedItems.length > 0) {
+                    ul.innerHTML = missingExpectedItems.map(item => `<li>${item.ref} - ${item.destinataire || 'Inconnu'}</li>`).join('');
+                } else {
+                    ul.innerHTML = "<li style='color:#10b981; list-style-type:none;'>✅ Aucun colis manquant, le dépotage est parfait !</li>";
+                }
+
+                modal.classList.add('active');
+
+                const confirmed = await new Promise(resolve => {
+                    document.getElementById('rapConfirmBtn').onclick = () => { modal.classList.remove('active'); resolve(true); };
+                    document.getElementById('rapCancelBtn').onclick = () => { modal.classList.remove('active'); resolve(false); };
+                    document.getElementById('closeRapModal').onclick = () => { modal.classList.remove('active'); resolve(false); };
+                });
+
+                if (!confirmed) return; // L'utilisateur a annulé, on arrête l'importation
+            }
+        }
+    }
 
     // Afficher le Modal de Progression
     const progressModal = document.getElementById('importProgressModal');
@@ -1186,6 +1229,10 @@ async function confirmImport() {
                 
                 updates.quantite = importItem.quantite; // Quantité issue du comptage des racines dans l'import
                 
+                if (importItem.scanHistory && importItem.scanHistory.length > 0) {
+                    updates.scanHistory = arrayUnion(...importItem.scanHistory);
+                }
+                
                 if (conteneur) updates.conteneur = conteneur;
                 else if (importItem.conteneur) updates.conteneur = importItem.conteneur;
 
@@ -1244,6 +1291,7 @@ async function confirmImport() {
                 ...itemData, 
                 conteneur: conteneur || importItem.conteneur || '', 
                 quantite: importItem.quantite || 1, // Stockage de la quantité
+                scanHistory: importItem.scanHistory || [], // Ajout du scan history
                 containerStatus: containerStatus,
             dateAjout: itemData.dateAjout || new Date().toISOString() // Respecte la date du fichier Excel
             }});
@@ -1321,6 +1369,21 @@ async function confirmImport() {
                     paymentHistory: paymentHistory
                 }});
             }
+        }
+    }
+
+    // --- NOUVEAU : MARQUER LES COLIS MANQUANTS EN INCIDENT ---
+    if (missingExpectedItems && missingExpectedItems.length > 0) {
+        for (const item of missingExpectedItems) {
+            operations.push({
+                type: 'update',
+                ref: doc(db, CONSTANTS.COLLECTION, item.id),
+                data: {
+                    status: 'INCIDENT',
+                    info: (item.info ? item.info + ' | ' : '') + 'Manquant au dépotage (' + new Date().toLocaleDateString('fr-FR') + ')'
+                }
+            });
+            updatedCount++;
         }
     }
 
@@ -1635,15 +1698,21 @@ function renderTable() {
         }
         const rowClass = d.status === 'LIVRE' ? 'delivered' : '';
         
+        // --- NOUVEAU : BADGE ARRIVAGE PARTIEL ---
+        let partielBadge = '';
+        if (d.arrivagePartiel && d.quantiteAttendue) {
+            partielBadge = `<div style="margin-top:6px;"><span style="background-color:#ef4444; color:white; padding:2px 4px; border-radius:4px; font-size:10px; font-weight:bold; white-space:nowrap;" title="Quantité attendue au départ : ${d.quantiteAttendue}">⚠️ Partiel (${d.quantite}/${d.quantiteAttendue})</span></div>`;
+        }
+
         let statusClass = 'status-attente';
         let statusText = '⏳ Attente';
 
         if (d.status === 'LIVRE') {
             statusClass = 'status-livre';
             statusText = '✅ Livré';
-        } else if (d.status === 'PARTIEL') {
+        } else if (d.status === 'LIVRAISON_PARTIELLE' || d.status === 'PARTIEL') {
             statusClass = 'status-attente'; // On utilise le style jaune/orange existant
-            statusText = '🌗 Partiel';
+            statusText = `🌗 Livré : ${d.quantiteLivree || 0} / Reste : ${d.quantiteRestante !== undefined ? d.quantiteRestante : (d.quantite || 1)}`;
         } else if (d.status === 'EN_COURS') {
             statusClass = 'status-en-cours';
             statusText = '🚚 En Cours';
@@ -1755,6 +1824,40 @@ function renderTable() {
         } else {
             montantStyle += " background-color: #ffedd5; color: #9a3412; font-weight: bold;"; // Orange (Dette)
         }
+        
+        // --- NOUVEAU : ALERTE FRAIS MAGASINAGE ---
+        let magasinageBadge = '';
+        if (d.containerStatus === 'EN_COURS' && d.status !== 'LIVRE' && d.status !== 'ABANDONNE' && d.dateAjout) {
+            const diffTime = new Date() - new Date(d.dateAjout);
+            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+            if (diffDays > 7) {
+                const qte = d.quantiteRestante !== undefined ? parseInt(d.quantiteRestante) : (parseInt(d.quantite) || 1);
+                let fee = 0;
+                let badgeColor = '';
+                let borderColor = '';
+                let bgMontant = '';
+                let textMontant = '';
+
+                if (diffDays <= 14) {
+                    fee = 10000 * qte;
+                    badgeColor = '#f97316'; // Orange
+                    borderColor = '#f97316';
+                    bgMontant = '#ffedd5';
+                    textMontant = '#9a3412';
+                } else {
+                    const extraDays = diffDays - 14;
+                    fee = (10000 + (extraDays * 1000)) * qte;
+                    badgeColor = '#dc2626'; // Rouge foncé
+                    borderColor = '#dc2626';
+                    bgMontant = '#fee2e2';
+                    textMontant = '#991b1b';
+                }
+                const formattedFee = new Intl.NumberFormat('fr-CI', { style: 'currency', currency: 'XOF' }).format(fee);
+                magasinageBadge = `<div style="margin-top:6px; text-align:center;"><span style="background-color:${badgeColor}; color:white; padding:3px 5px; border-radius:4px; font-size:10px; font-weight:bold; white-space:nowrap; box-shadow: 0 0 6px ${badgeColor};" title="En entrepôt depuis ${diffDays} jours">⚠️ + ${formattedFee} MAGASINAGE</span></div>`;
+                // Force l'alerte sur la couleur du montant même si le solde est 0
+                montantStyle = `width: 100%; background-color: ${bgMontant}; color: ${textMontant}; font-weight: bold; border: 2px solid ${borderColor};`;
+            }
+        }
 
         // FONCTIONS D'AFFICHAGE (Input vs Texte pour Spectateur)
         const renderInput = (val, type, onchange, style = "") => {
@@ -1772,7 +1875,7 @@ function renderTable() {
                     <td class="col-checkbox">${!isViewer ? `<input type="checkbox" onchange="toggleSelection('${d.id}')" ${selectedIds.has(d.id) ? 'checked' : ''}>` : ''}</td>
                     <td>${d.dateAjout ? new Date(d.dateAjout).toLocaleDateString('fr-FR') : '-'}</td>
                     <td>${d.conteneur || '-'}</td>
-                    <td class="ref">${d.ref}</td>
+                    <td class="ref"><a href="#" onclick="event.preventDefault(); showScanHistory('${d.id}');" style="color: #2563eb; text-decoration: underline; font-weight: bold;">${d.ref}</a></td>
                     <td style="text-align:center;">${renderInput(d.quantite || 1, "number", `updateDeliveryQuantity('${d.id}', this.value)`, "width: 50px; text-align:center; font-weight:bold;")}</td>
                     <td class="montant">${renderInput((d.montant || '').replace(/"/g, '&quot;'), "text", `updateDeliveryAmount('${d.id}', this.value)`, montantStyle)}</td>
                     <td>${d.expediteur}</td>
@@ -1789,14 +1892,18 @@ function renderTable() {
             <tr class="${rowClass}">
                 <td class="col-checkbox">${!isViewer ? `<input type="checkbox" onchange="toggleSelection('${d.id}')" ${selectedIds.has(d.id) ? 'checked' : ''}>` : ''}</td>
                 <td>${d.conteneur || '-'}</td>
-                <td class="ref">${transitIndicator}${d.ref}</td>
+                <td class="ref">${transitIndicator}<a href="#" onclick="event.preventDefault(); showScanHistory('${d.id}');" style="color: #2563eb; text-decoration: underline; font-weight: bold;">${d.ref}</a></td>
                 <td style="text-align:center;">
                     ${renderInput(d.quantite || 1, "number", `updateDeliveryQuantity('${d.id}', this.value)`, "width: 50px; text-align:center; font-weight:bold;")}
+                    ${partielBadge}
                     ${d.historiquePartiel && d.historiquePartiel.length > 0 ? 
                         `<span style="cursor:help; font-size:1.2em; margin-left:5px;" title="Historique partiel:\n${d.historiquePartiel.map(h => `- ${new Date(h.date).toLocaleDateString()} : ${h.quantiteLivree} livré(s) par ${h.livreur}`).join('\n')}">📦</span>` 
                     : ''}
                 </td>
-                <td class="montant">${renderInput((d.montant || '').replace(/"/g, '&quot;'), "text", `updateDeliveryAmount('${d.id}', this.value)`, montantStyle)}</td>
+                <td class="montant">
+                    ${renderInput((d.montant || '').replace(/"/g, '&quot;'), "text", `updateDeliveryAmount('${d.id}', this.value)`, montantStyle)}
+                    ${magasinageBadge}
+                </td>
                 <td>${d.expediteur}</td>
                 <td>${renderInput((d.lieuLivraison || '').replace(/"/g, '&quot;'), "text", `updateDeliveryLocation('${d.id}', this.value)`, "")}</td>
                 <td>${renderInput(displayDestinataire.replace(/"/g, '&quot;'), "text", `updateDeliveryRecipient('${d.id}', this.value)`, "")}</td>
@@ -1806,7 +1913,7 @@ function renderTable() {
                 ${notifiedCell}
                 <td>
                     <strong>${d.livreur || '-'}</strong><br>
-                    <small>${((d.status === 'LIVRE' || d.status === 'PARTIEL') && d.dateLivraison) ? new Date(d.dateLivraison).toLocaleDateString('fr-FR') : (d.dateProgramme || '')}</small>
+            <small>${((d.status === 'LIVRE' || d.status === 'PARTIEL' || d.status === 'LIVRAISON_PARTIELLE') && d.dateLivraison) ? new Date(d.dateLivraison).toLocaleDateString('fr-FR') : (d.dateProgramme || '')}</small>
                 </td>
                 ${statusCell}
                 <td>
@@ -1868,6 +1975,24 @@ function viewProgramDetails(date, livreur) {
     // Configuration du bouton export PDF
     document.getElementById('btnExportPdf').onclick = function() { exportRoadmapPDF(date, livreur); };
     document.getElementById('btnOpenMap').onclick = function() { openBingMapsRoute(date, livreur); };
+    
+    // --- NOUVEAU : Configuration du bouton export WhatsApp ---
+    let btnWhatsApp = document.getElementById('btnExportWhatsApp');
+    if (!btnWhatsApp) {
+        // Injection automatique du bouton s'il n'est pas dans le HTML
+        const btnPdf = document.getElementById('btnExportPdf');
+        if (btnPdf && btnPdf.parentNode) {
+            btnWhatsApp = document.createElement('button');
+            btnWhatsApp.id = 'btnExportWhatsApp';
+            btnWhatsApp.className = 'btn btn-success';
+            btnWhatsApp.innerHTML = '📱 WhatsApp';
+            btnWhatsApp.style.marginLeft = '10px';
+            btnPdf.parentNode.insertBefore(btnWhatsApp, btnPdf.nextSibling);
+        }
+    }
+    if (btnWhatsApp) {
+        btnWhatsApp.onclick = function() { exportRoadmapWhatsApp(date, livreur); };
+    }
 
     const table = document.getElementById('programDetailsTable');
     table.innerHTML = `
@@ -1893,6 +2018,9 @@ function viewProgramDetails(date, livreur) {
                 if (d.status === 'LIVRE') {
                     statusClass = 'status-livre';
                     statusText = 'LIVRÉ';
+        } else if (d.status === 'LIVRAISON_PARTIELLE' || d.status === 'PARTIEL') {
+            statusClass = 'status-attente';
+            statusText = `PARTIEL (${d.quantiteLivree || 0}/${d.quantite || 1})`;
                 } else if (d.status === 'EN_COURS') {
                     statusClass = 'status-en-cours';
                     statusText = 'EN COURS';
@@ -1968,6 +2096,36 @@ function openBingMapsRoute(date, livreur) {
     const destinations = items.map(d => `adr.${encodeURIComponent(`${d.lieuLivraison} ${d.commune} Abidjan`)}`).join('~');
     
     window.open(baseUrl + destinations, '_blank');
+}
+
+// --- NOUVEAU : Fonction d'export WhatsApp pour la feuille de route ---
+function exportRoadmapWhatsApp(date, livreur) {
+    // Récupérer les items dans l'ordre actuel
+    let items = deliveries.filter(d => d.dateProgramme === date && d.livreur === livreur);
+    items.sort((a, b) => (a.orderInRoute || 0) - (b.orderInRoute || 0));
+
+    if (items.length === 0) {
+        showToast('Aucun colis à envoyer', 'error');
+        return;
+    }
+
+    let msg = `*🚚 FEUILLE DE ROUTE - ${livreur}*\n`;
+    msg += `📅 Date : ${date}\n`;
+    msg += `📦 Total Colis : ${items.length}\n\n`;
+
+    items.forEach((d, index) => {
+        const num = d.numero || 'Non renseigné';
+        const montant = d.montant || '0 CFA';
+        const queryMap = encodeURIComponent(`${d.lieuLivraison || ''} ${d.commune || ''} Abidjan`.trim());
+        
+        msg += `*${index + 1}. Réf : ${d.ref}*\n`;
+        msg += `👤 Client : ${d.destinataire || 'Inconnu'}\n`;
+        msg += `📞 Tél : ${num}\n`;
+        msg += `💰 À encaisser : ${montant}\n`;
+        msg += `📍 GPS : https://www.google.com/maps/search/?api=1&query=${queryMap}\n\n`;
+    });
+
+    window.open('https://wa.me/?text=' + encodeURIComponent(msg), '_blank');
 }
 
 // Fonction d'export PDF pour la feuille de route
@@ -2847,11 +3005,52 @@ function toggleClientNotified(id, isChecked) {
 }
 
 // Actions
-function markAsDelivered(id) {
-    updateDoc(doc(db, CONSTANTS.COLLECTION, id), {
-        status: 'LIVRE',
-        dateLivraison: new Date().toISOString()
-    }).then(() => showToast('Marqué comme LIVRÉ', 'success'));
+async function markAsDelivered(id) {
+    const d = deliveries.find(item => item.id === id);
+    if (!d) return;
+
+    const quantiteTotal = parseInt(d.quantite) || 1;
+    const quantiteDejaLivree = parseInt(d.quantiteLivree) || 0;
+    const quantiteRestante = d.quantiteRestante !== undefined ? parseInt(d.quantiteRestante) : quantiteTotal;
+
+    if (quantiteRestante > 1) {
+        const rep = await AppModal.prompt(`Combien de colis ont été livrés aujourd'hui ? (Reste à livrer: ${quantiteRestante})`, quantiteRestante.toString(), "Confirmation de Livraison");
+        if (rep === null) return;
+        
+        const qteLivree = parseInt(rep);
+        if (isNaN(qteLivree) || qteLivree <= 0 || qteLivree > quantiteRestante) {
+            return AppModal.error("Quantité saisie invalide.");
+        }
+
+        const newRestante = quantiteRestante - qteLivree;
+        const newQuantiteLivree = quantiteDejaLivree + qteLivree;
+        const isPartial = newRestante > 0;
+
+        const updates = {
+            status: isPartial ? 'LIVRAISON_PARTIELLE' : 'LIVRE',
+            quantiteLivree: newQuantiteLivree,
+            quantiteRestante: newRestante,
+            dateLivraison: new Date().toISOString()
+        };
+
+        const newHistoryItem = {
+            date: new Date().toISOString(),
+            quantiteLivree: qteLivree,
+            livreur: d.livreur || sessionStorage.getItem('userName') || 'Inconnu'
+        };
+        updates.historiquePartiel = arrayUnion(newHistoryItem);
+
+        updateDoc(doc(db, CONSTANTS.COLLECTION, id), updates).then(() => {
+            showToast(isPartial ? 'Livraison partielle enregistrée' : 'Marqué comme LIVRÉ', 'success');
+        });
+    } else {
+        updateDoc(doc(db, CONSTANTS.COLLECTION, id), {
+            status: 'LIVRE',
+            quantiteLivree: quantiteTotal,
+            quantiteRestante: 0,
+            dateLivraison: new Date().toISOString()
+        }).then(() => showToast('Marqué comme LIVRÉ', 'success'));
+    }
 }
 
 function markAsPending(id) {
@@ -3451,9 +3650,71 @@ Object.assign(window, {
     confirmDeleteAction, checkAuditForDeliveries, toggleSelection, toggleSelectAll,
     closeProgramModal, openHelpModal, fillProgramFields, confirmProgram, closeAssignContainerModal,
     confirmAssignContainer, closeBulkStatusModal, confirmBulkStatusChange, viewProgramDetails,
-    sortProgramDetails, openBingMapsRoute, exportRoadmapPDF, printDeliverySlip, updateDeliveryOrder,
-    captureGPSLocation, removeFromProgram, closeProgramDetailsModal, renderTable, debouncedFilterDeliveries
+    sortProgramDetails, openBingMapsRoute, exportRoadmapPDF, exportRoadmapWhatsApp, printDeliverySlip, 
+    updateDeliveryOrder,
+    captureGPSLocation, removeFromProgram, closeProgramDetailsModal, renderTable, debouncedFilterDeliveries,
+    showScanHistory
 });
+
+// --- GESTION HISTORIQUE DES SCANS ---
+function initScanHistoryModal() {
+    const scanModalHTML = `
+    <div id="scanHistoryModal" class="modal">
+        <div class="modal-content" style="max-width: 500px; border-radius: 12px; padding: 20px;">
+            <span class="close-modal" id="closeScanHistoryModal" style="float:right; cursor:pointer; font-size:24px;">&times;</span>
+            <h2 style="margin-top:0; color:#1e293b;">Détail des Scans</h2>
+            <p id="scanHistorySubtitle" style="color:#64748b; font-size:14px; margin-bottom:15px;"></p>
+            <div style="max-height: 300px; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 8px;">
+                <table class="table" style="margin: 0; width: 100%;">
+                    <thead style="position: sticky; top: 0; background: #f8fafc; z-index: 1;">
+                        <tr>
+                            <th style="text-align: left; padding: 8px;">Code Barre (Scan)</th>
+                            <th style="text-align: right; padding: 8px;">Date & Heure</th>
+                        </tr>
+                    </thead>
+                    <tbody id="scanHistoryBody">
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    `;
+    document.body.insertAdjacentHTML('beforeend', scanModalHTML);
+
+    document.getElementById('closeScanHistoryModal').addEventListener('click', () => {
+        document.getElementById('scanHistoryModal').classList.remove('active');
+    });
+    
+    window.addEventListener('click', (e) => {
+        const modal = document.getElementById('scanHistoryModal');
+        if (e.target === modal) {
+            modal.classList.remove('active');
+        }
+    });
+}
+
+function showScanHistory(id) {
+    const item = deliveries.find(d => d.id === id);
+    if (!item) return;
+
+    document.getElementById('scanHistorySubtitle').textContent = `Lot / Référence : ${item.ref} (${item.quantite || 1} colis au total)`;
+    
+    const tbody = document.getElementById('scanHistoryBody');
+    if (!item.scanHistory || item.scanHistory.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="2" style="text-align:center; padding:20px; color:#94a3b8;">Aucun historique de scan disponible pour ce lot.</td></tr>';
+    } else {
+        // Trier du plus récent au plus ancien
+        const sortedScans = [...item.scanHistory].sort((a, b) => new Date(b.date) - new Date(a.date));
+        tbody.innerHTML = sortedScans.map((scan, index) => `
+            <tr style="background: ${index % 2 === 0 ? '#ffffff' : '#f8fafc'};">
+                <td style="padding: 10px 8px; border-bottom: 1px solid #e2e8f0; font-family: monospace; font-weight: bold; color: #334155;">${scan.scanRef}</td>
+                <td style="text-align: right; padding: 10px 8px; border-bottom: 1px solid #e2e8f0; color: #64748b; font-size: 12px;">${new Date(scan.date).toLocaleString('fr-FR')}</td>
+            </tr>
+        `).join('');
+    }
+    
+    document.getElementById('scanHistoryModal').classList.add('active');
+}
 
 // Stats
 function updateStats() {

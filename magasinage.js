@@ -80,9 +80,14 @@ document.addEventListener('DOMContentLoaded', () => {
             });
             return (totalVentes + totalAutres + totalRetraits) - (totalDepenses + totalDepots);
         },
-        calculateStorageFee(dateString, quantity = 1, compareDate = new Date()) {
+        calculateStorageFee(dateString, quantityOrItem = 1, compareDate = new Date()) {
             if (!dateString) return { days: 0, fee: 0 };
-            const qte = parseInt(quantity) || 1;
+            let qte = 1;
+            if (typeof quantityOrItem === 'object' && quantityOrItem !== null) {
+                qte = quantityOrItem.quantiteRestante !== undefined ? parseInt(quantityOrItem.quantiteRestante) : (parseInt(quantityOrItem.quantite) || 1);
+            } else {
+                qte = parseInt(quantityOrItem) || 1;
+            }
             const arrivalDate = new Date(dateString);
             const diffTime = compareDate - arrivalDate;
             if (diffTime < 0) return { days: 0, fee: 0 };
@@ -145,7 +150,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (t.storageFeeWaived === true) return false;
 
             // 3. On ne montre que ceux qui ont des frais (période gratuite dépassée)
-            const { fee } = transactionService.calculateStorageFee(t.date, t.quantite);
+            const { fee } = transactionService.calculateStorageFee(t.date, t);
             if (fee <= 0) return false;
 
             if (!term) return true; 
@@ -175,7 +180,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const toShow = filtered;
 
         toShow.forEach(t => {
-            const { days, fee } = transactionService.calculateStorageFee(t.date, t.quantite);
+            const { days, fee } = transactionService.calculateStorageFee(t.date, t);
             
             if (fee > 0) totalPotentialFees += fee;
 
@@ -259,7 +264,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const tableRows = [];
             
             currentFiltered.forEach(t => {
-                const { days, fee } = transactionService.calculateStorageFee(t.date, t.quantite);
+                const { days, fee } = transactionService.calculateStorageFee(t.date, t);
                 tableRows.push([
                     t.date || '',
                     t.reference || '',
