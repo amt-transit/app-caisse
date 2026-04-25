@@ -4264,33 +4264,3 @@ async function permanentlyDeleteSelected(skipConfirm = false) {
     });
 }
 
-function moveSingleToAVenir(id) {
-    const d = deliveries.find(item => item.id === id);
-    updateDoc(doc(db, CONSTANTS.COLLECTION, id), {
-        containerStatus: 'A_VENIR',
-        status: 'EN_ATTENTE',
-        livreur: deleteField(),
-        dateProgramme: deleteField(),
-        importedFromTransit: deleteField(),
-        directFromParis: deleteField(),
-        dateAjout: new Date().toISOString() // Fait remonter en haut de la liste
-    }).then(() => {
-        if (d && d.ref) deleteTransactionByRef(d.ref);
-        showToast('Colis renvoyé vers À VENIR', 'success');
-    });
-}
-
-async function permanentlyDeleteSingle(id, skipConfirm = false) {
-    if (!skipConfirm && !await AppModal.confirm('⚠️ ATTENTION : Êtes-vous sûr de vouloir supprimer définitivement cette livraison ?\nCette action est irréversible.', "Suppression Définitive", true)) return;
-
-    const d = deliveries.find(item => item.id === id);
-    deleteDoc(doc(db, CONSTANTS.COLLECTION, id))
-        .then(() => {
-            if (d && d.ref) deleteTransactionByRef(d.ref);
-            showToast('Livraison supprimée', 'success');
-        })
-        .catch(error => {
-            console.error("Erreur suppression:", error);
-            showToast("Erreur lors de la suppression: " + error.message, "error");
-        });
-}
