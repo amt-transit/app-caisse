@@ -754,6 +754,13 @@ html, body {
       </div>
     </div>
 
+    <div style="display:flex;align-items:center;gap:6px;background:#e3f2fd;border-radius:8px;padding:6px 10px;margin-bottom:10px;">
+        <span style="font-size:12px;font-weight:700;color:#1565c0;">📦 Conteneur :</span>
+        <select id="scanContainerFilter" style="flex:1; font-size:13px;font-weight:600;border:1px solid #bbdefb;border-radius:5px;padding:4px;color:#1565c0;background:#fff;" onchange="window.currentScanContainer = this.value;">
+            <option value="">Tous les conteneurs</option>
+        </select>
+    </div>
+
     <!-- Caméra scan -->
     <div class="section-label">Scanner le code-barres / QR</div>
     <div class="viewfinder-wrap" id="viewfinder-wrap">
@@ -816,6 +823,9 @@ html, body {
     <button class="nav-item active" id="nav-scan" onclick="showScreen('scan')">
       <span class="nav-icon">📷</span>Scanner
     </button>
+    <button class="nav-item" id="nav-route" onclick="showScreen('route')">
+      <span class="nav-icon">🗺️</span>Tournée
+    </button>
     <button class="nav-item" id="nav-history" onclick="showScreen('history')">
       <span class="nav-icon">📋</span>Historique
     </button>
@@ -851,12 +861,42 @@ html, body {
     <button class="nav-item" id="nav-scan2" onclick="showScreen('scan')">
       <span class="nav-icon">📷</span>Scanner
     </button>
+    <button class="nav-item" id="nav-route2" onclick="showScreen('route')">
+      <span class="nav-icon">🗺️</span>Tournée
+    </button>
     <button class="nav-item active" id="nav-history2" onclick="showScreen('history')">
       <span class="nav-icon">📋</span>Historique
     </button>
     <button class="nav-item" id="nav-back2" onclick="window.location.href='index.html'">
       <span class="nav-icon">🏠</span>Bureau
     </button>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════
+     SCREEN 3 : TOURNÉE DU JOUR
+     ═══════════════════════════════════════ -->
+<div class="screen hidden" id="screen-route">
+  <div class="topbar">
+    <div class="topbar-brand">
+      <div class="topbar-logo" style="background:#8b5cf6;">🗺️</div>
+      <div>
+        <div class="topbar-title">Ma Tournée</div>
+        <div class="topbar-sub">Feuille de route du jour</div>
+      </div>
+    </div>
+    <button class="topbar-btn" onclick="loadMyRoute()">↻ Rafraîchir</button>
+  </div>
+
+  <div class="content" id="route-list">
+    <div class="scan-empty"><div class="icon">🗺️</div>Chargement de la tournée...</div>
+  </div>
+
+  <div class="bottom-nav">
+    <button class="nav-item" onclick="showScreen('scan')"><span class="nav-icon">📷</span>Scanner</button>
+    <button class="nav-item active" onclick="showScreen('route')"><span class="nav-icon">🗺️</span>Tournée</button>
+    <button class="nav-item" onclick="showScreen('history')"><span class="nav-icon">📋</span>Historique</button>
+    <button class="nav-item" onclick="window.location.href='index.html'"><span class="nav-icon">🏠</span>Bureau</button>
   </div>
 </div>
 
@@ -892,6 +932,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     initScanner();
     loadTodayStats();
+    loadContainersList();
+    loadMyRoute();
 
     // Photo input listener
     document.getElementById('photoInputGallery').addEventListener('change', handlePhotoCapture);
@@ -958,6 +1000,49 @@ async function initScanner() {
     }
 }
 
+async function loadContainersList() {
+    try {
+        const snap = await getDocs(query(collection(db, 'livraisons'), where('containerStatus', '==', 'EN_COURS')));
+        const containers = [...new Set(snap.docs.map(d => d.data().conteneur).filter(Boolean))].sort();
+        const sel = document.getElementById('scanContainerFilter');
+        if (sel) {
+            containers.forEach(c => {
+                const opt = document.createElement('option');
+                opt.value = c; opt.textContent = c;
+                sel.appendChild(opt);
+            });
+        }
+    } catch(e) { console.warn('Conteneurs:', e); }
+}
+
+async function loadMyRoute() {
+    const livreurName = sessionStorage.getItem('userName');
+    const today = new Date().toISOString().split('T')[0];
+    try {
+        const snap = await getDocs(query(collection(db, 'livraisons'), where('livreur', '==', livreurName), where('dateProgramme', '==', today)));
+        const route = snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(d => ['EN_ATTENTE', 'EN_COURS', 'PARTIEL', 'LIVRAISON_PARTIELLE'].includes(d.status)).sort((a, b) => (a.orderInRoute ?? 999) - (b.orderInRoute ?? 999));
+        renderRoute(route);
+    } catch(e) { console.error(e); }
+}
+
+function renderRoute(route) {
+    const el = document.getElementById('route-list');
+    if (!route.length) {
+        el.innerHTML = `<div class="scan-empty"><div class="icon">🗺️</div>Aucune tournée programmée pour vous aujourd'hui.</div>`;
+        return;
+    }
+    el.innerHTML = route.map((r, i) => `
+        <div class="history-item" onclick="document.getElementById('manual-ref').value='${r.ref}'; searchDelivery('${r.ref}'); showScreen('scan');" style="background:var(--card); border:1px solid var(--border); border-radius:12px; padding:12px; display:flex; align-items:center; gap:12px; cursor:pointer; margin-bottom:8px;">
+            <div style="font-size:1.2rem; font-weight:800; color:var(--green); width:24px; text-align:center;">${i+1}</div>
+            <div class="history-info">
+                <div class="history-ref">${r.ref} <span style="font-size:0.75em; padding:2px 6px; border-radius:4px; background:var(--orange-l); color:var(--orange); margin-left:6px;">${r.montant||'0 CFA'}</span></div>
+                <div class="history-dest" style="color:var(--muted); font-size:0.8rem; margin-top:4px;">${getClientName(r)} · ${r.lieuLivraison || 'Lieu non précisé'}</div>
+            </div>
+            <div style="font-size:1.2rem; color:var(--muted);">▶</div>
+        </div>
+    `).join('');
+}
+
 // ── RECHERCHE LIVRAISON ──
 async function searchDelivery(ref) {
     if (!ref || ref.length < 2) return;
@@ -986,6 +1071,9 @@ async function searchDelivery(ref) {
         } else {
             const doc = snap.docs[0];
             currentDelivery = { id: doc.id, ...doc.data() };
+            if (window.currentScanContainer && currentDelivery.conteneur && currentDelivery.conteneur !== window.currentScanContainer) {
+                showToast(`⚠️ Attention: Ce colis appartient au conteneur ${currentDelivery.conteneur}`, 'error');
+            }
             capturedPhotos = [];
             renderResult(currentDelivery);
         }
@@ -1640,6 +1728,7 @@ function showScreen(name) {
     document.querySelectorAll(`[id^="nav-${name}"]`).forEach(n => n.classList.add('active'));
 
     if (name === 'history') renderHistory();
+    if (name === 'route') loadMyRoute();
 }
 
 // ── TOAST ──
@@ -1658,7 +1747,7 @@ function showLoading(show) {
 }
 
 Object.assign(window, {
-    showScreen, searchDelivery, resetScannerUI, captureGPS, checkPartial, addPhoto, sendToWhatsAppAndMarkDone, markIncident, viewPhoto, deletePhoto, rotatePhoto
+    showScreen, searchDelivery, resetScannerUI, captureGPS, checkPartial, addPhoto, sendToWhatsAppAndMarkDone, markIncident, viewPhoto, deletePhoto, rotatePhoto, loadMyRoute
 });
 </script>
 </body>

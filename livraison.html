@@ -406,7 +406,7 @@
                 </div>
             </div>
             <div style="display:inline-flex;align-items:center;gap:5px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:7px;padding:3px 8px;margin-left:8px">
-                <span style="font-size:11px;font-weight:700;color:#1565c0">🚢 Filtre :</span>
+                <span style="font-size:11px;font-weight:700;color:#e65100" id="av-container-label">🚢 Conteneur à préparer :</span>
                 <select id="quickContainerSelect2" style="padding:3px 7px;border:1px solid #bfdbfe;border-radius:5px;font-size:12px;font-weight:600;color:#1565c0;background:#fff" onchange="lvSyncQS(this.value)">
                     <option value="">Tous les conteneurs</option>
                 </select>
@@ -508,6 +508,7 @@
 
         <!-- DESCRIPTION CONTEXTUELLE -->
         <div class="lv-ctx" id="lv-ctx"></div>
+        <div id="paris-info-banner" style="display:none; background:#e3f2fd; border-left:4px solid #1565c0; padding:8px 16px; font-size:12px; color:#1565c0; font-weight:600; margin: 10px 16px 0; border-radius:4px;">🇫🇷 Vue complète — Tous les colis enregistrés depuis la France (embarqués ou non)</div>
 
         <!-- TABLEAU -->
         <div class="table-container" style="padding:0">
@@ -787,6 +788,10 @@
         const ctx = document.getElementById('lv-ctx');
         if(ctx){ ctx.innerHTML = LV_DESC[t]||''; ctx.classList.toggle('show',!!LV_DESC[t]); }
         // Section conteneur actif : visible EN_COURS seulement
+        const parisInfo = document.getElementById('paris-info-banner');
+        if (parisInfo) {
+            parisInfo.style.display = t === 'PARIS' ? 'block' : 'none';
+        }
         const cs = document.getElementById('lv-cont-sec');
         const csep = document.getElementById('lv-cont-sep');
         if(cs){ cs.style.display = t==='EN_COURS'?'inline-flex':'none'; }

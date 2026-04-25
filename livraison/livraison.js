@@ -979,6 +979,12 @@ async function findAddressForRecipient(name) {
 
 // Aperçu modal
 function showPreviewModal(data) {
+    // Pré-remplir le conteneur avec le conteneur actif de l'onglet courant
+    const importConteneurInput = document.getElementById('importConteneur');
+    if (importConteneurInput && currentContainerName && currentContainerName !== 'Aucun' && currentContainerName !== 'SANS_CONTENEUR') {
+        importConteneurInput.value = currentContainerName;
+    }
+
     // Pré-sélectionner le statut selon l'onglet actuel
     const statusSelect = document.getElementById('importContainerStatus');
     if (statusSelect && ['PARIS', 'EN_COURS', 'A_VENIR'].includes(currentTab)) {
@@ -1791,6 +1797,23 @@ function renderTable() {
             
             const msg = `Bonjour, votre colis ${d.ref} (${d.conteneur || ''}) est disponible pour la livraison.`;
             waBtn = `<a href="https://wa.me/${phone}?text=${encodeURIComponent(msg)}" target="_blank" class="btn btn-success btn-small" style="background-color:#25D366; border:none; padding:4px 6px; margin-right:4px;" title="Contacter sur WhatsApp">📱</a>`;
+        }
+
+        // --- AMÉLIORATION 7 : Notification spéciale pour "À Venir" ---
+        if (currentTab === 'A_VENIR' && !isViewer && phoneCandidate) {
+            let phone = phoneCandidate.replace(/[^\d]/g, '');
+            if (phone.length === 10 && phone.startsWith('0')) phone = '225' + phone.substring(1);
+            else if (phone.length === 10) phone = '225' + phone;
+            
+            const msgNotifier = encodeURIComponent(
+                `Bonjour ${displayDestinataire || 'Client'},\n\n` +
+                `🚢 Votre colis Réf: *${d.ref}* (Conteneur ${d.conteneur || 'en transit'}) ` +
+                `est en route vers Abidjan.\n\n` +
+                `Merci de confirmer votre lieu de livraison :\n` +
+                `${d.lieuLivraison || '(à confirmer)'}\n\n` +
+                `— AMT TRANS'IT`
+            );
+            waBtn += `<a href="https://wa.me/${phone}?text=${msgNotifier}" target="_blank" class="btn btn-small" style="background:#10b981; color:white; padding:4px 6px; margin-left:4px; text-decoration:none;" title="Notifier le client de l'arrivée imminente">💬 Notifier</a>`;
         }
 
         let actionButtons = waBtn;
