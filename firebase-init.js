@@ -18,7 +18,13 @@ const db = firebase.firestore();
 
 const logoutBtn = document.getElementById('logoutBtn');
 if (logoutBtn) {
-    logoutBtn.addEventListener('click', () => {
-        if (confirm("Voulez-vous vous déconnecter ?")) firebase.auth().signOut();
+    logoutBtn.addEventListener('click', async () => {
+        if (window.AppModal) {
+            if (await AppModal.confirm("Voulez-vous vous déconnecter ?", "Déconnexion", true)) {
+                firebase.auth().signOut();
+            }
+        } else {
+            if (confirm("Voulez-vous vous déconnecter ?")) firebase.auth().signOut();
+        }
     });
 }

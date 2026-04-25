@@ -83,7 +83,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 await updateDoc(doc(db, "expenses", pendingDeleteId), { isDeleted: true });
             }
         } catch (error) {
-            alert("Erreur lors de la suppression : " + error.message);
+            AppModal.error("Erreur lors de la suppression : " + error.message);
         } finally {
             closeDeleteModal();
         }
@@ -141,13 +141,13 @@ document.addEventListener('DOMContentLoaded', () => {
         addVehicleBtn.addEventListener('click', async () => {
             const name = newVehicleName.value.trim();
             const plate = newVehiclePlate.value.trim();
-            if (!name || !plate) return alert("Veuillez saisir un nom et une immatriculation.");
+            if (!name || !plate) return AppModal.error("Veuillez saisir un nom et une immatriculation.");
             
             // Vérification des doublons (basé sur l'immatriculation, en ignorant les espaces et la casse)
             const normalizedPlate = plate.toLowerCase().replace(/\s+/g, '');
             const isDuplicate = allVehicles.some(v => v.plate.toLowerCase().replace(/\s+/g, '') === normalizedPlate);
             if (isDuplicate) {
-                return alert("⚠️ Un véhicule avec cette immatriculation est déjà enregistré dans la flotte.");
+                return AppModal.error("Un véhicule avec cette immatriculation est déjà enregistré dans la flotte.", "Doublon");
             }
 
             try {
@@ -160,9 +160,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
                 newVehicleName.value = '';
                 newVehiclePlate.value = '';
-                alert("Véhicule ajouté !");
+                AppModal.success("Véhicule ajouté !");
             } catch (error) {
-                alert("Erreur lors de l'ajout : " + error.message);
+                AppModal.error("Erreur lors de l'ajout : " + error.message);
             }
         });
     } else if (addVehicleBtn) {
@@ -214,7 +214,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const desc = transDesc.value.trim();
 
             if (!date || !type || !category || amount <= 0) {
-                return alert("Veuillez remplir correctement la date, le type, la catégorie et le montant.");
+                return AppModal.error("Veuillez remplir correctement la date, le type, la catégorie et le montant.");
             }
 
             const selectedVehicle = allVehicles.find(v => v.id === vehicleId);
@@ -236,9 +236,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 await addDoc(collection(db, "fleet_transactions"), data);
                 transAmount.value = '';
                 transDesc.value = '';
-                alert("Opération enregistrée !");
+                AppModal.success("Opération enregistrée !");
             } catch (error) {
-                alert("Erreur lors de l'ajout : " + error.message);
+                AppModal.error("Erreur lors de l'ajout : " + error.message);
             }
         });
     } else if (addTransBtn) {
@@ -373,7 +373,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const source = e.target.getAttribute('data-source');
                 
                 if (source === 'expenses' && userRole !== 'admin' && userRole !== 'super_admin') {
-                    alert("Accès refusé : Seuls les administrateurs peuvent supprimer cette opération provenant de la Caisse.");
+                    AppModal.error("Accès refusé : Seuls les administrateurs peuvent supprimer cette opération provenant de la Caisse.", "Action non autorisée");
                     return;
                 }
                 

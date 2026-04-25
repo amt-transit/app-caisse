@@ -250,7 +250,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (exportPdfBtn) {
         exportPdfBtn.addEventListener('click', () => {
             if (currentFiltered.length === 0) {
-                alert("Aucune donnée à exporter.");
+                AppModal.alert("Aucune donnée à exporter.", "Export PDF");
                 return;
             }
             

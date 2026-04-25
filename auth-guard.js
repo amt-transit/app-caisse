@@ -16,9 +16,16 @@ onAuthStateChanged(auth, async (user) => {
         const userDocRef = doc(db, 'users', user.uid);
         const userDocSnap = await getDoc(userDocRef);
 
+        const showErrorAndRedirect = async (msg, title, url = 'index.html') => {
+            if (window.AppModal) await window.AppModal.error(msg, title);
+            else alert(title + "\n\n" + msg);
+            window.location.href = url;
+        };
+
         // DIAGNOSTIC 1 : Le document existe-t-il ?
         if (!userDocSnap.exists()) {
-            alert("ERREUR CRITIQUE :\n\nVotre compte de connexion existe, mais votre 'Fiche Utilisateur' (Rôle) est introuvable dans la base de données.\n\nID cherché : " + user.uid);
+            if (window.AppModal) await window.AppModal.error("ERREUR CRITIQUE :\n\nVotre compte de connexion existe, mais votre 'Fiche Utilisateur' (Rôle) est introuvable dans la base de données.\n\nID cherché : " + user.uid, "Profil introuvable");
+            else alert("ERREUR CRITIQUE :\n\nVotre compte de connexion existe, mais votre 'Fiche Utilisateur' (Rôle) est introuvable dans la base de données.\n\nID cherché : " + user.uid);
             throw new Error("Profil utilisateur introuvable dans Firestore.");
         }
 
@@ -27,7 +34,8 @@ onAuthStateChanged(auth, async (user) => {
         
         // DIAGNOSTIC 2 : Le rôle est-il valide ?
         if (!userRole) {
-            alert("ERREUR CRITIQUE :\n\nVotre fiche utilisateur existe, mais le champ 'role' est vide.");
+            if (window.AppModal) await window.AppModal.error("ERREUR CRITIQUE :\n\nVotre fiche utilisateur existe, mais le champ 'role' est vide.", "Rôle manquant");
+            else alert("ERREUR CRITIQUE :\n\nVotre fiche utilisateur existe, mais le champ 'role' est vide.");
             throw new Error("Champ 'role' manquant.");
         }
 
@@ -96,16 +104,14 @@ onAuthStateChanged(auth, async (user) => {
 
         // Protection page Admin
         if (currentPage.includes('admin-panel.html')) {
-            alert("Accès réservé au Super Admin.");
-            window.location.href = 'index.html';
+            await showErrorAndRedirect("Accès réservé au Super Admin.", "Accès Refusé");
             return;
         }
 
         // Protection page Points
         if (currentPage.includes('points.html')) {
             if (userRole !== 'admin' && userRole !== 'super_admin' && userRole !== 'spectateur') {
-                alert("Accès refusé : Réservé aux Administrateurs.");
-                window.location.href = 'index.html';
+                await showErrorAndRedirect("Accès refusé : Réservé aux Administrateurs.", "Accès Refusé");
                 return;
             }
         }
@@ -113,8 +119,7 @@ onAuthStateChanged(auth, async (user) => {
         // Protection page Audit
         if (currentPage.includes('audit.html')) {
             if (userRole !== 'admin' && userRole !== 'super_admin' && userRole !== 'spectateur') {
-                alert("Accès refusé : Réservé aux Administrateurs.");
-                window.location.href = 'index.html';
+                await showErrorAndRedirect("Accès refusé : Réservé aux Administrateurs.", "Accès Refusé");
                 return;
             }
         }
@@ -135,8 +140,7 @@ onAuthStateChanged(auth, async (user) => {
         if (userRole === 'saisie_full') {
             if (currentPage.includes('bank.html') || 
                 currentPage.includes('salaire.html')) {
-                alert("Accès refusé : Votre rôle (Saisie Full) ne permet pas d'accéder à cette page.");
-                window.location.href = 'index.html'; 
+                await showErrorAndRedirect("Accès refusé : Votre rôle (Saisie Full) ne permet pas d'accéder à cette page.", "Accès Refusé");
                 return;
             }
         }
@@ -144,16 +148,14 @@ onAuthStateChanged(auth, async (user) => {
         // SAISIE LIMITED
         if (userRole === 'saisie_limited') {
             if (!currentPage.includes('index.html') && !currentPage.includes('history.html') && !currentPage.includes('magasinage.html') && !currentPage.includes('livreurscan.html')) {
-                 alert("Accès refusé : Votre rôle (Saisie Limited) ne permet pas d'accéder à cette page.");
-                 window.location.href = 'index.html'; 
+                 await showErrorAndRedirect("Accès refusé : Votre rôle (Saisie Limited) ne permet pas d'accéder à cette page.", "Accès Refusé");
                  return;
             }
         }
 
         // Protection page Confirmation
         if (currentPage.includes('confirmation.html') && userRole === 'saisie_limited') {
-            alert("Accès refusé : Réservé aux Admins et Saisie Full.");
-            window.location.href = 'index.html';
+            await showErrorAndRedirect("Accès refusé : Réservé aux Admins et Saisie Full.", "Accès Refusé");
             return;
         }
 
@@ -204,7 +206,8 @@ onAuthStateChanged(auth, async (user) => {
         console.error("Erreur auth :", error);
         // On ne déconnecte PAS tout de suite pour vous laisser lire l'alerte si c'est une erreur de permission
         if (error.code === 'permission-denied') {
-             alert("ERREUR PERMISSION : Les règles de sécurité de Firestore bloquent la lecture de votre profil.\nVérifiez l'onglet 'Règles' dans la console Firebase.");
+             if (window.AppModal) await window.AppModal.error("Les règles de sécurité de Firestore bloquent la lecture de votre profil.\nVérifiez l'onglet 'Règles' dans la console Firebase.", "ERREUR PERMISSION");
+             else alert("ERREUR PERMISSION : Les règles de sécurité de Firestore bloquent la lecture de votre profil.\nVérifiez l'onglet 'Règles' dans la console Firebase.");
         }
         signOut(auth);
         window.location.href = 'login.html';

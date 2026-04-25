@@ -324,7 +324,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
 
         if (exportData.length === 0) {
-            alert("Aucune donnée à exporter.");
+            AppModal.alert("Aucune donnée à exporter.", "Export Excel");
             return;
         }
 

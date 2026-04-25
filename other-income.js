@@ -129,7 +129,7 @@ document.addEventListener('DOMContentLoaded', () => {
         };
         
         if (!data.date || !incomeDesc.value || data.montant <= 0) {
-            return alert("Veuillez remplir la date, la description et un montant valide.");
+            return AppModal.error("Veuillez remplir la date, la description et un montant valide.");
         }
         
         // --- CONFIGURATION DE L'UTILISATEUR SANS CONFIRMATION ---
@@ -138,9 +138,9 @@ document.addEventListener('DOMContentLoaded', () => {
         if (currentUserName === USER_NO_CONFIRM) {
             // Enregistrement DIRECT
             incomeCollection.add(data).then(() => {
-                alert("Entrée enregistrée (Mode Direct).");
+                AppModal.success("Entrée enregistrée (Mode Direct).");
                 resetIncomeForm();
-            }).catch(err => alert("Erreur : " + err.message));
+            }).catch(err => AppModal.error("Erreur : " + err.message));
         } else {
             // Ajout à la LISTE D'ATTENTE
             addIncomeToPendingList(data);
@@ -277,11 +277,11 @@ document.addEventListener('DOMContentLoaded', () => {
     fetchIncome();
 
     // 3. SUPPRESSION
-    incomeTableBody.addEventListener('click', (event) => {
+    incomeTableBody.addEventListener('click', async (event) => {
         if (isViewer) return;
         if (event.target.classList.contains('deleteBtn')) {
             const docId = event.target.getAttribute('data-id');
-            if (confirm("Confirmer la suppression ? Elle sera archivée.")) {
+            if (await AppModal.confirm("Confirmer la suppression ? Elle sera archivée.", "Suppression", true)) {
                 updateDoc(doc(db, "other_income", docId), { isDeleted: true });
             }
         }
@@ -334,7 +334,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (commitBtn) {
         commitBtn.addEventListener('click', async () => {
             if (pendingIncome.length === 0) return;
-            if (!confirm(`Enregistrer ${pendingIncome.length} entrée(s) ?`)) return;
+            if (!await AppModal.confirm(`Enregistrer ${pendingIncome.length} entrée(s) ?`, "Validation Multiple")) return;
 
             const batch = writeBatch(db);
             pendingIncome.forEach(inc => {
@@ -346,10 +346,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 await batch.commit();
                 pendingIncome = [];
                 renderPendingIncome();
-                alert("Entrées enregistrées avec succès !");
+                AppModal.success("Entrées enregistrées avec succès !");
             } catch (err) {
                 console.error(err);
-                alert("Erreur lors de l'enregistrement : " + err.message);
+                AppModal.error("Erreur lors de l'enregistrement : " + err.message);
             }
         });
     }

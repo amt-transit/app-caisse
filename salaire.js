@@ -264,7 +264,7 @@ console.log("✅ Mode Production (Salaire) : Connecté");
             if(!isSuperAdmin.value) return;
             const hasBudget = salaryFunds.value.some(f => f.targetMonth === payForm.value.month);
             if (!hasBudget) {
-                alert(`Impossible d'effectuer un paiement pour ${payForm.value.month} : Aucun fonds n'a été alloué pour ce mois.`);
+                window.AppModal.error(`Impossible d'effectuer un paiement pour ${payForm.value.month} : Aucun fonds n'a été alloué pour ce mois.`, "Absence de budget");
                 return;
             }
             actionLoading.value = true;
@@ -340,12 +340,12 @@ console.log("✅ Mode Production (Salaire) : Connecté");
         };
         const deleteEmployee = async (id) => { 
             if(!isSuperAdmin.value) return;
-            if(confirm("Supprimer cet employé ?")) await deleteDoc(doc(db, "employees", id)); 
+            if(await window.AppModal.confirm("Supprimer cet employé ?", "Suppression", true)) await deleteDoc(doc(db, "employees", id)); 
         };
 
         const cancelTontine = async (emp) => {
             if(!isSuperAdmin.value) return;
-            if (!confirm(`Voulez-vous vraiment annuler toutes les parts de tontine pour ${emp.name} ?`)) return;
+            if (!await window.AppModal.confirm(`Voulez-vous vraiment annuler toutes les parts de tontine pour ${emp.name} ?`, "Annulation", true)) return;
             try {
                 await updateDoc(doc(db, "employees", emp.id), { tontineCount: 0, isTontine: false });
                 showToast(`La tontine pour ${emp.name} a été annulée.`);
@@ -354,7 +354,7 @@ console.log("✅ Mode Production (Salaire) : Connecté");
 
         const deleteSalaryPayment = async (payment) => {
              if(!isSuperAdmin.value) return;
-             if(!confirm("Annuler ce paiement ?")) return;
+             if(!await window.AppModal.confirm("Annuler ce paiement ?", "Annulation", true)) return;
              try {
                 if(payment.loan > 0) {
                     const emp = employeesList.value.find(e => e.id === payment.employeeId);
@@ -428,7 +428,7 @@ console.log("✅ Mode Production (Salaire) : Connecté");
         };
         const deleteSalaryFund = async (id) => { 
             if(!isSuperAdmin.value) return;
-            if(confirm("Supprimer ?")) await deleteDoc(doc(db, "salary_funds", id)); 
+            if(await window.AppModal.confirm("Supprimer ce fonds ?", "Suppression", true)) await deleteDoc(doc(db, "salary_funds", id)); 
         };
 
         // ============================================================
@@ -520,10 +520,10 @@ console.log("✅ Mode Production (Salaire) : Connecté");
         // ============================================================
         const markTontinePayment = async (emp) => {
             if(!isSuperAdmin.value) return;
-            let amount = prompt("Montant de la cotisation pour " + emp.name + " ?", globalTontineAmount.value);
+            let amount = await window.AppModal.prompt("Montant de la cotisation pour " + emp.name + " ?", globalTontineAmount.value, "Cotisation Tontine");
             if (amount === null) return;
             amount = parseFloat(amount);
-            if (isNaN(amount) || amount <= 0) return alert("Montant invalide");
+            if (isNaN(amount) || amount <= 0) return window.AppModal.error("Montant invalide", "Erreur");
 
             try {
                 const currentMonth = selectedTontineMonth.value;
@@ -562,16 +562,16 @@ console.log("✅ Mode Production (Salaire) : Connecté");
             const wins = salaryHistory.value.filter(p => p.employeeId === emp.id && p.type === 'Gain Tontine').length;
             const allowed = parseInt(emp.tontineCount || (emp.isTontine ? 1 : 0));
             if (wins >= allowed) {
-                return alert(`Impossible : Cet employé a déjà récupéré la tontine ${wins} fois (Nombre de parts : ${allowed}).`);
+                return window.AppModal.error(`Impossible : Cet employé a déjà récupéré la tontine ${wins} fois (Nombre de parts : ${allowed}).`, "Limite Atteinte");
             }
-            if (!confirm(`Confirmer que ${emp.name} récupère la tontine du mois (${selectedTontineMonth.value}) ?`)) return;
+            if (!await window.AppModal.confirm(`Confirmer que ${emp.name} récupère la tontine du mois (${selectedTontineMonth.value}) ?`, "Confirmation de Gain")) return;
             const totalShares = employeesList.value.reduce((sum, e) => sum + (parseInt(e.tontineCount || (e.isTontine ? 1 : 0))), 0);
             // Gain = cagnotte du mois (2 périodes)
             const defaultAmount = totalShares * globalTontineAmount.value * 2;
-            let amount = prompt("Montant récupéré ?", defaultAmount);
+            let amount = await window.AppModal.prompt("Montant récupéré ?", defaultAmount, "Saisie du gain");
             if (amount === null) return;
             amount = parseFloat(amount);
-            if (isNaN(amount) || amount <= 0) return alert("Montant invalide");
+            if (isNaN(amount) || amount <= 0) return window.AppModal.error("Montant invalide", "Erreur");
             try {
                 await addDoc(collection(db, "salary_payments"), {
                     employeeId: emp.id, employeeName: emp.name, month: selectedTontineMonth.value, period: selectedTontinePeriod.value,
@@ -583,7 +583,7 @@ console.log("✅ Mode Production (Salaire) : Connecté");
 
         const deleteTontineBeneficiary = async (payment) => { 
             if(!isSuperAdmin.value) return;
-            if(confirm("Supprimer ce gain ?")) await deleteDoc(doc(db, "salary_payments", payment.id)); 
+            if(await window.AppModal.confirm("Supprimer ce gain ?", "Suppression", true)) await deleteDoc(doc(db, "salary_payments", payment.id)); 
         };
 
         const exportSalaryHistoryPDF = () => {

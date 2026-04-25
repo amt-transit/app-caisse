@@ -229,7 +229,7 @@
     .lv-qmodal { position:fixed; inset:0; background:rgba(0,0,0,.4); z-index:3000; display:none; align-items:center; justify-content:center; backdrop-filter:blur(2px); }
     .lv-qmodal.active { display:flex; }
     .lv-qbox { background:#fff; border-radius:14px; padding:22px; min-width:300px; max-width:90vw; box-shadow:0 20px 40px rgba(0,0,0,.15); }
-    .lv-qbox-title { font-size:15px; font-weight:700; color:var(--lv-text); margin-bottom:14px; display:flex; align-items:center; gap:7px; }
+    .lv-qbox-title { font-size:18px; font-weight:800; color:var(--lv-blue); margin-bottom:20px; display:flex; align-items:center; justify-content:center; gap:8px; text-align:center; }
 
     /* ── CONTEXT DESC ── */
     .lv-ctx {
@@ -537,13 +537,13 @@
         <div class="lv-qmodal" id="lv-qm">
             <div class="lv-qbox">
                 <div class="lv-qbox-title">📦 Conteneur actif</div>
-                <div style="margin-bottom:10px">
-                    <label style="font-size:12px;font-weight:600;color:#64748b;display:block;margin-bottom:4px">Numéro de conteneur</label>
+                <div style="margin-bottom:15px; text-align:center;">
+                    <label style="font-size:13px;font-weight:700;color:#64748b;display:block;margin-bottom:8px">Saisissez le numéro de conteneur</label>
                     <input type="text" id="lv-qm-input" placeholder="Ex: CONT-2024-01"
-                        style="width:100%;padding:10px 12px;border:1.5px solid #cbd5e1;border-radius:8px;font-size:14px;font-weight:600"
+                        style="width:100%;padding:12px 15px;border:2px solid #cbd5e1;border-radius:8px;font-size:16px;font-weight:700;text-align:center;color:#1e293b;box-sizing:border-box;"
                         onkeydown="if(event.key==='Enter'){lvApplyCont()}">
                 </div>
-                <div style="display:flex;align-items:center;gap:6px;margin-bottom:14px">
+                <div style="display:flex;align-items:center;justify-content:center;gap:6px;margin-bottom:20px">
                     <input type="checkbox" id="lv-qm-cb" style="width:auto">
                     <label for="lv-qm-cb" style="font-size:13px;color:#475569;cursor:pointer">Filtrer la vue sur ce conteneur</label>
                 </div>
@@ -802,13 +802,13 @@
     }
 
     function lvUpdateStats() {
-        if(typeof filteredDeliveries==='undefined') return;
+        if(!window.filteredDeliveries) return;
         const s = {t:0,a:0,l:0,p:0};
-        filteredDeliveries.forEach(d=>{
+        window.filteredDeliveries.forEach(d=>{
             s.t++;
             if(d.status==='EN_ATTENTE'||d.status==='EN_COURS') s.a++;
             if(d.status==='LIVRE')   s.l++;
-            if(d.status==='PARTIEL') s.p++;
+            if(d.status==='PARTIEL'||d.status==='LIVRAISON_PARTIELLE') s.p++;
         });
         const $=(id,v)=>{const e=document.getElementById(id);if(e)e.textContent=v;};
         $('lv-n-total',s.t); $('lv-n-attente',s.a); $('lv-n-livre',s.l); $('lv-n-partiel',s.p);
@@ -817,9 +817,9 @@
     }
 
     function lvUpdateCounts() {
-        if(typeof deliveries==='undefined') return;
+        if(!window.deliveries) return;
         const c={EN_COURS:0,A_VENIR:0,PARIS:0,PROGRAMME:0};
-        deliveries.forEach(d=>{
+        window.deliveries.forEach(d=>{
             const cs=d.containerStatus||'EN_COURS';
             if(c[cs]!==undefined) c[cs]++;
             if(d.dateProgramme) c.PROGRAMME++;
@@ -828,8 +828,8 @@
     }
 
     function lvUpdateSelBar() {
-        if(typeof selectedIds==='undefined') return;
-        const n=selectedIds.size;
+        if(!window.selectedIds) return;
+        const n=window.selectedIds.size;
         const bar=document.getElementById('lv-sel-bar');
         if(bar) bar.classList.toggle('show',n>0);
         const el=document.getElementById('lv-sel-n');
@@ -837,14 +837,14 @@
     }
 
     function lvDeselAll() {
-        if(typeof selectedIds!=='undefined') selectedIds.clear();
+        if(window.selectedIds) window.selectedIds.clear();
         const sa=document.getElementById('selectAll'); if(sa) sa.checked=false;
         if(typeof renderTable==='function') renderTable();
         lvUpdateSelBar();
     }
 
     // More menus
-    function lvToggleMore(t) { lvCloseMore(); document.getElementById('lvDrop-'+t)?.classList.toggle('open'); }
+    function lvToggleMore(t) { document.getElementById('lvDrop-'+t)?.classList.toggle('open'); }
     function lvCloseMore() { document.querySelectorAll('.lv-more-drop').forEach(d=>d.classList.remove('open')); }
     document.addEventListener('click',e=>{ if(!e.target.closest('.lv-more')) lvCloseMore(); });
 

@@ -159,7 +159,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             renderPointsTable();
 
-        } catch (e) { console.error(e); alert("Erreur chargement points."); }
+        } catch (e) { console.error(e); AppModal.error("Erreur chargement points."); }
     }
 
     function renderPointsTable() {

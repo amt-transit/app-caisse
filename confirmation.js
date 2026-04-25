@@ -283,7 +283,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // 1b. Charger les Archives (Sur demande)
     searchArchiveBtn.addEventListener('click', () => {
         const monthVal = archiveMonthInput.value; // YYYY-MM
-        if (!monthVal) return alert("Veuillez sélectionner un mois.");
+        if (!monthVal) return AppModal.error("Veuillez sélectionner un mois.", "Erreur");
 
         sessionsListArchivesEl.innerHTML = '<p style="color:#666;">Recherche...</p>';
 

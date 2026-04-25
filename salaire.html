@@ -590,8 +590,14 @@
 <script src="utils.js"></script>
 <script>
     // Gestionnaire de déconnexion global
-    document.getElementById('logoutBtn').addEventListener('click', () => {
-        if (confirm("Voulez-vous vous déconnecter ?")) firebase.auth().signOut();
+    document.getElementById('logoutBtn').addEventListener('click', async () => {
+        if (window.AppModal) {
+            if (await window.AppModal.confirm("Voulez-vous vous déconnecter ?", "Déconnexion", true)) {
+                firebase.auth().signOut();
+            }
+        } else {
+            if (confirm("Voulez-vous vous déconnecter ?")) firebase.auth().signOut();
+        }
     });
 </script>
 

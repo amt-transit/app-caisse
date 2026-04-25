@@ -40,6 +40,7 @@ let pendingImport = [];
 let currentContainerName = localStorage.getItem(CONSTANTS.STORAGE_KEYS.CONTAINER_NAME) || 'Aucun';
 let currentTab = 'EN_COURS'; // 'EN_COURS' ou 'A_VENIR'
 let selectedIds = new Set(); // Pour stocker les IDs sélectionnés
+window.selectedIds = selectedIds;
 let currentSort = {
     column: null,
     direction: 'asc' // 'asc' ou 'desc'
@@ -114,16 +115,20 @@ function initRealtimeSync() {
     const localData = localStorage.getItem('deliveries');
     if (localData) {
         const parsed = JSON.parse(localData);
-        if (parsed.length > 0 && confirm(`MIGRATION : ${parsed.length} livraisons trouvées en local. Migrer vers le serveur ?`)) {
-            const batch = writeBatch(db);
-            parsed.forEach(item => {
-                const docRef = doc(collection(db, CONSTANTS.COLLECTION));
-                const { id, ...data } = item; 
-                batch.set(docRef, data);
-            });
-            batch.commit().then(() => {
-                localStorage.removeItem('deliveries');
-                showToast("Migration terminée !", "success");
+        if (parsed.length > 0) {
+            AppModal.confirm(`MIGRATION : ${parsed.length} livraisons trouvées en local. Migrer vers le serveur ?`, "Migration requise").then(confirmed => {
+                if (confirmed) {
+                    const batch = writeBatch(db);
+                    parsed.forEach(item => {
+                        const docRef = doc(collection(db, CONSTANTS.COLLECTION));
+                        const { id, ...data } = item; 
+                        batch.set(docRef, data);
+                    });
+                    batch.commit().then(() => {
+                        localStorage.removeItem('deliveries');
+                        showToast("Migration terminée !", "success");
+                    });
+                }
             });
         }
     }
@@ -135,6 +140,8 @@ function initRealtimeSync() {
             snapshot.forEach((doc) => {
                 deliveries.push({ id: doc.id, ...doc.data() });
             });
+            
+            window.deliveries = deliveries;
             
             filterDeliveries();
             updateStats();
@@ -673,7 +680,7 @@ function importExcel(event) {
     if (!file) return;
 
     if (typeof XLSX === 'undefined') {
-        alert("Erreur CRITIQUE : La bibliothèque Excel n'est pas chargée.\nVérifiez votre connexion internet et rechargez la page.");
+        AppModal.error("Erreur CRITIQUE : La bibliothèque Excel n'est pas chargée.\nVérifiez votre connexion internet et rechargez la page.", "Erreur Technique");
         return;
     }
     
@@ -917,11 +924,11 @@ function importExcel(event) {
                     if (rawData.length > 0 && rawData[0].length === 1) {
                         msg += "\n\n💡 DIAGNOSTIC : Il semble que votre fichier CSV ne soit pas lu correctement (tout est dans une seule colonne). Essayez de l'enregistrer en format Excel (.xlsx) avant d'importer.";
                     }
-                    alert(msg);
+                    AppModal.alert(msg, "Échec de l'importation");
                 }
             } catch (error) {
                 console.error(error);
-                alert("Erreur technique lors de l'importation :\n" + error.message);
+                AppModal.error("Erreur technique lors de l'importation :\n" + error.message, "Erreur Import");
             } finally {
                 // Masquer l'écran de chargement
                 if (overlay) overlay.style.display = 'none';
@@ -1459,14 +1466,19 @@ async function confirmImport() {
                     <span style="font-size:1.5em; margin-right:15px;">✅</span>
                     <div><strong>${createdCount}</strong> Nouveaux colis créés</div>
                 </div>
-                <div style="display:flex; align-items:center; color:#1e40af; background:#dbeafe; padding:10px; border-radius:8px;">
+                <div style="display:flex; align-items:center; color:#1e40af; background:#dbeafe; padding:10px; border-radius:8px; ${ignoredArchivedCount > 0 ? 'margin-bottom:15px;' : ''}">
                     <span style="font-size:1.5em; margin-right:15px;">🔄</span>
                     <div><strong>${updatedCount}</strong> Colis mis à jour (Infos complétées)</div>
                 </div>
+                ${ignoredArchivedCount > 0 ? `
+                <div style="display:flex; align-items:center; color:#92400e; background:#ffedd5; padding:10px; border-radius:8px;">
+                    <span style="font-size:1.5em; margin-right:15px;">🗄️</span>
+                    <div><strong>${ignoredArchivedCount}</strong> Colis ignorés (Déjà archivés)</div>
+                </div>` : ''}
             `;
             resultModal.classList.add('active');
         } else {
-            alert(`Rapport d'importation :\n\n✅ ${createdCount} Nouveaux colis créés\n🔄 ${updatedCount} Colis mis à jour`);
+            AppModal.success(`Rapport d'importation :\n\n✅ ${createdCount} Nouveaux colis créés\n🔄 ${updatedCount} Colis mis à jour${ignoredArchivedCount > 0 ? `\n🗄️ ${ignoredArchivedCount} Colis ignorés (Déjà archivés)` : ''}`, "Succès");
         }
 
         pendingImport = []; // Nettoyage
@@ -1474,7 +1486,7 @@ async function confirmImport() {
         if (progressModal) progressModal.classList.remove('active');
         console.error("Erreur Import:", err);
         if (err.code === 'resource-exhausted') {
-            alert("⚠️ ALERTE QUOTA FIREBASE ATTEINT !\n\nVous avez dépassé la limite d'écriture quotidienne autorisée par Firebase (Plan Gratuit : 20 000 écritures/jour).\n\nL'enregistrement a été bloqué par le serveur. Veuillez réessayer demain (après minuit, heure du Pacifique) ou passer au plan Blaze.");
+            AppModal.error("⚠️ ALERTE QUOTA FIREBASE ATTEINT !\n\nVous avez dépassé la limite d'écriture quotidienne autorisée par Firebase (Plan Gratuit : 20 000 écritures/jour).\n\nL'enregistrement a été bloqué par le serveur. Veuillez réessayer demain (après minuit, heure du Pacifique) ou passer au plan Blaze.", "Quota Dépassé");
         } else {
             showToast("Erreur lors de l'enregistrement : " + err.message, 'error');
         }
@@ -2330,8 +2342,8 @@ function moveDeliveryOrder(id, direction, date, livreur) {
     viewProgramDetails(date, livreur);
 }
 
-function removeFromProgram(id) {
-    if (confirm('Retirer ce colis du programme ? Il repassera "En attente".')) {
+async function removeFromProgram(id) {
+    if (await AppModal.confirm('Retirer ce colis du programme ? Il repassera "En attente".', "Retirer du programme", true)) {
         updateDoc(doc(db, CONSTANTS.COLLECTION, id), {
             status: 'EN_ATTENTE',
             livreur: deleteField(),
@@ -2610,7 +2622,7 @@ function confirmBulkStatusChange() {
 
 // --- FONCTION DE SYNCHRONISATION FORCÉE (Réparation) ---
 async function forceSyncTransactions() {
-    if (!confirm("Voulez-vous forcer la synchronisation des transactions ?\n\nCela va copier les Noms, Adresses, Numéros ET MONTANTS corrects de l'onglet 'En Cours' vers la Caisse (Saisie) pour corriger les erreurs.")) return;
+    if (!await AppModal.confirm("Voulez-vous forcer la synchronisation des transactions ?\n\nCela va copier les Noms, Adresses, Numéros ET MONTANTS corrects de l'onglet 'En Cours' vers la Caisse (Saisie) pour corriger les erreurs.", "Synchronisation", true)) return;
 
     const loadingToast = document.createElement('div');
     loadingToast.className = 'toast';
@@ -2675,8 +2687,8 @@ async function forceSyncTransactions() {
             }
         }
         loadingToast.remove();
-        alert(`✅ Synchronisation terminée !\n${updatedCount} fiches corrigées dans la Caisse.`);
-    } catch (e) { console.error(e); loadingToast.remove(); alert("Erreur : " + e.message); }
+    AppModal.success(`✅ Synchronisation terminée !\n${updatedCount} fiches corrigées dans la Caisse.`);
+} catch (e) { console.error(e); loadingToast.remove(); AppModal.error("Erreur : " + e.message); }
 }
 
 // --- GESTION DES ARCHIVES ---
@@ -2689,7 +2701,7 @@ async function archiveCompletedDeliveries() {
         return;
     }
 
-    if (confirm(`Voulez-vous archiver ${completed.length} colis livrés ?\nIls seront retirés de la liste principale mais resteront consultables dans les archives.`)) {
+    if (await AppModal.confirm(`Voulez-vous archiver ${completed.length} colis livrés ?\nIls seront retirés de la liste principale mais resteront consultables dans les archives.`, "Archivage")) {
         const now = new Date().toISOString();
         
         const chunks = [];
@@ -2740,8 +2752,8 @@ function searchArchives() {
     renderArchivesTable(filtered);
 }
 
-function restoreFromArchive(id) {
-    if (confirm('Êtes-vous sûr de vouloir restaurer ce colis vers la liste principale ?')) {
+async function restoreFromArchive(id) {
+    if (await AppModal.confirm('Êtes-vous sûr de vouloir restaurer ce colis vers la liste principale ?', "Restauration")) {
         getDoc(doc(db, CONSTANTS.ARCHIVE_COLLECTION, id)).then(docSnap => {
             if(docSnap.exists()) {
                 const data = docSnap.data();
@@ -2917,6 +2929,8 @@ function filterDeliveries() {
             return 0;
         });
     }
+    
+    window.filteredDeliveries = filteredDeliveries;
     
     renderTable();
 }
@@ -3448,7 +3462,7 @@ function closeAddModal() {
     document.getElementById('deliveryForm').reset();
 }
 
-document.getElementById('deliveryForm').addEventListener('submit', function(e) {
+document.getElementById('deliveryForm').addEventListener('submit', async function(e) {
     e.preventDefault();
     
     const refInput = cleanString(document.getElementById('ref').value).toUpperCase();
@@ -3473,7 +3487,7 @@ document.getElementById('deliveryForm').addEventListener('submit', function(e) {
     };
     
     if (existingItem) {
-        if (!confirm(`La référence ${refInput} existe déjà.\nVoulez-vous fusionner les informations (garder les plus complètes) ?`)) {
+        if (!await AppModal.confirm(`La référence ${refInput} existe déjà.\nVoulez-vous fusionner les informations (garder les plus complètes) ?`, "Doublon détecté")) {
             return;
         }
 
@@ -3797,28 +3811,57 @@ function initDuplicateCleaner() {
 }
 
 async function removeDuplicatesFromDatabase() {
-    if (!confirm("⚠️ MAINTENANCE BASE DE DONNÉES ⚠️\n\nVoulez-vous rechercher et fusionner les doublons existants (même Référence) ?\n\nCette action va :\n1. Regrouper les colis par Référence\n2. Fusionner les informations (garder les plus complètes)\n3. Supprimer les doublons superflus\n\nCette action est irréversible.")) return;
+    if (!await AppModal.confirm("⚠️ MAINTENANCE BASE DE DONNÉES ⚠️\n\nVoulez-vous rechercher et nettoyer les doublons existants ?\n\nCette action va :\n1. Supprimer les colis 'fantômes' qui figurent DÉJÀ dans vos archives.\n2. Regrouper les colis restants par Référence\n3. Fusionner les informations (garder les plus complètes)\n4. Supprimer les doublons superflus\n\nCette action est irréversible.", "Maintenance", true)) return;
 
     const loadingToast = document.createElement('div');
     loadingToast.className = 'toast';
-    loadingToast.textContent = "Analyse des doublons en cours...";
+    loadingToast.textContent = "Analyse et nettoyage en cours...";
     loadingToast.style.background = "#3b82f6";
     document.body.appendChild(loadingToast);
 
     try {
-        const groups = {};
-        // 1. Regroupement par Référence
-        deliveries.forEach(d => {
-            if (!d.ref) return;
-            const key = d.ref.toUpperCase().trim();
-            if (!groups[key]) groups[key] = [];
-            groups[key].push(d);
-        });
-
         let batch = writeBatch(db);
         let opCount = 0;
         let deletedCount = 0;
         let updatedCount = 0;
+        let archivedDeletedCount = 0;
+
+        // --- 1. IDENTIFICATION DES COLIS DÉJÀ ARCHIVÉS ---
+        const activeRefs = [...new Set(deliveries.map(d => d.ref).filter(r => r))];
+        const archivedRefsSet = new Set();
+
+        if (activeRefs.length > 0) {
+            const chunks = [];
+            for (let i = 0; i < activeRefs.length; i += 10) chunks.push(activeRefs.slice(i, i + 10));
+            
+            const archivePromises = chunks.map(chunk => getDocs(query(collection(db, CONSTANTS.ARCHIVE_COLLECTION), where('ref', 'in', chunk))));
+            const archiveSnapshots = await Promise.all(archivePromises);
+            archiveSnapshots.forEach(snap => snap.forEach(doc => archivedRefsSet.add(doc.data().ref.toUpperCase())));
+        }
+
+        const groups = {};
+        
+        // 2. Traitement des colis
+        for (const d of deliveries) {
+            if (!d.ref) continue;
+            const key = d.ref.toUpperCase().trim();
+            
+            if (archivedRefsSet.has(key)) {
+                // Supprimer le colis actif car il est déjà dans les archives
+                batch.delete(doc(db, CONSTANTS.COLLECTION, d.id));
+                opCount++;
+                archivedDeletedCount++;
+            } else {
+                if (!groups[key]) groups[key] = [];
+                groups[key].push(d);
+            }
+            
+            if (opCount >= 400) {
+                await batch.commit();
+                batch = writeBatch(db);
+                opCount = 0;
+            }
+        }
 
         // Fonction utilitaire pour garder la chaîne la plus longue (plus d'infos)
         const pickBest = (oldV, newV) => {
@@ -3869,8 +3912,16 @@ async function removeDuplicatesFromDatabase() {
         }
         if (opCount > 0) await batch.commit();
         loadingToast.remove();
-        alert(deletedCount > 0 ? `✅ Nettoyage terminé !\n\n🗑️ ${deletedCount} doublons supprimés\n💾 ${updatedCount} fiches fusionnées` : "👍 Base de données saine : Aucun doublon trouvé.");
-    } catch (error) { console.error(error); loadingToast.remove(); alert("Erreur : " + error.message); }
+        
+        let resultMsg = "👍 Base de données saine : Aucun doublon actif ou fantôme trouvé.";
+        if (archivedDeletedCount > 0 || deletedCount > 0) {
+            resultMsg = "✅ Nettoyage terminé avec succès !\n\n";
+            if (archivedDeletedCount > 0) resultMsg += `🗄️ ${archivedDeletedCount} colis fantômes (déjà archivés) ont été supprimés de la vue active.\n`;
+            if (deletedCount > 0) resultMsg += `🗑️ ${deletedCount} doublons actifs supprimés.\n`;
+            if (updatedCount > 0) resultMsg += `💾 ${updatedCount} fiches actives fusionnées avec leurs doublons.`;
+        }
+        AppModal.success(resultMsg, "Nettoyage Terminé");
+    } catch (error) { console.error(error); loadingToast.remove(); AppModal.error("Erreur : " + error.message); }
 }
 
 // --- GESTION DU MODAL DE CHOIX DE SUPPRESSION ---
@@ -3936,7 +3987,7 @@ function initAuditSyncButton() {
 }
 
 async function checkAuditForDeliveries() {
-    if (!confirm("Lancer la vérification des statuts via l'Audit ?\n\nCela va :\n1. Chercher les colis payés/validés dans l'Audit.\n2. Mettre à jour leur statut en 'LIVRÉ'.\n3. Vous proposer de déplacer ceux qui sont encore à Paris/À Venir.")) return;
+    if (!await AppModal.confirm("Lancer la vérification des statuts via l'Audit ?\n\nCela va :\n1. Chercher les colis payés/validés dans l'Audit.\n2. Mettre à jour leur statut en 'LIVRÉ'.\n3. Vous proposer de déplacer ceux qui sont encore à Paris/À Venir.", "Vérification Audit")) return;
 
     const loadingToast = document.createElement('div');
     loadingToast.className = 'toast';
@@ -3954,7 +4005,7 @@ async function checkAuditForDeliveries() {
         const pendingDeliveries = deliveries.filter(d => d.status !== 'LIVRE');
         if (pendingDeliveries.length === 0) {
             loadingToast.remove();
-            return alert("Tous les colis sont déjà livrés.");
+            return AppModal.alert("Tous les colis sont déjà livrés.", "Vérification");
         }
 
         // 3. Vérifier le statut financier
@@ -3997,7 +4048,7 @@ async function checkAuditForDeliveries() {
 
         // Traitement des déplacements (Confirmation groupée)
         if (moveCandidates.length > 0) {
-            if (confirm(`${moveCandidates.length} colis validés sont encore dans 'Paris' ou 'À Venir'.\n\nTout déplacer vers 'EN COURS' et marquer 'LIVRÉ' ?`)) {
+            if (await AppModal.confirm(`${moveCandidates.length} colis validés sont encore dans 'Paris' ou 'À Venir'.\n\nTout déplacer vers 'EN COURS' et marquer 'LIVRÉ' ?`, "Déplacement", true)) {
                 moveCandidates.forEach(item => {
                     batch.update(doc(db, CONSTANTS.COLLECTION, item.id), {
                         containerStatus: 'EN_COURS', status: 'LIVRE', dateLivraison: new Date().toISOString(), importedFromTransit: true
@@ -4016,9 +4067,9 @@ async function checkAuditForDeliveries() {
         if (opCount > 0) await batch.commit();
 
         loadingToast.remove();
-        alert(`✅ Terminé !\n\n📦 ${updatedCount + movedCount} colis marqués LIVRÉ\n🚚 Dont ${movedCount} déplacés vers EN COURS.`);
+        AppModal.success(`✅ Terminé !\n\n📦 ${updatedCount + movedCount} colis marqués LIVRÉ\n🚚 Dont ${movedCount} déplacés vers EN COURS.`);
 
-    } catch (e) { console.error(e); loadingToast.remove(); alert("Erreur : " + e.message); }
+    } catch (e) { console.error(e); loadingToast.remove(); AppModal.error("Erreur : " + e.message); }
 }
 
 // Fonctions utilitaires de suppression/déplacement
@@ -4043,8 +4094,8 @@ function moveSelectedToAVenir() {
     });
 }
 
-function permanentlyDeleteSelected(skipConfirm = false) {
-    if (!skipConfirm && !confirm(`Voulez-vous vraiment supprimer ces ${selectedIds.size} livraisons ?`)) return;
+async function permanentlyDeleteSelected(skipConfirm = false) {
+    if (!skipConfirm && !await AppModal.confirm(`Voulez-vous vraiment supprimer ces ${selectedIds.size} livraisons ?`, "Suppression Multiple", true)) return;
 
     const batch = writeBatch(db);
     selectedIds.forEach(id => {
@@ -4077,8 +4128,8 @@ function moveSingleToAVenir(id) {
     });
 }
 
-function permanentlyDeleteSingle(id, skipConfirm = false) {
-    if (!skipConfirm && !confirm('⚠️ ATTENTION : Êtes-vous sûr de vouloir supprimer définitivement cette livraison ?\nCette action est irréversible.')) return;
+async function permanentlyDeleteSingle(id, skipConfirm = false) {
+    if (!skipConfirm && !await AppModal.confirm('⚠️ ATTENTION : Êtes-vous sûr de vouloir supprimer définitivement cette livraison ?\nCette action est irréversible.', "Suppression Définitive", true)) return;
 
     const d = deliveries.find(item => item.id === id);
     deleteDoc(doc(db, CONSTANTS.COLLECTION, id))

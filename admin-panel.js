@@ -43,7 +43,7 @@ const isSuperAdmin = userRole === 'super_admin';
         repairBtn.style.cssText = "background-color: #f59e0b; color: white; margin-bottom: 20px; padding: 10px 15px; border-radius: 6px; cursor: pointer; border: none; font-weight: bold; width: 100%;";
         repairBtn.innerHTML = "🛠️ Réparer le Reste à Payer des Anciennes Réductions (Base de Données)";
         repairBtn.onclick = async () => {
-            if (!confirm("Voulez-vous analyser et corriger définitivement le reste à payer des anciens colis ayant bénéficié d'une réduction dans la base de données ?\n\nCette action est recommandée pour nettoyer l'onglet Impayés.")) return;
+            if (!await AppModal.confirm("Voulez-vous analyser et corriger définitivement le reste à payer des anciens colis ayant bénéficié d'une réduction dans la base de données ?\n\nCette action est recommandée pour nettoyer l'onglet Impayés.", "Réparation Base de Données", true)) return;
             repairBtn.disabled = true;
             repairBtn.textContent = "Analyse en cours...";
 
@@ -71,13 +71,13 @@ const isSuperAdmin = userRole === 'super_admin';
 
                 if (count > 0) {
                     await batch.commit();
-                    alert(`Succès ! ${count} anciens colis ont été corrigés définitivement dans la base de données.`);
+                    AppModal.success(`Succès ! ${count} anciens colis ont été corrigés définitivement dans la base de données.`);
                 } else {
-                    alert("Aucune anomalie détectée. Tous les colis sont déjà à jour.");
+                    AppModal.alert("Aucune anomalie détectée. Tous les colis sont déjà à jour.", "Analyse Terminée");
                 }
             } catch (e) {
                 console.error(e);
-                alert("Erreur lors de la réparation : " + e.message);
+                AppModal.error("Erreur lors de la réparation : " + e.message);
             } finally {
                 repairBtn.disabled = false;
                 repairBtn.innerHTML = "🛠️ Réparer le Reste à Payer des Anciennes Réductions (Base de Données)";
@@ -166,12 +166,12 @@ const isSuperAdmin = userRole === 'super_admin';
             // Listeners suppression
             tbody.querySelectorAll('.deleteBtn').forEach(btn => {
                 btn.addEventListener('click', async (e) => {
-                    if(isSuperAdmin && confirm("Supprimer cet utilisateur ? (L'accès sera révoqué)")) {
+                    if(isSuperAdmin && await AppModal.confirm("Supprimer cet utilisateur ? (L'accès sera révoqué)", "Suppression", true)) {
                         const uid = e.target.dataset.id;
                         // Note: On supprime seulement de Firestore. Pour Auth, il faudrait une Cloud Function ou Admin SDK.
                         // Ici on casse le lien Firestore -> Auth Guard bloquera l'accès.
                         await deleteDoc(doc(db, "users", uid));
-                        alert("Utilisateur supprimé (Accès révoqué).");
+                        AppModal.success("Utilisateur supprimé (Accès révoqué).");
                     }
                 });
             });
@@ -185,8 +185,8 @@ const isSuperAdmin = userRole === 'super_admin';
             const password = newPasswordInput.value.trim();
             const role = newRoleSelect.value;
 
-            if (!username || !password) return alert("Veuillez remplir tous les champs.");
-            if (password.length < 6) return alert("Le mot de passe doit faire au moins 6 caractères.");
+            if (!username || !password) return AppModal.error("Veuillez remplir tous les champs.");
+            if (password.length < 6) return AppModal.error("Le mot de passe doit faire au moins 6 caractères.");
 
             // Email fictif si c'est juste un nom d'utilisateur
             let email = username;
@@ -216,12 +216,12 @@ const isSuperAdmin = userRole === 'super_admin';
                 await signOut(secondaryAuth);
                 await deleteApp(secondaryApp);
 
-                alert(`Utilisateur créé avec succès !\nEmail de connexion : ${email}\nMot de passe : ${password}`);
+                AppModal.success(`Utilisateur créé avec succès !\nEmail de connexion : ${email}\nMot de passe : ${password}`, "Création Réussie");
                 newUsernameInput.value = '';
                 newPasswordInput.value = '';
             } catch (error) {
                 console.error(error);
-                alert("Erreur lors de la création : " + error.message);
+                AppModal.error("Erreur lors de la création : " + error.message);
             } finally {
                 createUserBtn.disabled = false;
                 createUserBtn.textContent = "Créer Utilisateur";
