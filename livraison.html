@@ -13,6 +13,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/tesseract.js@4/dist/tesseract.min.js"></script>
     <style>
     :root {
@@ -398,6 +399,7 @@
             <div class="lv-sep"></div>
             <div class="lv-grp">
                 <button class="lv-btn" onclick="openAssignContainerModal()"><span>📦</span><span class="lv-l">Attribuer conteneur</span></button>
+                <button class="lv-btn ok" onclick="notifierMasseAVenir()"><span>💬</span><span class="lv-l">Notifier le lot</span></button>
             </div>
             <div class="lv-more" style="margin-left:auto">
                 <button class="lv-btn ghost" onclick="lvToggleMore('A_VENIR')"><span>⋯</span></button>
@@ -407,9 +409,12 @@
             </div>
             <div style="display:inline-flex;align-items:center;gap:5px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:7px;padding:3px 8px;margin-left:8px">
                 <span style="font-size:11px;font-weight:700;color:#e65100" id="av-container-label">🚢 Conteneur à préparer :</span>
-                <select id="quickContainerSelect2" style="padding:3px 7px;border:1px solid #bfdbfe;border-radius:5px;font-size:12px;font-weight:600;color:#1565c0;background:#fff" onchange="lvSyncQS(this.value)">
+                <select id="quickContainerSelect2" style="padding:3px 7px;border:1px solid #bfdbfe;border-radius:5px;font-size:12px;font-weight:600;color:#1565c0;background:#fff" onchange="lvSyncQS(this.value); lvSyncQS2Change(this.value)">
                     <option value="">Tous les conteneurs</option>
                 </select>
+                <span class="lv-sep"></span>
+                <span style="font-size:11px;font-weight:700;color:#0284c7">ETA :</span>
+                <input type="date" id="etaContainerInput" onchange="saveContainerETA(this.value)" style="padding:2px 5px; border:1px solid #bfdbfe; border-radius:4px; font-size:11px; color:#0284c7; background:#fff;">
             </div>
         </div>
 
@@ -419,6 +424,13 @@
                 <label class="lv-import-lbl"><span>📊</span><span class="lv-l">Import</span><input type="file" accept=".xlsx,.xls,.csv" onchange="importExcel(event)" style="display:none"></label>
                 <button class="lv-btn" onclick="showAddModal()"><span>➕</span><span class="lv-l">Ajouter</span></button>
                 <button class="lv-btn go" onclick="exportToExcel()"><span>📥</span><span class="lv-l">Export</span></button>
+            </div>
+            <div class="lv-sep"></div>
+            <div class="lv-grp">
+                <button class="lv-btn go" onclick="openEmbarquerModal()"><span>🚢</span><span class="lv-l">Expédier le lot</span></button>
+            </div>
+            <div style="margin-left:auto; font-weight:bold; font-size:12px; color:#b45309; background:#fef3c7; padding:4px 8px; border-radius:6px;">
+                Valeur Déclarée : <span id="parisTotalValue">0 CFA</span>
             </div>
             <div class="lv-more">
                 <button class="lv-btn ghost" onclick="lvToggleMore('PARIS')"><span>⋯</span></button>
@@ -472,6 +484,13 @@
                     <label><input type="checkbox" value="AUTRE" onchange="filterDeliveries()"> AUTRE</label>
                 </div>
             </div>
+            <div class="dropdown-filter" id="paymentFilter">
+                <button class="dropdown-toggle" onclick="togglePaymentDropdown()" id="paymentFilterBtn">💰 Paiement</button>
+                <div class="dropdown-menu" id="paymentDropdownList">
+                    <label><input type="checkbox" value="SOLDE" onchange="filterDeliveries()"> ✅ Soldé (0 CFA)</label>
+                    <label><input type="checkbox" value="IMPAYE" onchange="filterDeliveries()"> ⚠️ Reste à Payer</label>
+                </div>
+            </div>
             <div class="dropdown-filter" id="locationFilter">
                 <button class="dropdown-toggle" onclick="toggleLocationDropdown()" id="locationFilterBtn">📍 Lieux</button>
                 <div class="dropdown-menu" id="locationDropdownList"></div>
@@ -486,6 +505,7 @@
                     <label><input type="checkbox" value="INCIDENT" onchange="filterDeliveries()"> ⚠️ Incident</label>
                     <label><input type="checkbox" value="RETOUR" onchange="filterDeliveries()"> ↩️ Retour</label>
                     <label><input type="checkbox" value="ABANDONNE" onchange="filterDeliveries()"> ⚫ Abandonné</label>
+                    <label><input type="checkbox" value="MAGASINAGE" onchange="filterDeliveries()"> ⚠️ Magasinage</label>
                 </div>
             </div>
             <div class="lv-sep"></div>
@@ -756,6 +776,17 @@
             </div>
         </div>
     </div>
+        <div id="massNotificationModal" class="modal">
+            <div class="modal-content">
+                <h2 class="modal-header">💬 Notification en Masse (WhatsApp)</h2>
+                <p>Cliquez sur chaque lien pour envoyer le message. Le client sera automatiquement coché "Notifié".</p>
+                <div style="max-height: 300px; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px; background:#f8fafc;" id="massNotificationList">
+                </div>
+                <div style="text-align:right; margin-top:20px;">
+                    <button class="btn btn-danger" onclick="document.getElementById('massNotificationModal').classList.remove('active')">Fermer</button>
+                </div>
+            </div>
+        </div>
     <div id="loadingOverlay" class="loading-overlay" style="display:none">
         <div class="loading-spinner" style="width:60px;height:60px;border-width:6px"></div>
         <div class="loading-text">Importation du fichier en cours...</div>
@@ -796,10 +827,13 @@
         const csep = document.getElementById('lv-cont-sep');
         if(cs){ cs.style.display = t==='EN_COURS'?'inline-flex':'none'; }
         if(csep){ csep.style.display = t==='EN_COURS'?'inline-block':'none'; }
+        // Masquer le badge conteneur (📦 Ex ▼) sur Paris et Programme
+        const badge = document.getElementById('lvBadge');
+        if(badge) { badge.style.display = (t === 'EN_COURS' || t === 'A_VENIR') ? 'inline-flex' : 'none'; }
         // Boutons barre sélection
         const vis = {
             'lv-sb-prog':   t==='EN_COURS',
-            'lv-sb-attrib': t==='EN_COURS'||t==='A_VENIR',
+            'lv-sb-attrib': t==='EN_COURS'||t==='A_VENIR'||t==='PARIS',
             'lv-sb-stat':   t==='EN_COURS'
         };
         Object.entries(vis).forEach(([id,show])=>{ const el=document.getElementById(id); if(el) el.style.display=show?'':'none'; });
@@ -899,6 +933,15 @@
         const src=document.getElementById('quickContainerSelect');
         const dst=document.getElementById('quickContainerSelect2');
         if(src&&dst){ dst.innerHTML=src.innerHTML; dst.value=src.value; }
+        // MAJ ETA
+        if(src) {
+            const etaInput = document.getElementById('etaContainerInput');
+            if(etaInput) etaInput.value = localStorage.getItem(`eta_${src.value}`) || '';
+        }
+    }
+    function lvSyncQS2Change(val) {
+        const etaInput = document.getElementById('etaContainerInput');
+        if(etaInput) etaInput.value = localStorage.getItem(`eta_${val}`) || '';
     }
 
     // Intercepts
@@ -955,6 +998,7 @@
         lvSyncFCB,
         lvSyncQS,
         lvSyncQS2,
+        lvSyncQS2Change,
         lvUpdateBadge
     });
     </script>

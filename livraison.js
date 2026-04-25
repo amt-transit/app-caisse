@@ -464,6 +464,11 @@ function toggleLocationDropdown() {
     document.getElementById('locationDropdownList').classList.toggle('show');
 }
 
+// Gestion du menu déroulant Paiements
+function togglePaymentDropdown() {
+    document.getElementById('paymentDropdownList').classList.toggle('show');
+}
+
 // Gestion du menu déroulant Statuts
 function toggleStatusDropdown() {
     document.getElementById('statusDropdownList').classList.toggle('show');
@@ -1842,8 +1847,14 @@ function renderTable() {
         // Gestion Couleur Montant (Vert = Payé, Orange = Reste)
         const montantVal = parseFloat((d.montant || '0').replace(/[^\d]/g, '')) || 0;
         let montantStyle = "width: 100%;";
+        let displayMontant = (d.montant || '').replace(/"/g, '&quot;');
+        
         if (montantVal === 0) {
             montantStyle += " background-color: #dcfce7; color: #166534; font-weight: bold;"; // Vert (Payé)
+            if (currentTab === 'EN_COURS') {
+                montantStyle += " border: 2px solid #22c55e; box-shadow: 0 0 8px rgba(34, 197, 94, 0.4); text-align: center;";
+                displayMontant = "✅ SOLDÉ"; // Remplace le '0 CFA' par une alerte sécurisée visuelle
+            }
         } else {
             montantStyle += " background-color: #ffedd5; color: #9a3412; font-weight: bold;"; // Orange (Dette)
         }
@@ -1900,7 +1911,7 @@ function renderTable() {
                     <td>${d.conteneur || '-'}</td>
                     <td class="ref"><a href="#" onclick="event.preventDefault(); showScanHistory('${d.id}');" style="color: #2563eb; text-decoration: underline; font-weight: bold;">${d.ref}</a></td>
                     <td style="text-align:center;">${renderInput(d.quantite || 1, "number", `updateDeliveryQuantity('${d.id}', this.value)`, "width: 50px; text-align:center; font-weight:bold;")}</td>
-                    <td class="montant">${renderInput((d.montant || '').replace(/"/g, '&quot;'), "text", `updateDeliveryAmount('${d.id}', this.value)`, montantStyle)}</td>
+                    <td class="montant">${renderInput(displayMontant, "text", `updateDeliveryAmount('${d.id}', this.value)`, montantStyle)}</td>
                     <td>${d.expediteur}</td>
                     <td>${renderInput((d.lieuLivraison || '').replace(/"/g, '&quot;'), "text", `updateDeliveryLocation('${d.id}', this.value)`, "")}</td>
                     <td>${renderInput(displayDestinataire.replace(/"/g, '&quot;'), "text", `updateDeliveryRecipient('${d.id}', this.value)`, "")}</td>
@@ -1924,7 +1935,7 @@ function renderTable() {
                     : ''}
                 </td>
                 <td class="montant">
-                    ${renderInput((d.montant || '').replace(/"/g, '&quot;'), "text", `updateDeliveryAmount('${d.id}', this.value)`, montantStyle)}
+                    ${renderInput(displayMontant, "text", `updateDeliveryAmount('${d.id}', this.value)`, montantStyle)}
                     ${magasinageBadge}
                 </td>
                 <td>${d.expediteur}</td>
@@ -2051,9 +2062,10 @@ function viewProgramDetails(date, livreur) {
                 
 
                 return `
-                <tr class="${d.status === 'LIVRE' ? 'delivered' : ''}">
-                    <td>
-                        <input type="number" class="editable-cell" style="width: 50px; text-align: center; font-weight:bold;" value="${d.orderInRoute !== undefined ? d.orderInRoute : ''}" placeholder="${index + 1}" onchange="updateDeliveryOrder('${d.id}', this.value, '${date}', '${livreur}')">
+                <tr class="${d.status === 'LIVRE' ? 'delivered' : ''}" data-id="${d.id}">
+                    <td style="display:flex; align-items:center; gap:5px;">
+                        <span class="drag-handle" style="cursor:grab; color:#94a3b8; font-size:18px; margin-right:2px;" title="Glisser pour réorganiser">☰</span>
+                        <input type="number" class="editable-cell" style="width: 45px; text-align: center; font-weight:bold; margin:0;" value="${d.orderInRoute !== undefined ? d.orderInRoute : ''}" placeholder="${index + 1}" onchange="updateDeliveryOrder('${d.id}', this.value, '${date}', '${livreur}')">
                     </td>
                     <td class="ref">${d.ref}</td>
                     <td class="montant">${d.montant}</td>
@@ -2086,6 +2098,34 @@ function viewProgramDetails(date, livreur) {
     `;
     
     document.getElementById('programDetailsModal').classList.add('active');
+
+    // Initialisation de SortableJS pour le Drag & Drop
+    const tbody = document.querySelector('#programDetailsTable tbody');
+    if (tbody && typeof Sortable !== 'undefined') {
+        new Sortable(tbody, {
+            animation: 150,
+            handle: '.drag-handle',
+            onEnd: function (evt) {
+                const rows = tbody.querySelectorAll('tr');
+                const batch = writeBatch(db);
+                let hasChanges = false;
+                rows.forEach((row, index) => {
+                    const id = row.dataset.id;
+                    if (id) {
+                        const item = deliveries.find(d => d.id === id);
+                        if (item && item.orderInRoute !== index) {
+                            item.orderInRoute = index;
+                            batch.update(doc(db, CONSTANTS.COLLECTION, id), { orderInRoute: index });
+                            hasChanges = true;
+                            const input = row.querySelector('input[type="number"]');
+                            if(input) input.value = index;
+                        }
+                    }
+                });
+                if (hasChanges) batch.commit().then(() => showToast('Ordre de tournée mis à jour !', 'success'));
+            }
+        });
+    }
 }
 
 function sortProgramDetails(column) {
@@ -2832,6 +2872,17 @@ function filterDeliveries() {
         locBtn.textContent = `📍 ${selectedLocations.length} lieux`;
     }
 
+    // Récupération des paiements
+    const paymentCheckboxes = document.querySelectorAll('#paymentDropdownList input[type="checkbox"]:checked');
+    const selectedPayments = Array.from(paymentCheckboxes).map(cb => cb.value);
+    
+    const payBtn = document.getElementById('paymentFilterBtn');
+    if (payBtn) {
+        if (selectedPayments.length === 0) payBtn.textContent = '💰 Paiement';
+        else if (selectedPayments.length === 1) payBtn.textContent = selectedPayments[0] === 'SOLDE' ? '✅ Soldé' : '⚠️ Impayé';
+        else payBtn.textContent = `💰 ${selectedPayments.length} filtres`;
+    }
+
     // Récupération des statuts sélectionnés (Multi-select)
     const statusCheckboxes = document.querySelectorAll('#statusDropdownList input[type="checkbox"]:checked');
     const selectedStatuses = Array.from(statusCheckboxes).map(cb => cb.value);
@@ -2857,6 +2908,18 @@ function filterDeliveries() {
         const matchCommune = selectedCommunes.length === 0 || selectedCommunes.includes(d.commune);
         const matchLocation = selectedLocations.length === 0 || (d.lieuLivraison && selectedLocations.includes(d.lieuLivraison.trim()));
         
+        let matchPayment = true;
+        if (selectedPayments.length > 0) {
+            const montantVal = parseFloat((d.montant || '0').replace(/[^\d]/g, '')) || 0;
+            if (selectedPayments.includes('SOLDE') && selectedPayments.includes('IMPAYE')) {
+                matchPayment = true;
+            } else if (selectedPayments.includes('SOLDE')) {
+                matchPayment = montantVal === 0;
+            } else if (selectedPayments.includes('IMPAYE')) {
+                matchPayment = montantVal > 0;
+            }
+        }
+
         let matchStatus = selectedStatuses.length === 0 || selectedStatuses.includes(d.status);
         // NOUVEAU : Filtre Magasinage
         if (selectedStatuses.length > 0 && !matchStatus && selectedStatuses.includes('MAGASINAGE')) {
@@ -2898,7 +2961,7 @@ function filterDeliveries() {
             // Si c'est 'Aucun', matchContainer reste à true (affiche tout)
         }
         
-        return matchCommune && matchStatus && matchSearch && matchTab && matchLocation && matchContainer;
+        return matchCommune && matchStatus && matchSearch && matchTab && matchLocation && matchContainer && matchPayment;
     });
 
     // Appliquer le tri
@@ -2952,6 +3015,15 @@ function filterDeliveries() {
     
     window.filteredDeliveries = filteredDeliveries;
     
+    // Calcul Total Valeur pour PARIS
+    if (currentTab === 'PARIS') {
+        const totalVal = filteredDeliveries.reduce((sum, d) => {
+            return sum + (parseFloat(String(d.prixOriginal || d.montant || '0').replace(/[^\d]/g, '')) || 0);
+        }, 0);
+        const parisTotEl = document.getElementById('parisTotalValue');
+        if (parisTotEl) parisTotEl.textContent = formatCFA(totalVal);
+    }
+
     renderTable();
 }
 
@@ -3095,6 +3167,61 @@ function markAsPending(id) {
         dateLivraison: deleteField(),
         orderInRoute: deleteField()
     }).then(() => showToast('Repassé en attente et désassigné', 'success'));
+}
+
+// Actions d'amélioration rapides
+function openEmbarquerModal() {
+    if (selectedIds.size === 0) {
+        showToast('Veuillez sélectionner au moins un colis à expédier.', 'error');
+        return;
+    }
+    document.getElementById('assignSelectedCount').textContent = selectedIds.size;
+    document.getElementById('assignContainerStatus').value = 'A_VENIR';
+    document.getElementById('assignContainerModal').classList.add('active');
+}
+
+function notifierMasseAVenir() {
+    let itemsToNotify = filteredDeliveries.filter(d => d.containerStatus === 'A_VENIR');
+    if (selectedIds.size > 0) itemsToNotify = itemsToNotify.filter(d => selectedIds.has(d.id));
+
+    if (itemsToNotify.length === 0) return showToast("Aucun colis à notifier dans cette vue.", "error");
+
+    const listEl = document.getElementById('massNotificationList');
+    listEl.innerHTML = '';
+
+    itemsToNotify.forEach(d => {
+        let phone = d.numero || d.destinataire?.match(/(?:(?:\+|00)225[\s.-]?)?(?:01|05|07|0)\d(?:[\s.-]?\d{2}){4}|(?:(?:\+|00)225[\s.-]?)?(?:01|05|07|0)\d{8,}/)?.[0] || '';
+        phone = phone.replace(/[^\d]/g, '');
+        if (phone.length === 10 && phone.startsWith('0')) phone = '225' + phone.substring(1);
+        else if (phone.length === 10) phone = '225' + phone;
+
+        const msg = encodeURIComponent(`Bonjour ${d.destinataire || 'Client'},\n\n🚢 Votre colis Réf: *${d.ref}* (Conteneur ${d.conteneur || 'en transit'}) est en route vers Abidjan.\n\nMerci de nous confirmer votre lieu de livraison :\n${d.lieuLivraison || '(à préciser)'}\n\n— L'équipe AMT TRANS'IT`);
+
+        let btnHtml = '';
+        if (phone) {
+            btnHtml = `<a href="https://wa.me/${phone}?text=${msg}" target="_blank" onclick="toggleClientNotified('${d.id}', true); this.style.backgroundColor='#94a3b8'; this.textContent='✅ Message Envoyé';" style="display:inline-block; padding:6px 12px; background:#10b981; color:white; text-decoration:none; border-radius:6px; font-size:12px; font-weight:bold; box-shadow:0 2px 4px rgba(0,0,0,0.1);">💬 Notifier sur WhatsApp</a>`;
+        } else {
+            btnHtml = `<span style="color:#ef4444; font-size:12px; font-weight:bold;">Numéro Invalide</span>`;
+        }
+
+        listEl.innerHTML += `
+            <div style="display:flex; justify-content:space-between; align-items:center; padding:12px; border-bottom:1px solid #e2e8f0; background:white; margin-bottom:5px; border-radius:6px;">
+                <div>
+                    <div style="font-weight:bold; color:#1e293b; font-size:14px;">${d.ref}</div>
+                    <div style="font-size:12px; color:#64748b;">${d.destinataire || 'Inconnu'}</div>
+                </div>
+                <div>${btnHtml}</div>
+            </div>
+        `;
+    });
+    document.getElementById('massNotificationModal').classList.add('active');
+}
+
+function saveContainerETA(dateVal) {
+    const container = document.getElementById('quickContainerSelect2').value;
+    if (!container) return showToast("Sélectionnez d'abord un conteneur", "error");
+    localStorage.setItem(`eta_${container}`, dateVal);
+    showToast("Date d'arrivée estimée sauvegardée", "success");
 }
 
 function deleteDelivery(id) {
@@ -3683,7 +3810,7 @@ Object.assign(window, {
     updateDeliveryInfo, toggleClientNotified, markAsDelivered, markAsPending, deleteDelivery,
     openAbandonModal, closeAbandonModal, confirmAbandonment, generateAbandonmentPDFFromId,
     closeAddModal, updateContainerTitle, updateAvailableContainersList, toggleCommuneDropdown,
-    toggleLocationDropdown, toggleStatusDropdown, filterLocationOptions, toggleAllLocations,
+    toggleLocationDropdown, toggleStatusDropdown, togglePaymentDropdown, filterLocationOptions, toggleAllLocations,
     showPreviewModal, closePreviewModal, confirmImport, updateStats, loadMoreItems,
     removeDuplicatesFromDatabase, openDeleteChoiceModal, closeDeleteChoiceModal,
     confirmDeleteAction, checkAuditForDeliveries, toggleSelection, toggleSelectAll,
@@ -3691,7 +3818,7 @@ Object.assign(window, {
     confirmAssignContainer, closeBulkStatusModal, confirmBulkStatusChange, viewProgramDetails,
     sortProgramDetails, openBingMapsRoute, exportRoadmapPDF, exportRoadmapWhatsApp, printDeliverySlip, 
     updateDeliveryOrder,
-    captureGPSLocation, removeFromProgram, closeProgramDetailsModal, renderTable, debouncedFilterDeliveries,
+    captureGPSLocation, removeFromProgram, closeProgramDetailsModal, renderTable, debouncedFilterDeliveries, openEmbarquerModal, notifierMasseAVenir, saveContainerETA,
     showScanHistory
 });
 

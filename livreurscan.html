@@ -1002,25 +1002,44 @@ async function initScanner() {
 
 async function loadContainersList() {
     try {
+        // 1. Chargement instantané depuis le cache local pour la fluidité
+        const cached = localStorage.getItem('containers_cache');
+        if (cached) populateContainerSelect(JSON.parse(cached));
+
+        // 2. Requête réseau optimisée
         const snap = await getDocs(query(collection(db, 'livraisons'), where('containerStatus', '==', 'EN_COURS')));
         const containers = [...new Set(snap.docs.map(d => d.data().conteneur).filter(Boolean))].sort();
+        
+        localStorage.setItem('containers_cache', JSON.stringify(containers));
+        populateContainerSelect(containers);
+    } catch(e) { console.warn('Conteneurs:', e); }
+}
+
+function populateContainerSelect(containers) {
         const sel = document.getElementById('scanContainerFilter');
         if (sel) {
+            sel.innerHTML = '<option value="">Tous les conteneurs</option>';
             containers.forEach(c => {
                 const opt = document.createElement('option');
                 opt.value = c; opt.textContent = c;
                 sel.appendChild(opt);
             });
         }
-    } catch(e) { console.warn('Conteneurs:', e); }
 }
 
 async function loadMyRoute() {
     const livreurName = sessionStorage.getItem('userName');
     const today = new Date().toISOString().split('T')[0];
     try {
+        // 1. Recherche hors-ligne partielle (Cache)
+        const cachedRoute = localStorage.getItem(`route_${today}_${livreurName}`);
+        if (cachedRoute) renderRoute(JSON.parse(cachedRoute));
+
+        // 2. Sync réseau
         const snap = await getDocs(query(collection(db, 'livraisons'), where('livreur', '==', livreurName), where('dateProgramme', '==', today)));
         const route = snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(d => ['EN_ATTENTE', 'EN_COURS', 'PARTIEL', 'LIVRAISON_PARTIELLE'].includes(d.status)).sort((a, b) => (a.orderInRoute ?? 999) - (b.orderInRoute ?? 999));
+        
+        localStorage.setItem(`route_${today}_${livreurName}`, JSON.stringify(route));
         renderRoute(route);
     } catch(e) { console.error(e); }
 }
@@ -1396,7 +1415,7 @@ async function sendToWhatsAppAndMarkDone() {
             // On ne crée pas de nouveau document. On met à jour l'original.
         await updateDoc(doc(db, 'livraisons', currentDelivery.id), {
                 quantite: remainingQty, // La nouvelle quantité est ce qu'il reste à livrer
-                status: 'EN_COURS',      // Le statut global reste 'EN_COURS'
+                status: 'PARTIEL',       // Le statut passe en partiel pour alerter le bureau
                 // On ajoute un enregistrement dans un tableau pour garder l'historique
             historiquePartiel: arrayUnion({
                     quantiteLivree: qty,
