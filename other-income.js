@@ -137,7 +137,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (currentUserName === USER_NO_CONFIRM) {
             // Enregistrement DIRECT
-            incomeCollection.add(data).then(() => {
+            addDoc(collection(db, "other_income"), data).then(() => {
                 AppModal.success("Entrée enregistrée (Mode Direct).");
                 resetIncomeForm();
             }).catch(err => AppModal.error("Erreur : " + err.message));
