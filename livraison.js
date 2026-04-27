@@ -73,6 +73,79 @@ function debounce(func, wait) {
 
 const debouncedFilterDeliveries = debounce(() => filterDeliveries(), CONSTANTS.DEBOUNCE_DELAY);
 
+// --- GESTION MENU D'ACTIONS CONTEXTUEL ---
+function toggleActionMenu(menuId) {
+    document.querySelectorAll('.act-menu-wrap.open').forEach(m => {
+        if (m.id !== menuId) m.classList.remove('open');
+    });
+    document.getElementById(menuId)?.classList.toggle('open');
+}
+
+function closeActionMenu(menuId) {
+    document.getElementById(menuId)?.classList.remove('open');
+}
+
+document.addEventListener('click', e => {
+    if (!e.target.closest('.act-menu-wrap')) {
+        document.querySelectorAll('.act-menu-wrap.open').forEach(m => m.classList.remove('open'));
+    }
+});
+
+function buildActionMenu(d, phone, displayDestinataire) {
+    const id = d.id;
+    const isLivre = d.status === 'LIVRE';
+    const isAbandonne = d.status === 'ABANDONNE';
+    const menuId = `am_${id.substring(0,8)}`;
+
+    // Bouton principal visible : WhatsApp (si téléphone dispo)
+    let primaryBtn = '';
+    if (phone && currentTab !== 'PARIS') {
+        const cleanPhone = phone.replace(/[^\d]/g, '').replace(/^00/, '');
+        const phoneE164 = cleanPhone.length === 10 ? '225' + cleanPhone : cleanPhone;
+
+        if (currentTab === 'A_VENIR') {
+            const msgNotif = encodeURIComponent(
+                `Bonjour ${displayDestinataire || 'Client'},\n\n🚢 Votre colis *${d.ref}* (Conteneur ${d.conteneur || 'en transit'}) arrive bientôt à Abidjan.\n\nMerci de confirmer votre lieu de livraison :\n${d.lieuLivraison || '(à confirmer)'}\n\n— AMT TRANS'IT`
+            );
+            primaryBtn = `<a href="https://wa.me/${phoneE164}?text=${msgNotif}" target="_blank" class="btn btn-small" style="background:#10b981;color:white;padding:4px 8px;text-decoration:none;" title="Notifier l'arrivée">💬</a>`;
+        } else {
+            const msgContact = encodeURIComponent(`Bonjour, votre colis ${d.ref} (${d.conteneur || ''}) est disponible pour la livraison.`);
+            primaryBtn = `<a href="https://wa.me/${phoneE164}?text=${msgContact}" target="_blank" class="btn btn-small" style="background:#25D366;color:white;padding:4px 8px;text-decoration:none;" title="Contacter sur WhatsApp">📱</a>`;
+        }
+    }
+
+    // Menu déroulant contextuel
+    let menuItems = '';
+
+    if (currentTab !== 'PARIS' && currentTab !== 'A_VENIR' && !isViewer) {
+        menuItems += `<button class="act-mi" onclick="printDeliverySlip('${id}')">📄 Bon de Livraison</button>`;
+        menuItems += `<button class="act-mi" onclick="printInvoice('${id}')">🧾 Imprimer Facture</button>`;
+        if (!isLivre && !isAbandonne) {
+            menuItems += `<div class="act-div"></div>`;
+            menuItems += `<button class="act-mi act-green" onclick="markAsDelivered('${id}');closeActionMenu('${menuId}')">✅ Marquer Livré</button>`;
+            menuItems += `<button class="act-mi act-dark" onclick="openAbandonModal('${id}');closeActionMenu('${menuId}')">⚫ Déclarer Abandon</button>`;
+        } else if (isLivre) {
+            menuItems += `<button class="act-mi" onclick="markAsPending('${id}');closeActionMenu('${menuId}')">⏳ Remettre en attente</button>`;
+        } else if (isAbandonne) {
+            menuItems += `<button class="act-mi" onclick="markAsPending('${id}');closeActionMenu('${menuId}')">⏳ Annuler l'abandon</button>`;
+            menuItems += `<button class="act-mi" onclick="generateAbandonmentPDFFromId('${id}')">📄 Acte d'Abandon PDF</button>`;
+        }
+    }
+
+    if (!isViewer) {
+        if (menuItems !== '') menuItems += `<div class="act-div"></div>`;
+        menuItems += `<button class="act-mi act-red" onclick="deleteDelivery('${id}');closeActionMenu('${menuId}')">🗑️ Supprimer</button>`;
+    }
+
+    const moreBtn = menuItems ? `
+        <div class="act-menu-wrap" id="${menuId}">
+            <button class="btn btn-small act-more-btn" onclick="toggleActionMenu('${menuId}')" title="Plus d'actions">⋯</button>
+            <div class="act-dropdown">${menuItems}</div>
+        </div>` : '';
+
+    return `<div class="actions" style="gap:4px;flex-wrap:nowrap;justify-content:flex-start;">${primaryBtn}${moreBtn}</div>`;
+}
+
 // Correction encodage (UTF-8 mal interprété comme "TOURÃ‰")
 function fixEncoding(str) {
     if (!str) return '';
@@ -1187,10 +1260,12 @@ async function confirmImport() {
     const operations = []; 
     let createdCount = 0;
     let updatedCount = 0;
+    let ignoredArchivedCount = 0;
     
     // --- OPTIMISATION ---
     // Pré-charger l'existence des transactions pour éviter 1 requête Firestore par ligne
     const existingTransRefs = new Set();
+    const archivedItemsMap = new Map();
     if (containerStatus === 'EN_COURS' && finalImportList.length > 0) {
         if (progressModal) document.getElementById('importProgressText').textContent = 'Vérification des transactions existantes...';
         const allRefs = finalImportList.map(item => item.ref);
@@ -1199,8 +1274,12 @@ async function confirmImport() {
         
         // Exécuter les requêtes en parallèle (très rapide)
         const transPromises = chunks.map(chunk => getDocs(query(collection(db, 'transactions'), where('reference', 'in', chunk))));
-        const transSnapshots = await Promise.all(transPromises);
+        const archivePromises = chunks.map(chunk => getDocs(query(collection(db, CONSTANTS.ARCHIVE_COLLECTION), where('ref', 'in', chunk))));
+        
+        const [transSnapshots, archiveSnapshots] = await Promise.all([Promise.all(transPromises), Promise.all(archivePromises)]);
+        
         transSnapshots.forEach(snap => snap.forEach(doc => existingTransRefs.add(doc.data().reference)));
+        archiveSnapshots.forEach(snap => snap.forEach(doc => archivedItemsMap.set(doc.data().ref.toUpperCase(), { id: doc.id, data: doc.data() })));
     }
 
     for (let i = 0; i < finalImportList.length; i++) {
@@ -1216,6 +1295,7 @@ async function confirmImport() {
 
         // Vérifier si la référence existe déjà dans la base de données (Insensible à la casse)
         const existingItem = deliveries.find(d => d.ref.toUpperCase() === importItem.ref.toUpperCase());
+        const archivedItem = archivedItemsMap.get(importItem.ref.toUpperCase());
 
         // --- LOGIQUE INTELLIGENTE : RECHERCHE PAR RÉFÉRENCE DE BASE ---
         // Si l'item n'a pas d'infos complètes, on cherche son "Parent" (ex: MD-067-E2 pour MD-067-E2_1_969)
@@ -1266,17 +1346,41 @@ async function confirmImport() {
 
             if (containerStatus === 'EN_COURS') {
                 // LOGIQUE SIMPLIFIÉE (Demande utilisateur) :
-                // On met à jour UNIQUEMENT la quantité (comptée dans le fichier importé) et le statut.
-                // On conserve les données existantes (Description, Expéditeur, etc.) sans fusionner.
-                
-                updates.quantite = importItem.quantite; // Quantité issue du comptage des racines dans l'import
+                // CUMUL INTELLIGENT DE LA QUANTITÉ ET DES CONTENEURS (Cas des arrivages séparés)
+                let addedQty = 0;
                 
                 if (importItem.scanHistory && importItem.scanHistory.length > 0) {
-                    updates.scanHistory = arrayUnion(...importItem.scanHistory);
+                    const currentScans = existingItem.scanHistory ? existingItem.scanHistory.map(s => s.scanRef) : [];
+                    const newScans = importItem.scanHistory.filter(s => !currentScans.includes(s.scanRef));
+                    if (newScans.length > 0) {
+                        addedQty = newScans.length;
+                        updates.scanHistory = arrayUnion(...newScans);
+                    }
+                } else if (importItem.quantite) {
+                    // Import CSV classique (Sans scanneur)
+                    addedQty = parseInt(importItem.quantite) || 0;
+                }
+                    
+                if (addedQty > 0) {
+                    updates.quantite = (parseInt(existingItem.quantite) || 0) + addedQty;
+                    
+                    // Le colis a reçu de nouveaux cartons : on le repasse en partiel s'il était livré
+                    if (existingItem.status === 'LIVRE') {
+                        updates.status = 'PARTIEL';
+                        updates.quantiteRestante = addedQty;
+                    } else if (existingItem.status === 'PARTIEL' || existingItem.status === 'LIVRAISON_PARTIELLE') {
+                        updates.quantiteRestante = (parseInt(existingItem.quantiteRestante) || 0) + addedQty;
+                    }
+                } else {
+                    // Sécurité si on réimporte le même fichier sans nouveau scan
+                    updates.quantite = existingItem.quantite;
                 }
                 
-                if (conteneur) updates.conteneur = conteneur;
-                else if (importItem.conteneur) updates.conteneur = importItem.conteneur;
+                // Concaténation fractionnée des conteneurs (ex: "E14 / E15")
+                const targetCont = conteneur || importItem.conteneur || '';
+                if (targetCont && !(existingItem.conteneur || '').includes(targetCont)) {
+                    updates.conteneur = existingItem.conteneur ? `${existingItem.conteneur} / ${targetCont}` : targetCont;
+                }
 
                 if (existingItem.containerStatus === 'PARIS') {
                     updates.directFromParis = true; // ALERTE : A sauté l'étape "À Venir" (Client non prévenu)
@@ -1320,6 +1424,38 @@ async function confirmImport() {
             
             operations.push({ type: 'update', ref: docRef, data: updates });
             updatedCount++;
+        } else if (archivedItem && containerStatus === 'EN_COURS') {
+            // CAS 1.5 : Le colis était archivé, mais de NOUVEAUX cartons arrivent dans ce conteneur !
+            const docRef = doc(collection(db, CONSTANTS.COLLECTION), archivedItem.id);
+            const oldData = archivedItem.data;
+            
+            const currentScans = oldData.scanHistory ? oldData.scanHistory.map(s => s.scanRef) : [];
+            const newScans = importItem.scanHistory ? importItem.scanHistory.filter(s => !currentScans.includes(s.scanRef)) : [];
+            
+            if (newScans.length > 0) {
+                const targetCont = conteneur || importItem.conteneur || '';
+                const combinedConteneur = targetCont && !(oldData.conteneur || '').includes(targetCont) 
+                    ? (oldData.conteneur ? `${oldData.conteneur} / ${targetCont}` : targetCont) 
+                    : oldData.conteneur;
+
+                const restoredData = {
+                    ...oldData,
+                    status: 'PARTIEL', // De retour en attente de livraison pour le reste
+                    containerStatus: 'EN_COURS',
+                    quantite: (parseInt(oldData.quantite) || 0) + newScans.length,
+                    quantiteRestante: newScans.length,
+                    conteneur: combinedConteneur,
+                    scanHistory: [...(oldData.scanHistory || []), ...newScans],
+                    dateAjout: new Date().toISOString()
+                };
+                delete restoredData.dateArchivage;
+
+                operations.push({ type: 'delete', ref: doc(db, CONSTANTS.ARCHIVE_COLLECTION, archivedItem.id) });
+                operations.push({ type: 'set', ref: docRef, data: restoredData });
+                updatedCount++;
+            } else {
+                ignoredArchivedCount++;
+            }
         } else {
             // CAS 2 : La référence n'existe pas -> On crée un nouveau colis
             const docRef = doc(collection(db, CONSTANTS.COLLECTION));
@@ -1828,54 +1964,7 @@ function renderTable() {
 
         const displayPhone = phoneCandidate || '';
 
-        let waBtn = '';
-        if (phoneCandidate) {
-            // Nettoyage final pour l'API WhatsApp (chiffres uniquement)
-            let phone = phoneCandidate.replace(/[^\d]/g, '').replace(/^00/, '');
-            
-            if (phone.length === 10) phone = '225' + phone; // Ajout indicatif CI par défaut
-            
-            const msg = `Bonjour, votre colis ${d.ref} (${d.conteneur || ''}) est disponible pour la livraison.`;
-            waBtn = `<a href="https://wa.me/${phone}?text=${encodeURIComponent(msg)}" target="_blank" class="btn btn-success btn-small" style="background-color:#25D366; border:none; padding:4px 6px; margin-right:4px;" title="Contacter sur WhatsApp">📱</a>`;
-        }
-
-        // --- AMÉLIORATION 7 : Notification spéciale pour "À Venir" ---
-        if (currentTab === 'A_VENIR' && !isViewer && phoneCandidate) {
-            let phone = phoneCandidate.replace(/[^\d]/g, '');
-            if (phone.length === 10 && phone.startsWith('0')) phone = '225' + phone.substring(1);
-            else if (phone.length === 10) phone = '225' + phone;
-            
-            const msgNotifier = encodeURIComponent(
-                `Bonjour ${displayDestinataire || 'Client'},\n\n` +
-                `🚢 Votre colis Réf: *${d.ref}* (Conteneur ${d.conteneur || 'en transit'}) ` +
-                `est en route vers Abidjan.\n\n` +
-                `Merci de confirmer votre lieu de livraison :\n` +
-                `${d.lieuLivraison || '(à confirmer)'}\n\n` +
-                `— AMT TRANS'IT`
-            );
-            waBtn += `<a href="https://wa.me/${phone}?text=${msgNotifier}" target="_blank" class="btn btn-small" style="background:#10b981; color:white; padding:4px 6px; margin-left:4px; text-decoration:none;" title="Notifier le client de l'arrivée imminente">💬 Notifier</a>`;
-        }
-
-        let actionButtons = waBtn;
-
-        // Boutons BL et Livré uniquement pour EN_COURS (Masqués pour PARIS et A_VENIR)
-        if (currentTab !== 'PARIS' && currentTab !== 'A_VENIR' && !isViewer) {
-            actionButtons += `<button class="btn btn-small" style="background-color:#64748b; padding:4px 6px;" onclick="printDeliverySlip('${d.id}')" title="Imprimer Bon de Livraison">📄</button>`;
-            actionButtons += `<button class="btn btn-small" style="background-color:#0284c7; color:white; padding:4px 6px; margin-left:4px;" onclick="printInvoice('${d.id}')" title="Imprimer Facture">🧾</button>`;
-            if (d.status !== 'LIVRE' && d.status !== 'ABANDONNE') {
-                actionButtons += `<button class="btn btn-success btn-small" onclick="markAsDelivered('${d.id}')" title="Marquer comme livré">✅</button>`;
-                actionButtons += `<button class="btn btn-small" style="background-color:#1e293b; color:white; padding:4px 6px; margin-left:4px;" onclick="openAbandonModal('${d.id}')" title="Déclarer comme Abandonné">⚫</button>`;
-            } else if (d.status === 'LIVRE') {
-                actionButtons += `<button class="btn btn-warning btn-small" onclick="markAsPending('${d.id}')" title="Marquer en attente">⏳</button>`;
-            } else if (d.status === 'ABANDONNE') {
-                // Si c'est déjà abandonné, on peut le remettre en attente ou re-télécharger le PDF
-                actionButtons += `<button class="btn btn-warning btn-small" onclick="markAsPending('${d.id}')" title="Annuler l'abandon (Repasser en attente)">⏳</button>`;
-                actionButtons += `<button class="btn btn-small" style="background-color:#1e293b; color:white; padding:4px 6px; margin-left:4px;" onclick="generateAbandonmentPDFFromId('${d.id}')" title="Re-télécharger l'Acte d'Abandon">📄</button>`;
-            }
-        }
-        if (!isViewer) {
-            actionButtons += `<button class="btn btn-danger btn-small" onclick="deleteDelivery('${d.id}')" title="Supprimer">🗑️</button>`;
-        }
+        const actionCellHTML = buildActionMenu(d, phoneCandidate, displayDestinataire);
 
         // Gestion Couleur Montant (Vert = Payé, Orange = Reste)
         const montantVal = parseFloat((d.montant || '0').replace(/[^\d]/g, '')) || 0;
@@ -1895,34 +1984,19 @@ function renderTable() {
         // --- NOUVEAU : ALERTE FRAIS MAGASINAGE ---
         let magasinageBadge = '';
         if (d.containerStatus === 'EN_COURS' && d.status !== 'LIVRE' && d.status !== 'ABANDONNE' && d.dateAjout) {
-            const diffTime = new Date() - new Date(d.dateAjout);
-            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-            if (diffDays > 7) {
-                const qte = d.quantiteRestante !== undefined ? parseInt(d.quantiteRestante) : (parseInt(d.quantite) || 1);
-                let fee = 0;
-                let badgeColor = '';
-                let borderColor = '';
-                let bgMontant = '';
-                let textMontant = '';
-
-                if (diffDays <= 14) {
-                    fee = 10000 * qte;
-                    badgeColor = '#f97316'; // Orange
-                    borderColor = '#f97316';
-                    bgMontant = '#ffedd5';
-                    textMontant = '#9a3412';
-                } else {
-                    const extraDays = diffDays - 14;
-                    fee = (10000 + (extraDays * 1000)) * qte;
-                    badgeColor = '#dc2626'; // Rouge foncé
-                    borderColor = '#dc2626';
-                    bgMontant = '#fee2e2';
-                    textMontant = '#991b1b';
+            if (typeof transactionService !== 'undefined') {
+                const { days: diffDays2, fee: computedFee } = transactionService.calculateStorageFee(d.dateAjout, d);
+                if (computedFee > 0) {
+                    const formattedFee = new Intl.NumberFormat('fr-CI', { style: 'currency', currency: 'XOF' }).format(computedFee);
+                    const qte = d.quantiteRestante !== undefined ? parseInt(d.quantiteRestante) : (parseInt(d.quantite) || 1);
+                    const badgeColor = computedFee > (10000 * qte) ? '#dc2626' : '#f97316';
+                    const borderColor = computedFee > (10000 * qte) ? '#dc2626' : '#f97316';
+                    const bgMontant = computedFee > (10000 * qte) ? '#fee2e2' : '#ffedd5';
+                    const textMontant = computedFee > (10000 * qte) ? '#991b1b' : '#9a3412';
+                    magasinageBadge = `<div style="margin-top:6px; text-align:center;"><span style="background-color:${badgeColor}; color:white; padding:3px 5px; border-radius:4px; font-size:10px; font-weight:bold; white-space:nowrap; box-shadow: 0 0 6px ${badgeColor};" title="En entrepôt depuis ${diffDays2} jours">⚠️ + ${formattedFee} MAGASINAGE</span></div>`;
+                    // Force l'alerte sur la couleur du montant même si le solde est 0
+                    montantStyle = `width: 100%; background-color: ${bgMontant}; color: ${textMontant}; font-weight: bold; border: 2px solid ${borderColor};`;
                 }
-                const formattedFee = new Intl.NumberFormat('fr-CI', { style: 'currency', currency: 'XOF' }).format(fee);
-                magasinageBadge = `<div style="margin-top:6px; text-align:center;"><span style="background-color:${badgeColor}; color:white; padding:3px 5px; border-radius:4px; font-size:10px; font-weight:bold; white-space:nowrap; box-shadow: 0 0 6px ${badgeColor};" title="En entrepôt depuis ${diffDays} jours">⚠️ + ${formattedFee} MAGASINAGE</span></div>`;
-                // Force l'alerte sur la couleur du montant même si le solde est 0
-                montantStyle = `width: 100%; background-color: ${bgMontant}; color: ${textMontant}; font-weight: bold; border: 2px solid ${borderColor};`;
             }
         }
 
@@ -1960,7 +2034,7 @@ function renderTable() {
                     <td>${renderInput(displayDestinataire.replace(/"/g, '&quot;'), "text", `updateDeliveryRecipient('${d.id}', this.value)`, "")}</td>
                     <td>${renderInput(displayPhone, "text", `updateDeliveryPhone('${d.id}', this.value)`, "font-weight:bold; color:#0d47a1; width:100%;")}</td>
                     <td>${d.description || '-'}</td>
-                    <td><div class="actions">${actionButtons}</div></td>
+                    <td>${actionCellHTML}</td>
                 </tr>
             `;
         }
@@ -1993,9 +2067,7 @@ function renderTable() {
             <small>${((d.status === 'LIVRE' || d.status === 'PARTIEL' || d.status === 'LIVRAISON_PARTIELLE') && d.dateLivraison) ? new Date(d.dateLivraison).toLocaleDateString('fr-FR') : (d.dateProgramme || '')}</small>
                 </td>
                 ${statusCell}
-                <td>
-                    <div class="actions">${actionButtons}</div>
-                </td>
+                <td>${actionCellHTML}</td>
             </tr>
         `
     }).join('');
@@ -2276,50 +2348,195 @@ function exportRoadmapPDF(date, livreur) {
 }
 
 // Fonction d'export PDF pour un Bon de Livraison individuel
-function printDeliverySlip(id) {
-    const d = deliveries.find(i => i.id == id);
+async function printDeliverySlip(id) {
+    const d = deliveries.find(i => i.id === id);
     if(!d) return;
     
+    showToast("Génération du Bon de Livraison...", "success");
+
+    // 1. Récupération des données financières exactes depuis la Caisse
+    let transData = null;
+    try {
+        const qTrans = await getDocs(query(collection(db, 'transactions'), where('reference', '==', d.ref), limit(1)));
+        if (!qTrans.empty) transData = qTrans.docs[0].data();
+    } catch (e) {
+        console.error("Erreur récupération transaction :", e);
+    }
+
     const { jsPDF } = window.jspdf;
-    const doc = new jsPDF();
+    const doc = new jsPDF('p', 'mm', 'a4');
+    const pageWidth = doc.internal.pageSize.getWidth();
     
-    // En-tête
-    doc.setFontSize(22);
-    doc.setTextColor(40);
-    doc.text("BON DE LIVRAISON", 105, 20, null, null, "center");
-    
-    doc.setFontSize(10);
-    doc.setTextColor(100);
-    doc.text(`Date : ${new Date().toLocaleDateString('fr-FR')}`, 150, 30);
-    doc.text(`Réf : ${d.ref}`, 20, 30);
+    // --- En-tête Graphique ---
+    doc.setFillColor(30, 41, 59);
+    doc.rect(0, 0, pageWidth, 35, 'F');
+    doc.setFillColor(16, 185, 129); // Accent Vert (pour la livraison)
+    doc.rect(0, 35, pageWidth, 2, 'F');
 
-    // Cadre Expéditeur / Destinataire
-    doc.setDrawColor(200);
-    doc.rect(15, 40, 85, 40);
-    doc.rect(110, 40, 85, 40);
-    
-    doc.setFontSize(12);
-    doc.setTextColor(0);
-    doc.text("EXPÉDITEUR", 20, 48);
-    doc.text("DESTINATAIRE", 115, 48);
-    
-    doc.setFontSize(10);
-    doc.text(doc.splitTextToSize(d.expediteur || 'Non spécifié', 75), 20, 58);
-    doc.text(doc.splitTextToSize((d.destinataire || 'Non spécifié') + '\n' + (d.lieuLivraison || '') + '\n' + (d.commune || ''), 75), 115, 58);
+    try {
+        const logoElement = document.querySelector('.app-logo');
+        if (logoElement && logoElement.complete && logoElement.naturalWidth > 0) {
+            const ratio = logoElement.naturalWidth / logoElement.naturalHeight;
+            let imgW = 20 * ratio;
+            if (imgW > 50) imgW = 50;
+            doc.addImage(logoElement, 'PNG', 15, 7, imgW, 20);
+        } else {
+            doc.setTextColor(255, 255, 255);
+            doc.setFont("helvetica", "bold");
+            doc.setFontSize(20);
+            doc.text("AMT TRANS'IT", 15, 22);
+        }
+    } catch(e) {
+        doc.setTextColor(255, 255, 255);
+        doc.setFontSize(20);
+        doc.text("AMT TRANS'IT", 15, 22);
+    }
 
-    // Détails Colis
+    doc.setTextColor(255, 255, 255);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(18);
+    doc.text("BON DE LIVRAISON", pageWidth - 15, 22, { align: 'right' });
+    
+    // --- Informations Colis & Client ---
+    doc.setTextColor(0, 0, 0);
+    doc.setFontSize(10);
+    doc.setFont("helvetica", "bold");
+    doc.text("DÉTAILS DE L'EXPÉDITION :", 15, 50);
+    doc.setFont("helvetica", "normal");
+    doc.text(`Référence : ${d.ref}`, 15, 57);
+    doc.text(`Date d'édition : ${new Date().toLocaleDateString('fr-FR')}`, 15, 64);
+    doc.text(`Conteneur : ${d.conteneur || '-'}`, 15, 71);
+    doc.text(`Expéditeur : ${d.expediteur || '-'}`, 15, 78);
+
+    doc.setFillColor(248, 250, 252);
+    doc.setDrawColor(226, 232, 240);
+    doc.roundedRect(115, 45, 80, 35, 2, 2, 'FD');
+    doc.setFont("helvetica", "bold");
+    doc.text("LIVRÉ À :", 120, 52);
+    doc.setFont("helvetica", "normal");
+    
+    let clientName = transData ? transData.nom : (d.destinataire || 'Client non spécifié');
+    const phoneMatchBL = clientName.match(/(?:(?:\+|00)225[\s.-]?)?(?:01|05|07|0)\d(?:[\s.-]?\d{2}){4}|(?:(?:\+|00)225[\s.-]?)?(?:01|05|07|0)\d{8,}/);
+    if (phoneMatchBL) {
+        clientName = clientName.replace(phoneMatchBL[0], '').replace(/[-–,;:\/\s]+$/, '').trim();
+    }
+    doc.text(`${clientName}`, 120, 59);
+    doc.text(`${d.numero || transData?.numero || ''}`, 120, 66);
+    const addrStr = doc.splitTextToSize(`${d.lieuLivraison || d.commune || transData?.adresseDestinataire || ''}`, 70);
+    doc.text(addrStr, 120, 73);
+
+    // --- Tableau Descriptif ---
+    const tableColumn = ["Description / Nature du Colis", "Conteneur", "Quantité"];
+    const tableRows = [[d.description || transData?.description || 'Colis divers', d.conteneur || '-', d.quantite || transData?.quantite || 1]];
+
     doc.autoTable({
         startY: 90,
-        head: [['Description', 'Conteneur', 'Montant à Payer']],
-        body: [[d.description || 'Colis divers', d.conteneur || '-', d.montant || '0 CFA']],
+        head: [tableColumn],
+        body: tableRows,
         theme: 'grid',
-        headStyles: { fillColor: [60, 60, 60] }
+        headStyles: { fillColor: [16, 185, 129] } // Vert
     });
 
-    // Zone Signature
-    const finalY = doc.lastAutoTable.finalY + 20;
-    doc.text("Signature Client :", 130, finalY);
-    doc.rect(120, finalY + 5, 70, 30);
+    // --- Montant à encaisser ---
+    let reste = 0;
+    let magasinageFee = 0;
+    
+    if (transData) {
+        let prixFret = transData.prix || 0;
+        let paye = (transData.montantAbidjan || 0) + (transData.montantParis || 0);
+        let reduction = 0;
+        if (transData.adjustmentType === 'reduction' && transData.adjustmentVal > 0) {
+            reduction = transData.adjustmentVal;
+        } else if (transData.adjustmentType === 'augmentation' && transData.adjustmentVal > 0) {
+            magasinageFee = transData.adjustmentVal;
+        }
+        
+        if (magasinageFee === 0 && !transData.storageFeeWaived && d.dateAjout && d.status !== 'LIVRE' && d.status !== 'ABANDONNE') {
+            if (typeof transactionService !== 'undefined') {
+                magasinageFee = transactionService.calculateStorageFee(d.dateAjout, d).fee;
+            } else {
+                const diffTime = new Date() - new Date(d.dateAjout);
+                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                if (diffDays > 7) {
+                    const qte = d.quantiteRestante !== undefined ? parseInt(d.quantiteRestante) : (parseInt(d.quantite) || 1);
+                    if (diffDays <= 14) magasinageFee = 10000 * qte;
+                    else magasinageFee = (10000 + (diffDays - 14) * 1000) * qte;
+                }
+            }
+        }
+        const totalAPayer = prixFret - reduction + magasinageFee;
+        reste = totalAPayer - paye;
+        if (reste < 0) reste = 0;
+    } else {
+        reste = parseFloat(String(d.montant || '0').replace(/[^\d]/g, '')) || 0;
+        if (d.dateAjout && d.status !== 'LIVRE' && d.status !== 'ABANDONNE') {
+            if (typeof transactionService !== 'undefined') {
+                magasinageFee = transactionService.calculateStorageFee(d.dateAjout, d).fee;
+                reste += magasinageFee;
+            } else {
+                const diffTime = new Date() - new Date(d.dateAjout);
+                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                if (diffDays > 7) {
+                    const qte = d.quantiteRestante !== undefined ? parseInt(d.quantiteRestante) : (parseInt(d.quantite) || 1);
+                    if (diffDays <= 14) magasinageFee = 10000 * qte;
+                    else magasinageFee = (10000 + (diffDays - 14) * 1000) * qte;
+                    reste += magasinageFee;
+                }
+            }
+        }
+    }
+
+    const formatMontant = (num) => new Intl.NumberFormat('fr-CI', { style: 'currency', currency: 'XOF' }).format(num).replace(/[\u202F\u00A0]/g, ' ');
+    const finalY = doc.lastAutoTable.finalY + 15;
+    
+    if (reste > 0) {
+        doc.setFillColor(254, 242, 242);
+        doc.setDrawColor(220, 38, 38);
+        doc.setLineWidth(0.5);
+        doc.rect(95, finalY, 100, 14, 'FD');
+        
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(10);
+        doc.setTextColor(220, 38, 38);
+        doc.text("À REMETTRE AU LIVREUR :", 100, finalY + 9);
+        
+        doc.setFontSize(14);
+        doc.text(`${formatMontant(reste)}`, 190, finalY + 9.5, { align: 'right' });
+    } else {
+        doc.setFillColor(240, 253, 244);
+        doc.setDrawColor(22, 163, 74);
+        doc.setLineWidth(0.5);
+        doc.rect(95, finalY, 100, 14, 'FD');
+        
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(12);
+        doc.setTextColor(22, 163, 74);
+        doc.text("COLIS SOLDÉ (Rien à payer)", 145, finalY + 9, { align: 'center' });
+    }
+    doc.setTextColor(0, 0, 0);
+
+    // --- Zone de Signatures ---
+    let sigY = finalY + 35;
+    doc.setFontSize(10);
+    doc.setFont("helvetica", "bold");
+    doc.text("Livreur / Agent AMT :", 25, sigY);
+    doc.text("Client (Destinataire) :", 125, sigY);
+    
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8);
+    doc.setTextColor(100, 116, 139);
+    doc.text("Nom et Signature", 25, sigY + 5);
+    doc.text("Précédé de la mention 'Lu et approuvé'", 125, sigY + 5);
+
+    doc.setDrawColor(203, 213, 225);
+    doc.rect(20, sigY + 8, 70, 25);
+    doc.rect(120, sigY + 8, 70, 25);
+
+    // --- Pied de page ---
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8);
+    doc.setTextColor(100, 116, 139);
+    doc.text("AMT TRANS'IT | 81 AVENUE ARISTIDE BRIAND 93240 STAINS | Tel. 0186900380 | amt.transit@gmail.com", pageWidth / 2, doc.internal.pageSize.getHeight() - 10, { align: 'center' });
 
     doc.save(`BL_${d.ref}.pdf`);
 }
@@ -2392,7 +2609,12 @@ window.printInvoice = async function(id) {
     doc.setFont("helvetica", "bold");
     doc.text("FACTURÉ À :", 120, 52);
     doc.setFont("helvetica", "normal");
-    const clientName = transData ? transData.nom : (d.destinataire || 'Client');
+    
+    let clientName = transData ? transData.nom : (d.destinataire || 'Client');
+    const phoneMatchFacture = clientName.match(/(?:(?:\+|00)225[\s.-]?)?(?:01|05|07|0)\d(?:[\s.-]?\d{2}){4}|(?:(?:\+|00)225[\s.-]?)?(?:01|05|07|0)\d{8,}/);
+    if (phoneMatchFacture) {
+        clientName = clientName.replace(phoneMatchFacture[0], '').replace(/[-–,;:\/\s]+$/, '').trim();
+    }
     doc.text(`${clientName}`, 120, 59);
     doc.text(`${d.numero || transData?.numero || ''}`, 120, 66);
     const addrStr = doc.splitTextToSize(`${d.lieuLivraison || d.commune || transData?.adresseDestinataire || ''}`, 70);
@@ -2425,12 +2647,16 @@ window.printInvoice = async function(id) {
         
         // Calcul dynamique si non annulé, non livré et pas de frais manuel saisi
         if (magasinageFee === 0 && !transData.storageFeeWaived && d.dateAjout && d.status !== 'LIVRE' && d.status !== 'ABANDONNE') {
-            const diffTime = new Date() - new Date(d.dateAjout);
-            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-            if (diffDays > 7) {
-                const qte = d.quantiteRestante !== undefined ? parseInt(d.quantiteRestante) : (parseInt(d.quantite) || 1);
-                if (diffDays <= 14) magasinageFee = 10000 * qte;
-                else magasinageFee = (10000 + (diffDays - 14) * 1000) * qte;
+            if (typeof transactionService !== 'undefined') {
+                magasinageFee = transactionService.calculateStorageFee(d.dateAjout, d).fee;
+            } else {
+                const diffTime = new Date() - new Date(d.dateAjout);
+                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                if (diffDays > 7) {
+                    const qte = d.quantiteRestante !== undefined ? parseInt(d.quantiteRestante) : (parseInt(d.quantite) || 1);
+                    if (diffDays <= 14) magasinageFee = 10000 * qte;
+                    else magasinageFee = (10000 + (diffDays - 14) * 1000) * qte;
+                }
             }
         }
         
@@ -2443,13 +2669,18 @@ window.printInvoice = async function(id) {
         paye = prixFret > reste ? prixFret - reste : 0;
         
         if (d.dateAjout && d.status !== 'LIVRE' && d.status !== 'ABANDONNE') {
-            const diffTime = new Date() - new Date(d.dateAjout);
-            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-            if (diffDays > 7) {
-                const qte = d.quantiteRestante !== undefined ? parseInt(d.quantiteRestante) : (parseInt(d.quantite) || 1);
-                if (diffDays <= 14) magasinageFee = 10000 * qte;
-                else magasinageFee = (10000 + (diffDays - 14) * 1000) * qte;
+            if (typeof transactionService !== 'undefined') {
+                magasinageFee = transactionService.calculateStorageFee(d.dateAjout, d).fee;
                 reste += magasinageFee;
+            } else {
+                const diffTime = new Date() - new Date(d.dateAjout);
+                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                if (diffDays > 7) {
+                    const qte = d.quantiteRestante !== undefined ? parseInt(d.quantiteRestante) : (parseInt(d.quantite) || 1);
+                    if (diffDays <= 14) magasinageFee = 10000 * qte;
+                    else magasinageFee = (10000 + (diffDays - 14) * 1000) * qte;
+                    reste += magasinageFee;
+                }
             }
         }
     }
@@ -3377,8 +3608,42 @@ function updateDeliveryAmount(id, newAmount) {
 }
 
 // Mise à jour de la quantité en direct
-function updateDeliveryQuantity(id, newQty) {
-    updateDoc(doc(db, CONSTANTS.COLLECTION, id), { quantite: parseInt(newQty) || 1 });
+async function updateDeliveryQuantity(id, newQty) {
+    const parsedQty = parseInt(newQty) || 1;
+    
+    // 1. Récupérer les données actuelles du colis
+    const d = deliveries.find(item => item.id === id);
+    if (!d) return;
+
+    const quantiteLivree = parseInt(d.quantiteLivree) || 0;
+    
+    // 2. Calculer le nouveau reste (Nouvelle Quantité - Déjà livré)
+    const newQuantiteRestante = Math.max(0, parsedQty - quantiteLivree);
+
+    const updates = { 
+        quantite: parsedQty,
+        quantiteRestante: newQuantiteRestante
+    };
+
+    // 3 & 4. Mettre à jour le statut intelligemment
+    if (newQuantiteRestante <= 0) {
+        updates.status = 'LIVRE';
+        if (!d.dateLivraison) updates.dateLivraison = new Date().toISOString();
+    } else if (newQuantiteRestante > 0 && quantiteLivree > 0) {
+        updates.status = 'LIVRAISON_PARTIELLE';
+    } else if (newQuantiteRestante > 0 && d.status === 'LIVRE') {
+        // Sécurité : Si le colis était "LIVRE" par erreur et qu'on augmente la quantité
+        updates.status = d.livreur ? 'EN_COURS' : 'EN_ATTENTE';
+        updates.dateLivraison = deleteField();
+    }
+
+    // 5. Exécuter la mise à jour globale dans Firestore
+    try {
+        await updateDoc(doc(db, CONSTANTS.COLLECTION, id), updates);
+    } catch (error) {
+        console.error("Erreur lors de la mise à jour de la quantité :", error);
+        showToast("Erreur de mise à jour de la quantité", "error");
+    }
 }
 
 // Mise à jour de l'info manuelle en direct
@@ -3700,7 +3965,13 @@ function generateAbandonmentPDF(data, typeAbandon) {
 
     doc.setTextColor(15, 23, 42);
     doc.setFont("helvetica", "bold");
-    doc.text(`${data.destinataire || 'Non spécifié'}`, 45, y);
+    
+    let destClean = data.destinataire || 'Non spécifié';
+    const phoneMatchDest = destClean.match(/(?:(?:\+|00)225[\s.-]?)?(?:01|05|07|0)\d(?:[\s.-]?\d{2}){4}|(?:(?:\+|00)225[\s.-]?)?(?:01|05|07|0)\d{8,}/);
+    if (phoneMatchDest) {
+        destClean = destClean.replace(phoneMatchDest[0], '').replace(/[-–,;:\/\s]+$/, '').trim();
+    }
+    doc.text(`${destClean}`, 45, y);
     doc.text(`${data.numero || 'Non spécifié'}`, 45, y + 6);
     doc.text(`${data.expediteur || 'Non spécifié'}`, 45, y + 12);
 
@@ -3731,12 +4002,18 @@ function generateAbandonmentPDF(data, typeAbandon) {
     let fee = 0;
     let diffDays = 0;
     if (data.dateAjout) {
-        const diffTime = new Date() - new Date(data.dateAjout);
-        diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-        const qte = parseInt(data.quantite) || 1;
-        if (diffDays > 7) {
-            if (diffDays <= 14) fee = 10000 * qte;
-            else fee = (10000 + (diffDays - 14) * 1000) * qte;
+        if (typeof transactionService !== 'undefined') {
+            const computed = transactionService.calculateStorageFee(data.dateAjout, data);
+            diffDays = computed.days;
+            fee = computed.fee;
+        } else {
+            const diffTime = new Date() - new Date(data.dateAjout);
+            diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+            const qte = parseInt(data.quantite) || 1;
+            if (diffDays > 7) {
+                if (diffDays <= 14) fee = 10000 * qte;
+                else fee = (10000 + (diffDays - 14) * 1000) * qte;
+            }
         }
     }
     const totalVal = resteVal + fee;
@@ -4099,7 +4376,8 @@ Object.assign(window, {
     confirmAssignContainer, closeBulkStatusModal, confirmBulkStatusChange, viewProgramDetails,
     sortProgramDetails, openBingMapsRoute, exportRoadmapPDF, exportRoadmapWhatsApp, printDeliverySlip, 
         removeFromProgram, closeProgramDetailsModal, renderTable, debouncedFilterDeliveries, openEmbarquerModal, notifierMasseAVenir, saveContainerETA,
-        showScanHistory
+        showScanHistory,
+        toggleActionMenu, closeActionMenu
 });
 
 // --- NOUVEAU : GESTION DES PAIEMENTS DEPUIS LA LOGISTIQUE ---

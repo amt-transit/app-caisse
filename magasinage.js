@@ -93,7 +93,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (diffTime < 0) return { days: 0, fee: 0 };
             const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
             if (diffDays <= 7) return { days: diffDays, fee: 0 };
-            else if (diffDays <= 14) return { days: diffDays, fee: 10000 };
+            else if (diffDays <= 14) return { days: diffDays, fee: 10000 * qte };
             else {
                 const extraDays = diffDays - 14;
                 const unitFee = 10000 + (extraDays * 1000);
