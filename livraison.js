@@ -996,6 +996,15 @@ function showPreviewModal(data) {
         statusSelect.value = currentTab;
     }
 
+    const reqLabel = document.getElementById('importConteneurRequired');
+    function updateRequired() {
+        if (reqLabel) reqLabel.style.display = statusSelect.value === 'EN_COURS' ? 'inline' : 'none';
+    }
+    if (statusSelect) {
+        statusSelect.addEventListener('change', updateRequired);
+        updateRequired();
+    }
+
     document.getElementById('previewCount').textContent = `${data.length} livraisons détectées`;
     
     const tbody = document.getElementById('previewBody');
@@ -1039,6 +1048,18 @@ async function confirmImport() {
     if (currentTab === 'PARIS') containerStatus = 'PARIS';
     else if (currentTab === 'A_VENIR') containerStatus = 'A_VENIR';
     else if (currentTab === 'EN_COURS') containerStatus = 'EN_COURS';
+
+    if (containerStatus === 'EN_COURS' && (!conteneur || conteneur.trim() === '')) {
+        const confirmed = await AppModal.confirm(
+            '⚠️ Aucun numéro de conteneur saisi.\n\nSans conteneur, les transactions créées ne seront pas comptabilisées dans le P&L par conteneur.\n\nVoulez-vous continuer quand même ?',
+            'Conteneur manquant',
+            true
+        );
+        if (!confirmed) {
+            closePreviewModal();
+            return;
+        }
+    }
 
     // --- NOUVEAU : Pré-traitement pour fusionner les doublons DANS le fichier importé ---
     const uniqueImports = new Map();
@@ -2546,17 +2567,36 @@ async function confirmAssignContainer() {
         });
     }
 
+    const selectedItems = [...selectedIds].map(id => deliveries.find(d => d.id === id)).filter(Boolean);
+    const refs = selectedItems.map(d => d.ref).filter(Boolean);
+
+    const transToUpdate = new Map();
+    for (let i = 0; i < refs.length; i += 10) {
+        const chunk = refs.slice(i, i + 10);
+        const snap = await getDocs(query(
+            collection(db, 'transactions'),
+            where('reference', 'in', chunk)
+        ));
+        snap.forEach(doc => transToUpdate.set(doc.data().reference, doc.id));
+    }
+
     const batch = writeBatch(db);
-    selectedIds.forEach(id => {
-        const item = deliveries.find(d => d.id === id);
+    selectedItems.forEach(item => {
         const updates = { conteneur: newConteneur };
         if (newStatus) {
             updates.containerStatus = newStatus;
-            if (item && item.containerStatus !== newStatus) {
-                updates.dateAjout = new Date().toISOString(); // Préserve la date d'arrivée si le statut ne change pas
+            if (item.containerStatus !== newStatus) {
+                updates.dateAjout = new Date().toISOString();
             }
         }
-        batch.update(doc(db, CONSTANTS.COLLECTION, id), updates);
+        batch.update(doc(db, CONSTANTS.COLLECTION, item.id), updates);
+
+        const transDocId = transToUpdate.get(item.ref);
+        if (transDocId && newConteneur) {
+            batch.update(doc(db, 'transactions', transDocId), {
+                conteneur: newConteneur
+            });
+        }
     });
 
     // Création des transactions si on assigne manuellement vers EN_COURS
@@ -2711,6 +2751,7 @@ async function forceSyncTransactions() {
                     if (item.lieuLivraison && t.adresseDestinataire !== item.lieuLivraison) updates.adresseDestinataire = item.lieuLivraison;
                     if (item.numero && t.numero !== item.numero) updates.numero = item.numero;
                     if (item.description && t.description !== item.description) updates.description = item.description;
+                    if (item.conteneur && t.conteneur !== item.conteneur) updates.conteneur = item.conteneur;
 
                     // --- CORRECTION MONTANTS ---
                     const restant = parseFloat((item.montant || '0').replace(/[^\d]/g, '')) || 0;
@@ -4263,4 +4304,3 @@ async function permanentlyDeleteSelected(skipConfirm = false) {
         showToast("Erreur lors de la suppression groupée", "error");
     });
 }
-

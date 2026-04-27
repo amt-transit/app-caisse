@@ -621,7 +621,13 @@
                 <h2 class="modal-header">📋 Aperçu de l'import</h2>
                 <div class="form-grid" style="margin-bottom:20px;background:#f8f9fa;padding:15px;border-radius:8px">
                     <div class="form-group full-width"><label>Destination</label><select id="importContainerStatus" style="width:100%"><option value="PARIS">🇫🇷 Stock PARIS</option><option value="EN_COURS">📦 EN COURS</option><option value="A_VENIR">🚢 À VENIR</option></select></div>
-                    <div class="form-group"><label>N° Conteneur (Lot)</label><input type="text" id="importConteneur"></div>
+                    <div class="form-group">
+                        <label>
+                            N° Conteneur (Lot)
+                            <span id="importConteneurRequired" style="color:#ef4444; display:none;"> *obligatoire pour EN COURS</span>
+                        </label>
+                        <input type="text" id="importConteneur" placeholder="Ex: E14">
+                    </div>
                 </div>
                 <p id="previewCount"></p>
                 <div class="preview-table"><table><thead><tr><th>REF</th><th>QTE</th><th>EXPEDITEUR</th><th>COMMUNE</th><th>LIEU</th><th>INFO</th></tr></thead><tbody id="previewBody"></tbody></table></div>
