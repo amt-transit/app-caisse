@@ -1861,6 +1861,7 @@ function renderTable() {
         // Boutons BL et Livré uniquement pour EN_COURS (Masqués pour PARIS et A_VENIR)
         if (currentTab !== 'PARIS' && currentTab !== 'A_VENIR' && !isViewer) {
             actionButtons += `<button class="btn btn-small" style="background-color:#64748b; padding:4px 6px;" onclick="printDeliverySlip('${d.id}')" title="Imprimer Bon de Livraison">📄</button>`;
+            actionButtons += `<button class="btn btn-small" style="background-color:#0284c7; color:white; padding:4px 6px; margin-left:4px;" onclick="printInvoice('${d.id}')" title="Imprimer Facture">🧾</button>`;
             if (d.status !== 'LIVRE' && d.status !== 'ABANDONNE') {
                 actionButtons += `<button class="btn btn-success btn-small" onclick="markAsDelivered('${d.id}')" title="Marquer comme livré">✅</button>`;
                 actionButtons += `<button class="btn btn-small" style="background-color:#1e293b; color:white; padding:4px 6px; margin-left:4px;" onclick="openAbandonModal('${d.id}')" title="Déclarer comme Abandonné">⚫</button>`;
@@ -2322,6 +2323,224 @@ function printDeliverySlip(id) {
 
     doc.save(`BL_${d.ref}.pdf`);
 }
+
+// --- NOUVEAU : Fonction d'export PDF pour une Facture Complète ---
+window.printInvoice = async function(id) {
+    const d = deliveries.find(i => i.id === id);
+    if (!d) return;
+    
+    showToast("Génération de la facture en cours...", "success");
+
+    // 1. Récupération des données financières exactes depuis la Caisse
+    let transData = null;
+    try {
+        const qTrans = await getDocs(query(collection(db, 'transactions'), where('reference', '==', d.ref), limit(1)));
+        if (!qTrans.empty) transData = qTrans.docs[0].data();
+    } catch (e) {
+        console.error("Erreur récupération transaction :", e);
+    }
+
+    // 2. Initialisation du Document PDF
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF('p', 'mm', 'a4');
+    const pageWidth = doc.internal.pageSize.getWidth();
+
+    // --- En-tête Graphique ---
+    doc.setFillColor(30, 41, 59);
+    doc.rect(0, 0, pageWidth, 35, 'F');
+    doc.setFillColor(59, 130, 246);
+    doc.rect(0, 35, pageWidth, 2, 'F');
+
+    try {
+        const logoElement = document.querySelector('.app-logo');
+        if (logoElement && logoElement.complete && logoElement.naturalWidth > 0) {
+            const ratio = logoElement.naturalWidth / logoElement.naturalHeight;
+            let imgW = 20 * ratio;
+            if (imgW > 50) imgW = 50;
+            doc.addImage(logoElement, 'PNG', 15, 7, imgW, 20);
+        } else {
+            doc.setTextColor(255, 255, 255);
+            doc.setFont("helvetica", "bold");
+            doc.setFontSize(20);
+            doc.text("AMT TRANS'IT", 15, 22);
+        }
+    } catch(e) {
+        doc.setTextColor(255, 255, 255);
+        doc.setFontSize(20);
+        doc.text("AMT TRANS'IT", 15, 22);
+    }
+
+    doc.setTextColor(255, 255, 255);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(18);
+    doc.text("FACTURE", pageWidth - 15, 22, { align: 'right' });
+
+    // --- Informations Colis & Client ---
+    doc.setTextColor(0, 0, 0);
+    doc.setFontSize(10);
+    doc.setFont("helvetica", "bold");
+    doc.text("DÉTAILS DE L'EXPÉDITION :", 15, 50);
+    doc.setFont("helvetica", "normal");
+    doc.text(`Référence : ${d.ref}`, 15, 57);
+    doc.text(`Date : ${new Date().toLocaleDateString('fr-FR')}`, 15, 64);
+    doc.text(`Conteneur : ${d.conteneur || '-'}`, 15, 71);
+    doc.text(`Expéditeur : ${d.expediteur || '-'}`, 15, 78);
+
+    doc.setFillColor(248, 250, 252);
+    doc.setDrawColor(226, 232, 240);
+    doc.roundedRect(115, 45, 80, 35, 2, 2, 'FD');
+    doc.setFont("helvetica", "bold");
+    doc.text("FACTURÉ À :", 120, 52);
+    doc.setFont("helvetica", "normal");
+    const clientName = transData ? transData.nom : (d.destinataire || 'Client');
+    doc.text(`${clientName}`, 120, 59);
+    doc.text(`${d.numero || transData?.numero || ''}`, 120, 66);
+    const addrStr = doc.splitTextToSize(`${d.lieuLivraison || d.commune || transData?.adresseDestinataire || ''}`, 70);
+    doc.text(addrStr, 120, 73);
+
+    // --- Tableau Descriptif ---
+    const tableColumn = ["Description / Nature du Colis", "Quantité"];
+    const tableRows = [[d.description || transData?.description || 'Colis divers', d.quantite || transData?.quantite || 1]];
+
+    doc.autoTable({
+        startY: 90,
+        head: [tableColumn],
+        body: tableRows,
+        theme: 'grid',
+        headStyles: { fillColor: [59, 130, 246] }
+    });
+
+    // --- Bilan Financier ---
+    let prixFret = 0, paye = 0, reste = 0, magasinageFee = 0, reduction = 0;
+    
+    if (transData) {
+        prixFret = transData.prix || 0;
+        paye = (transData.montantAbidjan || 0) + (transData.montantParis || 0);
+        
+        if (transData.adjustmentType === 'reduction' && transData.adjustmentVal > 0) {
+            reduction = transData.adjustmentVal;
+        } else if (transData.adjustmentType === 'augmentation' && transData.adjustmentVal > 0) {
+            magasinageFee = transData.adjustmentVal;
+        }
+        
+        // Calcul dynamique si non annulé, non livré et pas de frais manuel saisi
+        if (magasinageFee === 0 && !transData.storageFeeWaived && d.dateAjout && d.status !== 'LIVRE' && d.status !== 'ABANDONNE') {
+            const diffTime = new Date() - new Date(d.dateAjout);
+            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+            if (diffDays > 7) {
+                const qte = d.quantiteRestante !== undefined ? parseInt(d.quantiteRestante) : (parseInt(d.quantite) || 1);
+                if (diffDays <= 14) magasinageFee = 10000 * qte;
+                else magasinageFee = (10000 + (diffDays - 14) * 1000) * qte;
+            }
+        }
+        
+        const totalAPayer = prixFret - reduction + magasinageFee;
+        reste = totalAPayer - paye;
+        if (reste < 0) reste = 0;
+    } else {
+        reste = parseFloat(String(d.montant || '0').replace(/[^\d]/g, '')) || 0;
+        prixFret = parseFloat(String(d.prixOriginal || '0').replace(/[^\d]/g, '')) || reste;
+        paye = prixFret > reste ? prixFret - reste : 0;
+        
+        if (d.dateAjout && d.status !== 'LIVRE' && d.status !== 'ABANDONNE') {
+            const diffTime = new Date() - new Date(d.dateAjout);
+            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+            if (diffDays > 7) {
+                const qte = d.quantiteRestante !== undefined ? parseInt(d.quantiteRestante) : (parseInt(d.quantite) || 1);
+                if (diffDays <= 14) magasinageFee = 10000 * qte;
+                else magasinageFee = (10000 + (diffDays - 14) * 1000) * qte;
+                reste += magasinageFee;
+            }
+        }
+    }
+
+    const formatMontant = (num) => new Intl.NumberFormat('fr-CI', { style: 'currency', currency: 'XOF' }).format(num).replace(/[\u202F\u00A0]/g, ' ');
+    const finalY = doc.lastAutoTable.finalY + 15;
+    
+    doc.setFont("helvetica", "bold");
+    doc.text("RÉCAPITULATIF FINANCIER", 115, finalY);
+    doc.setFont("helvetica", "normal");
+    
+    let currentLineY = finalY + 8;
+    doc.text("Total Fret :", 115, currentLineY);
+    doc.text(`${formatMontant(prixFret)}`, 195, currentLineY, { align: 'right' });
+    currentLineY += 6;
+    
+    if (reduction > 0) {
+        doc.text("Réduction :", 115, currentLineY);
+        doc.setTextColor(22, 163, 74);
+        doc.text(`- ${formatMontant(reduction)}`, 195, currentLineY, { align: 'right' });
+        doc.setTextColor(0, 0, 0);
+        currentLineY += 6;
+    }
+    
+    if (magasinageFee > 0) {
+        doc.text("Frais Magasinage :", 115, currentLineY);
+        doc.setTextColor(220, 38, 38);
+        doc.text(`+ ${formatMontant(magasinageFee)}`, 195, currentLineY, { align: 'right' });
+        doc.setTextColor(0, 0, 0);
+        currentLineY += 6;
+    }
+    
+    doc.text("Montant Payé :", 115, currentLineY);
+    doc.text(`${formatMontant(paye)}`, 195, currentLineY, { align: 'right' });
+    currentLineY += 6;
+    
+    // Boîte du Reste (Rouge si impayé, Vert si soldé)
+    doc.setFillColor(reste > 0 ? 254 : 240, reste > 0 ? 242 : 253, reste > 0 ? 242 : 244);
+    doc.rect(115, currentLineY + 2, 80, 10, 'F');
+    doc.setFont("helvetica", "bold");
+    doc.text("RESTE À PAYER :", 118, currentLineY + 9);
+    doc.setTextColor(reste > 0 ? 220 : 22, reste > 0 ? 38 : 163, reste > 0 ? 38 : 74);
+    doc.text(`${formatMontant(reste)}`, 192, currentLineY + 9, { align: 'right' });
+    doc.setTextColor(0, 0, 0);
+
+    doc.text("La Direction AMT TRANS'IT", 15, currentLineY + 9);
+
+    // --- CONDITIONS GÉNÉRALES DE VENTE ---
+    let cgvY = currentLineY + 20;
+    if (cgvY + 50 > doc.internal.pageSize.getHeight() - 15) {
+        doc.addPage();
+        cgvY = 20;
+    }
+    
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(8);
+    doc.setTextColor(71, 85, 105);
+    doc.text("CONDITIONS GÉNÉRALES DE VENTE", 15, cgvY);
+    cgvY += 4;
+    doc.text("A LIRE ATTENTIVEMENT:", 15, cgvY);
+    cgvY += 4;
+    
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(7);
+    const cgvLines = [
+        "1- Les temps et les délais de transports sont donnés à titre indicatifs par AMT TRANS'IT. Les retards des navires et les delais rallongés de dedouannement et de manutentiuons au port ne sauraient être imputés a AMT TRANS'IT, qui s'éfforcera de communiquer en cas d'éventuelles retards.",
+        "2- Les enlèvements à domicile sont gratuits dans la limite géographique définie par AMT TRANS'IT (dans un rayon de 20 Kilomètres autour de Paris).",
+        "3- Les livraisons sont gratuites dans toutes les communes d'Abidjan dans la limite d'accessibilité des véhicules et dans les 3 jours suivants l'arrivée du conteneur. Après cette date les livraisons sont payantes ou alors le client pourra récuperer lui même ses colis à sa charge dans nos locaux.",
+        "4- AMT TRANS'IT s'engage à stocker gratuitement les marchandises pendant une semaine après leur arrivées à Abidjan, au delà les clients devront payer un forfait de 10.000 Francs CFA à partir de la 2ème semaine plus 1.000 Francs par jour et par colis.",
+        "5- Tous les colis et ou marchandises devront être intégralement payés avant la remise au destinataire.",
+        "6- Les dommages causés lors du transport sont dédommagés dans la limite des coûts de transports sauf en cas de souscription a une assurance sur demande du client.",
+        "7- Les clients devront fournir leur marchandises dans un emballage correct et devront s'assurer que ceux-ci sont bien protegées pour un transport par conteneur. Un colis mal ou non emballés sera réemballés mais les coûts seront repercutés au client.",
+        "8- AMT TRANS'IT s'engage à conserver les colis non récupérés ou non payés pendant une période limite de 3 mois à partir de la date d'arrivée. Ce délais dépassé les marchandises seront considérées comme abandonnées et seront vendus si ils ont une valeur marchandes ou données à des oeuvres caritatives.",
+        "9- Toute contestation doit être formulée par écrit dans un délai raisonnable après réception de la facture.",
+        "10- En cas de litige, une solution amiable est privilégiée avant toute procédure contentieuse."
+    ];
+    
+    cgvLines.forEach(line => {
+        const splitLine = doc.splitTextToSize(line, pageWidth - 30);
+        doc.text(splitLine, 15, cgvY);
+        cgvY += (splitLine.length * 3);
+    });
+
+    // --- Pied de page ---
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8);
+    doc.setTextColor(100, 116, 139);
+    doc.text("81 AVENUE ARISTIDE BRIAND 93240 STAINS | Tel. 0186900380 | amt.transit@gmail.com", pageWidth / 2, doc.internal.pageSize.getHeight() - 10, { align: 'center' });
+
+    doc.save(`Facture_${d.ref}.pdf`);
+};
 
 // --- NOUVELLES FONCTIONS : ORDRE & GPS ---
 
