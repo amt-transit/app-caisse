@@ -128,6 +128,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     let allTransactions = [];
     let currentFiltered = [];
+    let deliveryStatusMap = new Map(); // Pour stocker l'état logistique des colis
     const exportPdfBtn = document.getElementById('exportPdfBtn');
 
     // 1. Chargement des données
@@ -137,16 +138,53 @@ document.addEventListener('DOMContentLoaded', () => {
         renderTable();
     }, error => console.error(error));
 
+    // 2. Chargement des statuts de Livraison Actifs
+    onSnapshot(collection(db, "livraisons"), snapshot => {
+        snapshot.forEach(doc => {
+            const d = doc.data();
+            if (d.ref) deliveryStatusMap.set(d.ref.toUpperCase().trim(), {
+                status: d.status,
+                containerStatus: d.containerStatus,
+                quantite: d.quantite,
+                quantiteRestante: d.quantiteRestante
+            });
+        });
+        renderTable();
+    }, error => console.error("Erreur chargement livraisons:", error));
+
+    // 3. Chargement des statuts de Livraison Archivés (Une seule fois au démarrage)
+    getDocs(collection(db, "livraisons_archives")).then(snapshot => {
+        snapshot.forEach(doc => {
+            const d = doc.data();
+            if (d.ref) deliveryStatusMap.set(d.ref.toUpperCase().trim(), { status: 'ARCHIVE' });
+        });
+        renderTable();
+    }).catch(error => console.error("Erreur chargement archives:", error));
+
     // 3. Affichage du tableau
     function renderTable() {
         const term = searchInput ? searchInput.value.toLowerCase().trim() : "";
         
         // On filtre d'abord
         const filtered = allTransactions.filter(t => {
-            // 1. Si le colis est payé (Reste >= 0), on suppose qu'il est sorti -> Pas de magasinage
-            if ((t.reste || 0) >= 0) return false;
+            const logData = t.reference ? deliveryStatusMap.get(t.reference.toUpperCase().trim()) : null;
+            const logStatus = logData ? logData.status : null;
+            const containerStatus = logData ? logData.containerStatus : null;
 
-            // 2. Si les frais ont été annulés manuellement lors de la saisie
+            // --- NOUVEAU : Synchronisation de la quantité ---
+            if (logData) {
+                if (logData.quantite !== undefined) t.quantite = logData.quantite;
+                if (logData.quantiteRestante !== undefined) t.quantiteRestante = logData.quantiteRestante;
+            }
+
+            // 1. RÈGLE ABSOLUE : S'il est physiquement livré, abandonné ou archivé, on l'exclut.
+            // (Peu importe qu'il soit payé, impayé, etc.)
+            if (logStatus === 'LIVRE' || logStatus === 'ABANDONNE' || logStatus === 'ARCHIVE') return false;
+
+            // 2. RÈGLE ABSOLUE : S'il n'est pas encore arrivé à Abidjan (Paris ou À Venir), pas de magasinage !
+            if (containerStatus === 'PARIS' || containerStatus === 'A_VENIR') return false;
+
+            // 2. Si les frais de magasinage ont été annulés manuellement (ex: offerts)
             if (t.storageFeeWaived === true) return false;
 
             // 3. On ne montre que ceux qui ont des frais (période gratuite dépassée)

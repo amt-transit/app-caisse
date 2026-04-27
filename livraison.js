@@ -50,6 +50,9 @@ let programDetailsSort = { column: null, direction: 'asc' };
 let currentProgramView = { date: null, livreur: null };
 let isImporting = false;
 let transactionsMap = new Map(); // NOUVEAU : Mémoire des dettes de la Caisse
+let currentPaymentTransId = null;
+let currentPaymentTransData = null;
+let currentPaymentDeliveryId = null;
 
 // Rôle Utilisateur
 const userRole = sessionStorage.getItem('userRole');
@@ -101,6 +104,7 @@ document.addEventListener('DOMContentLoaded', function() {
     if (!isViewer) initDuplicateCleaner(); // Initialisation du bouton de nettoyage
     if (!isViewer) initAuditSyncButton(); // Initialisation du bouton Audit
     initScanHistoryModal();
+    initPaymentModal(); // Initialisation de la modale de paiement
 
     const searchBox = document.getElementById('searchBox');
     if (searchBox) {
@@ -906,16 +910,15 @@ function importExcel(event) {
                             item.commune = detectCommune(localMatch.lieuLivraison);
                         }
                     }
-                    // Extraction Numéro si manquant (Regex)
-                    if (!item.numero && item.destinataire) {
-                        // Regex améliorée pour gérer les espaces/tirets et nettoyer le nom
+                    // Extraction Numéro et Nettoyage SYSTEMATIQUE du destinataire (Regex)
+                    if (item.destinataire) {
                         const phoneRegex = /(?:(?:\+|00)225[\s.-]?)?(?:01|05|07|0)\d(?:[\s.-]?\d{2}){4}|(?:(?:\+|00)225[\s.-]?)?(?:01|05|07|0)\d{8,}/;
                         const phoneMatch = item.destinataire.match(phoneRegex);
                         if (phoneMatch) {
-                            // On assigne le numéro trouvé et nettoyé
-                            item.numero = phoneMatch[0].replace(/[\s.-]/g, ''); 
-                            // On nettoie le nom du destinataire en retirant le numéro et les caractères de fin
-                            item.destinataire = item.destinataire.replace(phoneMatch[0], '').trim().replace(/[-–,;:\s]+$/, '');
+                            // Si on n'a pas encore de numéro, on le capture
+                            if (!item.numero) item.numero = phoneMatch[0].replace(/[\s.-]/g, ''); 
+                            // On retire systématiquement le numéro du nom affiché (et on retire les slashs/tirets isolés)
+                            item.destinataire = item.destinataire.replace(phoneMatch[0], '').replace(/[-–,;:\/\s]+$/, '').replace(/^[-–,;:\/\s]+/, '').trim();
                         }
                     }
                 }
@@ -1797,11 +1800,11 @@ function renderTable() {
 
         // --- LOGIQUE WHATSAPP & BOUTONS ---
         let phoneCandidate = d.numero;
+        const robustRegex = /(?:(?:\+|00)225[\s.-]?)?(?:01|05|07|0)\d(?:[\s.-]?\d{2}){4}|(?:(?:\+|00)225[\s.-]?)?(?:01|05|07|0)\d{8,}/;
 
         // Recherche intelligente du numéro
         if (!phoneCandidate) {
             const fieldsToCheck = [d.destinataire, d.description, d.info];
-            const robustRegex = /(?:(?:\+|00)225[\s.-]?)?(?:01|05|07|0)\d(?:[\s.-]?\d{2}){4}|(?:(?:\+|00)225[\s.-]?)?(?:01|05|07|0)\d{8,}/;
             
             for (const field of fieldsToCheck) {
                 if (field) {
@@ -1814,7 +1817,15 @@ function renderTable() {
             }
         }
 
-        const displayDestinataire = d.destinataire || '';
+        let displayDestinataire = d.destinataire || '';
+        
+        // --- NOUVEAU : Nettoyage dynamique à l'affichage pour la base existante ---
+        const destPhoneMatch = displayDestinataire.match(robustRegex);
+        if (destPhoneMatch) {
+            // Supprime le numéro ainsi que les éventuels slashs (/) ou tirets (-) restants
+            displayDestinataire = displayDestinataire.replace(destPhoneMatch[0], '').replace(/[-–,;:\/\s]+$/, '').replace(/^[-–,;:\/\s]+/, '').trim();
+        }
+
         const displayPhone = phoneCandidate || '';
 
         let waBtn = '';
@@ -1919,6 +1930,16 @@ function renderTable() {
             if (isViewer) return `<span style="${style}; display:block; padding:5px;">${val}</span>`;
             return `<input type="${type}" class="editable-cell" value="${val}" onchange="${onchange}" style="${style}">`;
         };
+        
+        // --- NOUVEAU : ENCAISSEMENT DIRECT ---
+        let montantHTML = renderInput(displayMontant, "text", `updateDeliveryAmount('${d.id}', this.value)`, montantStyle);
+        
+        if (currentTab === 'EN_COURS' && !isViewer) {
+            // Transformation en bouton d'encaissement pour l'onglet En Cours
+            const clickableStyle = montantStyle.replace('width: 100%;', 'width: 100%; display:block; padding:8px 5px; box-sizing:border-box; border-radius:6px; cursor:pointer; text-align:center;');
+            montantHTML = `<div onclick="openPaymentModal('${d.id}')" style="${clickableStyle}" title="Cliquez pour enregistrer un paiement">💰 ${displayMontant}</div>`;
+        }
+
         // --- NOUVEAU : VERROUILLAGE SÉCURITÉ ---
         // Si le colis est dans "En Cours", le champ devient "readonly" (Lecture seule).
         // Le livreur ne peut pas modifier le montant avec son clavier !
@@ -1956,7 +1977,7 @@ function renderTable() {
                     : ''}
                 </td>
                 <td class="montant">
-                    ${renderInput(displayMontant, "text", `updateDeliveryAmount('${d.id}', this.value)`, montantStyle)}
+                    ${montantHTML}
                     ${magasinageBadge}
                 </td>
                 <td>${d.expediteur}</td>
@@ -3858,10 +3879,191 @@ Object.assign(window, {
     closeProgramModal, openHelpModal, fillProgramFields, confirmProgram, closeAssignContainerModal,
     confirmAssignContainer, closeBulkStatusModal, confirmBulkStatusChange, viewProgramDetails,
     sortProgramDetails, openBingMapsRoute, exportRoadmapPDF, exportRoadmapWhatsApp, printDeliverySlip, 
-    updateDeliveryOrder,
-    captureGPSLocation, removeFromProgram, closeProgramDetailsModal, renderTable, debouncedFilterDeliveries, openEmbarquerModal, notifierMasseAVenir, saveContainerETA,
-    showScanHistory
+        removeFromProgram, closeProgramDetailsModal, renderTable, debouncedFilterDeliveries, openEmbarquerModal, notifierMasseAVenir, saveContainerETA,
+        showScanHistory
 });
+
+// --- NOUVEAU : GESTION DES PAIEMENTS DEPUIS LA LOGISTIQUE ---
+function initPaymentModal() {
+    getDocs(query(collection(db, "agents"), orderBy("name"))).then(snap => {
+        const agentSelect = document.getElementById('payAgent');
+        if (agentSelect) {
+            let opts = '<option value="">-- Sélectionnez --</option>';
+            snap.forEach(doc => {
+                opts += `<option value="${doc.data().name}">${doc.data().name}</option>`;
+            });
+            agentSelect.innerHTML = opts;
+        }
+    });
+}
+
+window.openPaymentModal = async function(deliveryId) {
+    if (isViewer) return;
+    const d = deliveries.find(item => item.id === deliveryId);
+    if (!d || !d.ref) return;
+
+    if (d.containerStatus !== 'EN_COURS') {
+        AppModal.error("Les paiements ne peuvent être enregistrés que pour les colis arrivés (EN COURS).");
+        return;
+    }
+
+    // On cherche la transaction correspondante dans la caisse
+    const q = await getDocs(query(collection(db, 'transactions'), where('reference', '==', d.ref), limit(1)));
+    if (q.empty) {
+        AppModal.error("Aucune transaction financière n'a été trouvée pour ce colis. Veuillez synchroniser la logistique avec la caisse.", "Transaction Introuvable");
+        return;
+    }
+
+    currentPaymentDeliveryId = deliveryId;
+    currentPaymentTransId = q.docs[0].id;
+    currentPaymentTransData = q.docs[0].data();
+
+    const reste = Math.abs(currentPaymentTransData.reste || 0); // Convertir -15000 en 15000
+    
+    if (reste === 0) {
+        AppModal.alert("Ce colis est déjà intégralement soldé dans la Caisse !", "Paiement Terminé");
+        return;
+    }
+
+    document.getElementById('payRefDisplay').textContent = d.ref;
+    document.getElementById('payResteDisplay').value = formatCFA(reste);
+    document.getElementById('payDate').value = new Date().toISOString().split('T')[0];
+    document.getElementById('payAmountAbidjan').value = reste; // Pré-remplir avec le reste
+    document.getElementById('payAmountParis').value = '';
+    document.getElementById('payAdjType').value = currentPaymentTransData.adjustmentType || '';
+    document.getElementById('payAdjVal').value = currentPaymentTransData.adjustmentVal || '';
+    document.getElementById('payMode').value = 'Espèce';
+    document.getElementById('payInfo').value = '';
+    document.getElementById('payAgent').value = d.livreur || ''; // Pré-remplir avec le livreur assigné si possible
+
+    document.getElementById('paymentModal').classList.add('active');
+};
+
+window.closePaymentModal = function() {
+    document.getElementById('paymentModal').classList.remove('active');
+    currentPaymentTransId = null;
+    currentPaymentTransData = null;
+    currentPaymentDeliveryId = null;
+};
+
+window.submitPayment = async function() {
+    if (!currentPaymentTransId || !currentPaymentTransData) return;
+
+    const date = document.getElementById('payDate').value;
+    const amountAbidjan = parseFloat(document.getElementById('payAmountAbidjan').value) || 0;
+    const amountParis = parseFloat(document.getElementById('payAmountParis').value) || 0;
+    const mode = document.getElementById('payMode').value;
+    const info = document.getElementById('payInfo').value.trim();
+    const agent = document.getElementById('payAgent').value;
+    const adjType = document.getElementById('payAdjType').value;
+    const adjVal = parseFloat(document.getElementById('payAdjVal').value) || 0;
+
+    if (!date) {
+        AppModal.error("Veuillez saisir une date valide.");
+        return;
+    }
+    if (amountAbidjan <= 0 && amountParis <= 0 && adjVal <= 0 && !adjType) {
+        AppModal.error("Veuillez saisir un montant encaissé ou un ajustement.");
+        return;
+    }
+
+    let effectivePrix = currentPaymentTransData.prix || 0;
+    if (adjType === 'reduction' && adjVal > 0) effectivePrix -= adjVal;
+    else if (adjType === 'augmentation' && adjVal > 0) effectivePrix += adjVal;
+
+    const newTotalAbidjan = (currentPaymentTransData.montantAbidjan || 0) + amountAbidjan;
+    const newTotalParis = (currentPaymentTransData.montantParis || 0) + amountParis;
+    const newReste = (newTotalAbidjan + newTotalParis) - effectivePrix;
+
+    if (newReste > 0) {
+        AppModal.error(`Opération refusée : Le total payé dépasse le prix après ajustement.`);
+        return;
+    }
+
+    const btn = document.querySelector('#paymentModal .btn-success');
+    const originalText = btn.textContent;
+    btn.textContent = "Traitement...";
+    btn.disabled = true;
+
+    try {
+        const batch = writeBatch(db);
+        const userName = sessionStorage.getItem('userName') || 'Saisie Logistique';
+
+        const paymentHistory = currentPaymentTransData.paymentHistory || [];
+        let sessionId = null;
+        let auditRef = null;
+
+        if (amountAbidjan > 0 || amountParis > 0) {
+            auditRef = doc(collection(db, "audit_logs"));
+            sessionId = auditRef.id;
+            paymentHistory.push({
+                date: date,
+                montantParis: amountParis,
+                montantAbidjan: amountAbidjan,
+                modePaiement: mode,
+                agentMobileMoney: info,
+                agent: agent,
+                saisiPar: userName,
+                sessionId: sessionId
+            });
+        }
+
+        const uniqueAgents = new Set();
+        paymentHistory.forEach(p => {
+            if (p.agent) p.agent.split(',').forEach(a => { if (a.trim()) uniqueAgents.add(a.trim()); });
+        });
+        const combinedAgents = Array.from(uniqueAgents).join(', ');
+
+        const updates = {
+            paymentHistory: paymentHistory,
+            montantAbidjan: newTotalAbidjan,
+            montantParis: newTotalParis,
+            reste: newReste,
+            lastPaymentDate: date,
+            agent: combinedAgents,
+            modePaiement: mode,
+            adjustmentType: adjType,
+            adjustmentVal: adjVal
+        };
+
+        // 1. Mise à jour de la transaction (La facture)
+        batch.update(doc(db, 'transactions', currentPaymentTransId), updates);
+
+        // 2. Création de la mini-session en attente (Pour l'onglet Confirmation)
+        if (auditRef) {
+            const isCash = ['Espèce', 'Wave', 'OM', 'Mobile Money'].includes(mode);
+            const totalIn = isCash ? amountAbidjan : 0;
+
+            batch.set(auditRef, {
+                date: new Date().toISOString(),
+                entryDate: date,
+                user: userName,
+                action: "VALIDATION_JOURNEE",
+                details: `Encaissement logistique | Réf: ${currentPaymentTransData.reference} | ${mode}: Abj: ${amountAbidjan}, Par: ${amountParis}`,
+                targetId: "BATCH",
+                status: "PENDING",
+                transactionIds: [currentPaymentTransId],
+                expenseIds: [],
+                agents: agent,
+                totalIn: totalIn,
+                totalGlobalIn: amountAbidjan + amountParis,
+                totalOut: 0,
+                result: totalIn
+            });
+        }
+
+        await batch.commit();
+
+        showToast("Paiement envoyé en Confirmation avec succès !", "success");
+        closePaymentModal();
+    } catch (error) {
+        console.error(error);
+        AppModal.error("Erreur lors de l'enregistrement : " + error.message);
+    } finally {
+        btn.textContent = originalText;
+        btn.disabled = false;
+    }
+};
 
 // --- GESTION HISTORIQUE DES SCANS ---
 function initScanHistoryModal() {

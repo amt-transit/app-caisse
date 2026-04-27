@@ -755,6 +755,58 @@
         <datalist id="sharedLocationsList"></datalist>
     </div>
 
+    <div id="paymentModal" class="modal" style="z-index:2005">
+        <div class="modal-content" style="max-width:500px">
+            <span class="close-modal" onclick="closePaymentModal()" style="float:right; cursor:pointer; font-size:24px;">&times;</span>
+            <h2 class="modal-header" style="margin-top:0;">💰 Encaisser un paiement</h2>
+            <p>Colis Réf: <strong id="payRefDisplay" style="color:#2563eb;"></strong></p>
+            
+            <div class="form-grid" style="grid-template-columns: 1fr 1fr; gap:15px; margin-bottom:20px;">
+                <div style="grid-column: span 2;">
+                    <label>Reste à payer attendu</label>
+                    <input type="text" id="payResteDisplay" readonly style="background:#f1f5f9; font-weight:bold; color:#ef4444; border:1px solid #fca5a5;">
+                </div>
+                <div>
+                    <label>Date</label>
+                    <input type="date" id="payDate">
+                </div>
+                <div>
+                <label>Mode de paiement</label>
+                <select id="payMode"><option value="Espèce">Espèce</option><option value="Wave">Wave</option><option value="OM">OM</option><option value="Chèque">Chèque</option><option value="Virement">Virement</option></select>
+                </div>
+                <div>
+                <label>Montant Abidjan (CFA)</label>
+                <input type="number" id="payAmountAbidjan" min="0" placeholder="0">
+                </div>
+                <div>
+                <label>Montant Paris (CFA/€)</label>
+                <input type="number" id="payAmountParis" min="0" placeholder="0">
+            </div>
+            <div>
+                <label>Ajustement</label>
+                <select id="payAdjType"><option value="">-- Aucun --</option><option value="reduction">Réduction ⬇️</option><option value="augmentation">Augmentation ⬆️</option></select>
+            </div>
+            <div>
+                <label>Valeur Ajust. (CFA)</label>
+                <input type="number" id="payAdjVal" min="0" placeholder="0">
+            </div>
+            <div>
+                    <label>Info (Agent MM / Banque)</label>
+                    <input type="text" id="payInfo" placeholder="Ex: Wave, BICICI...">
+                </div>
+            <div>
+                    <label>Livreur / Agent (Optionnel)</label>
+                    <select id="payAgent"><option value="">-- Sélectionnez --</option></select>
+                </div>
+            </div>
+            
+            <div style="display:flex; gap:10px; margin-top:10px;">
+                <button class="btn btn-success" onclick="submitPayment()" style="flex:1; justify-content:center;">✅ Valider le Paiement</button>
+                <button class="btn btn-danger" onclick="closePaymentModal()" style="flex:1; justify-content:center;">❌ Annuler</button>
+            </div>
+        </div>
+    </div>
+
     <div id="importProgressModal" class="modal" style="z-index:2000">
         <div class="modal-content" style="max-width:400px;text-align:center;padding:30px">
             <h3 style="margin-top:0;color:#333">Importation en cours...</h3>
