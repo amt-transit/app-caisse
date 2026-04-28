@@ -168,21 +168,26 @@ document.addEventListener('DOMContentLoaded', () => {
         // On filtre d'abord
         const filtered = allTransactions.filter(t => {
             const logData = t.reference ? deliveryStatusMap.get(t.reference.toUpperCase().trim()) : null;
-            const logStatus = logData ? logData.status : null;
-            const containerStatus = logData ? logData.containerStatus : null;
+
+            // 1. RÈGLE ANTI-FANTÔMES : Si le colis n'existe pas dans la logistique, on l'exclut d'office.
+            if (!logData) return false;
 
             // --- NOUVEAU : Synchronisation de la quantité ---
-            if (logData) {
-                if (logData.quantite !== undefined) t.quantite = logData.quantite;
-                if (logData.quantiteRestante !== undefined) t.quantiteRestante = logData.quantiteRestante;
+            if (logData.quantite !== undefined) t.quantite = logData.quantite;
+            if (logData.quantiteRestante !== undefined) t.quantiteRestante = logData.quantiteRestante;
+
+            const logStatus = logData.status;
+            const containerStatus = logData.containerStatus;
+
+            // 2. RÈGLE DE SOURCE : Le colis DOIT être physiquement à Abidjan.
+            if (containerStatus !== 'EN_COURS') return false;
+
+            // 3. RÈGLE DE STATUT (La plus importante) : L'horloge tourne UNIQUEMENT pour les colis en attente.
+            // On autorise 'EN_ATTENTE', 'EN_COURS' (dans le camion du livreur), ou les livraisons 'PARTIEL'.
+            // Tout ce qui est 'LIVRE', 'ABANDONNE' ou 'ARCHIVE' est strictement exclu.
+            if (logStatus === 'LIVRE' || logStatus === 'ABANDONNE' || logStatus === 'ARCHIVE') {
+                return false;
             }
-
-            // 1. RÈGLE ABSOLUE : S'il est physiquement livré, abandonné ou archivé, on l'exclut.
-            // (Peu importe qu'il soit payé, impayé, etc.)
-            if (logStatus === 'LIVRE' || logStatus === 'ABANDONNE' || logStatus === 'ARCHIVE') return false;
-
-            // 2. RÈGLE ABSOLUE : S'il n'est pas encore arrivé à Abidjan (Paris ou À Venir), pas de magasinage !
-            if (containerStatus === 'PARIS' || containerStatus === 'A_VENIR') return false;
 
             // 2. Si les frais de magasinage ont été annulés manuellement (ex: offerts)
             if (t.storageFeeWaived === true) return false;

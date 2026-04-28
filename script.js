@@ -730,6 +730,21 @@ document.addEventListener('DOMContentLoaded', async () => {
                 if (Object.keys(livUpdates).length > 0) {
                     batch.update(livDoc.ref, livUpdates);
                 }
+            } else {
+                // Création automatique si le colis n'existe pas en logistique
+                const newLivRef = doc(collection(db, "livraisons"));
+                batch.set(newLivRef, {
+                    ref: ref,
+                    destinataire: baseTransac.nom || 'Client Caisse',
+                    conteneur: baseTransac.conteneur || '',
+                    containerStatus: 'EN_COURS',
+                    status: 'EN_ATTENTE',
+                    dateAjout: baseTransac.date || new Date().toISOString().split('T')[0],
+                    quantite: 1,
+                    montant: (baseTransac.prix || 0) + ' CFA',
+                    numero: baseTransac.numero || '',
+                    description: 'Créé automatiquement depuis la Caisse'
+                });
             }
         }
 
@@ -1461,6 +1476,21 @@ function initMobileApp() {
                         if (baseTransac.conteneur && baseTransac.conteneur !== livQuery.docs[0].data().conteneur) livUpdates.conteneur = baseTransac.conteneur;
                         if (baseTransac.nom && baseTransac.nom !== livQuery.docs[0].data().destinataire) livUpdates.destinataire = baseTransac.nom;
                         if (Object.keys(livUpdates).length > 0) batch.update(livQuery.docs[0].ref, livUpdates);
+                    } else {
+                        // Création automatique si le colis n'existe pas en logistique
+                        const newLivRef = doc(collection(db, "livraisons"));
+                        batch.set(newLivRef, {
+                            ref: ref,
+                            destinataire: baseTransac.nom || 'Client Caisse',
+                            conteneur: baseTransac.conteneur || '',
+                            containerStatus: 'EN_COURS',
+                            status: 'EN_ATTENTE',
+                            dateAjout: baseTransac.date || new Date().toISOString().split('T')[0],
+                            quantite: 1,
+                            montant: (baseTransac.prix || 0) + ' CFA',
+                            numero: baseTransac.numero || '',
+                            description: 'Créé automatiquement depuis la Caisse'
+                        });
                     }
                 }
 
