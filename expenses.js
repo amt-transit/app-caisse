@@ -4,8 +4,6 @@ import { collection, doc, addDoc, updateDoc, query, where, orderBy, onSnapshot, 
 document.addEventListener('DOMContentLoaded', () => {
 
     const userRole = sessionStorage.getItem('userRole');
-    // Récupération du nom de l'utilisateur (stocké par auth-guard.js)
-    const currentUserName = sessionStorage.getItem('userName') || 'Inconnu';
     const isViewer = userRole === 'spectateur';
     
     const addExpenseBtn = document.getElementById('addExpenseBtn');
@@ -306,6 +304,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // 1. AJOUT (AVEC NOM DE L'UTILISATEUR)
     if (addExpenseBtn && !isViewer) { addExpenseBtn.addEventListener('click', async () => {
+        // Récupération DYNAMIQUE du nom de l'utilisateur au moment du clic
+        const currentUserName = sessionStorage.getItem('userName') || 'Inconnu';
+
         // --- CONFIGURATION DE L'UTILISATEUR SANS CONFIRMATION ---
         const USER_NO_CONFIRM = "aziz";
 

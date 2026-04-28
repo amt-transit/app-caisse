@@ -60,6 +60,10 @@ h1, h2, h3, .app-header { font-family: 'Comfortaa', sans-serif; letter-spacing: 
 .app-header h1 { margin: 0; font-size: 22px; font-weight: 700; }
 h2 { text-align: center; color: var(--text-main); margin: 15px 0 10px 0; font-size: 18px; font-weight: 600; }
 
+/* Rendu Conditionnel Vue Bureau / Vue Mobile */
+#desktop-view { display: block; }
+#mobile-view { display: none; }
+
 /* --- NAVIGATION --- */
 .navigation {
     display: flex; justify-content: center; gap: 5px;
@@ -108,6 +112,10 @@ h2 { text-align: center; color: var(--text-main); margin: 15px 0 10px 0; font-si
 
 /* Masquer l'onglet Admin par défaut pour tous (Sécurité) */
 #nav-admin { display: none; }
+
+/* --- HAMBURGER MENU (Desktop) --- */
+.hamburger-btn { display: none; }
+.mobile-overlay { display: none; }
 
 /* --- SOUS-ONGLETS --- */
 .sub-nav {
@@ -189,6 +197,11 @@ input[id*="montantAbidjan"] { background-color: #fff7ed; border-color: #fed7aa; 
     box-shadow: 0 4px 6px rgba(16, 185, 129, 0.25);
 }
 #saveDayBtn:hover { box-shadow: 0 6px 12px rgba(16, 185, 129, 0.35); background: linear-gradient(135deg, #059669 0%, var(--success) 100%); }
+
+/* WIZARD DESKTOP (Masqué) */
+.mobile-progress-bar, .btn-scan, .summary-card, .btn-prev, .btn-next { display: none; }
+.desktop-only-title { display: block; }
+.step-nav { display: none; }
 
 .prix-container { display: flex; align-items: center; gap: 5px; }
 .prix-container input { flex-grow: 1; }
@@ -563,22 +576,84 @@ body.login-page {
 
 /* --- RESPONSIVE MOBILE (Livreurs) --- */
 @media (max-width: 768px) {
-    /* Header : Logo et Titre empilés, Bouton déconnexion visible */
-    .app-header { flex-direction: column; gap: 10px; padding-bottom: 15px; }
-    .app-header h1 { font-size: 18px; text-align: center; }
-    #logoutBtn, .logout-btn { position: static !important; width: 100%; margin: 5px 0 0 0; text-align: center; }
+    /* Inversion de l'affichage principal */
+    #desktop-view { display: none !important; }
+    #desktop-header { display: none !important; }
+    #mobile-view { display: block !important; padding-bottom: 70px; }
 
-    /* Navigation : Défilement horizontal fluide (App-like) */
-    .navigation { 
-        justify-content: flex-start; 
-        overflow-x: auto; 
-        white-space: nowrap; 
-        width: 100%; 
-        padding: 10px 5px;
-        -webkit-overflow-scrolling: touch; /* Smooth scroll iOS */
-        margin-bottom: 5px;
-    }
-    .navigation a { padding: 10px 15px; font-size: 14px; flex-shrink: 0; }
+    /* --- STYLES SPA LIVREUR (MOBILE) --- */
+    .mob-header { background: linear-gradient(135deg, #1e293b 0%, #334155 100%); color: white; padding: 15px; text-align: center; border-radius: 0 0 16px 16px; margin-bottom: 15px; margin: -10px -10px 15px -10px; position: relative;}
+    .mob-header h2 { margin: 0; font-family: 'Comfortaa', sans-serif; font-size: 18px; color: white; line-height: 30px;}
+    
+    .mob-summary { display: flex; gap: 8px; padding: 0 5px; margin-bottom: 15px; }
+    .mob-stat { flex: 1; background: white; padding: 10px 5px; border-radius: 12px; text-align: center; box-shadow: 0 2px 4px rgba(0,0,0,0.05); border: 1px solid #e2e8f0; }
+    .mob-stat span { display: block; font-size: 10px; color: #64748b; text-transform: uppercase; margin-bottom: 3px; font-weight: bold;}
+    .mob-stat b { font-size: 14px; color: #0f172a; display: block; word-break: break-word;}
+    
+    .mob-card { background: white; padding: 15px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); margin: 0 5px 15px 5px; border: 1px solid #e2e8f0; }
+    .mob-card h3 { margin-top: 0; margin-bottom: 15px; font-size: 16px; color: #1e293b; border-bottom: 1px solid #f1f5f9; padding-bottom: 8px; text-align: left; }
+    .mob-card input, .mob-card select { width: 100%; margin-bottom: 12px; padding: 14px; border-radius: 8px; border: 1px solid #cbd5e1; font-size: 16px; box-sizing: border-box; background: #f8fafc; color: #0f172a; font-weight: 600;}
+    .mob-card input:focus, .mob-card select:focus { border-color: #4f46e5; outline: none; background: white; box-shadow: 0 0 0 3px rgba(79,70,229,0.1); }
+    
+    .mob-btn { width: 100%; padding: 16px; border-radius: 8px; font-weight: bold; font-size: 16px; border: none; cursor: pointer; transition: 0.2s; }
+    .mob-btn-primary { background: linear-gradient(135deg, #4f46e5 0%, #4338ca 100%); color: white; box-shadow: 0 4px 6px rgba(79, 70, 229, 0.2); }
+    .mob-btn-danger { background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); color: white; box-shadow: 0 4px 6px rgba(239, 68, 68, 0.2); }
+    .mob-btn-success { background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; box-shadow: 0 4px 6px rgba(16, 185, 129, 0.2); }
+    
+    .mob-list-item { background: white; margin: 0 5px 10px 5px; padding: 12px 15px; border-radius: 12px; display: flex; justify-content: space-between; align-items: center; border: 1px solid #e2e8f0; box-shadow: 0 2px 4px rgba(0,0,0,0.02); }
+    .mob-list-item strong { font-size: 15px; color: #1e293b; }
+    .mob-list-item-actions button { background: none; border: none; font-size: 18px; padding: 5px; margin-left: 5px; cursor: pointer; }
+    
+    .mob-bottom-nav { position: fixed; bottom: 0; left: 0; width: 100%; background: white; display: flex; border-top: 1px solid #e2e8f0; padding-bottom: env(safe-area-inset-bottom); z-index: 1000; box-shadow: 0 -4px 10px rgba(0,0,0,0.05); }
+    .mob-nav-item { flex: 1; text-align: center; padding: 15px 0; font-size: 13px; font-weight: bold; color: #64748b; cursor: pointer; transition: 0.2s; text-transform: uppercase; letter-spacing: 0.5px;}
+    .mob-nav-item.active { color: #4f46e5; border-top: 3px solid #4f46e5; background: #f8fafc; }
+
+        /* --- HAMBURGER MENU (OFF-CANVAS) MOBILE --- */
+        .hamburger-btn {
+            display: flex; align-items: center; justify-content: center;
+            background: transparent; border: none; color: white;
+            font-size: 30px; cursor: pointer;
+            position: absolute; left: 15px; top: 15px;
+            z-index: 10002; padding: 5px;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .hamburger-btn.open {
+            position: fixed;
+            color: #0f172a; /* Devient sombre car il sera sur le fond blanc du menu */
+            left: 215px; /* Se décale avec le tiroir */
+        }
+        .mobile-overlay {
+            display: block; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(15, 23, 42, 0.6); backdrop-filter: blur(3px);
+            z-index: 9999; opacity: 0; visibility: hidden;
+            transition: all 0.3s ease;
+        }
+        .mobile-overlay.active { opacity: 1; visibility: visible; }
+        
+        /* Transformation de la Navigation en Tiroir Latéral */
+        .navigation { 
+            position: fixed !important; top: 0 !important; left: -320px !important;
+            width: 260px !important; height: 100vh !important;
+            box-sizing: border-box !important;
+            background: #ffffff !important;
+            flex-direction: column !important; align-items: stretch !important; justify-content: flex-start !important;
+            padding: 70px 20px 20px 20px !important; margin: 0 !important;
+            border-radius: 0 !important; box-shadow: 4px 0 15px rgba(0,0,0,0.2) !important;
+            transition: left 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+            z-index: 10000 !important;
+            overflow-y: auto !important; overflow-x: hidden !important;
+            white-space: normal !important; flex-wrap: nowrap !important;
+        }
+        .navigation.open { left: 0 !important; }
+        .navigation a { 
+            padding: 14px 15px !important; font-size: 15px !important; 
+            width: 100% !important; box-sizing: border-box !important; 
+            border-bottom: 1px solid #f1f5f9 !important; border-radius: 8px !important;
+            margin-bottom: 5px !important;
+        }
+        .navigation a.active {
+            box-shadow: 0 4px 6px rgba(79, 70, 229, 0.2) !important;
+        }
 
     /* Sous-menus (Arrivages, etc.) */
     .sub-nav { overflow-x: auto; white-space: nowrap; justify-content: flex-start; padding-bottom: 10px; }
@@ -609,6 +684,28 @@ body.login-page {
         grid-template-columns: 1fr !important;
     }
     .form-grid[style*="grid-template-columns"] { grid-template-columns: 1fr !important; }
+
+    /* --- WIZARD MOBILE (SAISIE CAISSE) --- */
+    .desktop-only-title { display: none !important; }
+    .mobile-progress-bar { display: flex; justify-content: space-between; background: #f1f5f9; border-radius: 12px; padding: 6px; margin-bottom: 25px; box-shadow: inset 0 2px 4px rgba(0,0,0,0.05); }
+    .step-indicator { flex: 1; text-align: center; padding: 10px 5px; font-size: 12px; font-weight: bold; color: #64748b; border-radius: 8px; transition: 0.3s; }
+    .step-indicator.active { background: #4f46e5; color: white; box-shadow: 0 4px 6px rgba(79, 70, 229, 0.2); }
+    .step-indicator.completed { color: #4f46e5; background: #e0e7ff; }
+    
+    .btn-scan { display: flex; width: 100%; justify-content: center; align-items: center; background: #e0f2fe; color: #0369a1; border: 2px dashed #bae6fd; padding: 15px; border-radius: 8px; font-size: 16px; font-weight: bold; margin-top: 10px; cursor: pointer; }
+    
+    .step-nav { display: flex !important; justify-content: space-between; margin-top: 20px; gap: 10px; }
+    .btn-prev, .btn-next { display: block; padding: 15px !important; font-size: 16px !important; flex: 1; text-align: center; }
+    
+    #caisseForm.mobile-step-1 .step-2, #caisseForm.mobile-step-1 .step-3 { display: none !important; }
+    #caisseForm.mobile-step-2 .step-1, #caisseForm.mobile-step-2 .step-3 { display: none !important; }
+    #caisseForm.mobile-step-3 .step-1, #caisseForm.mobile-step-3 .step-2 { display: none !important; }
+    #caisseForm.mobile-step-1 #finalSubmitWrapper, #caisseForm.mobile-step-2 #finalSubmitWrapper { display: none !important; }
+    
+    #caisseForm input, #caisseForm select { padding: 15px !important; font-size: 18px !important; min-height: 54px; }
+    #addEntryBtn { padding: 18px !important; font-size: 18px !important; width: 100%; }
+    
+    .summary-card { display: block; background: #fff; border: 2px dashed #cbd5e1; padding: 25px 20px; text-align: center; border-radius: 12px; margin-bottom: 25px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
 }
 
 
@@ -846,5 +943,3 @@ td.status { text-align: center; }
 .loading-spinner { border: 4px solid #f3f3f3; border-top: 4px solid #667eea; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; margin: 0 auto 20px; }
 .editable-cell { width: 100%; padding: 6px; border: 1px solid #e0e0e0; border-radius: 4px; font-size: 13px; background-color: #fff; }
 .editable-cell:focus { border-color: #667eea; outline: none; }
-
-

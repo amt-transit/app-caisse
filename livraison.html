@@ -758,7 +758,13 @@
         </div>
         <div id="archivesModal" class="modal">
             <div class="modal-content modal-xl" style="height:90vh">
-                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px"><h2 class="modal-header" style="margin:0">🗄️ Archives</h2><button class="btn btn-danger btn-small" onclick="closeArchivesModal()">Fermer</button></div>
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
+                    <h2 class="modal-header" style="margin:0">🗄️ Archives</h2>
+                    <div style="display:flex; gap:10px;">
+                        <button class="btn btn-success btn-small" onclick="exportArchivesToExcel()">📥 Export Excel</button>
+                        <button class="btn btn-danger btn-small" onclick="closeArchivesModal()">Fermer</button>
+                    </div>
+                </div>
                 <input type="text" id="archiveSearch" class="search-filter" placeholder="🔍 Rechercher..." oninput="searchArchives()" style="margin-bottom:15px;width:100%">
                 <div class="preview-table" style="max-height:calc(90vh - 150px)">
                     <table id="archivesTable"><thead><tr><th>DATE</th><th>REF</th><th>CONTENEUR</th><th>DESTINATAIRE</th><th>LIVREUR</th><th>ACTIONS</th></tr></thead><tbody id="archivesBody"></tbody></table>

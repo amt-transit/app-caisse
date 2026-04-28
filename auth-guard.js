@@ -95,7 +95,7 @@ onAuthStateChanged(auth, async (user) => {
 
         // SUPER ADMIN
         if (userRole === 'super_admin') {
-            // On ré-affiche l'onglet Admin spécifiquement pour le Super Admin
+            // On ré-affiche l'onglet Admin
             const navAdmin = document.getElementById('nav-admin');
             if (navAdmin) navAdmin.style.display = 'block';
             document.body.style.display = 'block';
@@ -104,8 +104,10 @@ onAuthStateChanged(auth, async (user) => {
 
         // Protection page Admin
         if (currentPage.includes('admin-panel.html')) {
-            await showErrorAndRedirect("Accès réservé au Super Admin.", "Accès Refusé");
-            return;
+            if (userRole !== 'admin') {
+                await showErrorAndRedirect("Accès réservé aux Administrateurs.", "Accès Refusé");
+                return;
+            }
         }
 
         // Protection page Points
@@ -175,7 +177,7 @@ onAuthStateChanged(auth, async (user) => {
         const navAudit = document.getElementById('nav-audit');
         const navVoiture = document.getElementById('nav-voiture');
 
-        if (navAdmin && userRole !== 'super_admin') navAdmin.style.display = 'none';
+        if (navAdmin && userRole !== 'super_admin' && userRole !== 'admin') navAdmin.style.display = 'none';
         if (navPoints && (userRole !== 'admin' && userRole !== 'super_admin' && userRole !== 'spectateur')) navPoints.style.display = 'none';
         if (navAudit && (userRole !== 'admin' && userRole !== 'super_admin' && userRole !== 'spectateur')) navAudit.style.display = 'none';
 

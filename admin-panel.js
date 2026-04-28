@@ -18,6 +18,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     const usersListEl = document.getElementById('usersList');
     const auditLogBody = document.getElementById('auditLogBody');
     
+    // Recherche Audit
+    const auditSearchInput = document.getElementById('auditSearchInput');
+    let allAuditLogs = [];
+
     // Formulaire Création
     const newUsernameInput = document.getElementById('newUsername');
     const newPasswordInput = document.getElementById('newPassword');
@@ -35,6 +39,40 @@ document.addEventListener('DOMContentLoaded', async () => {
 // Récupération du rôle pour la gestion des accès
 const userRole = sessionStorage.getItem('userRole');
 const isSuperAdmin = userRole === 'super_admin';
+
+    // Masquer la gestion des utilisateurs si ce n'est pas le Super Admin
+    const userManagementSection = document.getElementById('userManagementSection');
+    if (!isSuperAdmin && userManagementSection) {
+        userManagementSection.style.display = 'none';
+        
+        // Masquer l'onglet Utilisateurs et forcer l'onglet Audit pour les admins simples
+        const tabUsers = document.getElementById('tabUsers');
+        if (tabUsers) tabUsers.style.display = 'none';
+        
+        const tabAudit = document.getElementById('tabAudit');
+        const panelAudit = document.getElementById('panel-audit');
+        const panelUsers = document.getElementById('panel-users');
+        if (tabAudit && panelAudit) {
+            tabAudit.classList.add('active');
+            panelAudit.classList.add('active');
+            if (panelUsers) panelUsers.classList.remove('active');
+        }
+    }
+
+    // --- GESTION DES SOUS-ONGLETS ---
+    const tabs = document.querySelectorAll('#adminSubNav a');
+    const panels = document.querySelectorAll('.admin-container .tab-panel');
+    tabs.forEach(tab => {
+        tab.addEventListener('click', (e) => {
+            e.preventDefault();
+            const targetId = tab.getAttribute('href').substring(1);
+            const targetPanel = document.getElementById(targetId);
+            tabs.forEach(t => t.classList.remove('active'));
+            panels.forEach(p => p.classList.remove('active'));
+            tab.classList.add('active');
+            if (targetPanel) targetPanel.classList.add('active');
+        });
+    });
 
     // --- BOUTON DE RÉPARATION DE LA BASE DE DONNÉES (POUR LES ANCIENNES RÉDUCTIONS) ---
     if (isSuperAdmin && usersListEl) {
@@ -88,6 +126,7 @@ const isSuperAdmin = userRole === 'super_admin';
 
     // 1. LISTE DES UTILISATEURS
     function loadUsers() {
+        if (!isSuperAdmin) return; // Economise des lectures Firebase si l'utilisateur n'est qu'un admin simple
         onSnapshot(collection(db, "users"), snapshot => {
             usersListEl.innerHTML = '';
             if (snapshot.empty) {
@@ -227,36 +266,51 @@ const isSuperAdmin = userRole === 'super_admin';
                 createUserBtn.textContent = "Créer Utilisateur";
             }
         });
-    } else if (createUserBtn) {
-        // Si l'utilisateur n'est pas super_admin, on cache le formulaire de création
-        const form = createUserBtn.closest('.card');
-        if (form) {
-            form.style.display = 'none';
-        }
     }
 
     // 3. JOURNAL D'AUDIT
     function loadAuditLogs() {
         // Charger tous les logs
         onSnapshot(query(collection(db, "audit_logs"), orderBy("date", "desc")), snapshot => {
-            auditLogBody.innerHTML = '';
-            if (snapshot.empty) {
-                auditLogBody.innerHTML = '<tr><td colspan="4">Aucun log.</td></tr>';
-                return;
-            }
+            allAuditLogs = [];
             snapshot.forEach(doc => {
-                const log = doc.data();
-                const date = new Date(log.date).toLocaleString('fr-FR');
-                const tr = document.createElement('tr');
-                tr.innerHTML = `
-                    <td>${date}</td>
-                    <td>${log.user || 'Système'}</td>
-                    <td><b>${log.action}</b></td>
-                    <td>${log.details || '-'}</td>
-                `;
-                auditLogBody.appendChild(tr);
+                allAuditLogs.push({ id: doc.id, ...doc.data() });
             });
+            renderAuditLogs();
         });
+    }
+
+    function renderAuditLogs() {
+        const term = auditSearchInput ? auditSearchInput.value.toLowerCase().trim() : "";
+        const filtered = allAuditLogs.filter(log => {
+            if (!term) return true;
+            return (log.user || '').toLowerCase().includes(term) ||
+                   (log.action || '').toLowerCase().includes(term) ||
+                   (log.details || '').toLowerCase().includes(term) ||
+                   (log.date || '').toLowerCase().includes(term);
+        });
+
+        auditLogBody.innerHTML = '';
+        if (filtered.length === 0) {
+            auditLogBody.innerHTML = '<tr><td colspan="4" style="text-align:center; padding:15px;">Aucun log trouvé pour cette recherche.</td></tr>';
+            return;
+        }
+
+        filtered.forEach(log => {
+            const date = new Date(log.date).toLocaleString('fr-FR');
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td>${date}</td>
+                <td>${log.user || 'Système'}</td>
+                <td><b>${log.action}</b></td>
+                <td>${log.details || '-'}</td>
+            `;
+            auditLogBody.appendChild(tr);
+        });
+    }
+
+    if (auditSearchInput) {
+        auditSearchInput.addEventListener('input', renderAuditLogs);
     }
 
     // Init

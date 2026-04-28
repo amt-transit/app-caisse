@@ -30,16 +30,17 @@
     }
 })();
 
-window.addEventListener('load', () => {
-    // Délai supplémentaire (600ms) pour laisser le temps à Firebase d'afficher les premiers résultats
-    setTimeout(() => {
-        const loader = document.getElementById('global-loader');
-        if (loader) {
-            loader.style.opacity = '0';
-            setTimeout(() => loader.remove(), 400); // Suppression du DOM après le fondu
-        }
-    }, 600);
-});
+function removeLoader() {
+    const loader = document.getElementById('global-loader');
+    if (loader) {
+        loader.style.opacity = '0';
+        setTimeout(() => loader.remove(), 400);
+    }
+}
+
+// Retrait au chargement complet, avec une sécurité anti-blocage de 3 secondes
+window.addEventListener('load', () => setTimeout(removeLoader, 600));
+setTimeout(removeLoader, 3000);
 
 // --- FORMATAGE MONÉTAIRE (CFA) ---
 function formatCFA(n) {
@@ -135,6 +136,73 @@ function initBackToTopButton() {
     const observer = new MutationObserver(attachModalButtons);
     observer.observe(document.body, { childList: true, subtree: true });
 }
+
+// --- MENU HAMBURGER (MOBILE) ---
+function initHamburgerMenu() {
+    const nav = document.querySelector('.navigation');
+    if (!nav) return;
+
+    // Créer l'Overlay (assombrissement du fond)
+    let overlay = document.querySelector('.mobile-overlay');
+    if (!overlay) {
+        overlay = document.createElement('div');
+        overlay.className = 'mobile-overlay';
+        document.body.appendChild(overlay);
+    }
+
+    let isMenuOpen = false;
+
+    // Logique d'ouverture/fermeture fluide
+    const toggleMenu = () => {
+        isMenuOpen = !isMenuOpen;
+        if (!isMenuOpen) {
+            nav.classList.remove('open');
+            overlay.classList.remove('active');
+            document.querySelectorAll('.hamburger-btn').forEach(btn => {
+                btn.innerHTML = '☰';
+                btn.classList.remove('open');
+            });
+        } else {
+            nav.classList.add('open');
+            overlay.classList.add('active');
+            document.querySelectorAll('.hamburger-btn').forEach(btn => {
+                btn.innerHTML = '✖';
+                btn.classList.add('open');
+            });
+        }
+    };
+
+    const attachToHeader = (selector) => {
+        const header = document.querySelector(selector);
+        if (!header) return;
+        if (header.querySelector('.hamburger-btn')) return;
+        
+        const btn = document.createElement('button');
+        btn.className = 'hamburger-btn';
+        btn.innerHTML = '☰';
+        btn.title = 'Menu';
+        btn.addEventListener('click', (e) => { e.stopPropagation(); toggleMenu(); });
+        header.appendChild(btn);
+    };
+
+    attachToHeader('.app-header');
+    attachToHeader('.mob-header');
+
+    overlay.addEventListener('click', toggleMenu);
+
+    // Fermer automatiquement le menu après un clic sur un lien de navigation
+    const navLinks = nav.querySelectorAll('a');
+    navLinks.forEach(link => {
+        link.addEventListener('click', () => {
+            if (window.innerWidth <= 768 && nav.classList.contains('open')) toggleMenu();
+        });
+    });
+}
+
+// Exécution de l'initialisation au chargement de toutes les pages
+document.addEventListener('DOMContentLoaded', () => {
+    initHamburgerMenu();
+});
 
 // --- GESTIONNAIRE DE MODALES ESTHÉTIQUES (Remplacement Alert/Confirm/Prompt) ---
 window.AppModal = {

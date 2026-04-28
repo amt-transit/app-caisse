@@ -4,7 +4,6 @@ import { collection, doc, updateDoc, getDocs, query, where, orderBy, onSnapshot,
 document.addEventListener('DOMContentLoaded', () => {
 
     const userRole = sessionStorage.getItem('userRole');
-    const currentUserName = sessionStorage.getItem('userName') || 'Utilisateur';
     const tableBody = document.getElementById('tableBody');
     
     const showDeletedCheckbox = document.getElementById('showDeletedCheckbox');
@@ -189,7 +188,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function logAudit(action, details, docId) {
         addDoc(collection(db, "audit_logs"), {
             date: new Date().toISOString(),
-            user: currentUserName,
+            user: sessionStorage.getItem('userName') || 'Utilisateur',
             action: action,
             details: details,
             targetId: docId || ''
@@ -371,7 +370,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // FIX : Si on affiche les supprimés, on ne filtre pas (on veut tout voir)
             if (showDeletedCheckbox.checked) {
-                if (tBase.deletedBy === currentUserName) {
+                if (tBase.deletedBy === (sessionStorage.getItem('userName') || 'Utilisateur')) {
                     acc.push({ ...tBase, reste: ((tBase.montantParis || 0) + (tBase.montantAbidjan || 0)) - effectivePrix });
                 }
                 return acc;
@@ -774,7 +773,7 @@ document.addEventListener('DOMContentLoaded', () => {
             modePaiement: editHistPayMode.value,
             agentMobileMoney: editHistPayInfo.value.trim(),
             agent: editHistPayAgent.value,
-            saisiPar: currentUserName // L'éditeur est le "saisiPar"
+            saisiPar: sessionStorage.getItem('userName') || 'Utilisateur'
         };
 
         if (!paymentData.date) return AppModal.error("La date du paiement est obligatoire.");

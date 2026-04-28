@@ -166,6 +166,18 @@ function fixEncoding(str) {
         .replace(/Ã€/g, 'À');
 }
 
+// --- GESTION JOURNAL D'AUDIT (LOGS) ---
+function logLivraisonAudit(action, details, docId) {
+    const userName = sessionStorage.getItem('userName') || 'Système';
+    addDoc(collection(db, "audit_logs"), {
+        date: new Date().toISOString(),
+        user: userName,
+        action: action,
+        details: details,
+        targetId: docId || ''
+    }).catch(e => console.error("Erreur d'enregistrement de l'audit:", e));
+}
+
 // Initialisation
 document.addEventListener('DOMContentLoaded', function() {
 
@@ -3315,6 +3327,37 @@ function searchArchives() {
     renderArchivesTable(filtered);
 }
 
+function exportArchivesToExcel() {
+    if (archivedDeliveries.length === 0) {
+        showToast('Aucune archive à exporter', 'error');
+        return;
+    }
+    
+    // Récupérer la recherche actuelle pour n'exporter que ce qui est affiché
+    const query = document.getElementById('archiveSearch').value.toLowerCase();
+    const filtered = archivedDeliveries.filter(d => 
+        `${d.ref} ${d.conteneur} ${d.destinataire} ${d.livreur}`.toLowerCase().includes(query)
+    );
+
+    const data = filtered.map(d => ({
+        'DATE ARCHIVAGE': d.dateArchivage ? new Date(d.dateArchivage).toLocaleDateString('fr-FR') : '',
+        'CONTENEUR': d.conteneur || '',
+        'REF': d.ref,
+        'EXPEDITEUR': d.expediteur || '',
+        'DESTINATAIRE': d.destinataire || '',
+        'LIEU LIVRAISON': d.lieuLivraison || '',
+        'LIVREUR': d.livreur || '-',
+    }));
+    
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.json_to_sheet(data);
+    XLSX.utils.book_append_sheet(wb, ws, "Archives");
+    
+    const date = new Date().toISOString().split('T')[0];
+    XLSX.writeFile(wb, `LIVRAISONS_ARCHIVES_${date}.xlsx`);
+    showToast('Archives exportées avec succès !', 'success');
+}
+
 async function restoreFromArchive(id) {
     if (await AppModal.confirm('Êtes-vous sûr de vouloir restaurer ce colis vers la liste principale ?', "Restauration")) {
         getDoc(doc(db, CONSTANTS.ARCHIVE_COLLECTION, id)).then(docSnap => {
@@ -3563,7 +3606,11 @@ function updateDeliveryLocation(id, newLocation) {
     const updates = { lieuLivraison: newLocation };
     if (detected !== 'AUTRE') updates.commune = detected;
     
-    updateDoc(doc(db, CONSTANTS.COLLECTION, id), updates);
+    const d = deliveries.find(item => item.id === id);
+    const oldLoc = d ? d.lieuLivraison : '?';
+    updateDoc(doc(db, CONSTANTS.COLLECTION, id), updates).then(() => {
+        if (d && oldLoc !== newLocation) logLivraisonAudit("MODIF_LIVRAISON", `Colis ${d.ref} : Adresse modifiée de "${oldLoc}" à "${newLocation}"`, id);
+    });
 
     // PROPAGATION : Mettre à jour tous les colis du même destinataire (tous onglets confondus)
     const currentItem = deliveries.find(d => d.id === id);
@@ -3594,17 +3641,32 @@ function updateDeliveryLocation(id, newLocation) {
 
 // Mise à jour du destinataire en direct
 function updateDeliveryRecipient(id, newRecipient) {
-    updateDoc(doc(db, CONSTANTS.COLLECTION, id), { destinataire: cleanString(newRecipient) });
+    const cleanRecip = cleanString(newRecipient);
+    const d = deliveries.find(item => item.id === id);
+    const oldRecip = d ? d.destinataire : '?';
+    updateDoc(doc(db, CONSTANTS.COLLECTION, id), { destinataire: cleanRecip }).then(() => {
+        if (d && oldRecip !== cleanRecip) logLivraisonAudit("MODIF_LIVRAISON", `Colis ${d.ref} : Destinataire modifié de "${oldRecip}" à "${cleanRecip}"`, id);
+    });
 }
 
 // Mise à jour du numéro en direct
 function updateDeliveryPhone(id, newPhone) {
-    updateDoc(doc(db, CONSTANTS.COLLECTION, id), { numero: cleanString(newPhone) });
+    const cleanPhone = cleanString(newPhone);
+    const d = deliveries.find(item => item.id === id);
+    const oldPhone = d ? d.numero : '?';
+    updateDoc(doc(db, CONSTANTS.COLLECTION, id), { numero: cleanPhone }).then(() => {
+        if (d && oldPhone !== cleanPhone) logLivraisonAudit("MODIF_LIVRAISON", `Colis ${d.ref} : Téléphone modifié de "${oldPhone}" à "${cleanPhone}"`, id);
+    });
 }
 
 // Mise à jour du montant en direct
 function updateDeliveryAmount(id, newAmount) {
-    updateDoc(doc(db, CONSTANTS.COLLECTION, id), { montant: cleanString(newAmount) });
+    const cleanAmount = cleanString(newAmount);
+    const d = deliveries.find(item => item.id === id);
+    const oldAmount = d ? d.montant : '?';
+    updateDoc(doc(db, CONSTANTS.COLLECTION, id), { montant: cleanAmount }).then(() => {
+        if (d && oldAmount !== cleanAmount) logLivraisonAudit("MODIF_LIVRAISON_MONTANT", `Colis ${d.ref} : Montant modifié de "${oldAmount}" à "${cleanAmount}"`, id);
+    });
 }
 
 // Mise à jour de la quantité en direct
@@ -3614,6 +3676,9 @@ async function updateDeliveryQuantity(id, newQty) {
     // 1. Récupérer les données actuelles du colis
     const d = deliveries.find(item => item.id === id);
     if (!d) return;
+
+    const oldQty = d.quantite || 1;
+    if (oldQty === parsedQty) return;
 
     const quantiteLivree = parseInt(d.quantiteLivree) || 0;
     
@@ -3640,6 +3705,7 @@ async function updateDeliveryQuantity(id, newQty) {
     // 5. Exécuter la mise à jour globale dans Firestore
     try {
         await updateDoc(doc(db, CONSTANTS.COLLECTION, id), updates);
+        logLivraisonAudit("MODIF_LIVRAISON_QUANTITE", `Colis ${d.ref} : Quantité modifiée de ${oldQty} à ${parsedQty} (Reste à livrer: ${newQuantiteRestante})`, id);
     } catch (error) {
         console.error("Erreur lors de la mise à jour de la quantité :", error);
         showToast("Erreur de mise à jour de la quantité", "error");
@@ -3648,7 +3714,12 @@ async function updateDeliveryQuantity(id, newQty) {
 
 // Mise à jour de l'info manuelle en direct
 function updateDeliveryInfo(id, newInfo) {
-    updateDoc(doc(db, CONSTANTS.COLLECTION, id), { info: cleanString(newInfo) });
+    const cleanInfo = cleanString(newInfo);
+    const d = deliveries.find(item => item.id === id);
+    const oldInfo = d ? (d.info || '') : '';
+    updateDoc(doc(db, CONSTANTS.COLLECTION, id), { info: cleanInfo }).then(() => {
+        if (d && oldInfo !== cleanInfo) logLivraisonAudit("MODIF_LIVRAISON", `Colis ${d.ref} : Info modifiée de "${oldInfo}" à "${cleanInfo}"`, id);
+    });
 }
 
 // Mise à jour du statut "Client Notifié" (Onglet À Venir)
@@ -3661,9 +3732,24 @@ async function markAsDelivered(id) {
     const d = deliveries.find(item => item.id === id);
     if (!d) return;
 
+    // --- NOUVEAU : Verrou Intelligent (Fret uniquement) ---
+    const totalDu = parseFloat(String(d.montant || '0').replace(/[^\d]/g, '')) || 0;
+    let preuvePaiement = null;
+
+    if (totalDu > 0) {
+        const promptMsg = `⚠️ Ce colis présente un solde impayé de ${totalDu} CFA.\n\nSaisissez le NOM de la personne à qui l'argent a été versé, ou tapez 'PARIS' si le règlement a été fait en France.\n\nPour annuler la remise, laissez vide.`;
+        preuvePaiement = await AppModal.prompt(promptMsg, "", "Justification de Remise");
+        
+        if (!preuvePaiement || preuvePaiement.trim() === '') {
+            return; // On bloque la remise
+        }
+    }
+
     const quantiteTotal = parseInt(d.quantite) || 1;
     const quantiteDejaLivree = parseInt(d.quantiteLivree) || 0;
     const quantiteRestante = d.quantiteRestante !== undefined ? parseInt(d.quantiteRestante) : quantiteTotal;
+    let updates = {};
+    let isPartial = false;
 
     if (quantiteRestante > 1) {
         const rep = await AppModal.prompt(`Combien de colis ont été livrés aujourd'hui ? (Reste à livrer: ${quantiteRestante})`, quantiteRestante.toString(), "Confirmation de Livraison");
@@ -3676,14 +3762,15 @@ async function markAsDelivered(id) {
 
         const newRestante = quantiteRestante - qteLivree;
         const newQuantiteLivree = quantiteDejaLivree + qteLivree;
-        const isPartial = newRestante > 0;
+        isPartial = newRestante > 0;
 
-        const updates = {
+        updates = {
             status: isPartial ? 'LIVRAISON_PARTIELLE' : 'LIVRE',
             quantiteLivree: newQuantiteLivree,
             quantiteRestante: newRestante,
             dateLivraison: new Date().toISOString()
         };
+
 
         const newHistoryItem = {
             date: new Date().toISOString(),
@@ -3692,27 +3779,81 @@ async function markAsDelivered(id) {
         };
         updates.historiquePartiel = arrayUnion(newHistoryItem);
 
-        updateDoc(doc(db, CONSTANTS.COLLECTION, id), updates).then(() => {
-            showToast(isPartial ? 'Livraison partielle enregistrée' : 'Marqué comme LIVRÉ', 'success');
-        });
+        
     } else {
-        updateDoc(doc(db, CONSTANTS.COLLECTION, id), {
+        updates = {
             status: 'LIVRE',
             quantiteLivree: quantiteTotal,
             quantiteRestante: 0,
             dateLivraison: new Date().toISOString()
-        }).then(() => showToast('Marqué comme LIVRÉ', 'success'));
+        };
+    }    
+    if (preuvePaiement) {
+        updates.infoPaiementLivreur = preuvePaiement.trim();
+        updates.montantSaisiLivreur = totalDu;
     }
-}
+
+     // --- NOUVEAU : CAPTURE GPS (Preuve de Livraison - POD) ---
+        const getGPSPosition = () => {
+            return new Promise((resolve) => {
+                if (!navigator.geolocation) {
+                    resolve(null);
+                    return;
+                }
+                const timer = setTimeout(() => resolve(null), 5000); // Timeout court de 5000ms
+                
+                navigator.geolocation.getCurrentPosition(
+                    (position) => {
+                        clearTimeout(timer);
+                        resolve({
+                            lat: position.coords.latitude,
+                            lng: position.coords.longitude,
+                            precision: position.coords.accuracy
+                        });
+                    },
+                    (error) => {
+                        clearTimeout(timer);
+                        resolve(null);
+                    },
+                    { enableHighAccuracy: true, timeout: 4800, maximumAge: 0 }
+                );
+            });
+        };
+
+        const gpsData = await getGPSPosition();
+        if (gpsData) {
+            updates.preuveGPS = gpsData;
+        } else {
+            showToast("Livraison validée sans coordonnées GPS", "warning");
+        }
+
+        // Retour visuel immédiat (Optimistic UI) pour ne pas faire douter le livreur hors-ligne
+        if (gpsData) {
+            showToast(isPartial ? 'Livraison partielle enregistrée avec GPS 📍' : 'Marqué comme LIVRÉ avec GPS 📍', 'success');
+        } else if (!gpsData && isPartial) {
+            showToast('Livraison partielle enregistrée', 'success');
+        } else {
+            showToast('Marqué comme LIVRÉ', 'success');
+        }
+
+        // Firebase gère l'envoi en arrière-plan, et le réessaiera si le réseau revient
+        updateDoc(doc(db, CONSTANTS.COLLECTION, id), updates).then(() => {
+            logLivraisonAudit("STATUT_LIVRAISON", `Colis ${d.ref} marqué comme ${updates.status}`, id);
+        }).catch(e => console.error("Erreur synchro serveur:", e));
+    }   
 
 function markAsPending(id) {
+    const d = deliveries.find(item => item.id === id);
     updateDoc(doc(db, CONSTANTS.COLLECTION, id), { 
         status: 'EN_ATTENTE',
         livreur: deleteField(),
         dateProgramme: deleteField(),
         dateLivraison: deleteField(),
         orderInRoute: deleteField()
-    }).then(() => showToast('Repassé en attente et désassigné', 'success'));
+    }).then(() => {
+        if (d) logLivraisonAudit("STATUT_LIVRAISON", `Colis ${d.ref} repassé EN ATTENTE (Désassigné)`, id);
+        showToast('Repassé en attente et désassigné', 'success');
+    });
 }
 
 // Actions d'amélioration rapides
@@ -4377,7 +4518,8 @@ Object.assign(window, {
     sortProgramDetails, openBingMapsRoute, exportRoadmapPDF, exportRoadmapWhatsApp, printDeliverySlip, 
         removeFromProgram, closeProgramDetailsModal, renderTable, debouncedFilterDeliveries, openEmbarquerModal, notifierMasseAVenir, saveContainerETA,
         showScanHistory,
-        toggleActionMenu, closeActionMenu
+    toggleActionMenu, closeActionMenu,
+    exportArchivesToExcel
 });
 
 // --- NOUVEAU : GESTION DES PAIEMENTS DEPUIS LA LOGISTIQUE ---

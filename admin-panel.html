@@ -10,7 +10,7 @@
 <body style="display:none">
     <header class="app-header">
         <img src="LOGOAMT.png" alt="Logo" class="app-logo">
-        <h1>Panneau Super Admin</h1>
+        <h1>Panneau d'Administration</h1>
         <button id="logoutBtn" style="position: absolute; right: 20px;" class="logout-btn">Déconnexion</button>
     </header>
 
@@ -34,7 +34,13 @@
     </nav>
 
     <div class="admin-container" style="max-width: 900px; margin: 20px auto; background: white; padding: 20px; border-radius: 12px; box-shadow: var(--shadow-md);">
-        <h2>Gestion des Utilisateurs</h2>
+        <div class="sub-nav" id="adminSubNav">
+            <a href="#panel-users" class="active" id="tabUsers">👥 Utilisateurs</a>
+            <a href="#panel-audit" id="tabAudit">🛡️ Journal d'Audit</a>
+        </div>
+
+        <div id="panel-users" class="tab-panel active">
+            <div id="userManagementSection">
         <div id="createUserForm" style="margin-bottom: 20px; border-bottom: 1px solid #eee; padding-bottom: 20px;">
             <div class="form-grid" style="grid-template-columns: 1fr 1fr 1fr 1fr;">
                 <input type="text" id="newUsername" placeholder="Nom d'utilisateur">
@@ -51,10 +57,12 @@
         <div id="usersList">
             <!-- La liste des utilisateurs sera chargée ici par JS -->
         </div>
+            </div>
+        </div>
 
         <!-- Section Journal d'Audit -->
-        <div id="auditSection" style="margin-top: 40px;">
-            <h2>🛡️ Journal d'Audit (Sécurité)</h2>
+        <div id="panel-audit" class="tab-panel">
+            <input type="text" id="auditSearchInput" placeholder="🔍 Rechercher (Date, Utilisateur, Action, Réf. Colis...)" style="width: 100%; padding: 10px; margin-bottom: 15px; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box;">
             <div style="max-height: 300px; overflow-y: auto; background: #f8fafc; padding: 10px; border-radius: 8px; border: 1px solid var(--border-color);">
                 <table style="width:100%; font-size:12px;">
                     <thead><tr><th>Date</th><th>Utilisateur</th><th>Action</th><th>Détails</th></tr></thead>

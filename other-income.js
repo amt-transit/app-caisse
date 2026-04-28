@@ -4,8 +4,6 @@ import { collection, doc, addDoc, updateDoc, query, where, orderBy, onSnapshot, 
 document.addEventListener('DOMContentLoaded', () => {
 
     const userRole = sessionStorage.getItem('userRole');
-    // CORRECTION : On récupère le nom de l'utilisateur
-    const currentUserName = sessionStorage.getItem('userName') || 'Inconnu';
     const isViewer = userRole === 'spectateur';
     
     const addIncomeBtn = document.getElementById('addIncomeBtn');
@@ -114,6 +112,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // 1. AJOUT MANUEL (AVEC AUTEUR)
     if (addIncomeBtn && !isViewer) { addIncomeBtn.addEventListener('click', () => {
+        // Récupération DYNAMIQUE du nom de l'utilisateur au moment du clic
+        const currentUserName = sessionStorage.getItem('userName') || 'Inconnu';
+
         let finalDesc = incomeDesc.value;
         if (incomeCategory && incomeCategory.value) {
             finalDesc = `${incomeCategory.value} - ${finalDesc}`;

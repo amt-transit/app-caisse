@@ -1,6 +1,63 @@
 import { db } from './firebase-config.js';
 import { collection, doc, addDoc, updateDoc, getDocs, query, where, orderBy, limit, onSnapshot, writeBatch, arrayUnion } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 
+// --- WIZARD MOBILE (SAISIE EN 3 ÉTAPES) - DÉCLARATION GLOBALE INSTANTANÉE ---
+// Note: conservé pour historique mais inactif sur mobile (car remplacé par SPA Livreur)
+window.goToMobileStep = (step) => {
+    const formWrapper = document.getElementById('caisseForm');
+    if (!formWrapper) return;
+
+    // Sécurité : Validation avant de passer de l'étape 1 à 2
+    if (step === 2) {
+        const dateEl = document.getElementById('date');
+        const refEl = document.getElementById('reference');
+        if (dateEl && refEl) {
+            const date = dateEl.value;
+            const ref = refEl.value.trim();
+            if (!date || !ref) {
+                if (window.AppModal) window.AppModal.error("Veuillez saisir la Date et la Référence avant de continuer.");
+                else alert("Veuillez saisir la Date et la Référence avant de continuer.");
+                return;
+            }
+        }
+    }
+
+    // Mise à jour de la classe CSS parente pour afficher/masquer les étapes
+    formWrapper.className = `mobile-step-${step}`;
+
+        // Mise à jour visuelle de la barre de progression (Jauge par onglets)
+    for (let i = 1; i <= 3; i++) {
+            const ind = document.getElementById(`ind-${i}`);
+            if (ind) {
+                if (i === step) {
+                    ind.className = 'step-indicator active';
+                } else if (i < step) {
+                    ind.className = 'step-indicator completed';
+                } else {
+                    ind.className = 'step-indicator';
+                }
+        }
+    }
+        
+        // Si étape 3, mettre à jour la carte récapitulative
+        if (step === 3 && window.updateMobileSummary) {
+            window.updateMobileSummary();
+        }
+    };
+
+    window.updateMobileSummary = () => {
+        const summary = document.getElementById('mobileSummary');
+        if (!summary) return;
+        const ref = document.getElementById('reference').value || 'N/A';
+        const resteVal = parseFloat(document.getElementById('reste').value) || 0;
+        const formatCFA = (n) => new Intl.NumberFormat('fr-CI', { style: 'currency', currency: 'XOF' }).format(n);
+        
+        let resteHTML = `<h2 style="color:${resteVal <= 0 ? '#10b981' : '#ef4444'}; margin: 10px 0; font-size: 22px;">RESTE À PAYER : ${formatCFA(Math.abs(resteVal))}</h2>`;
+        if (resteVal <= 0) resteHTML = `<h2 style="color:#10b981; margin: 10px 0; font-size: 22px;">✅ COLIS SOLDÉ</h2>`;
+        
+        summary.innerHTML = `<h3 style="margin: 0 0 10px 0; color: #475569; font-size: 16px;">Référence : ${ref}</h3>${resteHTML}`;
+};
+
 document.addEventListener('DOMContentLoaded', async () => {
 
     // SERVICE TRANSACTION (Injecté localement car non chargé via HTML)
@@ -101,9 +158,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
         }
     };
-
-    // Récupération du nom de l'utilisateur connecté
-    const currentUserName = sessionStorage.getItem('userName') || 'Utilisateur';
 
     const agentSelectElement = document.getElementById('agent');
     const addAgentBtn = document.getElementById('addAgentBtn');
@@ -361,6 +415,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         referenceInput.focus();
         currentStorageFeeWaived = false; // Reset après ajout
         currentIsNewAdjustment = false; // Reset après ajout
+        
+        // Retour à l'étape 1 sur mobile après validation du colis
+        if (window.innerWidth <= 768) window.goToMobileStep(1);
     });
 
     // --- 2. GESTION DÉPENSES (LIVREUR) ---
@@ -500,6 +557,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     // --- 4. ENREGISTREMENT FINAL ---
     saveDayBtn.addEventListener('click', async () => {
         if (dailyTransactions.length === 0 && dailyExpenses.length === 0) return AppModal.error("Rien à enregistrer, la session est vide.");
+        
+        // Récupération DYNAMIQUE du nom de l'utilisateur au moment du clic
+        const currentUserName = sessionStorage.getItem('userName') || 'Utilisateur';
         
         let totalsByMode = {};
         let totalEspAbidjan = 0;
@@ -922,6 +982,12 @@ document.addEventListener('DOMContentLoaded', async () => {
                 }
             }
         }
+        
+        // AUTO-SUIVANT SUR MOBILE : Si une référence est trouvée et pré-remplie, on passe automatiquement à l'étape Paiement !
+        if (window.innerWidth <= 768 && searchValue && document.getElementById('caisseForm').classList.contains('mobile-step-1')) {
+            // Léger délai pour laisser à l'utilisateur le temps de voir l'auto-complétion
+            setTimeout(() => window.goToMobileStep(2), 350);
+        }
     });
 
     function clearDisplayFields() {
@@ -1018,3 +1084,474 @@ document.addEventListener('DOMContentLoaded', async () => {
     populateDatalist(); 
     initBackToTopButton();
 });
+
+// --- MODE LIVREUR (SPA MOBILE) ---
+function initMobileApp() {
+    if (window.innerWidth > 768) return; // Ne s'exécute que sur mobile
+
+    // Forçage de l'affichage par JavaScript (Sécurité anti-cache du navigateur mobile)
+    const desktopView = document.getElementById('desktop-view');
+    const mobileView = document.getElementById('mobile-view');
+    const desktopHeader = document.getElementById('desktop-header');
+    if (desktopHeader) desktopHeader.style.setProperty('display', 'none', 'important');
+    if (desktopView) desktopView.style.setProperty('display', 'none', 'important');
+    if (mobileView) mobileView.style.setProperty('display', 'block', 'important');
+
+    const mobRefInput = document.getElementById('mob-refInput');
+    const mobNomInput = document.getElementById('mob-nomInput');
+    const mobConteneurInput = document.getElementById('mob-conteneurInput');
+    const mobPrixInput = document.getElementById('mob-prixInput');
+    const mobMontantInput = document.getElementById('mob-montantInput');
+    const mobResteInput = document.getElementById('mob-resteInput');
+    const mobModeInput = document.getElementById('mob-modeInput');
+    const mobAgentInput = document.getElementById('mob-agentInput');
+    const mobAddBtn = document.getElementById('mob-addBtn');
+
+    const mobDepenseDesc = document.getElementById('mob-depenseDesc');
+    const mobDepenseAmount = document.getElementById('mob-depenseAmount');
+    const mobAddDepenseBtn = document.getElementById('mob-addDepenseBtn');
+
+    const mobItemsList = document.getElementById('mob-itemsList');
+    const mobTotalIn = document.getElementById('mob-totalIn');
+    const mobTotalOut = document.getElementById('mob-totalOut');
+    const mobTotalNet = document.getElementById('mob-totalNet');
+    const mobValidateDayBtn = document.getElementById('mob-validateDayBtn');
+    const mobLogoutBtn = document.getElementById('mob-logoutBtn');
+
+    let mobile_dailyTransactions = JSON.parse(localStorage.getItem('mobile_dailyTransactions')) || [];
+    let mobile_dailyDepenses = JSON.parse(localStorage.getItem('mobile_dailyDepenses')) || [];
+
+    function formatCFA(n) { return new Intl.NumberFormat('fr-CI', { style: 'currency', currency: 'XOF' }).format(n || 0); }
+
+    // --- 1. RECHERCHE INTÉLLIGENTE & AUTO-COMPLÉTION (Comme Desktop) ---
+    getDocs(query(collection(db, "transactions"), where("isDeleted", "!=", true), orderBy("isDeleted"), orderBy("date", "desc"))).then(snapshot => {
+        const references = new Set(); 
+        snapshot.forEach(doc => { if (doc.data().reference) references.add(doc.data().reference); });
+        const mobRefList = document.getElementById('mob-referenceList');
+        if(mobRefList) {
+            mobRefList.innerHTML = '';
+            references.forEach(ref => {
+                const opt = document.createElement('option'); opt.value = ref; mobRefList.appendChild(opt);
+            });
+        }
+    });
+    
+    // --- RÉCUPÉRATION DES AGENTS POUR LE DÉPÔT (Wave, OM) ---
+    getDocs(query(collection(db, "agents"), orderBy("name"))).then(snap => {
+        if(mobAgentInput) {
+            snap.forEach(doc => {
+                const opt = document.createElement('option');
+                opt.value = doc.data().name;
+                opt.textContent = doc.data().name;
+                mobAgentInput.appendChild(opt);
+            });
+        }
+    });
+
+    if (mobModeInput && mobAgentInput) {
+        mobModeInput.addEventListener('change', () => {
+            if (mobModeInput.value !== 'Espèce') {
+                mobAgentInput.style.display = 'block';
+            } else {
+                mobAgentInput.style.display = 'none';
+                mobAgentInput.value = '';
+            }
+        });
+    }
+
+    mobRefInput.addEventListener('change', async () => {
+        const searchValue = mobRefInput.value.trim().toUpperCase();
+        mobNomInput.value = ''; mobConteneurInput.value = ''; mobPrixInput.value = ''; mobResteInput.value = ''; mobMontantInput.value = '';
+        mobResteInput.dataset.baseReste = '0';
+        window.mobCurrentAdjustment = null;
+        if (!searchValue) return;
+
+        // A. Vérifier dans les saisies locales en attente
+        const dailyItems = mobile_dailyTransactions.filter(t => t.reference === searchValue);
+        if (dailyItems.length > 0) {
+             const base = dailyItems.reduce((prev, current) => (prev.prix > current.prix) ? prev : current);
+             const totalPaidDaily = dailyItems.reduce((sum, t) => sum + t.montant, 0);
+             const currentRest = base.baseReste + totalPaidDaily; // baseReste est négatif (Dette)
+             
+             mobNomInput.value = base.nom; mobConteneurInput.value = base.conteneur;
+             mobPrixInput.value = base.prix; mobResteInput.value = currentRest;
+             mobResteInput.dataset.baseReste = currentRest; mobMontantInput.value = Math.abs(currentRest);
+             return;
+        }
+
+        // B. Vérifier dans la base de données (Transactions / Caisse)
+        let qT = await getDocs(query(collection(db, "transactions"), where("reference", "==", searchValue)));
+        if (!qT.empty) {
+            const data = qT.docs[0].data();
+            let effectivePrix = data.prix || 0;
+            if (data.adjustmentType === 'reduction') effectivePrix -= (data.adjustmentVal || 0);
+            
+            let reste = ((data.montantParis || 0) + (data.montantAbidjan || 0)) - effectivePrix;
+
+            if (reste < 0 && !data.storageFeeWaived) {
+                const diffDays = Math.ceil((new Date() - new Date(data.date)) / (1000 * 60 * 60 * 24));
+                let fee = 0;
+                if (diffDays > 7 && diffDays <= 14) fee = 10000 * (data.quantite || 1);
+                else if (diffDays > 14) fee = (10000 + (diffDays - 14) * 1000) * (data.quantite || 1);
+
+                if (fee > 0) {
+                    const userResponse = window.AppModal ? await AppModal.prompt(`⚠️ FRAIS MAGASINAGE : ${fee} CFA\n\nMontant à appliquer (0 pour offrir) :`, fee) : prompt(`Frais magasinage: ${fee}. Montant à appliquer ?`, fee);
+                    if (userResponse !== null) {
+                        const amt = parseFloat(userResponse) || 0;
+                        if (amt > 0) {
+                            window.mobCurrentAdjustment = { type: 'augmentation', val: amt };
+                            effectivePrix += amt; reste -= amt;
+                        }
+                    }
+                }
+            }
+
+            mobNomInput.value = data.nomDestinataire || data.nom || '';
+            mobConteneurInput.value = data.conteneur || ''; mobPrixInput.value = effectivePrix;
+            mobResteInput.value = reste; mobResteInput.dataset.baseReste = reste;
+            mobMontantInput.value = Math.abs(reste);
+        } else {
+            // C. Vérifier dans les Livraisons (Pré-paiement Paris/A_Venir)
+            const livQuery = await getDocs(query(collection(db, "livraisons"), where("ref", "==", searchValue), limit(1)));
+            if (!livQuery.empty) {
+                const livData = livQuery.docs[0].data();
+                mobNomInput.value = livData.destinataire || livData.expediteur || '';
+                mobConteneurInput.value = livData.conteneur || '';
+                let price = parseFloat(String(livData.prixOriginal || livData.montant || '0').replace(/[^\d]/g, '')) || 0;
+                mobPrixInput.value = price; mobResteInput.value = -price;
+                mobResteInput.dataset.baseReste = -price; mobMontantInput.value = price;
+            }
+        }
+    });
+
+    mobMontantInput.addEventListener('input', () => {
+        const baseReste = parseFloat(mobResteInput.dataset.baseReste) || 0;
+        mobResteInput.value = baseReste + (parseFloat(mobMontantInput.value) || 0);
+    });
+
+    function renderMobileList() {
+        let totalIn = 0;
+        let totalOut = 0;
+        mobItemsList.innerHTML = '';
+
+        if(mobile_dailyTransactions.length === 0 && mobile_dailyDepenses.length === 0) {
+            mobItemsList.innerHTML = '<div style="text-align:center; padding:20px; color:#94a3b8; font-size:14px;">Aucune opération enregistrée.</div>';
+        }
+
+        mobile_dailyTransactions.forEach((t, i) => {
+            totalIn += t.montant;
+            const agentTag = t.agentRecepteur ? `<span class="tag" style="background:#dbeafe; color:#1e40af; font-size:10px; margin-left:5px;">👤 ${t.agentRecepteur}</span>` : '';
+            mobItemsList.innerHTML += `
+                <div class="mob-list-item">
+                    <div>
+                        <strong>${t.reference}</strong> <span class="tag" style="background:#e2e8f0; color:#333; font-size:10px;">${t.mode}</span>${agentTag}<br>
+                        <span style="color:#10b981; font-weight:bold;">+ ${formatCFA(t.montant)}</span>
+                    </div>
+                    <div class="mob-list-item-actions">
+                        <button onclick="window.mobEditTransaction(${i})" title="Modifier">✏️</button>
+                        <button onclick="window.mobDeleteTransaction(${i})" title="Supprimer">❌</button>
+                    </div>
+                </div>
+            `;
+        });
+
+        mobile_dailyDepenses.forEach((d, i) => {
+            totalOut += d.montant;
+            mobItemsList.innerHTML += `
+                <div class="mob-list-item">
+                    <div>
+                        <strong>${d.motif}</strong><br>
+                        <span style="color:#ef4444; font-weight:bold;">- ${formatCFA(d.montant)}</span>
+                    </div>
+                    <div class="mob-list-item-actions">
+                        <button onclick="window.mobDeleteDepense(${i})" title="Supprimer">❌</button>
+                    </div>
+                </div>
+            `;
+        });
+
+        mobTotalIn.textContent = formatCFA(totalIn);
+        mobTotalOut.textContent = formatCFA(totalOut);
+        mobTotalNet.textContent = formatCFA(totalIn - totalOut);
+
+        localStorage.setItem('mobile_dailyTransactions', JSON.stringify(mobile_dailyTransactions));
+        localStorage.setItem('mobile_dailyDepenses', JSON.stringify(mobile_dailyDepenses));
+    }
+
+    window.mobSwitchTab = function(tab) {
+        document.getElementById('mob-nav-saisie').classList.remove('active');
+        document.getElementById('mob-nav-depenses').classList.remove('active');
+        document.getElementById('mob-saisieView').style.display = 'none';
+        document.getElementById('mob-depensesView').style.display = 'none';
+
+        if(tab === 'saisie') {
+            document.getElementById('mob-nav-saisie').classList.add('active');
+            document.getElementById('mob-saisieView').style.display = 'block';
+        } else {
+            document.getElementById('mob-nav-depenses').classList.add('active');
+            document.getElementById('mob-depensesView').style.display = 'block';
+        }
+    };
+
+    window.mobDeleteTransaction = function(i) { 
+        if(confirm("Supprimer cet encaissement ?")) { mobile_dailyTransactions.splice(i, 1); renderMobileList(); }
+    };
+    window.mobDeleteDepense = function(i) { 
+        if(confirm("Supprimer cette dépense ?")) { mobile_dailyDepenses.splice(i, 1); renderMobileList(); }
+    };
+
+    window.mobEditTransaction = function(i) {
+        const t = mobile_dailyTransactions[i];
+        mobRefInput.value = t.reference;
+        mobMontantInput.value = t.montant;
+        mobModeInput.value = t.mode;
+        mobNomInput.value = t.nom;
+        mobConteneurInput.value = t.conteneur;
+        mobPrixInput.value = t.prix;
+        mobResteInput.value = t.baseReste + t.montant;
+        mobResteInput.dataset.baseReste = t.baseReste;
+        
+        if (mobAgentInput) {
+            mobAgentInput.value = t.agentRecepteur || '';
+            mobAgentInput.style.display = t.mode !== 'Espèce' ? 'block' : 'none';
+        }
+        window.mobCurrentAdjustment = t.isNewAdjustment ? { type: t.adjustmentType, val: t.adjustmentVal } : null;
+
+        mobile_dailyTransactions.splice(i, 1);
+        renderMobileList();
+        window.mobSwitchTab('saisie');
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    };
+
+    if(mobAddBtn) {
+        mobAddBtn.addEventListener('click', () => {
+            const ref = mobRefInput.value.trim().toUpperCase();
+            const montant = parseFloat(mobMontantInput.value);
+            const mode = mobModeInput.value;
+            const nom = mobNomInput.value.trim() || 'Client';
+            const conteneur = mobConteneurInput.value.trim();
+            const prix = parseFloat(mobPrixInput.value) || montant;
+            const baseReste = parseFloat(mobResteInput.dataset.baseReste) || 0;
+            const adj = window.mobCurrentAdjustment || null;
+            const agentRecepteur = mobAgentInput ? mobAgentInput.value : '';
+
+            if(!ref || isNaN(montant) || montant < 0) return window.AppModal ? AppModal.error("Veuillez saisir une référence et un montant valide.") : alert("Veuillez saisir des données valides.");
+            if(mode !== 'Espèce' && !agentRecepteur) return window.AppModal ? AppModal.error("Veuillez sélectionner l'agent ayant reçu le dépôt sur son compte.") : alert("Veuillez sélectionner l'agent.");
+
+            mobile_dailyTransactions.push({ 
+                reference: ref, montant, mode, nom, conteneur, prix, baseReste, agentRecepteur,
+                adjustmentType: adj ? adj.type : '', adjustmentVal: adj ? adj.val : 0, isNewAdjustment: !!adj
+            });
+            
+            mobRefInput.value = ''; mobMontantInput.value = ''; mobNomInput.value = '';
+            mobConteneurInput.value = ''; mobPrixInput.value = ''; mobResteInput.value = '';
+            mobResteInput.dataset.baseReste = '0'; window.mobCurrentAdjustment = null;
+            if(mobAgentInput) { mobAgentInput.value = ''; mobAgentInput.style.display = 'none'; }
+
+            renderMobileList();
+            document.getElementById('mob-listContainer').scrollIntoView({ behavior: 'smooth' });
+        });
+    }
+
+    if(mobAddDepenseBtn) {
+        mobAddDepenseBtn.addEventListener('click', () => {
+            const motif = mobDepenseDesc.value.trim();
+            const montant = parseFloat(mobDepenseAmount.value);
+
+            if(!motif || isNaN(montant) || montant <= 0) return AppModal ? AppModal.error("Veuillez saisir un motif et un montant valide.") : alert("Veuillez saisir des données valides.");
+
+            mobile_dailyDepenses.push({ motif, montant });
+            mobDepenseDesc.value = ''; mobDepenseAmount.value = '';
+            renderMobileList();
+            document.getElementById('mob-listContainer').scrollIntoView({ behavior: 'smooth' });
+        });
+    }
+
+    if(mobValidateDayBtn) {
+        mobValidateDayBtn.addEventListener('click', async () => {
+            if(mobile_dailyTransactions.length === 0 && mobile_dailyDepenses.length === 0) return AppModal ? AppModal.error("Rien à valider.") : alert("Rien à valider.");
+
+            const confirmation = AppModal ? await AppModal.confirm("Valider la journée et envoyer à la base de données ?") : confirm("Valider la journée ?");
+            if(!confirmation) return;
+
+            mobValidateDayBtn.disabled = true;
+            mobValidateDayBtn.textContent = "⏳ Validation en cours...";
+
+            const userName = sessionStorage.getItem('userName') || 'Livreur';
+            const dateStr = new Date().toISOString().split('T')[0];
+
+            try {
+                const { db } = await import('./firebase-config.js');
+                const { collection, doc, writeBatch } = await import("https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js");
+                
+                const batch = writeBatch(db);
+                const auditRef = doc(collection(db, "audit_logs"));
+                const sessionId = auditRef.id;
+
+                let totalIn = 0;
+                let totalOut = 0;
+                let detailsStr = `Saisie Mobile (${userName}) | `;
+
+                const touchedTransactionIds = [];
+                const touchedExpenseIds = [];
+
+                // --- 2. TRAITEMENT GROUPÉ DES ENCAISSEMENTS (Comme Desktop) ---
+                const transactionsByRef = {};
+                mobile_dailyTransactions.forEach(t => {
+                    totalIn += t.montant;
+                    if (!transactionsByRef[t.reference]) transactionsByRef[t.reference] = [];
+                    transactionsByRef[t.reference].push(t);
+                });
+
+                for (const ref of Object.keys(transactionsByRef)) {
+                    const group = transactionsByRef[ref];
+                    const baseTransac = group.reduce((prev, current) => (prev.prix > current.prix) ? prev : current);
+                    const totalAbidjan = group.reduce((sum, t) => sum + t.montant, 0);
+
+                    const newPaymentEntries = group.map(t => ({
+                        date: dateStr, montantParis: 0, montantAbidjan: t.montant, agent: userName,
+                        saisiPar: userName, modePaiement: t.mode, agentMobileMoney: t.agentRecepteur || '', sessionId: sessionId
+                    }));
+
+                    const qTrans = await getDocs(query(collection(db, "transactions"), where("reference", "==", ref)));
+
+                    if (!qTrans.empty) {
+                        const docRef = qTrans.docs[0].ref;
+                        const oldData = qTrans.docs[0].data();
+                        const dailyMetadata = group[group.length - 1];
+
+                        let finalPrix = oldData.prix || 0;
+                        let finalAdjustmentType = dailyMetadata.adjustmentType || oldData.adjustmentType;
+                        let finalAdjustmentVal = dailyMetadata.adjustmentVal || oldData.adjustmentVal || 0;
+
+                        const augmentationItem = group.find(t => t.isNewAdjustment && t.adjustmentType === 'augmentation');
+                        if (augmentationItem) finalPrix += augmentationItem.adjustmentVal;
+                        let effectivePrix = finalPrix;
+                        if (finalAdjustmentType === 'reduction') effectivePrix -= finalAdjustmentVal;
+
+                        const newTotalParis = (oldData.montantParis || 0);
+                        const newTotalAbidjan = (oldData.montantAbidjan || 0) + totalAbidjan;
+                        const newReste = newTotalParis + newTotalAbidjan - effectivePrix;
+
+                        const updates = { montantAbidjan: newTotalAbidjan, reste: newReste, paymentHistory: arrayUnion(...newPaymentEntries), lastPaymentDate: dateStr, saisiPar: userName, isDeleted: false, modePaiement: baseTransac.mode };
+                        if (baseTransac.agentRecepteur) updates.agentMobileMoney = baseTransac.agentRecepteur;
+
+                        if (augmentationItem) { updates.prix = finalPrix; updates.adjustmentType = 'augmentation'; updates.adjustmentVal = augmentationItem.adjustmentVal; } 
+                        else if (dailyMetadata.adjustmentType) { updates.adjustmentType = finalAdjustmentType; updates.adjustmentVal = finalAdjustmentVal; }
+
+                        batch.update(docRef, updates);
+                        touchedTransactionIds.push(docRef.id);
+                    } else {
+                        const docRef = doc(collection(db, "transactions"));
+                        let effectivePrix = baseTransac.prix;
+                        if (baseTransac.adjustmentType === 'reduction') effectivePrix -= baseTransac.adjustmentVal;
+
+                        batch.set(docRef, {
+                            date: dateStr, reference: ref, nom: baseTransac.nom || 'Client', conteneur: baseTransac.conteneur || '',
+                            prix: baseTransac.prix, montantParis: 0, montantAbidjan: totalAbidjan, reste: totalAbidjan - effectivePrix,
+                            agent: userName, isDeleted: false, saisiPar: userName, modePaiement: baseTransac.mode, agentMobileMoney: baseTransac.agentRecepteur || '', paymentHistory: newPaymentEntries, lastPaymentDate: dateStr
+                        });
+                        touchedTransactionIds.push(docRef.id);
+                    }
+                    
+                    // Synchro avec Logistique
+                    const livQuery = await getDocs(query(collection(db, "livraisons"), where("ref", "==", ref), limit(1)));
+                    if (!livQuery.empty) {
+                        const livUpdates = {};
+                        if (baseTransac.conteneur && baseTransac.conteneur !== livQuery.docs[0].data().conteneur) livUpdates.conteneur = baseTransac.conteneur;
+                        if (baseTransac.nom && baseTransac.nom !== livQuery.docs[0].data().destinataire) livUpdates.destinataire = baseTransac.nom;
+                        if (Object.keys(livUpdates).length > 0) batch.update(livQuery.docs[0].ref, livUpdates);
+                    }
+                }
+
+                mobile_dailyDepenses.forEach(d => {
+                    const docRef = doc(collection(db, "expenses"));
+                    totalOut += d.montant;
+                    batch.set(docRef, {
+                        date: dateStr,
+                        description: d.motif + ` (${userName})`,
+                        montant: d.montant,
+                        type: 'Mensuelle',
+                        mode: 'Espèce',
+                        isDeleted: false,
+                        sessionId: sessionId
+                    });
+                    touchedExpenseIds.push(docRef.id);
+                });
+
+                detailsStr += `Encaissements: ${mobile_dailyTransactions.length}, Dépenses: ${mobile_dailyDepenses.length}`;
+
+                batch.set(auditRef, {
+                    date: new Date().toISOString(),
+                    entryDate: dateStr,
+                    user: userName,
+                    action: "VALIDATION_JOURNEE",
+                    details: detailsStr,
+                    targetId: "BATCH_MOBILE",
+                    status: "PENDING",
+                    transactionIds: touchedTransactionIds,
+                    expenseIds: touchedExpenseIds,
+                    agents: userName,
+                    totalIn: totalIn,
+                    totalGlobalIn: totalIn,
+                    totalOut: totalOut,
+                    result: totalIn - totalOut
+                });
+
+                await batch.commit();
+
+                // Génération du texte WhatsApp final
+                let waMsg = `*BILAN LIVREUR DU ${new Date().toLocaleDateString('fr-FR')}*\n`;
+                waMsg += `👤 *${userName}*\n\n`;
+
+                if(mobile_dailyTransactions.length > 0) {
+                    waMsg += `📦 *ENCAISSEMENTS :*\n`;
+                    mobile_dailyTransactions.forEach(t => {
+                        const info = t.agentRecepteur ? ` (Reçu par: ${t.agentRecepteur})` : "";
+                        waMsg += `- ${t.reference} : ${formatCFA(t.montant)} [${t.mode}]${info}\n`;
+                    });
+                }
+
+                if(mobile_dailyDepenses.length > 0) {
+                    waMsg += `\n📉 *DÉPENSES :*\n`;
+                    mobile_dailyDepenses.forEach(d => {
+                        waMsg += `- ${d.motif} : ${formatCFA(d.montant)}\n`;
+                    });
+                }
+
+                const net = totalIn - totalOut;
+                waMsg += `\n💵 *NET À VERSER : ${formatCFA(net)}*`;
+
+                mobile_dailyTransactions = [];
+                mobile_dailyDepenses = [];
+                renderMobileList();
+
+                if(AppModal) await AppModal.success("Journée validée avec succès !");
+                else alert("Journée validée avec succès !");
+                
+                window.open(`https://wa.me/?text=${encodeURIComponent(waMsg)}`, '_blank');
+
+            } catch(e) {
+                console.error(e);
+                if(AppModal) AppModal.error("Erreur lors de l'enregistrement : " + e.message);
+                else alert("Erreur lors de l'enregistrement : " + e.message);
+            } finally {
+                mobValidateDayBtn.disabled = false;
+                mobValidateDayBtn.textContent = "✅ Valider la journée";
+            }
+        });
+    }
+
+    if (mobLogoutBtn) {
+        mobLogoutBtn.addEventListener('click', async () => {
+            const { auth } = await import('./firebase-config.js');
+            const { signOut } = await import("https://www.gstatic.com/firebasejs/9.22.0/firebase-auth.js");
+            signOut(auth).then(() => {
+                window.location.href = 'login.html';
+            });
+        });
+    }
+
+    renderMobileList();
+}
+document.addEventListener('DOMContentLoaded', initMobileApp);
