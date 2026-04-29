@@ -60,6 +60,35 @@ window.goToMobileStep = (step) => {
 
 document.addEventListener('DOMContentLoaded', async () => {
 
+    // --- DÉBUT : NOTIFICATION BADGE (SESSIONS EN ATTENTE) ---
+    const qPendingSessions = query(collection(db, "audit_logs"), where("action", "==", "VALIDATION_JOURNEE"));
+    onSnapshot(qPendingSessions, (snapshot) => {
+        let pendingCount = 0;
+        snapshot.forEach(doc => {
+            const status = doc.data().status;
+            if (status !== "VALIDATED" && status !== "ARCHIVED") {
+                pendingCount++;
+            }
+        });
+        
+        const badgeHTML = `<span class="pending-count-badge" style="background-color: rgb(239, 68, 68); color: white; border-radius: 10px; padding: 1px 6px; font-size: 10px; font-weight: bold; margin-left: 5px; vertical-align: super; display: inline-block;">${pendingCount}</span>`;
+
+        // Mettre à jour les liens "Entrée Caisse" et "Confirmation" dans la barre de navigation
+        const navLinks = document.querySelectorAll('.nav-menu a');
+        navLinks.forEach(link => {
+            // On extrait uniquement le texte du lien (pour ignorer le badge existant lors de la recherche)
+            const text = Array.from(link.childNodes).filter(node => node.nodeType === Node.TEXT_NODE).map(node => node.textContent.trim()).join('');
+                
+            if (text.includes('Entrée Caisse') || text.includes('Caisse') || text.includes('Confirmation')) {
+                const existingBadge = link.querySelector('.pending-count-badge');
+                if (existingBadge) existingBadge.remove(); // Nettoyer l'ancien badge
+                
+                if (pendingCount > 0) link.insertAdjacentHTML('beforeend', badgeHTML);
+            }
+        });
+    });
+    // --- FIN : NOTIFICATION BADGE ---
+
     // SERVICE TRANSACTION (Injecté localement car non chargé via HTML)
     const transactionService = {
         getCleanTransactions(transactions, validatedSessions) {
