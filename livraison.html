@@ -279,22 +279,48 @@
         <button id="logoutBtn" style="position:absolute;right:20px;padding:8px 15px;cursor:pointer;">Déconnexion</button>
     </header>
     <nav class="navigation">
-        <a href="index.html">Saisie</a>
-        <a href="confirmation.html" id="nav-confirmation">Confirmation</a>
-        <a href="audit.html" id="nav-audit">Audit</a>
-        <a href="dashboard.html" id="nav-dashboard">Tableau de Bord</a>
-        <a href="history.html">Historique</a>
-        <a href="expenses.html" id="nav-expenses">Dépenses</a>
-        <a href="other-income.html" id="nav-other-income">Autres Entrées</a>
-        <a href="bank.html" id="nav-bank">Banque</a>
-        <a href="clients.html" id="nav-clients">Clients</a>
-        <a href="magasinage.html" id="nav-magasinage">Magasinage</a>
-        <a href="salaire.html" id="nav-salaire">Salaire</a>
-        <a href="livraison.html" id="nav-livraison" class="active">LIVRAISON</a>
-        <a href="livreurscan.html" style="background:#16a34a;color:white;">📱 MODE LIVREUR</a>
-        <a href="voiture.html" id="nav-voiture">Gestion Véhicules</a>
-        <a href="points.html" id="nav-points">Points</a>
-        <a href="admin-panel.html" id="nav-admin" style="background-color:#6f42c1;color:white;">ADMIN</a>
+        <ul class="nav-menu">
+            <li><a href="dashboard.html" id="nav-dashboard">📊 Tableau de Bord</a></li>
+            
+            <li class="has-dropdown">
+                <a href="#">💵 Entrées Caisse</a>
+                <ul class="dropdown">
+                    <li><a href="index.html">Saisie</a></li>
+                    <li><a href="confirmation.html" id="nav-confirmation">Confirmation</a></li>
+                    <li><a href="history.html">Historique</a></li>
+                    <li><a href="other-income.html" id="nav-other-income">Autres Entrées</a></li>
+                </ul>
+            </li>
+            
+            <li class="has-dropdown">
+                <a href="#">📦 Logistique</a>
+                <ul class="dropdown">
+                    <li><a href="livraison.html" id="nav-livraison" class="active">LIVRAISON</a></li>
+                    <li><a href="livreurscan.html" style="color:#16a34a; font-weight:bold;">📱 MODE LIVREUR</a></li>
+                    <li><a href="voiture.html" id="nav-voiture">Gestion Véhicules</a></li>
+                    <li><a href="magasinage.html" id="nav-magasinage">Magasinage</a></li>
+                    <li><a href="points.html" id="nav-points">Points</a></li>
+                    <li><a href="clients.html" id="nav-clients">Clients</a></li>
+                </ul>
+            </li>
+            
+            <li class="has-dropdown">
+                <a href="#">💳 Sorties & Tréso</a>
+                <ul class="dropdown">
+                    <li><a href="expenses.html" id="nav-expenses">Dépenses</a></li>
+                    <li><a href="bank.html" id="nav-bank">Banque</a></li>
+                    <li><a href="audit.html" id="nav-audit">Audit</a></li>
+                </ul>
+            </li>
+            
+            <li class="has-dropdown">
+                <a href="#">⚙️ Administration</a>
+                <ul class="dropdown">
+                    <li><a href="admin-panel.html" id="nav-admin">ADMIN</a></li>
+                    <li><a href="salaire.html" id="nav-salaire">Salaire</a></li>
+                </ul>
+            </li>
+        </ul>
     </nav>
 
     <div id="livraison-content">

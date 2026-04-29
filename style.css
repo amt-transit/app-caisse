@@ -66,26 +66,81 @@ h2 { text-align: center; color: var(--text-main); margin: 15px 0 10px 0; font-si
 
 /* --- NAVIGATION --- */
 .navigation {
-    display: flex; justify-content: center; gap: 5px;
-    margin-bottom: 10px; flex-wrap: wrap;
+    display: flex; justify-content: center;
+    margin-bottom: 15px;
     background: white; padding: 6px; border-radius: var(--radius);
     box-shadow: var(--shadow-sm);
     width: fit-content; margin-left: auto; margin-right: auto;
 }
-.navigation a {
-    text-decoration: none; padding: 6px 12px;
+.nav-menu {
+    display: flex; gap: 5px; list-style: none; margin: 0; padding: 0; flex-wrap: wrap; justify-content: center;
+}
+.nav-menu > li {
+    position: relative; /* Requis pour le dropdown absolu */
+}
+.nav-menu a {
+    display: inline-flex; align-items: center; gap: 6px;
+    text-decoration: none; padding: 8px 14px;
     border-radius: 8px; color: var(--text-muted); font-weight: 600;
     background: transparent;
     transition: all 0.2s ease; font-size: 13px;
-    border: none;
-    box-shadow: none;
+    border: none; box-shadow: none; white-space: nowrap;
 }
-.navigation a:hover { background: #f1f5f9; color: var(--primary); transform: translateY(-1px); }
-.navigation a.active { background: var(--primary); color: #fff; box-shadow: var(--shadow-md); }
+.nav-menu a:hover { background: #f1f5f9; color: var(--primary); transform: translateY(-1px); }
+.nav-menu a.active { background: var(--primary); color: #fff; box-shadow: var(--shadow-md); }
+
+/* Flèche pour les menus déroulants */
+.has-dropdown > a::after {
+    content: "▾";
+    font-size: 11px;
+    margin-left: 4px;
+    transition: transform 0.2s ease;
+}
+.has-dropdown:hover > a::after {
+    transform: rotate(180deg);
+}
+
+/* Menu Déroulant (Dropdown) */
+.dropdown {
+    display: none; position: absolute; top: 100%; left: 0;
+    background: var(--bg-surface); min-width: 220px;
+    box-shadow: var(--shadow-lg); border-radius: 8px;
+    padding: 8px 0; list-style: none; margin: 5px 0 0 0;
+    z-index: 1000; border: 1px solid var(--border-color);
+    flex-direction: column; gap: 2px;
+}
+
+/* Pont invisible pour garder le hover actif quand on passe du menu au sous-menu */
+.dropdown::before {
+    content: "";
+    position: absolute;
+    top: -10px;
+    left: 0;
+    width: 100%;
+    height: 10px;
+}
+
+.has-dropdown:hover .dropdown {
+    display: flex; animation: fadeInDropdown 0.2s ease-in-out;
+}
+.dropdown a {
+    padding: 8px 16px; border-radius: 0; width: 100%; box-sizing: border-box;
+    font-weight: 500; color: var(--text-main);
+}
+.dropdown a:hover {
+    background: #f8fafc; color: var(--primary); transform: none; padding-left: 20px; /* Petit effet au survol */
+}
+@keyframes fadeInDropdown {
+    from { opacity: 0; transform: translateY(-5px); }
+    to { opacity: 1; transform: translateY(0); }
+}
 
 /* Badge Notification Confirmation */
-#nav-confirmation { position: relative; }
-#nav-confirmation.has-pending::after {
+#nav-confirmation,
+.nav-menu li:has(#nav-confirmation.has-pending) > a { position: relative; }
+
+#nav-confirmation.has-pending::after,
+.nav-menu li:has(#nav-confirmation.has-pending) > a::before {
     content: "!";
     position: absolute;
     top: -5px;
@@ -654,6 +709,14 @@ body.login-page {
         .navigation a.active {
             box-shadow: 0 4px 6px rgba(79, 70, 229, 0.2) !important;
         }
+        
+        /* Adaptation Mobile pour les Dropdowns (Tiroir) */
+        .nav-menu { flex-direction: column !important; width: 100%; }
+        .nav-menu > li { width: 100%; display: flex; flex-direction: column; }
+        .has-dropdown > a::after { display: none; } /* Masquer la flèche sur mobile */
+        /* Toujours afficher les sous-menus en mobile, avec une indentation */
+        .dropdown { position: static !important; display: flex !important; box-shadow: none !important; border: none !important; margin: 0 !important; padding: 0 0 0 15px !important; background: transparent !important; }
+        .dropdown a { padding: 10px 15px !important; font-size: 14px !important; border-bottom: none !important; }
 
     /* Sous-menus (Arrivages, etc.) */
     .sub-nav { overflow-x: auto; white-space: nowrap; justify-content: flex-start; padding-bottom: 10px; }

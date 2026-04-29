@@ -1584,4 +1584,49 @@ function initMobileApp() {
 
     renderMobileList();
 }
+window.reparerCalculsFinanciers = async function() {
+    if (!confirm("Voulez-vous recalculer tous les montants et restes de la base de données pour corriger les doublons ?")) return;
+    
+    try {
+        const transSnap = await getDocs(query(collection(db, "transactions"), where("isDeleted", "!=", true)));
+        let batch = writeBatch(db);
+        let count = 0;
+        
+        transSnap.forEach(docSnap => {
+            const t = docSnap.data();
+            if (t.paymentHistory && t.paymentHistory.length > 0) {
+                // On recalcule le VRAI total payé à partir de l'historique (qui lui est exact)
+                const vraiAbidjan = t.paymentHistory.reduce((sum, p) => sum + (p.montantAbidjan || 0), 0);
+                const vraiParis = t.paymentHistory.reduce((sum, p) => sum + (p.montantParis || 0), 0);
+                
+                let effectivePrix = t.prix || 0;
+                if (t.adjustmentType === 'reduction') effectivePrix -= (t.adjustmentVal || 0);
+                if (t.adjustmentType === 'augmentation') effectivePrix += (t.adjustmentVal || 0);
+                
+                // Le reste doit être négatif en cas de dette (Payé - Prix)
+                const vraiReste = (vraiAbidjan + vraiParis) - effectivePrix;
+                
+                // Si la base de données est fausse, on la corrige
+                if (t.montantAbidjan !== vraiAbidjan || t.reste !== vraiReste) {
+                    batch.update(docSnap.ref, {
+                        montantAbidjan: vraiAbidjan,
+                        montantParis: vraiParis,
+                        reste: vraiReste
+                    });
+                    count++;
+                }
+            }
+        });
+        
+        if (count > 0) {
+            await batch.commit();
+            alert(`✅ Réparation terminée : ${count} transactions ont été corrigées (Montants doublés effacés).`);
+        } else {
+            alert("👍 Tout est déjà correct, aucune erreur trouvée.");
+        }
+    } catch (e) {
+        console.error(e);
+        alert("Erreur lors de la réparation : " + e.message);
+    }
+};
 document.addEventListener('DOMContentLoaded', initMobileApp);
