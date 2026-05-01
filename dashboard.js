@@ -143,6 +143,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         depenses: document.getElementById('grandTotalDepenses'),
         benefice: document.getElementById('grandTotalBenefice'),
         caisse: document.getElementById('grandTotalCaisse'),
+        ventesCash: document.getElementById('grandTotalVentesCash'),
+        otherCash: document.getElementById('grandTotalOtherCash'),
+        depensesCash: document.getElementById('grandTotalDepensesCash'),
         banque: document.getElementById('grandTotalSoldeBanque'),
         cheques: document.getElementById('grandTotalCheques'),
         virements: document.getElementById('grandTotalVirements'),
@@ -291,6 +294,9 @@ document.addEventListener('DOMContentLoaded', async () => {
             els.benefice.parentElement.className = `total-card ${benefice >= 0 ? 'card-positif' : 'card-negatif'}`;
         }
         if(els.caisse) els.caisse.textContent = formatCFA(soldeCaisse);
+        if(els.ventesCash) els.ventesCash.textContent = formatCFA(totalVentesCash);
+        if(els.otherCash) els.otherCash.textContent = formatCFA(totalOtherCash);
+        if(els.depensesCash) els.depensesCash.textContent = formatCFA(totalDepCash);
         if(els.banque) els.banque.textContent = formatCFA(soldeBanque);
         if(els.cheques) els.cheques.textContent = formatCFA(totalCheques);
         if(els.virements) els.virements.textContent = formatCFA(totalVirements);

@@ -399,6 +399,9 @@ td button.editBtn { background-color: #007bff; color: white; border: none; paddi
 #card-cheques { background: linear-gradient(135deg, #8b5cf6 0%, #6d28d9 100%) !important; }
 #card-virements { background: linear-gradient(135deg, #0ea5e9 0%, #0369a1 100%) !important; }
 #card-operations { background: linear-gradient(135deg, #64748b 0%, #334155 100%) !important; }
+#card-ventes-cash { background: linear-gradient(135deg, #34d399 0%, #059669 100%) !important; }
+#card-other-cash { background: linear-gradient(135deg, #2dd4bf 0%, #0f766e 100%) !important; }
+#card-depenses-cash { background: linear-gradient(135deg, #fb7185 0%, #e11d48 100%) !important; }
 
 .card-positif { background: linear-gradient(135deg, #10b981 0%, #059669 100%) !important; border: none !important; }
 .card-negatif { background: linear-gradient(135deg, #ef4444 0%, #b91c1c 100%) !important; border: none !important; }

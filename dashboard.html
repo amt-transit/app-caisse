@@ -111,41 +111,62 @@
         <!-- 3. TRÉSORERIE, FLUX BANCAIRES & ACTIVITÉ -->
         <h3 class="kpi-section-title"><span class="icon-bg">🏦</span> Trésorerie, Flux Bancaires & Activité</h3>
         
-        <!-- Ligne 1 : Caisse, Retraits, Dépôts, Chèques, Virements -->
+        <!-- Ligne 1 : Détail Entrées Caisse -->
         <div class="totals-container" style="margin-bottom: 20px;">
-            <div class="total-card colored-card" id="card-caisse-especes" onclick="window.location.href='index.html'">
-                <h3>Solde Caisse (Espèces + MM)</h3>
-                <p id="grandTotalCaisse">0 CFA</p>
-                <div class="card-watermark">🪙</div>
+            <div class="total-card colored-card" id="card-ventes-cash" onclick="window.location.href='history.html'">
+                <h3>Encaissements Cash (Ventes)</h3>
+                <p id="grandTotalVentesCash">0 CFA</p>
+                <span class="card-subtext">Espèces + OM + Wave</span>
+                <div class="card-watermark">💶</div>
+            </div>
+            <div class="total-card colored-card" id="card-other-cash" onclick="window.location.href='other-income.html'">
+                <h3>Autres Entrées Cash</h3>
+                <p id="grandTotalOtherCash">0 CFA</p>
+                <div class="card-watermark">💵</div>
             </div>
             <div class="total-card colored-card" id="card-retraits" onclick="window.location.href='bank.html'">
                 <h3>Retraits (Banque ➔ Caisse)</h3>
                 <p id="grandTotalRetraits">0 CFA</p>
                 <div class="card-watermark">🏧</div>
             </div>
+        </div>
+
+        <!-- Ligne 2 : Détail Sorties & Solde Caisse -->
+        <div class="totals-container" style="margin-bottom: 20px;">
+            <div class="total-card colored-card" id="card-depenses-cash" onclick="window.location.href='expenses.html'">
+                <h3>Dépenses Cash</h3>
+                <p id="grandTotalDepensesCash">0 CFA</p>
+                <span class="card-subtext">Total Dépenses − Chèques/Virements</span>
+                <div class="card-watermark">💸</div>
+            </div>
             <div class="total-card colored-card" id="card-depots" onclick="window.location.href='bank.html'">
                 <h3>Dépôts (Caisse ➔ Banque)</h3>
                 <p id="grandTotalDepots">0 CFA</p>
                 <div class="card-watermark">📥</div>
             </div>
-            <div class="total-card colored-card" id="card-cheques" onclick="window.location.href='bank.html'">
-                <h3>Total Chèques Reçus</h3>
-                <p id="grandTotalCheques">0 CFA</p>
-                <div class="card-watermark">📝</div>
-            </div>
-            <div class="total-card colored-card" id="card-virements" onclick="window.location.href='bank.html'">
-                <h3>Total Virements Reçus</h3>
-                <p id="grandTotalVirements">0 CFA</p>
-                <div class="card-watermark">💻</div>
+            <div class="total-card colored-card card-positif" id="card-caisse-especes" onclick="window.location.href='index.html'" style="border: 2px solid #059669 !important; transform: scale(1.02);">
+                <h3>Solde Caisse (Espèces + MM)</h3>
+                <p id="grandTotalCaisse">0 CFA</p>
+                <div class="card-watermark">🪙</div>
             </div>
         </div>
 
-        <!-- Ligne 2 : Solde Banque, Dettes Clients, Opérations Totales -->
+        <!-- Ligne 3 : Banque, Dettes, Opérations -->
         <div class="totals-container">
             <div class="total-card colored-card" id="card-solde-banque" onclick="window.location.href='bank.html'">
                 <h3>Solde Banque</h3>
                 <p id="grandTotalSoldeBanque">0 CFA</p>
                 <div class="card-watermark">💳</div>
+            </div>
+            <div class="total-card colored-card" id="card-cheques" onclick="window.location.href='bank.html'">
+                <h3>Chèques Reçus</h3>
+                <p id="grandTotalCheques">0 CFA</p>
+                <div class="card-watermark">📝</div>
+            </div>
+            <div class="total-card colored-card" id="card-virements" onclick="window.location.href='bank.html'">
+                <h3>Virements Reçus</h3>
+                <p id="grandTotalVirements">0 CFA</p>
+                <div class="card-watermark">💻</div>
             </div>
             <div class="total-card colored-card" id="card-reste" onclick="window.location.href='clients.html'">
                 <h3>Dettes Clients (Reste Total)</h3>
