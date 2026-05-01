@@ -387,6 +387,10 @@ td button.editBtn { background-color: #007bff; color: white; border: none; paddi
 .total-card:hover .card-watermark { transform: rotate(0deg) scale(1.15); opacity: 0.25; }
 .card-subtext { display: block; font-size: 12px; opacity: 0.85; margin-top: 8px; font-weight: 500; }
 
+@media (min-width: 768px) {
+    .span-2 { grid-column: span 2; }
+}
+
 /* COULEURS GRANDS TOTAUX DASHBOARD - Gradients Premium */
 #card-percu { background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%) !important; }
 #card-other { background: linear-gradient(135deg, #14b8a6 0%, #0f766e 100%) !important; }
@@ -396,12 +400,9 @@ td button.editBtn { background-color: #007bff; color: white; border: none; paddi
 #card-reste { background: linear-gradient(135deg, #f97316 0%, #c2410c 100%) !important; }
 #card-retraits { background: linear-gradient(135deg, #a855f7 0%, #7e22ce 100%) !important; }
 #card-depots { background: linear-gradient(135deg, #ec4899 0%, #be185d 100%) !important; }
-#card-cheques { background: linear-gradient(135deg, #8b5cf6 0%, #6d28d9 100%) !important; }
-#card-virements { background: linear-gradient(135deg, #0ea5e9 0%, #0369a1 100%) !important; }
 #card-operations { background: linear-gradient(135deg, #64748b 0%, #334155 100%) !important; }
-#card-ventes-cash { background: linear-gradient(135deg, #34d399 0%, #059669 100%) !important; }
 #card-other-cash { background: linear-gradient(135deg, #2dd4bf 0%, #0f766e 100%) !important; }
-#card-depenses-cash { background: linear-gradient(135deg, #fb7185 0%, #e11d48 100%) !important; }
+#card-sorties-cash { background: linear-gradient(135deg, #fb7185 0%, #e11d48 100%) !important; }
 
 .card-positif { background: linear-gradient(135deg, #10b981 0%, #059669 100%) !important; border: none !important; }
 .card-negatif { background: linear-gradient(135deg, #ef4444 0%, #b91c1c 100%) !important; border: none !important; }

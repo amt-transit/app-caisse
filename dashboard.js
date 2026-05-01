@@ -143,18 +143,22 @@ document.addEventListener('DOMContentLoaded', async () => {
         depenses: document.getElementById('grandTotalDepenses'),
         benefice: document.getElementById('grandTotalBenefice'),
         caisse: document.getElementById('grandTotalCaisse'),
-        ventesCash: document.getElementById('grandTotalVentesCash'),
         otherCash: document.getElementById('grandTotalOtherCash'),
-        depensesCash: document.getElementById('grandTotalDepensesCash'),
         banque: document.getElementById('grandTotalSoldeBanque'),
-        cheques: document.getElementById('grandTotalCheques'),
-        virements: document.getElementById('grandTotalVirements'),
         count: document.getElementById('grandTotalCount'),
         reste: document.getElementById('grandTotalReste'),
         retraits: document.getElementById('grandTotalRetraits'),
         depots: document.getElementById('grandTotalDepots'),
         depContainer: document.getElementById('detailDepensesConteneur'),
-        depMensuelle: document.getElementById('detailDepensesMensuelles')
+        depMensuelle: document.getElementById('detailDepensesMensuelles'),
+        depBreakdownCash: document.getElementById('depensesBreakdownCash'),
+        depBreakdownBanque: document.getElementById('depensesBreakdownBanque'),
+        sortiesCash: document.getElementById('grandTotalSortiesCash'),
+        sortiesBreakdownDepenses: document.getElementById('sortiesBreakdownDepenses'),
+        sortiesBreakdownDepots: document.getElementById('sortiesBreakdownDepots'),
+        percuBreakdownCash: document.getElementById('percuBreakdownCash'),
+        percuBreakdownCheques: document.getElementById('percuBreakdownCheques'),
+        percuBreakdownVirements: document.getElementById('percuBreakdownVirements')
     };
 
     // Gestion Rôle Saisie Full (Masquage)
@@ -234,6 +238,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         // A. Recettes (Basées sur les paiements effectifs dans la période)
         let totalAbidjan = 0, totalParis = 0, totalCheques = 0, totalVirements = 0;
         let totalVentesCash = 0; // Pour la caisse physique
+        let abidjanCheques = 0, abidjanVirements = 0; // Pour le détail de la carte Conteneurs
 
         transactions.forEach(t => {
             const payments = t.paymentHistory || [{ ...t, date: t.date }]; // Fallback legacy
@@ -247,9 +252,17 @@ document.addEventListener('DOMContentLoaded', async () => {
 
                     // Ventilation par mode
                     const mode = p.modePaiement || t.modePaiement || 'Espèce';
-                    if (['Espèce', 'Wave', 'OM', 'Mobile Money'].includes(mode)) totalVentesCash += (p.montantAbidjan || 0);
-                    if (mode === 'Chèque') totalCheques += ((p.montantAbidjan || 0) + (p.montantParis || 0));
-                    if (mode === 'Virement') totalVirements += ((p.montantAbidjan || 0) + (p.montantParis || 0));
+                    if (['Espèce', 'Wave', 'OM', 'Mobile Money'].includes(mode)) {
+                        totalVentesCash += (p.montantAbidjan || 0);
+                    }
+                    if (mode === 'Chèque') {
+                        totalCheques += ((p.montantAbidjan || 0) + (p.montantParis || 0));
+                        abidjanCheques += (p.montantAbidjan || 0);
+                    }
+                    if (mode === 'Virement') {
+                        totalVirements += ((p.montantAbidjan || 0) + (p.montantParis || 0));
+                        abidjanVirements += (p.montantAbidjan || 0);
+                    }
                 }
             });
         });
@@ -262,6 +275,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         const realExpenses = expenses.filter(e => e.action !== 'Allocation'); // On exclut les recharges budget
         const totalDep = realExpenses.reduce((sum, e) => sum + (e.montant || 0), 0);
         const totalDepCash = realExpenses.filter(e => e.mode !== 'Chèque' && e.mode !== 'Virement').reduce((sum, e) => sum + (e.montant || 0), 0);
+        const totalDepBanque = totalDep - totalDepCash;
 
         // Détail Dépenses
         const depConteneur = realExpenses.filter(e => {
@@ -287,6 +301,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         // F. Affichage
         if(els.percu) els.percu.textContent = formatCFA(totalAbidjan);
         if(els.parisHidden) els.parisHidden.textContent = `Dont Paris: ${formatCFA(totalParis)}`;
+        if(els.percuBreakdownCash) els.percuBreakdownCash.textContent = formatCFA(totalVentesCash);
+        if(els.percuBreakdownCheques) els.percuBreakdownCheques.textContent = formatCFA(abidjanCheques);
+        if(els.percuBreakdownVirements) els.percuBreakdownVirements.textContent = formatCFA(abidjanVirements);
         if(els.other) els.other.textContent = formatCFA(totalOther);
         if(els.depenses) els.depenses.textContent = formatCFA(totalDep);
         if(els.benefice) {
@@ -294,18 +311,18 @@ document.addEventListener('DOMContentLoaded', async () => {
             els.benefice.parentElement.className = `total-card ${benefice >= 0 ? 'card-positif' : 'card-negatif'}`;
         }
         if(els.caisse) els.caisse.textContent = formatCFA(soldeCaisse);
-        if(els.ventesCash) els.ventesCash.textContent = formatCFA(totalVentesCash);
         if(els.otherCash) els.otherCash.textContent = formatCFA(totalOtherCash);
-        if(els.depensesCash) els.depensesCash.textContent = formatCFA(totalDepCash);
+        if(els.sortiesCash) els.sortiesCash.textContent = formatCFA(totalDepCash + depots);
+        if(els.sortiesBreakdownDepenses) els.sortiesBreakdownDepenses.textContent = formatCFA(totalDepCash);
+        if(els.sortiesBreakdownDepots) els.sortiesBreakdownDepots.textContent = formatCFA(depots);
         if(els.banque) els.banque.textContent = formatCFA(soldeBanque);
-        if(els.cheques) els.cheques.textContent = formatCFA(totalCheques);
-        if(els.virements) els.virements.textContent = formatCFA(totalVirements);
         if(els.retraits) els.retraits.textContent = formatCFA(retraitsEspeces);
-        if(els.depots) els.depots.textContent = formatCFA(depots);
         if(els.count) els.count.textContent = transactions.length;
         if(els.reste) els.reste.textContent = formatCFA(resteTotal);
         if(els.depContainer) els.depContainer.textContent = `Conteneurs: ${formatCFA(depConteneur)}`;
         if(els.depMensuelle) els.depMensuelle.textContent = `Mensuelles: ${formatCFA(depMensuelle)}`;
+        if(els.depBreakdownCash) els.depBreakdownCash.textContent = formatCFA(totalDepCash);
+        if(els.depBreakdownBanque) els.depBreakdownBanque.textContent = formatCFA(totalDepBanque);
     }
 
     function isInDateRange(dateStr) {

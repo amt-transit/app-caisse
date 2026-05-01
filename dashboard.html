@@ -83,10 +83,28 @@
         <!-- 1. PERFORMANCE FINANCIÈRE -->
         <h3 class="kpi-section-title"><span class="icon-bg">📈</span> Performance Financière</h3>
         <div class="totals-container" style="margin-bottom: 30px;">
-            <div class="total-card colored-card" id="card-percu" onclick="window.location.href='arrivages.html'">
-                <h3>Total Conteneurs (A)</h3>
-                <p id="grandTotalPercu">0 CFA</p>
-                <span id="grandTotalParisHidden" class="card-subtext">Dont Paris: 0 CFA</span>
+            <div class="total-card colored-card span-2" id="card-percu" onclick="window.location.href='arrivages.html'">
+                <div style="display: flex; justify-content: space-between; align-items: center; width: 100%; gap: 15px; flex-wrap: wrap;">
+                    <div style="flex: 1; min-width: 150px;">
+                        <h3>Total Conteneurs (A)</h3>
+                        <p id="grandTotalPercu">0 CFA</p>
+                        <span id="grandTotalParisHidden" class="card-subtext">Dont Paris: 0 CFA</span>
+                    </div>
+                    <div style="flex: 1.2; min-width: 180px; border-left: 1px solid rgba(255,255,255,0.2); padding-left: 15px;">
+                        <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
+                            <span style="opacity: 0.85; font-size: 12px;">Encaissements Cash :</span>
+                            <span id="percuBreakdownCash" style="font-weight: 700; font-size: 13px;">0 CFA</span>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
+                            <span style="opacity: 0.85; font-size: 12px;">Chèques Reçus :</span>
+                            <span id="percuBreakdownCheques" style="font-weight: 700; font-size: 13px;">0 CFA</span>
+                        </div>
+                        <div style="display: flex; justify-content: space-between;">
+                            <span style="opacity: 0.85; font-size: 12px;">Virements Reçus :</span>
+                            <span id="percuBreakdownVirements" style="font-weight: 700; font-size: 13px;">0 CFA</span>
+                        </div>
+                    </div>
+                </div>
                 <div class="card-watermark">📦</div>
             </div>
             <div class="total-card colored-card" id="card-other" onclick="window.location.href='other-income.html'">
@@ -94,11 +112,25 @@
                 <p id="grandTotalOtherIncome">0 CFA</p>
                 <div class="card-watermark">💵</div>
             </div>
-            <div class="total-card colored-card" id="card-depenses" onclick="window.location.href='expenses.html'">
-                <h3>Dépenses Totales</h3>
-                <p id="grandTotalDepenses">0 CFA</p>
-                <span id="detailDepensesConteneur" class="card-subtext">Conteneurs: 0 CFA</span>
-                <span id="detailDepensesMensuelles" class="card-subtext">Mensuelles: 0 CFA</span>
+            <div class="total-card colored-card span-2" id="card-depenses" onclick="window.location.href='expenses.html'">
+                <div style="display: flex; justify-content: space-between; align-items: center; width: 100%; gap: 15px; flex-wrap: wrap;">
+                    <div style="flex: 1; min-width: 150px;">
+                        <h3>Dépenses Totales</h3>
+                        <p id="grandTotalDepenses">0 CFA</p>
+                        <span id="detailDepensesConteneur" class="card-subtext">Conteneurs: 0 CFA</span>
+                        <span id="detailDepensesMensuelles" class="card-subtext">Mensuelles: 0 CFA</span>
+                    </div>
+                    <div style="flex: 1.2; min-width: 180px; border-left: 1px solid rgba(255,255,255,0.2); padding-left: 15px;">
+                        <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
+                            <span style="opacity: 0.85; font-size: 12px;">Dépenses Cash :</span>
+                            <span id="depensesBreakdownCash" style="font-weight: 700; font-size: 13px;">0 CFA</span>
+                        </div>
+                        <div style="display: flex; justify-content: space-between;">
+                            <span style="opacity: 0.85; font-size: 12px;">Dépenses Banque :</span>
+                            <span id="depensesBreakdownBanque" style="font-weight: 700; font-size: 13px;">0 CFA</span>
+                        </div>
+                    </div>
+                </div>
                 <div class="card-watermark">📉</div>
             </div>
             <div class="total-card" id="card-benefice" onclick="window.location.href='audit.html'">
@@ -113,12 +145,6 @@
         
         <!-- Ligne 1 : Détail Entrées Caisse -->
         <div class="totals-container" style="margin-bottom: 20px;">
-            <div class="total-card colored-card" id="card-ventes-cash" onclick="window.location.href='history.html'">
-                <h3>Encaissements Cash (Ventes)</h3>
-                <p id="grandTotalVentesCash">0 CFA</p>
-                <span class="card-subtext">Espèces + OM + Wave</span>
-                <div class="card-watermark">💶</div>
-            </div>
             <div class="total-card colored-card" id="card-other-cash" onclick="window.location.href='other-income.html'">
                 <h3>Autres Entrées Cash</h3>
                 <p id="grandTotalOtherCash">0 CFA</p>
@@ -133,16 +159,24 @@
 
         <!-- Ligne 2 : Détail Sorties & Solde Caisse -->
         <div class="totals-container" style="margin-bottom: 20px;">
-            <div class="total-card colored-card" id="card-depenses-cash" onclick="window.location.href='expenses.html'">
-                <h3>Dépenses Cash</h3>
-                <p id="grandTotalDepensesCash">0 CFA</p>
-                <span class="card-subtext">Total Dépenses − Chèques/Virements</span>
+            <div class="total-card colored-card span-2" id="card-sorties-cash" onclick="window.location.href='expenses.html'">
+                <div style="display: flex; justify-content: space-between; align-items: center; width: 100%; gap: 15px; flex-wrap: wrap;">
+                    <div style="flex: 1; min-width: 150px;">
+                        <h3>Décaissements Cash</h3>
+                        <p id="grandTotalSortiesCash">0 CFA</p>
+                    </div>
+                    <div style="flex: 1.2; min-width: 180px; border-left: 1px solid rgba(255,255,255,0.2); padding-left: 15px;">
+                        <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
+                            <span style="opacity: 0.85; font-size: 12px;">Dépenses Cash :</span>
+                            <span id="sortiesBreakdownDepenses" style="font-weight: 700; font-size: 13px;">0 CFA</span>
+                        </div>
+                        <div style="display: flex; justify-content: space-between;">
+                            <span style="opacity: 0.85; font-size: 12px;">Dépôts (➔ Banque) :</span>
+                            <span id="sortiesBreakdownDepots" style="font-weight: 700; font-size: 13px;">0 CFA</span>
+                        </div>
+                    </div>
+                </div>
                 <div class="card-watermark">💸</div>
-            </div>
-            <div class="total-card colored-card" id="card-depots" onclick="window.location.href='bank.html'">
-                <h3>Dépôts (Caisse ➔ Banque)</h3>
-                <p id="grandTotalDepots">0 CFA</p>
-                <div class="card-watermark">📥</div>
             </div>
             <div class="total-card colored-card card-positif" id="card-caisse-especes" onclick="window.location.href='index.html'" style="border: 2px solid #059669 !important; transform: scale(1.02);">
                 <h3>Solde Caisse (Espèces + MM)</h3>
@@ -157,16 +191,6 @@
                 <h3>Solde Banque</h3>
                 <p id="grandTotalSoldeBanque">0 CFA</p>
                 <div class="card-watermark">💳</div>
-            </div>
-            <div class="total-card colored-card" id="card-cheques" onclick="window.location.href='bank.html'">
-                <h3>Chèques Reçus</h3>
-                <p id="grandTotalCheques">0 CFA</p>
-                <div class="card-watermark">📝</div>
-            </div>
-            <div class="total-card colored-card" id="card-virements" onclick="window.location.href='bank.html'">
-                <h3>Virements Reçus</h3>
-                <p id="grandTotalVirements">0 CFA</p>
-                <div class="card-watermark">💻</div>
             </div>
             <div class="total-card colored-card" id="card-reste" onclick="window.location.href='clients.html'">
                 <h3>Dettes Clients (Reste Total)</h3>
