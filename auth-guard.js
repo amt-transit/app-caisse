@@ -97,13 +97,15 @@ onAuthStateChanged(auth, async (user) => {
         if (userRole === 'super_admin') {
             // On ré-affiche l'onglet Admin
             const navAdmin = document.getElementById('nav-admin');
+            const navCompteJB = document.getElementById('nav-comptejb');
             if (navAdmin) navAdmin.style.display = 'block';
+            if (navCompteJB) navCompteJB.style.display = 'block';
             document.body.style.display = 'block';
             return;
         }
 
-        // Protection page Admin
-        if (currentPage.includes('admin-panel.html')) {
+        // Protection page Admin et Compte JB
+        if (currentPage.includes('admin-panel.html') || currentPage.includes('comptejb.html')) {
             if (userRole !== 'admin') {
                 await showErrorAndRedirect("Accès réservé aux Administrateurs.", "Accès Refusé");
                 return;
@@ -176,8 +178,10 @@ onAuthStateChanged(auth, async (user) => {
         const navLivraison = document.getElementById('nav-livraison');
         const navAudit = document.getElementById('nav-audit');
         const navVoiture = document.getElementById('nav-voiture');
+        const navCompteJB = document.getElementById('nav-comptejb');
 
         if (navAdmin && userRole !== 'super_admin' && userRole !== 'admin') navAdmin.style.display = 'none';
+        if (navCompteJB && userRole !== 'super_admin' && userRole !== 'admin') navCompteJB.style.display = 'none';
         if (navPoints && (userRole !== 'admin' && userRole !== 'super_admin' && userRole !== 'spectateur')) navPoints.style.display = 'none';
         if (navAudit && (userRole !== 'admin' && userRole !== 'super_admin' && userRole !== 'spectateur')) navAudit.style.display = 'none';
 

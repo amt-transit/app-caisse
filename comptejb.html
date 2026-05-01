@@ -1,0 +1,829 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>COMPTE JB — Livre de Caisse</title>
+  <link rel="stylesheet" href="style.css" />
+  <link rel="icon" type="image/png" href="favicon.png">
+  <style>
+    /* ===================================================
+       COMPTE JB — Scoped Stylesheet
+       Intégration harmonieuse dans le layout global
+       =================================================== */
+
+    @import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Sans:wght@300;400;500;600&display=swap');
+
+    /* ---------- Variables Scoped ---------- */
+    .jb-workspace {
+      --navy:        #0d1b2a;
+      --navy-mid:    #162740;
+      --navy-light:  #1e3551;
+      --gold:        #d4a843;
+      --gold-light:  #e8c06a;
+      --gold-faint:  rgba(212,168,67,.12);
+      --green:       #27ae60;
+      --green-bg:    rgba(39,174,96,.1);
+      --red:         #e74c3c;
+      --red-bg:      rgba(231,76,60,.1);
+      --text-main:   #f0f4f8;
+      --text-muted:  #8fa3bb;
+      --border:      rgba(255,255,255,.08);
+      --card-bg:     #162740;
+      --radius:      12px;
+      --shadow:      0 4px 24px rgba(0,0,0,.35);
+      --transition:  .22s cubic-bezier(.4,0,.2,1);
+
+      background: var(--navy);
+      color: var(--text-main);
+      border-radius: 16px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.15);
+      overflow: hidden;
+      font-family: 'DM Sans', sans-serif;
+      min-height: 80vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .jb-workspace h1, .jb-workspace h2, .jb-workspace h3 {
+      font-family: 'DM Serif Display', serif;
+      letter-spacing: 0.5px;
+      margin: 0;
+    }
+
+    /* ---------- INTERNAL HEADER ---------- */
+    .jb-header {
+      background: var(--navy-mid);
+      padding: 20px 30px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 20px;
+    }
+
+    .brand {
+      display: flex; align-items: center; gap: 12px;
+    }
+    .brand-icon {
+      width: 40px; height: 40px;
+      background: var(--gold);
+      color: var(--navy);
+      border-radius: 10px;
+      display: grid; place-items: center;
+      font-size: 22px; font-weight: 700;
+      font-family: 'DM Serif Display', serif;
+      flex-shrink: 0;
+    }
+    .brand-name {
+      font-size: 18px; color: var(--gold-light);
+    }
+
+    .nav-menu {
+      display: flex; gap: 8px; flex-wrap: wrap;
+      margin: 0; padding: 0; list-style: none;
+    }
+    .nav-btn {
+      display: flex; align-items: center; gap: 12px;
+      padding: 10px 16px;
+      background: transparent; border: none; cursor: pointer;
+      color: var(--text-muted); font-size: 14px; font-weight: 500;
+      border-radius: 9px;
+      transition: all var(--transition);
+    }
+    .nav-btn svg { width: 18px; height: 18px; fill: currentColor; flex-shrink: 0; }
+    .nav-btn:hover { background: var(--gold-faint); color: var(--text-main); }
+    .nav-btn.active { background: var(--gold-faint); color: var(--gold); border: 1px solid rgba(212,168,67,0.3); }
+    .nav-btn.active svg { fill: var(--gold); }
+
+    /* Horizontal Info Bar */
+    .om-banque-info {
+      display: flex; align-items: center; gap: 20px; flex-wrap: wrap;
+      background: var(--navy-mid); padding: 12px 30px;
+      border-bottom: 1px solid var(--border); font-size: 13px;
+    }
+    .om-banque-info .om-label { font-weight: 700; color: var(--gold); letter-spacing: 1px; }
+    .om-banque-info .om-item { display: flex; gap: 8px; color: var(--text-muted); }
+    .om-banque-info .om-item strong { color: var(--text-main); }
+    .om-banque-info .om-item strong.gold { color: var(--gold-light); }
+    .om-banque-info .om-item strong.red { color: var(--red); }
+
+    /* ---------- MAIN AREA ---------- */
+    .jb-main {
+      flex: 1; padding: 30px; position: relative;
+    }
+
+    /* ---------- BUTTONS ---------- */
+    .jb-workspace .btn-primary, 
+    .jb-workspace .btn-secondary, 
+    .jb-workspace .btn-add {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 9px 20px; border-radius: 8px;
+      font-size: 14px; font-weight: 600; cursor: pointer;
+      border: none; transition: all var(--transition);
+    }
+    .jb-workspace .btn-primary {
+      background: var(--gold); color: var(--navy);
+    }
+    .jb-workspace .btn-primary:hover { background: var(--gold-light); transform: translateY(-1px); }
+    .jb-workspace .btn-primary svg { width: 16px; height: 16px; fill: var(--navy); }
+    
+    .jb-workspace .btn-secondary {
+      background: var(--navy-light); color: var(--text-main);
+      border: 1px solid var(--border);
+    }
+    .jb-workspace .btn-secondary:hover { border-color: var(--gold); color: var(--gold); }
+    
+    .jb-workspace .btn-add {
+      background: transparent; color: var(--gold); border: 1px dashed var(--gold);
+      margin-top: 10px; padding: 8px 16px; font-size: 13px; font-weight: 500;
+    }
+    .jb-workspace .btn-add:hover { background: var(--gold-faint); }
+
+    /* ---------- VIEWS ---------- */
+    .jb-workspace .view { display: none; animation: fadeIn .3s ease; }
+    .jb-workspace .view.active { display: block; }
+
+    /* ---------- DASHBOARD ---------- */
+    .jb-workspace .kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 16px; margin-bottom: 32px;
+    }
+    .jb-workspace .kpi-card {
+      background: var(--card-bg);
+      border-radius: var(--radius); padding: 22px 24px;
+      border: 1px solid var(--border);
+      transition: transform var(--transition);
+    }
+    .jb-workspace .kpi-card:hover { transform: translateY(-3px); }
+    .jb-workspace .kpi-card.credit { border-top: 3px solid var(--green); }
+    .jb-workspace .kpi-card.debit  { border-top: 3px solid var(--red); }
+    .jb-workspace .kpi-card.solde  { border-top: 3px solid var(--gold); }
+    .jb-workspace .kpi-card.periodes { border-top: 3px solid #7c5cbf; }
+    .jb-workspace .kpi-label { font-size: 12px; text-transform: uppercase; letter-spacing: 1px; color: var(--text-muted); margin-bottom: 6px; }
+    .jb-workspace .kpi-value { font-size: 26px; font-weight: 700; color: var(--text-main); font-family: 'DM Serif Display', serif; }
+    .jb-workspace .kpi-sub { font-size: 12px; color: var(--text-muted); margin-top: 4px; }
+    .jb-workspace .kpi-card.credit .kpi-value { color: var(--green); }
+    .jb-workspace .kpi-card.debit .kpi-value  { color: var(--red); }
+    .jb-workspace .kpi-card.solde .kpi-value  { color: var(--gold); }
+
+    .jb-workspace .section-title {
+      font-size: 13px; font-weight: 600; text-transform: uppercase;
+      letter-spacing: 1.2px; color: var(--text-muted); margin-bottom: 14px;
+      padding-bottom: 8px; border-bottom: 1px solid var(--border);
+    }
+
+    .jb-workspace .periode-summary {
+      background: var(--card-bg); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 20px; margin-bottom: 28px;
+    }
+
+    .jb-workspace .credit-bars { margin-bottom: 28px; }
+    .jb-workspace .bar-row { display: flex; align-items: center; gap: 14px; margin-bottom: 12px; }
+    .jb-workspace .bar-label { width: 60px; font-size: 13px; color: var(--text-muted); flex-shrink: 0; }
+    .jb-workspace .bar-track { flex: 1; height: 10px; background: var(--navy-light); border-radius: 99px; overflow: hidden; }
+    .jb-workspace .bar-fill { height: 100%; border-radius: 99px; transition: width .6s ease; }
+    .jb-workspace .bar-fill.om { background: var(--gold); }
+    .jb-workspace .bar-fill.wave { background: #3498db; }
+    .jb-workspace .bar-fill.espece { background: var(--green); }
+    .jb-workspace .bar-value { width: 100px; font-size: 13px; text-align: right; color: var(--text-main); font-weight: 500; }
+
+    /* ---------- SPLIT LAYOUT (SAISIE + RECAP) ---------- */
+    .jb-workspace .split-layout { display: flex; gap: 24px; align-items: flex-start; }
+    .jb-workspace .split-left { flex: 2; min-width: 0; }
+    .jb-workspace .split-right { flex: 1; min-width: 320px; position: sticky; top: 24px; }
+    .jb-workspace .recap-side-card { background: var(--card-bg); border: 1px solid var(--border); border-radius: var(--radius); padding: 24px; box-shadow: var(--shadow); }
+    .jb-workspace .mini-ledger { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .jb-workspace .mini-ledger th { text-align: left; padding-bottom: 8px; color: var(--text-muted); font-weight: 600; border-bottom: 1px solid var(--border); }
+    .jb-workspace .mini-ledger td { padding: 10px 0; border-bottom: 1px dashed rgba(255,255,255,0.05); color: var(--text-main); }
+    .jb-workspace .mini-ledger tr:last-child td { border-bottom: none; }
+    .jb-workspace .text-green { color: var(--green) !important; font-weight: 600; text-align: right; white-space: nowrap; }
+    .jb-workspace .text-red { color: var(--red) !important; font-weight: 600; text-align: right; white-space: nowrap; }
+    @media (max-width: 900px) { .jb-workspace .split-layout { flex-direction: column; } .jb-workspace .split-right { position: static; width: 100%; } }
+
+    /* ---------- FORM ---------- */
+    .jb-workspace .form-card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 24px; max-width: 100%;
+      margin-bottom: 20px;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+    }
+    .jb-workspace .form-card.border-green { border-top: 3px solid var(--green); }
+    .jb-workspace .form-card.border-red { border-top: 3px solid var(--red); }
+    .jb-workspace .form-card.border-gold { border-top: 3px solid var(--gold); }
+
+    .jb-workspace .form-header-title { font-size: 22px; margin-bottom: 6px; color: var(--gold-light); font-family: 'DM Serif Display', serif; }
+    .jb-workspace .form-header-sub { font-size: 13px; color: var(--text-muted); margin-bottom: 24px; }
+    
+    .jb-workspace .form-section-title {
+      font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px;
+      color: var(--text-main); margin-bottom: 16px; display: flex; align-items: center; gap: 8px;
+    }
+
+    /* Dynamic credit/debit rows */
+    .jb-workspace .entry-row {
+      display: flex; gap: 8px; align-items: center; margin-bottom: 8px;
+      background: var(--navy-mid); padding: 6px; border-radius: 10px;
+      border: 1px solid var(--border);
+      animation: fadeIn .2s ease;
+    }
+    @keyframes fadeIn { from { opacity:0; transform: translateY(4px); } to { opacity:1; transform: none; } }
+    .jb-workspace .entry-row input, .jb-workspace .entry-row select {
+      flex: 1; padding: 8px 10px;
+      background: var(--navy); border: 1px solid transparent;
+      border-radius: 6px; color: var(--text-main); font-size: 13px;
+    }
+    .jb-workspace .entry-row input:focus, .jb-workspace .entry-row select:focus { border-color: var(--gold); background: var(--navy-light); outline: none; }
+    .jb-workspace .entry-row .btn-del {
+      background: transparent; border: none; color: var(--red);
+      cursor: pointer; font-size: 16px; padding: 4px 8px;
+      border-radius: 6px; transition: background var(--transition);
+    }
+    .jb-workspace .entry-row .btn-del:hover { background: var(--red-bg); }
+
+    /* Billet grid */
+    .jb-workspace .billet-grid {
+      display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 12px;
+    }
+    .jb-workspace .billet-item {
+      background: var(--navy-mid); border: 1px solid var(--border);
+      border-radius: 8px; padding: 8px 12px;
+      display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    }
+    .jb-workspace .billet-item label { font-size: 13px; font-weight: 700; color: var(--gold-light); }
+    .jb-workspace .billet-item input {
+      background: var(--navy); border: 1px solid var(--border); border-radius: 6px;
+      color: var(--text-main); font-size: 14px; font-weight: 600; width: 65px;
+      text-align: center; padding: 4px; transition: border-color var(--transition);
+    }
+    .jb-workspace .billet-item input:focus { outline: none; border-color: var(--gold); }
+
+    /* Recap */
+    .jb-workspace .recap-section { background: var(--navy-light); border-radius: 10px; padding: 20px; }
+    .jb-workspace .recap-grid {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px;
+    }
+    .jb-workspace .recap-item {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 10px 14px; background: var(--navy-mid);
+      border-radius: 8px; border: 1px solid var(--border);
+    }
+    .jb-workspace .recap-item span { font-size: 13px; color: var(--text-muted); }
+    .jb-workspace .recap-item strong { font-size: 14px; color: var(--text-main); }
+    .jb-workspace .recap-item.highlight strong { color: var(--gold); }
+    .jb-workspace .recap-item.solde-recap { grid-column: 1 / -1; background: var(--gold-faint); border-color: var(--gold); }
+    .jb-workspace .recap-item.solde-recap strong { font-size: 18px; }
+    .jb-workspace .recap-item.solde-recap.negatif { background: var(--red-bg); border-color: var(--red); }
+    .jb-workspace .recap-item.solde-recap.negatif strong { color: var(--red); }
+    .jb-workspace .recap-item.solde-recap.positif strong { color: var(--green); }
+
+    .jb-workspace .form-actions { display: flex; gap: 12px; justify-content: flex-end; margin-top: 8px; }
+
+    /* ---------- HISTORIQUE ---------- */
+    .jb-workspace .search-bar {
+      display: flex; align-items: center; gap: 10px;
+      background: var(--card-bg); border: 1px solid var(--border);
+      border-radius: 10px; padding: 10px 16px; margin-bottom: 20px;
+    }
+    .jb-workspace .search-bar svg { width: 18px; height: 18px; fill: var(--text-muted); flex-shrink: 0; }
+    .jb-workspace .search-bar input { background: transparent; border: none; color: var(--text-main); font-size: 14px; flex: 1; }
+    .jb-workspace .search-bar input:focus { outline: none; }
+
+    .jb-workspace .periode-card {
+      background: var(--card-bg); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 18px 22px; margin-bottom: 12px;
+      display: flex; align-items: center; gap: 20px;
+      cursor: pointer; transition: all var(--transition);
+    }
+    .jb-workspace .periode-card:hover { border-color: var(--gold); transform: translateX(4px); }
+    .jb-workspace .pc-date {
+      font-family: 'DM Serif Display', serif;
+      font-size: 20px; color: var(--gold); min-width: 110px;
+    }
+    .jb-workspace .pc-metrics { display: flex; gap: 24px; flex: 1; }
+    .jb-workspace .pc-metric { display: flex; flex-direction: column; }
+    .jb-workspace .pc-metric-label { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: .8px; }
+    .jb-workspace .pc-metric-val { font-size: 15px; font-weight: 600; }
+    .jb-workspace .pc-metric-val.credit { color: var(--green); }
+    .jb-workspace .pc-metric-val.debit { color: var(--red); }
+    .jb-workspace .pc-metric-val.pos { color: var(--gold); }
+    .jb-workspace .pc-metric-val.neg { color: var(--red); }
+    .jb-workspace .pc-actions { display: flex; gap: 8px; }
+    .jb-workspace .btn-icon {
+      background: transparent; border: 1px solid var(--border);
+      border-radius: 7px; padding: 7px 10px; cursor: pointer;
+      color: var(--text-muted); font-size: 13px;
+      transition: all var(--transition);
+    }
+    .jb-workspace .btn-icon:hover { border-color: var(--red); color: var(--red); }
+
+    /* ---------- STATISTIQUES ---------- */
+    .jb-workspace .stat-grid {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 20px;
+    }
+    .jb-workspace .stat-card {
+      background: var(--card-bg); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 22px;
+    }
+    .jb-workspace .stat-card.full-width { grid-column: 1 / -1; }
+    .jb-workspace .stat-card h3 { font-size: 14px; color: var(--text-muted); margin-bottom: 18px; }
+    .jb-workspace .chart-area { min-height: 180px; position: relative; }
+    .jb-workspace .donut-area { display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 16px; }
+
+    /* SVG Charts */
+    .jb-workspace .chart-line { fill: none; stroke: var(--gold); stroke-width: 2; }
+    .jb-workspace .chart-area-fill { fill: url(#area-gradient); opacity: .25; }
+    .jb-workspace .chart-axis { stroke: var(--border); stroke-width: 1; }
+    .jb-workspace .chart-dot { fill: var(--gold); r: 4; }
+    .jb-workspace .chart-dot-negative { fill: var(--red); }
+    .jb-workspace .chart-label { font-size: 10px; fill: var(--text-muted); font-family: 'DM Sans', sans-serif; }
+
+    /* Legend */
+    .jb-workspace .legend { display: flex; gap: 16px; flex-wrap: wrap; }
+    .jb-workspace .legend-item { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-muted); }
+    .jb-workspace .legend-dot { width: 10px; height: 10px; border-radius: 50%; }
+
+    /* ---------- MODAL ---------- */
+    .jb-workspace .modal-overlay {
+      position: fixed; inset: 0; z-index: 200;
+      background: rgba(0,0,0,.6); backdrop-filter: blur(4px);
+      display: flex; align-items: center; justify-content: center;
+      padding: 20px;
+    }
+    .jb-workspace .modal-overlay.hidden { display: none; }
+    .jb-workspace .modal {
+      background: var(--navy-mid); border: 1px solid var(--border);
+      border-radius: 16px; width: 100%; max-width: 720px;
+      max-height: 90vh; overflow-y: auto;
+      box-shadow: var(--shadow);
+      animation: slideUp .25s ease;
+      color: var(--text-main);
+    }
+    .jb-workspace .modal-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 20px 24px; border-bottom: 1px solid var(--border);
+      position: sticky; top: 0; background: var(--navy-mid); z-index: 1;
+    }
+    .jb-workspace .modal-header h3 { font-size: 20px; color: var(--gold-light); margin: 0; }
+    .jb-workspace #modal-close {
+      background: transparent; border: none; color: var(--text-muted);
+      font-size: 18px; cursor: pointer; padding: 4px 8px;
+      border-radius: 6px; transition: all var(--transition);
+    }
+    .jb-workspace #modal-close:hover { background: var(--red-bg); color: var(--red); }
+    .jb-workspace .modal-body { padding: 22px 24px; }
+
+    .jb-workspace .modal-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .jb-workspace .modal-table th {
+      text-align: left; padding: 8px 12px;
+      background: var(--navy-light); color: var(--text-muted);
+      font-size: 11px; text-transform: uppercase; letter-spacing: .8px;
+    }
+    .jb-workspace .modal-table td { padding: 9px 12px; border-bottom: 1px solid var(--border); color: var(--text-main); }
+    .jb-workspace .modal-table tr:last-child td { border-bottom: none; }
+    .jb-workspace .modal-table td.amount-pos { color: var(--green); font-weight: 600; }
+    .jb-workspace .modal-table td.amount-neg { color: var(--red); font-weight: 600; }
+
+    .jb-workspace .modal-kpis {
+      display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 20px;
+    }
+    .jb-workspace .modal-kpi {
+      background: var(--navy-light); border-radius: 8px;
+      padding: 12px 16px; border: 1px solid var(--border);
+    }
+    .jb-workspace .modal-kpi-label { font-size: 11px; color: var(--text-muted); text-transform: uppercase; }
+    .jb-workspace .modal-kpi-val { font-size: 16px; font-weight: 700; margin-top: 4px; }
+
+    /* ---------- TOAST ---------- */
+    .jb-workspace .toast {
+      position: fixed; bottom: 28px; right: 28px; z-index: 500;
+      background: var(--navy-mid); border: 1px solid var(--border);
+      border-radius: 10px; padding: 14px 22px;
+      font-size: 14px; color: var(--text-main);
+      box-shadow: var(--shadow); min-width: 220px;
+      animation: slideUp .25s ease;
+    }
+    .jb-workspace .toast.hidden { display: none; }
+    .jb-workspace .toast.success { border-color: var(--green); }
+    .jb-workspace .toast.error { border-color: var(--red); }
+
+    /* ---------- Empty msg ---------- */
+    .jb-workspace .empty-msg { color: var(--text-muted); font-size: 14px; padding: 12px 0; }
+
+    /* ---------- Responsive ---------- */
+    @media (max-width: 768px) {
+      .jb-workspace .stat-grid { grid-template-columns: 1fr; }
+      .jb-workspace .kpi-grid { grid-template-columns: 1fr 1fr; }
+      .jb-workspace .pc-metrics { flex-wrap: wrap; gap: 12px; }
+      .jb-workspace .modal-kpis { grid-template-columns: 1fr 1fr; }
+    }
+    @media (max-width: 480px) {
+      .jb-workspace .kpi-grid { grid-template-columns: 1fr; }
+      .jb-workspace .jb-main { padding: 16px; }
+      .jb-workspace .form-card { padding: 18px; }
+    }
+
+    /* ---------- ENTRY-ROW COLUMN HEADERS ---------- */
+    .jb-workspace .entry-row-header {
+      display: flex; gap: 8px; align-items: center;
+      padding: 0 6px; margin-bottom: 6px;
+    }
+    .jb-workspace .entry-row-header span {
+      font-size: 11px; font-weight: 600; text-transform: uppercase;
+      letter-spacing: .8px; color: var(--text-muted);
+    }
+
+    /* Canal badge dans le mini-ledger */
+    .jb-workspace .canal-badge {
+      display: inline-block; padding: 2px 7px; border-radius: 4px;
+      font-size: 10px; font-weight: 700; letter-spacing: .5px; white-space: nowrap;
+    }
+    .jb-workspace .canal-badge.om      { background: rgba(212,168,67,.15); color: var(--gold); }
+    .jb-workspace .canal-badge.wave    { background: rgba(52,152,219,.15); color: #3498db; }
+    .jb-workspace .canal-badge.espece  { background: rgba(39,174,96,.15);  color: var(--green); }
+    .jb-workspace .canal-badge.virement{ background: rgba(124,92,191,.15); color: #7c5cbf; }
+    .jb-workspace .canal-badge.debit   { background: rgba(231,76,60,.12);  color: var(--red); }
+
+  </style>
+</head>
+<body style="display:none">
+  
+  <!-- GLOBAL SHELL: En-tête et Navigation -->
+  <header class="app-header">
+    <img src="LOGOAMT.png" alt="Logo" class="app-logo">
+    <h1>Livre de Caisse JB</h1>
+    <button id="logoutBtn" style="position: absolute; right: 20px; padding: 8px 15px; cursor: pointer;">Déconnexion</button>
+  </header>
+
+  <nav class="navigation">
+    <ul class="nav-menu">
+        <li><a href="dashboard.html" id="nav-dashboard">📊 Tableau de Bord</a></li>
+        
+        <li class="has-dropdown">
+            <a href="#">💵 Entrées Caisse</a>
+            <ul class="dropdown">
+                <li><a href="index.html">Saisie</a></li>
+                <li><a href="confirmation.html" id="nav-confirmation">Confirmation</a></li>
+                <li><a href="history.html">Historique</a></li>
+                <li><a href="other-income.html" id="nav-other-income">Autres Entrées</a></li>
+            </ul>
+        </li>
+        
+        <li class="has-dropdown">
+            <a href="#">📦 Logistique</a>
+            <ul class="dropdown">
+                <li><a href="livraison.html" id="nav-livraison">LIVRAISON</a></li>
+                <li><a href="livreurscan.html" style="color:#16a34a; font-weight:bold;">📱 MODE LIVREUR</a></li>
+                <li><a href="voiture.html" id="nav-voiture">Gestion Véhicules</a></li>
+                <li><a href="magasinage.html" id="nav-magasinage">Magasinage</a></li>
+                <li><a href="points.html" id="nav-points">Points</a></li>
+                <li><a href="clients.html" id="nav-clients">Clients</a></li>
+            </ul>
+        </li>
+        
+        <li class="has-dropdown">
+            <a href="#">💳 Sorties & Tréso</a>
+            <ul class="dropdown">
+                <li><a href="expenses.html" id="nav-expenses">Dépenses</a></li>
+                <li><a href="bank.html" id="nav-bank">Banque</a></li>
+                <li><a href="audit.html" id="nav-audit">Audit</a></li>
+            </ul>
+        </li>
+        
+        <li class="has-dropdown">
+            <a href="#">⚙️ Administration</a>
+            <ul class="dropdown">
+                <li><a href="admin-panel.html" id="nav-admin">ADMIN</a></li>
+                <li><a href="salaire.html" id="nav-salaire">Salaire</a></li>
+                <li><a href="comptejb.html" id="nav-comptejb" class="active">Compte JB</a></li>
+            </ul>
+        </li>
+    </ul>
+  </nav>
+
+  <!-- ZONE DE TRAVAIL "COMPTE JB" ISOLÉE (Scoped) -->
+  <div class="dashboard-container jb-workspace">
+    
+    <!-- En-tête interne du module JB -->
+    <div class="jb-header">
+      <div class="brand">
+        <span class="brand-icon">₣</span>
+        <span class="brand-name">Caisse JB</span>
+      </div>
+      
+      <ul class="nav-menu">
+        <li><button class="nav-btn active" data-view="dashboard">
+          <svg viewBox="0 0 24 24"><path d="M3 13h8V3H3v10zm0 8h8v-6H3v6zm10 0h8V11h-8v10zm0-18v6h8V3h-8z"/></svg>
+          Tableau de bord
+        </button></li>
+        <li><button class="nav-btn" data-view="nouvelle-periode">
+          <svg viewBox="0 0 24 24"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
+          Nouvelle période
+        </button></li>
+        <li><button class="nav-btn" data-view="historique">
+          <svg viewBox="0 0 24 24"><path d="M13 3a9 9 0 0 0-9 9H1l3.89 3.89.07.14L9 12H6c0-3.87 3.13-7 7-7s7 3.13 7 7-3.13 7-7 7c-1.93 0-3.68-.79-4.94-2.06l-1.42 1.42A8.954 8.954 0 0 0 13 21a9 9 0 0 0 0-18zm-1 5v5l4.28 2.54.72-1.21-3.5-2.08V8H12z"/></svg>
+          Historique
+        </button></li>
+        <li><button class="nav-btn" data-view="statistiques">
+          <svg viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM9 17H7v-7h2v7zm4 0h-2V7h2v10zm4 0h-2v-4h2v4z"/></svg>
+          Statistiques
+        </button></li>
+      </ul>
+      
+      <div>
+        <button class="btn-primary" id="btn-export">
+          <svg viewBox="0 0 24 24"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
+          Exporter
+        </button>
+      </div>
+    </div>
+
+    <!-- Barre d'infos rapides OM (ex-sidebar) -->
+    <div class="om-banque-info">
+      <span class="om-label">OM BANQUE :</span>
+      <span class="om-item">Montant: <strong id="sb-om-montant">...</strong></span>
+      <span class="om-item">Frais (1%): <strong id="sb-om-frais" class="red">...</strong></span>
+      <span class="om-item">Net reçu: <strong id="sb-om-net" class="gold">...</strong></span>
+    </div>
+
+    <!-- CONTENU DES VUES -->
+    <div id="main" class="jb-main">
+
+    <!-- VIEW: DASHBOARD -->
+    <section id="view-dashboard" class="view active">
+      <div class="kpi-grid">
+        <div class="kpi-card credit">
+          <div class="kpi-label">Total Crédit</div>
+          <div class="kpi-value" id="kpi-credit">—</div>
+          <div class="kpi-sub">OM + WAVE + Espèces</div>
+        </div>
+        <div class="kpi-card debit">
+          <div class="kpi-label">Total Débit</div>
+          <div class="kpi-value" id="kpi-debit">—</div>
+          <div class="kpi-sub">Toutes dépenses</div>
+        </div>
+        <div class="kpi-card solde" id="kpi-solde-card">
+          <div class="kpi-label">Solde Net</div>
+          <div class="kpi-value" id="kpi-solde">—</div>
+          <div class="kpi-sub">Crédit − Débit</div>
+        </div>
+        <div class="kpi-card periodes">
+          <div class="kpi-label">Périodes</div>
+          <div class="kpi-value" id="kpi-periodes">0</div>
+          <div class="kpi-sub">Enregistrées</div>
+        </div>
+      </div>
+
+      <div class="section-title">Dernière période active</div>
+      <div class="periode-summary" id="derniere-periode">
+        <p class="empty-msg">Aucune période enregistrée. Créez-en une.</p>
+      </div>
+
+      <div class="section-title">Répartition du crédit</div>
+      <div class="credit-bars" id="credit-bars">
+        <p class="empty-msg">Aucune donnée.</p>
+      </div>
+    </section>
+
+    <!-- VIEW: NOUVELLE PÉRIODE -->
+    <section id="view-nouvelle-periode" class="view">
+      <div class="split-layout">
+        <div class="split-left">
+
+          <div class="form-header" style="margin-bottom: 20px;">
+            <h2 class="form-header-title">Nouvelle période comptable</h2>
+            <p class="form-header-sub">Saisissez les entrées, sorties et le billetage pour clôturer la période.</p>
+          </div>
+
+          <!-- DATE GLOBALE -->
+          <div class="form-card">
+            <div class="form-section-title"><span style="color:var(--gold);font-size:14px;">📅</span> Date de la période</div>
+            <input type="date" id="f-date"
+              style="width:100%;max-width:250px;padding:10px 14px;background:var(--navy-light);
+                     border:1px solid var(--border);border-radius:8px;color:var(--text-main);font-size:14px;" />
+          </div>
+
+          <!-- ENTRÉES CRÉDIT -->
+          <div class="form-card border-green">
+            <div class="form-section-title">
+              <span style="background:var(--green-bg);color:var(--green);padding:4px 6px;border-radius:4px;">+</span>
+              ENTRÉES (CRÉDIT)
+            </div>
+            <div class="entry-row-header">
+              <span style="flex:0.75;min-width:0;">Date</span>
+              <span style="flex:1.8;min-width:0;">Réf / Libellé</span>
+              <span style="flex:1;min-width:0;">Montant (FCFA)</span>
+              <span style="flex:0.8;min-width:0;">Canal</span>
+              <span style="width:32px;flex-shrink:0;"></span>
+            </div>
+            <div id="credits-list"></div>
+            <button class="btn-add" id="btn-add-credit"
+              style="width:100%;justify-content:center;background:var(--green-bg);color:var(--green);
+                     border-color:rgba(39,174,96,0.3);margin-top:12px;">
+              + Ajouter une entrée crédit
+            </button>
+          </div>
+
+          <!-- DÉPENSES DÉBIT -->
+          <div class="form-card border-red">
+            <div class="form-section-title">
+              <span style="background:var(--red-bg);color:var(--red);padding:4px 6px;border-radius:4px;">−</span>
+              DÉPENSES (DÉBIT)
+            </div>
+            <div class="entry-row-header">
+              <span style="flex:0.75;min-width:0;">Date</span>
+              <span style="flex:1.8;min-width:0;">Motif / Libellé</span>
+              <span style="flex:1;min-width:0;">Montant (FCFA)</span>
+              <span style="width:32px;flex-shrink:0;"></span>
+            </div>
+            <div id="debits-list"></div>
+            <button class="btn-add" id="btn-add-debit"
+              style="width:100%;justify-content:center;background:var(--red-bg);color:var(--red);
+                     border-color:rgba(231,76,60,0.3);margin-top:12px;">
+              + Ajouter une dépense
+            </button>
+          </div>
+
+          <!-- BILLETAGE -->
+          <div class="form-card border-gold">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+              <div class="form-section-title" style="margin-bottom:0;">
+                <span style="background:var(--gold-faint);color:var(--gold);padding:4px 6px;border-radius:4px;">💵</span>
+                Caisse Espèce — Billetage
+              </div>
+              <div style="font-size:12px;color:var(--text-muted);">
+                Total compté : <strong id="billet-total" style="color:var(--gold);">0 FCFA</strong>
+              </div>
+            </div>
+            <div class="billet-grid" id="billet-grid">
+              <div class="billet-item"><label>10 000 F</label><input type="number" min="0" placeholder="0" data-val="10000" /></div>
+              <div class="billet-item"><label>5 000 F</label><input  type="number" min="0" placeholder="0" data-val="5000"  /></div>
+              <div class="billet-item"><label>2 000 F</label><input  type="number" min="0" placeholder="0" data-val="2000"  /></div>
+              <div class="billet-item"><label>1 000 F</label><input  type="number" min="0" placeholder="0" data-val="1000"  /></div>
+              <div class="billet-item"><label>500 F</label><input    type="number" min="0" placeholder="0" data-val="500"   /></div>
+              <div class="billet-item"><label>Pièces</label><input   type="number" min="0" placeholder="0" data-val="1"     /></div>
+            </div>
+            <!-- Rapprochement billetage vs crédit espèce -->
+            <div id="billet-rapprochement"
+              style="margin-top:14px;padding:10px 14px;border-radius:8px;background:var(--navy-mid);
+                     border:1px solid var(--border);font-size:13px;display:flex;
+                     justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">
+              <div style="display:flex;flex-direction:column;gap:2px;">
+                <span style="color:var(--text-muted);font-size:11px;text-transform:uppercase;letter-spacing:.8px;">Espèce saisie</span>
+                <span id="billet-credit-espece" style="font-weight:700;color:var(--text-main);">0 FCFA</span>
+              </div>
+              <span id="billet-diff-icon" style="font-size:22px;">⚖️</span>
+              <div style="display:flex;flex-direction:column;gap:2px;">
+                <span style="color:var(--text-muted);font-size:11px;text-transform:uppercase;letter-spacing:.8px;">Billetage compté</span>
+                <span id="billet-total-right" style="font-weight:700;color:var(--text-main);">0 FCFA</span>
+              </div>
+              <span id="billet-diff-label"
+                style="font-weight:700;font-size:12px;padding:4px 10px;border-radius:6px;background:var(--navy);">—</span>
+            </div>
+          </div>
+
+          <!-- ACTIONS -->
+          <div style="margin-top:24px;display:flex;gap:12px;justify-content:space-between;align-items:center;">
+            <button class="btn-secondary" id="btn-cancel-form" style="padding:12px 24px;">Annuler</button>
+            <button class="btn-primary" id="btn-save-periode" style="padding:12px 30px;font-size:15px;">
+              <svg viewBox="0 0 24 24" style="width:18px;height:18px;fill:var(--navy);margin-right:4px;"><path d="M17 3H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V7l-4-4zm-5 16c-1.66 0-3-1.34-3-3s1.34-3 3-3 3 1.34 3 3-1.34 3-3 3zm3-10H5V5h10v4z"/></svg>
+              Enregistrer la période
+            </button>
+          </div>
+
+          <!-- DATALISTS POUR SAISIE INTELLIGENTE -->
+          <datalist id="jb-credit-list"></datalist>
+          <datalist id="jb-debit-list"></datalist>
+
+        </div><!-- End .split-left -->
+
+        <!-- RECAP STICKY -->
+        <div class="split-right">
+          <div class="recap-side-card">
+
+            <h3 style="font-size:13px;text-transform:uppercase;letter-spacing:1.2px;color:var(--gold);
+                       margin-bottom:14px;padding-bottom:8px;border-bottom:1px solid var(--border);">
+              Opérations saisies
+            </h3>
+            <div style="max-height:280px;overflow-y:auto;margin-bottom:24px;padding-right:4px;">
+              <table class="mini-ledger">
+                <thead>
+                  <tr>
+                    <th>Libellé / Réf</th>
+                    <th style="text-align:center;">Canal</th>
+                    <th style="text-align:right;">Montant</th>
+                  </tr>
+                </thead>
+                <tbody id="mini-ledger-body">
+                  <tr id="mini-ledger-empty">
+                    <td colspan="3" style="text-align:center;color:var(--text-muted);font-style:italic;padding:12px 0;">
+                      Aucune opération
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <h3 style="font-size:13px;text-transform:uppercase;letter-spacing:1.2px;color:var(--gold);
+                       margin-bottom:14px;padding-bottom:8px;border-bottom:1px solid var(--border);">
+              Totaux Caisse
+            </h3>
+            <div class="recap-grid" style="grid-template-columns:1fr;">
+              <div class="recap-item">
+                <span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--gold);margin-right:6px;vertical-align:middle;"></span>Crédit OM</span>
+                <strong id="r-om">0 FCFA</strong>
+              </div>
+              <div class="recap-item">
+                <span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#3498db;margin-right:6px;vertical-align:middle;"></span>Crédit WAVE</span>
+                <strong id="r-wave">0 FCFA</strong>
+              </div>
+              <div class="recap-item">
+                <span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--green);margin-right:6px;vertical-align:middle;"></span>Crédit Espèce</span>
+                <strong id="r-espece">0 FCFA</strong>
+              </div>
+              <div class="recap-item">
+                <span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#7c5cbf;margin-right:6px;vertical-align:middle;"></span>Crédit Virement</span>
+                <strong id="r-virement">0 FCFA</strong>
+              </div>
+              <div class="recap-item highlight">
+                <span>Total Crédit</span>
+                <strong id="r-total-credit">0 FCFA</strong>
+              </div>
+              <div class="recap-item highlight" style="border-color:rgba(231,76,60,0.4);">
+                <span>Total Débit</span>
+                <strong id="r-total-debit" style="color:var(--red);">0 FCFA</strong>
+              </div>
+              <div class="recap-item solde-recap" id="recap-solde-wrap">
+                <span>SOLDE</span>
+                <strong id="r-solde">0 FCFA</strong>
+              </div>
+            </div>
+
+            <div style="margin-top:14px;display:flex;gap:8px;justify-content:space-between;
+                        font-size:12px;color:var(--text-muted);padding-top:12px;border-top:1px solid var(--border);">
+              <span id="r-nb-credits">0 entrée(s) crédit</span>
+              <span id="r-nb-debits">0 dépense(s)</span>
+            </div>
+
+          </div>
+        </div><!-- End .split-right -->
+
+      </div><!-- End .split-layout -->
+    </section>
+
+    <!-- VIEW: HISTORIQUE -->
+    <section id="view-historique" class="view">
+      <div class="search-bar">
+        <svg viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
+        <input type="text" id="search-input" placeholder="Rechercher par date, libellé…" />
+      </div>
+      <div id="historique-list">
+        <p class="empty-msg">Aucune période enregistrée.</p>
+      </div>
+    </section>
+
+    <!-- VIEW: STATISTIQUES -->
+    <section id="view-statistiques" class="view">
+      <div class="stat-grid">
+        <div class="stat-card">
+          <h3>Évolution du solde</h3>
+          <div id="chart-solde" class="chart-area"></div>
+        </div>
+        <div class="stat-card">
+          <h3>Crédit par canal</h3>
+          <div id="chart-canal" class="chart-area donut-area"></div>
+        </div>
+        <div class="stat-card full-width">
+          <h3>Crédit vs Débit par période</h3>
+          <div id="chart-cv-d" class="chart-area bar-area"></div>
+        </div>
+      </div>
+    </section>
+
+    </div> <!-- End .jb-main -->
+
+    <!-- MODAL: Détail période -->
+    <div id="modal-overlay" class="modal-overlay hidden">
+      <div class="modal">
+        <div class="modal-header">
+          <h3 id="modal-title">Détail de la période</h3>
+          <button id="modal-close">✕</button>
+        </div>
+        <div id="modal-body" class="modal-body"></div>
+      </div>
+    </div>
+
+    <!-- TOAST -->
+    <div id="toast" class="toast hidden"></div>
+  </div> <!-- End .jb-workspace -->
+
+  <!-- Intégration Firebase et protection de route -->
+  <script type="module" src="firebase-config.js"></script>
+  <script type="module" src="auth-guard.js"></script>
+  <script type="module" src="comptejb.js"></script>
+</body>
+</html>
