@@ -791,8 +791,9 @@ html, body {
     <div class="section-label">Ou saisir manuellement</div>
     <div class="manual-row">
       <input type="text" class="manual-input" id="manual-ref" placeholder="Ex: AMT-2024-001"
-             oninput="this.value=this.value.toUpperCase()"
+             list="colis-suggestions" autocomplete="off"
              onkeydown="if(event.key==='Enter') searchDelivery(this.value.trim())">
+      <datalist id="colis-suggestions"></datalist>
       <button class="btn-search" onclick="searchDelivery(document.getElementById('manual-ref').value.trim())">🔍</button>
     </div>
 
@@ -936,11 +937,14 @@ let html5QrCode = null;
 let barcodeDetector = null;
 let scanAnimationFrame = null;
 let currentScreen  = 'scan';
+let allRouteRefs = []; // Pour stocker les références de la tournée pour l'autocomplétion
 
 // ── INIT ──
 document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('history-date').textContent =
         new Date().toLocaleDateString('fr-FR', { weekday:'long', day:'numeric', month:'long' });
+
+    document.getElementById('manual-ref').addEventListener('input', handleManualInput);
 
     startHybridScanner();
     loadTodayStats();
@@ -953,7 +957,47 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Auto-sync
     window.addEventListener('online', syncOfflineActions);
+
+    // Clic en dehors pour fermer l'autocomplétion
+    document.addEventListener('click', (e) => {
+        if (!e.target.closest('.manual-row')) {
+            const ac = document.getElementById('custom-autocomplete');
+            if (ac) ac.style.display = 'none';
+        }
+    });
 });
+
+function handleManualInput(e) {
+    const inputEl = e.target;
+    const originalValue = inputEl.value;
+    inputEl.value = originalValue.toUpperCase(); // Force la saisie en majuscules
+
+    const input = inputEl.value;
+    const ac = document.getElementById('custom-autocomplete');
+    if (!ac) return;
+
+    if (input.length < 2) {
+        ac.style.display = 'none';
+        return;
+    }
+
+    // Filtre les références qui CONTIENNENT la saisie
+    const suggestions = allRouteRefs.filter(ref => ref.includes(input));
+
+    if (suggestions.length === 0) {
+        ac.style.display = 'none';
+        return;
+    }
+
+    ac.innerHTML = suggestions.map(ref => `
+        <div style="padding: 12px 14px; border-bottom: 1px solid var(--border); font-size: 0.9rem; font-weight: 600; cursor: pointer; color: var(--text);"
+             onmouseover="this.style.background='var(--card)'" onmouseout="this.style.background='transparent'"
+             onclick="document.getElementById('manual-ref').value='${ref}'; document.getElementById('custom-autocomplete').style.display='none'; searchDelivery('${ref}');">
+            ${ref.replace(new RegExp(input, 'gi'), match => `<span style="color: var(--green);">${match}</span>`)}
+        </div>
+    `).join('');
+    ac.style.display = 'block';
+}
 
 // ── SCANNER HYBRIDE (Native / Html5Qrcode) ──
 function onScanSuccess(decodedText) {
@@ -1006,13 +1050,20 @@ async function startHybridScanner() {
                 return startFallbackScanner();
             }
 
-            nativeVideoStream = await navigator.mediaDevices.getUserMedia({
-                video: { 
-                    facingMode: 'environment', 
-                    width: { ideal: 1280 },
-                    advanced: [{ focusMode: 'continuous' }] 
-                }
-            });
+            try {
+                nativeVideoStream = await navigator.mediaDevices.getUserMedia({
+                    video: { 
+                        facingMode: 'environment', 
+                        width: { ideal: 1280 },
+                        advanced: [{ focusMode: 'continuous' }] 
+                    }
+                });
+            } catch (err) {
+                if (err.name === 'NotFoundError' || err.name === 'OverconstrainedError') {
+                    // Fallback pour PC / Webcams (Pas de caméra arrière)
+                    nativeVideoStream = await navigator.mediaDevices.getUserMedia({ video: { width: { ideal: 1280 } } });
+                } else throw err;
+            }
             
             const videoEl = document.getElementById('video-preview');
             videoEl.srcObject = nativeVideoStream;
@@ -1028,7 +1079,21 @@ async function startHybridScanner() {
             startFallbackScanner();
         }
     } catch (e) {
-        handleCameraError(e);
+        if (e.name === 'NotFoundError' || e.name === 'OverconstrainedError' || typeof e === 'string') {
+            try {
+                if (!html5QrCode) html5QrCode = new Html5Qrcode("reader");
+                // Fallback logiciel pour la webcam du PC
+                await html5QrCode.start(
+                    { facingMode: "user" },
+                    { fps: 10, formatsToSupport: [ Html5QrcodeSupportedFormats.CODE_128, Html5QrcodeSupportedFormats.QR_CODE, Html5QrcodeSupportedFormats.EAN_13 ] },
+                    (decodedText) => onScanSuccess(decodedText),
+                    () => {}
+                );
+                document.getElementById('video-preview').style.display = 'none';
+                document.getElementById('reader').style.display = 'block';
+                document.getElementById('scan-status-text').textContent = 'Caméra active (Webcam) — prête à scanner';
+            } catch (err2) { handleCameraError(err2); }
+        } else handleCameraError(e);
     }
 }
 
@@ -1144,7 +1209,11 @@ async function loadMyRoute() {
     try {
         // 1. Recherche hors-ligne partielle (Cache)
         const cachedRoute = localStorage.getItem(`route_${today}_${livreurName}`);
-        if (cachedRoute) renderRoute(JSON.parse(cachedRoute));
+        if (cachedRoute) {
+            const parsedRoute = JSON.parse(cachedRoute);
+            renderRoute(parsedRoute);
+            updateColisSuggestions(parsedRoute);
+        }
 
         // 2. Sync réseau
         const snap = await getDocs(query(collection(db, 'livraisons'), where('livreur', '==', livreurName), where('dateProgramme', '==', today)));
@@ -1152,7 +1221,13 @@ async function loadMyRoute() {
         
         localStorage.setItem(`route_${today}_${livreurName}`, JSON.stringify(route));
         renderRoute(route);
+        updateColisSuggestions(route);
     } catch(e) { console.error(e); }
+}
+
+function updateColisSuggestions(route) {
+    // Stocke simplement les références dans un tableau global pour le filtrage dynamique
+    allRouteRefs = route.map(d => d.ref).filter(Boolean);
 }
 
 function renderRoute(route) {
