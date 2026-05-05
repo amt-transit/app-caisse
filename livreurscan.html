@@ -730,7 +730,8 @@ html, body {
         <div class="topbar-sub">Mode Livreur</div>
       </div>
     </div>
-    <div style="display:flex; gap:8px;">
+    <div style="display:flex; gap:8px; align-items:center;">
+        <div id="offline-badge" style="display:none; background:var(--orange); color:white; font-size:0.65rem; padding:4px 8px; border-radius:12px; font-weight:bold; cursor:pointer;" onclick="syncOfflineActions()" title="Cliquer pour synchroniser">⚠️ Sync</div>
         <button class="topbar-btn" onclick="window.location.reload()" style="padding: 6px 10px; font-size: 1.1rem;">↻</button>
         <button class="topbar-btn" onclick="showScreen('history')">Historique</button>
     </div>
@@ -907,7 +908,7 @@ html, body {
 <script type="module" src="auth-guard.js"></script>
 <script type="module">
 import { db } from './firebase-config.js';
-import { collection, doc, updateDoc, getDocs, query, where, limit, arrayUnion } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
+import { collection, doc, addDoc, updateDoc, getDocs, query, where, limit, arrayUnion } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 
 // ── NUMÉRO DU GROUPE WHATSAPP ──
 // ⚠️ Remplace par le numéro du téléphone qui héberge le groupe
@@ -934,15 +935,29 @@ document.addEventListener('DOMContentLoaded', () => {
     loadTodayStats();
     loadContainersList();
     loadMyRoute();
+    checkOfflineSyncBadge();
 
     // Photo input listener
     document.getElementById('photoInputGallery').addEventListener('change', handlePhotoCapture);
+    
+    // Auto-sync
+    window.addEventListener('online', syncOfflineActions);
 });
 
 // ── SCANNER (ZXing) ──
 async function initScanner() {
     try {
-        codeReader = new ZXing.BrowserMultiFormatReader();
+        // OPTIMISATION 1 : Restreindre les formats pour réduire la charge CPU (fluidité)
+        const hints = new Map();
+        hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [
+            ZXing.BarcodeFormat.CODE_128,
+            ZXing.BarcodeFormat.CODE_39,
+            ZXing.BarcodeFormat.EAN_13,
+            ZXing.BarcodeFormat.QR_CODE
+        ]);
+
+        // OPTIMISATION 2 : Réduire le délai entre les tentatives de scan (300ms au lieu de 500ms)
+        codeReader = new ZXing.BrowserMultiFormatReader(hints, 300);
         const videoEl = document.getElementById('video-preview');
 
         const callback = (result, err) => {
@@ -952,8 +967,8 @@ async function initScanner() {
                 let text = result.getText().trim().toUpperCase();
                 
                 // Tentative d'extraction intelligente (Regex comme dans livraison.js)
-                // Cherche motif type BA-123-E2 au milieu d'un texte
-                const refMatch = text.match(/([A-Z]{2})[-_.\s]*(\d{3})[-_.\s]*([A-Z0-9]{2,3})/i);
+                // Cherche motif type BA-123-E2 ou BD-203-E14_2_1032 au milieu d'un texte
+                const refMatch = text.match(/([A-Z]{2})[-_.\s]*(\d{3})[-_.\s]*([A-Z0-9]+(?:_[0-9]+)*)/i);
                 if (refMatch) {
                     text = `${refMatch[1]}-${refMatch[2]}-${refMatch[3]}`.toUpperCase();
                 }
@@ -972,7 +987,14 @@ async function initScanner() {
 
         try {
             // On attend (`await`) que la promesse de la caméra soit résolue ou rejetée
-            await codeReader.decodeFromConstraints({ video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } } }, videoEl, callback);
+            await codeReader.decodeFromConstraints({ 
+                video: { 
+                    facingMode: 'environment', 
+                    width: { ideal: 1280 }, 
+                    height: { ideal: 720 },
+                    advanced: [{ focusMode: 'continuous' }] // OPTIMISATION 3 : Demander l'autofocus continu
+                } 
+            }, videoEl, callback);
         } catch (e) {
             // Si la caméra arrière n'est pas trouvée, on essaie avec n'importe quelle caméra
             if (e.name === 'NotFoundError' || e.name === 'OverconstrainedError') {
@@ -1073,23 +1095,58 @@ async function searchDelivery(ref) {
     try {
         // 1. Nettoyage de la référence (Majuscules + Trim)
         const cleanRef = ref.trim().toUpperCase();
+        let docData = null;
+        let docId = null;
 
-        // 2. Recherche exacte
-        let snap = await getDocs(query(collection(db, 'livraisons'), where('ref', '==', cleanRef), limit(1)));
+        // 2. Recherche Firebase si en ligne
+        if (navigator.onLine) {
+            try {
+                let snap = await getDocs(query(collection(db, 'livraisons'), where('ref', '==', cleanRef), limit(1)));
+                if (snap.empty && cleanRef.includes('_')) {
+                     const baseRef = cleanRef.split('_')[0];
+                     snap = await getDocs(query(collection(db, 'livraisons'), where('ref', '==', baseRef), limit(1)));
+                }
+                if (!snap.empty) {
+                    docData = snap.docs[0].data();
+                    docId = snap.docs[0].id;
+                }
+            } catch(e) {
+                console.warn("Erreur Firebase, passage en mode hors-ligne", e);
+            }
+        }
 
-        // 3. Si pas trouvé, essai avec nettoyage de suffixe (ex: BA-123-E2_1_4 -> BA-123-E2)
-        if (snap.empty && cleanRef.includes('_')) {
-             const baseRef = cleanRef.split('_')[0];
-             snap = await getDocs(query(collection(db, 'livraisons'), where('ref', '==', baseRef), limit(1)));
+        // 3. Fallback Hors-Ligne (Cache de la tournée)
+        if (!docData) {
+            const livreurName = sessionStorage.getItem('userName');
+            const today = new Date().toISOString().split('T')[0];
+            const cachedRoute = localStorage.getItem(`route_${today}_${livreurName}`);
+            if (cachedRoute) {
+                const route = JSON.parse(cachedRoute);
+                const found = route.find(d => d.ref === cleanRef || (cleanRef.includes('_') && d.ref === cleanRef.split('_')[0]));
+                if (found) {
+                    docData = found;
+                    docId = found.id;
+                    showToast("⚠️ Mode hors-ligne : Colis récupéré du cache", "warning");
+                }
+            }
         }
 
         showLoading(false);
 
-        if (snap.empty) {
-            showNotFound(ref);
+        if (!docData) {
+            // Permettre quand même d'utiliser l'application (Mode Fantôme)
+            showToast("⚠️ Colis inconnu / Hors-ligne : Mode manuel activé", "warning");
+            currentDelivery = {
+                id: 'offline_' + Date.now(),
+                ref: cleanRef,
+                status: 'EN_COURS',
+                quantite: 1,
+                isOfflineGen: true
+            };
+            capturedPhotos = [];
+            renderResult(currentDelivery);
         } else {
-            const doc = snap.docs[0];
-            currentDelivery = { id: doc.id, ...doc.data() };
+            currentDelivery = { id: docId, ...docData };
             if (window.currentScanContainer && currentDelivery.conteneur && currentDelivery.conteneur !== window.currentScanContainer) {
                 showToast(`⚠️ Attention: Ce colis appartient au conteneur ${currentDelivery.conteneur}`, 'error');
             }
@@ -1407,71 +1464,74 @@ async function sendToWhatsAppAndMarkDone() {
 
     // --- LOGIQUE PROGRAMME AUTOMATIQUE ---
     const today = new Date().toISOString().split('T')[0]; // Format YYYY-MM-DD
+    
+    // Préparer les données de mise à jour
+    const updateData = isPartial ? {
+        quantite: totalQty - qty,
+        status: 'PARTIEL',
+        scanProof: true
+    } : {
+        status: 'LIVRE',
+        containerStatus: 'EN_COURS',
+        dateLivraison: new Date().toISOString(),
+        livreur: livreurName,
+        quantiteLivree: qty,
+        scanProof: true
+    };
+    if (!isPartial && !currentDelivery.dateProgramme) updateData.dateProgramme = today;
+
+    let isOfflineSave = false;
 
     try {
-        if (isPartial) {
-            const remainingQty = totalQty - qty;
-
-            // On ne crée pas de nouveau document. On met à jour l'original.
-        await updateDoc(doc(db, 'livraisons', currentDelivery.id), {
-                quantite: remainingQty, // La nouvelle quantité est ce qu'il reste à livrer
-                status: 'PARTIEL',       // Le statut passe en partiel pour alerter le bureau
-                // On ajoute un enregistrement dans un tableau pour garder l'historique
-            historiquePartiel: arrayUnion({
+        if (navigator.onLine && !currentDelivery.isOfflineGen) {
+            if (isPartial) {
+                updateData.historiquePartiel = arrayUnion({
                     quantiteLivree: qty,
                     date: new Date().toISOString(),
                     livreur: livreurName
-                }),
-                scanProof: true // Marquer comme scanné même si partiel
-            });
-
-            // Mise à jour de l'objet local pour l'affichage
-            currentDelivery.quantite = remainingQty;
-            
-            showToast(`✅ Partiel validé ! Reste à livrer : ${remainingQty}`, 'success');
-            
-            // Feedback visuel et haptique
-            const flash = document.createElement('div');
-            flash.className = 'success-flash';
-            document.body.appendChild(flash);
-            setTimeout(() => flash.remove(), 600);
-            vibrate([50, 30, 50]);
-            
-            // On rafraîchit la carte pour afficher la quantité restante
-            renderResult(currentDelivery); 
-
-        } else {
-            // CAS STANDARD (Tout livré)
-            const updates = {
-                status: 'LIVRE',
-                containerStatus: 'EN_COURS',
-                dateLivraison: new Date().toISOString(),
-                livreur: livreurName,
-                quantiteLivree: qty,
-                scanProof: true
-            };
-
-            // Si le colis n'est pas déjà dans un programme, on l'ajoute à celui du jour
-            if (!currentDelivery.dateProgramme) {
-                updates.dateProgramme = today;
+                });
             }
-
-        await updateDoc(doc(db, 'livraisons', currentDelivery.id), updates);
-
-            finalizeDeliveryUI('LIVRE');
+            await updateDoc(doc(db, 'livraisons', currentDelivery.id), updateData);
+        } else {
+            throw new Error("OFFLINE"); // Force le passage dans le catch
         }
-
-        updateCounters();
-
     } catch (e) {
-        showLoading(false);
-        showToast('Erreur lors de la mise à jour', 'error');
-        return; // On arrête si la mise à jour DB échoue
+        // Mode Hors-ligne / Sauvegarde locale
+        const pendingActions = JSON.parse(localStorage.getItem('offline_actions') || '[]');
+        pendingActions.push({
+            deliveryId: currentDelivery.id,
+            ref: currentDelivery.ref,
+            isOfflineGen: currentDelivery.isOfflineGen || false,
+            isPartial: isPartial,
+            qtyLivree: qty,
+            totalQty: totalQty,
+            updateData: isPartial ? {
+                quantite: totalQty - qty,
+                status: 'PARTIEL',
+                historiquePartiel: [{ quantiteLivree: qty, date: new Date().toISOString(), livreur: livreurName }],
+                scanProof: true
+            } : updateData,
+            timestamp: Date.now()
+        });
+        localStorage.setItem('offline_actions', JSON.stringify(pendingActions));
+        isOfflineSave = true;
     }
 
-    // Si c'était partiel, currentDelivery a été modifié pour refléter le RESTE.
-    // Mais pour le message WhatsApp, on veut parler de ce qu'on vient de livrer.
-    // On reconstruit un objet temporaire pour le message.
+    showLoading(false);
+
+    if (isPartial) {
+        currentDelivery.quantite = totalQty - qty;
+        showToast(isOfflineSave ? `⚠️ Sauvegardé hors-ligne (Partiel)` : `✅ Partiel validé ! Reste : ${totalQty - qty}`, isOfflineSave ? 'warning' : 'success');
+        const flash = document.createElement('div');
+        flash.className = 'success-flash';
+        document.body.appendChild(flash);
+        setTimeout(() => flash.remove(), 600);
+        vibrate([50, 30, 50]);
+        renderResult(currentDelivery);
+    } else {
+        finalizeDeliveryUI('LIVRE', isOfflineSave);
+    }
+
     let deliveryForMsg = currentDelivery;
     if (isPartial) {
         deliveryForMsg = {
@@ -1482,9 +1542,11 @@ async function sendToWhatsAppAndMarkDone() {
     }
     
     sendWhatsAppMessage(deliveryForMsg, livreurName, isPartial, totalQty);
+    updateCounters();
+    checkOfflineSyncBadge();
 }
 
-function finalizeDeliveryUI(status) {
+function finalizeDeliveryUI(status, isOfflineSave = false) {
     currentDelivery.status = status;
     document.getElementById('btn-wa').disabled = true;
 
@@ -1495,7 +1557,7 @@ function finalizeDeliveryUI(status) {
     setTimeout(() => flash.remove(), 600);
 
     vibrate([50, 30, 50, 30, 100]);
-    showToast('✅ Livraison confirmée !', 'success');
+    showToast(isOfflineSave ? '⚠️ Sauvegardé hors-ligne !' : '✅ Livraison confirmée !', isOfflineSave ? 'warning' : 'success');
 
     // Mettre à jour le badge statut dans le card
     const badge = document.querySelector('.result-status-badge');
@@ -1603,6 +1665,83 @@ function cleanName(str) {
 
 function vibrate(pattern) {
     if (navigator.vibrate) navigator.vibrate(pattern);
+}
+
+// ── SYNCHRONISATION HORS LIGNE ──
+async function syncOfflineActions() {
+    if (!navigator.onLine) {
+        showToast("Impossible de synchroniser, vous êtes hors-ligne", "error");
+        return;
+    }
+    const actions = JSON.parse(localStorage.getItem('offline_actions') || '[]');
+    if (actions.length === 0) {
+        checkOfflineSyncBadge();
+        return;
+    }
+
+    showToast(`⏳ Synchronisation de ${actions.length} action(s)...`, '');
+    let successCount = 0;
+    const remainingActions = [];
+
+    for (let act of actions) {
+        try {
+            if (act.isOfflineGen) {
+                // C'était un colis fantôme, on essaie de le trouver dans la base pour le mettre à jour
+                let snap = await getDocs(query(collection(db, 'livraisons'), where('ref', '==', act.ref), limit(1)));
+                if (!snap.empty) {
+                    const realDoc = snap.docs[0];
+                    let updates = act.updateData;
+                    if (act.isPartial) updates.historiquePartiel = arrayUnion(...act.updateData.historiquePartiel);
+                    await updateDoc(doc(db, 'livraisons', realDoc.id), updates);
+                    successCount++;
+                } else {
+                    // Colis toujours introuvable -> On le crée pour que le bureau s'en occupe
+                    await addDoc(collection(db, "livraisons"), {
+                        ref: act.ref,
+                        destinataire: 'Client Hors-ligne',
+                        containerStatus: 'EN_COURS',
+                        status: act.isPartial ? 'PARTIEL' : 'LIVRE',
+                        dateAjout: new Date().toISOString().split('T')[0],
+                        dateLivraison: new Date().toISOString(),
+                        quantite: act.isPartial ? act.totalQty - act.qtyLivree : act.totalQty,
+                        quantiteLivree: act.qtyLivree,
+                        livreur: sessionStorage.getItem('userName') || 'Livreur',
+                        scanProof: true,
+                        description: 'Créé via mode hors-ligne'
+                    });
+                    successCount++;
+                }
+            } else {
+                let updates = act.updateData;
+                if (act.isPartial) updates.historiquePartiel = arrayUnion(...act.updateData.historiquePartiel);
+                await updateDoc(doc(db, 'livraisons', act.deliveryId), updates);
+                successCount++;
+            }
+        } catch (e) {
+            console.error("Erreur sync offline", e);
+            remainingActions.push(act);
+        }
+    }
+
+    localStorage.setItem('offline_actions', JSON.stringify(remainingActions));
+    checkOfflineSyncBadge();
+
+    if (successCount > 0) {
+        showToast(`✅ ${successCount} action(s) synchronisée(s)`, 'success');
+    }
+}
+
+function checkOfflineSyncBadge() {
+    const actions = JSON.parse(localStorage.getItem('offline_actions') || '[]');
+    const badge = document.getElementById('offline-badge');
+    if (badge) {
+        if (actions.length > 0) {
+            badge.style.display = 'block';
+            badge.textContent = `⚠️ Sync (${actions.length})`;
+        } else {
+            badge.style.display = 'none';
+        }
+    }
 }
 
 // ── GPS CAPTURE ──
@@ -1766,7 +1905,7 @@ function showLoading(show) {
 }
 
 Object.assign(window, {
-    showScreen, searchDelivery, resetScannerUI, captureGPS, checkPartial, addPhoto, sendToWhatsAppAndMarkDone, markIncident, viewPhoto, deletePhoto, rotatePhoto, loadMyRoute
+    showScreen, searchDelivery, resetScannerUI, captureGPS, checkPartial, addPhoto, sendToWhatsAppAndMarkDone, markIncident, viewPhoto, deletePhoto, rotatePhoto, loadMyRoute, syncOfflineActions
 });
 </script>
 </body>
