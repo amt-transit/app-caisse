@@ -723,7 +723,7 @@ html, body {
 <div id="loading"><div class="spinner"></div></div>
 
 <!-- HIDDEN FILE INPUT FOR PHOTOS -->
-<input type="file" id="photoInputGallery" accept="image/*,video/*" multiple style="display:none">
+<input type="file" id="photoInput" accept="image/*" style="display:none">
 
 <!-- ═══════════════════════════════════════
      SCREEN 1 : SCAN / RECHERCHE
@@ -949,7 +949,7 @@ document.addEventListener('DOMContentLoaded', () => {
     checkOfflineSyncBadge();
 
     // Photo input listener
-    document.getElementById('photoInputGallery').addEventListener('change', handlePhotoCapture);
+    document.getElementById('photoInput').addEventListener('change', handlePhotoCapture);
     
     // Auto-sync
     window.addEventListener('online', syncOfflineActions);
@@ -1352,40 +1352,92 @@ function showNotFound(ref) {
 
 // ── PHOTOS ──
 function addPhoto() {
-    document.getElementById('photoInputGallery').click();
+    document.getElementById('photoInput').click();
 }
 
-function handlePhotoCapture(event) {
+function compressImageForReadability(file) {
+    return new Promise((resolve) => {
+        const img = new Image();
+        const objectUrl = URL.createObjectURL(file);
+        img.onload = () => {
+            URL.revokeObjectURL(objectUrl);
+            const canvas = document.createElement('canvas');
+            let width = img.width;
+            let height = img.height;
+            const maxDim = 1920; // Garantit une très haute lisibilité des textes tout en soulageant la RAM
+
+            if (width > height) {
+                if (width > maxDim) {
+                    height = Math.round(height * (maxDim / width));
+                    width = maxDim;
+                }
+            } else {
+                if (height > maxDim) {
+                    width = Math.round(width * (maxDim / height));
+                    height = maxDim;
+                }
+            }
+
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, width, height);
+            
+            // Génère un fichier JPEG à 80% de qualité
+            canvas.toBlob((blob) => {
+                resolve(blob);
+            }, 'image/jpeg', 0.8); 
+        };
+        img.src = objectUrl;
+    });
+}
+
+async function handlePhotoCapture(event) {
     const files = Array.from(event.target.files);
     if (!files.length) return;
 
-    files.forEach(file => {
-        const isVideo = file.type.startsWith('video/');
-        const isImage = file.type.startsWith('image/');
+    showLoading(true);
+    const loadingEl = document.getElementById('loading');
+    loadingEl.style.flexDirection = 'column'; // Empile le texte sous le spinner
+    let loadingText = loadingEl.querySelector('.loading-text');
+    if (!loadingText) {
+        loadingText = document.createElement('div');
+        loadingText.className = 'loading-text';
+        loadingText.style.color = 'white';
+        loadingText.style.marginTop = '15px';
+        loadingText.style.fontWeight = '600';
+        loadingEl.appendChild(loadingText);
+    }
+    loadingText.textContent = "Compression de l'image (Haute Lisibilité)...";
 
-        if (!isImage && !isVideo) {
-            showToast(`Format ${file.type} non supporté`, 'error');
-            return;
+    for (let file of files) {
+        if (!file.type.startsWith('image/')) {
+            showToast(`Format non supporté`, 'error');
+            continue;
         }
 
-        if (isImage) {
-            const reader = new FileReader();
-            reader.onload = (e) => {
-                capturedPhotos.push({ previewUrl: e.target.result, file: file, type: 'image' });
-                updatePhotosUI();
-                if (capturedPhotos.length > 0) document.getElementById('btn-wa').disabled = false;
-            };
-            reader.readAsDataURL(file);
-        } else { // isVideo
-            const previewUrl = URL.createObjectURL(file);
-            capturedPhotos.push({ previewUrl: previewUrl, file: file, type: 'video' });
-            updatePhotosUI();
-            if (capturedPhotos.length > 0) document.getElementById('btn-wa').disabled = false;
+        try {
+            // 1. Compression et Création du Blob
+            const compressedBlob = await compressImageForReadability(file);
+            
+            // 2. Conversion en File natif pour la Web Share API (Partage WhatsApp fluide)
+            const compressedFile = new File([compressedBlob], "Colis_Livraison.jpg", { type: "image/jpeg" });
+            const previewUrl = URL.createObjectURL(compressedBlob);
+
+            capturedPhotos.push({ previewUrl: previewUrl, file: compressedFile, type: 'image' });
+        } catch (e) {
+            console.error("Erreur compression :", e);
+            showToast(`Erreur de traitement de l'image`, 'error');
         }
-    });
+    }
     
-    if(files.length > 0) {
-        showToast(`✅ ${capturedPhotos.length} média(s) prêt(s)`, 'success');
+    loadingText.textContent = "";
+    showLoading(false);
+    updatePhotosUI();
+    
+    if (capturedPhotos.length > 0) {
+        document.getElementById('btn-wa').disabled = false;
+        showToast(`✅ Image prête !`, 'success');
     }
 
     event.target.value = ''; // Reset pour permettre re-sélection
