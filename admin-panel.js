@@ -192,6 +192,103 @@ const isSuperAdmin = userRole === 'super_admin';
             }
         };
         usersListEl.parentNode.insertBefore(repairBtn, usersListEl);
+
+        // --- BOUTON DE MIGRATION MULTI-AGENCES ---
+        const migrateBtn = document.createElement('button');
+        migrateBtn.className = "btn";
+        migrateBtn.style.cssText = "background-color: #3b82f6; color: white; margin-bottom: 20px; padding: 10px 15px; border-radius: 6px; cursor: pointer; border: none; font-weight: bold; width: 100%;";
+        migrateBtn.innerHTML = "🌍 Migrer les anciennes données vers Abidjan (Multi-Agences)";
+        migrateBtn.onclick = async () => {
+            if (!await AppModal.confirm("Voulez-vous assigner l'agence 'Abidjan' à toutes les anciennes données (Transactions, Dépenses, Livraisons, etc.) qui n'ont pas d'agence ?\n\nCela fera réapparaître vos données disparues.", "Migration des données", true)) return;
+            migrateBtn.disabled = true;
+            migrateBtn.textContent = "Migration en cours... (Ne fermez pas la page)";
+
+            try {
+                let totalUpdated = 0;
+                const collectionsToMigrate = ["transactions", "expenses", "other_income", "bank_movements", "livraisons", "livraisons_archives", "audit_logs", "jb_periodes", "fleet_transactions"];
+
+                for (const collName of collectionsToMigrate) {
+                    const snapshot = await getDocs(collection(db, collName));
+                    let batch = writeBatch(db);
+                    let opCount = 0;
+
+                    for (const docSnap of snapshot.docs) {
+                        const data = docSnap.data();
+                        if (!data.agency) {
+                            batch.update(docSnap.ref, { agency: "abidjan" });
+                            opCount++;
+                            totalUpdated++;
+
+                            if (opCount >= 400) {
+                                await batch.commit();
+                                batch = writeBatch(db);
+                                opCount = 0;
+                            }
+                        }
+                    }
+                    if (opCount > 0) await batch.commit();
+                }
+
+                AppModal.success(`Succès ! ${totalUpdated} anciens documents ont été mis à jour avec l'agence Abidjan.`);
+            } catch (e) {
+                console.error(e);
+                AppModal.error("Erreur lors de la migration : " + e.message);
+            } finally {
+                migrateBtn.disabled = false;
+                migrateBtn.innerHTML = "🌍 Migrer les anciennes données vers Abidjan (Multi-Agences)";
+            }
+        };
+        usersListEl.parentNode.insertBefore(migrateBtn, usersListEl);
+
+        // --- BOUTON DE CORRECTION DES ACCENTS (NOMS CASSÉS) ---
+        const fixAccentsBtn = document.createElement('button');
+        fixAccentsBtn.className = "btn";
+        fixAccentsBtn.style.cssText = "background-color: #8b5cf6; color: white; margin-bottom: 20px; padding: 10px 15px; border-radius: 6px; cursor: pointer; border: none; font-weight: bold; width: 100%;";
+        fixAccentsBtn.innerHTML = "🔤 Corriger l'orthographe des Noms (Accents & Encodage)";
+        fixAccentsBtn.onclick = async () => {
+            if (!await AppModal.confirm("Voulez-vous analyser toute la base de données pour réparer les erreurs d'accents sur les noms des clients (ex: 'Ã‰LISE' -> 'ÉLISE') ?\n\nCela uniformisera proprement les Expéditeurs et Destinataires sans les mélanger.", "Correction Orthographique", true)) return;
+            fixAccentsBtn.disabled = true;
+            fixAccentsBtn.textContent = "Analyse et correction en cours... (Ne fermez pas la page)";
+
+            const fixEncoding = (str) => {
+                if (!str) return str;
+                return str.replace(/Ã©/g, 'é').replace(/Ã¨/g, 'è').replace(/Ã /g, 'à')
+                          .replace(/Ã¢/g, 'â').replace(/Ãª/g, 'ê').replace(/Ã®/g, 'î')
+                          .replace(/Ã´/g, 'ô').replace(/Ã»/g, 'û').replace(/Ã§/g, 'ç')
+                          .replace(/Ã¯/g, 'ï').replace(/Ã«/g, 'ë').replace(/Ã‰/g, 'É')
+                          .replace(/Ãˆ/g, 'È').replace(/Ã€/g, 'À');
+            };
+
+            try {
+                let totalUpdated = 0;
+                let batch = writeBatch(db);
+                let opCount = 0;
+
+                const processCollection = async (collName, fieldsToFix) => {
+                    const snap = await getDocs(collection(db, collName));
+                    for (const docSnap of snap.docs) {
+                        const data = docSnap.data();
+                        let updates = {};
+                        fieldsToFix.forEach(field => {
+                            if (data[field] && data[field] !== fixEncoding(data[field])) updates[field] = fixEncoding(data[field]);
+                        });
+                        if (Object.keys(updates).length > 0) {
+                            batch.update(docSnap.ref, updates);
+                            opCount++; totalUpdated++;
+                            if (opCount >= 400) { await batch.commit(); batch = writeBatch(db); opCount = 0; }
+                        }
+                    }
+                };
+
+                await processCollection("livraisons", ["expediteur", "destinataire", "lieuLivraison", "description"]);
+                await processCollection("transactions", ["nom", "nomDestinataire", "adresseDestinataire", "description"]);
+
+                if (opCount > 0) await batch.commit();
+                AppModal.success(`Succès ! ${totalUpdated} fiches ont été corrigées avec les bons accents.`);
+            } catch (e) { console.error(e); AppModal.error("Erreur : " + e.message); }
+            finally { fixAccentsBtn.disabled = false; fixAccentsBtn.innerHTML = "🔤 Corriger l'orthographe des Noms (Accents & Encodage)"; }
+        };
+        usersListEl.parentNode.insertBefore(fixAccentsBtn, usersListEl);
     }
 
     // 1. LISTE DES UTILISATEURS

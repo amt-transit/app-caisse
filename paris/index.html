@@ -37,8 +37,8 @@
 
     <aside class="sidebar" id="sidebar">
         <div class="sidebar-header">
-            <div class="sidebar-logo">
-                <i class="fas fa-ship"></i>
+            <div class="sidebar-logo" style="background: transparent; box-shadow: none;">
+                <img src="../LOGOAMT.png" alt="Logo AMT" style="width: 100%; height: 100%; object-fit: contain; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.2));">
             </div>
             <div>
                 <h2>AMT Paris</h2>
@@ -197,7 +197,7 @@
                     <i class="fas fa-user"></i>
                 </div>
                 <div class="user-dropdown-menu" id="userDropdownMenu">
-                    <a href="#" id="menuProfile"><i class="fas fa-user-circle"></i> Profil</a>
+                    <a href="#" id="menuProfile" onclick="app.renderPage('settings-profile'); document.getElementById('userDropdownMenu').classList.remove('active'); return false;"><i class="fas fa-user-circle"></i> Profil</a>
                     <a href="#" id="menuAgencySwitch" style="display: none;"><i class="fas fa-globe"></i> Vue Abidjan</a>
                     <hr style="margin: 5px 0; border: none; border-top: 1px solid #e2e8f0;">
                     <a href="#" id="logoutBtnParis" class="logout-btn logout"><i class="fas fa-sign-out-alt"></i> Déconnexion</a>

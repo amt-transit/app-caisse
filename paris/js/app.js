@@ -1,59 +1,15 @@
+import { appData } from './data.js';
+import { DashboardView } from './views/dashboard.js';
+import { NouvelleFactureView } from './views/nouvellefacture.js';
+import { ClientsListView } from './views/clients-list.js';
+
 // Configuration de l'application Paris
 const app = {
     currentPage: 'dashboard',
     user: { name: 'Agent Paris', role: 'agent' },
     
-    // Données simulées (à remplacer par Firebase plus tard)
-    data: {
-        invoices: [
-            { id: 1, number: 'FAC-2024-001', client: 'Jean Dupont', amount: 380.00, status: 'payée', date: '2024-12-01' },
-            { id: 2, number: 'FAC-2024-002', client: 'Marie Koné', amount: 275.50, status: 'envoyée', date: '2024-12-05' },
-            { id: 3, number: 'FAC-2024-003', client: 'Ibrahim Touré', amount: 485.00, status: 'en_attente', date: '2024-12-10' }
-        ],
-        appointments: [
-            { id: 1, client: 'Jean Dupont', date: '2024-12-15', time: '10:00', status: 'confirmé' },
-            { id: 2, client: 'Marie Koné', date: '2024-12-16', time: '14:30', status: 'en_attente' },
-            { id: 3, client: 'Ibrahim Touré', date: '2024-12-17', time: '09:00', status: 'confirmé' },
-            { id: 4, client: 'Fatima Diallo', date: '2024-12-18', time: '11:00', status: 'en_attente' }
-        ],
-        quotes: [
-            { id: 1, number: 'DEV-2024-001', client: 'Jean Dupont', amount: 220.00, status: 'envoyé', date: '2024-11-28' },
-            { id: 2, number: 'DEV-2024-002', client: 'Société ABC', amount: 680.00, status: 'accepté', date: '2024-12-03' }
-        ],
-        quoteRequests: [
-            { id: 1, client: 'Nouveau Client', email: 'client@email.com', date: '2024-12-12' },
-            { id: 2, client: 'Entreprise XYZ', email: 'contact@xyz.com', date: '2024-12-13' }
-        ],
-        programs: [
-            { id: 1, name: 'Programme Décembre 2024', startDate: '2024-12-01', endDate: '2024-12-31', status: 'en_cours' }
-        ],
-        drivers: [
-            { id: 1, name: 'Jean-Marc', status: 'disponible', vehicle: 'Renault Master' },
-            { id: 2, name: 'Sébastien', status: 'occupé', vehicle: 'Peugeot Trafic' }
-        ],
-        containers: [
-            { id: 1, number: 'CONT-PAR-001', status: 'en_chargement', items: 45 },
-            { id: 2, number: 'CONT-PAR-002', status: 'en_transit', items: 78 },
-            { id: 3, number: 'CONT-PAR-003', status: 'arrivé', items: 32 }
-        ],
-        products: [
-            { id: 1, name: 'Colis Standard', price: 15.00, stock: 150 },
-            { id: 2, name: 'Malle / Fût', price: 45.00, stock: 25 },
-            { id: 3, name: 'Colis Express', price: 25.00, stock: 80 }
-        ],
-        messages: [
-            { id: 1, from: 'Client Jean', message: 'Bonjour, quel est le statut de mon colis ?', time: '10:30', read: false },
-            { id: 2, from: 'Service Logistique', message: 'Le départ est prévu demain', time: '09:15', read: false }
-        ],
-        notifications: [
-            { id: 1, title: 'Nouvelle facture', message: 'La facture FAC-2024-002 a été émise', time: '2024-12-05 14:30', read: false },
-            { id: 2, title: 'Rappel RDV', message: 'RDV avec Jean Dupont demain 10h', time: '2024-12-14 08:00', read: false }
-        ],
-        agents: [
-            { id: 1, name: 'Agent Paris 1', email: 'agent1@amtparis.fr', role: 'agent', active: true },
-            { id: 2, name: 'Agent Paris 2', email: 'agent2@amtparis.fr', role: 'agent', active: true }
-        ]
-    },
+    // Données simulées externalisées
+    data: appData,
 
     init() {
         this.renderPage('dashboard');
@@ -61,6 +17,7 @@ const app = {
         this.initMobileToggle();
         this.initGlobalEvents();
         this.updateBadges();
+        this.loadUserProfile();
         
         // Expose l'objet app à l'objet global Window pour les appels onclick HTML
         window.app = this;
@@ -74,6 +31,12 @@ const app = {
                     this.renderPage(page);
                     document.querySelectorAll('.sidebar-item').forEach(i => i.classList.remove('active'));
                     item.classList.add('active');
+
+                        // Fermer le menu sur mobile après la sélection d'une page
+                        const sidebar = document.getElementById('sidebar');
+                        if (window.innerWidth <= 768 && sidebar && sidebar.classList.contains('open')) {
+                            sidebar.classList.remove('open');
+                        }
                 }
             });
         });
@@ -82,9 +45,17 @@ const app = {
     initMobileToggle() {
         const toggle = document.getElementById('mobileToggle');
         const sidebar = document.getElementById('sidebar');
-        if(toggle) {
-            toggle.addEventListener('click', () => {
+        if(toggle && sidebar) {
+            toggle.addEventListener('click', (e) => {
+                e.stopPropagation(); // Empêche le clic de se déclencher sur le document
                 sidebar.classList.toggle('open');
+            });
+            
+            // Fermer le menu si l'utilisateur clique en dehors (dans la zone de contenu)
+            document.addEventListener('click', (e) => {
+                if (window.innerWidth <= 768 && sidebar.classList.contains('open') && !sidebar.contains(e.target)) {
+                    sidebar.classList.remove('open');
+                }
             });
         }
     },
@@ -187,7 +158,7 @@ const app = {
             'daily-bilan': () => this.renderDailyBilan(),
             'daily-users': () => this.renderDailyUsers(),
             'invoices-list': () => this.renderInvoicesList(),
-            'invoice-new': () => this.renderInvoiceNew(),
+            'invoice-new': () => NouvelleFactureView.render(this),
             'appointment-new': () => this.renderAppointmentNew(),
             'appointments-list': () => this.renderAppointmentsList(),
             'appointments-pending': () => this.renderAppointmentsPending(),
@@ -206,7 +177,7 @@ const app = {
             'scan-container': () => this.renderScanContainer(),
             'scan-classic': () => this.renderScanClassic(),
             'scan-history': () => this.renderScanHistory(),
-            'clients-list': () => this.renderClientsList(),
+            'clients-list': () => ClientsListView.render(this),
             'clients-app': () => this.renderClientsApp(),
             'clients-analytics': () => this.renderClientsAnalytics(),
             'chat': () => this.renderChat(),
@@ -254,83 +225,7 @@ const app = {
     // ==================== RENDU DES PAGES ====================
 
     renderDashboard() {
-        const totalInvoices = this.data.invoices.reduce((s, i) => s + i.amount, 0);
-        const pendingAppointments = this.data.appointments.filter(a => a.status === 'en_attente').length;
-        const activePrograms = this.data.programs.filter(p => p.status === 'en_cours').length;
-        
-        const html = `
-            <div class="stats-grid">
-                <div class="stat-card">
-                    <div class="stat-icon" style="background:#dbeafe; color:#2563eb;"><i class="fas fa-file-invoice"></i></div>
-                    <div class="stat-value">${this.formatMoney(totalInvoices)}</div>
-                    <div class="stat-label">Chiffre d'affaires</div>
-                    <div class="stat-trend"><span style="color:#10b981;">↑ 12%</span> vs mois dernier</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-icon" style="background:#d1fae5; color:#059669;"><i class="fas fa-calendar"></i></div>
-                    <div class="stat-value">${pendingAppointments}</div>
-                    <div class="stat-label">RDV en attente</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-icon" style="background:#fef3c7; color:#d97706;"><i class="fas fa-tasks"></i></div>
-                    <div class="stat-value">${activePrograms}</div>
-                    <div class="stat-label">Programmes actifs</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-icon" style="background:#ede9fe; color:#7c3aed;"><i class="fas fa-box"></i></div>
-                    <div class="stat-value">${this.data.containers.length}</div>
-                    <div class="stat-label">Conteneurs en transit</div>
-                </div>
-            </div>
-            
-            <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 25px;">
-                <div style="background: white; border-radius: 20px; padding: 20px; border: 1px solid #e2e8f0;">
-                    <h3 style="margin-bottom: 20px; font-size: 16px;">📊 Évolution du CA</h3>
-                    <canvas id="revenueChart" height="200"></canvas>
-                </div>
-                <div style="background: white; border-radius: 20px; padding: 20px; border: 1px solid #e2e8f0;">
-                    <h3 style="margin-bottom: 20px; font-size: 16px;">📦 Activité récente</h3>
-                    <div style="max-height: 300px; overflow-y: auto;">
-                        ${this.data.invoices.slice(0, 5).map(inv => `
-                            <div style="display: flex; justify-content: space-between; padding: 12px 0; border-bottom: 1px solid #f1f5f9;">
-                                <div><strong>${inv.number}</strong><br><span style="font-size:12px; color:#64748b;">${inv.client}</span></div>
-                                <div style="text-align: right;"><strong>${this.formatMoney(inv.amount)}</strong><br><span class="badge ${inv.status === 'payée' ? 'badge-success' : (inv.status === 'envoyée' ? 'badge-info' : 'badge-warning')}">${inv.status}</span></div>
-                            </div>
-                        `).join('')}
-                    </div>
-                </div>
-            </div>
-            
-            <div class="quick-actions" style="margin-top: 25px;">
-                <button class="btn btn-primary" onclick="app.renderPage('invoice-new')"><i class="fas fa-plus"></i> Nouvelle facture</button>
-                <button class="btn btn-outline" onclick="app.renderPage('appointment-new')"><i class="fas fa-calendar-plus"></i> Nouveau RDV</button>
-                <button class="btn btn-outline" onclick="app.renderPage('quote-new')"><i class="fas fa-file-alt"></i> Nouveau devis</button>
-            </div>
-        `;
-        
-        document.getElementById('contentContainer').innerHTML = html;
-        
-        // Initialiser le graphique
-        setTimeout(() => {
-            const ctx = document.getElementById('revenueChart')?.getContext('2d');
-            if (ctx && typeof Chart !== 'undefined') {
-                new Chart(ctx, {
-                    type: 'line',
-                    data: {
-                        labels: ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Jun', 'Jul', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc'],
-                        datasets: [{
-                            label: 'CA (€)',
-                            data: [1200, 1500, 1800, 2200, 2500, 2800, 3100, 3400, 3700, 4000, 4300, 4600],
-                            borderColor: '#3b82f6',
-                            backgroundColor: 'rgba(59,130,246,0.1)',
-                            fill: true,
-                            tension: 0.4
-                        }]
-                    },
-                    options: { responsive: true, maintainAspectRatio: true }
-                });
-            }
-        }, 100);
+        DashboardView.render(this);
     },
 
     renderDailyBilan() {
@@ -844,25 +739,6 @@ const app = {
         document.getElementById('contentContainer').innerHTML = html;
     },
 
-    renderClientsList() {
-        const html = `
-            <div class="quick-actions">
-                <button class="btn btn-primary" onclick="app.addClient()"><i class="fas fa-user-plus"></i> Nouveau client</button>
-                <button class="btn btn-outline" onclick="app.exportClients()"><i class="fas fa-download"></i> Export Excel</button>
-            </div>
-            <div class="form-card">
-                <table class="data-table">
-                    <thead><tr><th>Client</th><th>Email</th><th>Téléphone</th><th>Total dépensé</th><th>Actions</th></tr></thead>
-                    <tbody>
-                        <tr><td><strong>Jean Dupont</strong></td><td>jean@email.com</td><td>07 12 34 56 78</td><td>${this.formatMoney(450)}</td><td><button class="btn btn-outline btn-small" onclick="app.viewClient()">Voir</button></td></tr>
-                        <tr><td><strong>Marie Koné</strong></td><td>marie@email.com</td><td>07 23 45 67 89</td><td>${this.formatMoney(180)}</td><td><button class="btn btn-outline btn-small">Voir</button></td></tr>
-                    </tbody>
-                </table>
-            </div>
-        `;
-        document.getElementById('contentContainer').innerHTML = html;
-    },
-
     renderClientsApp() {
         const html = `
             <div class="form-card">
@@ -872,8 +748,8 @@ const app = {
                     <div class="stat-card"><div class="stat-value">42</div><div class="stat-label">Nouveaux ce mois</div></div>
                     <div class="stat-card"><div class="stat-value">89%</div><div class="stat-label">Taux satisfaction</div></div>
                 </div>
-                <div style="margin-top: 20px;">
-                    <canvas id="appUsageChart" height="150"></canvas>
+                <div style="margin-top: 20px; position: relative; height: 200px; width: 100%;">
+                    <canvas id="appUsageChart"></canvas>
                 </div>
             </div>
         `;
@@ -902,7 +778,9 @@ const app = {
                     <div class="stat-card"><div class="stat-value">45</div><div class="stat-label">Clients actifs</div></div>
                     <div class="stat-card"><div class="stat-value">1250</div><div class="stat-label">Colis expédiés</div></div>
                 </div>
-                <canvas id="clientSegmentChart" height="200"></canvas>
+                <div style="position: relative; height: 250px; width: 100%; margin-top: 20px;">
+                    <canvas id="clientSegmentChart"></canvas>
+                </div>
             </div>
         `;
         document.getElementById('contentContainer').innerHTML = html;
@@ -1151,7 +1029,9 @@ const app = {
         const html = `
             <div class="form-card">
                 <h3>${title}</h3>
-                <canvas id="statsChart" height="300"></canvas>
+                <div style="position: relative; height: 300px; width: 100%;">
+                    <canvas id="statsChart"></canvas>
+                </div>
             </div>
         `;
         document.getElementById('contentContainer').innerHTML = html;
@@ -1218,7 +1098,130 @@ const app = {
     },
 
     renderSettingsAppointments() { this.renderSettingsForm('Paramètres RDV', { duration: 30, slotInterval: 15, workingHours: '09:00-18:00', reminderDelay: 24 }); },
-    renderSettingsProfile() { this.renderSettingsForm('Mon profil', { name: this.user.name, email: 'agent@amtparis.fr', phone: '07 12 34 56 78', role: 'Agent Paris' }); },
+    renderSettingsProfile() { 
+        const userName = sessionStorage.getItem('userName') || 'Utilisateur';
+        const userAgency = sessionStorage.getItem('userAgency') || 'Non définie';
+        const userRole = sessionStorage.getItem('userRole') || 'Non défini';
+        
+        let agencyDisplay = userAgency === 'paris' ? '🇫🇷 Paris' : (userAgency === 'abidjan' ? '🇨🇮 Abidjan' : '🌍 Global (Abidjan & Paris)');
+        if (userAgency === 'Non définie') agencyDisplay = 'Non définie';
+
+        const roleDisplay = userRole.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+
+        const html = `
+            <div style="max-width: 1100px; margin: 0 auto; animation: fadeIn 0.3s ease-in-out;">
+                <!-- En-tête du Profil -->
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; flex-wrap: wrap; gap: 15px; background: white; padding: 20px 25px; border-radius: 16px; border: 1px solid #e2e8f0; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);">
+                    <div style="display: flex; align-items: center; gap: 15px;">
+                        <div style="width: 50px; height: 50px; background: #eff6ff; color: #3b82f6; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 22px;">
+                            <i class="fas fa-user-cog"></i>
+                        </div>
+                        <div>
+                            <h2 style="margin: 0; color: #0f172a; font-size: 22px; font-weight: 800;">Paramètres du Profil</h2>
+                            <p style="margin: 4px 0 0 0; color: #64748b; font-size: 13px;">Gérez vos informations, votre sécurité et vos accréditations.</p>
+                        </div>
+                    </div>
+                    <button class="btn btn-primary" onclick="app.saveProfile()" style="padding: 12px 24px; font-size: 14px; box-shadow: 0 4px 12px rgba(59,130,246,0.3);">
+                        <i class="fas fa-save" style="margin-right: 6px;"></i> Enregistrer les modifications
+                    </button>
+                </div>
+
+                <!-- Grille de cartes -->
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 25px;">
+                    
+                    <!-- Carte 1: Photo de profil -->
+                    <div class="form-card" style="margin-bottom: 0; display: flex; flex-direction: column; align-items: center; text-align: center; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);">
+                        <h4 style="margin: 0 0 20px 0; color: #1e293b; font-size: 15px; align-self: flex-start; border-bottom: 1px solid #e2e8f0; padding-bottom: 12px; width: 100%; text-align: left; display: flex; align-items: center;">
+                            <i class="fas fa-camera" style="color: #3b82f6; margin-right: 10px; font-size: 18px;"></i> Photo de profil
+                        </h4>
+                        
+                        <div class="user-avatar" id="profileAvatarPreview" style="width: 130px; height: 130px; margin: 10px auto 15px; font-size: 50px; cursor: pointer; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.15); border: 4px solid white; transition: transform 0.2s;" onclick="document.getElementById('profilePhotoInput').click()" title="Changer la photo">
+                            <i class="fas fa-user text-white"></i>
+                        </div>
+                        <input type="file" id="profilePhotoInput" accept="image/*" style="display: none;" onchange="app.handleProfilePhotoChange(event)">
+                        
+                        <h3 style="margin: 0 0 5px 0; color: #0f172a; font-size: 18px; font-weight: 700;">${userName}</h3>
+                        <p style="margin: 0 0 20px 0; color: #64748b; font-size: 13px; background: #f1f5f9; padding: 4px 12px; border-radius: 20px; display: inline-block;">${roleDisplay}</p>
+                        
+                        <button class="btn btn-outline" onclick="document.getElementById('profilePhotoInput').click()" style="border-radius: 8px; width: 100%; justify-content: center;">
+                            <i class="fas fa-image"></i> Modifier la photo
+                        </button>
+                    </div>
+
+                    <!-- Carte 2: Infos Personnelles -->
+                    <div class="form-card" style="margin-bottom: 0; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);">
+                        <h4 style="margin: 0 0 20px 0; color: #1e293b; font-size: 15px; border-bottom: 1px solid #e2e8f0; padding-bottom: 12px; display: flex; align-items: center;">
+                            <i class="fas fa-id-card" style="color: #10b981; margin-right: 10px; font-size: 18px;"></i> Identité
+                        </h4>
+                        <div class="form-group" style="margin-bottom: 20px;">
+                            <label>Nom d'utilisateur complet</label>
+                            <input type="text" id="profileName" value="${userName}" style="font-size: 14px; padding: 12px 15px; background: #f8fafc; border: 1px solid #cbd5e1;">
+                        </div>
+                        <div style="padding: 15px; background: #f0fdf4; border-radius: 10px; border: 1px solid #bbf7d0; display: flex; gap: 12px; align-items: flex-start;">
+                            <i class="fas fa-info-circle" style="color: #16a34a; font-size: 18px; margin-top: 2px;"></i>
+                            <p style="margin: 0; font-size: 13px; color: #166534; line-height: 1.5;">
+                                Ce nom sera utilisé pour tracer vos actions dans le journal d'audit et apparaîtra sur vos documents (factures, reçus).
+                            </p>
+                        </div>
+                    </div>
+
+                    <!-- Carte 3: Sécurité -->
+                    <div class="form-card" style="margin-bottom: 0; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);">
+                        <h4 style="margin: 0 0 20px 0; color: #1e293b; font-size: 15px; border-bottom: 1px solid #e2e8f0; padding-bottom: 12px; display: flex; align-items: center;">
+                            <i class="fas fa-shield-alt" style="color: #ef4444; margin-right: 10px; font-size: 18px;"></i> Sécurité
+                        </h4>
+                        <div class="form-group" style="margin-bottom: 10px;">
+                            <label>Nouveau mot de passe</label>
+                            <input type="password" id="profileNewPassword" placeholder="••••••••" style="font-size: 14px; padding: 12px 15px; background: #f8fafc; border: 1px solid #cbd5e1;">
+                        </div>
+                        <div style="padding: 15px; background: #fef2f2; border-radius: 10px; border: 1px solid #fecaca; display: flex; gap: 12px; align-items: flex-start; margin-top: 20px;">
+                            <i class="fas fa-exclamation-triangle" style="color: #dc2626; font-size: 18px; margin-top: 2px;"></i>
+                            <div style="margin: 0; font-size: 13px; color: #991b1b; line-height: 1.5;">
+                                <strong>Attention :</strong> Laissez vide si vous ne souhaitez pas changer de mot de passe. Minimum 6 caractères requis.
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Carte 4: Infos Pro -->
+                    <div class="form-card" style="margin-bottom: 0; background: #f8fafc; border: 1px dashed #cbd5e1; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.02);">
+                        <h4 style="margin: 0 0 20px 0; color: #1e293b; font-size: 15px; border-bottom: 1px solid #e2e8f0; padding-bottom: 12px; display: flex; align-items: center;">
+                            <i class="fas fa-building" style="color: #f59e0b; margin-right: 10px; font-size: 18px;"></i> Accréditations
+                        </h4>
+                        
+                        <div class="form-group" style="margin-bottom: 20px;">
+                            <label>Agence / Secteur rattaché</label>
+                            <div style="padding: 12px 16px; background: white; border: 1px solid #e2e8f0; border-radius: 10px; color: #334155; font-weight: 600; font-size: 14px; box-shadow: inset 0 2px 4px rgba(0,0,0,0.02);">
+                                ${agencyDisplay}
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label>Niveau d'accès (Rôle)</label>
+                            <div style="padding: 12px 16px; background: white; border: 1px solid #e2e8f0; border-radius: 10px; color: #334155; font-weight: 600; font-size: 14px; display: flex; align-items: center; gap: 10px; box-shadow: inset 0 2px 4px rgba(0,0,0,0.02);">
+                                <i class="fas fa-user-shield" style="color: #94a3b8;"></i>
+                                ${roleDisplay}
+                            </div>
+                        </div>
+                        
+                        <p style="font-size: 12px; color: #64748b; margin-top: 25px; padding-top: 15px; border-top: 1px solid #e2e8f0; font-style: italic; text-align: center;">
+                            <i class="fas fa-lock" style="margin-right: 5px;"></i> Ces informations sont gérées par votre administrateur réseau.
+                        </p>
+                    </div>
+                </div>
+                </div>
+            </div>
+        `;
+        document.getElementById('contentContainer').innerHTML = html;
+
+        const savedPhoto = localStorage.getItem('userProfilePhoto');
+        if (savedPhoto) {
+            const avatar = document.getElementById('profileAvatarPreview');
+            avatar.innerHTML = '';
+            avatar.style.backgroundImage = `url(${savedPhoto})`;
+            avatar.style.backgroundSize = 'cover';
+            avatar.style.backgroundPosition = 'center';
+        }
+    },
     renderConfigInvoice() { this.renderSettingsForm('Choix facture', { template: 'Standard', logo: 'AMT', footer: 'Merci de votre confiance' }); },
     renderConfigLabel() { this.renderSettingsForm('Choix étiquette', { format: 'A6', template: 'Étiquette standard', barcode: true }); },
     renderConfigObjectives() { this.renderSettingsForm('Objectifs', { monthlyTarget: 50000, quarterlyTarget: 150000, yearlyTarget: 600000 }); },
@@ -1257,6 +1260,117 @@ const app = {
             </div>
         `;
         document.getElementById('contentContainer').innerHTML = html;
+    },
+
+    // ==================== PROFIL & UTILISATEUR ====================
+
+    loadUserProfile() {
+        const savedPhoto = localStorage.getItem('userProfilePhoto');
+        if (savedPhoto) {
+            const headerAvatar = document.getElementById('userAvatar');
+            if (headerAvatar) {
+                headerAvatar.innerHTML = '';
+                headerAvatar.style.backgroundImage = `url(${savedPhoto})`;
+                headerAvatar.style.backgroundSize = 'cover';
+                headerAvatar.style.backgroundPosition = 'center';
+            }
+        }
+    },
+
+    handleProfilePhotoChange(event) {
+        const file = event.target.files[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const avatar = document.getElementById('profileAvatarPreview');
+                avatar.innerHTML = '';
+                avatar.style.backgroundImage = `url(${e.target.result})`;
+                avatar.style.backgroundSize = 'cover';
+                avatar.style.backgroundPosition = 'center';
+                this.tempProfilePhoto = e.target.result;
+            };
+            reader.readAsDataURL(file);
+        }
+    },
+
+    async saveProfile() {
+        const newName = document.getElementById('profileName').value.trim();
+        const newPassword = document.getElementById('profileNewPassword').value;
+        
+        if (!newName) {
+            this.showToast("Le nom d'utilisateur ne peut pas être vide.", "error");
+            return;
+        }
+
+        const btn = document.querySelector('#contentContainer .btn-primary');
+        const oldText = btn.innerHTML;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Enregistrement...';
+        btn.disabled = true;
+
+        try {
+            const { auth, db } = await import('../../firebase-config.js');
+            const { updateProfile, updatePassword } = await import('https://www.gstatic.com/firebasejs/9.22.0/firebase-auth.js');
+            const { doc, updateDoc } = await import('https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js');
+
+            const user = auth.currentUser;
+            if (!user) throw new Error("Utilisateur non connecté.");
+
+            const updates = {};
+
+            // 1. Mise à jour du Nom
+            if (newName !== user.displayName) {
+                await updateProfile(user, { displayName: newName });
+                updates.displayName = newName;
+                sessionStorage.setItem('userName', newName);
+                const headerName = document.getElementById('userName');
+                if (headerName) headerName.textContent = newName;
+            }
+
+            // 2. Mise à jour de la Photo
+            if (this.tempProfilePhoto) {
+                updates.photoURL = this.tempProfilePhoto;
+                localStorage.setItem('userProfilePhoto', this.tempProfilePhoto);
+                this.loadUserProfile();
+            }
+
+            // Mise à jour dans Firestore (Synchronisation)
+            if (Object.keys(updates).length > 0) {
+                await updateDoc(doc(db, 'users', user.uid), updates);
+            }
+
+            // 3. Mise à jour du Mot de passe
+            if (newPassword) {
+                if (newPassword.length < 6) {
+                    this.showToast("Le mot de passe doit faire au moins 6 caractères.", "error");
+                    btn.innerHTML = oldText;
+                    btn.disabled = false;
+                    return;
+                }
+                try {
+                    await updatePassword(user, newPassword);
+                    await updateDoc(doc(db, 'users', user.uid), { password: newPassword });
+                } catch (pwError) {
+                    if (pwError.code === 'auth/requires-recent-login') {
+                        this.showToast("Par sécurité, veuillez vous déconnecter et vous reconnecter pour modifier le mot de passe.", "error");
+                        btn.innerHTML = oldText;
+                        btn.disabled = false;
+                        return;
+                    } else {
+                        throw pwError;
+                    }
+                }
+            }
+
+            this.showToast("Profil mis à jour avec succès !", "success");
+            document.getElementById('profileNewPassword').value = '';
+
+        } catch (error) {
+            console.error("Erreur lors de la mise à jour du profil :", error);
+            this.showToast("Erreur : " + error.message, "error");
+        } finally {
+            btn.innerHTML = oldText;
+            btn.disabled = false;
+        }
     },
 
     // ==================== ACTIONS ====================
