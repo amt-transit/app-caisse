@@ -7,7 +7,7 @@ onAuthStateChanged(auth, async (user) => {
     if (!user) {
         // Pas connecté, redirection normale vers login
         if (!window.location.pathname.includes('login.html')) {
-            window.location.href = 'login.html';
+            window.location.href = window.location.pathname.includes('/paris/') ? '../login.html' : 'login.html';
         }
         return;
     }
@@ -19,7 +19,8 @@ onAuthStateChanged(auth, async (user) => {
         const showErrorAndRedirect = async (msg, title, url = 'index.html') => {
             if (window.AppModal) await window.AppModal.error(msg, title);
             else alert(title + "\n\n" + msg);
-            window.location.href = url;
+            const isParis = window.location.pathname.includes('/paris/');
+            window.location.href = (isParis && !url.includes('/')) ? '../' + url : url;
         };
 
         // DIAGNOSTIC 1 : Le document existe-t-il ?
@@ -47,7 +48,64 @@ onAuthStateChanged(auth, async (user) => {
         }
         sessionStorage.setItem('userRole', userRole);
         sessionStorage.setItem('userName', userName || 'Utilisateur');
+        sessionStorage.setItem('userAgency', userData.agency || 'abidjan');
+
+        // Affichage dynamique du nom dans l'en-tête (ex: Vue Paris)
+        const userNameEl = document.getElementById('userName');
+        if (userNameEl) userNameEl.textContent = userName || 'Utilisateur';
+
+        // Détermination de l'agence actuellement "Active"
+        let currentActiveAgency = sessionStorage.getItem('currentActiveAgency');
+        if (!currentActiveAgency || (userData.agency !== 'all' && currentActiveAgency !== userData.agency)) {
+            currentActiveAgency = userData.agency === 'all' ? 'abidjan' : (userData.agency || 'abidjan');
+            sessionStorage.setItem('currentActiveAgency', currentActiveAgency);
+        }
+
         document.body.classList.add('role-' + userRole);
+        document.body.classList.add('agency-' + currentActiveAgency);
+
+        // --- INJECTION DU SÉLECTEUR D'AGENCE (Pour les comptes Globaux) ---
+        if (userData.agency === 'all' || userRole === 'super_admin') {
+            const header = document.querySelector('.app-header');
+            if (header && !document.getElementById('agencySwitcher')) {
+                const switcher = document.createElement('select');
+                switcher.id = 'agencySwitcher';
+                switcher.innerHTML = `
+                    <option value="abidjan" ${currentActiveAgency === 'abidjan' ? 'selected' : ''}>🇨🇮 Vue Abidjan</option>
+                    <option value="paris" ${currentActiveAgency === 'paris' ? 'selected' : ''}>🇫🇷 Vue Paris</option>
+                `;
+                switcher.style.cssText = "position: absolute; right: 140px; padding: 6px 10px; border-radius: 8px; font-weight: bold; border: 1px solid rgba(255,255,255,0.3); background: rgba(255,255,255,0.1); color: white; cursor: pointer; font-size: 13px;";
+                switcher.addEventListener('change', (e) => {
+                    const selectedAgency = e.target.value;
+                    sessionStorage.setItem('currentActiveAgency', selectedAgency);
+                    
+                    const isCurrentlyInParis = window.location.pathname.includes('/paris/');
+                    
+                    if (selectedAgency === 'paris' && !isCurrentlyInParis) {
+                        window.location.href = 'paris/index.html';
+                    } else if (selectedAgency === 'abidjan' && isCurrentlyInParis) {
+                        window.location.href = '../index.html';
+                    } else {
+                        window.location.reload();
+                    }
+                });
+                header.appendChild(switcher);
+            }
+
+            // --- INJECTION DU SÉLECTEUR D'AGENCE (Menu Utilisateur Paris/Abidjan) ---
+            const menuAgencySwitch = document.getElementById('menuAgencySwitch');
+            if (menuAgencySwitch) {
+                menuAgencySwitch.style.display = 'block';
+                const isCurrentlyInParis = window.location.pathname.includes('/paris/');
+                menuAgencySwitch.innerHTML = isCurrentlyInParis ? '<i class="fas fa-globe"></i> Vue Abidjan' : '<i class="fas fa-globe"></i> Vue Paris';
+                menuAgencySwitch.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    const targetAgency = isCurrentlyInParis ? 'abidjan' : 'paris';
+                    sessionStorage.setItem('currentActiveAgency', targetAgency);
+                    window.location.href = isCurrentlyInParis ? '../index.html' : 'paris/index.html';
+                });
+            }
+        }
 
         // --- GESTION GLOBALE DU BADGE DE NOTIFICATION (Placé ici pour s'exécuter AVANT les return) ---
         // Vérification des sessions en attente sur toutes les pages
@@ -179,6 +237,15 @@ onAuthStateChanged(auth, async (user) => {
         const navAudit = document.getElementById('nav-audit');
         const navVoiture = document.getElementById('nav-voiture');
         const navCompteJB = document.getElementById('nav-comptejb');
+        const navParis = document.getElementById('nav-paris');
+
+        if (navParis) {
+            if (userRole === 'super_admin' || userRole === 'admin' || userRole === 'agent_paris' || userData.agency === 'all' || userData.agency === 'paris') {
+                navParis.style.display = 'inline-flex';
+            } else {
+                navParis.style.display = 'none';
+            }
+        }
 
         if (navAdmin && userRole !== 'super_admin' && userRole !== 'admin') navAdmin.style.display = 'none';
         if (navCompteJB && userRole !== 'super_admin' && userRole !== 'admin') navCompteJB.style.display = 'none';
@@ -216,6 +283,42 @@ onAuthStateChanged(auth, async (user) => {
              else alert("ERREUR PERMISSION : Les règles de sécurité de Firestore bloquent la lecture de votre profil.\nVérifiez l'onglet 'Règles' dans la console Firebase.");
         }
         signOut(auth);
-        window.location.href = 'login.html';
+        window.location.href = window.location.pathname.includes('/paris/') ? '../login.html' : 'login.html';
     }
 });
+
+// --- GESTION GLOBALE DE LA DÉCONNEXION ---
+const setupLogout = () => {
+    const handleLogout = async () => {
+        const confirmLogout = window.AppModal ? 
+            await window.AppModal.confirm("Voulez-vous vous déconnecter ?", "Déconnexion", true) : 
+            confirm("Voulez-vous vous déconnecter ?");
+            
+        if (confirmLogout) {
+            try {
+                await signOut(auth);
+                sessionStorage.clear(); // Sécurité : on vide les données de session
+                window.location.href = window.location.pathname.includes('/paris/') ? '../login.html' : 'login.html';
+            } catch (error) {
+                console.error("Erreur lors de la déconnexion:", error);
+            }
+        }
+    };
+
+    // Bouton de bureau classique
+    const logoutBtn = document.getElementById('logoutBtn');
+    if (logoutBtn) logoutBtn.addEventListener('click', handleLogout);
+
+    // Boutons avec la classe .logout-btn (sécurité supplémentaire pour d'autres pages comme Salaire)
+    const logoutBtns = document.querySelectorAll('.logout-btn');
+    logoutBtns.forEach(btn => {
+        if (btn.id !== 'logoutBtn') btn.addEventListener('click', handleLogout);
+    });
+};
+
+// S'assurer que le DOM est chargé avant d'attacher les événements (Gère le délai des type="module")
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', setupLogout);
+} else {
+    setupLogout();
+}

@@ -21,6 +21,7 @@
     <nav class="navigation">
         <ul class="nav-menu">
             <li><a href="dashboard.html" id="nav-dashboard">📊 Tableau de Bord</a></li>
+            <li><a href="paris/index.html" id="nav-paris" style="display:none; color:#2563eb; font-weight:bold;">🇫🇷 Interface Paris</a></li>
             
             <li class="has-dropdown">
                 <a href="#">💵 Entrées Caisse</a>
@@ -163,10 +164,5 @@
     <script type="module" src="auth-guard.js"></script>
     <script type="module" src="voiture.js"></script>
     <script src="utils.js"></script>
-    <script>
-        document.getElementById('logoutBtn').addEventListener('click', () => {
-            if (confirm("Voulez-vous vous déconnecter ?")) firebase.auth().signOut();
-        });
-    </script>
 </body>
 </html>

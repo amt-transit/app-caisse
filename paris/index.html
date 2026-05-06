@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes">
+    <title>AMT Paris - Agent Dashboard</title>
+    
+    <link href="https://fonts.googleapis.com/css2?family=Inter:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/fullcalendar@5.11.3/main.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/fullcalendar@5.11.3/main.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="icon" type="image/png" href="../favicon.png">
+    <style>
+        /* Styles du menu utilisateur (Dropdown) */
+        .user-dropdown-container { position: relative; display: inline-block; }
+        .user-avatar { cursor: pointer; transition: transform 0.2s; }
+        .user-avatar:active { transform: scale(0.95); }
+        .user-dropdown-menu {
+            display: none; position: absolute; right: 0; top: calc(100% + 10px);
+            background: white; border: 1px solid #e2e8f0; border-radius: 8px;
+            box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1); padding: 8px; min-width: 170px; z-index: 1000;
+        }
+        .user-dropdown-menu.active { display: block; animation: slideDown 0.2s ease-out; }
+        .user-dropdown-menu a { display: block; padding: 8px 12px; color: #1e293b; text-decoration: none; border-radius: 6px; font-size: 14px; font-weight: 500; transition: background 0.2s; margin-bottom: 2px; }
+        .user-dropdown-menu a i { margin-right: 8px; width: 16px; text-align: center; }
+        .user-dropdown-menu a:hover { background: #f8fafc; }
+        .user-dropdown-menu a.logout { color: #ef4444; }
+        .user-dropdown-menu a.logout:hover { background: #fef2f2; }
+        @keyframes slideDown { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
+    </style>
+</head>
+<body>
+
+    <aside class="sidebar" id="sidebar">
+        <div class="sidebar-header">
+            <div class="sidebar-logo">
+                <i class="fas fa-ship"></i>
+            </div>
+            <div>
+                <h2>AMT Paris</h2>
+                <p>Agent Dashboard</p>
+            </div>
+        </div>
+
+        <nav class="sidebar-nav" id="sidebarNav">
+            <div class="sidebar-category">
+                <div class="sidebar-category-title">Dashboard</div>
+                <div class="sidebar-item active" data-page="dashboard">
+                    <i class="fas fa-chart-line"></i><span>Tableau de bord</span>
+                </div>
+            </div>
+
+            <div class="sidebar-category">
+                <div class="sidebar-category-title">Bilan journalier</div>
+                <div class="sidebar-item" data-page="daily-bilan"><i class="fas fa-calendar-day"></i><span>Bilan du jour</span></div>
+                <div class="sidebar-item" data-page="daily-users"><i class="fas fa-users"></i><span>Bilan par utilisateurs</span></div>
+            </div>
+
+            <div class="sidebar-category">
+                <div class="sidebar-category-title">Factures d'envoi</div>
+                <div class="sidebar-item" data-page="invoices-list"><i class="fas fa-file-invoice"></i><span>Toutes les factures</span></div>
+                <div class="sidebar-item" data-page="invoice-new"><i class="fas fa-plus-circle"></i><span>Nouvelle facture</span></div>
+            </div>
+
+            <div class="sidebar-category">
+                <div class="sidebar-category-title">Rendez-vous</div>
+                <div class="sidebar-item" data-page="appointment-new"><i class="fas fa-calendar-plus"></i><span>Nouveau RDV</span></div>
+                <div class="sidebar-item" data-page="appointments-list"><i class="fas fa-list-ul"></i><span>Tous les RDV</span></div>
+                <div class="sidebar-item" data-page="appointments-pending"><i class="fas fa-clock"></i><span>À valider <span class="badge" id="pendingAppointmentsBadge">3</span></span></div>
+                <div class="sidebar-item" data-page="appointments-calendar"><i class="fas fa-calendar-alt"></i><span>Calendrier RDV</span></div>
+            </div>
+
+            <div class="sidebar-category">
+                <div class="sidebar-category-title">Les Programmes</div>
+                <div class="sidebar-item" data-page="program-new"><i class="fas fa-plus"></i><span>Nouveau programme</span></div>
+                <div class="sidebar-item" data-page="program-my"><i class="fas fa-tasks"></i><span>Mon programme</span></div>
+                <div class="sidebar-item" data-page="program-history"><i class="fas fa-history"></i><span>Historique</span></div>
+                <div class="sidebar-item" data-page="drivers"><i class="fas fa-truck"></i><span>Chauffeurs</span></div>
+                <div class="sidebar-item" data-page="departures-calendar"><i class="fas fa-ship"></i><span>Calendrier départs</span></div>
+            </div>
+
+            <div class="sidebar-category">
+                <div class="sidebar-category-title">Devis</div>
+                <div class="sidebar-item" data-page="quotes-list"><i class="fas fa-file-alt"></i><span>Tous les devis</span></div>
+                <div class="sidebar-item" data-page="quote-new"><i class="fas fa-plus"></i><span>Nouveau devis</span></div>
+                <div class="sidebar-item" data-page="quote-requests"><i class="fas fa-envelope"></i><span>Demandes reçues <span class="badge" id="quoteRequestsBadge">2</span></span></div>
+            </div>
+
+            <div class="sidebar-category">
+                <div class="sidebar-category-title">Chargement</div>
+                <div class="sidebar-item" data-page="loading-container"><i class="fas fa-box"></i><span>Conteneur</span></div>
+                <div class="sidebar-item" data-page="loading-boats"><i class="fas fa-ship"></i><span>Bateaux départ</span></div>
+            </div>
+
+            <div class="sidebar-category">
+                <div class="sidebar-category-title">Scan</div>
+                <div class="sidebar-item" data-page="scan-warehouse"><i class="fas fa-warehouse"></i><span>Mise en entrepôt</span></div>
+                <div class="sidebar-item" data-page="scan-container"><i class="fas fa-cube"></i><span>Charger conteneur</span></div>
+                <div class="sidebar-item" data-page="scan-classic"><i class="fas fa-qrcode"></i><span>Scanner (classique)</span></div>
+                <div class="sidebar-item" data-page="scan-history"><i class="fas fa-history"></i><span>Historique</span></div>
+            </div>
+
+            <div class="sidebar-category">
+                <div class="sidebar-category-title">Clients</div>
+                <div class="sidebar-item" data-page="clients-list"><i class="fas fa-users"></i><span>Liste clients</span></div>
+                <div class="sidebar-item" data-page="clients-app"><i class="fas fa-mobile-alt"></i><span>Client application</span></div>
+                <div class="sidebar-item" data-page="clients-analytics"><i class="fas fa-chart-bar"></i><span>Analytics</span></div>
+            </div>
+
+            <div class="sidebar-category">
+                <div class="sidebar-category-title">Communication</div>
+                <div class="sidebar-item" data-page="chat"><i class="fas fa-comments"></i><span>Chat <span class="badge" id="chatBadge">5</span></span></div>
+                <div class="sidebar-item" data-page="sms-send"><i class="fas fa-sms"></i><span>Envoi SMS</span></div>
+                <div class="sidebar-item" data-page="sms-history"><i class="fas fa-history"></i><span>Historique SMS</span></div>
+                <div class="sidebar-item" data-page="notifications"><i class="fas fa-bell"></i><span>Notifications</span></div>
+                <div class="sidebar-item" data-page="notifications-history"><i class="fas fa-clock"></i><span>Historique Notif</span></div>
+            </div>
+
+            <div class="sidebar-category">
+                <div class="sidebar-category-title">PRODUITS</div>
+                <div class="sidebar-item" data-page="products-list"><i class="fas fa-boxes"></i><span>Liste produits</span></div>
+            </div>
+
+            <div class="sidebar-category">
+                <div class="sidebar-category-title">Finance</div>
+                <div class="sidebar-item" data-page="finance-cashier"><i class="fas fa-money-bill-wave"></i><span>Caisse globale</span></div>
+                <div class="sidebar-item" data-page="finance-cheques"><i class="fas fa-receipt"></i><span>Liste des chèques</span></div>
+                <div class="sidebar-item" data-page="finance-expenses"><i class="fas fa-chart-line"></i><span>Dépenses</span></div>
+            </div>
+
+            <div class="sidebar-category">
+                <div class="sidebar-category-title">Stock</div>
+                <div class="sidebar-item" data-page="stock-list"><i class="fas fa-warehouse"></i><span>Liste produit stocker</span></div>
+            </div>
+
+            <div class="sidebar-category">
+                <div class="sidebar-category-title">Bilans financiers</div>
+                <div class="sidebar-item" data-page="balance-monthly"><i class="fas fa-chart-line"></i><span>Bilan mensuel</span></div>
+                <div class="sidebar-item" data-page="balance-yearly"><i class="fas fa-chart-bar"></i><span>Bilan annuel</span></div>
+                <div class="sidebar-item" data-page="balance-boat"><i class="fas fa-ship"></i><span>Bilan bateau</span></div>
+                <div class="sidebar-item" data-page="balance-12m"><i class="fas fa-chart-simple"></i><span>Direction 12M</span></div>
+            </div>
+
+            <div class="sidebar-category">
+                <div class="sidebar-category-title">Statistique</div>
+                <div class="sidebar-item" data-page="stats-boat"><i class="fas fa-ship"></i><span>Stats bateau</span></div>
+                <div class="sidebar-item" data-page="stats-monthly"><i class="fas fa-calendar-month"></i><span>Stats par mois</span></div>
+                <div class="sidebar-item" data-page="stats-yearly"><i class="fas fa-calendar-year"></i><span>Stats par année</span></div>
+            </div>
+
+            <div class="sidebar-category">
+                <div class="sidebar-category-title">Paramètres</div>
+                <div class="sidebar-item" data-page="settings-agency"><i class="fas fa-building"></i><span>Agence</span></div>
+                <div class="sidebar-item" data-page="settings-company"><i class="fas fa-briefcase"></i><span>Entreprise</span></div>
+                <div class="sidebar-item" data-page="settings-software"><i class="fas fa-cog"></i><span>Paramètre logiciel</span></div>
+                <div class="sidebar-item" data-page="settings-sms"><i class="fas fa-comment-dots"></i><span>Config SMS</span></div>
+                <div class="sidebar-item" data-page="settings-notifications"><i class="fas fa-bell"></i><span>Config notifs</span></div>
+                <div class="sidebar-item" data-page="settings-menus"><i class="fas fa-bars"></i><span>Gestion menus</span></div>
+                <div class="sidebar-item" data-page="settings-agents"><i class="fas fa-user-cog"></i><span>Gestion des agents</span></div>
+                <div class="sidebar-item" data-page="settings-appointments"><i class="fas fa-calendar-check"></i><span>Paramètres RDV</span></div>
+                <div class="sidebar-item" data-page="settings-profile"><i class="fas fa-user"></i><span>Mon profil</span></div>
+            </div>
+
+            <div class="sidebar-category">
+                <div class="sidebar-category-title">Configuration</div>
+                <div class="sidebar-item" data-page="config-invoice"><i class="fas fa-file-invoice"></i><span>Choix facture</span></div>
+                <div class="sidebar-item" data-page="config-label"><i class="fas fa-tag"></i><span>Choix étiquette</span></div>
+                <div class="sidebar-item" data-page="config-objectives"><i class="fas fa-bullseye"></i><span>Objectifs</span></div>
+                <div class="sidebar-item" data-page="config-charges"><i class="fas fa-charging-station"></i><span>Charges</span></div>
+            </div>
+
+            <div class="sidebar-category">
+                <div class="sidebar-category-title">Prospect</div>
+                <div class="sidebar-item" data-page="prospecting"><i class="fas fa-chart-line"></i><span>Prospections</span></div>
+            </div>
+            <div class="sidebar-category">
+                <div class="sidebar-category-title">Audit Log</div>
+                <div class="sidebar-item" data-page="audit-log"><i class="fas fa-history"></i><span>Activités log</span></div>
+            </div>
+        </nav>
+    </aside>
+
+    <main class="main-content">
+        <div class="top-bar">
+            <button class="mobile-toggle" id="mobileToggle">
+                <i class="fas fa-bars"></i>
+            </button>
+            <h1 class="page-title" id="pageTitle">Tableau de bord</h1>
+            <div class="user-info">
+                <span id="userName">Agent Paris</span>
+            <div class="user-dropdown-container">
+                <div class="user-avatar" id="userAvatar" title="Menu Utilisateur">
+                    <i class="fas fa-user"></i>
+                </div>
+                <div class="user-dropdown-menu" id="userDropdownMenu">
+                    <a href="#" id="menuProfile"><i class="fas fa-user-circle"></i> Profil</a>
+                    <a href="#" id="menuAgencySwitch" style="display: none;"><i class="fas fa-globe"></i> Vue Abidjan</a>
+                    <hr style="margin: 5px 0; border: none; border-top: 1px solid #e2e8f0;">
+                    <a href="#" id="logoutBtnParis" class="logout-btn logout"><i class="fas fa-sign-out-alt"></i> Déconnexion</a>
+                </div>
+            </div>
+            </div>
+        </div>
+
+        <div class="content-container" id="contentContainer">
+            <div class="loading">Chargement...</div>
+        </div>
+    </main>
+
+    <div class="modal-overlay" id="modalOverlay">
+        <div class="modal-content" id="modalContent">
+            </div>
+    </div>
+
+    <script>
+        // Gestion de l'affichage du menu déroulant Utilisateur
+        document.addEventListener('DOMContentLoaded', () => {
+            const userAvatar = document.getElementById('userAvatar');
+            const userDropdownMenu = document.getElementById('userDropdownMenu');
+            
+            userAvatar.addEventListener('click', (e) => {
+                e.stopPropagation();
+                userDropdownMenu.classList.toggle('active');
+            });
+            
+            document.addEventListener('click', (e) => {
+                if (!userAvatar.contains(e.target) && !userDropdownMenu.contains(e.target)) {
+                    userDropdownMenu.classList.remove('active');
+                }
+            });
+        });
+    </script>
+    <script type="module" src="../auth-guard.js"></script>
+    <script type="module" src="js/app.js"></script>
+</body>
+</html>

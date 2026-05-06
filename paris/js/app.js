@@ -1,0 +1,1335 @@
+// Configuration de l'application Paris
+const app = {
+    currentPage: 'dashboard',
+    user: { name: 'Agent Paris', role: 'agent' },
+    
+    // Données simulées (à remplacer par Firebase plus tard)
+    data: {
+        invoices: [
+            { id: 1, number: 'FAC-2024-001', client: 'Jean Dupont', amount: 380.00, status: 'payée', date: '2024-12-01' },
+            { id: 2, number: 'FAC-2024-002', client: 'Marie Koné', amount: 275.50, status: 'envoyée', date: '2024-12-05' },
+            { id: 3, number: 'FAC-2024-003', client: 'Ibrahim Touré', amount: 485.00, status: 'en_attente', date: '2024-12-10' }
+        ],
+        appointments: [
+            { id: 1, client: 'Jean Dupont', date: '2024-12-15', time: '10:00', status: 'confirmé' },
+            { id: 2, client: 'Marie Koné', date: '2024-12-16', time: '14:30', status: 'en_attente' },
+            { id: 3, client: 'Ibrahim Touré', date: '2024-12-17', time: '09:00', status: 'confirmé' },
+            { id: 4, client: 'Fatima Diallo', date: '2024-12-18', time: '11:00', status: 'en_attente' }
+        ],
+        quotes: [
+            { id: 1, number: 'DEV-2024-001', client: 'Jean Dupont', amount: 220.00, status: 'envoyé', date: '2024-11-28' },
+            { id: 2, number: 'DEV-2024-002', client: 'Société ABC', amount: 680.00, status: 'accepté', date: '2024-12-03' }
+        ],
+        quoteRequests: [
+            { id: 1, client: 'Nouveau Client', email: 'client@email.com', date: '2024-12-12' },
+            { id: 2, client: 'Entreprise XYZ', email: 'contact@xyz.com', date: '2024-12-13' }
+        ],
+        programs: [
+            { id: 1, name: 'Programme Décembre 2024', startDate: '2024-12-01', endDate: '2024-12-31', status: 'en_cours' }
+        ],
+        drivers: [
+            { id: 1, name: 'Jean-Marc', status: 'disponible', vehicle: 'Renault Master' },
+            { id: 2, name: 'Sébastien', status: 'occupé', vehicle: 'Peugeot Trafic' }
+        ],
+        containers: [
+            { id: 1, number: 'CONT-PAR-001', status: 'en_chargement', items: 45 },
+            { id: 2, number: 'CONT-PAR-002', status: 'en_transit', items: 78 },
+            { id: 3, number: 'CONT-PAR-003', status: 'arrivé', items: 32 }
+        ],
+        products: [
+            { id: 1, name: 'Colis Standard', price: 15.00, stock: 150 },
+            { id: 2, name: 'Malle / Fût', price: 45.00, stock: 25 },
+            { id: 3, name: 'Colis Express', price: 25.00, stock: 80 }
+        ],
+        messages: [
+            { id: 1, from: 'Client Jean', message: 'Bonjour, quel est le statut de mon colis ?', time: '10:30', read: false },
+            { id: 2, from: 'Service Logistique', message: 'Le départ est prévu demain', time: '09:15', read: false }
+        ],
+        notifications: [
+            { id: 1, title: 'Nouvelle facture', message: 'La facture FAC-2024-002 a été émise', time: '2024-12-05 14:30', read: false },
+            { id: 2, title: 'Rappel RDV', message: 'RDV avec Jean Dupont demain 10h', time: '2024-12-14 08:00', read: false }
+        ],
+        agents: [
+            { id: 1, name: 'Agent Paris 1', email: 'agent1@amtparis.fr', role: 'agent', active: true },
+            { id: 2, name: 'Agent Paris 2', email: 'agent2@amtparis.fr', role: 'agent', active: true }
+        ]
+    },
+
+    init() {
+        this.renderPage('dashboard');
+        this.initSidebarEvents();
+        this.initMobileToggle();
+        this.initGlobalEvents();
+        this.updateBadges();
+        
+        // Expose l'objet app à l'objet global Window pour les appels onclick HTML
+        window.app = this;
+    },
+
+    initSidebarEvents() {
+        document.querySelectorAll('.sidebar-item').forEach(item => {
+            item.addEventListener('click', (e) => {
+                const page = item.dataset.page;
+                if (page) {
+                    this.renderPage(page);
+                    document.querySelectorAll('.sidebar-item').forEach(i => i.classList.remove('active'));
+                    item.classList.add('active');
+                }
+            });
+        });
+    },
+
+    initMobileToggle() {
+        const toggle = document.getElementById('mobileToggle');
+        const sidebar = document.getElementById('sidebar');
+        if(toggle) {
+            toggle.addEventListener('click', () => {
+                sidebar.classList.toggle('open');
+            });
+        }
+    },
+
+    initGlobalEvents() {
+        // Fermer le modal au clic en dehors
+        const modal = document.getElementById('modalOverlay');
+        if(modal) {
+            modal.addEventListener('click', (e) => {
+                if (e.target === modal) {
+                    this.closeModal();
+                }
+            });
+        }
+    },
+
+    updateBadges() {
+        const pendingAppointments = this.data.appointments.filter(a => a.status === 'en_attente').length;
+        const pendingQuotes = this.data.quoteRequests.length;
+        const unreadMessages = this.data.messages.filter(m => !m.read).length;
+        const unreadNotifications = this.data.notifications.filter(n => !n.read).length;
+
+        const pendingBadge = document.getElementById('pendingAppointmentsBadge');
+        if (pendingBadge) pendingBadge.textContent = pendingAppointments;
+        
+        const quoteBadge = document.getElementById('quoteRequestsBadge');
+        if (quoteBadge) quoteBadge.textContent = pendingQuotes;
+        
+        const chatBadge = document.getElementById('chatBadge');
+        if (chatBadge) chatBadge.textContent = unreadMessages;
+    },
+
+    renderPage(page) {
+        this.currentPage = page;
+        const titleMap = {
+            'dashboard': 'Tableau de bord',
+            'daily-bilan': 'Bilan du jour',
+            'daily-users': 'Bilan par utilisateurs',
+            'invoices-list': 'Toutes les factures',
+            'invoice-new': 'Nouvelle facture',
+            'appointment-new': 'Nouveau RDV',
+            'appointments-list': 'Tous les RDV',
+            'appointments-pending': 'RDV à valider',
+            'appointments-calendar': 'Calendrier RDV',
+            'program-new': 'Nouveau programme',
+            'program-my': 'Mon programme',
+            'program-history': 'Historique programmes',
+            'drivers': 'Chauffeurs',
+            'departures-calendar': 'Calendrier départs',
+            'quotes-list': 'Tous les devis',
+            'quote-new': 'Nouveau devis',
+            'quote-requests': 'Demandes reçues',
+            'loading-container': 'Gestion Conteneur',
+            'loading-boats': 'Bateaux départ',
+            'scan-warehouse': 'Mise en entrepôt',
+            'scan-container': 'Charger conteneur',
+            'scan-classic': 'Scanner classique',
+            'scan-history': 'Historique scans',
+            'clients-list': 'Liste clients',
+            'clients-app': 'Client application',
+            'clients-analytics': 'Analytics clients',
+            'chat': 'Chat',
+            'sms-send': 'Envoi SMS',
+            'sms-history': 'Historique SMS',
+            'notifications': 'Notifications',
+            'notifications-history': 'Historique notifications',
+            'products-list': 'Liste produits',
+            'finance-cashier': 'Caisse globale',
+            'finance-cheques': 'Liste des chèques',
+            'finance-expenses': 'Dépenses',
+            'stock-list': 'Stock produits',
+            'balance-monthly': 'Bilan mensuel',
+            'balance-yearly': 'Bilan annuel',
+            'balance-boat': 'Bilan bateau',
+            'balance-12m': 'Direction 12 mois',
+            'stats-boat': 'Statistiques bateau',
+            'stats-monthly': 'Statistiques mensuelles',
+            'stats-yearly': 'Statistiques annuelles',
+            'settings-agency': 'Paramètres Agence',
+            'settings-company': 'Paramètres Entreprise',
+            'settings-software': 'Paramètres logiciel',
+            'settings-sms': 'Configuration SMS',
+            'settings-notifications': 'Configuration notifications',
+            'settings-menus': 'Gestion menus',
+            'settings-agents': 'Gestion des agents',
+            'settings-appointments': 'Paramètres RDV',
+            'settings-profile': 'Mon profil',
+            'config-invoice': 'Choix facture',
+            'config-label': 'Choix étiquette',
+            'config-objectives': 'Objectifs',
+            'config-charges': 'Charges',
+            'prospecting': 'Prospections',
+            'audit-log': 'Journal d\'activités'
+        };
+        
+        document.getElementById('pageTitle').textContent = titleMap[page] || page;
+        
+        const renderers = {
+            'dashboard': () => this.renderDashboard(),
+            'daily-bilan': () => this.renderDailyBilan(),
+            'daily-users': () => this.renderDailyUsers(),
+            'invoices-list': () => this.renderInvoicesList(),
+            'invoice-new': () => this.renderInvoiceNew(),
+            'appointment-new': () => this.renderAppointmentNew(),
+            'appointments-list': () => this.renderAppointmentsList(),
+            'appointments-pending': () => this.renderAppointmentsPending(),
+            'appointments-calendar': () => this.renderAppointmentsCalendar(),
+            'program-new': () => this.renderProgramNew(),
+            'program-my': () => this.renderProgramMy(),
+            'program-history': () => this.renderProgramHistory(),
+            'drivers': () => this.renderDrivers(),
+            'departures-calendar': () => this.renderDeparturesCalendar(),
+            'quotes-list': () => this.renderQuotesList(),
+            'quote-new': () => this.renderQuoteNew(),
+            'quote-requests': () => this.renderQuoteRequests(),
+            'loading-container': () => this.renderLoadingContainer(),
+            'loading-boats': () => this.renderLoadingBoats(),
+            'scan-warehouse': () => this.renderScanWarehouse(),
+            'scan-container': () => this.renderScanContainer(),
+            'scan-classic': () => this.renderScanClassic(),
+            'scan-history': () => this.renderScanHistory(),
+            'clients-list': () => this.renderClientsList(),
+            'clients-app': () => this.renderClientsApp(),
+            'clients-analytics': () => this.renderClientsAnalytics(),
+            'chat': () => this.renderChat(),
+            'sms-send': () => this.renderSmsSend(),
+            'sms-history': () => this.renderSmsHistory(),
+            'notifications': () => this.renderNotifications(),
+            'notifications-history': () => this.renderNotificationsHistory(),
+            'products-list': () => this.renderProductsList(),
+            'finance-cashier': () => this.renderFinanceCashier(),
+            'finance-cheques': () => this.renderFinanceCheques(),
+            'finance-expenses': () => this.renderFinanceExpenses(),
+            'stock-list': () => this.renderStockList(),
+            'balance-monthly': () => this.renderBalanceMonthly(),
+            'balance-yearly': () => this.renderBalanceYearly(),
+            'balance-boat': () => this.renderBalanceBoat(),
+            'balance-12m': () => this.renderBalance12M(),
+            'stats-boat': () => this.renderStatsBoat(),
+            'stats-monthly': () => this.renderStatsMonthly(),
+            'stats-yearly': () => this.renderStatsYearly(),
+            'settings-agency': () => this.renderSettingsAgency(),
+            'settings-company': () => this.renderSettingsCompany(),
+            'settings-software': () => this.renderSettingsSoftware(),
+            'settings-sms': () => this.renderSettingsSms(),
+            'settings-notifications': () => this.renderSettingsNotifications(),
+            'settings-menus': () => this.renderSettingsMenus(),
+            'settings-agents': () => this.renderSettingsAgents(),
+            'settings-appointments': () => this.renderSettingsAppointments(),
+            'settings-profile': () => this.renderSettingsProfile(),
+            'config-invoice': () => this.renderConfigInvoice(),
+            'config-label': () => this.renderConfigLabel(),
+            'config-objectives': () => this.renderConfigObjectives(),
+            'config-charges': () => this.renderConfigCharges(),
+            'prospecting': () => this.renderProspecting(),
+            'audit-log': () => this.renderAuditLog()
+        };
+        
+        const renderer = renderers[page];
+        if (renderer) {
+            renderer();
+        } else {
+            document.getElementById('contentContainer').innerHTML = '<div class="loading">Page en construction...</div>';
+        }
+    },
+
+    // ==================== RENDU DES PAGES ====================
+
+    renderDashboard() {
+        const totalInvoices = this.data.invoices.reduce((s, i) => s + i.amount, 0);
+        const pendingAppointments = this.data.appointments.filter(a => a.status === 'en_attente').length;
+        const activePrograms = this.data.programs.filter(p => p.status === 'en_cours').length;
+        
+        const html = `
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-icon" style="background:#dbeafe; color:#2563eb;"><i class="fas fa-file-invoice"></i></div>
+                    <div class="stat-value">${this.formatMoney(totalInvoices)}</div>
+                    <div class="stat-label">Chiffre d'affaires</div>
+                    <div class="stat-trend"><span style="color:#10b981;">↑ 12%</span> vs mois dernier</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon" style="background:#d1fae5; color:#059669;"><i class="fas fa-calendar"></i></div>
+                    <div class="stat-value">${pendingAppointments}</div>
+                    <div class="stat-label">RDV en attente</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon" style="background:#fef3c7; color:#d97706;"><i class="fas fa-tasks"></i></div>
+                    <div class="stat-value">${activePrograms}</div>
+                    <div class="stat-label">Programmes actifs</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon" style="background:#ede9fe; color:#7c3aed;"><i class="fas fa-box"></i></div>
+                    <div class="stat-value">${this.data.containers.length}</div>
+                    <div class="stat-label">Conteneurs en transit</div>
+                </div>
+            </div>
+            
+            <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 25px;">
+                <div style="background: white; border-radius: 20px; padding: 20px; border: 1px solid #e2e8f0;">
+                    <h3 style="margin-bottom: 20px; font-size: 16px;">📊 Évolution du CA</h3>
+                    <canvas id="revenueChart" height="200"></canvas>
+                </div>
+                <div style="background: white; border-radius: 20px; padding: 20px; border: 1px solid #e2e8f0;">
+                    <h3 style="margin-bottom: 20px; font-size: 16px;">📦 Activité récente</h3>
+                    <div style="max-height: 300px; overflow-y: auto;">
+                        ${this.data.invoices.slice(0, 5).map(inv => `
+                            <div style="display: flex; justify-content: space-between; padding: 12px 0; border-bottom: 1px solid #f1f5f9;">
+                                <div><strong>${inv.number}</strong><br><span style="font-size:12px; color:#64748b;">${inv.client}</span></div>
+                                <div style="text-align: right;"><strong>${this.formatMoney(inv.amount)}</strong><br><span class="badge ${inv.status === 'payée' ? 'badge-success' : (inv.status === 'envoyée' ? 'badge-info' : 'badge-warning')}">${inv.status}</span></div>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            </div>
+            
+            <div class="quick-actions" style="margin-top: 25px;">
+                <button class="btn btn-primary" onclick="app.renderPage('invoice-new')"><i class="fas fa-plus"></i> Nouvelle facture</button>
+                <button class="btn btn-outline" onclick="app.renderPage('appointment-new')"><i class="fas fa-calendar-plus"></i> Nouveau RDV</button>
+                <button class="btn btn-outline" onclick="app.renderPage('quote-new')"><i class="fas fa-file-alt"></i> Nouveau devis</button>
+            </div>
+        `;
+        
+        document.getElementById('contentContainer').innerHTML = html;
+        
+        // Initialiser le graphique
+        setTimeout(() => {
+            const ctx = document.getElementById('revenueChart')?.getContext('2d');
+            if (ctx && typeof Chart !== 'undefined') {
+                new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Jun', 'Jul', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc'],
+                        datasets: [{
+                            label: 'CA (€)',
+                            data: [1200, 1500, 1800, 2200, 2500, 2800, 3100, 3400, 3700, 4000, 4300, 4600],
+                            borderColor: '#3b82f6',
+                            backgroundColor: 'rgba(59,130,246,0.1)',
+                            fill: true,
+                            tension: 0.4
+                        }]
+                    },
+                    options: { responsive: true, maintainAspectRatio: true }
+                });
+            }
+        }, 100);
+    },
+
+    renderDailyBilan() {
+        const today = new Date().toISOString().split('T')[0];
+        const todayInvoices = this.data.invoices.filter(i => i.date === today);
+        const total = todayInvoices.reduce((s, i) => s + i.amount, 0);
+        
+        const html = `
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-value">${this.formatMoney(total)}</div>
+                    <div class="stat-label">Encaissements du jour</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">${todayInvoices.length}</div>
+                    <div class="stat-label">Factures émises</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">${this.data.appointments.filter(a => a.date === today).length}</div>
+                    <div class="stat-label">RDV aujourd'hui</div>
+                </div>
+            </div>
+            
+            <div class="form-card">
+                <h3>Résumé détaillé</h3>
+                <table class="data-table">
+                    <thead>
+                        <tr><th>Client</th><th>Facture</th><th>Montant</th><th>Statut</th><th>Action</th></tr>
+                    </thead>
+                    <tbody>
+                        ${todayInvoices.length === 0 ? '<tr><td colspan="5" style="text-align:center;">Aucune opération aujourd\'hui</td></tr>' : todayInvoices.map(inv => `
+                            <tr>
+                                <td>${inv.client}</td>
+                                <td>${inv.number}</td>
+                                <td>${this.formatMoney(inv.amount)}</td>
+                                <td><span class="badge ${inv.status === 'payée' ? 'badge-success' : 'badge-warning'}">${inv.status}</span></td>
+                                <td><button class="btn btn-outline btn-small" onclick="app.viewInvoice(${inv.id})">Détails</button></td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            </div>
+        `;
+        document.getElementById('contentContainer').innerHTML = html;
+    },
+
+    renderDailyUsers() {
+        const userStats = {
+            'Jean Dupont': { invoices: 2, amount: 450.00 },
+            'Marie Koné': { invoices: 1, amount: 180.00 },
+            'Ibrahim Touré': { invoices: 1, amount: 320.00 }
+        };
+        
+        const html = `
+            <div class="form-card">
+                <h3>Bilan par utilisateur</h3>
+                <table class="data-table">
+                    <thead><tr><th>Utilisateur</th><th>Nb factures</th><th>Montant total</th><th>Actions</th></tr></thead>
+                    <tbody>
+                        ${Object.entries(userStats).map(([user, stats]) => `
+                            <tr>
+                                <td><strong>${user}</strong></td>
+                                <td>${stats.invoices}</td>
+                                <td>${this.formatMoney(stats.amount)}</td>
+                                <td><button class="btn btn-outline btn-small" onclick="app.showToast('Détails de ${user}')">Voir détail</button></td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            </div>
+        `;
+        document.getElementById('contentContainer').innerHTML = html;
+    },
+
+    renderInvoicesList() {
+        const html = `
+            <div class="quick-actions">
+                <button class="btn btn-primary" onclick="app.renderPage('invoice-new')"><i class="fas fa-plus"></i> Nouvelle facture</button>
+                <button class="btn btn-outline" onclick="app.exportInvoices()"><i class="fas fa-download"></i> Exporter Excel</button>
+            </div>
+            <div class="form-card">
+                <table class="data-table">
+                    <thead>
+                        <tr><th>N° Facture</th><th>Client</th><th>Date</th><th>Montant</th><th>Statut</th><th>Actions</th></tr>
+                    </thead>
+                    <tbody>
+                        ${this.data.invoices.map(inv => `
+                            <tr>
+                                <td><strong>${inv.number}</strong></td>
+                                <td>${inv.client}</td>
+                                <td>${inv.date}</td>
+                                <td>${this.formatMoney(inv.amount)}</td>
+                                <td><span class="badge ${inv.status === 'payée' ? 'badge-success' : (inv.status === 'envoyée' ? 'badge-info' : 'badge-warning')}">${inv.status}</span></td>
+                                <td>
+                                    <button class="btn btn-outline btn-small" onclick="app.viewInvoice(${inv.id})"><i class="fas fa-eye"></i></button>
+                                    <button class="btn btn-outline btn-small" onclick="app.downloadInvoice(${inv.id})"><i class="fas fa-download"></i></button>
+                                    <button class="btn btn-danger btn-small" onclick="app.deleteInvoice(${inv.id})"><i class="fas fa-trash"></i></button>
+                                </td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            </div>
+        `;
+        document.getElementById('contentContainer').innerHTML = html;
+    },
+
+    renderInvoiceNew() {
+        const html = `
+            <div class="form-card">
+                <h3>Créer une nouvelle facture</h3>
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label>Client</label>
+                        <input type="text" id="invoiceClient" placeholder="Nom du client">
+                    </div>
+                    <div class="form-group">
+                        <label>Date</label>
+                        <input type="date" id="invoiceDate" value="${new Date().toISOString().split('T')[0]}">
+                    </div>
+                    <div class="form-group">
+                        <label>Montant (€)</label>
+                        <input type="number" id="invoiceAmount" placeholder="Montant">
+                    </div>
+                    <div class="form-group">
+                        <label>Description</label>
+                        <textarea id="invoiceDesc" rows="3" placeholder="Détail de la prestation"></textarea>
+                    </div>
+                </div>
+                <div style="margin-top: 20px; display: flex; gap: 10px;">
+                    <button class="btn btn-primary" onclick="app.createInvoice()"><i class="fas fa-save"></i> Générer la facture</button>
+                    <button class="btn btn-outline" onclick="app.renderPage('invoices-list')">Annuler</button>
+                </div>
+            </div>
+            <div class="invoice-preview" id="invoicePreview" style="display:none;">
+                <h4>Aperçu facture</h4>
+                <div id="previewContent"></div>
+            </div>
+        `;
+        document.getElementById('contentContainer').innerHTML = html;
+    },
+
+    renderAppointmentNew() {
+        const html = `
+            <div class="form-card">
+                <h3>Prendre un rendez-vous</h3>
+                <div class="form-grid">
+                    <div class="form-group"><label>Client</label><input type="text" id="appClient" placeholder="Nom du client"></div>
+                    <div class="form-group"><label>Date</label><input type="date" id="appDate" value="${new Date().toISOString().split('T')[0]}"></div>
+                    <div class="form-group"><label>Heure</label><input type="time" id="appTime" value="10:00"></div>
+                    <div class="form-group"><label>Objet</label><input type="text" id="appSubject" placeholder="Objet du rendez-vous"></div>
+                    <div class="form-group full-width"><label>Notes</label><textarea id="appNotes" rows="3" placeholder="Informations complémentaires"></textarea></div>
+                </div>
+                <div style="margin-top: 20px; display: flex; gap: 10px;">
+                    <button class="btn btn-primary" onclick="app.createAppointment()"><i class="fas fa-save"></i> Enregistrer</button>
+                    <button class="btn btn-outline" onclick="app.renderPage('appointments-list')">Annuler</button>
+                </div>
+            </div>
+        `;
+        document.getElementById('contentContainer').innerHTML = html;
+    },
+
+    renderAppointmentsList() {
+        const html = `
+            <div class="quick-actions">
+                <button class="btn btn-primary" onclick="app.renderPage('appointment-new')"><i class="fas fa-plus"></i> Nouveau RDV</button>
+            </div>
+            <div class="form-card">
+                <table class="data-table">
+                    <thead><tr><th>Client</th><th>Date</th><th>Heure</th><th>Statut</th><th>Actions</th></tr></thead>
+                    <tbody>
+                        ${this.data.appointments.map(rdv => `
+                            <tr>
+                                <td><strong>${rdv.client}</strong></td>
+                                <td>${rdv.date}</td>
+                                <td>${rdv.time}</td>
+                                <td><span class="badge ${rdv.status === 'confirmé' ? 'badge-success' : 'badge-warning'}">${rdv.status}</span></td>
+                                <td>
+                                    <button class="btn btn-outline btn-small" onclick="app.confirmAppointment(${rdv.id})"><i class="fas fa-check"></i></button>
+                                    <button class="btn btn-danger btn-small" onclick="app.deleteAppointment(${rdv.id})"><i class="fas fa-trash"></i></button>
+                                </td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            </div>
+        `;
+        document.getElementById('contentContainer').innerHTML = html;
+    },
+
+    renderAppointmentsPending() {
+        const pending = this.data.appointments.filter(a => a.status === 'en_attente');
+        const html = `
+            <div class="form-card">
+                <h3>RDV à valider (${pending.length})</h3>
+                <table class="data-table">
+                    <thead><tr><th>Client</th><th>Date</th><th>Heure</th><th>Objet</th><th>Actions</th></tr></thead>
+                    <tbody>
+                        ${pending.map(rdv => `
+                            <tr>
+                                <td><strong>${rdv.client}</strong></td>
+                                <td>${rdv.date}</td>
+                                <td>${rdv.time}</td>
+                                <td>-</td>
+                                <td>
+                                    <button class="btn btn-success btn-small" onclick="app.validateAppointment(${rdv.id})"><i class="fas fa-check"></i> Valider</button>
+                                    <button class="btn btn-danger btn-small" onclick="app.rejectAppointment(${rdv.id})"><i class="fas fa-times"></i> Refuser</button>
+                                </td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            </div>
+        `;
+        document.getElementById('contentContainer').innerHTML = html;
+    },
+
+    renderAppointmentsCalendar() {
+        const html = `
+            <div class="calendar-container">
+                <div id="calendar"></div>
+            </div>
+        `;
+        document.getElementById('contentContainer').innerHTML = html;
+        
+        setTimeout(() => {
+            if (typeof Calendar !== 'undefined') {
+                const calendarEl = document.getElementById('calendar');
+                const calendar = new Calendar(calendarEl, {
+                    initialView: 'dayGridMonth',
+                    locale: 'fr',
+                    events: this.data.appointments.map(rdv => ({
+                        title: rdv.client,
+                        start: `${rdv.date}T${rdv.time}`,
+                        color: rdv.status === 'confirmé' ? '#10b981' : '#f59e0b'
+                    }))
+                });
+                calendar.render();
+            }
+        }, 100);
+    },
+
+    renderProgramNew() {
+        const html = `
+            <div class="form-card">
+                <h3>Créer un nouveau programme</h3>
+                <div class="form-grid">
+                    <div class="form-group"><label>Nom du programme</label><input type="text" id="progName" placeholder="Ex: Programme Décembre 2024"></div>
+                    <div class="form-group"><label>Date début</label><input type="date" id="progStart"></div>
+                    <div class="form-group"><label>Date fin</label><input type="date" id="progEnd"></div>
+                    <div class="form-group"><label>Description</label><textarea id="progDesc" rows="3"></textarea></div>
+                </div>
+                <div style="margin-top: 20px;"><button class="btn btn-primary" onclick="app.createProgram()">Enregistrer</button></div>
+            </div>
+        `;
+        document.getElementById('contentContainer').innerHTML = html;
+    },
+
+    renderProgramMy() {
+        const html = `
+            <div class="form-card">
+                <h3>Mon programme en cours</h3>
+                ${this.data.programs.filter(p => p.status === 'en_cours').map(prog => `
+                    <div style="padding: 15px; border: 1px solid #e2e8f0; border-radius: 12px; margin-bottom: 15px;">
+                        <div style="display: flex; justify-content: space-between;">
+                            <div><strong>${prog.name}</strong><br><span style="font-size:12px;">${prog.startDate} → ${prog.endDate}</span></div>
+                            <span class="badge badge-success">En cours</span>
+                        </div>
+                        <div style="margin-top: 10px;">
+                            <div class="progress-bar"><div style="width:65%; background:#3b82f6; height:100%; border-radius:10px;"></div></div>
+                            <div style="margin-top: 8px; font-size:12px;">65% réalisé</div>
+                        </div>
+                    </div>
+                `).join('')}
+                <button class="btn btn-outline" onclick="app.renderPage('program-history')">Voir historique</button>
+            </div>
+        `;
+        document.getElementById('contentContainer').innerHTML = html;
+    },
+
+    renderProgramHistory() {
+        const html = `
+            <div class="form-card">
+                <h3>Historique des programmes</h3>
+                <table class="data-table">
+                    <thead><tr><th>Nom</th><th>Période</th><th>Statut</th><th>Réalisations</th></tr></thead>
+                    <tbody>
+                        <tr><td>Programme Novembre 2024</td><td>01/11 - 30/11</td><td><span class="badge badge-info">Terminé</span></td><td>78%</td></tr>
+                        <tr><td>Programme Octobre 2024</td><td>01/10 - 31/10</td><td><span class="badge badge-info">Terminé</span></td><td>92%</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        `;
+        document.getElementById('contentContainer').innerHTML = html;
+    },
+
+    renderDrivers() {
+        const html = `
+            <div class="quick-actions">
+                <button class="btn btn-primary" onclick="app.addDriver()"><i class="fas fa-plus"></i> Ajouter chauffeur</button>
+            </div>
+            <div class="form-card">
+                <table class="data-table">
+                    <thead><tr><th>Nom</th><th>Véhicule</th><th>Statut</th><th>Actions</th></tr></thead>
+                    <tbody>
+                        ${this.data.drivers.map(d => `
+                            <tr>
+                                <td><strong>${d.name}</strong></td>
+                                <td>${d.vehicle}</td>
+                                <td><span class="badge ${d.status === 'disponible' ? 'badge-success' : 'badge-warning'}">${d.status}</span></td>
+                                <td><button class="btn btn-outline btn-small" onclick="app.assignDriver(${d.id})">Assigner</button></td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            </div>
+        `;
+        document.getElementById('contentContainer').innerHTML = html;
+    },
+
+    renderDeparturesCalendar() {
+        const html = `
+            <div class="calendar-container">
+                <div id="departureCalendar" style="height: 500px;"></div>
+            </div>
+        `;
+        document.getElementById('contentContainer').innerHTML = html;
+        
+        setTimeout(() => {
+            if (typeof Calendar !== 'undefined') {
+                const calendarEl = document.getElementById('departureCalendar');
+                new Calendar(calendarEl, {
+                    initialView: 'dayGridMonth',
+                    locale: 'fr',
+                    events: [
+                        { title: 'Départ CONT-001', start: '2024-12-20', color: '#3b82f6' },
+                        { title: 'Arrivée CONT-002', start: '2024-12-25', color: '#10b981' }
+                    ]
+                }).render();
+            }
+        }, 100);
+    },
+
+    renderQuotesList() {
+        const html = `
+            <div class="quick-actions">
+                <button class="btn btn-primary" onclick="app.renderPage('quote-new')"><i class="fas fa-plus"></i> Nouveau devis</button>
+            </div>
+            <div class="form-card">
+                <table class="data-table">
+                    <thead><tr><th>N° Devis</th><th>Client</th><th>Date</th><th>Montant</th><th>Statut</th><th>Actions</th></tr></thead>
+                    <tbody>
+                        ${this.data.quotes.map(q => `
+                            <tr>
+                                <td>${q.number}</td>
+                                <td>${q.client}</td>
+                                <td>${q.date}</td>
+                                <td>${this.formatMoney(q.amount)}</td>
+                                <td><span class="badge ${q.status === 'accepté' ? 'badge-success' : 'badge-info'}">${q.status}</span></td>
+                                <td><button class="btn btn-outline btn-small" onclick="app.convertQuoteToInvoice(${q.id})">Convertir</button></td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            </div>
+        `;
+        document.getElementById('contentContainer').innerHTML = html;
+    },
+
+    renderQuoteNew() {
+        const html = `
+            <div class="form-card">
+                <h3>Créer un devis</h3>
+                <div class="form-grid">
+                    <div class="form-group"><label>Client</label><input type="text" id="quoteClient"></div>
+                    <div class="form-group"><label>Montant (€)</label><input type="number" id="quoteAmount"></div>
+                    <div class="form-group"><label>Validité</label><input type="date" id="quoteValidUntil"></div>
+                    <div class="form-group full-width"><label>Description</label><textarea rows="3" id="quoteDesc"></textarea></div>
+                </div>
+                <div style="margin-top: 20px;">
+                    <button class="btn btn-primary" onclick="app.createQuote()">Générer devis</button>
+                </div>
+            </div>
+        `;
+        document.getElementById('contentContainer').innerHTML = html;
+    },
+
+    renderQuoteRequests() {
+        const html = `
+            <div class="form-card">
+                <h3>Demandes de devis reçues</h3>
+                <table class="data-table">
+                    <thead><tr><th>Client</th><th>Email</th><th>Date</th><th>Actions</th></tr></thead>
+                    <tbody>
+                        ${this.data.quoteRequests.map(req => `
+                            <tr>
+                                <td><strong>${req.client}</strong></td>
+                                <td>${req.email}</td>
+                                <td>${req.date}</td>
+                                <td><button class="btn btn-primary btn-small" onclick="app.processQuoteRequest(${req.id})">Traiter</button></td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            </div>
+        `;
+        document.getElementById('contentContainer').innerHTML = html;
+    },
+
+    renderLoadingContainer() {
+        const html = `
+            <div class="form-card">
+                <h3>Gestion des conteneurs</h3>
+                <table class="data-table">
+                    <thead><tr><th>N° Conteneur</th><th>Statut</th><th>Colis chargés</th><th>Actions</th></tr></thead>
+                    <tbody>
+                        ${this.data.containers.map(c => `
+                            <tr>
+                                <td><strong>${c.number}</strong></td>
+                                <td><span class="badge ${c.status === 'en_chargement' ? 'badge-warning' : (c.status === 'en_transit' ? 'badge-info' : 'badge-success')}">${c.status}</span></td>
+                                <td style="text-align: center;">${c.items} %</td>
+                                <td><button class="btn btn-outline btn-small" onclick="app.viewContainer(${c.id})">Détails</button></td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            </div>
+        `;
+        document.getElementById('contentContainer').innerHTML = html;
+    },
+
+    renderLoadingBoats() {
+        const html = `
+            <div class="form-card">
+                <h3>Départs bateaux</h3>
+                <div style="margin-bottom: 20px;">
+                    <button class="btn btn-primary" onclick="app.addBoatDeparture()"><i class="fas fa-plus"></i> Planifier départ</button>
+                </div>
+                <table class="data-table">
+                    <thead><tr><th>Bateau</th><th>Date départ</th><th>Date arrivée prévue</th><th>Statut</th></tr></thead>
+                    <tbody>
+                        <tr><td>CMA CGM</td><td>15/12/2024</td><td>20/12/2024</td><td><span class="badge badge-info">Planifié</span></td></tr>
+                        <tr><td>MSC</td><td>18/12/2024</td><td>23/12/2024</td><td><span class="badge badge-info">Planifié</span></td></tr>
+                    </tbody>
+                </table>
+            </div>
+        `;
+        document.getElementById('contentContainer').innerHTML = html;
+    },
+
+    renderScanWarehouse() {
+        const html = `
+            <div class="form-card" style="text-align: center;">
+                <div style="background: #f8fafc; border-radius: 16px; padding: 30px;">
+                    <i class="fas fa-qrcode" style="font-size: 64px; color: #3b82f6;"></i>
+                    <h3 style="margin: 20px 0 10px;">Scanner un colis</h3>
+                    <p style="color: #64748b; margin-bottom: 20px;">Pointez la caméra vers le code-barres</p>
+                    <div id="scanArea" style="width: 100%; max-width: 400px; margin: 0 auto; background: #1e293b; border-radius: 12px; padding: 20px;">
+                        <div style="background: #0f172a; border-radius: 8px; padding: 60px 20px; text-align: center; border: 2px dashed #475569;">
+                            <i class="fas fa-camera" style="font-size: 48px; color: #64748b;"></i>
+                            <p style="color: #94a3b8; margin-top: 10px;">Scan en préparation...</p>
+                        </div>
+                    </div>
+                    <div style="margin-top: 20px;">
+                        <input type="text" id="manualScan" placeholder="Ou saisir le code manuellement" style="padding: 10px; width: 100%; max-width: 300px; border: 1px solid #e2e8f0; border-radius: 8px;">
+                        <button class="btn btn-primary" onclick="app.manualScan()" style="margin-top: 10px;">Valider</button>
+                    </div>
+                </div>
+            </div>
+        `;
+        document.getElementById('contentContainer').innerHTML = html;
+    },
+
+    renderScanContainer() {
+        const html = `
+            <div class="form-card">
+                <h3>Charger un conteneur</h3>
+                <div class="form-grid">
+                    <div class="form-group"><label>Conteneur cible</label><select id="targetContainer"><option>CONT-PAR-001</option><option>CONT-PAR-002</option></select></div>
+                    <div class="form-group"><label>Scanner le colis</label><input type="text" id="scanBarcode" placeholder="Code-barres du colis"></div>
+                </div>
+                <button class="btn btn-primary" onclick="app.addToContainer()" style="margin-top:15px;">Ajouter au conteneur</button>
+                <div style="margin-top: 20px;">
+                    <h4>Colis chargés (45)</h4>
+                    <div style="max-height: 300px; overflow-y: auto;">
+                        ${Array(10).fill().map((_, i) => `<div style="padding: 8px; border-bottom: 1px solid #f1f5f9;"><code>MD-127-E2_${i+1}</code> - Ajouté à 10:${i+5}</div>`).join('')}
+                    </div>
+                </div>
+            </div>
+        `;
+        document.getElementById('contentContainer').innerHTML = html;
+    },
+
+    renderScanClassic() {
+        this.renderScanWarehouse();
+    },
+
+    renderScanHistory() {
+        const html = `
+            <div class="form-card">
+                <h3>Historique des scans</h3>
+                <table class="data-table">
+                    <thead><tr><th>Date</th><th>Code-barres</th><th>Opération</th><th>Utilisateur</th></tr></thead>
+                    <tbody>
+                        <tr><td>2024-12-14 10:30</td><td><code>MD-127-E2</code></td><td>Mise en entrepôt</td><td>Agent Paris</td></tr>
+                        <tr><td>2024-12-14 11:20</td><td><code>AB-031-E6</code></td><td>Chargement conteneur</td><td>Agent Paris</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        `;
+        document.getElementById('contentContainer').innerHTML = html;
+    },
+
+    renderClientsList() {
+        const html = `
+            <div class="quick-actions">
+                <button class="btn btn-primary" onclick="app.addClient()"><i class="fas fa-user-plus"></i> Nouveau client</button>
+                <button class="btn btn-outline" onclick="app.exportClients()"><i class="fas fa-download"></i> Export Excel</button>
+            </div>
+            <div class="form-card">
+                <table class="data-table">
+                    <thead><tr><th>Client</th><th>Email</th><th>Téléphone</th><th>Total dépensé</th><th>Actions</th></tr></thead>
+                    <tbody>
+                        <tr><td><strong>Jean Dupont</strong></td><td>jean@email.com</td><td>07 12 34 56 78</td><td>${this.formatMoney(450)}</td><td><button class="btn btn-outline btn-small" onclick="app.viewClient()">Voir</button></td></tr>
+                        <tr><td><strong>Marie Koné</strong></td><td>marie@email.com</td><td>07 23 45 67 89</td><td>${this.formatMoney(180)}</td><td><button class="btn btn-outline btn-small">Voir</button></td></tr>
+                    </tbody>
+                </table>
+            </div>
+        `;
+        document.getElementById('contentContainer').innerHTML = html;
+    },
+
+    renderClientsApp() {
+        const html = `
+            <div class="form-card">
+                <h3>Statistiques application client</h3>
+                <div class="stats-grid">
+                    <div class="stat-card"><div class="stat-value">156</div><div class="stat-label">Utilisateurs actifs</div></div>
+                    <div class="stat-card"><div class="stat-value">42</div><div class="stat-label">Nouveaux ce mois</div></div>
+                    <div class="stat-card"><div class="stat-value">89%</div><div class="stat-label">Taux satisfaction</div></div>
+                </div>
+                <div style="margin-top: 20px;">
+                    <canvas id="appUsageChart" height="150"></canvas>
+                </div>
+            </div>
+        `;
+        document.getElementById('contentContainer').innerHTML = html;
+        
+        setTimeout(() => {
+            const ctx = document.getElementById('appUsageChart')?.getContext('2d');
+            if (ctx) {
+                new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: ['Sem 1', 'Sem 2', 'Sem 3', 'Sem 4'],
+                        datasets: [{ label: 'Connexions', data: [45, 67, 89, 102], borderColor: '#3b82f6' }]
+                    }
+                });
+            }
+        }, 100);
+    },
+
+    renderClientsAnalytics() {
+        const html = `
+            <div class="form-card">
+                <h3>Analytique clients</h3>
+                <div class="stats-grid">
+                    <div class="stat-card"><div class="stat-value">25K</div><div class="stat-label">CA total clients (€)</div></div>
+                    <div class="stat-card"><div class="stat-value">45</div><div class="stat-label">Clients actifs</div></div>
+                    <div class="stat-card"><div class="stat-value">1250</div><div class="stat-label">Colis expédiés</div></div>
+                </div>
+                <canvas id="clientSegmentChart" height="200"></canvas>
+            </div>
+        `;
+        document.getElementById('contentContainer').innerHTML = html;
+        
+        setTimeout(() => {
+            const ctx = document.getElementById('clientSegmentChart')?.getContext('2d');
+            if (ctx) {
+                new Chart(ctx, {
+                    type: 'doughnut',
+                    data: {
+                        labels: ['Grands comptes', 'PME', 'Particuliers'],
+                        datasets: [{ data: [45, 35, 20], backgroundColor: ['#3b82f6', '#10b981', '#f59e0b'] }]
+                    }
+                });
+            }
+        }, 100);
+    },
+
+    renderChat() {
+        const html = `
+            <div class="form-card" style="height: 70vh; display: flex; flex-direction: column;">
+                <div style="flex: 1; overflow-y: auto; padding: 15px; background: #f8fafc; border-radius: 12px;">
+                    ${this.data.messages.map(msg => `
+                        <div style="margin-bottom: 15px; ${msg.from === 'Agent Paris' ? 'text-align: right;' : ''}">
+                            <div style="display: inline-block; max-width: 70%; padding: 10px 15px; border-radius: 15px; ${msg.from === 'Agent Paris' ? 'background: #3b82f6; color: white;' : 'background: white; border: 1px solid #e2e8f0;'}">
+                                <div style="font-size: 12px; font-weight: bold;">${msg.from}</div>
+                                <div style="margin-top: 4px;">${msg.message}</div>
+                                <div style="font-size: 10px; opacity: 0.7; margin-top: 4px;">${msg.time}</div>
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+                <div style="display: flex; gap: 10px; margin-top: 15px;">
+                    <input type="text" id="chatMessage" placeholder="Votre message..." style="flex: 1; padding: 10px; border: 1px solid #e2e8f0; border-radius: 8px;">
+                    <button class="btn btn-primary" onclick="app.sendMessage()"><i class="fas fa-paper-plane"></i> Envoyer</button>
+                </div>
+            </div>
+        `;
+        document.getElementById('contentContainer').innerHTML = html;
+    },
+
+    renderSmsSend() {
+        const html = `
+            <div class="form-card">
+                <h3>Envoi de SMS</h3>
+                <div class="form-grid">
+                    <div class="form-group"><label>Numéro(s)</label><input type="text" id="smsNumbers" placeholder="Séparés par des virgules"></div>
+                    <div class="form-group"><label>Sélectionner un groupe</label><select id="smsGroup"><option>Tous les clients</option><option>Clients actifs</option><option>Prospects</option></select></div>
+                    <div class="form-group full-width"><label>Message</label><textarea id="smsMessage" rows="4" placeholder="Votre message..."></textarea></div>
+                </div>
+                <div style="margin-top: 20px;">
+                    <button class="btn btn-primary" onclick="app.sendSms()"><i class="fas fa-paper-plane"></i> Envoyer</button>
+                    <span id="smsCount" style="margin-left: 15px; color: #64748b;">0 SMS à envoyer</span>
+                </div>
+            </div>
+        `;
+        document.getElementById('contentContainer').innerHTML = html;
+    },
+
+    renderSmsHistory() {
+        const html = `
+            <div class="form-card">
+                <h3>Historique des SMS</h3>
+                <table class="data-table">
+                    <thead><tr><th>Date</th><th>Destinataire</th><th>Message</th><th>Statut</th></tr></thead>
+                    <tbody>
+                        <tr><td>2024-12-14 09:30</td><td>07 12 34 56 78</td><td>Votre colis est disponible</td><td><span class="badge badge-success">Envoyé</span></td></tr>
+                        <tr><td>2024-12-13 15:20</td><td>07 23 45 67 89</td><td>Rappel RDV demain 10h</td><td><span class="badge badge-success">Envoyé</span></td></tr>
+                    </tbody>
+                </table>
+            </div>
+        `;
+        document.getElementById('contentContainer').innerHTML = html;
+    },
+
+    renderNotifications() {
+        const unread = this.data.notifications.filter(n => !n.read);
+        const html = `
+            <div class="form-card">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                    <h3>Notifications (${unread.length} non lues)</h3>
+                    <button class="btn btn-outline btn-small" onclick="app.markAllRead()">Tout marquer comme lu</button>
+                </div>
+                <div>
+                    ${this.data.notifications.map(notif => `
+                        <div style="padding: 15px; border-bottom: 1px solid #f1f5f9; ${!notif.read ? 'background: #eff6ff;' : ''}">
+                            <div style="display: flex; justify-content: space-between;">
+                                <strong>${notif.title}</strong>
+                                <span style="font-size: 11px; color:#64748b;">${notif.time}</span>
+                            </div>
+                            <p style="margin-top: 5px; font-size: 13px;">${notif.message}</p>
+                            <div style="margin-top: 8px;">
+                                <button class="btn btn-outline btn-small" onclick="app.markRead(${notif.id})">Marquer lu</button>
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+        `;
+        document.getElementById('contentContainer').innerHTML = html;
+    },
+
+    renderNotificationsHistory() {
+        const html = `
+            <div class="form-card">
+                <h3>Historique des notifications</h3>
+                <table class="data-table">
+                    <thead><tr><th>Date</th><th>Titre</th><th>Message</th><th>Lu le</th></tr></thead>
+                    <tbody>
+                        <tr><td>2024-12-10</td><td>Nouvelle facture</td><td>Facture FAC-2024-001 émise</td><td>2024-12-10 14:30</td></tr>
+                        <tr><td>2024-12-05</td><td>Rappel RDV</td><td>RDV avec Jean Dupont</td><td>2024-12-05 09:15</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        `;
+        document.getElementById('contentContainer').innerHTML = html;
+    },
+
+    renderProductsList() {
+        const html = `
+            <div class="quick-actions">
+                <button class="btn btn-primary" onclick="app.addProduct()"><i class="fas fa-plus"></i> Nouveau produit</button>
+            </div>
+            <div class="form-card">
+                <table class="data-table">
+                    <thead><tr><th>Produit</th><th>Prix unitaire</th><th>Stock</th><th>Actions</th></tr></thead>
+                    <tbody>
+                        ${this.data.products.map(p => `
+                            <tr>
+                                <td><strong>${p.name}</strong></td>
+                                <td>${this.formatMoney(p.price)}</td>
+                                <td>${p.stock} unités</td>
+                                <td><button class="btn btn-outline btn-small" onclick="app.editProduct(${p.id})">Modifier</button></td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            </div>
+        `;
+        document.getElementById('contentContainer').innerHTML = html;
+    },
+
+    renderFinanceCashier() {
+        const totalIn = 12500;
+        const totalOut = 3850;
+        const balance = totalIn - totalOut;
+        
+        const html = `
+            <div class="stats-grid">
+                <div class="stat-card"><div class="stat-value">${this.formatMoney(totalIn)}</div><div class="stat-label">Total encaissements</div></div>
+                <div class="stat-card"><div class="stat-value">${this.formatMoney(totalOut)}</div><div class="stat-label">Total dépenses</div></div>
+                <div class="stat-card"><div class="stat-value" style="color: ${balance >= 0 ? '#10b981' : '#ef4444'}">${this.formatMoney(balance)}</div><div class="stat-label">Solde caisse</div></div>
+            </div>
+            <div class="form-card">
+                <h3>Dernières opérations</h3>
+                <table class="data-table">
+                    <thead><tr><th>Date</th><th>Libellé</th><th>Type</th><th>Montant</th></tr></thead>
+                    <tbody>
+                        <tr><td>2024-12-14</td><td>Facture Jean Dupont</td><td>Entrée</td><td style="color:#10b981;">${this.formatMoney(250)}</td></tr>
+                        <tr><td>2024-12-13</td><td>Dépense fourniture</td><td>Sortie</td><td style="color:#ef4444;">-${this.formatMoney(50)}</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        `;
+        document.getElementById('contentContainer').innerHTML = html;
+    },
+
+    renderFinanceCheques() {
+        const html = `
+            <div class="form-card">
+                <h3>Chèques reçus</h3>
+                <table class="data-table">
+                    <thead><tr><th>N° Chèque</th><th>Client</th><th>Montant</th><th>Date encaissement</th><th>Statut</th></tr></thead>
+                    <tbody>
+                        <tr><td>CHQ-001</td><td>Jean Dupont</td><td>${this.formatMoney(150)}</td><td>2024-12-10</td><td><span class="badge badge-success">Encaissé</span></td></tr>
+                        <tr><td>CHQ-002</td><td>Marie Koné</td><td>${this.formatMoney(80)}</td><td>2024-12-15</td><td><span class="badge badge-warning">En attente</span></td></tr>
+                    </tbody>
+                </table>
+            </div>
+        `;
+        document.getElementById('contentContainer').innerHTML = html;
+    },
+
+    renderFinanceExpenses() {
+        const html = `
+            <div class="quick-actions">
+                <button class="btn btn-primary" onclick="app.addExpense()"><i class="fas fa-plus"></i> Nouvelle dépense</button>
+            </div>
+            <div class="form-card">
+                <h3>Dépenses</h3>
+                <table class="data-table">
+                    <thead><tr><th>Date</th><th>Libellé</th><th>Catégorie</th><th>Montant</th><th>Actions</th></tr></thead>
+                    <tbody>
+                        <tr><td>2024-12-10</td><td>Achat fournitures</td><td>Fournitures</td><td>${this.formatMoney(50)}</td><td><button class="btn btn-outline btn-small">Modifier</button></td></tr>
+                        <tr><td>2024-12-08</td><td>Entretien local</td><td>Maintenance</td><td>${this.formatMoney(150)}</td><td><button class="btn btn-outline btn-small">Modifier</button></td></tr>
+                    </tbody>
+                </table>
+            </div>
+        `;
+        document.getElementById('contentContainer').innerHTML = html;
+    },
+
+    renderStockList() {
+        const html = `
+            <div class="quick-actions">
+                <button class="btn btn-primary" onclick="app.addStock()"><i class="fas fa-plus"></i> Nouveau stock</button>
+            </div>
+            <div class="form-card">
+                <table class="data-table">
+                    <thead><tr><th>Produit</th><th>Quantité</th><th>Emplacement</th><th>Date entrée</th><th>Actions</th></tr></thead>
+                    <tbody>
+                        <tr><td>Colis Standard</td><td>150</td><td>Entrepôt A1</td><td>2024-12-01</td><td><button class="btn btn-outline btn-small">Détails</button></td></tr>
+                        <tr><td>Malle / Fût</td><td>25</td><td>Zone B2</td><td>2024-12-05</td><td><button class="btn btn-outline btn-small">Détails</button></td></tr>
+                    </tbody>
+                </table>
+            </div>
+        `;
+        document.getElementById('contentContainer').innerHTML = html;
+    },
+
+    renderBalanceMonthly() { this.renderChartPage('bilan mensuel', 'monthly'); },
+    renderBalanceYearly() { this.renderChartPage('bilan annuel', 'yearly'); },
+    
+    renderBalanceBoat() {
+        const html = `
+            <div class="form-card">
+                <h3>Bilan par bateau</h3>
+                <table class="data-table">
+                    <thead><tr><th>Bateau</th><th>Voyages</th><th>CA généré</th><th>Dépenses</th><th>Bénéfice</th></tr></thead>
+                    <tbody>
+                        <tr><td>CMA CGM</td><td>12</td><td>${this.formatMoney(24500)}</td><td>${this.formatMoney(9800)}</td><td style="color:#10b981;">${this.formatMoney(14700)}</td></tr>
+                        <tr><td>MSC</td><td>10</td><td>${this.formatMoney(21000)}</td><td>${this.formatMoney(8500)}</td><td style="color:#10b981;">${this.formatMoney(12500)}</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        `;
+        document.getElementById('contentContainer').innerHTML = html;
+    },
+
+    renderBalance12M() { this.renderChartPage('direction 12 mois', '12m'); },
+    renderStatsBoat() { this.renderChartPage('statistiques bateau', 'boat'); },
+    renderStatsMonthly() { this.renderChartPage('statistiques mensuelles', 'monthlyStats'); },
+    renderStatsYearly() { this.renderChartPage('statistiques annuelles', 'yearlyStats'); },
+
+    renderChartPage(title, type) {
+        const html = `
+            <div class="form-card">
+                <h3>${title}</h3>
+                <canvas id="statsChart" height="300"></canvas>
+            </div>
+        `;
+        document.getElementById('contentContainer').innerHTML = html;
+        
+        setTimeout(() => {
+            const ctx = document.getElementById('statsChart')?.getContext('2d');
+            if (ctx) {
+                let data, labels;
+                if (type === 'monthly') {
+                    labels = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Jun'];
+                    data = [12500, 15000, 18000, 22000, 25000, 28000];
+                } else if (type === 'yearly') {
+                    labels = ['2020', '2021', '2022', '2023', '2024'];
+                    data = [85000, 102000, 128000, 159000, 198000];
+                } else if (type === 'boat') {
+                    labels = ['CMA CGM', 'MSC', 'MAERSK', 'HAPAG'];
+                    data = [24500, 21000, 17500, 19000];
+                } else {
+                    labels = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Jun', 'Jul', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc'];
+                    data = [12500, 13200, 14800, 16500, 18500, 21000, 23500, 26000, 28500, 31000, 34000, 37000];
+                }
+                
+                new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: labels,
+                        datasets: [{ label: 'Montant (€)', data: data, backgroundColor: '#3b82f6' }]
+                    },
+                    options: { responsive: true, scales: { y: { ticks: { callback: v => this.formatMoney(v) } } } }
+                });
+            }
+        }, 100);
+    },
+
+    // Paramètres pages
+    renderSettingsAgency() { this.renderSettingsForm('Agence', { name: 'AMT Paris', address: '93 avenue de la République, 75011 Paris', phone: '01 86 90 03 80', email: 'paris@amt.com' }); },
+    renderSettingsCompany() { this.renderSettingsForm('Entreprise', { name: 'AMT TRANS\'IT', siret: '929 865 103 R.C.S. Paris', vat: 'FR929865103', legal: 'SARL' }); },
+    renderSettingsSoftware() { this.renderSettingsForm('Paramètres logiciel', { theme: 'Clair', language: 'Français', notifications: true, autoBackup: true }); },
+    renderSettingsSms() { this.renderSettingsForm('Configuration SMS', { provider: 'API SMS', apiKey: '••••••••', sender: 'AMT PARIS' }); },
+    renderSettingsNotifications() { this.renderSettingsForm('Notifications', { emailAlerts: true, smsAlerts: true, pushEnabled: true }); },
+    renderSettingsMenus() { this.renderSettingsForm('Gestion menus', { dashboardOrder: 1, invoicesOrder: 2, clientsOrder: 3 }); },
+    
+    renderSettingsAgents() {
+        const html = `
+            <div class="quick-actions"><button class="btn btn-primary" onclick="app.addAgent()"><i class="fas fa-user-plus"></i> Nouvel agent</button></div>
+            <div class="form-card">
+                <table class="data-table">
+                    <thead><tr><th>Nom</th><th>Email</th><th>Rôle</th><th>Statut</th><th>Actions</th></tr></thead>
+                    <tbody>
+                        ${this.data.agents.map(a => `
+                            <tr>
+                                <td><strong>${a.name}</strong></td>
+                                <td>${a.email}</td>
+                                <td>${a.role}</td>
+                                <td><span class="badge ${a.active ? 'badge-success' : 'badge-danger'}">${a.active ? 'Actif' : 'Inactif'}</span></td>
+                                <td><button class="btn btn-outline btn-small" onclick="app.editAgent(${a.id})">Modifier</button></td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            </div>
+        `;
+        document.getElementById('contentContainer').innerHTML = html;
+    },
+
+    renderSettingsAppointments() { this.renderSettingsForm('Paramètres RDV', { duration: 30, slotInterval: 15, workingHours: '09:00-18:00', reminderDelay: 24 }); },
+    renderSettingsProfile() { this.renderSettingsForm('Mon profil', { name: this.user.name, email: 'agent@amtparis.fr', phone: '07 12 34 56 78', role: 'Agent Paris' }); },
+    renderConfigInvoice() { this.renderSettingsForm('Choix facture', { template: 'Standard', logo: 'AMT', footer: 'Merci de votre confiance' }); },
+    renderConfigLabel() { this.renderSettingsForm('Choix étiquette', { format: 'A6', template: 'Étiquette standard', barcode: true }); },
+    renderConfigObjectives() { this.renderSettingsForm('Objectifs', { monthlyTarget: 50000, quarterlyTarget: 150000, yearlyTarget: 600000 }); },
+    renderConfigCharges() { this.renderSettingsForm('Charges', { rent: 1500, utilities: 250, salaries: 8000, other: 500 }); },
+    renderProspecting() { this.renderChartPage('prospections', 'monthly'); },
+    
+    renderAuditLog() {
+        const html = `
+            <div class="form-card">
+                <h3>Journal d'activités</h3>
+                <div style="margin-bottom: 15px;">
+                    <input type="text" placeholder="Filtrer par utilisateur, action..." style="padding: 8px; width: 100%; border: 1px solid #e2e8f0; border-radius: 8px;">
+                </div>
+                <table class="data-table">
+                    <thead><tr><th>Date/Heure</th><th>Utilisateur</th><th>Action</th><th>Détails</th></tr></thead>
+                    <tbody>
+                        <tr><td>2024-12-14 10:30</td><td>Agent Paris</td><td>Création facture</td><td>FAC-2024-003 créée pour Ibrahim Touré</td></tr>
+                        <tr><td>2024-12-14 09:15</td><td>Agent Paris</td><td>Connexion</td><td>Connexion réussie</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        `;
+        document.getElementById('contentContainer').innerHTML = html;
+    },
+
+    renderSettingsForm(title, fields) {
+        const html = `
+            <div class="form-card">
+                <h3>${title}</h3>
+                <div class="form-grid">
+                    ${Object.entries(fields).map(([key, val]) => `
+                        <div class="form-group"><label>${key}</label><input type="text" value="${val}"></div>
+                    `).join('')}
+                </div>
+                <div style="margin-top: 20px;"><button class="btn btn-primary" onclick="app.saveSettings()">Enregistrer</button></div>
+            </div>
+        `;
+        document.getElementById('contentContainer').innerHTML = html;
+    },
+
+    // ==================== ACTIONS ====================
+    
+    // FORMATAGE EN EURO (€) 🇫🇷
+    formatMoney(amount) {
+        return new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(amount || 0);
+    },
+
+    showToast(message, type = 'success') {
+        const toast = document.createElement('div');
+        toast.style.cssText = 'position: fixed; bottom: 20px; right: 20px; background: ' + (type === 'success' ? '#10b981' : '#ef4444') + '; color: white; padding: 12px 20px; border-radius: 8px; z-index: 2000; animation: slideIn 0.3s ease;';
+        toast.textContent = message;
+        document.body.appendChild(toast);
+        setTimeout(() => toast.remove(), 3000);
+    },
+
+    openModal(content) {
+        const modal = document.getElementById('modalOverlay');
+        const modalContent = document.getElementById('modalContent');
+        modalContent.innerHTML = content;
+        modal.classList.add('active');
+    },
+
+    closeModal() {
+        document.getElementById('modalOverlay').classList.remove('active');
+    },
+
+    createInvoice() {
+        const client = document.getElementById('invoiceClient')?.value;
+        const amount = document.getElementById('invoiceAmount')?.value;
+        if (client && amount) {
+            this.showToast(`Facture créée pour ${client} de ${this.formatMoney(amount)}`);
+            this.renderPage('invoices-list');
+        } else {
+            this.showToast('Veuillez remplir tous les champs', 'error');
+        }
+    },
+
+    createAppointment() { this.showToast('RDV enregistré'); this.renderPage('appointments-list'); },
+    createProgram() { this.showToast('Programme créé'); this.renderPage('program-my'); },
+    createQuote() { this.showToast('Devis généré'); this.renderPage('quotes-list'); },
+    sendMessage() { this.showToast('Message envoyé'); document.getElementById('chatMessage').value = ''; },
+    sendSms() { this.showToast('SMS envoyé avec succès'); },
+    markRead(id) { this.showToast('Notification marquée comme lue'); },
+    markAllRead() { this.showToast('Toutes les notifications marquées comme lues'); },
+    confirmAppointment(id) { this.showToast('RDV confirmé'); },
+    deleteAppointment(id) { this.showToast('RDV supprimé'); },
+    validateAppointment(id) { this.showToast('RDV validé'); },
+    rejectAppointment(id) { this.showToast('RDV refusé'); },
+    viewInvoice(id) { this.showToast('Affichage facture'); },
+    downloadInvoice(id) { this.showToast('Téléchargement facture'); },
+    deleteInvoice(id) { this.showToast('Facture supprimée'); },
+    convertQuoteToInvoice(id) { this.showToast('Devis converti en facture'); },
+    processQuoteRequest(id) { this.showToast('Demande traitée'); },
+    addDriver() { this.showToast('Fonctionnalité à venir'); },
+    assignDriver(id) { this.showToast('Chauffeur assigné'); },
+    viewContainer(id) { this.showToast('Détails conteneur'); },
+    manualScan() { this.showToast('Scan enregistré'); },
+    addToContainer() { this.showToast('Colis ajouté au conteneur'); },
+    addClient() { this.showToast('Fonctionnalité à venir'); },
+    exportClients() { this.showToast('Export Excel en cours'); },
+    viewClient() { this.showToast('Détails client'); },
+    addProduct() { this.showToast('Fonctionnalité à venir'); },
+    editProduct(id) { this.showToast('Modification produit'); },
+    addExpense() { this.showToast('Nouvelle dépense'); },
+    addStock() { this.showToast('Nouveau stock'); },
+    addAgent() { this.showToast('Ajout agent'); },
+    editAgent(id) { this.showToast('Modification agent'); },
+    saveSettings() { this.showToast('Paramètres enregistrés'); }
+};
+
+// Démarrage une fois le DOM chargé
+document.addEventListener('DOMContentLoaded', () => {
+    app.init();
+});

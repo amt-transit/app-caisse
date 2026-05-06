@@ -7,6 +7,8 @@ import {
 
 document.addEventListener('DOMContentLoaded', () => {
 
+    const activeAgency = sessionStorage.getItem('currentActiveAgency') || 'abidjan';
+
     // =========================================================
     // 1. NAVIGATION ENTRE LES ONGLETS
     // =========================================================
@@ -56,7 +58,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function loadInitBalances() {
         try {
-            const snap = await getDoc(doc(db, "jb_settings", "balances"));
+            const snap = await getDoc(doc(db, "jb_settings", "balances_" + activeAgency));
             if (snap.exists()) {
                 const data = snap.data();
                 initBalances.OM = data.OM || 0;
@@ -80,7 +82,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function initDraftRef() {
         const userName = sessionStorage.getItem('userName') || 'default';
-        draftDocRef = doc(db, 'jb_drafts', 'draft_' + userName.replace(/\s+/g, '_'));
+        draftDocRef = doc(db, 'jb_drafts', 'draft_' + activeAgency + '_' + userName.replace(/\s+/g, '_'));
     }
 
     async function loadDraft() {
@@ -144,7 +146,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function populateDatalists() {
         // Liste des Crédits (Transactions Caisse)
-        const qTrans = query(collection(db, "transactions"), where("isDeleted", "!=", true));
+        const qTrans = query(collection(db, "transactions"), where("isDeleted", "!=", true), where("agency", "==", activeAgency));
         onSnapshot(qTrans, (snap) => {
             const creditList = document.getElementById('jb-credit-list');
             transactionsCache = [];
@@ -162,7 +164,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         // Liste des Débits (Dépenses Caisse)
-        const qExp = query(collection(db, "expenses"), where("isDeleted", "!=", true));
+        const qExp = query(collection(db, "expenses"), where("isDeleted", "!=", true), where("agency", "==", activeAgency));
         onSnapshot(qExp, (snap) => {
             const debitList = document.getElementById('jb-debit-list');
             expensesCache = [];
@@ -608,12 +610,13 @@ document.addEventListener('DOMContentLoaded', () => {
                         ecartBillet: ecart
                     },
                     bilan: bilan,
-                    auteur: sessionStorage.getItem('userName') || 'Utilisateur'
+                    auteur: sessionStorage.getItem('userName') || 'Utilisateur',
+                    agency: activeAgency
                 });
             
                 // Mettre à jour les soldes initiaux pour la prochaine période (qui correspondent aux soldes finaux)
                 try {
-                    await setDoc(doc(db, "jb_settings", "balances"), {
+                    await setDoc(doc(db, "jb_settings", "balances_" + activeAgency), {
                         OM: bilan.totOM,
                         WAVE: bilan.totWave,
                         Espèce: bilan.totEspeces,
@@ -653,7 +656,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // =========================================================
     const historiqueList = document.getElementById('historique-list');
     if (historiqueList) {
-        const q = query(collection(db, 'jb_periodes'), orderBy('dateCreation', 'desc'));
+        const q = query(collection(db, 'jb_periodes'), where("agency", "==", activeAgency), orderBy('dateCreation', 'desc'));
 
         onSnapshot(q, (snap) => {
             historiqueList.innerHTML = '';
@@ -881,7 +884,7 @@ document.addEventListener('DOMContentLoaded', () => {
             btnSaveInit.textContent = "⏳...";
             btnSaveInit.disabled = true;
             try {
-                await setDoc(doc(db, "jb_settings", "balances"), initBalances);
+                await setDoc(doc(db, "jb_settings", "balances_" + activeAgency), initBalances);
                 if (window.AppModal) await AppModal.success("Soldes initiaux enregistrés avec succès !");
             } catch(e) {
                 console.error(e);

@@ -3,6 +3,8 @@ import { collection, doc, updateDoc, getDocs, query, where, orderBy, onSnapshot,
 
 document.addEventListener('DOMContentLoaded', () => {
 
+    const activeAgency = sessionStorage.getItem('currentActiveAgency') || 'abidjan';
+
     const userRole = sessionStorage.getItem('userRole');
     const tableBody = document.getElementById('tableBody');
     
@@ -202,7 +204,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // --- LISTENER SESSIONS NON VALIDÉES ---
-    onSnapshot(query(collection(db, "audit_logs"), where("action", "==", "VALIDATION_JOURNEE")), snapshot => {
+    onSnapshot(query(collection(db, "audit_logs"), where("action", "==", "VALIDATION_JOURNEE"), where("agency", "==", activeAgency)), snapshot => {
             unconfirmedSessions.clear();
             snapshot.forEach(doc => {
                 if (doc.data().status !== "VALIDATED") unconfirmedSessions.add(doc.id);
@@ -232,13 +234,13 @@ document.addEventListener('DOMContentLoaded', () => {
         const isFiltering = startDateInput.value || endDateInput.value || smartSearchInput.value || agentFilterInput.value || showDeletedCheckbox.checked || (showReductionsCheckbox && showReductionsCheckbox.checked);
 
         if (showDeletedCheckbox.checked) {
-             constraints.push(where("isDeleted", "==", true), orderBy("isDeleted"), orderBy("date", "desc"));
+             constraints.push(where("isDeleted", "==", true), where("agency", "==", activeAgency), orderBy("isDeleted"), orderBy("date", "desc"));
         } else {
              // Cas normal : Non supprimés
              if (!isFiltering) {
-                constraints.push(where("isDeleted", "!=", true), orderBy("isDeleted"), orderBy("date", "desc"));
+                constraints.push(where("isDeleted", "!=", true), where("agency", "==", activeAgency), orderBy("isDeleted"), orderBy("date", "desc"));
              } else {
-                constraints.push(where("isDeleted", "!=", true), orderBy("isDeleted"), orderBy("date", "desc"), limit(500));
+                constraints.push(where("isDeleted", "!=", true), where("agency", "==", activeAgency), orderBy("isDeleted"), orderBy("date", "desc"), limit(500));
              }
          }
         

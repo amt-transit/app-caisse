@@ -3,6 +3,8 @@ import { collection, getDocs, query, where, onSnapshot } from "https://www.gstat
 
 document.addEventListener('DOMContentLoaded', async () => {
 
+    const activeAgency = sessionStorage.getItem('currentActiveAgency') || 'abidjan';
+
     // SERVICE TRANSACTION (Injecté localement car non chargé via HTML)
     const transactionService = {
         getCleanTransactions(transactions, validatedSessions) {
@@ -36,7 +38,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             }, []);
         },
         async calculateAvailableBalance(db, unconfirmedSessions) {
-            const transSnap = await getDocs(query(collection(db, "transactions"), where("isDeleted", "!=", true)));
+            const transSnap = await getDocs(query(collection(db, "transactions"), where("isDeleted", "!=", true), where("agency", "==", activeAgency)));
             let totalVentes = 0;
             transSnap.forEach(doc => {
                 const d = doc.data();
@@ -53,7 +55,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     }
                 }
             });
-            const incSnap = await getDocs(query(collection(db, "other_income"), where("isDeleted", "!=", true)));
+            const incSnap = await getDocs(query(collection(db, "other_income"), where("isDeleted", "!=", true), where("agency", "==", activeAgency)));
             let totalAutres = 0;
             incSnap.forEach(doc => {
                 const d = doc.data();
@@ -61,7 +63,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     totalAutres += (d.montant || 0);
                 }
             });
-            const expSnap = await getDocs(query(collection(db, "expenses"), where("isDeleted", "!=", true)));
+            const expSnap = await getDocs(query(collection(db, "expenses"), where("isDeleted", "!=", true), where("agency", "==", activeAgency)));
             let totalDepenses = 0;
             expSnap.forEach(doc => {
                 const d = doc.data();
@@ -70,7 +72,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     totalDepenses += (d.montant || 0);
                 }
             });
-            const bankSnap = await getDocs(query(collection(db, "bank_movements"), where("isDeleted", "!=", true)));
+            const bankSnap = await getDocs(query(collection(db, "bank_movements"), where("isDeleted", "!=", true), where("agency", "==", activeAgency)));
             let totalRetraits = 0;
             let totalDepots = 0;
             bankSnap.forEach(doc => {
@@ -983,7 +985,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     // --- 8. DATA LOADING (LISTENERS) ---
     
     // A. Sessions Validées (Liste Blanche)
-    onSnapshot(query(collection(db, "audit_logs"), where("action", "==", "VALIDATION_JOURNEE")), snap => {
+    onSnapshot(query(collection(db, "audit_logs"), where("action", "==", "VALIDATION_JOURNEE"), where("agency", "==", activeAgency)), snap => {
         validatedSessions.clear();
         snap.forEach(doc => {
             if (doc.data().status === "VALIDATED") validatedSessions.add(doc.id);
@@ -992,19 +994,19 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
 
     // B. Données
-    onSnapshot(query(collection(db, "transactions"), where("isDeleted", "!=", true)), snap => {
+    onSnapshot(query(collection(db, "transactions"), where("isDeleted", "!=", true), where("agency", "==", activeAgency)), snap => {
         allTransactions = snap.docs.map(d => ({ id: d.id, ...d.data() }));
         updateDashboard();
     });
-    onSnapshot(query(collection(db, "expenses"), where("isDeleted", "!=", true)), snap => {
+    onSnapshot(query(collection(db, "expenses"), where("isDeleted", "!=", true), where("agency", "==", activeAgency)), snap => {
         allExpenses = snap.docs.map(d => ({ id: d.id, ...d.data() }));
         updateDashboard();
     });
-    onSnapshot(query(collection(db, "other_income"), where("isDeleted", "!=", true)), snap => {
+    onSnapshot(query(collection(db, "other_income"), where("isDeleted", "!=", true), where("agency", "==", activeAgency)), snap => {
         allOtherIncome = snap.docs.map(d => ({ id: d.id, ...d.data() }));
         updateDashboard();
     });
-    onSnapshot(query(collection(db, "bank_movements"), where("isDeleted", "!=", true)), snap => {
+    onSnapshot(query(collection(db, "bank_movements"), where("isDeleted", "!=", true), where("agency", "==", activeAgency)), snap => {
         allBankMovements = snap.docs.map(d => ({ id: d.id, ...d.data() }));
         updateDashboard();
     });

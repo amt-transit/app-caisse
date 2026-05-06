@@ -3,6 +3,8 @@ import { collection, doc, setDoc, updateDoc, query, where, orderBy, onSnapshot, 
 
 document.addEventListener('DOMContentLoaded', () => {
 
+    const activeAgency = sessionStorage.getItem('currentActiveAgency') || 'abidjan';
+
     const userRole = sessionStorage.getItem('userRole');
     const isViewer = userRole === 'spectateur';
     
@@ -331,6 +333,7 @@ document.addEventListener('DOMContentLoaded', () => {
             conteneur: (expenseType.value === 'Conteneur' && action === 'Depense') ? expenseContainer.value.trim().toUpperCase() : '',
             vehicleId: vId,
             vehicleName: selectedV ? `${selectedV.name} (${selectedV.plate})` : '',
+            agency: activeAgency,
             isDeleted: false
         };
 
@@ -518,8 +521,8 @@ document.addEventListener('DOMContentLoaded', () => {
     function fetchExpenses() {
         if (unsubscribeExpenses) unsubscribeExpenses();
         let constraints = [];
-        if (showDeletedCheckbox.checked) constraints.push(where("isDeleted", "==", true), orderBy("isDeleted"));
-        else constraints.push(where("isDeleted", "!=", true), orderBy("isDeleted"));
+        if (showDeletedCheckbox.checked) constraints.push(where("isDeleted", "==", true), where("agency", "==", activeAgency), orderBy("isDeleted"));
+        else constraints.push(where("isDeleted", "!=", true), where("agency", "==", activeAgency), orderBy("isDeleted"));
         constraints.push(orderBy("date", "desc"));
         constraints.push(limit(currentLimit));
         
@@ -531,7 +534,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // --- LISTENER SESSIONS NON VALIDÉES ---
-    const qAudit = query(collection(db, "audit_logs"), where("action", "==", "VALIDATION_JOURNEE"));
+    const qAudit = query(collection(db, "audit_logs"), where("action", "==", "VALIDATION_JOURNEE"), where("agency", "==", activeAgency));
     onSnapshot(qAudit, snapshot => {
             unconfirmedSessions.clear();
             snapshot.forEach(doc => {
@@ -920,7 +923,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const batch = writeBatch(db);
             pendingExpenses.forEach(exp => {
                 const docRef = doc(collection(db, "expenses"));
-                batch.set(docRef, exp);
+                batch.set(docRef, { ...exp, agency: activeAgency });
             });
 
             try {

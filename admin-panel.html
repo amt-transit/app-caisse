@@ -17,6 +17,7 @@
     <nav class="navigation">
         <ul class="nav-menu">
             <li><a href="dashboard.html" id="nav-dashboard">📊 Tableau de Bord</a></li>
+            <li><a href="paris/index.html" id="nav-paris" style="display:none; color:#2563eb; font-weight:bold;">🇫🇷 Interface Paris</a></li>
             
             <li class="has-dropdown">
                 <a href="#">💵 Entrées Caisse</a>
@@ -69,14 +70,23 @@
         <div id="panel-users" class="tab-panel active">
             <div id="userManagementSection">
         <div id="createUserForm" style="margin-bottom: 20px; border-bottom: 1px solid #eee; padding-bottom: 20px;">
-            <div class="form-grid" style="grid-template-columns: 1fr 1fr 1fr 1fr;">
+            <div class="form-grid" style="grid-template-columns: repeat(5, 1fr);">
                 <input type="text" id="newUsername" placeholder="Nom d'utilisateur">
                 <input type="password" id="newPassword" placeholder="Mot de passe">
+                <select id="newAgency">
+                    <option value="abidjan">🇨🇮 Abidjan</option>
+                    <option value="paris">🇫🇷 Paris</option>
+                    <option value="all">🌍 Abidjan & Paris (Global)</option>
+                </select>
                 <select id="newRole">
                     <option value="saisie_limited">Saisie Limitée</option>
                     <option value="saisie_full">Saisie Complète</option>
                     <option value="admin">Admin</option>
                     <option value="super_admin">Super Admin</option>
+                    <option value="admin_abidjan">Admin Abidjan</option>
+                    <option value="agent_paris">Agent Paris</option>
+                    <option value="livreur">Livreur</option>
+                    <option value="magasinier">Magasinier</option>
                 </select>
                 <button id="createUserBtn" class="primary">Créer Utilisateur</button>
             </div>

@@ -231,6 +231,8 @@ function logLivraisonAudit(action, details, docId) {
 // Initialisation
 document.addEventListener('DOMContentLoaded', function() {
 
+    window.activeAgency = sessionStorage.getItem('currentActiveAgency') || 'abidjan';
+
     initRealtimeSync();
     updateContainerTitle();
     initActiveContainerInput();
@@ -273,7 +275,7 @@ function initRealtimeSync() {
     }
 
     // 2. Écouteur sur la collection 'livraisons'
-    const qLivraisons = query(collection(db, CONSTANTS.COLLECTION), orderBy('dateAjout', 'desc'));
+    const qLivraisons = query(collection(db, CONSTANTS.COLLECTION), where("agency", "==", window.activeAgency), orderBy('dateAjout', 'desc'));
     onSnapshot(qLivraisons, (snapshot) => {
             deliveries = [];
             snapshot.forEach((doc) => {
@@ -294,7 +296,7 @@ function initRealtimeSync() {
 
     // --- NOUVEAU : 3. Écouteur sur la Caisse (Transactions) ---
     // On écoute la caisse en permanence pour avoir les vrais montants
-    const qTrans = query(collection(db, 'transactions'), where('isDeleted', '==', false));
+    const qTrans = query(collection(db, 'transactions'), where('isDeleted', '==', false), where("agency", "==", window.activeAgency));
     onSnapshot(qTrans, (snap) => {
             transactionsMap.clear();
             snap.forEach(doc => {
@@ -1101,7 +1103,7 @@ async function findAddressForRecipient(name) {
 
     // 2. Recherche Firestore Active (Pour les items hors limite 500)
     try {
-        const snapActive = await getDocs(query(collection(db, CONSTANTS.COLLECTION), where('destinataire', '==', val)));
+        const snapActive = await getDocs(query(collection(db, CONSTANTS.COLLECTION), where("agency", "==", window.activeAgency), where('destinataire', '==', val)));
         
         for (const docSnap of snapActive.docs) {
             const d = docSnap.data();
@@ -1536,7 +1538,8 @@ async function confirmImport() {
                 quantite: importItem.quantite || 1, // Stockage de la quantité
                 scanHistory: importItem.scanHistory || [], // Ajout du scan history
                 containerStatus: containerStatus,
-            dateAjout: itemData.dateAjout || new Date().toISOString() // Respecte la date du fichier Excel
+                dateAjout: itemData.dateAjout || new Date().toISOString(), // Respecte la date du fichier Excel
+                agency: window.activeAgency
             }});
             createdCount++;
         }
@@ -1602,6 +1605,7 @@ async function confirmImport() {
                     montantParis: mParis,
                     montantAbidjan: 0,
                     reste: -restant, // La dette est exactement le montant restant
+                    agency: window.activeAgency,
                     isDeleted: false,
                     description: importItem.description || '',
                     adresseDestinataire: importItem.lieuLivraison || '',
@@ -4509,7 +4513,8 @@ document.getElementById('deliveryForm').addEventListener('submit', async functio
                     nomDestinataire: newItem.destinataire || '',
                     numero: newItem.numero || '',
                     saisiPar: sessionStorage.getItem('userName') || 'Saisie Livraison',
-                    quantite: newItem.quantite || 1
+                quantite: newItem.quantite || 1,
+                agency: window.activeAgency
                 });
             }
             showToast('Livraison ajoutée !', 'success');

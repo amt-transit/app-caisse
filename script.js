@@ -60,8 +60,10 @@ window.goToMobileStep = (step) => {
 
 document.addEventListener('DOMContentLoaded', async () => {
 
+    const activeAgency = sessionStorage.getItem('currentActiveAgency') || 'abidjan';
+
     // --- DÉBUT : NOTIFICATION BADGE (SESSIONS EN ATTENTE) ---
-    const qPendingSessions = query(collection(db, "audit_logs"), where("action", "==", "VALIDATION_JOURNEE"));
+    const qPendingSessions = query(collection(db, "audit_logs"), where("action", "==", "VALIDATION_JOURNEE"), where("agency", "==", activeAgency));
     onSnapshot(qPendingSessions, (snapshot) => {
         let pendingCount = 0;
         snapshot.forEach(doc => {
@@ -122,7 +124,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             }, []);
         },
         async calculateAvailableBalance(db, unconfirmedSessions) {
-            const transSnap = await getDocs(query(collection(db, "transactions"), where("isDeleted", "!=", true)));
+            const transSnap = await getDocs(query(collection(db, "transactions"), where("isDeleted", "!=", true), where("agency", "==", activeAgency)));
             let totalVentes = 0;
             transSnap.forEach(doc => {
                 const d = doc.data();
@@ -139,7 +141,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     }
                 }
             });
-            const incSnap = await getDocs(query(collection(db, "other_income"), where("isDeleted", "!=", true)));
+            const incSnap = await getDocs(query(collection(db, "other_income"), where("isDeleted", "!=", true), where("agency", "==", activeAgency)));
             let totalAutres = 0;
             incSnap.forEach(doc => {
                 const d = doc.data();
@@ -147,7 +149,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     totalAutres += (d.montant || 0);
                 }
             });
-            const expSnap = await getDocs(query(collection(db, "expenses"), where("isDeleted", "!=", true)));
+            const expSnap = await getDocs(query(collection(db, "expenses"), where("isDeleted", "!=", true), where("agency", "==", activeAgency)));
             let totalDepenses = 0;
             expSnap.forEach(doc => {
                 const d = doc.data();
@@ -156,7 +158,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     totalDepenses += (d.montant || 0);
                 }
             });
-            const bankSnap = await getDocs(query(collection(db, "bank_movements"), where("isDeleted", "!=", true)));
+            const bankSnap = await getDocs(query(collection(db, "bank_movements"), where("isDeleted", "!=", true), where("agency", "==", activeAgency)));
             let totalRetraits = 0;
             let totalDepots = 0;
             bankSnap.forEach(doc => {
@@ -735,6 +737,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     montantParis: totalParis,
                     montantAbidjan: totalAbidjan,
                     reste: (totalParis + totalAbidjan) - effectivePrix,
+                    agency: activeAgency,
                     agent: combinedAgents,
                     isDeleted: false, 
                     saisiPar: currentUserName, 
@@ -769,6 +772,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const newLivRef = doc(collection(db, "livraisons"));
                 batch.set(newLivRef, {
                     ref: ref,
+                            agency: activeAgency,
                     destinataire: baseTransac.nom || 'Client Caisse',
                     expediteur: '',
                     conteneur: baseTransac.conteneur || '',
@@ -793,6 +797,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 date: exp.date,
                 description: `${exp.description} (${currentUserName})`, // Ajout de l'auteur
                 montant: exp.montant,
+                    agency: activeAgency,
                 type: typeDepense,
                 isDeleted: false,
                 conteneur: exp.conteneur || "",
@@ -844,6 +849,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             date: new Date().toISOString(),
             entryDate: realEntryDate, // Utilisation de la date réelle des opérations
             user: currentUserName,
+                agency: activeAgency,
             action: "VALIDATION_JOURNEE",
             details: detailsStr, // Affiche tous les modes de paiement pour rassurer l'administrateur
             targetId: "BATCH",
@@ -1113,7 +1119,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     function formatCFA(n) { return new Intl.NumberFormat('fr-CI', { style: 'currency', currency: 'XOF' }).format(n || 0); }
     
     function populateDatalist() {
-        const qDatalist = query(collection(db, "transactions"), where("isDeleted", "!=", true), orderBy("isDeleted"), orderBy("date", "desc"));
+        const qDatalist = query(collection(db, "transactions"), where("isDeleted", "!=", true), where("agency", "==", activeAgency), orderBy("isDeleted"), orderBy("date", "desc"));
         getDocs(qDatalist).then(snapshot => {
             const references = new Set(); 
             snapshot.forEach(doc => {
@@ -1499,6 +1505,7 @@ function initMobileApp() {
                         batch.set(docRef, {
                             date: dateStr, reference: ref, nom: baseTransac.nom || 'Client', conteneur: baseTransac.conteneur || '',
                             prix: baseTransac.prix, montantParis: 0, montantAbidjan: totalAbidjan, reste: totalAbidjan - effectivePrix,
+                            agency: activeAgency,
                             agent: userName, isDeleted: false, saisiPar: userName, modePaiement: baseTransac.mode, agentMobileMoney: baseTransac.agentRecepteur || '', paymentHistory: newPaymentEntries, lastPaymentDate: dateStr
                         });
                         touchedTransactionIds.push(docRef.id);
@@ -1516,6 +1523,7 @@ function initMobileApp() {
                         const newLivRef = doc(collection(db, "livraisons"));
                         batch.set(newLivRef, {
                             ref: ref,
+                            agency: activeAgency,
                             destinataire: baseTransac.nom || 'Client Caisse',
                             expediteur: '',
                             conteneur: baseTransac.conteneur || '',
@@ -1537,6 +1545,7 @@ function initMobileApp() {
                         date: dateStr,
                         description: d.motif + ` (${userName})`,
                         montant: d.montant,
+                        agency: activeAgency,
                         type: 'Mensuelle',
                         mode: 'Espèce',
                         isDeleted: false,
@@ -1551,6 +1560,7 @@ function initMobileApp() {
                     date: new Date().toISOString(),
                     entryDate: dateStr,
                     user: userName,
+                    agency: activeAgency,
                     action: "VALIDATION_JOURNEE",
                     details: detailsStr,
                     targetId: "BATCH_MOBILE",
@@ -1624,7 +1634,7 @@ window.reparerCalculsFinanciers = async function() {
     if (!confirm("Voulez-vous recalculer tous les montants et restes de la base de données pour corriger les doublons ?")) return;
     
     try {
-        const transSnap = await getDocs(query(collection(db, "transactions"), where("isDeleted", "!=", true)));
+        const transSnap = await getDocs(query(collection(db, "transactions"), where("isDeleted", "!=", true), where("agency", "==", sessionStorage.getItem('currentActiveAgency') || 'abidjan')));
         let batch = writeBatch(db);
         let count = 0;
         

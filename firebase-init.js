@@ -15,16 +15,3 @@ const db = firebase.firestore();
 //     firebase.auth().useEmulator("http://localhost:9099");
 //     console.log("🔧 Mode Local : Connecté aux émulateurs Firebase");
 // }
-
-const logoutBtn = document.getElementById('logoutBtn');
-if (logoutBtn) {
-    logoutBtn.addEventListener('click', async () => {
-        if (window.AppModal) {
-            if (await AppModal.confirm("Voulez-vous vous déconnecter ?", "Déconnexion", true)) {
-                firebase.auth().signOut();
-            }
-        } else {
-            if (confirm("Voulez-vous vous déconnecter ?")) firebase.auth().signOut();
-        }
-    });
-}

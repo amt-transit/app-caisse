@@ -3,6 +3,8 @@ import { collection, getDocs, query, where, orderBy, onSnapshot } from "https://
 
 document.addEventListener('DOMContentLoaded', () => {
 
+    const activeAgency = sessionStorage.getItem('currentActiveAgency') || 'abidjan';
+
     // SERVICE TRANSACTION (Injecté localement car non chargé via HTML)
     const transactionService = {
         getCleanTransactions(transactions, validatedSessions) {
@@ -36,7 +38,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }, []);
         },
         async calculateAvailableBalance(db, unconfirmedSessions) {
-            const transSnap = await getDocs(query(collection(db, "transactions"), where("isDeleted", "!=", true)));
+            const transSnap = await getDocs(query(collection(db, "transactions"), where("isDeleted", "!=", true), where("agency", "==", activeAgency)));
             let totalVentes = 0;
             transSnap.forEach(doc => {
                 const d = doc.data();
@@ -53,7 +55,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                 }
             });
-            const incSnap = await getDocs(query(collection(db, "other_income"), where("isDeleted", "!=", true)));
+            const incSnap = await getDocs(query(collection(db, "other_income"), where("isDeleted", "!=", true), where("agency", "==", activeAgency)));
             let totalAutres = 0;
             incSnap.forEach(doc => {
                 const d = doc.data();
@@ -61,7 +63,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     totalAutres += (d.montant || 0);
                 }
             });
-            const expSnap = await getDocs(query(collection(db, "expenses"), where("isDeleted", "!=", true)));
+            const expSnap = await getDocs(query(collection(db, "expenses"), where("isDeleted", "!=", true), where("agency", "==", activeAgency)));
             let totalDepenses = 0;
             expSnap.forEach(doc => {
                 const d = doc.data();
@@ -70,7 +72,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     totalDepenses += (d.montant || 0);
                 }
             });
-            const bankSnap = await getDocs(query(collection(db, "bank_movements"), where("isDeleted", "!=", true)));
+            const bankSnap = await getDocs(query(collection(db, "bank_movements"), where("isDeleted", "!=", true), where("agency", "==", activeAgency)));
             let totalRetraits = 0;
             let totalDepots = 0;
             bankSnap.forEach(doc => {
@@ -137,14 +139,14 @@ document.addEventListener('DOMContentLoaded', () => {
     const exportPdfBtn = document.getElementById('exportPdfBtn');
 
     // 1. Chargement des données
-    const qTrans = query(collection(db, "transactions"), where("isDeleted", "!=", true), orderBy("isDeleted"), orderBy("date", "desc"));
+    const qTrans = query(collection(db, "transactions"), where("isDeleted", "!=", true), where("agency", "==", activeAgency), orderBy("isDeleted"), orderBy("date", "desc"));
     onSnapshot(qTrans, snapshot => {
         allTransactions = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         renderTable();
     }, error => console.error(error));
 
     // 2. Chargement des statuts de Livraison Actifs
-    onSnapshot(collection(db, "livraisons"), snapshot => {
+    onSnapshot(query(collection(db, "livraisons"), where("agency", "==", activeAgency)), snapshot => {
         snapshot.forEach(doc => {
             const d = doc.data();
             if (d.ref) deliveryStatusMap.set(d.ref.toUpperCase().trim(), {
@@ -158,7 +160,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }, error => console.error("Erreur chargement livraisons:", error));
 
     // 3. Chargement des statuts de Livraison Archivés (Une seule fois au démarrage)
-    getDocs(collection(db, "livraisons_archives")).then(snapshot => {
+    getDocs(query(collection(db, "livraisons_archives"), where("agency", "==", activeAgency))).then(snapshot => {
         snapshot.forEach(doc => {
             const d = doc.data();
             if (d.ref) deliveryStatusMap.set(d.ref.toUpperCase().trim(), { status: 'ARCHIVE' });

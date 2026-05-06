@@ -1,9 +1,78 @@
 import { db } from './firebase-config.js';
-import { collection, doc, setDoc, deleteDoc, getDocs, onSnapshot, writeBatch, query, orderBy } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
+import { collection, doc, setDoc, updateDoc, deleteDoc, getDocs, onSnapshot, writeBatch, query, orderBy } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 import { initializeApp, deleteApp } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js";
 import { getAuth, createUserWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-auth.js";
 
 document.addEventListener('DOMContentLoaded', async () => {
+
+    // --- INJECTION DU MODAL DE MODIFICATION UTILISATEUR ---
+    const editUserModalHTML = `
+    <div id="editUserModal" class="modal" style="display:none; position:fixed; z-index:1000; left:0; top:0; width:100%; height:100%; background-color:rgba(0,0,0,0.8); align-items:center; justify-content:center;">
+        <div class="modal-content" style="background:#fff; padding:20px; width:90%; max-width:400px; border-radius:12px;">
+            <span class="close-modal" id="closeEditUserModal" style="float:right; cursor:pointer; font-size:24px;">&times;</span>
+            <h2 style="margin-top:0;">Modifier Utilisateur</h2>
+            <input type="hidden" id="editUserId">
+            
+            <div style="margin-bottom:15px;">
+                <label style="display:block; margin-bottom:5px; font-weight:bold;">Agence</label>
+                <select id="editUserAgency" style="width:100%; padding:8px; box-sizing:border-box;">
+                    <option value="abidjan">🇨🇮 Abidjan</option>
+                    <option value="paris">🇫🇷 Paris</option>
+                    <option value="all">🌍 Abidjan & Paris (Global)</option>
+                </select>
+            </div>
+            
+            <div style="margin-bottom:15px;">
+                <label style="display:block; margin-bottom:5px; font-weight:bold;">Rôle</label>
+                <select id="editUserRole" style="width:100%; padding:8px; box-sizing:border-box;">
+                    <option value="saisie_limited">Saisie Limitée</option>
+                    <option value="saisie_full">Saisie Complète</option>
+                    <option value="admin">Admin</option>
+                    <option value="super_admin">Super Admin</option>
+                    <option value="admin_abidjan">Admin Abidjan</option>
+                    <option value="agent_paris">Agent Paris</option>
+                    <option value="livreur">Livreur</option>
+                    <option value="magasinier">Magasinier</option>
+                    <option value="spectateur">👓 Spectateur</option>
+                </select>
+            </div>
+
+            <div style="text-align:right; margin-top:20px;">
+                <button id="cancelEditUserBtn" class="btn" style="background: #6c757d; color:white; margin-right:10px; border:none; padding:8px 15px; border-radius:6px; cursor:pointer;">Annuler</button>
+                <button id="saveEditUserBtn" class="btn btn-success" style="background: #10b981; color:white; border:none; padding:8px 15px; border-radius:6px; cursor:pointer;">Enregistrer</button>
+            </div>
+        </div>
+    </div>
+    `;
+    document.body.insertAdjacentHTML('beforeend', editUserModalHTML);
+
+    const editUserModal = document.getElementById('editUserModal');
+    const closeUserModal = () => { editUserModal.style.display = 'none'; };
+    document.getElementById('closeEditUserModal').onclick = closeUserModal;
+    document.getElementById('cancelEditUserBtn').onclick = closeUserModal;
+    window.addEventListener('click', (e) => { if(e.target === editUserModal) closeUserModal(); });
+
+    document.getElementById('saveEditUserBtn').addEventListener('click', async () => {
+        const uid = document.getElementById('editUserId').value;
+        const newAgency = document.getElementById('editUserAgency').value;
+        const newRole = document.getElementById('editUserRole').value;
+        
+        if (!uid) return;
+        
+        const saveBtn = document.getElementById('saveEditUserBtn');
+        saveBtn.disabled = true; saveBtn.textContent = 'Enregistrement...';
+        
+        try {
+            await updateDoc(doc(db, "users", uid), { agency: newAgency, role: newRole });
+            AppModal.success("Les autorisations de l'utilisateur ont été mises à jour !");
+            closeUserModal();
+        } catch (error) {
+            console.error(error);
+            AppModal.error("Erreur lors de la modification : " + error.message);
+        } finally {
+            saveBtn.disabled = false; saveBtn.textContent = 'Enregistrer';
+        }
+    });
 
     // Configuration nécessaire pour l'app secondaire (Création utilisateur)
     const firebaseConfig = {
@@ -25,6 +94,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Formulaire Création
     const newUsernameInput = document.getElementById('newUsername');
     const newPasswordInput = document.getElementById('newPassword');
+    const newAgencySelect = document.getElementById('newAgency');
     const newRoleSelect = document.getElementById('newRole');
     const createUserBtn = document.getElementById('createUserBtn');
 
@@ -140,6 +210,7 @@ const isSuperAdmin = userRole === 'super_admin';
                 <thead>
                     <tr>
                         <th>Nom / Email</th>
+                        <th>Agence</th>
                         <th>Rôle</th>
                         <th>Mot de passe</th>
                         <th>Actions</th>
@@ -153,6 +224,11 @@ const isSuperAdmin = userRole === 'super_admin';
                 const user = doc.data();
                 const tr = document.createElement('tr');
                 
+                // Gestion de l'affichage de l'agence (avec fallback pour les anciens comptes)
+                let agencyDisplay = user.agency === 'paris' ? '🇫🇷 Paris' : '🇨🇮 Abidjan';
+                if (user.agency === 'all') agencyDisplay = '🌍 Global (Abidjan & Paris)';
+                if (!user.agency) agencyDisplay = '🇨🇮 Abidjan (Défaut)';
+
                 // Mapping des rôles pour affichage propre
                 let roleDisplay = user.role;
                 if(user.role === 'super_admin') roleDisplay = '👑 Super Admin';
@@ -160,6 +236,10 @@ const isSuperAdmin = userRole === 'super_admin';
                 else if(user.role === 'saisie_full') roleDisplay = '✏️ Saisie Complète';
                 else if(user.role === 'saisie_limited') roleDisplay = '👀 Saisie Limitée';
                 else if(user.role === 'spectateur') roleDisplay = '👓 Spectateur';
+                else if(user.role === 'admin_abidjan') roleDisplay = '🛡️ Admin Abidjan';
+                else if(user.role === 'agent_paris') roleDisplay = '🇫🇷 Agent Paris';
+                else if(user.role === 'livreur') roleDisplay = '🚚 Livreur';
+                else if(user.role === 'magasinier') roleDisplay = '📦 Magasinier';
 
                 // Gestion affichage mot de passe
                 let passwordHtml = '<span style="color:#999; font-style:italic; font-size:0.8em;">Non stocké</span>';
@@ -177,10 +257,14 @@ const isSuperAdmin = userRole === 'super_admin';
                         <div style="font-weight:bold;">${user.displayName || user.email}</div>
                         <div style="font-size:0.8em; color:#666;">${user.email}</div>
                     </td>
+                    <td><span class="tag" style="background:#f1f5f9; color:#334155;">${agencyDisplay}</span></td>
                     <td><span class="tag" style="background:#e2e8f0; color:#334155;">${roleDisplay}</span></td>
                     <td>${passwordHtml}</td>
                     <td>
-                        ${isSuperAdmin ? `<button class="deleteBtn" data-id="${doc.id}" style="background:#ef4444; color:white; border:none; padding:5px 10px; border-radius:4px; cursor:pointer;">Supprimer</button>` : ''}
+                        ${isSuperAdmin ? `
+                        <button class="editBtn" data-id="${doc.id}" data-agency="${user.agency || 'abidjan'}" data-role="${user.role}" style="background:#3b82f6; color:white; border:none; padding:5px 10px; border-radius:4px; cursor:pointer; margin-right:5px;">Modifier</button>
+                        <button class="deleteBtn" data-id="${doc.id}" style="background:#ef4444; color:white; border:none; padding:5px 10px; border-radius:4px; cursor:pointer;">Supprimer</button>
+                        ` : ''}
                     </td>
                 `;
                 tbody.appendChild(tr);
@@ -199,6 +283,17 @@ const isSuperAdmin = userRole === 'super_admin';
                         input.type = "password";
                         e.target.textContent = "👁️";
                     }
+                });
+            });
+
+            // Listeners modification
+            tbody.querySelectorAll('.editBtn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    document.getElementById('editUserId').value = e.target.dataset.id;
+                    document.getElementById('editUserAgency').value = e.target.dataset.agency;
+                    document.getElementById('editUserRole').value = e.target.dataset.role;
+                    
+                    document.getElementById('editUserModal').style.display = 'flex';
                 });
             });
 
@@ -222,6 +317,7 @@ const isSuperAdmin = userRole === 'super_admin';
         createUserBtn.addEventListener('click', async () => {
             const username = newUsernameInput.value.trim();
             const password = newPasswordInput.value.trim();
+            const agency = newAgencySelect ? newAgencySelect.value : 'abidjan';
             const role = newRoleSelect.value;
 
             if (!username || !password) return AppModal.error("Veuillez remplir tous les champs.");
@@ -246,6 +342,7 @@ const isSuperAdmin = userRole === 'super_admin';
                 await setDoc(doc(db, "users", uid), {
                     email: email,
                     displayName: username,
+                    agency: agency,
                     role: role,
                     password: password, // Stockage du mot de passe
                     createdAt: new Date().toISOString()

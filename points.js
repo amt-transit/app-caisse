@@ -3,6 +3,8 @@ import { collection, getDocs, query, where, orderBy } from "https://www.gstatic.
 
 document.addEventListener('DOMContentLoaded', async () => {
 
+    const activeAgency = sessionStorage.getItem('currentActiveAgency') || 'abidjan';
+
     // --- SÉCURITÉ : VÉRIFICATION RÔLE (Admin OU Super Admin) ---
     const userRole = sessionStorage.getItem('userRole');
     if (userRole !== 'admin' && userRole !== 'super_admin' && userRole !== 'spectateur') {
@@ -49,7 +51,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         try {
             // 1. Récupérer les Sessions (Audit Logs) pour mapper SessionID -> Utilisateur
             // C'est crucial pour attribuer les dépenses au bon utilisateur
-            const sessionsSnap = await getDocs(query(collection(db, "audit_logs"), where("action", "==", "VALIDATION_JOURNEE"), where("date", ">=", start), where("date", "<=", end + "T23:59:59")));
+            const sessionsSnap = await getDocs(query(collection(db, "audit_logs"), where("action", "==", "VALIDATION_JOURNEE"), where("agency", "==", activeAgency), where("date", ">=", start), where("date", "<=", end + "T23:59:59")));
 
             // 1b. Identifier les sessions NON VALIDÉES (En attente)
             const pendingSessions = new Set();
@@ -64,10 +66,10 @@ document.addEventListener('DOMContentLoaded', async () => {
             });
 
             // 2. Récupérer les Transactions (Encaissements)
-            const transSnap = await getDocs(query(collection(db, "transactions"), where("date", ">=", start), where("date", "<=", end)));
+            const transSnap = await getDocs(query(collection(db, "transactions"), where("agency", "==", activeAgency), where("date", ">=", start), where("date", "<=", end)));
 
             // 3. Récupérer les Dépenses
-            const expSnap = await getDocs(query(collection(db, "expenses"), where("date", ">=", start), where("date", "<=", end)));
+            const expSnap = await getDocs(query(collection(db, "expenses"), where("agency", "==", activeAgency), where("date", ">=", start), where("date", "<=", end)));
 
             // --- TRAITEMENT DES DONNÉES ---
             currentStats = {};

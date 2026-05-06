@@ -3,6 +3,8 @@ import { collection, doc, addDoc, setDoc, updateDoc, query, where, orderBy, onSn
 
 document.addEventListener('DOMContentLoaded', () => {
 
+    const activeAgency = sessionStorage.getItem('currentActiveAgency') || 'abidjan';
+
     const userRole = sessionStorage.getItem('userRole');
     const isViewer = userRole === 'spectateur';
     
@@ -125,8 +127,9 @@ document.addEventListener('DOMContentLoaded', () => {
             // AJOUT DU NOM DE L'AUTEUR
             description: `${finalDesc} (${currentUserName})`,
             montant: parseFloat(incomeAmount.value) || 0,
-            mode: document.getElementById('incomeMode').value, // <--- AJOUTER CETTE LIGNE
-            isDeleted: false
+            mode: document.getElementById('incomeMode').value, 
+            isDeleted: false,
+            agency: activeAgency
         };
         
         if (!data.date || !incomeDesc.value || data.montant <= 0) {
@@ -159,9 +162,9 @@ document.addEventListener('DOMContentLoaded', () => {
         let constraints = [];
         
         if (showDeletedCheckbox.checked) {
-            constraints.push(where("isDeleted", "==", true), orderBy("isDeleted"));
+            constraints.push(where("isDeleted", "==", true), where("agency", "==", activeAgency), orderBy("isDeleted"));
         } else {
-            constraints.push(where("isDeleted", "!=", true), orderBy("isDeleted"));
+            constraints.push(where("isDeleted", "!=", true), where("agency", "==", activeAgency), orderBy("isDeleted"));
         }
         constraints.push(orderBy("date", "desc"));
         constraints.push(limit(currentLimit));
@@ -341,7 +344,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const batch = writeBatch(db);
             pendingIncome.forEach(inc => {
                 const docRef = doc(collection(db, "other_income"));
-                batch.set(docRef, inc);
+                batch.set(docRef, { ...inc, agency: activeAgency });
             });
 
             try {

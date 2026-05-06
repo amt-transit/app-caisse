@@ -34,6 +34,7 @@
     <nav class="navigation">
         <ul class="nav-menu">
             <li><a href="dashboard.html" id="nav-dashboard">📊 Tableau de Bord</a></li>
+            <li><a href="paris/index.html" id="nav-paris" style="display:none; color:#2563eb; font-weight:bold;">🇫🇷 Interface Paris</a></li>
             
             <li class="has-dropdown">
                 <a href="#">💵 Entrées Caisse</a>
@@ -613,18 +614,6 @@
 
 <script type="module" src="auth-guard.js"></script>
 <script src="utils.js"></script>
-<script>
-    // Gestionnaire de déconnexion global
-    document.getElementById('logoutBtn').addEventListener('click', async () => {
-        if (window.AppModal) {
-            if (await window.AppModal.confirm("Voulez-vous vous déconnecter ?", "Déconnexion", true)) {
-                firebase.auth().signOut();
-            }
-        } else {
-            if (confirm("Voulez-vous vous déconnecter ?")) firebase.auth().signOut();
-        }
-    });
-</script>
 
 <!-- Script Vue.js (Module) -->
 <script type="module" src="salaire.js"></script>
