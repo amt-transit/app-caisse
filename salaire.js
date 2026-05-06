@@ -317,7 +317,8 @@ console.log("✅ Mode Production (Salaire) : Connecté");
             if(!newEmp.value.name) return;
             actionLoading.value = true;
             try {
-                await addDoc(collection(db, "employees"), { 
+                const newEmpRef = doc(collection(db, "employees"));
+                await setDoc(newEmpRef, { 
                     name: newEmp.value.name, salary: newEmp.value.salary || 0, loan: newEmp.value.loan || 0, tontineCount: newEmp.value.tontineCount || 0, isTontine: (newEmp.value.tontineCount || 0) > 0
                 });
                 showAddEmployeeModal.value = false;
@@ -421,7 +422,8 @@ console.log("✅ Mode Production (Salaire) : Connecté");
             if(!newFund.value.amount) return;
             actionLoading.value = true;
             try { 
-                await addDoc(collection(db, "salary_funds"), { amount: newFund.value.amount, note: newFund.value.note || 'Dotation', targetMonth: newFund.value.targetMonth || selectedBudgetMonth.value, timestamp: Timestamp.now() }); 
+                const newFundRef = doc(collection(db, "salary_funds"));
+                await setDoc(newFundRef, { amount: newFund.value.amount, note: newFund.value.note || 'Dotation', targetMonth: newFund.value.targetMonth || selectedBudgetMonth.value, timestamp: Timestamp.now() }); 
                 showFundModal.value = false; newFund.value = { amount: '', note: '', targetMonth: selectedBudgetMonth.value }; showToast("Fonds enregistrés !"); 
             } catch(e) { showToast(e.message, "error"); }
             finally { actionLoading.value = false; }
@@ -527,7 +529,8 @@ console.log("✅ Mode Production (Salaire) : Connecté");
 
             try {
                 const currentMonth = selectedTontineMonth.value;
-                await addDoc(collection(db, "salary_payments"), {
+                const newPayRef = doc(collection(db, "salary_payments"));
+                await setDoc(newPayRef, {
                     employeeId: emp.id, 
                     employeeName: emp.name, 
                     month: currentMonth,
@@ -573,7 +576,8 @@ console.log("✅ Mode Production (Salaire) : Connecté");
             amount = parseFloat(amount);
             if (isNaN(amount) || amount <= 0) return window.AppModal.error("Montant invalide", "Erreur");
             try {
-                await addDoc(collection(db, "salary_payments"), {
+                const newGainRef = doc(collection(db, "salary_payments"));
+                await setDoc(newGainRef, {
                     employeeId: emp.id, employeeName: emp.name, month: selectedTontineMonth.value, period: selectedTontinePeriod.value,
                     type: 'Gain Tontine', base: 0, loan: 0, tontine: 0, tontineGain: amount, net: 0, timestamp: Timestamp.now()
                 });

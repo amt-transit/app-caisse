@@ -1,5 +1,5 @@
 import { db } from './firebase-config.js';
-import { collection, doc, addDoc, updateDoc, query, where, orderBy, onSnapshot, writeBatch, limit } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
+import { collection, doc, setDoc, updateDoc, query, where, orderBy, onSnapshot, writeBatch, limit } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 
 document.addEventListener('DOMContentLoaded', () => {
 
@@ -340,7 +340,8 @@ document.addEventListener('DOMContentLoaded', () => {
         // 3. Décision : Enregistrement Direct ou Liste D'attente
         if (currentUserName === USER_NO_CONFIRM) {
             // Enregistrement DIRECT
-            addDoc(collection(db, "expenses"), data).then(() => {
+            const newExpRef = doc(collection(db, "expenses"));
+            setDoc(newExpRef, data).then(() => {
                 AppModal.success("Dépense enregistrée (Mode Direct).");
                 resetExpenseForm();
             }).catch(err => AppModal.error("Erreur : " + err.message));

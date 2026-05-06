@@ -1,6 +1,5 @@
-
 import { db } from '../firebase-config.js';
-import { collection, doc, getDoc, getDocs, addDoc, updateDoc, deleteDoc, query, where, orderBy, limit, onSnapshot, writeBatch, deleteField, arrayUnion } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
+import { collection, doc, getDoc, getDocs, addDoc, setDoc, updateDoc, deleteDoc, query, where, orderBy, limit, onSnapshot, writeBatch, deleteField, arrayUnion } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 
 // --- CONFIGURATION & CONSTANTES (Refactorisation) ---
 const CONSTANTS = {
@@ -91,6 +90,56 @@ document.addEventListener('click', e => {
     }
 });
 
+
+// ─────────────────────────────────────────────────────────────
+//  CALCUL MAGASINAGE CENTRALISÉ
+//  Règle : Gratuit J1-J7 | Forfait 10 000 CFA J8-J13 | +3000/j palette ou +1000/j std dès J14
+//  ⚠️ NE PAS MODIFIER MANUELLEMENT — Source unique de vérité
+// ─────────────────────────────────────────────────────────────
+function calculateMagasinageFee(dateAjout, d, transData) {
+    if (!dateAjout) return { days: 0, fee: 0, isPalette: false };
+
+    // Si transactionService est disponible (chargé via window), l'utiliser en priorité
+    if (typeof window !== 'undefined' && window.transactionService && typeof window.transactionService.calculateStorageFee === 'function') {
+        const res = window.transactionService.calculateStorageFee(dateAjout, d);
+        return { days: res.days, fee: res.fee, isPalette: res.isPalette || false };
+    }
+
+    const diffTime  = new Date() - new Date(dateAjout);
+    const diffDays  = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+    if (diffDays <= 7) return { days: diffDays, fee: 0, isPalette: false };
+
+    // Détection palette : tous les champs possibles
+    const transDesc = transData
+        ? (transData.description || transData.desc || transData.nature || '')
+        : '';
+    const combinedDesc = [
+        d.description || '',
+        d.nature      || '',
+        d.info        || '',
+        transDesc
+    ].join(' ').toLowerCase();
+
+    const isPalette = combinedDesc.includes('palette');
+    const tarifJour = isPalette ? 3000 : 1000;
+    const qte       = (d.quantiteRestante !== undefined && d.quantiteRestante !== null)
+        ? parseInt(d.quantiteRestante)
+        : (parseInt(d.quantite) || 1);
+
+    let fee = 0;
+    if (diffDays <= 13) {
+        // J8 à J13 → forfait fixe 10 000 × qte
+        fee = 10000 * qte;
+    } else {
+        // J14+ → forfait + tarif journalier × (jours au-delà de J13)
+        const joursSupp = diffDays - 13;
+        fee = (10000 + joursSupp * tarifJour) * qte;
+    }
+
+    return { days: diffDays, fee, isPalette };
+}
+
 function buildActionMenu(d, phone, displayDestinataire) {
     const id = d.id;
     const isLivre = d.status === 'LIVRE';
@@ -118,6 +167,7 @@ function buildActionMenu(d, phone, displayDestinataire) {
     let menuItems = '';
 
     if (currentTab !== 'PARIS' && currentTab !== 'A_VENIR' && !isViewer) {
+        menuItems += `<button class="act-mi" onclick="editArrivalDate('${id}');closeActionMenu('${menuId}')">📅 Modifier Date Arrivée</button>`;
         menuItems += `<button class="act-mi" onclick="printDeliverySlip('${id}')">📄 Bon de Livraison</button>`;
         menuItems += `<button class="act-mi" onclick="printInvoice('${id}')">🧾 Imprimer Facture</button>`;
         if (!isLivre && !isAbandonne) {
@@ -256,8 +306,11 @@ function initRealtimeSync() {
                     if (t.reste < 0) {
                         resteAPayer = Math.abs(t.reste); // Transforme -15000 en 15000
                     }
-                    // On stocke le montant sous forme de texte pour la livraison
-                    transactionsMap.set(t.reference.toUpperCase().trim(), resteAPayer + " CFA");
+                    // On stocke le montant et la description pour la livraison
+                    transactionsMap.set(t.reference.toUpperCase().trim(), {
+                        montant: resteAPayer + " CFA",
+                        desc: t.description || ''
+                    });
                 }
             });
             
@@ -267,10 +320,10 @@ function initRealtimeSync() {
                 let batchCount = 0;
                 deliveries.forEach(d => {
                     if (d.containerStatus === 'EN_COURS' && d.ref) {
-                        const realCaisseAmount = transactionsMap.get(d.ref.toUpperCase().trim());
-                        if (realCaisseAmount !== undefined && realCaisseAmount !== d.montant) {
-                            batch.update(doc(db, CONSTANTS.COLLECTION, d.id), { montant: realCaisseAmount });
-                            d.montant = realCaisseAmount; // Maj locale pour éviter décalage
+                        const transData = transactionsMap.get(d.ref.toUpperCase().trim());
+                        if (transData && transData.montant !== d.montant) {
+                            batch.update(doc(db, CONSTANTS.COLLECTION, d.id), { montant: transData.montant });
+                            d.montant = transData.montant; // Maj locale pour éviter décalage
                             batchCount++;
                         }
                     }
@@ -1156,8 +1209,8 @@ async function confirmImport() {
         const o = String(oldV || '').trim();
         const n = String(newV || '').trim();
         if (!n) return o; // Si nouveau vide, garder ancien
-        if (!o) return n; // Si ancien vide, prendre nouveau
-        // Si les deux existent, on privilégie le plus long (plus d'infos)
+        if (!o || o === 'Créé automatiquement depuis la Caisse') return n; // Écrase le texte par défaut
+        if (n === 'Créé automatiquement depuis la Caisse') return o;
         return n.length >= o.length ? n : o;
     };
 
@@ -1881,14 +1934,14 @@ function renderTable() {
         // --- NOUVEAU : SYNCHRONISATION ET SÉCURITÉ DU MONTANT ---
         // Si le colis est à Abidjan (En Cours), on VÉRIFIE la Caisse
         if (d.containerStatus === 'EN_COURS' && d.ref) {
-            const realCaisseAmount = transactionsMap.get(d.ref.toUpperCase().trim());
+            const transData = transactionsMap.get(d.ref.toUpperCase().trim());
             
             // Si la Caisse a un montant différent de celui du colis (ex: le client vient de payer)
-            if (realCaisseAmount !== undefined && realCaisseAmount !== d.montant) {
+            if (transData && transData.montant !== d.montant) {
                 // 1. On corrige silencieusement la base de données Livraison en arrière-plan
-                updateDoc(doc(db, CONSTANTS.COLLECTION, d.id), { montant: realCaisseAmount });
+                updateDoc(doc(db, CONSTANTS.COLLECTION, d.id), { montant: transData.montant });
                 // 2. On corrige l'affichage immédiatement
-                d.montant = realCaisseAmount;
+                d.montant = transData.montant;
             }
         }
         const rowClass = d.status === 'LIVRE' ? 'delivered' : '';
@@ -1996,19 +2049,24 @@ function renderTable() {
         // --- NOUVEAU : ALERTE FRAIS MAGASINAGE ---
         let magasinageBadge = '';
         if (d.containerStatus === 'EN_COURS' && d.status !== 'LIVRE' && d.status !== 'ABANDONNE' && d.dateAjout) {
-            if (typeof transactionService !== 'undefined') {
-                const { days: diffDays2, fee: computedFee } = transactionService.calculateStorageFee(d.dateAjout, d);
-                if (computedFee > 0) {
-                    const formattedFee = new Intl.NumberFormat('fr-CI', { style: 'currency', currency: 'XOF' }).format(computedFee);
-                    const qte = d.quantiteRestante !== undefined ? parseInt(d.quantiteRestante) : (parseInt(d.quantite) || 1);
-                    const badgeColor = computedFee > (10000 * qte) ? '#dc2626' : '#f97316';
-                    const borderColor = computedFee > (10000 * qte) ? '#dc2626' : '#f97316';
-                    const bgMontant = computedFee > (10000 * qte) ? '#fee2e2' : '#ffedd5';
-                    const textMontant = computedFee > (10000 * qte) ? '#991b1b' : '#9a3412';
-                    magasinageBadge = `<div style="margin-top:6px; text-align:center;"><span style="background-color:${badgeColor}; color:white; padding:3px 5px; border-radius:4px; font-size:10px; font-weight:bold; white-space:nowrap; box-shadow: 0 0 6px ${badgeColor};" title="En entrepôt depuis ${diffDays2} jours">⚠️ + ${formattedFee} MAGASINAGE</span></div>`;
-                    // Force l'alerte sur la couleur du montant même si le solde est 0
-                    montantStyle = `width: 100%; background-color: ${bgMontant}; color: ${textMontant}; font-weight: bold; border: 2px solid ${borderColor};`;
-                }
+            let diffDays2 = 0;
+            let computedFee = 0;
+            
+            const _transData1 = d.ref ? transactionsMap.get(d.ref.toUpperCase().trim()) : null;
+            const _calc1 = calculateMagasinageFee(d.dateAjout, d, _transData1);
+            diffDays2   = _calc1.days;
+            computedFee = _calc1.fee;
+
+            if (computedFee > 0) {
+                const formattedFee = new Intl.NumberFormat('fr-CI', { style: 'currency', currency: 'XOF' }).format(computedFee);
+                const qte = d.quantiteRestante !== undefined ? parseInt(d.quantiteRestante) : (parseInt(d.quantite) || 1);
+                const badgeColor = computedFee > (10000 * qte) ? '#dc2626' : '#f97316';
+                const borderColor = computedFee > (10000 * qte) ? '#dc2626' : '#f97316';
+                const bgMontant = computedFee > (10000 * qte) ? '#fee2e2' : '#ffedd5';
+                const textMontant = computedFee > (10000 * qte) ? '#991b1b' : '#9a3412';
+                magasinageBadge = `<div style="margin-top:6px; text-align:center;"><span style="background-color:${badgeColor}; color:white; padding:3px 5px; border-radius:4px; font-size:10px; font-weight:bold; white-space:nowrap; box-shadow: 0 0 6px ${badgeColor};" title="En entrepôt depuis ${diffDays2} jours">⚠️ + ${formattedFee} MAGASINAGE</span></div>`;
+                // Force l'alerte sur la couleur du montant même si le solde est 0
+                montantStyle = `width: 100%; background-color: ${bgMontant}; color: ${textMontant}; font-weight: bold; border: 2px solid ${borderColor};`;
             }
         }
 
@@ -2041,11 +2099,11 @@ function renderTable() {
                     <td class="ref"><a href="#" onclick="event.preventDefault(); showScanHistory('${d.id}');" style="color: #2563eb; text-decoration: underline; font-weight: bold;">${d.ref}</a></td>
                     <td style="text-align:center;">${renderInput(d.quantite || 1, "number", `updateDeliveryQuantity('${d.id}', this.value)`, "width: 50px; text-align:center; font-weight:bold;")}</td>
                     <td class="montant">${renderInput(displayMontant, "text", `updateDeliveryAmount('${d.id}', this.value)`, montantStyle)}</td>
-                    <td>${d.expediteur}</td>
+                    <td>${d.expediteur || ''}</td>
                     <td>${renderInput((d.lieuLivraison || '').replace(/"/g, '&quot;'), "text", `updateDeliveryLocation('${d.id}', this.value)`, "")}</td>
                     <td>${renderInput(displayDestinataire.replace(/"/g, '&quot;'), "text", `updateDeliveryRecipient('${d.id}', this.value)`, "")}</td>
                     <td>${renderInput(displayPhone, "text", `updateDeliveryPhone('${d.id}', this.value)`, "font-weight:bold; color:#0d47a1; width:100%;")}</td>
-                    <td>${d.description || '-'}</td>
+                    <td>${renderInput((d.description || '').replace(/"/g, '&quot;'), "text", `updateDeliveryDescription('${d.id}', this.value)`, "")}</td>
                     <td>${actionCellHTML}</td>
                 </tr>
             `;
@@ -2067,11 +2125,11 @@ function renderTable() {
                     ${montantHTML}
                     ${magasinageBadge}
                 </td>
-                <td>${d.expediteur}</td>
+                <td>${d.expediteur || ''}</td>
                 <td>${renderInput((d.lieuLivraison || '').replace(/"/g, '&quot;'), "text", `updateDeliveryLocation('${d.id}', this.value)`, "")}</td>
                 <td>${renderInput(displayDestinataire.replace(/"/g, '&quot;'), "text", `updateDeliveryRecipient('${d.id}', this.value)`, "")}</td>
                 <td>${renderInput(displayPhone, "text", `updateDeliveryPhone('${d.id}', this.value)`, "font-weight:bold; color:#0d47a1; width:100%;")}</td>
-                <td>${d.description || '-'}</td>
+                <td>${renderInput((d.description || '').replace(/"/g, '&quot;'), "text", `updateDeliveryDescription('${d.id}', this.value)`, "")}</td>
                 <td>${renderInput((d.info || '').replace(/"/g, '&quot;'), "text", `updateDeliveryInfo('${d.id}', this.value)`, "")}</td>
                 ${notifiedCell}
                 <td>
@@ -2196,7 +2254,7 @@ function viewProgramDetails(date, livreur) {
                     </td>
                     <td class="ref">${d.ref}</td>
                     <td class="montant">${d.montant}</td>
-                    <td>${d.expediteur}</td>
+                    <td>${d.expediteur || ''}</td>
                     <td style="display: flex; align-items: center; gap: 5px;">
                         <input type="text" class="editable-cell" value="${(d.lieuLivraison || '').replace(/"/g, '&quot;')}" list="sharedLocationsList" onchange="updateDeliveryLocation('${d.id}', this.value)">
                         <a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent((d.lieuLivraison || '') + ' ' + d.commune + ' Abidjan')}" target="_blank" title="Voir sur la carte" style="text-decoration: none; font-size: 1.2em;">
@@ -2207,7 +2265,7 @@ function viewProgramDetails(date, livreur) {
                         </button>
                     </td>
                     <td><input type="text" class="editable-cell" value="${(d.destinataire || '').replace(/"/g, '&quot;')}" onchange="updateDeliveryRecipient('${d.id}', this.value)"></td>
-                    <td>${d.description || ''}</td>
+                    <td><input type="text" class="editable-cell" value="${(d.description || '').replace(/"/g, '&quot;')}" onchange="updateDeliveryDescription('${d.id}', this.value)"></td>
                     <td><input type="text" class="editable-cell" value="${(d.info || '').replace(/"/g, '&quot;')}" onchange="updateDeliveryInfo('${d.id}', this.value)"></td>
                     <td><span class="status-badge ${statusClass}">${statusText}</span></td>
                     <td>
@@ -2338,7 +2396,7 @@ function exportRoadmapPDF(date, livreur) {
         const rowData = [
             d.ref,
             d.montant,
-            d.expediteur,
+            d.expediteur || '',
             d.lieuLivraison,
             d.destinataire,
             d.description,
@@ -2464,17 +2522,7 @@ async function printDeliverySlip(id) {
         }
         
         if (magasinageFee === 0 && !transData.storageFeeWaived && d.dateAjout && d.status !== 'LIVRE' && d.status !== 'ABANDONNE') {
-            if (typeof transactionService !== 'undefined') {
-                magasinageFee = transactionService.calculateStorageFee(d.dateAjout, d).fee;
-            } else {
-                const diffTime = new Date() - new Date(d.dateAjout);
-                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-                if (diffDays > 7) {
-                    const qte = d.quantiteRestante !== undefined ? parseInt(d.quantiteRestante) : (parseInt(d.quantite) || 1);
-                    if (diffDays <= 14) magasinageFee = 10000 * qte;
-                    else magasinageFee = (10000 + (diffDays - 14) * 1000) * qte;
-                }
-            }
+            magasinageFee = calculateMagasinageFee(d.dateAjout, d, transData).fee;
         }
         const totalAPayer = prixFret - reduction + magasinageFee;
         reste = totalAPayer - paye;
@@ -2482,19 +2530,8 @@ async function printDeliverySlip(id) {
     } else {
         reste = parseFloat(String(d.montant || '0').replace(/[^\d]/g, '')) || 0;
         if (d.dateAjout && d.status !== 'LIVRE' && d.status !== 'ABANDONNE') {
-            if (typeof transactionService !== 'undefined') {
-                magasinageFee = transactionService.calculateStorageFee(d.dateAjout, d).fee;
-                reste += magasinageFee;
-            } else {
-                const diffTime = new Date() - new Date(d.dateAjout);
-                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-                if (diffDays > 7) {
-                    const qte = d.quantiteRestante !== undefined ? parseInt(d.quantiteRestante) : (parseInt(d.quantite) || 1);
-                    if (diffDays <= 14) magasinageFee = 10000 * qte;
-                    else magasinageFee = (10000 + (diffDays - 14) * 1000) * qte;
-                    reste += magasinageFee;
-                }
-            }
+            magasinageFee = calculateMagasinageFee(d.dateAjout, d, null).fee;
+            reste += magasinageFee;
         }
     }
 
@@ -2659,17 +2696,7 @@ window.printInvoice = async function(id) {
         
         // Calcul dynamique si non annulé, non livré et pas de frais manuel saisi
         if (magasinageFee === 0 && !transData.storageFeeWaived && d.dateAjout && d.status !== 'LIVRE' && d.status !== 'ABANDONNE') {
-            if (typeof transactionService !== 'undefined') {
-                magasinageFee = transactionService.calculateStorageFee(d.dateAjout, d).fee;
-            } else {
-                const diffTime = new Date() - new Date(d.dateAjout);
-                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-                if (diffDays > 7) {
-                    const qte = d.quantiteRestante !== undefined ? parseInt(d.quantiteRestante) : (parseInt(d.quantite) || 1);
-                    if (diffDays <= 14) magasinageFee = 10000 * qte;
-                    else magasinageFee = (10000 + (diffDays - 14) * 1000) * qte;
-                }
-            }
+            magasinageFee = calculateMagasinageFee(d.dateAjout, d, transData).fee;
         }
         
         const totalAPayer = prixFret - reduction + magasinageFee;
@@ -2681,19 +2708,8 @@ window.printInvoice = async function(id) {
         paye = prixFret > reste ? prixFret - reste : 0;
         
         if (d.dateAjout && d.status !== 'LIVRE' && d.status !== 'ABANDONNE') {
-            if (typeof transactionService !== 'undefined') {
-                magasinageFee = transactionService.calculateStorageFee(d.dateAjout, d).fee;
-                reste += magasinageFee;
-            } else {
-                const diffTime = new Date() - new Date(d.dateAjout);
-                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-                if (diffDays > 7) {
-                    const qte = d.quantiteRestante !== undefined ? parseInt(d.quantiteRestante) : (parseInt(d.quantite) || 1);
-                    if (diffDays <= 14) magasinageFee = 10000 * qte;
-                    else magasinageFee = (10000 + (diffDays - 14) * 1000) * qte;
-                    reste += magasinageFee;
-                }
-            }
+            magasinageFee = calculateMagasinageFee(d.dateAjout, d, null).fee;
+            reste += magasinageFee;
         }
     }
 
@@ -2761,7 +2777,7 @@ window.printInvoice = async function(id) {
         "1- Les temps et les délais de transports sont donnés à titre indicatifs par AMT TRANS'IT. Les retards des navires et les delais rallongés de dedouannement et de manutentiuons au port ne sauraient être imputés a AMT TRANS'IT, qui s'éfforcera de communiquer en cas d'éventuelles retards.",
         "2- Les enlèvements à domicile sont gratuits dans la limite géographique définie par AMT TRANS'IT (dans un rayon de 20 Kilomètres autour de Paris).",
         "3- Les livraisons sont gratuites dans toutes les communes d'Abidjan dans la limite d'accessibilité des véhicules et dans les 3 jours suivants l'arrivée du conteneur. Après cette date les livraisons sont payantes ou alors le client pourra récuperer lui même ses colis à sa charge dans nos locaux.",
-        "4- AMT TRANS'IT s'engage à stocker gratuitement les marchandises pendant une semaine après leur arrivées à Abidjan, au delà les clients devront payer un forfait de 10.000 Francs CFA à partir de la 2ème semaine plus 1.000 Francs par jour et par colis.",
+        "4- AMT TRANS'IT s'engage à stocker gratuitement les marchandises pendant une semaine après leur arrivées à Abidjan, au delà les clients devront payer un forfait de 10.000 Francs CFA à partir de la 2ème semaine plus 1.000 Francs par jour et par colis (majoré à 3.000 Francs par jour pour les palettes).",
         "5- Tous les colis et ou marchandises devront être intégralement payés avant la remise au destinataire.",
         "6- Les dommages causés lors du transport sont dédommagés dans la limite des coûts de transports sauf en cas de souscription a une assurance sur demande du client.",
         "7- Les clients devront fournir leur marchandises dans un emballage correct et devront s'assurer que ceux-ci sont bien protegées pour un transport par conteneur. Un colis mal ou non emballés sera réemballés mais les coûts seront repercutés au client.",
@@ -3722,6 +3738,80 @@ function updateDeliveryInfo(id, newInfo) {
     });
 }
 
+// Mise à jour de la description en direct
+async function updateDeliveryDescription(id, newDesc) {
+    const cleanDesc = cleanString(newDesc);
+    const d = deliveries.find(item => item.id === id);
+    if (!d) return;
+    const oldDesc = d.description || '';
+    if (oldDesc === cleanDesc) return;
+
+    // Mise à jour visuelle instantanée pour recalculer le magasinage à l'écran
+    d.description = cleanDesc;
+    filterDeliveries(); 
+
+    try {
+        const batch = writeBatch(db);
+        batch.update(doc(db, CONSTANTS.COLLECTION, id), { description: cleanDesc });
+
+        // Synchroniser immédiatement la description avec l'onglet Caisse (transactions)
+        if (d.ref) {
+            const qTrans = await getDocs(query(collection(db, 'transactions'), where('reference', '==', d.ref), limit(1)));
+            if (!qTrans.empty) {
+                batch.update(qTrans.docs[0].ref, { description: cleanDesc });
+            }
+        }
+
+        await batch.commit();
+        logLivraisonAudit("MODIF_LIVRAISON", `Colis ${d.ref} : Description modifiée de "${oldDesc}" à "${cleanDesc}"`, id);
+    } catch (error) {
+        console.error("Erreur lors de la mise à jour de la description :", error);
+        showToast("Erreur de mise à jour", "error");
+        // Rollback visuel en cas d'erreur
+        d.description = oldDesc;
+        filterDeliveries();
+    }
+}
+
+// Mise à jour de la date d'arrivée en direct
+window.editArrivalDate = async function(id) {
+    const d = deliveries.find(item => item.id === id);
+    if (!d) return;
+
+    const currentVal = d.dateAjout ? d.dateAjout.split('T')[0] : new Date().toISOString().split('T')[0];
+    
+    const newDate = await AppModal.prompt("Modifier la date d'arrivée (Format AAAA-MM-JJ) :\n\nCela affectera le calcul des frais de magasinage.", currentVal, "Date d'arrivée");
+    
+    if (!newDate) return;
+    
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(newDate)) {
+        return AppModal.error("Format de date invalide. Utilisez AAAA-MM-JJ (ex: 2026-03-15).");
+    }
+
+    const isoDate = newDate + 'T12:00:00.000Z'; // Forcer l'heure à midi pour éviter les décalages de fuseau horaire
+
+    try {
+        const batch = writeBatch(db);
+        
+        // 1. Mise à jour Logistique
+        batch.update(doc(db, CONSTANTS.COLLECTION, id), { dateAjout: isoDate });
+
+        // 2. Mise à jour de la Caisse (Transaction)
+        if (d.ref) {
+            const qTrans = await getDocs(query(collection(db, 'transactions'), where('reference', '==', d.ref), limit(1)));
+            if (!qTrans.empty) batch.update(qTrans.docs[0].ref, { date: newDate });
+        }
+
+        await batch.commit();
+        logLivraisonAudit("MODIF_DATE_ARRIVEE", `Colis ${d.ref} : Date d'arrivée modifiée de ${currentVal} à ${newDate}`, id);
+        showToast("Date d'arrivée mise à jour !", "success");
+        
+    } catch (error) {
+        console.error("Erreur lors de la modification de la date:", error);
+        AppModal.error("Erreur de mise à jour : " + error.message);
+    }
+};
+
 // Mise à jour du statut "Client Notifié" (Onglet À Venir)
 function toggleClientNotified(id, isChecked) {
     updateDoc(doc(db, CONSTANTS.COLLECTION, id), { clientNotified: isChecked });
@@ -3732,12 +3822,36 @@ async function markAsDelivered(id) {
     const d = deliveries.find(item => item.id === id);
     if (!d) return;
 
-    // --- NOUVEAU : Verrou Intelligent (Fret uniquement) ---
-    const totalDu = parseFloat(String(d.montant || '0').replace(/[^\d]/g, '')) || 0;
+    // --- NOUVEAU : Verrou Intelligent (Fret + Magasinage) ---
+    let baseReste = parseFloat(String(d.montant || '0').replace(/[^\d]/g, '')) || 0;
+    let computedFee = 0;
+
+    // Vérification Caisse pour ne pas double-facturer (Si la pénalité a déjà été ajoutée à la caisse)
+    let isFeeAlreadyApplied = false;
+    let transDesc = '';
+    if (d.ref) {
+        try {
+            const qTrans = await getDocs(query(collection(db, 'transactions'), where('reference', '==', d.ref), limit(1)));
+            if (!qTrans.empty) {
+                if (qTrans.docs[0].data().adjustmentType === 'augmentation' && qTrans.docs[0].data().adjustmentVal > 0) {
+                    isFeeAlreadyApplied = true; // Déjà inclus dans baseReste
+                }
+                transDesc = qTrans.docs[0].data().description || '';
+            }
+        } catch(e) { console.error(e); }
+    }
+
+    if (!isFeeAlreadyApplied && d.containerStatus === 'EN_COURS' && d.status !== 'LIVRE' && d.status !== 'ABANDONNE' && d.dateAjout) {
+        const _calcMag = calculateMagasinageFee(d.dateAjout, d, { description: transDesc });
+        computedFee = _calcMag.fee;
+    }
+
+    const totalDu = baseReste + computedFee;
     let preuvePaiement = null;
 
     if (totalDu > 0) {
-        const promptMsg = `⚠️ Ce colis présente un solde impayé de ${totalDu} CFA.\n\nSaisissez le NOM de la personne à qui l'argent a été versé, ou tapez 'PARIS' si le règlement a été fait en France.\n\nPour annuler la remise, laissez vide.`;
+        let msgFee = computedFee > 0 ? `\n(Incluant ${computedFee} CFA de pénalité magasinage)` : '';
+        const promptMsg = `⚠️ Ce colis présente un solde impayé de ${totalDu} CFA.${msgFee}\n\nSaisissez le NOM de la personne à qui l'argent a été versé, ou tapez 'PARIS' si le règlement a été fait en France.\n\nPour annuler la remise, laissez vide.`;
         preuvePaiement = await AppModal.prompt(promptMsg, "", "Justification de Remise");
         
         if (!preuvePaiement || preuvePaiement.trim() === '') {
@@ -4151,10 +4265,7 @@ function generateAbandonmentPDF(data, typeAbandon) {
             const diffTime = new Date() - new Date(data.dateAjout);
             diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
             const qte = parseInt(data.quantite) || 1;
-            if (diffDays > 7) {
-                if (diffDays <= 14) fee = 10000 * qte;
-                else fee = (10000 + (diffDays - 14) * 1000) * qte;
-            }
+            fee = calculateMagasinageFee(data.dateAjout, data, null).fee;
         }
     }
     const totalVal = resteVal + fee;
@@ -4185,7 +4296,9 @@ function generateAbandonmentPDF(data, typeAbandon) {
     doc.setFont("helvetica", "italic");
     doc.setFontSize(8);
     doc.setTextColor(148, 163, 184);
-    doc.text("(Conditions : Franchise 7j, puis 10 000 CFA/semaine, puis 1 000 CFA/j/colis)", 100, y);
+    const _calcForText = calculateMagasinageFee(data.dateAjout, data, null);
+    const tarifJourText = _calcForText.isPalette ? '3 000' : '1 000';
+    doc.text(`(Conditions : Franchise 7j, puis 10 000 CFA/semaine, puis ${tarifJourText} CFA/j/colis)`, 100, y);
 
     y += 8;
     
@@ -4345,7 +4458,8 @@ document.getElementById('deliveryForm').addEventListener('submit', async functio
             const o = String(oldV || '').trim();
             const n = String(newV || '').trim();
             if (!n) return o;
-            if (!o) return n;
+            if (!o || o === 'Créé automatiquement depuis la Caisse') return n;
+            if (n === 'Créé automatiquement depuis la Caisse') return o;
             return n.length >= o.length ? n : o;
         };
 
@@ -4373,12 +4487,14 @@ document.getElementById('deliveryForm').addEventListener('submit', async functio
         });
 
     } else {
-        addDoc(collection(db, CONSTANTS.COLLECTION), newItem).then(() => {
+        const newLivRef = doc(collection(db, CONSTANTS.COLLECTION));
+        setDoc(newLivRef, newItem).then(() => {
             // --- SYNC TRANSACTION (Si En Cours) ---
             // Si on ajoute manuellement un colis "En Cours", on crée la transaction financière correspondante
             if (newItem.containerStatus === 'EN_COURS') {
                 const price = parseFloat((newItem.montant || '0').replace(/[^\d]/g, '')) || 0;
-                addDoc(collection(db, 'transactions'), {
+                const newTransRef = doc(collection(db, 'transactions'));
+                setDoc(newTransRef, {
                     date: newItem.dateAjout.split('T')[0],
                     reference: newItem.ref,
                     nom: newItem.destinataire || newItem.expediteur || 'Client',
@@ -4506,7 +4622,7 @@ Object.assign(window, {
     showAddModal, archiveCompletedDeliveries, openArchivesModal, closeArchivesModal,
     searchArchives, restoreFromArchive, filterDeliveries, sortTable, updateDeliveryLocation,
     updateDeliveryRecipient, updateDeliveryPhone, updateDeliveryAmount, updateDeliveryQuantity,
-    updateDeliveryInfo, toggleClientNotified, markAsDelivered, markAsPending, deleteDelivery,
+    updateDeliveryInfo, updateDeliveryDescription, toggleClientNotified, markAsDelivered, markAsPending, deleteDelivery,
     openAbandonModal, closeAbandonModal, confirmAbandonment, generateAbandonmentPDFFromId,
     closeAddModal, updateContainerTitle, updateAvailableContainersList, toggleCommuneDropdown,
     toggleLocationDropdown, toggleStatusDropdown, togglePaymentDropdown, filterLocationOptions, toggleAllLocations,
@@ -4518,8 +4634,8 @@ Object.assign(window, {
     sortProgramDetails, openBingMapsRoute, exportRoadmapPDF, exportRoadmapWhatsApp, printDeliverySlip, 
         removeFromProgram, closeProgramDetailsModal, renderTable, debouncedFilterDeliveries, openEmbarquerModal, notifierMasseAVenir, saveContainerETA,
         showScanHistory,
-    toggleActionMenu, closeActionMenu,
-    exportArchivesToExcel
+        toggleActionMenu, closeActionMenu, exportArchivesToExcel,
+        editArrivalDate
 });
 
 // --- NOUVEAU : GESTION DES PAIEMENTS DEPUIS LA LOGISTIQUE ---
@@ -4557,17 +4673,36 @@ window.openPaymentModal = async function(deliveryId) {
     currentPaymentTransId = q.docs[0].id;
     currentPaymentTransData = q.docs[0].data();
 
-    const reste = Math.abs(currentPaymentTransData.reste || 0); // Convertir -15000 en 15000
+    let reste = Math.abs(currentPaymentTransData.reste || 0); // Convertir -15000 en 15000
+    let magasinageFee = 0;
     
-    if (reste === 0) {
+    // Calcul dynamique du magasinage si pas encore payé/annulé
+    if (currentPaymentTransData.adjustmentType === 'augmentation' && currentPaymentTransData.adjustmentVal > 0) {
+        // Déjà appliqué dans la caisse, donc déjà inclus dans `reste`
+    } else if (!currentPaymentTransData.storageFeeWaived && d.dateAjout && d.status !== 'LIVRE' && d.status !== 'ABANDONNE') {
+        magasinageFee = calculateMagasinageFee(d.dateAjout, d, currentPaymentTransData).fee;
+    }
+
+    const totalAPayer = reste + magasinageFee;
+
+    if (totalAPayer === 0) {
         AppModal.alert("Ce colis est déjà intégralement soldé dans la Caisse !", "Paiement Terminé");
         return;
     }
 
     document.getElementById('payRefDisplay').textContent = d.ref;
-    document.getElementById('payResteDisplay').value = formatCFA(reste);
+    document.getElementById('payResteDisplay').value = formatCFA(totalAPayer);
     document.getElementById('payDate').value = new Date().toISOString().split('T')[0];
-    document.getElementById('payAmountAbidjan').value = reste; // Pré-remplir avec le reste
+    document.getElementById('payAmountAbidjan').value = totalAPayer; // Pré-remplir avec le reste + magasinage
+    
+    if (magasinageFee > 0 && currentPaymentTransData.adjustmentType !== 'augmentation') {
+        document.getElementById('payAdjType').value = 'augmentation';
+        document.getElementById('payAdjVal').value = magasinageFee;
+    } else {
+        document.getElementById('payAdjType').value = currentPaymentTransData.adjustmentType || '';
+        document.getElementById('payAdjVal').value = currentPaymentTransData.adjustmentVal || '';
+    }
+
     document.getElementById('payAmountParis').value = '';
     document.getElementById('payAdjType').value = currentPaymentTransData.adjustmentType || '';
     document.getElementById('payAdjVal').value = currentPaymentTransData.adjustmentVal || '';
@@ -4902,7 +5037,8 @@ async function removeDuplicatesFromDatabase() {
             const o = String(oldV || '').trim();
             const n = String(newV || '').trim();
             if (!n) return o;
-            if (!o) return n;
+            if (!o || o === 'Créé automatiquement depuis la Caisse') return n;
+            if (n === 'Créé automatiquement depuis la Caisse') return o;
             return n.length >= o.length ? n : o;
         };
 

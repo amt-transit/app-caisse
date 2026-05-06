@@ -83,8 +83,13 @@ document.addEventListener('DOMContentLoaded', () => {
         calculateStorageFee(dateString, quantityOrItem = 1, compareDate = new Date()) {
             if (!dateString) return { days: 0, fee: 0 };
             let qte = 1;
+            let tarifJour = 1000;
             if (typeof quantityOrItem === 'object' && quantityOrItem !== null) {
                 qte = quantityOrItem.quantiteRestante !== undefined ? parseInt(quantityOrItem.quantiteRestante) : (parseInt(quantityOrItem.quantite) || 1);
+                const desc = (quantityOrItem.description || '').toLowerCase();
+                if (desc.includes('palette')) {
+                    tarifJour = 3000;
+                }
             } else {
                 qte = parseInt(quantityOrItem) || 1;
             }
@@ -96,7 +101,7 @@ document.addEventListener('DOMContentLoaded', () => {
             else if (diffDays <= 14) return { days: diffDays, fee: 10000 * qte };
             else {
                 const extraDays = diffDays - 14;
-                const unitFee = 10000 + (extraDays * 1000);
+                const unitFee = 10000 + (extraDays * tarifJour);
                 return { days: diffDays, fee: unitFee * qte };
             }
         }

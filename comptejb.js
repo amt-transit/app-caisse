@@ -591,7 +591,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 const ecart = bilan.billetTotal - bilan.totEspeces;
 
                 // 5. Envoyer le tout sur Firebase (Collection 'jb_periodes')
-                await addDoc(collection(db, "jb_periodes"), {
+                const newPeriodeRef = doc(collection(db, "jb_periodes"));
+                await setDoc(newPeriodeRef, {
                     dateCreation: serverTimestamp(),
                     datePeriode: datePeriode,
                     entrees: entrees,

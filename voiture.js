@@ -1,5 +1,5 @@
 import { db } from './firebase-config.js';
-import { collection, doc, addDoc, updateDoc, query, where, orderBy, onSnapshot } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
+import { collection, doc, addDoc, setDoc, updateDoc, query, where, orderBy, onSnapshot } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 
 document.addEventListener('DOMContentLoaded', () => {
 
@@ -151,7 +151,8 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             try {
-                await addDoc(collection(db, "fleet_vehicles"), {
+                const newVehRef = doc(collection(db, "fleet_vehicles"));
+                await setDoc(newVehRef, {
                     name: name,
                     plate: plate,
                     createdAt: new Date().toISOString(),
@@ -233,7 +234,8 @@ document.addEventListener('DOMContentLoaded', () => {
             };
 
             try {
-                await addDoc(collection(db, "fleet_transactions"), data);
+                const newTransRef = doc(collection(db, "fleet_transactions"));
+                await setDoc(newTransRef, data);
                 transAmount.value = '';
                 transDesc.value = '';
                 AppModal.success("Opération enregistrée !");

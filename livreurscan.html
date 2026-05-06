@@ -917,7 +917,7 @@ html, body {
 <script type="module" src="auth-guard.js"></script>
 <script type="module">
 import { db } from './firebase-config.js';
-import { collection, doc, addDoc, updateDoc, getDocs, query, where, limit, arrayUnion } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
+import { collection, doc, addDoc, setDoc, updateDoc, getDocs, query, where, limit, arrayUnion } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 
 // ── NUMÉRO DU GROUPE WHATSAPP ──
 // ⚠️ Remplace par le numéro du téléphone qui héberge le groupe
@@ -969,34 +969,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
 function handleManualInput(e) {
     const inputEl = e.target;
-    const originalValue = inputEl.value;
-    inputEl.value = originalValue.toUpperCase(); // Force la saisie en majuscules
+    // Force la saisie en majuscules
+    inputEl.value = inputEl.value.toUpperCase(); 
 
-    const input = inputEl.value;
-    const ac = document.getElementById('custom-autocomplete');
-    if (!ac) return;
-
-    if (input.length < 2) {
-        ac.style.display = 'none';
-        return;
+    // Si le livreur sélectionne une suggestion dans la liste,
+    // le code correspondra exactement à l'une des références de la tournée.
+    if (allRouteRefs.includes(inputEl.value)) {
+        // On lance la recherche automatiquement
+        searchDelivery(inputEl.value);
+        // On masque le clavier du téléphone
+        inputEl.blur(); 
     }
-
-    // Filtre les références qui CONTIENNENT la saisie
-    const suggestions = allRouteRefs.filter(ref => ref.includes(input));
-
-    if (suggestions.length === 0) {
-        ac.style.display = 'none';
-        return;
-    }
-
-    ac.innerHTML = suggestions.map(ref => `
-        <div style="padding: 12px 14px; border-bottom: 1px solid var(--border); font-size: 0.9rem; font-weight: 600; cursor: pointer; color: var(--text);"
-             onmouseover="this.style.background='var(--card)'" onmouseout="this.style.background='transparent'"
-             onclick="document.getElementById('manual-ref').value='${ref}'; document.getElementById('custom-autocomplete').style.display='none'; searchDelivery('${ref}');">
-            ${ref.replace(new RegExp(input, 'gi'), match => `<span style="color: var(--green);">${match}</span>`)}
-        </div>
-    `).join('');
-    ac.style.display = 'block';
 }
 
 // ── SCANNER HYBRIDE (Native / Html5Qrcode) ──
@@ -1226,8 +1209,14 @@ async function loadMyRoute() {
 }
 
 function updateColisSuggestions(route) {
-    // Stocke simplement les références dans un tableau global pour le filtrage dynamique
+    // Stocke les références en mémoire
     allRouteRefs = route.map(d => d.ref).filter(Boolean);
+    
+    // Injecte les options dans le datalist HTML
+    const datalist = document.getElementById('colis-suggestions');
+    if (datalist) {
+        datalist.innerHTML = allRouteRefs.map(ref => `<option value="${ref}">`).join('');
+    }
 }
 
 function renderRoute(route) {
@@ -1912,7 +1901,8 @@ async function syncOfflineActions() {
                     successCount++;
                 } else {
                     // Colis toujours introuvable -> On le crée pour que le bureau s'en occupe
-                    await addDoc(collection(db, "livraisons"), {
+                    const newLivRef = doc(collection(db, "livraisons"));
+                    await setDoc(newLivRef, {
                         ref: act.ref,
                         destinataire: 'Client Hors-ligne',
                         containerStatus: 'EN_COURS',

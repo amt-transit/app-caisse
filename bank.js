@@ -1,5 +1,5 @@
 import { db } from './firebase-config.js';
-import { collection, doc, addDoc, updateDoc, getDocs, query, where, orderBy, onSnapshot, writeBatch } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
+import { collection, doc, setDoc, updateDoc, getDocs, query, where, orderBy, onSnapshot, writeBatch } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 
 document.addEventListener('DOMContentLoaded', () => {
 
@@ -83,8 +83,13 @@ document.addEventListener('DOMContentLoaded', () => {
         calculateStorageFee(dateString, quantityOrItem = 1, compareDate = new Date()) {
             if (!dateString) return { days: 0, fee: 0 };
             let qte = 1;
+            let tarifJour = 1000;
             if (typeof quantityOrItem === 'object' && quantityOrItem !== null) {
                 qte = quantityOrItem.quantiteRestante !== undefined ? parseInt(quantityOrItem.quantiteRestante) : (parseInt(quantityOrItem.quantite) || 1);
+                const desc = (quantityOrItem.description || '').toLowerCase();
+                if (desc.includes('palette')) {
+                    tarifJour = 3000;
+                }
             } else {
                 qte = parseInt(quantityOrItem) || 1;
             }
@@ -93,10 +98,10 @@ document.addEventListener('DOMContentLoaded', () => {
             if (diffTime < 0) return { days: 0, fee: 0 };
             const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
             if (diffDays <= 7) return { days: diffDays, fee: 0 };
-            else if (diffDays <= 14) return { days: diffDays, fee: 10000 };
+            else if (diffDays <= 14) return { days: diffDays, fee: 10000 * qte };
             else {
                 const extraDays = diffDays - 14;
-                const unitFee = 10000 + (extraDays * 1000);
+                const unitFee = 10000 + (extraDays * tarifJour);
                 return { days: diffDays, fee: unitFee * qte };
             }
         }
@@ -216,10 +221,12 @@ document.addEventListener('DOMContentLoaded', () => {
             addBankMovementBtn.textContent = "Enregistrer le Mouvement";
         }
 
-        addDoc(collection(db, "bank_movements"), data).then((docRef) => {
+        const newDocRef = doc(collection(db, "bank_movements"));
+        setDoc(newDocRef, data).then(() => {
             // AUTOMATISATION : Si c'est un Paiement lié à un Conteneur, on crée la dépense automatiquement
             if (type === 'Paiement' && conteneur) {
-                addDoc(collection(db, "expenses"), {
+                const newExpRef = doc(collection(db, "expenses"));
+                setDoc(newExpRef, {
                     date: data.date,
                     description: `${data.description} (Virement Bancaire)`,
                     montant: data.montant,
@@ -228,7 +235,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     mode: 'Virement', // Important : Mode Virement pour ne pas impacter la caisse physique
                     action: 'Depense',
                     isDeleted: false,
-                    linkedBankMovementId: docRef.id // Lien pour suppression en cascade
+                    linkedBankMovementId: newDocRef.id // Lien pour suppression en cascade
                 });
             }
 

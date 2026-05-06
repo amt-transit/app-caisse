@@ -1,5 +1,5 @@
 import { db } from './firebase-config.js';
-import { collection, doc, addDoc, updateDoc, query, where, orderBy, onSnapshot, writeBatch, limit } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
+import { collection, doc, addDoc, setDoc, updateDoc, query, where, orderBy, onSnapshot, writeBatch, limit } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 
 document.addEventListener('DOMContentLoaded', () => {
 
@@ -138,7 +138,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (currentUserName === USER_NO_CONFIRM) {
             // Enregistrement DIRECT
-            addDoc(collection(db, "other_income"), data).then(() => {
+            const newIncRef = doc(collection(db, "other_income"));
+            setDoc(newIncRef, data).then(() => {
                 AppModal.success("Entrée enregistrée (Mode Direct).");
                 resetIncomeForm();
             }).catch(err => AppModal.error("Erreur : " + err.message));
