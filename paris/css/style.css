@@ -4,10 +4,16 @@
     box-sizing: border-box;
 }
 
+html {
+    height: 100%;
+    overflow-y: scroll; /* Force l'apparition de la barre de défilement vertical */
+}
+
 body {
     font-family: 'Inter', sans-serif;
     background: #f1f5f9;
     overflow-x: hidden;
+    min-height: 100vh;
 }
 
 /* ============================================
@@ -107,6 +113,7 @@ body {
     margin-left: 280px;
     min-height: 100vh;
     transition: margin-left 0.3s;
+    width: calc(100% - 280px); /* Évite que le contenu pousse la barre de scroll hors écran */
 }
 
 /* Top Bar */
@@ -212,22 +219,15 @@ body {
 .progress-bar { width: 100%; background: #e2e8f0; border-radius: 10px; height: 8px; overflow: hidden; }
 .progress-bar > div { transition: width 0.3s; }
 
-/* Responsive */
-@media (max-width: 1024px) {
-    .sidebar { transform: translateX(-100%); }
-    .sidebar.open { transform: translateX(0); }
-    .main-content { margin-left: 0; }
-    .mobile-toggle { display: block; }
-    .stats-grid { grid-template-columns: repeat(2, 1fr); }
-}
-@media (max-width: 768px) {
-    .content-container { padding: 15px; }
-    .stats-grid { grid-template-columns: 1fr; }
-    .form-grid { grid-template-columns: 1fr; }
-    .tabs-header { flex-wrap: wrap; }
-}
-
+/* ============================================
+    ANIMATIONS
+============================================ */
 @keyframes slideIn {
     from { transform: translateX(100%); opacity: 0; }
-    to { transform: translateX(0); opacity: 1; }
+    to   { transform: translateX(0);    opacity: 1; }
+}
+
+@keyframes slideUp {
+    from { transform: translateY(20px); opacity: 0; }
+    to   { transform: translateY(0);    opacity: 1; }
 }

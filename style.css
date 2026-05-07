@@ -593,6 +593,33 @@ body { min-height: 100vh; overflow-y: auto; overflow-x: hidden; }
     transform: translateY(-1px);
 }
 
+/* --- MENU UTILISATEUR (HEADER) --- */
+.user-info { display: flex; align-items: center; gap: 15px; }
+.user-avatar {
+    width: 40px; height: 40px; background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+    border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; cursor: pointer;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}
+.user-dropdown-container { position: relative; }
+.user-dropdown-menu {
+    position: absolute; right: 0; top: 110%; background: white; border-radius: 12px;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.2); min-width: 180px; padding: 8px 0;
+    display: flex; flex-direction: column; opacity: 0; visibility: hidden;
+    transform: translateY(10px); transition: all 0.3s ease; z-index: 1000;
+}
+.user-dropdown-container:hover .user-dropdown-menu {
+    opacity: 1; visibility: visible; transform: translateY(0);
+}
+.user-dropdown-menu a {
+    padding: 10px 20px; color: #334155; text-decoration: none; font-size: 14px; font-weight: 500;
+    display: flex; align-items: center; gap: 10px; transition: background 0.2s; border: none; box-shadow: none;
+}
+.user-dropdown-menu a:hover { background: #f8fafc; color: #3b82f6; transform: none; }
+
+/* Priorité sur l'ancien style #logoutBtn blanc */
+.user-dropdown-menu a.logout, .user-dropdown-menu a#logoutBtn { color: #ef4444; background: transparent; border: none; padding: 10px 20px; margin: 0; font-size: 14px; font-weight: 500; justify-content: flex-start; }
+.user-dropdown-menu a.logout:hover, .user-dropdown-menu a#logoutBtn:hover { background: #fef2f2; color: #dc2626; transform: none; }
+
 /* --- CHOICES.JS (SÉLECTEUR AGENTS) --- */
 /* Adaptation Light Mode */
 .choices { margin-bottom: 0; }
@@ -773,6 +800,101 @@ body.login-page {
     #addEntryBtn { padding: 18px !important; font-size: 18px !important; width: 100%; }
     
     .summary-card { display: block; background: #fff; border: 2px dashed #cbd5e1; padding: 25px 20px; text-align: center; border-radius: 12px; margin-bottom: 25px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
+}
+
+/* ── MOBILE FIRST PWA (APP PARIS) ── */
+@media (max-width: 768px) {
+    /* Main content : libérer l'espace en bas pour la Bottom Nav */
+    .main-content { padding-bottom: 80px !important; }
+
+    /* Topbar mobile : plus compacte */
+    .top-bar { padding: 10px 14px; min-height: 60px; }
+    .page-title { font-size: 18px; }
+    
+    /* Padding réduit pour maximiser l'espace écran */
+    .content-container { padding: 15px 10px; }
+
+    /* ── BOTTOM NAVIGATION ── */
+    .bottom-nav {
+        display: flex;
+        position: fixed;
+        bottom: 0; left: 0; right: 0;
+        height: 65px;
+        background: rgba(255, 255, 255, 0.95);
+        backdrop-filter: blur(10px);
+        border-top: 1px solid #e2e8f0;
+        z-index: 990; /* Sous les modales (1000) */
+        padding-bottom: env(safe-area-inset-bottom);
+        box-shadow: 0 -4px 15px rgba(0,0,0,0.03);
+    }
+
+    .bottom-nav-item {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 4px;
+        color: #94a3b8;
+        font-size: 11px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.2s;
+        position: relative;
+        border: none;
+        background: none;
+        font-family: inherit;
+    }
+
+    .bottom-nav-item i { font-size: 20px; transition: transform 0.2s; }
+    .bottom-nav-item.active { color: #3b82f6; }
+    .bottom-nav-item.active i { transform: translateY(-2px); }
+
+    .bottom-nav-item .nav-badge {
+        position: absolute;
+        top: 6px; right: calc(50% - 20px);
+        background: #ef4444; color: white;
+        font-size: 10px; font-weight: 700;
+        border-radius: 10px;
+        padding: 2px 5px;
+        min-width: 18px; text-align: center;
+        box-shadow: 0 2px 4px rgba(239,68,68,0.3);
+    }
+
+    /* ── FAB (Floating Action Button) ── */
+    .fab-btn {
+        position: fixed;
+        bottom: 85px; right: 16px;
+        width: 56px; height: 56px;
+        background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+        border-radius: 50%;
+        border: none;
+        color: white;
+        font-size: 24px;
+        cursor: pointer;
+        z-index: 980;
+        box-shadow: 0 6px 16px rgba(59,130,246,0.4);
+        display: flex; align-items: center; justify-content: center;
+        transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    .fab-btn:active { transform: scale(0.9); }
+
+    /* ── MODALES : Bottom Sheet Style ── */
+    .modal-content {
+        margin: auto auto 0 auto !important; /* Force en bas */
+        border-radius: 20px 20px 0 0 !important;
+        max-width: 100% !important;
+        width: 100% !important;
+        padding: 25px 20px 40px 20px !important;
+        animation: slideUpModal 0.3s cubic-bezier(0.16, 1, 0.3, 1) !important;
+    }
+    @keyframes slideUpModal { from { transform: translateY(100%); } to { transform: translateY(0); } }
+}
+
+/* Masquer bottom-nav et FAB sur desktop */
+@media (min-width: 769px) {
+    .bottom-nav { display: none; }
+    .fab-btn { display: none; }
 }
 
 

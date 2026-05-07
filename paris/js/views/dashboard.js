@@ -10,7 +10,7 @@ export const DashboardView = {
             </style>
             
             <h3 style="margin: 0 0 20px 0; color: #0f172a; font-size: 20px; font-weight: 800;">🚀 Accès rapide</h3>
-            <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 15px; margin-bottom: 30px;">
+            <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(min(130px, 45%), 1fr)); gap: 12px; margin-bottom: 30px;">
                 <button onclick="app.renderPage('invoice-new')" class="quick-action-btn" style="display:flex; flex-direction:column; align-items:center; padding:15px; background:white; border:1px solid #e2e8f0; border-radius:12px; cursor:pointer; transition:all 0.2s; box-shadow:0 2px 4px rgba(0,0,0,0.02);">
                     <i class="fas fa-file-invoice" style="font-size:24px; color:#3b82f6; margin-bottom:10px;"></i>
                     <span style="font-weight:600; color:#334155; font-size:12px; text-align:center;">Nouvelle facture</span>

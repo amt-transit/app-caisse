@@ -15,14 +15,26 @@
     <header class="app-header" id="desktop-header">
         <img src="LOGOAMT.png" alt="Logo" class="app-logo">
         <h1>Saisie de Caisse</h1>
-        <button id="logoutBtn" style="position: absolute; right: 20px; padding: 8px 15px; cursor: pointer;">Déconnexion</button>
+        <div class="user-info" style="position: absolute; right: 20px; display: flex; align-items: center; gap: 10px;">
+            <span id="userName" style="font-weight: bold; font-size: 14px;">Utilisateur</span>
+            <div class="user-dropdown-container">
+                <div class="user-avatar" id="userAvatar" title="Menu Utilisateur">
+                    <i class="fas fa-user"></i>
+                </div>
+                <div class="user-dropdown-menu" id="userDropdownMenu">
+                    <a href="#" id="menuProfile"><i class="fas fa-user-circle"></i> Profil</a>
+                    <a href="#" id="menuAgencySwitch" style="display: none;"><i class="fas fa-globe"></i> Vue Paris</a>
+                    <hr style="margin: 5px 0; border: none; border-top: 1px solid #e2e8f0;">
+                    <a href="#" id="logoutBtn" class="logout-btn logout"><i class="fas fa-sign-out-alt"></i> Déconnexion</a>
+                </div>
+            </div>
+        </div>
     </header>
 
     <nav class="navigation">
         <ul class="nav-menu">
             <li><a href="dashboard.html" id="nav-dashboard">📊 Tableau de Bord</a></li>
-            <li><a href="paris/index.html" id="nav-paris" style="display:none; color:#2563eb; font-weight:bold;">🇫🇷 Interface Paris</a></li>
-            
+                        
             <li class="has-dropdown">
                 <a href="#">💵 Entrées Caisse</a>
                 <ul class="dropdown">

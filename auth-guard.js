@@ -2,6 +2,23 @@ import { auth, db } from './firebase-config.js';
 import { onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-auth.js";
 import { doc, getDoc, collection, query, where, orderBy, onSnapshot } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 
+// --- FONCTION GLOBALE DE DÉCONNEXION ---
+window.appHandleLogout = async () => {
+    const confirmLogout = window.AppModal ? 
+        await window.AppModal.confirm("Voulez-vous vous déconnecter ?", "Déconnexion", true) : 
+        confirm("Voulez-vous vous déconnecter ?");
+        
+    if (confirmLogout) {
+        try {
+            await signOut(auth);
+            sessionStorage.clear();
+            window.location.href = window.location.pathname.includes('/paris/') ? '../login.html' : 'login.html';
+        } catch (error) {
+            console.error("Erreur lors de la déconnexion:", error);
+        }
+    }
+};
+
 onAuthStateChanged(auth, async (user) => {
     
     if (!user) {
@@ -50,9 +67,37 @@ onAuthStateChanged(auth, async (user) => {
         sessionStorage.setItem('userName', userName || 'Utilisateur');
         sessionStorage.setItem('userAgency', userData.agency || 'abidjan');
 
-        // Affichage dynamique du nom dans l'en-tête (ex: Vue Paris)
-        const userNameEl = document.getElementById('userName');
-        if (userNameEl) userNameEl.textContent = userName || 'Utilisateur';
+        // --- INJECTION DYNAMIQUE DU MENU PROFIL (POUR TOUTES LES PAGES ABIDJAN) ---
+        const header = document.querySelector('.app-header');
+        if (header) {
+            // 1. Supprimer l'ancien bouton déconnexion isolé s'il existe (pour le Tableau de bord, Historique, etc.)
+            const oldLogoutBtn = Array.from(header.children).find(el => el.id === 'logoutBtn' && el.tagName === 'BUTTON');
+            if (oldLogoutBtn) oldLogoutBtn.remove();
+
+            // 2. Injecter le nouveau bloc utilisateur s'il n'existe pas encore
+            if (!header.querySelector('.user-info')) {
+                const userInfoHtml = `
+                    <div class="user-info" style="position: absolute; right: 20px; display: flex; align-items: center; gap: 10px;">
+                        <span id="userName" style="font-weight: bold; font-size: 14px;">${userName || 'Utilisateur'}</span>
+                        <div class="user-dropdown-container">
+                            <div class="user-avatar" id="userAvatar" title="Menu Utilisateur">
+                                <i class="fas fa-user"></i>
+                            </div>
+                            <div class="user-dropdown-menu" id="userDropdownMenu">
+                                <a href="#" id="menuProfile" onclick="alert('Le module Profil sera bientôt adapté pour Abidjan.'); document.getElementById('userDropdownMenu').classList.remove('active'); return false;"><i class="fas fa-user-circle"></i> Profil</a>
+                                <a href="#" id="menuAgencySwitch" style="display: none;"><i class="fas fa-globe"></i> Vue Paris</a>
+                                <hr style="margin: 5px 0; border: none; border-top: 1px solid #e2e8f0;">
+                                <a href="#" id="logoutBtn" class="logout-btn logout" onclick="window.appHandleLogout(); return false;"><i class="fas fa-sign-out-alt"></i> Déconnexion</a>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                header.insertAdjacentHTML('beforeend', userInfoHtml);
+            } else {
+                const userNameEl = document.getElementById('userName');
+                if (userNameEl) userNameEl.textContent = userName || 'Utilisateur';
+            }
+        }
 
         // Détermination de l'agence actuellement "Active"
         let currentActiveAgency = sessionStorage.getItem('currentActiveAgency');
@@ -66,31 +111,6 @@ onAuthStateChanged(auth, async (user) => {
 
         // --- INJECTION DU SÉLECTEUR D'AGENCE (Pour les comptes Globaux) ---
         if (userData.agency === 'all' || userRole === 'super_admin') {
-            const header = document.querySelector('.app-header');
-            if (header && !document.getElementById('agencySwitcher')) {
-                const switcher = document.createElement('select');
-                switcher.id = 'agencySwitcher';
-                switcher.innerHTML = `
-                    <option value="abidjan" ${currentActiveAgency === 'abidjan' ? 'selected' : ''}>🇨🇮 Vue Abidjan</option>
-                    <option value="paris" ${currentActiveAgency === 'paris' ? 'selected' : ''}>🇫🇷 Vue Paris</option>
-                `;
-                switcher.style.cssText = "position: absolute; right: 140px; padding: 6px 10px; border-radius: 8px; font-weight: bold; border: 1px solid rgba(255,255,255,0.3); background: rgba(255,255,255,0.1); color: white; cursor: pointer; font-size: 13px;";
-                switcher.addEventListener('change', (e) => {
-                    const selectedAgency = e.target.value;
-                    sessionStorage.setItem('currentActiveAgency', selectedAgency);
-                    
-                    const isCurrentlyInParis = window.location.pathname.includes('/paris/');
-                    
-                    if (selectedAgency === 'paris' && !isCurrentlyInParis) {
-                        window.location.href = 'paris/index.html';
-                    } else if (selectedAgency === 'abidjan' && isCurrentlyInParis) {
-                        window.location.href = '../index.html';
-                    } else {
-                        window.location.reload();
-                    }
-                });
-                header.appendChild(switcher);
-            }
 
             // --- INJECTION DU SÉLECTEUR D'AGENCE (Menu Utilisateur Paris/Abidjan) ---
             const menuAgencySwitch = document.getElementById('menuAgencySwitch');
@@ -289,30 +309,14 @@ onAuthStateChanged(auth, async (user) => {
 
 // --- GESTION GLOBALE DE LA DÉCONNEXION ---
 const setupLogout = () => {
-    const handleLogout = async () => {
-        const confirmLogout = window.AppModal ? 
-            await window.AppModal.confirm("Voulez-vous vous déconnecter ?", "Déconnexion", true) : 
-            confirm("Voulez-vous vous déconnecter ?");
-            
-        if (confirmLogout) {
-            try {
-                await signOut(auth);
-                sessionStorage.clear(); // Sécurité : on vide les données de session
-                window.location.href = window.location.pathname.includes('/paris/') ? '../login.html' : 'login.html';
-            } catch (error) {
-                console.error("Erreur lors de la déconnexion:", error);
-            }
-        }
-    };
-
     // Bouton de bureau classique
     const logoutBtn = document.getElementById('logoutBtn');
-    if (logoutBtn) logoutBtn.addEventListener('click', handleLogout);
+    if (logoutBtn) logoutBtn.addEventListener('click', window.appHandleLogout);
 
     // Boutons avec la classe .logout-btn (sécurité supplémentaire pour d'autres pages comme Salaire)
     const logoutBtns = document.querySelectorAll('.logout-btn');
     logoutBtns.forEach(btn => {
-        if (btn.id !== 'logoutBtn') btn.addEventListener('click', handleLogout);
+        if (btn.id !== 'logoutBtn') btn.addEventListener('click', window.appHandleLogout);
     });
 };
 

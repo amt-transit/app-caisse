@@ -2,6 +2,9 @@ import { appData } from './data.js';
 import { DashboardView } from './views/dashboard.js';
 import { NouvelleFactureView } from './views/nouvellefacture.js';
 import { ClientsListView } from './views/clients-list.js';
+import { ProductsListView } from './views/products-list.js';
+import { ToutesLesFacturesView } from './views/touteslesfactures.js';
+import { NouveauDevisView } from './views/nouveaudevis.js';
 
 // Configuration de l'application Paris
 const app = {
@@ -31,33 +34,61 @@ const app = {
                     this.renderPage(page);
                     document.querySelectorAll('.sidebar-item').forEach(i => i.classList.remove('active'));
                     item.classList.add('active');
-
-                        // Fermer le menu sur mobile après la sélection d'une page
-                        const sidebar = document.getElementById('sidebar');
-                        if (window.innerWidth <= 768 && sidebar && sidebar.classList.contains('open')) {
-                            sidebar.classList.remove('open');
-                        }
+                    // La fermeture sidebar mobile est gérée dans initMobileToggle
                 }
             });
         });
     },
 
     initMobileToggle() {
-        const toggle = document.getElementById('mobileToggle');
+        const toggle  = document.getElementById('mobileToggle');
         const sidebar = document.getElementById('sidebar');
-        if(toggle && sidebar) {
-            toggle.addEventListener('click', (e) => {
-                e.stopPropagation(); // Empêche le clic de se déclencher sur le document
-                sidebar.classList.toggle('open');
-            });
-            
-            // Fermer le menu si l'utilisateur clique en dehors (dans la zone de contenu)
-            document.addEventListener('click', (e) => {
-                if (window.innerWidth <= 768 && sidebar.classList.contains('open') && !sidebar.contains(e.target)) {
-                    sidebar.classList.remove('open');
+        const overlay = document.getElementById('sidebarOverlay');
+
+        // Fonction utilitaire : ouvrir la sidebar
+        const openSidebar = (e) => {
+            if (e) e.stopPropagation();
+            sidebar?.classList.add('open');
+            overlay?.classList.add('show');
+            document.body.style.overflow = 'hidden'; // Empêche le scroll du fond
+        };
+
+        // Fonction utilitaire : fermer la sidebar
+        const closeSidebar = () => {
+            sidebar?.classList.remove('open');
+            overlay?.classList.remove('show');
+            document.body.style.overflow = '';
+        };
+
+        // Bouton hamburger dans la topbar
+        if (toggle) {
+            toggle.addEventListener('click', openSidebar);
+        }
+
+        // Bouton "Menu" dans la bottom nav mobile
+        const bnavMore = document.getElementById('bnav-more');
+        if (bnavMore) {
+            bnavMore.addEventListener('click', openSidebar);
+        }
+
+        // Clic sur l'overlay → fermer
+        if (overlay) {
+            overlay.addEventListener('click', closeSidebar);
+        }
+
+        // Clic sur un item sidebar sur mobile → fermer
+        document.querySelectorAll('.sidebar-item').forEach(item => {
+            item.addEventListener('click', () => {
+                if (window.innerWidth <= 1024) {
+                    closeSidebar();
                 }
             });
-        }
+        });
+
+        // Touche Escape → fermer
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') closeSidebar();
+        });
     },
 
     initGlobalEvents() {
@@ -86,6 +117,13 @@ const app = {
         
         const chatBadge = document.getElementById('chatBadge');
         if (chatBadge) chatBadge.textContent = unreadMessages;
+
+        // Badge Bottom Nav Mobile (RDV)
+        const bnavBadgeRdv = document.getElementById('bnavBadgeRdv');
+        if (bnavBadgeRdv) {
+            bnavBadgeRdv.textContent = pendingAppointments;
+            bnavBadgeRdv.style.display = pendingAppointments > 0 ? 'block' : 'none';
+        }
     },
 
     renderPage(page) {
@@ -153,11 +191,16 @@ const app = {
         
         document.getElementById('pageTitle').textContent = titleMap[page] || page;
         
+        // Mise à jour de l'état actif dans la Bottom Nav Mobile
+        document.querySelectorAll('.bottom-nav-item').forEach(b => b.classList.remove('active'));
+        const activeBnav = document.querySelector(`.bottom-nav-item[data-target="${page}"]`);
+        if (activeBnav) activeBnav.classList.add('active');
+
         const renderers = {
             'dashboard': () => this.renderDashboard(),
             'daily-bilan': () => this.renderDailyBilan(),
             'daily-users': () => this.renderDailyUsers(),
-            'invoices-list': () => this.renderInvoicesList(),
+            'invoices-list': () => ToutesLesFacturesView.render(this),
             'invoice-new': () => NouvelleFactureView.render(this),
             'appointment-new': () => this.renderAppointmentNew(),
             'appointments-list': () => this.renderAppointmentsList(),
@@ -169,7 +212,7 @@ const app = {
             'drivers': () => this.renderDrivers(),
             'departures-calendar': () => this.renderDeparturesCalendar(),
             'quotes-list': () => this.renderQuotesList(),
-            'quote-new': () => this.renderQuoteNew(),
+            'quote-new': () => NouveauDevisView.render(this),
             'quote-requests': () => this.renderQuoteRequests(),
             'loading-container': () => this.renderLoadingContainer(),
             'loading-boats': () => this.renderLoadingBoats(),
@@ -185,7 +228,7 @@ const app = {
             'sms-history': () => this.renderSmsHistory(),
             'notifications': () => this.renderNotifications(),
             'notifications-history': () => this.renderNotificationsHistory(),
-            'products-list': () => this.renderProductsList(),
+            'products-list': () => ProductsListView.render(this),
             'finance-cashier': () => this.renderFinanceCashier(),
             'finance-cheques': () => this.renderFinanceCheques(),
             'finance-expenses': () => this.renderFinanceExpenses(),
@@ -291,39 +334,6 @@ const app = {
                                 <td>${stats.invoices}</td>
                                 <td>${this.formatMoney(stats.amount)}</td>
                                 <td><button class="btn btn-outline btn-small" onclick="app.showToast('Détails de ${user}')">Voir détail</button></td>
-                            </tr>
-                        `).join('')}
-                    </tbody>
-                </table>
-            </div>
-        `;
-        document.getElementById('contentContainer').innerHTML = html;
-    },
-
-    renderInvoicesList() {
-        const html = `
-            <div class="quick-actions">
-                <button class="btn btn-primary" onclick="app.renderPage('invoice-new')"><i class="fas fa-plus"></i> Nouvelle facture</button>
-                <button class="btn btn-outline" onclick="app.exportInvoices()"><i class="fas fa-download"></i> Exporter Excel</button>
-            </div>
-            <div class="form-card">
-                <table class="data-table">
-                    <thead>
-                        <tr><th>N° Facture</th><th>Client</th><th>Date</th><th>Montant</th><th>Statut</th><th>Actions</th></tr>
-                    </thead>
-                    <tbody>
-                        ${this.data.invoices.map(inv => `
-                            <tr>
-                                <td><strong>${inv.number}</strong></td>
-                                <td>${inv.client}</td>
-                                <td>${inv.date}</td>
-                                <td>${this.formatMoney(inv.amount)}</td>
-                                <td><span class="badge ${inv.status === 'payée' ? 'badge-success' : (inv.status === 'envoyée' ? 'badge-info' : 'badge-warning')}">${inv.status}</span></td>
-                                <td>
-                                    <button class="btn btn-outline btn-small" onclick="app.viewInvoice(${inv.id})"><i class="fas fa-eye"></i></button>
-                                    <button class="btn btn-outline btn-small" onclick="app.downloadInvoice(${inv.id})"><i class="fas fa-download"></i></button>
-                                    <button class="btn btn-danger btn-small" onclick="app.deleteInvoice(${inv.id})"><i class="fas fa-trash"></i></button>
-                                </td>
                             </tr>
                         `).join('')}
                     </tbody>
@@ -590,24 +600,6 @@ const app = {
                         `).join('')}
                     </tbody>
                 </table>
-            </div>
-        `;
-        document.getElementById('contentContainer').innerHTML = html;
-    },
-
-    renderQuoteNew() {
-        const html = `
-            <div class="form-card">
-                <h3>Créer un devis</h3>
-                <div class="form-grid">
-                    <div class="form-group"><label>Client</label><input type="text" id="quoteClient"></div>
-                    <div class="form-group"><label>Montant (€)</label><input type="number" id="quoteAmount"></div>
-                    <div class="form-group"><label>Validité</label><input type="date" id="quoteValidUntil"></div>
-                    <div class="form-group full-width"><label>Description</label><textarea rows="3" id="quoteDesc"></textarea></div>
-                </div>
-                <div style="margin-top: 20px;">
-                    <button class="btn btn-primary" onclick="app.createQuote()">Générer devis</button>
-                </div>
             </div>
         `;
         document.getElementById('contentContainer').innerHTML = html;
@@ -892,30 +884,6 @@ const app = {
                     <tbody>
                         <tr><td>2024-12-10</td><td>Nouvelle facture</td><td>Facture FAC-2024-001 émise</td><td>2024-12-10 14:30</td></tr>
                         <tr><td>2024-12-05</td><td>Rappel RDV</td><td>RDV avec Jean Dupont</td><td>2024-12-05 09:15</td></tr>
-                    </tbody>
-                </table>
-            </div>
-        `;
-        document.getElementById('contentContainer').innerHTML = html;
-    },
-
-    renderProductsList() {
-        const html = `
-            <div class="quick-actions">
-                <button class="btn btn-primary" onclick="app.addProduct()"><i class="fas fa-plus"></i> Nouveau produit</button>
-            </div>
-            <div class="form-card">
-                <table class="data-table">
-                    <thead><tr><th>Produit</th><th>Prix unitaire</th><th>Stock</th><th>Actions</th></tr></thead>
-                    <tbody>
-                        ${this.data.products.map(p => `
-                            <tr>
-                                <td><strong>${p.name}</strong></td>
-                                <td>${this.formatMoney(p.price)}</td>
-                                <td>${p.stock} unités</td>
-                                <td><button class="btn btn-outline btn-small" onclick="app.editProduct(${p.id})">Modifier</button></td>
-                            </tr>
-                        `).join('')}
                     </tbody>
                 </table>
             </div>

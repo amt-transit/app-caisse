@@ -1,10 +1,13 @@
 import { db } from '../../../firebase-config.js';
-import { collection, query, where, onSnapshot, doc, writeBatch, getDocs, orderBy, limit } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
+import { collection, query, where, onSnapshot, doc, writeBatch, getDocs, orderBy, limit, updateDoc } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 
 export const ClientsListView = {
-    unsubscribe: null,
+    unsubClients: null,
+    unsubLivraisons: null,
     clients: [],
     filteredClients: [],
+    rawClients: null,
+    rawLivraisons: null,
 
     // Correcteur automatique pour les accents cassés (ex: Ã‰LISE -> ÉLISE)
     fixEncoding(str) {
@@ -111,11 +114,38 @@ export const ClientsListView = {
 
             <!-- VUE DÉTAIL CLIENT (Masquée par défaut) -->
             <div id="clientDetailView" style="display: none; max-width: 1200px; margin: 0 auto; animation: fadeIn 0.3s ease-in-out;"></div>
+
+            <!-- MODAL ÉDITION CLIENT -->
+            <div id="editClientModal" class="modal" style="display:none; position:fixed; z-index:1000; left:0; top:0; width:100%; height:100%; background-color:rgba(0,0,0,0.8); align-items:center; justify-content:center;">
+                <div class="modal-content" style="background:#fff; padding:20px; width:90%; max-width:500px; border-radius:12px;">
+                    <span class="close-modal" onclick="document.getElementById('editClientModal').style.display='none'" style="float:right; cursor:pointer; font-size:24px;">&times;</span>
+                    <h2 style="margin-top:0;">Modifier Client</h2>
+                    <input type="hidden" id="editClientId">
+                    <div style="margin-bottom:15px;">
+                        <label style="display:block; margin-bottom:5px; font-weight:bold;">Nom complet</label>
+                        <input type="text" id="editClientNom" style="width:100%; padding:8px; box-sizing:border-box;">
+                    </div>
+                    <div style="margin-bottom:15px;">
+                        <label style="display:block; margin-bottom:5px; font-weight:bold;">Téléphone</label>
+                        <input type="text" id="editClientTel" style="width:100%; padding:8px; box-sizing:border-box;">
+                    </div>
+                    <div style="margin-bottom:15px;">
+                        <label style="display:block; margin-bottom:5px; font-weight:bold;">Adresse complète</label>
+                        <input type="text" id="editClientAdresse" style="width:100%; padding:8px; box-sizing:border-box;">
+                    </div>
+                    <div style="text-align:right; margin-top:20px;">
+                        <button class="btn" onclick="document.getElementById('editClientModal').style.display='none'" style="background: #6c757d; color:white; margin-right:10px; border:none; padding:8px 15px; border-radius:6px; cursor:pointer;">Annuler</button>
+                        <button class="btn btn-success" onclick="window.app.views.clientsList.saveClientEdit()" style="background: #10b981; color:white; border:none; padding:8px 15px; border-radius:6px; cursor:pointer;">Enregistrer</button>
+                    </div>
+                </div>
+            </div>
         `;
 
-        if (this.unsubscribe) {
-            this.unsubscribe();
-        }
+        // --- RÉINITIALISATION DES ÉCOUTEURS ---
+        if (this.unsubClients) this.unsubClients();
+        if (this.unsubLivraisons) this.unsubLivraisons();
+        this.rawClients = null;
+        this.rawLivraisons = null;
 
         // --- ATTACHEMENT DES ÉVÉNEMENTS ---
         const searchInput = document.getElementById('clSearchInput');
@@ -186,60 +216,103 @@ export const ClientsListView = {
 
                             if (jsonData.length === 0) throw new Error("Le fichier est vide ou mal formaté.");
 
-                            const batch = writeBatch(db);
-                            let count = 0;
+                            // ÉTAPE 1 : Dédoublonnage en mémoire du fichier CSV (On garde la dernière ligne de chaque client)
+                            const uniqueClientsFromCSV = new Map();
 
-                            this.app.showToast("Importation et formatage des données en cours...", "success");
-
-                            let processedCount = 0;
                             for (const row of jsonData) {
-                                processedCount++;
-                                
-                                // MISE À JOUR DE L'INTERFACE (Évite le freeze du navigateur)
-                                if (importBtn && processedCount % 50 === 0) {
-                                    importBtn.innerHTML = `<i class="fas fa-spinner fa-spin"></i> Traitement (${processedCount}/${jsonData.length})...`;
-                                    await new Promise(r => setTimeout(r, 0)); // Libère le thread 1 milliseconde pour afficher l'animation
-                                }
-
                                 const nom = (row.NOM || row.Nom || '').trim();
                                 const prenom = (row.PRENOM || row.Prenom || '').trim();
                                 const fullName = this.fixEncoding(`${nom} ${prenom}`.trim());
                                 
+                                if (!fullName) continue;
+
                                 let phone = (row.TELEPHONE || row.Telephone || row.TEL || '').toString().trim();
+                                
+                                // FIX EXCEL : Gestion de la notation scientifique (Ex: 2.25071E+12)
+                                if (phone.toUpperCase().includes('E')) {
+                                    const num = Number(phone);
+                                    if (!isNaN(num)) phone = num.toLocaleString('fullwide', {useGrouping:false});
+                                }
+
                                 const cleanPhone = phone.replace(/[\s.-]/g, '');
                                 if (cleanPhone.length === 9 && /^[1-9]/.test(cleanPhone)) {
-                                    phone = '0' + cleanPhone; // Restaure le zéro manquant pour les formats français
+                                    phone = '0' + cleanPhone; // Restaure le zéro
                                 }
+                                // Si après nettoyage le tel est juste "0" (Cellule vide sur Excel)
+                                if (cleanPhone === "0" || phone === "0") phone = "";
                                 
                                 const rawAddress = (row.ADRESSES || row.ADRESSE || row.Adresses || row.Adresse || '');
-
                                 let finalAddress = this.fixEncoding((rawAddress || '').toString().trim().replace(/\s+/g, ' '));
                                 if (finalAddress) {
                                     finalAddress = finalAddress.toLowerCase().replace(/(?:^|\s|-|')\S/g, c => c.toUpperCase());
                                     finalAddress = finalAddress.replace(/(\d{5})([a-zA-Z])/g, '$1 $2');
                                 }
 
-                                if (fullName) {
+                                // On écrase s'il existe déjà dans le CSV pour ne garder que la donnée la plus pertinente
+                                uniqueClientsFromCSV.set(fullName.toLowerCase(), { fullName, phone, finalAddress });
+                            }
+
+                            // ÉTAPE 2 : Application des changements à la base de données avec nettoyage des doublons existants
+                            let batch = writeBatch(db);
+                            let opCount = 0;
+                            let count = 0;
+                            let updatedCount = 0;
+                            let deletedDuplicatesCount = 0;
+
+                            this.app.showToast("Mise à jour et nettoyage des doublons...", "success");
+
+                            let processedCount = 0;
+                            for (const [lowerName, clientData] of uniqueClientsFromCSV.entries()) {
+                                processedCount++;
+                                if (importBtn && processedCount % 50 === 0) {
+                                    importBtn.innerHTML = `<i class="fas fa-spinner fa-spin"></i> Nettoyage (${processedCount}/${uniqueClientsFromCSV.size})...`;
+                                    await new Promise(r => setTimeout(r, 0));
+                                }
+
+                                const { fullName, phone, finalAddress } = clientData;
+
+                                // On cherche TOUS les doublons existants dans la base de données pour ce nom
+                                const existingDuplicates = this.clients.filter(c => c.nom.toLowerCase() === lowerName);
+
+                                if (existingDuplicates.length > 0) {
+                                    // 1. On met à jour le TOUT PREMIER trouvé
+                                    const mainClient = existingDuplicates[0];
+                                    batch.update(doc(db, "clients", mainClient.id), { tel: phone, adresse: finalAddress });
+                                    updatedCount++;
+                                    opCount++;
+
+                                    // 2. On SUPPRIME impitoyablement TOUS LES AUTRES doublons avec le même nom !
+                                    for (let i = 1; i < existingDuplicates.length; i++) {
+                                        batch.delete(doc(db, "clients", existingDuplicates[i].id));
+                                        deletedDuplicatesCount++;
+                                        opCount++;
+                                    }
+                                } else {
+                                    // 3. CRÉATION
                                     const newClientRef = doc(collection(db, "clients"));
                                     batch.set(newClientRef, {
-                                        nom: fullName,
-                                        tel: phone,
-                                        adresse: finalAddress,
-                                        dateAjout: new Date().toISOString(),
-                                        agency: activeAgency,
-                                        risque: 'low',
-                                        segment: 'nouveau',
-                                        taille: 'petit',
-                                        ca: 0,
-                                        factures: 0
+                                        nom: fullName, tel: phone, adresse: finalAddress,
+                                        dateAjout: new Date().toISOString(), agency: activeAgency,
+                                        risque: 'low', segment: 'nouveau', taille: 'petit', ca: 0, factures: 0
                                     });
                                     count++;
+                                    opCount++;
+                                }
+
+                                // Sécurité : On envoie les requêtes par paquets de 400 pour ne pas surcharger Firebase
+                                if (opCount >= 400) {
+                                    await batch.commit();
+                                    batch = writeBatch(db);
+                                    opCount = 0;
                                 }
                             }
 
-                            if (count > 0) {
-                                await batch.commit();
-                                this.app.showToast(`${count} client(s) importé(s) avec succès !`, 'success');
+                            if (opCount > 0) await batch.commit();
+
+                            if (count > 0 || updatedCount > 0 || deletedDuplicatesCount > 0) {
+                                let msg = `${count} créés, ${updatedCount} mis à jour`;
+                                if (deletedDuplicatesCount > 0) msg += ` et ${deletedDuplicatesCount} doublons supprimés`;
+                                this.app.showToast(msg + ' !', 'success');
                             } else {
                                 this.app.showToast("Aucune donnée valide trouvée dans le fichier.", "error");
                             }
@@ -266,39 +339,70 @@ export const ClientsListView = {
             });
         }
 
-        // --- CHARGEMENT DES DONNÉES FIRESTORE ---
-        const q = query(collection(db, "clients"), where("agency", "==", activeAgency));
-        this.unsubscribe = onSnapshot(q, (snapshot) => {
-            const clientsList = [];
-            snapshot.forEach(d => {
-                const data = d.data();
-                
-                let tel = data.tel || '-';
-                let cleanTel = tel.replace(/[\s.-]/g, '');
-                if (cleanTel.length === 9 && /^[1-9]/.test(cleanTel)) tel = '0' + cleanTel;
-                
-                clientsList.push({ 
-                    id: d.id, 
-                    nom: this.fixEncoding(data.nom || 'Inconnu'), 
-                    tel: tel, 
-                    adresse: this.fixEncoding(data.adresse || '-'),
-                    date: data.dateAjout ? new Date(data.dateAjout).toLocaleDateString('fr-FR') : '-', 
-                    risque: data.risque || 'low', 
-                    segment: data.segment || 'nouveau', 
-                    ca: data.ca || 0, 
-                    factures: data.factures || 0 
-                });
-            });
-            
-            // Tri par CA décroissant pour obtenir les "Meilleurs Clients"
-            clientsList.sort((a, b) => b.ca - a.ca);
-            this.clients = clientsList;
-            
-            this.applyFilters();
+        // --- 1. CHARGEMENT DES CLIENTS ---
+        const qClients = query(collection(db, "clients"), where("agency", "==", activeAgency));
+        this.unsubClients = onSnapshot(qClients, (snapshot) => {
+            this.rawClients = snapshot.docs.map(d => ({id: d.id, ...d.data()}));
+            this.computeClientStats();
         }, (error) => {
             console.error("Erreur Firestore :", error);
             this.app.showToast("Erreur lors du chargement des clients.", "error");
         });
+
+        // --- 2. CHARGEMENT DES LIVRAISONS (POUR LE CALCUL DYNAMIQUE DU CA) ---
+        this.unsubLivraisons = onSnapshot(collection(db, "livraisons"), (snapshot) => {
+            this.rawLivraisons = snapshot.docs.map(d => d.data());
+            this.computeClientStats();
+        }, (error) => {
+            console.error("Erreur Firestore (Livraisons) :", error);
+        });
+    },
+
+    computeClientStats() {
+        if (!this.rawClients || !this.rawLivraisons) return; // Attend que les deux requêtes soient terminées
+        
+        // 1. Agréger les statistiques par expéditeur
+        const statsMap = new Map();
+        this.rawLivraisons.forEach(liv => {
+            if (liv.expediteur && liv.expediteur.trim() !== '') {
+                const nom = this.fixEncoding(liv.expediteur.trim()).toUpperCase();
+                if (!statsMap.has(nom)) statsMap.set(nom, { ca: 0, factures: 0 });
+                const st = statsMap.get(nom);
+                st.factures += 1;
+                
+                // CONVERSION : La base est en CFA. Paris affiche en Euros. (1 € = 656 CFA)
+                let amountCFA = parseFloat(String(liv.prixOriginal || liv.montant || '0').replace(/[^\d]/g, '')) || 0;
+                let amountEUR = amountCFA / 656;
+                st.ca += amountEUR;
+            }
+        });
+
+        // 2. Fusionner avec la liste des clients
+        const clientsList = this.rawClients.map(data => {
+            const nom = this.fixEncoding(data.nom || 'Inconnu');
+            const stats = statsMap.get(nom.toUpperCase()) || { ca: 0, factures: 0 };
+            
+            let tel = data.tel || '-';
+            let cleanTel = tel.replace(/[\s.-]/g, '');
+            if (cleanTel.length === 9 && /^[1-9]/.test(cleanTel)) tel = '0' + cleanTel;
+
+            // Attribution intelligente du segment basée sur l'activité réelle
+            let segment = 'dormant';
+            if (stats.factures >= 10) segment = 'regulier';
+            else if (stats.factures >= 3) segment = 'habituel';
+            else if (stats.factures > 0) segment = 'nouveau';
+            else segment = data.segment || 'dormant';
+            
+            return { 
+                id: data.id, nom: nom, tel: tel, adresse: this.fixEncoding(data.adresse || '-'),
+                date: data.dateAjout ? new Date(data.dateAjout).toLocaleDateString('fr-FR') : '-', 
+                risque: data.risque || 'low', segment: segment, ca: stats.ca, factures: stats.factures 
+            };
+        });
+        
+        clientsList.sort((a, b) => b.ca - a.ca);
+        this.clients = clientsList;
+        this.applyFilters();
     },
 
     applyFilters() {
@@ -364,9 +468,23 @@ export const ClientsListView = {
         const transSnap = await getDocs(qTrans);
         const factures = transSnap.docs.map(d => d.data());
 
-        const qLiv = query(collection(db, "livraisons"), where("expediteur", "==", client.nom), orderBy("dateAjout", "desc"), limit(5));
+        // LOGIQUE ABIDJAN -> PARIS : On récupère TOUT l'historique pour extraire les destinataires
+        const qLiv = query(collection(db, "livraisons"), where("expediteur", "==", client.nom), orderBy("dateAjout", "desc"));
         const livSnap = await getDocs(qLiv);
-        const colis = livSnap.docs.map(d => d.data());
+        const colisTous = livSnap.docs.map(d => d.data());
+        
+        const colis = colisTous.slice(0, 5); // On garde les 5 derniers pour le petit tableau
+
+        // Extraction dynamique du "Carnet d'adresses" (Destinataires uniques) sans doublons
+        const destinatairesMap = new Map();
+        colisTous.forEach(c => {
+            if (c.destinataire && c.destinataire.trim() !== '') {
+                const nomDest = this.fixEncoding(c.destinataire.trim());
+                if (!destinatairesMap.has(nomDest)) destinatairesMap.set(nomDest, 0);
+                destinatairesMap.set(nomDest, destinatairesMap.get(nomDest) + 1);
+            }
+        });
+        const carnetAdresses = Array.from(destinatairesMap.entries()).sort((a, b) => b[1] - a[1]); // Trié par fréquence
 
         const panierMoyen = client.factures > 0 ? (client.ca / client.factures) : 0;
 
@@ -384,6 +502,9 @@ export const ClientsListView = {
                         <p class="cd-header__subtitle">${client.tel} — ${client.adresse}</p>
                     </div>
                 </div>
+                <button class="btn btn-outline" onclick="window.app.views.clientsList.openEditClientModal('${client.id}')">
+                    <i class="fas fa-edit"></i> Modifier
+                </button>
             </div>
 
             <div class="cd-pills">
@@ -403,7 +524,7 @@ export const ClientsListView = {
                     <h2 class="cd-table-card__title">🧾 Dernières Factures (Caisse)</h2>
                     <table class="data-table" style="width:100%;">
                         <thead><tr><th>Réf</th><th>Date</th><th style="text-align:right;">Montant</th></tr></thead>
-                        <tbody>${factures.length === 0 ? '<tr><td colspan="3">Aucune facture</td></tr>' : factures.map(f => `<tr><td><b>${f.reference}</b></td><td>${f.date}</td><td style="text-align:right; font-weight:bold;">${this.app.formatMoney(f.prix)}</td></tr>`).join('')}</tbody>
+                        <tbody>${factures.length === 0 ? '<tr><td colspan="3">Aucune facture</td></tr>' : factures.map(f => `<tr><td><b>${f.reference}</b></td><td>${f.date}</td><td style="text-align:right; font-weight:bold;">${this.app.formatMoney((f.prix || 0) / 656)}</td></tr>`).join('')}</tbody>
                     </table>
                 </div>
                 <div class="cd-table-card">
@@ -414,8 +535,83 @@ export const ClientsListView = {
                     </table>
                 </div>
             </div>
+
+            <!-- NOUVEAU : CARNET D'ADRESSES (DESTINATAIRES ABIDJAN) -->
+            <div class="cd-table-card" style="margin-top: 20px;">
+                <h2 class="cd-table-card__title" style="margin-bottom: 15px;"><i class="fas fa-address-book" style="color: #f59e0b;"></i> Carnet d'adresses (Destinataires Abidjan)</h2>
+                <div style="display: flex; gap: 15px; flex-wrap: wrap;">
+                    ${carnetAdresses.length === 0 ? '<p style="color:#64748b; font-style: italic;">Aucun destinataire enregistré pour le moment.</p>' : carnetAdresses.map(([nom, count]) => `
+                        <div style="background: #f8fafc; border: 1px solid #e2e8f0; padding: 10px 15px; border-radius: 12px; display: flex; align-items: center; gap: 12px; min-width: 200px; box-shadow: 0 1px 2px rgba(0,0,0,0.02);">
+                            <div style="background: #ffedd5; color: #ea580c; width: 36px; height: 36px; border-radius: 50%; display: flex; justify-content: center; align-items: center; font-weight: 800; font-size: 16px;">
+                                ${nom.charAt(0).toUpperCase()}
+                            </div>
+                            <div>
+                                <div style="font-weight: 700; color: #0f172a; font-size: 14px;">${nom}</div>
+                                <div style="font-size: 11px; color: #64748b; font-weight: 600;">${count} colis envoyé(s)</div>
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
         `;
         
         detailView.innerHTML = html;
+    },
+
+    openEditClientModal(clientId) {
+        const client = this.clients.find(c => c.id === clientId);
+        if (!client) return;
+        document.getElementById('editClientId').value = client.id;
+        document.getElementById('editClientNom').value = client.nom;
+        document.getElementById('editClientTel').value = client.tel;
+        document.getElementById('editClientAdresse').value = client.adresse;
+        document.getElementById('editClientModal').style.display = 'flex';
+    },
+
+    async saveClientEdit() {
+        const id = document.getElementById('editClientId').value;
+        const newNom = document.getElementById('editClientNom').value.trim();
+        const newTel = document.getElementById('editClientTel').value.trim();
+        const newAdresse = document.getElementById('editClientAdresse').value.trim();
+
+        if (!id || !newNom) {
+            this.app.showToast("Le nom est obligatoire.", "error");
+            return;
+        }
+
+        try {
+            const client = this.clients.find(c => c.id === id);
+            const oldNom = client ? client.nom : '';
+
+            // 1. Mise à jour de la fiche client
+            await updateDoc(doc(db, "clients", id), { nom: newNom, tel: newTel, adresse: newAdresse });
+
+            // 2. PROPAGATION : Si le nom change, on met à jour tous ses anciens colis et factures !
+            if (oldNom && oldNom.toLowerCase() !== newNom.toLowerCase()) {
+                const batch = writeBatch(db);
+                let hasUpdates = false;
+
+                // A. Livraisons
+                const snapLiv = await getDocs(query(collection(db, "livraisons"), where("expediteur", "==", oldNom)));
+                snapLiv.forEach(d => { batch.update(d.ref, { expediteur: newNom }); hasUpdates = true; });
+
+                // B. Transactions (Caisse)
+                const snapTrans = await getDocs(query(collection(db, "transactions"), where("nom", "==", oldNom)));
+                snapTrans.forEach(d => { batch.update(d.ref, { nom: newNom }); hasUpdates = true; });
+
+                if (hasUpdates) await batch.commit();
+            }
+
+            document.getElementById('editClientModal').style.display = 'none';
+            this.app.showToast("Client mis à jour avec succès !", "success");
+            
+            // Rafraîchir instantanément la fiche client
+            if (client) { client.nom = newNom; client.tel = newTel; client.adresse = newAdresse; }
+            this.showDetail(id);
+
+        } catch (error) {
+            console.error(error);
+            this.app.showToast("Erreur lors de la modification : " + error.message, "error");
+        }
     }
 };

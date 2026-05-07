@@ -1,0 +1,227 @@
+/* ============================================
+    RESPONSIVE — TABLET (≤1024px)
+============================================ */
+@media (max-width: 1024px) {
+    .sidebar { transform: translateX(-100%); }
+    .sidebar.open { transform: translateX(0); }
+    .main-content { margin-left: 0; width: 100%; }
+    .mobile-toggle { display: block; }
+    .stats-grid { grid-template-columns: repeat(2, 1fr); }
+}
+
+/* ============================================
+    OVERLAY SIDEBAR MOBILE
+============================================ */
+.sidebar-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.45);
+    z-index: 99;
+    backdrop-filter: blur(2px);
+    -webkit-backdrop-filter: blur(2px);
+}
+.sidebar-overlay.show { display: block; }
+
+/* ============================================
+    BOTTOM NAVIGATION MOBILE
+============================================ */
+.bottom-nav {
+    display: none;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 60px;
+    background: white;
+    border-top: 1px solid #e2e8f0;
+    z-index: 150;
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.06);
+}
+
+.bottom-nav-item {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    color: #94a3b8;
+    font-size: 10px;
+    font-weight: 600;
+    font-family: 'Inter', sans-serif;
+    cursor: pointer;
+    border: none;
+    background: none;
+    padding: 0;
+    transition: color 0.15s;
+    position: relative;
+    min-height: 44px;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.bottom-nav-item i {
+    font-size: 20px;
+    line-height: 1;
+}
+
+.bottom-nav-item.active {
+    color: #3b82f6;
+}
+
+.bottom-nav-item.active::after {
+    content: '';
+    position: absolute;
+    top: 6px;
+    width: 4px;
+    height: 4px;
+    background: #3b82f6;
+    border-radius: 50%;
+    display: none; 
+}
+
+.nav-badge {
+    position: absolute;
+    top: 5px;
+    right: calc(50% - 20px);
+    background: #ef4444;
+    color: white;
+    font-size: 9px;
+    font-weight: 700;
+    border-radius: 10px;
+    padding: 1px 5px;
+    min-width: 16px;
+    text-align: center;
+    line-height: 14px;
+    border: 1.5px solid white;
+}
+
+/* ============================================
+    FAB — BOUTON ACTION PRINCIPAL
+============================================ */
+.fab-btn {
+    display: none;
+    position: fixed;
+    bottom: 72px;
+    right: 16px;
+    width: 52px;
+    height: 52px;
+    background: #3b82f6;
+    border-radius: 50%;
+    border: none;
+    color: white;
+    font-size: 22px;
+    cursor: pointer;
+    z-index: 148;
+    box-shadow: 0 4px 14px rgba(59, 130, 246, 0.45);
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.15s, box-shadow 0.15s;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.fab-btn:active {
+    transform: scale(0.92);
+    box-shadow: 0 2px 8px rgba(59, 130, 246, 0.35);
+}
+
+/* ============================================
+    RESPONSIVE — MOBILE (≤768px)
+============================================ */
+@media (max-width: 768px) {
+    .sidebar {
+        width: 82vw;
+        max-width: 290px;
+        z-index: 100;
+    }
+    .sidebar.open { z-index: 100; }
+    .main-content {
+        margin-left: 0;
+        padding-bottom: calc(60px + env(safe-area-inset-bottom, 0px));
+    }
+    .top-bar {
+        padding: 10px 14px;
+        height: 52px;
+    }
+    .page-title {
+        font-size: 16px;
+        font-weight: 700;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        max-width: 160px;
+    }
+    #userName { display: none; }
+    .content-container { padding: 12px 14px; }
+    
+    .stats-grid {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 10px;
+        margin-bottom: 20px;
+    }
+    .stat-card { padding: 14px; border-radius: 14px; }
+    .stat-value { font-size: 22px; }
+    .stat-label { font-size: 11px; }
+    .stat-icon { width: 38px; height: 38px; font-size: 18px; margin-bottom: 10px; }
+
+    .form-grid { grid-template-columns: 1fr; gap: 14px; }
+    .form-group.full-width { grid-column: 1; }
+    .form-card { padding: 16px; border-radius: 14px; }
+    
+    .form-group label { font-size: 11px; }
+    .form-group input, .form-group select, .form-group textarea { font-size: 13px; padding: 8px 12px; }
+
+    .tabs-header {
+        overflow-x: auto;
+        flex-wrap: nowrap;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none;
+    }
+    .tabs-header::-webkit-scrollbar { display: none; }
+
+    .data-table-wrap {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        border-radius: 12px;
+    }
+
+    .data-table th { font-size: 10px; padding: 10px 12px; }
+    .data-table td { font-size: 12px; padding: 10px 12px; }
+
+    .table-as-cards thead { display: none; }
+    .table-as-cards tbody tr {
+        display: block; background: white; border-radius: 12px; border: 1px solid #e2e8f0; margin-bottom: 10px; padding: 12px 14px; box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+    }
+    .table-as-cards tbody td {
+        display: flex; justify-content: space-between; align-items: center; border: none; padding: 5px 0; font-size: 12px; border-bottom: 1px solid #f1f5f9;
+    }
+    .table-as-cards tbody td:last-child { border-bottom: none; }
+    .table-as-cards tbody td::before {
+        content: attr(data-label); font-weight: 600; color: #64748b; font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em;
+    }
+
+    .modal-overlay { align-items: flex-end; padding: 0; }
+    .modal-content {
+        border-radius: 20px 20px 0 0; max-width: 100%; width: 100%; max-height: 90vh; padding: 8px 18px 32px; position: relative;
+    }
+    .modal-content::before {
+        content: ''; display: block; width: 36px; height: 4px; background: #e2e8f0; border-radius: 2px; margin: 8px auto 16px;
+    }
+
+    .btn { min-height: 40px; padding: 10px 16px; font-size: 12px; }
+
+    .bottom-nav { display: flex; }
+    .fab-btn { display: flex; }
+    .mobile-toggle { display: none; }
+}
+
+/* ============================================
+    DESKTOP : s'assurer que bottom nav et FAB restent cachés
+============================================ */
+@media (min-width: 769px) {
+    .bottom-nav { display: none !important; }
+    .fab-btn    { display: none !important; }
+    .sidebar-overlay { display: none !important; }
+    .mobile-toggle { display: block; }
+}

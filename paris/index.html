@@ -13,6 +13,7 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     
     <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/responsive-paris.css"> <!-- Votre nouvelle ligne -->
     <link rel="icon" type="image/png" href="../favicon.png">
     <style>
         /* Styles du menu utilisateur (Dropdown) */
@@ -215,6 +216,29 @@
         <div class="modal-content" id="modalContent">
             </div>
     </div>
+
+    <!-- OVERLAY SIDEBAR MOBILE (fond sombre derrière la sidebar) -->
+    <div class="sidebar-overlay" id="sidebarOverlay"></div>
+
+    <!-- BOTTOM NAVIGATION MOBILE -->
+    <nav class="bottom-nav" id="bottomNav" role="navigation" aria-label="Navigation principale">
+        <button class="bottom-nav-item active" data-target="dashboard" onclick="app.renderPage('dashboard')">
+            <i class="fas fa-home"></i><span>Accueil</span>
+        </button>
+        <button class="bottom-nav-item" data-target="invoices-list" onclick="app.renderPage('invoices-list')">
+            <i class="fas fa-file-invoice"></i><span>Factures</span>
+        </button>
+        <button class="bottom-nav-item" data-target="appointments-pending" onclick="app.renderPage('appointments-pending')">
+            <i class="fas fa-calendar-alt"></i><span>RDV</span>
+            <span class="nav-badge" id="bnavBadgeRdv" style="display:none">0</span>
+        </button>
+        <button class="bottom-nav-item" id="bnav-more">
+            <i class="fas fa-bars"></i><span>Menu</span>
+        </button>
+    </nav>
+
+    <!-- FAB (Nouvelle Facture) -->
+    <button class="fab-btn" id="fabBtn" onclick="app.renderPage('invoice-new')" title="Nouvelle facture"><i class="fas fa-plus"></i></button>
 
     <script>
         // Gestion de l'affichage du menu déroulant Utilisateur
