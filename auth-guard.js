@@ -1,6 +1,6 @@
 import { auth, db } from './firebase-config.js';
 import { onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-auth.js";
-import { doc, getDoc, collection, query, where, orderBy, onSnapshot } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
+import { doc, getDoc, updateDoc, collection, query, where, orderBy, onSnapshot } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 
 // --- FONCTION GLOBALE DE DÉCONNEXION ---
 window.appHandleLogout = async () => {
@@ -10,6 +10,10 @@ window.appHandleLogout = async () => {
         
     if (confirmLogout) {
         try {
+            // Marquer l'utilisateur comme déconnecté dans Firestore
+            if (auth.currentUser) {
+                await updateDoc(doc(db, 'users', auth.currentUser.uid), { isOnline: false }).catch(e => console.error(e));
+            }
             await signOut(auth);
             sessionStorage.clear();
             window.location.href = window.location.pathname.includes('/paris/') ? '../login.html' : 'login.html';
@@ -56,6 +60,14 @@ onAuthStateChanged(auth, async (user) => {
             else alert("ERREUR CRITIQUE :\n\nVotre fiche utilisateur existe, mais le champ 'role' est vide.");
             throw new Error("Champ 'role' manquant.");
         }
+
+        // --- NOUVEAU : SYSTÈME DE PRÉSENCE (En Ligne) ---
+        // Marquer l'utilisateur comme en ligne avec la date d'activité
+        updateDoc(userDocRef, { lastActive: new Date().toISOString(), isOnline: true }).catch(e => console.error(e));
+        // Mettre à jour l'activité toutes les 3 minutes pendant qu'il navigue
+        window.presenceInterval = setInterval(() => {
+            updateDoc(userDocRef, { lastActive: new Date().toISOString() }).catch(e => console.error(e));
+        }, 3 * 60 * 1000);
 
         // Stockage session
         let userName = userData.displayName;
@@ -104,6 +116,22 @@ onAuthStateChanged(auth, async (user) => {
         if (!currentActiveAgency || (userData.agency !== 'all' && currentActiveAgency !== userData.agency)) {
             currentActiveAgency = userData.agency === 'all' ? 'abidjan' : (userData.agency || 'abidjan');
             sessionStorage.setItem('currentActiveAgency', currentActiveAgency);
+        }
+
+        // --- REDIRECTION AUTOMATIQUE VERS LA BONNE INTERFACE ---
+        const pathUrl = window.location.pathname;
+        const inParisFolder = pathUrl.includes('/paris/');
+        const isLogin = pathUrl.includes('login.html');
+
+        if (currentActiveAgency === 'paris' && !inParisFolder) {
+            window.location.href = 'paris/index.html';
+            return;
+        } else if (currentActiveAgency === 'abidjan' && inParisFolder) {
+            window.location.href = '../index.html';
+            return;
+        } else if (isLogin) {
+            window.location.href = 'index.html';
+            return;
         }
 
         document.body.classList.add('role-' + userRole);

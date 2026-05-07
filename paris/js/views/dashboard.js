@@ -4,6 +4,17 @@ export const DashboardView = {
         const pendingAppointments = app.data.appointments.filter(a => a.status === 'en_attente').length;
         const activePrograms = app.data.programs.filter(p => p.status === 'en_cours').length;
         
+        // Helper pour afficher les boutons d'accès rapide conditionnellement
+        const renderQuickActionButton = (page, icon, label, color) => {
+            if (!app.checkPageAccess(page)) return ''; // Ne rien afficher si l'accès est refusé
+            return `
+                <button onclick="app.renderPage('${page}')" class="quick-action-btn" style="display:flex; flex-direction:column; align-items:center; padding:15px; background:white; border:1px solid #e2e8f0; border-radius:12px; cursor:pointer; transition:all 0.2s; box-shadow:0 2px 4px rgba(0,0,0,0.02);">
+                    <i class="fas ${icon}" style="font-size:24px; color:${color}; margin-bottom:10px;"></i>
+                    <span style="font-weight:600; color:#334155; font-size:12px; text-align:center;">${label}</span>
+                </button>
+            `;
+        };
+        
         const html = `
             <style>
                 .quick-action-btn:hover { transform: translateY(-3px) !important; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1) !important; border-color: #cbd5e1 !important; }
@@ -11,54 +22,18 @@ export const DashboardView = {
             
             <h3 style="margin: 0 0 20px 0; color: #0f172a; font-size: 20px; font-weight: 800;">🚀 Accès rapide</h3>
             <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(min(130px, 45%), 1fr)); gap: 12px; margin-bottom: 30px;">
-                <button onclick="app.renderPage('invoice-new')" class="quick-action-btn" style="display:flex; flex-direction:column; align-items:center; padding:15px; background:white; border:1px solid #e2e8f0; border-radius:12px; cursor:pointer; transition:all 0.2s; box-shadow:0 2px 4px rgba(0,0,0,0.02);">
-                    <i class="fas fa-file-invoice" style="font-size:24px; color:#3b82f6; margin-bottom:10px;"></i>
-                    <span style="font-weight:600; color:#334155; font-size:12px; text-align:center;">Nouvelle facture</span>
-                </button>
-                <button onclick="app.renderPage('invoices-list')" class="quick-action-btn" style="display:flex; flex-direction:column; align-items:center; padding:15px; background:white; border:1px solid #e2e8f0; border-radius:12px; cursor:pointer; transition:all 0.2s; box-shadow:0 2px 4px rgba(0,0,0,0.02);">
-                    <i class="fas fa-list" style="font-size:24px; color:#64748b; margin-bottom:10px;"></i>
-                    <span style="font-weight:600; color:#334155; font-size:12px; text-align:center;">Liste factures</span>
-                </button>
-                <button onclick="app.renderPage('quote-new')" class="quick-action-btn" style="display:flex; flex-direction:column; align-items:center; padding:15px; background:white; border:1px solid #e2e8f0; border-radius:12px; cursor:pointer; transition:all 0.2s; box-shadow:0 2px 4px rgba(0,0,0,0.02);">
-                    <i class="fas fa-file-signature" style="font-size:24px; color:#10b981; margin-bottom:10px;"></i>
-                    <span style="font-weight:600; color:#334155; font-size:12px; text-align:center;">Nouveau devis</span>
-                </button>
-                <button onclick="app.renderPage('quote-requests')" class="quick-action-btn" style="display:flex; flex-direction:column; align-items:center; padding:15px; background:white; border:1px solid #e2e8f0; border-radius:12px; cursor:pointer; transition:all 0.2s; box-shadow:0 2px 4px rgba(0,0,0,0.02);">
-                    <i class="fas fa-inbox" style="font-size:24px; color:#f59e0b; margin-bottom:10px;"></i>
-                    <span style="font-weight:600; color:#334155; font-size:12px; text-align:center;">Demandes devis</span>
-                </button>
-                <button onclick="app.renderPage('appointments-pending')" class="quick-action-btn" style="display:flex; flex-direction:column; align-items:center; padding:15px; background:white; border:1px solid #e2e8f0; border-radius:12px; cursor:pointer; transition:all 0.2s; box-shadow:0 2px 4px rgba(0,0,0,0.02);">
-                    <i class="fas fa-calendar-check" style="font-size:24px; color:#ef4444; margin-bottom:10px;"></i>
-                    <span style="font-weight:600; color:#334155; font-size:12px; text-align:center;">RDV à valider</span>
-                </button>
-                <button onclick="app.renderPage('notifications')" class="quick-action-btn" style="display:flex; flex-direction:column; align-items:center; padding:15px; background:white; border:1px solid #e2e8f0; border-radius:12px; cursor:pointer; transition:all 0.2s; box-shadow:0 2px 4px rgba(0,0,0,0.02);">
-                    <i class="fas fa-bell" style="font-size:24px; color:#8b5cf6; margin-bottom:10px;"></i>
-                    <span style="font-weight:600; color:#334155; font-size:12px; text-align:center;">Notifications</span>
-                </button>
-                <button onclick="app.renderPage('sms-send')" class="quick-action-btn" style="display:flex; flex-direction:column; align-items:center; padding:15px; background:white; border:1px solid #e2e8f0; border-radius:12px; cursor:pointer; transition:all 0.2s; box-shadow:0 2px 4px rgba(0,0,0,0.02);">
-                    <i class="fas fa-sms" style="font-size:24px; color:#ec4899; margin-bottom:10px;"></i>
-                    <span style="font-weight:600; color:#334155; font-size:12px; text-align:center;">Envoi SMS</span>
-                </button>
-                <button onclick="app.renderPage('departures-calendar')" class="quick-action-btn" style="display:flex; flex-direction:column; align-items:center; padding:15px; background:white; border:1px solid #e2e8f0; border-radius:12px; cursor:pointer; transition:all 0.2s; box-shadow:0 2px 4px rgba(0,0,0,0.02);">
-                    <i class="fas fa-ship" style="font-size:24px; color:#0ea5e9; margin-bottom:10px;"></i>
-                    <span style="font-weight:600; color:#334155; font-size:12px; text-align:center;">Dates départ</span>
-                </button>
-                <button onclick="app.renderPage('clients-list')" class="quick-action-btn" style="display:flex; flex-direction:column; align-items:center; padding:15px; background:white; border:1px solid #e2e8f0; border-radius:12px; cursor:pointer; transition:all 0.2s; box-shadow:0 2px 4px rgba(0,0,0,0.02);">
-                    <i class="fas fa-users" style="font-size:24px; color:#14b8a6; margin-bottom:10px;"></i>
-                    <span style="font-weight:600; color:#334155; font-size:12px; text-align:center;">Clients</span>
-                </button>
-                <button onclick="app.renderPage('balance-monthly')" class="quick-action-btn" style="display:flex; flex-direction:column; align-items:center; padding:15px; background:white; border:1px solid #e2e8f0; border-radius:12px; cursor:pointer; transition:all 0.2s; box-shadow:0 2px 4px rgba(0,0,0,0.02);">
-                    <i class="fas fa-chart-line" style="font-size:24px; color:#f43f5e; margin-bottom:10px;"></i>
-                    <span style="font-weight:600; color:#334155; font-size:12px; text-align:center;">Bilan mois</span>
-                </button>
-                <button onclick="app.renderPage('scan-warehouse')" class="quick-action-btn" style="display:flex; flex-direction:column; align-items:center; padding:15px; background:white; border:1px solid #e2e8f0; border-radius:12px; cursor:pointer; transition:all 0.2s; box-shadow:0 2px 4px rgba(0,0,0,0.02);">
-                    <i class="fas fa-barcode" style="font-size:24px; color:#6366f1; margin-bottom:10px;"></i>
-                    <span style="font-weight:600; color:#334155; font-size:12px; text-align:center;">Numérisation</span>
-                </button>
-                <button onclick="app.renderPage('finance-expenses')" class="quick-action-btn" style="display:flex; flex-direction:column; align-items:center; padding:15px; background:white; border:1px solid #e2e8f0; border-radius:12px; cursor:pointer; transition:all 0.2s; box-shadow:0 2px 4px rgba(0,0,0,0.02);">
-                    <i class="fas fa-money-bill-wave" style="font-size:24px; color:#f97316; margin-bottom:10px;"></i>
-                    <span style="font-weight:600; color:#334155; font-size:12px; text-align:center;">Dépenses</span>
-                </button>
+                ${renderQuickActionButton('invoice-new', 'fa-file-invoice', 'Nouvelle facture', '#3b82f6')}
+                ${renderQuickActionButton('invoices-list', 'fa-list', 'Liste factures', '#64748b')}
+                ${renderQuickActionButton('quote-new', 'fa-file-signature', 'Nouveau devis', '#10b981')}
+                ${renderQuickActionButton('quote-requests', 'fa-inbox', 'Demandes devis', '#f59e0b')}
+                ${renderQuickActionButton('appointments-pending', 'fa-calendar-check', 'RDV à valider', '#ef4444')}
+                ${renderQuickActionButton('notifications', 'fa-bell', 'Notifications', '#8b5cf6')}
+                ${renderQuickActionButton('sms-send', 'fa-sms', 'Envoi SMS', '#ec4899')}
+                ${renderQuickActionButton('departures-calendar', 'fa-ship', 'Dates départ', '#0ea5e9')}
+                ${renderQuickActionButton('clients-list', 'fa-users', 'Clients', '#14b8a6')}
+                ${renderQuickActionButton('balance-monthly', 'fa-chart-line', 'Bilan mois', '#f43f5e')}
+                ${renderQuickActionButton('scan-warehouse', 'fa-barcode', 'Numérisation', '#6366f1')}
+                ${renderQuickActionButton('finance-expenses', 'fa-money-bill-wave', 'Dépenses', '#f97316')}
             </div>
 
             <h3 style="margin: 0 0 20px 0; color: #0f172a; font-size: 20px; font-weight: 800;">📊 Indicateurs du mois</h3>

@@ -5,16 +5,53 @@ import { ClientsListView } from './views/clients-list.js';
 import { ProductsListView } from './views/products-list.js';
 import { ToutesLesFacturesView } from './views/touteslesfactures.js';
 import { NouveauDevisView } from './views/nouveaudevis.js';
+import { DailyBilanView } from './views/daily-bilan.js';
+import { DailyUsersView } from './views/daily-users.js';
+import { NouveauRdvView } from './views/nouveaurdv.js';
+import { TousLesRdvView } from './views/touslesrdv.js';
+import { TousLesDevisView } from './views/touslesdevis.js';
+import { DemandesDevisView } from './views/demandesdevis.js';
+import { GestionConteneursView } from './views/gestion-conteneurs.js';
+import { FinanceCaisseView } from './views/finance-caisse.js';
+import { FinanceDepensesView } from './views/finance-depenses.js';
+import { FinanceChequesView } from './views/finance-cheques.js';
+import { SettingsAgencyView } from './views/settings-agency.js';
+import { SettingsAgentsView } from './views/settings-agents.js';
+import { SettingsMenusView } from './views/settings-menus.js';
 
 // Configuration de l'application Paris
 const app = {
     currentPage: 'dashboard',
     user: { name: 'Agent Paris', role: 'agent' },
     
+    allowedMenus: null, // Permet de stocker les accès
+    pageToMenuMap: {
+        'dashboard': 'main',
+        'daily-bilan': 'bilan', 'daily-users': 'bilan',
+        'invoices-list': 'factures', 'invoice-new': 'factures',
+        'appointment-new': 'rdv', 'appointments-list': 'rdv', 'appointments-pending': 'rdv', 'appointments-calendar': 'rdv',
+        'program-new': 'operations', 'program-my': 'operations', 'program-history': 'operations', 'drivers': 'operations', 'departures-calendar': 'operations',
+        'quotes-list': 'devis', 'quote-new': 'devis', 'quote-requests': 'devis',
+        'loading-container': 'chargement', 'loading-boats': 'chargement',
+        'scan-warehouse': 'scan', 'scan-container': 'scan', 'scan-classic': 'scan', 'scan-history': 'scan',
+        'clients-list': 'clients', 'clients-app': 'clients', 'clients-analytics': 'clients',
+        'chat': 'comms', 'sms-send': 'comms', 'sms-history': 'comms', 'notifications': 'comms', 'notifications-history': 'comms',
+        'products-list': 'produits',
+        'finance-cashier': 'finance', 'finance-cheques': 'finance', 'finance-expenses': 'finance',
+        'stock-list': 'stock',
+        'balance-monthly': 'bilans-financiers', 'balance-yearly': 'bilans-financiers', 'balance-boat': 'bilans-financiers', 'balance-12m': 'bilans-financiers',
+        'stats-boat': 'statistique', 'stats-monthly': 'statistique', 'stats-yearly': 'statistique',
+        'settings-agency': 'settings', 'settings-company': 'settings', 'settings-software': 'settings', 'settings-sms': 'settings', 'settings-notifications': 'settings', 'settings-menus': 'settings', 'settings-agents': 'settings', 'settings-appointments': 'settings', 'settings-profile': 'settings',
+        'config-invoice': 'configuration', 'config-label': 'configuration', 'config-objectives': 'configuration', 'config-charges': 'configuration',
+        'prospecting': 'prospecting',
+        'audit-log': 'audit-log'
+    },
+
     // Données simulées externalisées
     data: appData,
 
     init() {
+        this.loadMenuConfig(); // Charge la configuration et applique les accès aux menus
         this.renderPage('dashboard');
         this.initSidebarEvents();
         this.initMobileToggle();
@@ -24,6 +61,110 @@ const app = {
         
         // Expose l'objet app à l'objet global Window pour les appels onclick HTML
         window.app = this;
+    },
+
+    async loadMenuConfig() {
+        try {
+            const { db } = await import('../../../firebase-config.js');
+            const { doc, getDoc } = await import('https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js');
+            const activeAgency = sessionStorage.getItem('currentActiveAgency') || 'paris';
+            const docSnap = await getDoc(doc(db, "settings", `menus_${activeAgency}`));
+            
+            if (docSnap.exists()) {
+                this.applyMenuConfig(docSnap.data());
+            }
+        } catch(e) {
+            console.error("Erreur chargement configuration des menus:", e);
+        }
+    },
+
+    applyMenuConfig(config) {
+        const userRole = sessionStorage.getItem('userRole') || 'agent';
+        let baseRole = 'agent';
+        if (userRole.includes('chauf')) baseRole = 'chauf';
+        if (userRole.includes('manager') || userRole.includes('direction')) baseRole = 'manager';
+        
+        // Les Admins et Super Admins ont accès à tout, sinon on regarde la liste des accès
+        const isSuperUser = userRole === 'super_admin' || userRole === 'admin';
+        const allowedMenus = isSuperUser ? config.order : (config.roles[baseRole] || []);
+        
+        this.allowedMenus = allowedMenus; // On stocke la liste en mémoire pour sécuriser l'application
+
+        const navContainer = document.querySelector('.sidebar-nav');
+        if (!navContainer) return;
+
+        const sections = Array.from(navContainer.querySelectorAll('.sidebar-category'));
+        
+        // Mapping entre les titres affichés en HTML et les clés en base de données
+        const titleToKey = {
+            'Dashboard': 'main',
+            'Bilan journalier': 'bilan',
+            "Factures d'envoi": 'factures',
+            'Rendez-vous': 'rdv',
+            'Les Programmes': 'operations',
+            'Devis': 'devis',
+            'Chargement': 'chargement',
+            'Scan': 'scan',
+            'Clients': 'clients',
+            'Communication': 'comms',
+            'PRODUITS': 'produits',
+            'Finance': 'finance',
+            'Colis reçus': 'colis-recus',
+            'Stock': 'stock',
+            'Bilans financiers': 'bilans-financiers',
+            'Statistique': 'statistique',
+            'Paramètres': 'settings',
+            'Configuration': 'configuration',
+            'Prospect': 'prospecting',
+            'Audit Log': 'audit-log'
+        };
+
+        // Détacher les sections du DOM pour les trier
+        sections.forEach(sec => sec.remove());
+
+        // Réinsérer dans l'ordre défini par Firestore
+        config.order.forEach(key => {
+            const section = sections.find(sec => {
+                const titleEl = sec.querySelector('.sidebar-category-title');
+                return titleEl && titleToKey[titleEl.textContent.trim()] === key;
+            });
+            
+            if (section) {
+                if (allowedMenus.includes(key)) {
+                    section.style.display = '';
+                    navContainer.appendChild(section);
+                } else {
+                    section.style.display = 'none';
+                    navContainer.appendChild(section);
+                }
+            }
+        });
+        
+        // Assurer que les éventuelles sections orphelines sont gérées (par exemple un nouveau menu)
+        sections.forEach(sec => {
+            if (!sec.parentNode) {
+                sec.style.display = isSuperUser ? '' : 'none';
+                navContainer.appendChild(sec);
+            }
+        });
+
+        // Si l'utilisateur se trouve sur une page qu'il n'a plus le droit de voir, on l'expulse
+        if (this.currentPage && !this.checkPageAccess(this.currentPage)) {
+            this.renderPage('dashboard');
+        }
+    },
+
+    checkPageAccess(page) {
+        // Si les droits ne sont pas encore chargés, on laisse passer (temporairement)
+        if (!this.allowedMenus) return true;
+        
+        const requiredMenu = this.pageToMenuMap[page];
+        
+        // S'il y a un menu requis pour cette page et qu'il n'est pas dans la liste des menus autorisés
+        if (requiredMenu && !this.allowedMenus.includes(requiredMenu)) {
+            return false;
+        }
+        return true;
     },
 
     initSidebarEvents() {
@@ -104,10 +245,36 @@ const app = {
     },
 
     updateBadges() {
-        const pendingAppointments = this.data.appointments.filter(a => a.status === 'en_attente').length;
         const pendingQuotes = this.data.quoteRequests.length;
         const unreadMessages = this.data.messages.filter(m => !m.read).length;
         const unreadNotifications = this.data.notifications.filter(n => !n.read).length;
+
+        // Compteur réel depuis la vue "TousLesRdvView" si elle est chargée, 
+        // sinon on fera une requête rapide (Pour l'instant, on utilise le cache si disponible)
+        let pendingAppointments = 0;
+        if (window.app?.views?.tousLesRdv?.appointments) {
+            pendingAppointments = window.app.views.tousLesRdv.appointments.filter(a => a.status === 'en_attente').length;
+        } else {
+            import('https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js').then(module => {
+                const { collection, query, where, getDocs } = module;
+                import('../../../firebase-config.js').then(async cfg => {
+                    const activeAgency = sessionStorage.getItem('currentActiveAgency') || 'paris';
+                    const q = query(collection(cfg.db, "appointments"), where("agency", "==", activeAgency), where("status", "==", "en_attente"));
+                    const snap = await getDocs(q);
+                    
+                    pendingAppointments = snap.size;
+                    
+                    const pendingBadge = document.getElementById('pendingAppointmentsBadge');
+                    if (pendingBadge) pendingBadge.textContent = pendingAppointments;
+                    
+                    const bnavBadgeRdv = document.getElementById('bnavBadgeRdv');
+                    if (bnavBadgeRdv) {
+                        bnavBadgeRdv.textContent = pendingAppointments;
+                        bnavBadgeRdv.style.display = pendingAppointments > 0 ? 'block' : 'none';
+                    }
+                });
+            });
+        }
 
         const pendingBadge = document.getElementById('pendingAppointmentsBadge');
         if (pendingBadge) pendingBadge.textContent = pendingAppointments;
@@ -127,6 +294,18 @@ const app = {
     },
 
     renderPage(page) {
+        // VERROUILLAGE SÉCURITÉ : On bloque le rendu de la page si l'accès est refusé
+        if (!this.checkPageAccess(page)) {
+            this.showToast("Accès refusé. Vous n'avez pas les permissions pour cette page.", "error");
+            if (page !== 'dashboard') {
+                this.renderPage('dashboard');
+            } else {
+                document.getElementById('contentContainer').innerHTML = '<div style="padding: 50px; text-align: center; color: #ef4444;"><h2>⛔ Accès Restreint</h2><p>Vous n\'avez accès à aucun module. Contactez l\'administrateur.</p></div>';
+                document.getElementById('pageTitle').textContent = "Accès Restreint";
+            }
+            return;
+        }
+
         this.currentPage = page;
         const titleMap = {
             'dashboard': 'Tableau de bord',
@@ -198,23 +377,23 @@ const app = {
 
         const renderers = {
             'dashboard': () => this.renderDashboard(),
-            'daily-bilan': () => this.renderDailyBilan(),
-            'daily-users': () => this.renderDailyUsers(),
+            'daily-bilan': () => DailyBilanView.render(this),
+            'daily-users': () => DailyUsersView.render(this),
             'invoices-list': () => ToutesLesFacturesView.render(this),
             'invoice-new': () => NouvelleFactureView.render(this),
-            'appointment-new': () => this.renderAppointmentNew(),
-            'appointments-list': () => this.renderAppointmentsList(),
-            'appointments-pending': () => this.renderAppointmentsPending(),
+            'appointment-new': () => NouveauRdvView.render(this),
+            'appointments-list': () => TousLesRdvView.render(this, 'all'),
+            'appointments-pending': () => TousLesRdvView.render(this, 'pending'),
             'appointments-calendar': () => this.renderAppointmentsCalendar(),
             'program-new': () => this.renderProgramNew(),
             'program-my': () => this.renderProgramMy(),
             'program-history': () => this.renderProgramHistory(),
             'drivers': () => this.renderDrivers(),
             'departures-calendar': () => this.renderDeparturesCalendar(),
-            'quotes-list': () => this.renderQuotesList(),
+            'quotes-list': () => TousLesDevisView.render(this),
             'quote-new': () => NouveauDevisView.render(this),
-            'quote-requests': () => this.renderQuoteRequests(),
-            'loading-container': () => this.renderLoadingContainer(),
+            'quote-requests': () => DemandesDevisView.render(this),
+            'loading-container': () => GestionConteneursView.render(this),
             'loading-boats': () => this.renderLoadingBoats(),
             'scan-warehouse': () => this.renderScanWarehouse(),
             'scan-container': () => this.renderScanContainer(),
@@ -229,10 +408,9 @@ const app = {
             'notifications': () => this.renderNotifications(),
             'notifications-history': () => this.renderNotificationsHistory(),
             'products-list': () => ProductsListView.render(this),
-            'finance-cashier': () => this.renderFinanceCashier(),
-            'finance-cheques': () => this.renderFinanceCheques(),
-            'finance-expenses': () => this.renderFinanceExpenses(),
-            'stock-list': () => this.renderStockList(),
+            'finance-cashier': () => FinanceCaisseView.render(this),
+            'finance-cheques': () => FinanceChequesView.render(this),
+            'finance-expenses': () => FinanceDepensesView.render(this),
             'balance-monthly': () => this.renderBalanceMonthly(),
             'balance-yearly': () => this.renderBalanceYearly(),
             'balance-boat': () => this.renderBalanceBoat(),
@@ -240,13 +418,13 @@ const app = {
             'stats-boat': () => this.renderStatsBoat(),
             'stats-monthly': () => this.renderStatsMonthly(),
             'stats-yearly': () => this.renderStatsYearly(),
-            'settings-agency': () => this.renderSettingsAgency(),
+            'settings-agency': () => SettingsAgencyView.render(this),
             'settings-company': () => this.renderSettingsCompany(),
             'settings-software': () => this.renderSettingsSoftware(),
             'settings-sms': () => this.renderSettingsSms(),
             'settings-notifications': () => this.renderSettingsNotifications(),
-            'settings-menus': () => this.renderSettingsMenus(),
-            'settings-agents': () => this.renderSettingsAgents(),
+            'settings-menus': () => SettingsMenusView.render(this),
+            'settings-agents': () => SettingsAgentsView.render(this),
             'settings-appointments': () => this.renderSettingsAppointments(),
             'settings-profile': () => this.renderSettingsProfile(),
             'config-invoice': () => this.renderConfigInvoice(),
@@ -378,81 +556,6 @@ const app = {
         document.getElementById('contentContainer').innerHTML = html;
     },
 
-    renderAppointmentNew() {
-        const html = `
-            <div class="form-card">
-                <h3>Prendre un rendez-vous</h3>
-                <div class="form-grid">
-                    <div class="form-group"><label>Client</label><input type="text" id="appClient" placeholder="Nom du client"></div>
-                    <div class="form-group"><label>Date</label><input type="date" id="appDate" value="${new Date().toISOString().split('T')[0]}"></div>
-                    <div class="form-group"><label>Heure</label><input type="time" id="appTime" value="10:00"></div>
-                    <div class="form-group"><label>Objet</label><input type="text" id="appSubject" placeholder="Objet du rendez-vous"></div>
-                    <div class="form-group full-width"><label>Notes</label><textarea id="appNotes" rows="3" placeholder="Informations complémentaires"></textarea></div>
-                </div>
-                <div style="margin-top: 20px; display: flex; gap: 10px;">
-                    <button class="btn btn-primary" onclick="app.createAppointment()"><i class="fas fa-save"></i> Enregistrer</button>
-                    <button class="btn btn-outline" onclick="app.renderPage('appointments-list')">Annuler</button>
-                </div>
-            </div>
-        `;
-        document.getElementById('contentContainer').innerHTML = html;
-    },
-
-    renderAppointmentsList() {
-        const html = `
-            <div class="quick-actions">
-                <button class="btn btn-primary" onclick="app.renderPage('appointment-new')"><i class="fas fa-plus"></i> Nouveau RDV</button>
-            </div>
-            <div class="form-card">
-                <table class="data-table">
-                    <thead><tr><th>Client</th><th>Date</th><th>Heure</th><th>Statut</th><th>Actions</th></tr></thead>
-                    <tbody>
-                        ${this.data.appointments.map(rdv => `
-                            <tr>
-                                <td><strong>${rdv.client}</strong></td>
-                                <td>${rdv.date}</td>
-                                <td>${rdv.time}</td>
-                                <td><span class="badge ${rdv.status === 'confirmé' ? 'badge-success' : 'badge-warning'}">${rdv.status}</span></td>
-                                <td>
-                                    <button class="btn btn-outline btn-small" onclick="app.confirmAppointment(${rdv.id})"><i class="fas fa-check"></i></button>
-                                    <button class="btn btn-danger btn-small" onclick="app.deleteAppointment(${rdv.id})"><i class="fas fa-trash"></i></button>
-                                </td>
-                            </tr>
-                        `).join('')}
-                    </tbody>
-                </table>
-            </div>
-        `;
-        document.getElementById('contentContainer').innerHTML = html;
-    },
-
-    renderAppointmentsPending() {
-        const pending = this.data.appointments.filter(a => a.status === 'en_attente');
-        const html = `
-            <div class="form-card">
-                <h3>RDV à valider (${pending.length})</h3>
-                <table class="data-table">
-                    <thead><tr><th>Client</th><th>Date</th><th>Heure</th><th>Objet</th><th>Actions</th></tr></thead>
-                    <tbody>
-                        ${pending.map(rdv => `
-                            <tr>
-                                <td><strong>${rdv.client}</strong></td>
-                                <td>${rdv.date}</td>
-                                <td>${rdv.time}</td>
-                                <td>-</td>
-                                <td>
-                                    <button class="btn btn-success btn-small" onclick="app.validateAppointment(${rdv.id})"><i class="fas fa-check"></i> Valider</button>
-                                    <button class="btn btn-danger btn-small" onclick="app.rejectAppointment(${rdv.id})"><i class="fas fa-times"></i> Refuser</button>
-                                </td>
-                            </tr>
-                        `).join('')}
-                    </tbody>
-                </table>
-            </div>
-        `;
-        document.getElementById('contentContainer').innerHTML = html;
-    },
-
     renderAppointmentsCalendar() {
         const html = `
             <div class="calendar-container">
@@ -579,75 +682,6 @@ const app = {
         }, 100);
     },
 
-    renderQuotesList() {
-        const html = `
-            <div class="quick-actions">
-                <button class="btn btn-primary" onclick="app.renderPage('quote-new')"><i class="fas fa-plus"></i> Nouveau devis</button>
-            </div>
-            <div class="form-card">
-                <table class="data-table">
-                    <thead><tr><th>N° Devis</th><th>Client</th><th>Date</th><th>Montant</th><th>Statut</th><th>Actions</th></tr></thead>
-                    <tbody>
-                        ${this.data.quotes.map(q => `
-                            <tr>
-                                <td>${q.number}</td>
-                                <td>${q.client}</td>
-                                <td>${q.date}</td>
-                                <td>${this.formatMoney(q.amount)}</td>
-                                <td><span class="badge ${q.status === 'accepté' ? 'badge-success' : 'badge-info'}">${q.status}</span></td>
-                                <td><button class="btn btn-outline btn-small" onclick="app.convertQuoteToInvoice(${q.id})">Convertir</button></td>
-                            </tr>
-                        `).join('')}
-                    </tbody>
-                </table>
-            </div>
-        `;
-        document.getElementById('contentContainer').innerHTML = html;
-    },
-
-    renderQuoteRequests() {
-        const html = `
-            <div class="form-card">
-                <h3>Demandes de devis reçues</h3>
-                <table class="data-table">
-                    <thead><tr><th>Client</th><th>Email</th><th>Date</th><th>Actions</th></tr></thead>
-                    <tbody>
-                        ${this.data.quoteRequests.map(req => `
-                            <tr>
-                                <td><strong>${req.client}</strong></td>
-                                <td>${req.email}</td>
-                                <td>${req.date}</td>
-                                <td><button class="btn btn-primary btn-small" onclick="app.processQuoteRequest(${req.id})">Traiter</button></td>
-                            </tr>
-                        `).join('')}
-                    </tbody>
-                </table>
-            </div>
-        `;
-        document.getElementById('contentContainer').innerHTML = html;
-    },
-
-    renderLoadingContainer() {
-        const html = `
-            <div class="form-card">
-                <h3>Gestion des conteneurs</h3>
-                <table class="data-table">
-                    <thead><tr><th>N° Conteneur</th><th>Statut</th><th>Colis chargés</th><th>Actions</th></tr></thead>
-                    <tbody>
-                        ${this.data.containers.map(c => `
-                            <tr>
-                                <td><strong>${c.number}</strong></td>
-                                <td><span class="badge ${c.status === 'en_chargement' ? 'badge-warning' : (c.status === 'en_transit' ? 'badge-info' : 'badge-success')}">${c.status}</span></td>
-                                <td style="text-align: center;">${c.items} %</td>
-                                <td><button class="btn btn-outline btn-small" onclick="app.viewContainer(${c.id})">Détails</button></td>
-                            </tr>
-                        `).join('')}
-                    </tbody>
-                </table>
-            </div>
-        `;
-        document.getElementById('contentContainer').innerHTML = html;
-    },
 
     renderLoadingBoats() {
         const html = `
@@ -891,77 +925,15 @@ const app = {
         document.getElementById('contentContainer').innerHTML = html;
     },
 
-    renderFinanceCashier() {
-        const totalIn = 12500;
-        const totalOut = 3850;
-        const balance = totalIn - totalOut;
-        
-        const html = `
-            <div class="stats-grid">
-                <div class="stat-card"><div class="stat-value">${this.formatMoney(totalIn)}</div><div class="stat-label">Total encaissements</div></div>
-                <div class="stat-card"><div class="stat-value">${this.formatMoney(totalOut)}</div><div class="stat-label">Total dépenses</div></div>
-                <div class="stat-card"><div class="stat-value" style="color: ${balance >= 0 ? '#10b981' : '#ef4444'}">${this.formatMoney(balance)}</div><div class="stat-label">Solde caisse</div></div>
-            </div>
-            <div class="form-card">
-                <h3>Dernières opérations</h3>
-                <table class="data-table">
-                    <thead><tr><th>Date</th><th>Libellé</th><th>Type</th><th>Montant</th></tr></thead>
-                    <tbody>
-                        <tr><td>2024-12-14</td><td>Facture Jean Dupont</td><td>Entrée</td><td style="color:#10b981;">${this.formatMoney(250)}</td></tr>
-                        <tr><td>2024-12-13</td><td>Dépense fourniture</td><td>Sortie</td><td style="color:#ef4444;">-${this.formatMoney(50)}</td></tr>
-                    </tbody>
-                </table>
-            </div>
-        `;
-        document.getElementById('contentContainer').innerHTML = html;
-    },
-
-    renderFinanceCheques() {
-        const html = `
-            <div class="form-card">
-                <h3>Chèques reçus</h3>
-                <table class="data-table">
-                    <thead><tr><th>N° Chèque</th><th>Client</th><th>Montant</th><th>Date encaissement</th><th>Statut</th></tr></thead>
-                    <tbody>
-                        <tr><td>CHQ-001</td><td>Jean Dupont</td><td>${this.formatMoney(150)}</td><td>2024-12-10</td><td><span class="badge badge-success">Encaissé</span></td></tr>
-                        <tr><td>CHQ-002</td><td>Marie Koné</td><td>${this.formatMoney(80)}</td><td>2024-12-15</td><td><span class="badge badge-warning">En attente</span></td></tr>
-                    </tbody>
-                </table>
-            </div>
-        `;
-        document.getElementById('contentContainer').innerHTML = html;
-    },
-
-    renderFinanceExpenses() {
-        const html = `
-            <div class="quick-actions">
-                <button class="btn btn-primary" onclick="app.addExpense()"><i class="fas fa-plus"></i> Nouvelle dépense</button>
-            </div>
-            <div class="form-card">
-                <h3>Dépenses</h3>
-                <table class="data-table">
-                    <thead><tr><th>Date</th><th>Libellé</th><th>Catégorie</th><th>Montant</th><th>Actions</th></tr></thead>
-                    <tbody>
-                        <tr><td>2024-12-10</td><td>Achat fournitures</td><td>Fournitures</td><td>${this.formatMoney(50)}</td><td><button class="btn btn-outline btn-small">Modifier</button></td></tr>
-                        <tr><td>2024-12-08</td><td>Entretien local</td><td>Maintenance</td><td>${this.formatMoney(150)}</td><td><button class="btn btn-outline btn-small">Modifier</button></td></tr>
-                    </tbody>
-                </table>
-            </div>
-        `;
-        document.getElementById('contentContainer').innerHTML = html;
-    },
-
     renderStockList() {
         const html = `
-            <div class="quick-actions">
-                <button class="btn btn-primary" onclick="app.addStock()"><i class="fas fa-plus"></i> Nouveau stock</button>
-            </div>
             <div class="form-card">
+                <h3>État du stock</h3>
                 <table class="data-table">
-                    <thead><tr><th>Produit</th><th>Quantité</th><th>Emplacement</th><th>Date entrée</th><th>Actions</th></tr></thead>
+                    <thead><tr><th>Produit</th><th>Catégorie</th><th>Stock actuel</th><th>Prix unitaire</th></tr></thead>
                     <tbody>
-                        <tr><td>Colis Standard</td><td>150</td><td>Entrepôt A1</td><td>2024-12-01</td><td><button class="btn btn-outline btn-small">Détails</button></td></tr>
-                        <tr><td>Malle / Fût</td><td>25</td><td>Zone B2</td><td>2024-12-05</td><td><button class="btn btn-outline btn-small">Détails</button></td></tr>
+                        <tr><td>Carton standard</td><td>Emballage</td><td>150</td><td>15.00 €</td></tr>
+                        <tr><td>Malle</td><td>Contenant</td><td>25</td><td>45.00 €</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -969,43 +941,26 @@ const app = {
         document.getElementById('contentContainer').innerHTML = html;
     },
 
-    renderBalanceMonthly() { this.renderChartPage('bilan mensuel', 'monthly'); },
-    renderBalanceYearly() { this.renderChartPage('bilan annuel', 'yearly'); },
-    
-    renderBalanceBoat() {
+    renderBalanceMonthly() { this.renderChartPage('balance-monthly', 'monthly'); },
+    renderBalanceYearly() { this.renderChartPage('balance-yearly', 'yearly'); },
+    renderBalanceBoat() { this.renderChartPage('balance-boat', 'boat'); },
+    renderBalance12M() { this.renderChartPage('balance-12m', 'yearly'); },
+    renderStatsBoat() { this.renderChartPage('stats-boat', 'boat'); },
+    renderStatsMonthly() { this.renderChartPage('stats-monthly', 'monthly'); },
+    renderStatsYearly() { this.renderChartPage('stats-yearly', 'yearly'); },
+
+    renderChartPage(pageId, type) {
         const html = `
             <div class="form-card">
-                <h3>Bilan par bateau</h3>
-                <table class="data-table">
-                    <thead><tr><th>Bateau</th><th>Voyages</th><th>CA généré</th><th>Dépenses</th><th>Bénéfice</th></tr></thead>
-                    <tbody>
-                        <tr><td>CMA CGM</td><td>12</td><td>${this.formatMoney(24500)}</td><td>${this.formatMoney(9800)}</td><td style="color:#10b981;">${this.formatMoney(14700)}</td></tr>
-                        <tr><td>MSC</td><td>10</td><td>${this.formatMoney(21000)}</td><td>${this.formatMoney(8500)}</td><td style="color:#10b981;">${this.formatMoney(12500)}</td></tr>
-                    </tbody>
-                </table>
-            </div>
-        `;
-        document.getElementById('contentContainer').innerHTML = html;
-    },
-
-    renderBalance12M() { this.renderChartPage('direction 12 mois', '12m'); },
-    renderStatsBoat() { this.renderChartPage('statistiques bateau', 'boat'); },
-    renderStatsMonthly() { this.renderChartPage('statistiques mensuelles', 'monthlyStats'); },
-    renderStatsYearly() { this.renderChartPage('statistiques annuelles', 'yearlyStats'); },
-
-    renderChartPage(title, type) {
-        const html = `
-            <div class="form-card">
-                <h3>${title}</h3>
+                <h3>Graphiques et Statistiques</h3>
                 <div style="position: relative; height: 300px; width: 100%;">
-                    <canvas id="statsChart"></canvas>
+                    <canvas id="chart-${type}"></canvas>
                 </div>
             </div>
         `;
         document.getElementById('contentContainer').innerHTML = html;
-        
         setTimeout(() => {
-            const ctx = document.getElementById('statsChart')?.getContext('2d');
+            const ctx = document.getElementById(`chart-${type}`)?.getContext('2d');
             if (ctx) {
                 let data, labels;
                 if (type === 'monthly') {
@@ -1035,36 +990,11 @@ const app = {
     },
 
     // Paramètres pages
-    renderSettingsAgency() { this.renderSettingsForm('Agence', { name: 'AMT Paris', address: '93 avenue de la République, 75011 Paris', phone: '01 86 90 03 80', email: 'paris@amt.com' }); },
     renderSettingsCompany() { this.renderSettingsForm('Entreprise', { name: 'AMT TRANS\'IT', siret: '929 865 103 R.C.S. Paris', vat: 'FR929865103', legal: 'SARL' }); },
     renderSettingsSoftware() { this.renderSettingsForm('Paramètres logiciel', { theme: 'Clair', language: 'Français', notifications: true, autoBackup: true }); },
     renderSettingsSms() { this.renderSettingsForm('Configuration SMS', { provider: 'API SMS', apiKey: '••••••••', sender: 'AMT PARIS' }); },
     renderSettingsNotifications() { this.renderSettingsForm('Notifications', { emailAlerts: true, smsAlerts: true, pushEnabled: true }); },
-    renderSettingsMenus() { this.renderSettingsForm('Gestion menus', { dashboardOrder: 1, invoicesOrder: 2, clientsOrder: 3 }); },
     
-    renderSettingsAgents() {
-        const html = `
-            <div class="quick-actions"><button class="btn btn-primary" onclick="app.addAgent()"><i class="fas fa-user-plus"></i> Nouvel agent</button></div>
-            <div class="form-card">
-                <table class="data-table">
-                    <thead><tr><th>Nom</th><th>Email</th><th>Rôle</th><th>Statut</th><th>Actions</th></tr></thead>
-                    <tbody>
-                        ${this.data.agents.map(a => `
-                            <tr>
-                                <td><strong>${a.name}</strong></td>
-                                <td>${a.email}</td>
-                                <td>${a.role}</td>
-                                <td><span class="badge ${a.active ? 'badge-success' : 'badge-danger'}">${a.active ? 'Actif' : 'Inactif'}</span></td>
-                                <td><button class="btn btn-outline btn-small" onclick="app.editAgent(${a.id})">Modifier</button></td>
-                            </tr>
-                        `).join('')}
-                    </tbody>
-                </table>
-            </div>
-        `;
-        document.getElementById('contentContainer').innerHTML = html;
-    },
-
     renderSettingsAppointments() { this.renderSettingsForm('Paramètres RDV', { duration: 30, slotInterval: 15, workingHours: '09:00-18:00', reminderDelay: 24 }); },
     renderSettingsProfile() { 
         const userName = sessionStorage.getItem('userName') || 'Utilisateur';
