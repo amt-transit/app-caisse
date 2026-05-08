@@ -1,11 +1,13 @@
 import { db } from '../../../firebase-config.js';
 import { collection, doc, writeBatch, getDocs, query, where, limit } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
+import { Autocomplete } from './autocomplete.js';
 
 export const NouveauDevisView = {
     items: [{ id: Date.now(), desc: '', qty: 1, pu: 0, total: 0 }],
     clientsData: new Map(),
     destMap: new Map(),
     destTel: new Map(),
+    destExpediteurMap: new Map(),
     productsData: new Map(),
 
     render(app) {
@@ -13,6 +15,9 @@ export const NouveauDevisView = {
         this.items = [{ id: Date.now(), desc: '', qty: 1, pu: 0, total: 0 }];
         this.destMap.clear();
         this.destTel.clear();
+        this.destExpediteurMap.clear();
+        this.availableDests = [];
+        this.availableCommunes = [];
 
         const html = `
             <div style="max-width: 1000px; margin: 0 auto; animation: fadeIn 0.3s ease-in-out;">
@@ -62,8 +67,10 @@ export const NouveauDevisView = {
                         </div>
                         <div class="form-group">
                             <label>Lieu de livraison prévu</label>
-                            <input type="text" id="ndLieu" placeholder="Optionnel..." list="ndCommunesList">
-                            <datalist id="ndCommunesList"></datalist>
+                            <div style="position: relative;">
+                                <input type="text" id="ndLieu" placeholder="Optionnel..." autocomplete="off">
+                                <ul id="ndLieuSuggestions" class="autocomplete-suggestions"></ul>
+                            </div>
                         </div>
                     </div>
                     <div class="form-group" style="margin-top: 15px;">
@@ -77,8 +84,10 @@ export const NouveauDevisView = {
                     <div class="form-card" style="box-shadow: 0 2px 4px rgba(0,0,0,0.02);">
                         <h3 style="border-bottom: 1px solid #e2e8f0; padding-bottom: 10px; margin-bottom: 15px; display: flex; align-items: center; gap: 10px;"><i class="fas fa-upload text-orange-500"></i> Expéditeur (Client)</h3>
                         <div class="form-group">
-                            <input type="text" id="ndExpediteur" placeholder="Rechercher nom ou téléphone..." required list="ndClientsList">
-                            <datalist id="ndClientsList"></datalist>
+                            <div style="position: relative;">
+                                <input type="text" id="ndExpediteur" placeholder="Rechercher nom ou téléphone..." required autocomplete="off">
+                                <ul id="ndExpediteurSuggestions" class="autocomplete-suggestions"></ul>
+                            </div>
                             <div id="ndExpediteurFeedback" style="font-size: 12px; color: #64748b; margin-top: 5px;"></div>
                         </div>
                     </div>
@@ -86,8 +95,10 @@ export const NouveauDevisView = {
                     <div class="form-card" style="box-shadow: 0 2px 4px rgba(0,0,0,0.02);">
                         <h3 style="border-bottom: 1px solid #e2e8f0; padding-bottom: 10px; margin-bottom: 15px; display: flex; align-items: center; gap: 10px;"><i class="fas fa-download text-emerald-500"></i> Destinataire</h3>
                         <div class="form-group">
-                            <input type="text" id="ndDestinataire" placeholder="Nom ou téléphone (Optionnel pour un devis)..." list="ndDestinatairesList">
-                            <datalist id="ndDestinatairesList"></datalist>
+                            <div style="position: relative;">
+                                <input type="text" id="ndDestinataire" placeholder="Nom ou téléphone (Optionnel pour un devis)..." autocomplete="off">
+                                <ul id="ndDestinataireSuggestions" class="autocomplete-suggestions"></ul>
+                            </div>
                             <div id="ndDestinataireFeedback" style="font-size: 12px; color: #64748b; margin-top: 5px;"></div>
                         </div>
                     </div>
@@ -178,6 +189,41 @@ export const NouveauDevisView = {
         document.getElementById('ndRemise').addEventListener('input', () => this.calculateTotals());
         document.getElementById('ndDevise').addEventListener('change', () => this.calculateTotals());
         document.getElementById('ndSubmitBtn').addEventListener('click', () => this.submitQuote());
+        
+        Autocomplete.initCustom('ndExpediteur', 'ndExpediteurSuggestions',
+            (q) => {
+                const query = q.toLowerCase();
+                return Array.from(this.clientsData.values()).filter(c => (c.nom && c.nom.toLowerCase().includes(query)) || (c.tel && c.tel.includes(query))).slice(0, 8);
+            },
+            (c) => `<div style="font-weight: 600;">${c.nom}</div><div style="font-size: 11px; opacity: 0.7;">📞 ${c.tel || 'N/A'}</div>`,
+            (c, input) => { input.value = c.nom; this.handleExpediteurChange(); }
+        );
+        document.getElementById('ndExpediteur').addEventListener('input', (e) => { if(e.target.value.trim().length < 2) this.handleExpediteurChange(); });
+
+        Autocomplete.initCustom('ndDestinataire', 'ndDestinataireSuggestions',
+            (q) => {
+                const query = q.toLowerCase();
+                let matches = Array.from(this.destMap.keys()).filter(d => d.toLowerCase().includes(query));
+                if (matches.length < 5) {
+                    const globalMatches = (this.availableDests || []).filter(d => d.toLowerCase().includes(query));
+                    matches = [...new Set([...matches, ...globalMatches])];
+                }
+                return matches.slice(0, 8);
+            },
+            (d) => `<div style="font-weight: 600;">${d}</div>`,
+            (d, input) => { input.value = d; this.handleDestinataireChange(); }
+        );
+        document.getElementById('ndDestinataire').addEventListener('input', (e) => { if(e.target.value.trim().length < 2) this.handleDestinataireChange(); });
+
+        Autocomplete.initCustom('ndLieu', 'ndLieuSuggestions',
+            (q) => {
+                const query = q.toLowerCase();
+                const matches = (this.availableCommunes || []).filter(c => c.toLowerCase().includes(query));
+                return matches.slice(0, 8);
+            },
+            (c) => `<div style="font-weight: 600;">${c}</div>`,
+            (c, input) => { input.value = c; }
+        );
     },
 
     async loadAutocompleteData() {
@@ -189,10 +235,6 @@ export const NouveauDevisView = {
                 if (data.nom) this.clientsData.set(data.nom.trim(), data);
             });
             
-            const datalist = document.getElementById('ndClientsList');
-            if (datalist) {
-                datalist.innerHTML = Array.from(this.clientsData.keys()).sort().map(nom => `<option value="${nom}"></option>`).join('');
-            }
 
             // NOUVEAU : Charger l'historique des destinataires (depuis les livraisons)
             const livSnap = await getDocs(collection(db, "livraisons"));
@@ -207,16 +249,12 @@ export const NouveauDevisView = {
                     destSet.add(destName);
                     if (data.lieuLivraison && !this.destMap.has(destName)) this.destMap.set(destName, data.lieuLivraison.trim());
                     if (data.numero && !this.destTel.has(destName)) this.destTel.set(destName, data.numero.trim());
+                    if (data.expediteur && !this.destExpediteurMap.has(destName)) this.destExpediteurMap.set(destName, data.expediteur.trim());
                 }
             });
 
-            const communesList = document.getElementById('ndCommunesList');
-            if (communesList) communesList.innerHTML = Array.from(communesSet).sort().map(l => `<option value="${l}"></option>`).join('');
-            
-            const destList = document.getElementById('ndDestinatairesList');
-            if (destList && destList.options.length === 0) {
-                destList.innerHTML = Array.from(destSet).sort().map(d => `<option value="${d}"></option>`).join('');
-            }
+            this.availableCommunes = Array.from(communesSet).sort();
+            this.availableDests = Array.from(destSet).sort();
 
             const prodSnap = await getDocs(collection(db, "products"));
             this.productsData.clear();
@@ -225,10 +263,6 @@ export const NouveauDevisView = {
                 if (data.desc) this.productsData.set(data.desc.trim(), data);
             });
             
-            const prodList = document.getElementById('ndProductsList');
-            if (prodList) {
-                prodList.innerHTML = Array.from(this.productsData.keys()).sort().map(desc => `<option value="${desc}"></option>`).join('');
-            }
         } catch (e) {
             console.error("Erreur chargement auto-complétion :", e);
         }
@@ -236,12 +270,10 @@ export const NouveauDevisView = {
 
     async handleExpediteurChange() {
         const expediteur = document.getElementById('ndExpediteur').value.trim();
-        const destinatairesDatalist = document.getElementById('ndDestinatairesList');
         const destinataireInput = document.getElementById('ndDestinataire');
         const feedbackExp = document.getElementById('ndExpediteurFeedback');
         
         if (!expediteur) {
-            if(destinatairesDatalist) destinatairesDatalist.innerHTML = '';
             if(feedbackExp) feedbackExp.innerHTML = '';
             return;
         }
@@ -270,8 +302,6 @@ export const NouveauDevisView = {
 
             const uniqueDests = Array.from(localDestMap.keys());
             if (uniqueDests.length > 0) {
-                if(destinatairesDatalist) destinatairesDatalist.innerHTML = uniqueDests.map(dest => `<option value="${dest}"></option>`).join('');
-                
                 if (uniqueDests.length === 1) {
                     if (!destinataireInput.value || destinataireInput.value !== uniqueDests[0]) {
                         destinataireInput.value = uniqueDests[0];
@@ -290,6 +320,7 @@ export const NouveauDevisView = {
         const destinataireInput = document.getElementById('ndDestinataire');
         const lieuInput = document.getElementById('ndLieu');
         const feedbackDest = document.getElementById('ndDestinataireFeedback');
+        const expInput = document.getElementById('ndExpediteur');
         
         const selectedDest = destinataireInput ? destinataireInput.value.trim() : '';
         if (!selectedDest) {
@@ -298,11 +329,12 @@ export const NouveauDevisView = {
             return;
         }
 
-        let lieu = '', num = '', isFound = false;
+         let lieu = '', num = '', exp = '', isFound = false;
 
         if (this.destMap && this.destMap.has(selectedDest)) {
             lieu = this.destMap.get(selectedDest);
             num = this.destTel.get(selectedDest);
+            exp = this.destExpediteurMap.get(selectedDest) || '';
             isFound = true;
         } else {
             try {
@@ -311,12 +343,19 @@ export const NouveauDevisView = {
                 if (!snap.empty) {
                     lieu = snap.docs[0].data().lieuLivraison || snap.docs[0].data().commune || '';
                     num = snap.docs[0].data().numero || '';
+                    exp = snap.docs[0].data().expediteur || '';
                     isFound = true;
                 }
             } catch (e) { console.error(e); }
         }
 
         if (lieuInput && isFound && lieuInput.value.trim() === '') lieuInput.value = lieu || '';
+        if (expInput && isFound && exp && expInput.value.trim() === '') {
+            expInput.value = exp;
+            expInput.style.backgroundColor = '#e0f2fe';
+            setTimeout(() => expInput.style.backgroundColor = '', 1000);
+            this.handleExpediteurChange();
+        }
         if (isFound && feedbackDest) feedbackDest.innerHTML = `<span style="color:#059669;"><i class="fas fa-check-circle"></i> <b>Tél:</b> ${num || 'N/A'}</span>`;
         else if (feedbackDest) feedbackDest.innerHTML = `<span style="color:#f59e0b;"><i class="fas fa-exclamation-triangle"></i> Nouveau destinataire</span>`;
     },
@@ -329,7 +368,10 @@ export const NouveauDevisView = {
             <div class="form-grid" style="grid-template-columns: 2fr 0.5fr 1fr 1fr auto; align-items: end; background: #f8fafc; padding: 15px; border-radius: 8px; margin-bottom: 10px; border: 1px solid #e2e8f0;">
                 <div class="form-group" style="margin: 0;">
                     <label style="font-size: 11px;">Description *</label>
-                    <input type="text" class="item-desc" data-id="${item.id}" value="${item.desc}" list="ndProductsList" placeholder="Article..." style="margin: 0; width: 100%;">
+                    <div style="position: relative; width: 100%;">
+                        <input type="text" class="item-desc" id="ndProduct_${item.id}" data-id="${item.id}" value="${item.desc}" placeholder="Article..." style="margin: 0; width: 100%;" autocomplete="off">
+                        <ul id="ndProductSuggestions_${item.id}" class="autocomplete-suggestions"></ul>
+                    </div>
                 </div>
                 <div class="form-group" style="margin: 0;">
                     <label style="font-size: 11px;">Qté *</label>
@@ -345,11 +387,25 @@ export const NouveauDevisView = {
                 </div>
                 <button class="btn btn-danger btn-small" onclick="window.ndRemoveRow(${item.id})" style="height: 36px; display: flex; align-items: center; justify-content: center; width: 100%;" ${this.items.length === 1 ? 'disabled' : ''}><i class="fas fa-trash"></i></button>
             </div>
-        `).join('') + '<datalist id="ndProductsList">' + Array.from(this.productsData.keys()).sort().map(desc => `<option value="${desc}"></option>`).join('') + '</datalist>';
+        `).join('');
 
         document.querySelectorAll('.item-desc').forEach(el => el.addEventListener('input', (e) => this.updateItem(e, 'desc')));
         document.querySelectorAll('.item-qty').forEach(el => el.addEventListener('input', (e) => this.updateItem(e, 'qty')));
         document.querySelectorAll('.item-pu').forEach(el => el.addEventListener('input', (e) => this.updateItem(e, 'pu')));
+
+        this.items.forEach(item => {
+            Autocomplete.initCustom(`ndProduct_${item.id}`, `ndProductSuggestions_${item.id}`,
+                (q) => {
+                    const query = q.toLowerCase();
+                    return Array.from(this.productsData.values()).filter(p => p.desc && p.desc.toLowerCase().includes(query)).slice(0, 8);
+                },
+                (p) => `<div style="font-weight: 600;">${p.desc}</div><div style="font-size: 11px; opacity: 0.7;">Prix: ${p.price || 0} €</div>`,
+                (p, input) => {
+                    input.value = p.desc;
+                    input.dispatchEvent(new Event('input')); // Déclenche le calcul automatique
+                }
+            );
+        });
 
         window.ndRemoveRow = (id) => {
             if (this.items.length > 1) {

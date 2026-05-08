@@ -1,10 +1,12 @@
 import { db } from '../../../firebase-config.js';
 import { collection, doc, writeBatch, getDocs, query, where, limit } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
+import { Autocomplete } from './autocomplete.js';
 
 export const NouvelleFactureView = {
     items: [{ id: Date.now(), desc: '', qty: 1, pu: 0, total: 0 }],
     destMap: new Map(),
     destInfos: new Map(),
+    destExpMap: new Map(),
     clientsData: new Map(),
     productsData: new Map(),
 
@@ -13,6 +15,9 @@ export const NouvelleFactureView = {
         this.items = [{ id: Date.now(), desc: '', qty: 1, pu: 0, total: 0 }]; // Reset des lignes
         this.destMap.clear();
         this.destInfos.clear();
+        this.destExpMap.clear();
+        this.availableDests = [];
+        this.availableCommunes = [];
 
         const html = `
             <div style="max-width: 1000px; margin: 0 auto; animation: fadeIn 0.3s ease-in-out;">
@@ -52,6 +57,10 @@ export const NouvelleFactureView = {
                                 <option value="LIBREVILLE">LIBREVILLE</option>
                             </select>
                         </div>
+                        <div class="form-group">
+                            <label>Conteneur prévisionnel</label>
+                            <input type="text" id="nfConteneur" placeholder="Ex: E10, D45...">
+                        </div>
                     </div>
                 </div>
 
@@ -60,8 +69,10 @@ export const NouvelleFactureView = {
                     <div class="form-card" style="box-shadow: 0 2px 4px rgba(0,0,0,0.02);">
                         <h3 style="border-bottom: 1px solid #e2e8f0; padding-bottom: 10px; margin-bottom: 15px; display: flex; align-items: center; gap: 10px;"><i class="fas fa-upload text-orange-500"></i> Expéditeur</h3>
                         <div class="form-group">
-                            <input type="text" id="nfExpediteur" placeholder="Nom, Prénom et Téléphone..." required list="nfExpediteursList">
-                            <datalist id="nfExpediteursList"></datalist>
+                            <div style="position: relative;">
+                                <input type="text" id="nfExpediteur" placeholder="Nom, Prénom et Téléphone..." required autocomplete="off">
+                                <ul id="nfExpediteurSuggestions" class="autocomplete-suggestions"></ul>
+                            </div>
                         </div>
                         <div id="nfExpediteurFeedback" style="font-size: 12px; color: #64748b; margin-top: 5px;"></div>
                     </div>
@@ -69,26 +80,18 @@ export const NouvelleFactureView = {
                     <div class="form-card" style="box-shadow: 0 2px 4px rgba(0,0,0,0.02);">
                         <h3 style="border-bottom: 1px solid #e2e8f0; padding-bottom: 10px; margin-bottom: 15px; display: flex; align-items: center; gap: 10px;"><i class="fas fa-download text-emerald-500"></i> Destinataire</h3>
                         <div class="form-group">
-                            <input type="text" id="nfDestinataire" placeholder="Nom, Prénom et Téléphone..." required list="nfDestinatairesList">
-                            <datalist id="nfDestinatairesList"></datalist>
+                            <div style="position: relative;">
+                                <input type="text" id="nfDestinataire" placeholder="Nom, Prénom et Téléphone..." required autocomplete="off">
+                                <ul id="nfDestinataireSuggestions" class="autocomplete-suggestions"></ul>
+                            </div>
                         </div>
                         <div id="nfDestinataireFeedback" style="font-size: 12px; color: #64748b; margin-top: 5px;"></div>
                         <div class="form-group" style="margin-top: 15px;">
                             <label>Lieu livraison / Adresse complète</label>
-                            <input type="text" id="nfLieu" placeholder="Ex: Cocody Angré 8ème tranche..." list="nfCommunesList">
-                            <datalist id="nfCommunesList">
-                                <option value="ABOBO"></option>
-                                <option value="ADJAME"></option>
-                                <option value="ATTECOUBE"></option>
-                                <option value="BINGERVILLE"></option>
-                                <option value="COCODY"></option>
-                                <option value="KOUMASSI"></option>
-                                <option value="MARCORY"></option>
-                                <option value="PLATEAU"></option>
-                                <option value="PORT-BOUET"></option>
-                                <option value="YOPOUGON"></option>
-                                <option value="PAS DE LIVRAISON (Retrait Entrepôt)"></option>
-                            </datalist>
+                            <div style="position: relative;">
+                                <input type="text" id="nfLieu" placeholder="Ex: Cocody Angré 8ème tranche..." autocomplete="off">
+                                <ul id="nfLieuSuggestions" class="autocomplete-suggestions"></ul>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -206,6 +209,42 @@ export const NouvelleFactureView = {
         });
         
         this.loadAutocompleteData();
+
+        // Setup Autocompletes
+        Autocomplete.initCustom('nfExpediteur', 'nfExpediteurSuggestions',
+            (q) => {
+                const query = q.toLowerCase();
+                return Array.from(this.clientsData.values()).filter(c => (c.nom && c.nom.toLowerCase().includes(query)) || (c.tel && c.tel.includes(query))).slice(0, 8);
+            },
+            (c) => `<div style="font-weight: 600;">${c.nom}</div><div style="font-size: 11px; opacity: 0.7;">📞 ${c.tel || 'N/A'}</div>`,
+            (c, input) => { input.value = c.nom; this.handleExpediteurChange(); }
+        );
+        document.getElementById('nfExpediteur').addEventListener('input', (e) => { if(e.target.value.trim().length < 2) this.handleExpediteurChange(); });
+
+        Autocomplete.initCustom('nfDestinataire', 'nfDestinataireSuggestions',
+            (q) => {
+                const query = q.toLowerCase();
+                let matches = Array.from(this.destMap.keys()).filter(d => d.toLowerCase().includes(query));
+                if (matches.length < 5) {
+                    const globalMatches = (this.availableDests || []).filter(d => d.toLowerCase().includes(query));
+                    matches = [...new Set([...matches, ...globalMatches])];
+                }
+                return matches.slice(0, 8);
+            },
+            (d) => `<div style="font-weight: 600;">${d}</div>`,
+            (d, input) => { input.value = d; this.handleDestinataireChange(); }
+        );
+        document.getElementById('nfDestinataire').addEventListener('input', (e) => { if(e.target.value.trim().length < 2) this.handleDestinataireChange(); });
+
+        Autocomplete.initCustom('nfLieu', 'nfLieuSuggestions',
+            (q) => {
+                const query = q.toLowerCase();
+                const matches = (this.availableCommunes || []).filter(c => c.toLowerCase().includes(query));
+                return matches.slice(0, 8);
+            },
+            (c) => `<div style="font-weight: 600;">${c}</div>`,
+            (c, input) => { input.value = c; }
+        );
     },
 
     async loadAutocompleteData() {
@@ -221,10 +260,6 @@ export const NouvelleFactureView = {
                 }
             });
             
-            const datalistExp = document.getElementById('nfExpediteursList');
-            if (datalistExp) {
-                datalistExp.innerHTML = Array.from(this.clientsData.keys()).sort().map(nom => `<option value="${nom}"></option>`).join('');
-            }
 
             // NOUVEAU: Charger TOUTES les adresses et destinataires pour auto-complétion globale
             const livSnap = await getDocs(collection(db, "livraisons"));
@@ -244,18 +279,14 @@ export const NouvelleFactureView = {
                     if (data.lieuLivraison && !this.destInfos.has(destName)) {
                         this.destInfos.set(destName, data.lieuLivraison.trim());
                     }
+                    if (data.expediteur && !this.destExpMap.has(destName)) {
+                        this.destExpMap.set(destName, data.expediteur.trim());
+                    }
                 }
             });
 
-            const communesList = document.getElementById('nfCommunesList');
-            if (communesList) {
-                communesList.innerHTML = Array.from(communesSet).sort().map(l => `<option value="${l}"></option>`).join('');
-            }
-            
-            const destList = document.getElementById('nfDestinatairesList');
-            if (destList && destList.options.length === 0) { // Si pas encore rempli
-                destList.innerHTML = Array.from(destSet).sort().map(d => `<option value="${d}"></option>`).join('');
-            }
+            this.availableCommunes = Array.from(communesSet).sort();
+            this.availableDests = Array.from(destSet).sort();
         } catch (e) {
             console.error("Erreur de chargement de l'auto-complétion :", e);
         }
@@ -263,12 +294,10 @@ export const NouvelleFactureView = {
 
     async handleExpediteurChange() {
         const expediteur = document.getElementById('nfExpediteur').value.trim();
-        const destinatairesDatalist = document.getElementById('nfDestinatairesList');
         const destinataireInput = document.getElementById('nfDestinataire');
         const feedbackExp = document.getElementById('nfExpediteurFeedback');
         
         if (!expediteur) {
-            if(destinatairesDatalist) destinatairesDatalist.innerHTML = '';
             if(feedbackExp) feedbackExp.innerHTML = '';
             return;
         }
@@ -305,10 +334,6 @@ export const NouvelleFactureView = {
             const uniqueDests = Array.from(this.destMap.keys());
             
             if (uniqueDests.length > 0) {
-                if(destinatairesDatalist) {
-                    destinatairesDatalist.innerHTML = uniqueDests.map(dest => `<option value="${dest}"></option>`).join('');
-                }
-                
                 if (uniqueDests.length === 1) {
                     // Pré-remplissage automatique si le champ Destinataire est vide ou différent
                     if (!destinataireInput.value || destinataireInput.value !== uniqueDests[0]) {
@@ -321,8 +346,6 @@ export const NouvelleFactureView = {
                         feedbackExp.innerHTML += `<br><span style="color:#3b82f6;"><i class="fas fa-info-circle"></i> ${uniqueDests.length} destinataires trouvés. Utilisez la flèche pour choisir.</span>`;
                     }
                 }
-            } else {
-                if(destinatairesDatalist) destinatairesDatalist.innerHTML = '';
             }
         } catch (error) {
             console.error("Erreur de recherche des destinataires :", error);
@@ -333,6 +356,7 @@ export const NouvelleFactureView = {
         const destinataireInput = document.getElementById('nfDestinataire');
         const lieuInput = document.getElementById('nfLieu');
         const feedbackDest = document.getElementById('nfDestinataireFeedback');
+        const expInput = document.getElementById('nfExpediteur');
         
         const selectedDest = destinataireInput ? destinataireInput.value.trim() : '';
 
@@ -344,6 +368,7 @@ export const NouvelleFactureView = {
 
         let lieu = '';
         let num = '';
+        let exp = '';
         let isFound = false;
 
         // 1. Chercher dans l'historique lié à l'expéditeur actuel
@@ -360,11 +385,23 @@ export const NouvelleFactureView = {
                     const data = snap.docs[0].data();
                     lieu = data.lieuLivraison || data.commune || '';
                     num = data.numero || '';
+                    exp = data.expediteur || '';
                     isFound = true;
                 }
             } catch (e) {
                 console.error(e);
             }
+        }
+        
+        if (!exp && this.destExpMap && this.destExpMap.has(selectedDest)) {
+            exp = this.destExpMap.get(selectedDest);
+        }
+
+        if (expInput && isFound && exp && expInput.value.trim() === '') {
+            expInput.value = exp;
+            expInput.style.backgroundColor = '#e0f2fe';
+            setTimeout(() => expInput.style.backgroundColor = '', 1000);
+            this.handleExpediteurChange();
         }
 
         // Appliquer l'adresse complète directement (Même si vide, on l'applique pour écraser)
@@ -386,7 +423,10 @@ export const NouvelleFactureView = {
             <div class="form-grid" style="grid-template-columns: 2fr 0.5fr 1fr 1fr auto; align-items: end; background: #f8fafc; padding: 15px; border-radius: 8px; margin-bottom: 10px; border: 1px solid #e2e8f0;">
                 <div class="form-group" style="margin: 0;">
                     <label style="font-size: 11px;">Description *</label>
-                    <input type="text" class="item-desc" data-id="${item.id}" value="${item.desc}" list="nfProductsList" placeholder="Ex: TV 55 pouces" style="margin: 0; width: 100%;">
+                    <div style="position: relative; width: 100%;">
+                        <input type="text" class="item-desc" id="nfProduct_${item.id}" data-id="${item.id}" value="${item.desc}" placeholder="Ex: TV 55 pouces" style="margin: 0; width: 100%;" autocomplete="off">
+                        <ul id="nfProductSuggestions_${item.id}" class="autocomplete-suggestions"></ul>
+                    </div>
                 </div>
                 <div class="form-group" style="margin: 0;">
                     <label style="font-size: 11px;">Qté *</label>
@@ -402,12 +442,26 @@ export const NouvelleFactureView = {
                 </div>
                 <button class="btn btn-danger btn-small" onclick="window.nfRemoveRow(${item.id})" style="height: 36px; display: flex; align-items: center; justify-content: center; width: 100%;" ${this.items.length === 1 ? 'disabled' : ''}><i class="fas fa-trash"></i></button>
             </div>
-        `).join('') + '<datalist id="nfProductsList"></datalist>'; // AJOUT DE LA BALISE DATALIST À LA FIN
+        `).join('');
 
         // Attacher les écouteurs sur les inputs
         document.querySelectorAll('.item-desc').forEach(el => el.addEventListener('input', (e) => this.updateItem(e, 'desc')));
         document.querySelectorAll('.item-qty').forEach(el => el.addEventListener('input', (e) => this.updateItem(e, 'qty')));
         document.querySelectorAll('.item-pu').forEach(el => el.addEventListener('input', (e) => this.updateItem(e, 'pu')));
+
+        this.items.forEach(item => {
+            Autocomplete.initCustom(`nfProduct_${item.id}`, `nfProductSuggestions_${item.id}`,
+                (q) => {
+                    const query = q.toLowerCase();
+                    return Array.from(this.productsData.values()).filter(p => p.desc && p.desc.toLowerCase().includes(query)).slice(0, 8);
+                },
+                (p) => `<div style="font-weight: 600;">${p.desc}</div><div style="font-size: 11px; opacity: 0.7;">Prix: ${p.price || 0} €</div>`,
+                (p, input) => {
+                    input.value = p.desc;
+                    input.dispatchEvent(new Event('input')); // Déclenche le calcul
+                }
+            );
+        });
 
         window.nfRemoveRow = (id) => {
             if (this.items.length > 1) {
@@ -547,12 +601,35 @@ export const NouvelleFactureView = {
 
         const batch = writeBatch(db);
         const dateIso = document.getElementById('nfDate').value || new Date().toISOString().split('T')[0];
-        const ref = "PAR-" + Date.now().toString().slice(-6); // Génération d'une Réf unique
+        
+        // --- GÉNÉRATION DE LA RÉFÉRENCE ET DES ÉTIQUETTES ---
+        const userName = sessionStorage.getItem('userName') || 'Agent Paris';
+        const initialsMatch = userName.match(/\b\w/g) || ['A', 'P'];
+        const initials = initialsMatch.join('').substring(0, 2).toUpperCase();
+
+        const qToday = query(collection(db, "transactions"), where("date", "==", dateIso));
+        const todaySnap = await getDocs(qToday);
+        const orderNum = (todaySnap.size + 1).toString().padStart(3, '0');
+
+        let conteneurInput = document.getElementById('nfConteneur')?.value.trim().toUpperCase() || '';
+        const conteneurCode = conteneurInput || 'ATT';
+
+        const ref = `${initials}-${orderNum}-${conteneurCode}`;
+
+        // Génération des sous-étiquettes uniques (ex: KA-018-E10_1_71)
+        const totalColis = this.items.reduce((sum, item) => sum + item.qty, 0);
+        const generatedLabels = [];
+        for (let i = 1; i <= totalColis; i++) {
+            const uniqueId = Math.floor(10 + Math.random() * 90); // 2 chiffres aléatoires
+            generatedLabels.push(`${ref}_${i}_${uniqueId}`);
+        }
 
         // 1. Logistique (Livraisons)
         const livRef = doc(collection(db, "livraisons"));
         batch.set(livRef, {
             ref: ref,
+            labels: generatedLabels,
+            conteneur: conteneurInput,
             expediteur: expediteur,
             destinataire: destinataire,
             lieuLivraison: document.getElementById('nfLieu').value,
@@ -572,6 +649,7 @@ export const NouvelleFactureView = {
             reference: ref,
             nom: expediteur,
             nomDestinataire: destinataire,
+            conteneur: conteneurInput,
             date: dateIso,
             prix: totalCFA,
             montantParis: payeCFA,

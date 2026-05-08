@@ -246,6 +246,11 @@ input[id*="montantAbidjan"] { background-color: #fff7ed; border-color: #fed7aa; 
 }
 .form-buttons button.primary:hover, #addTransactionBtn:hover { box-shadow: 0 6px 12px rgba(79, 70, 229, 0.35); background: linear-gradient(135deg, var(--primary-hover) 0%, var(--primary) 100%); }
 
+/* --- AUTOCOMPLETION INTELLIGENTE --- */
+.autocomplete-suggestions { position: absolute; z-index: 1000; background: white; border: 1px solid #cbd5e1; width: 100%; max-height: 200px; overflow-y: auto; list-style: none; padding: 0; margin: 4px 0 0 0; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); display: none; text-align: left; }
+.autocomplete-suggestions li { padding: 10px 12px; cursor: pointer; border-bottom: 1px solid #f1f5f9; font-size: 13px; color: #1e293b; transition: background-color 0.2s, color 0.2s; }
+.autocomplete-suggestions li:hover, .autocomplete-suggestions li.selected { background: #e0f2fe; color: #0284c7; font-weight: 600; }
+
 #saveDayBtn {
     background: linear-gradient(135deg, var(--success) 0%, #059669 100%);
     color: white; border: none;

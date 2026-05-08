@@ -9,6 +9,7 @@ import { DailyBilanView } from './views/daily-bilan.js';
 import { DailyUsersView } from './views/daily-users.js';
 import { NouveauRdvView } from './views/nouveaurdv.js';
 import { TousLesRdvView } from './views/touslesrdv.js';
+import { CalendrierRdvView } from './views/calendrierrdv.js';
 import { TousLesDevisView } from './views/touslesdevis.js';
 import { DemandesDevisView } from './views/demandesdevis.js';
 import { GestionConteneursView } from './views/gestion-conteneurs.js';
@@ -18,6 +19,8 @@ import { FinanceChequesView } from './views/finance-cheques.js';
 import { SettingsAgencyView } from './views/settings-agency.js';
 import { SettingsAgentsView } from './views/settings-agents.js';
 import { SettingsMenusView } from './views/settings-menus.js';
+import { ConfigInvoiceView } from './views/config-invoice.js';
+import { ConfigLabelView } from './views/config-label.js';
 
 // Configuration de l'application Paris
 const app = {
@@ -384,7 +387,7 @@ const app = {
             'appointment-new': () => NouveauRdvView.render(this),
             'appointments-list': () => TousLesRdvView.render(this, 'all'),
             'appointments-pending': () => TousLesRdvView.render(this, 'pending'),
-            'appointments-calendar': () => this.renderAppointmentsCalendar(),
+            'appointments-calendar': () => CalendrierRdvView.render(this),
             'program-new': () => this.renderProgramNew(),
             'program-my': () => this.renderProgramMy(),
             'program-history': () => this.renderProgramHistory(),
@@ -427,8 +430,8 @@ const app = {
             'settings-agents': () => SettingsAgentsView.render(this),
             'settings-appointments': () => this.renderSettingsAppointments(),
             'settings-profile': () => this.renderSettingsProfile(),
-            'config-invoice': () => this.renderConfigInvoice(),
-            'config-label': () => this.renderConfigLabel(),
+            'config-invoice': () => ConfigInvoiceView.render(this),
+            'config-label': () => ConfigLabelView.render(this),
             'config-objectives': () => this.renderConfigObjectives(),
             'config-charges': () => this.renderConfigCharges(),
             'prospecting': () => this.renderProspecting(),
@@ -554,31 +557,6 @@ const app = {
             </div>
         `;
         document.getElementById('contentContainer').innerHTML = html;
-    },
-
-    renderAppointmentsCalendar() {
-        const html = `
-            <div class="calendar-container">
-                <div id="calendar"></div>
-            </div>
-        `;
-        document.getElementById('contentContainer').innerHTML = html;
-        
-        setTimeout(() => {
-            if (typeof Calendar !== 'undefined') {
-                const calendarEl = document.getElementById('calendar');
-                const calendar = new Calendar(calendarEl, {
-                    initialView: 'dayGridMonth',
-                    locale: 'fr',
-                    events: this.data.appointments.map(rdv => ({
-                        title: rdv.client,
-                        start: `${rdv.date}T${rdv.time}`,
-                        color: rdv.status === 'confirmé' ? '#10b981' : '#f59e0b'
-                    }))
-                });
-                calendar.render();
-            }
-        }, 100);
     },
 
     renderProgramNew() {
@@ -1285,6 +1263,8 @@ const app = {
         document.body.appendChild(toast);
         setTimeout(() => toast.remove(), 3000);
     },
+
+    renderConfigObjectives() { this.renderSettingsForm('Objectifs', { monthlyTarget: 50000, quarterlyTarget: 150000, yearlyTarget: 600000 }); },
 
     openModal(content) {
         const modal = document.getElementById('modalOverlay');
