@@ -161,7 +161,7 @@ export const NouveauRdvView = {
                                     <div class="form-field form-field--full" style="grid-column: 1 / -1;"><label class="label">Adresse</label>
                                         <div class="address-autocomplete" style="position: relative;">
                                             <input id="newClientAdresse" class="control" placeholder="Adresse complète" autocomplete="off">
-                                            <ul id="newClientAdresseSuggestions" class="autocomplete-suggestions"></ul>
+                                        <ul id="newClientAdresseSuggestions" class="autocomplete-suggestions autocomplete-up"></ul>
                                         </div>
                                     </div>
                                 </div>
@@ -261,7 +261,7 @@ export const NouveauRdvView = {
                                     <label class="label">Adresse</label>
                                     <div class="address-autocomplete" style="position: relative;">
                                         <input id="rdvAdresse" class="control" placeholder="Adresse du RDV" autocomplete="off">
-                                        <ul id="rdvAdresseSuggestions" class="autocomplete-suggestions"></ul>
+                                    <ul id="rdvAdresseSuggestions" class="autocomplete-suggestions autocomplete-up"></ul>
                                     </div>
                                 </div>
                                 <div class="form-field form-field--full" style="grid-column: 1 / -1;">

@@ -231,3 +231,177 @@ body {
     from { transform: translateY(20px); opacity: 0; }
     to   { transform: translateY(0);    opacity: 1; }
 }
+/* Ajoutez ceci à votre fichier style.css */
+
+/* ============================================
+    AUTOCOMPLETE MODERNE
+============================================ */
+
+.autocomplete-suggestions {
+    position: absolute;
+    z-index: 1000;
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 10px 25px -5px rgba(0,0,0,0.1), 0 8px 10px -6px rgba(0,0,0,0.02);
+    margin-top: 8px;
+    padding: 4px 0;
+    max-height: 280px;
+    overflow-y: auto;
+    width: 100%;
+    min-width: 280px;
+    animation: autocompleteSlideUp 0.2s ease-out;
+    border: 1px solid #e2e8f0;
+}
+
+@keyframes autocompleteSlideUp {
+    from {
+        opacity: 0;
+        transform: translateY(-8px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.autocomplete-suggestions.autocomplete-up {
+    top: auto;
+    bottom: 100%;
+    margin-top: 0;
+    margin-bottom: 8px;
+    box-shadow: 0 -10px 25px -5px rgba(0,0,0,0.1), 0 -8px 10px -6px rgba(0,0,0,0.02);
+    animation: autocompleteSlideDown 0.2s ease-out;
+}
+
+@keyframes autocompleteSlideDown {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.autocomplete-suggestions::-webkit-scrollbar {
+    width: 6px;
+}
+
+.autocomplete-suggestions::-webkit-scrollbar-track {
+    background: #f1f5f9;
+    border-radius: 10px;
+}
+
+.autocomplete-suggestions::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 10px;
+}
+
+.autocomplete-suggestions::-webkit-scrollbar-thumb:hover {
+    background: #94a3b8;
+}
+
+.autocomplete-suggestions li {
+    padding: 8px 12px;
+    cursor: pointer;
+    font-size: 13px;
+    color: #1e293b;
+    transition: all 0.15s ease;
+    border-left: 3px solid transparent;
+    list-style: none;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 500;
+}
+
+.autocomplete-suggestions li::before {
+    content: "📍";
+    font-size: 14px;
+    opacity: 0.6;
+    transition: opacity 0.2s;
+}
+
+.autocomplete-suggestions li:hover,
+.autocomplete-suggestions li.highlighted {
+    background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+    border-left-color: #3b82f6;
+    color: #1e40af;
+}
+
+.autocomplete-suggestions li:hover::before,
+.autocomplete-suggestions li.highlighted::before {
+    opacity: 1;
+    content: "📍";
+}
+
+/* Variante pour les suggestions personnalisées */
+.autocomplete-suggestions.custom-suggestions li::before {
+    content: "🔍";
+    font-size: 12px;
+}
+
+.autocomplete-suggestions.custom-suggestions li:hover::before,
+.autocomplete-suggestions.custom-suggestions li.highlighted::before {
+    content: "✨";
+    opacity: 1;
+}
+
+/* Animation de chargement pour l'autocomplete */
+.autocomplete-suggestions.loading {
+    text-align: center;
+    padding: 20px;
+    color: #64748b;
+}
+
+.autocomplete-suggestions.loading li {
+    justify-content: center;
+    cursor: default;
+}
+
+.autocomplete-suggestions.loading li::before {
+    content: "⏳";
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+/* Style pour le champ de saisie en focus */
+input[id$="Adresse"]:focus {
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 3px rgba(59,130,246,0.1);
+}
+
+/* Conteneur parent pour positionnement relatif */
+.form-group {
+    position: relative;
+}
+
+/* Message d'absence de résultat */
+.autocomplete-suggestions .no-results {
+    padding: 16px;
+    text-align: center;
+    color: #94a3b8;
+    font-size: 12px;
+    font-style: italic;
+    cursor: default;
+    pointer-events: none;
+}
+
+.autocomplete-suggestions .no-results::before {
+    content: "🔍";
+    display: block;
+    font-size: 24px;
+    margin-bottom: 8px;
+    opacity: 0.5;
+}
+
+/* Indicateur de sélection clavier */
+.autocomplete-suggestions li.selected {
+    background: #3b82f6;
+    color: white;
+    border-left-color: #1e3a8a;
+}
+
+.autocomplete-suggestions li.selected::before {
+    opacity: 1;
+    content: "✓";
+}

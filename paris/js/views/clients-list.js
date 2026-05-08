@@ -1,5 +1,6 @@
 import { db } from '../../../firebase-config.js';
-import { collection, query, where, onSnapshot, doc, writeBatch, getDocs, orderBy, limit, updateDoc } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
+import { collection, query, where, onSnapshot, doc, writeBatch, getDocs, orderBy, limit, updateDoc, addDoc } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
+import { Autocomplete } from './autocomplete.js';
 
 export const ClientsListView = {
     unsubClients: null,
@@ -36,6 +37,13 @@ export const ClientsListView = {
         window.app.views.clientsList = this;
 
         const activeAgency = sessionStorage.getItem('currentActiveAgency') || 'paris';
+        const userRole = sessionStorage.getItem('userRole') || 'agent';
+        const isAdmin = userRole === 'admin' || userRole === 'super_admin';
+        
+        const importBtnHtml = isAdmin ? `
+            <input type="file" id="importClientInput" accept=".csv, .xlsx, .xls" style="display: none;">
+            <button class="btn btn-outline" onclick="document.getElementById('importClientInput').click()" style="display: flex; align-items: center; gap: 8px;"><i class="fas fa-file-import"></i> Importer clients</button>
+        ` : '';
         
         // --- SQUELETTE DE LA PAGE (Ne se recharge plus, préserve les événements) ---
         document.getElementById('contentContainer').innerHTML = `
@@ -69,8 +77,10 @@ export const ClientsListView = {
                         <div><h2 style="margin: 0; color: #0f172a; font-size: 22px; font-weight: 800;">Clients</h2><p style="margin: 4px 0 0 0; color: #64748b; font-size: 13px;">Gestion de la base clients et analyse</p></div>
                     </div>
                     <div style="display: flex; gap: 10px;">
-                        <input type="file" id="importClientInput" accept=".csv, .xlsx, .xls" style="display: none;">
-                        <button class="btn btn-outline" onclick="document.getElementById('importClientInput').click()" style="display: flex; align-items: center; gap: 8px;"><i class="fas fa-file-import"></i> Importer clients</button>
+                        ${importBtnHtml}
+                        <button class="btn btn-primary" onclick="window.app.views.clientsList.openNewClientModal()" style="display: flex; align-items: center; gap: 8px;">
+                            <i class="fas fa-plus"></i> Nouveau client
+                        </button>
                     </div>
                 </div>
 
@@ -129,13 +139,57 @@ export const ClientsListView = {
                         <label style="display:block; margin-bottom:5px; font-weight:bold;">Téléphone</label>
                         <input type="text" id="editClientTel" style="width:100%; padding:8px; box-sizing:border-box;">
                     </div>
-                    <div style="margin-bottom:15px;">
+                <div style="margin-bottom:15px;">
                         <label style="display:block; margin-bottom:5px; font-weight:bold;">Adresse complète</label>
-                        <input type="text" id="editClientAdresse" style="width:100%; padding:8px; box-sizing:border-box;">
+                    <div style="position: relative;">
+                        <input type="text" id="editClientAdresse" autocomplete="off" style="width:100%; padding:8px; border:1px solid #cbd5e1; border-radius:6px; box-sizing:border-box;">
+                        <ul id="editClientAdresseSuggestions" class="autocomplete-suggestions autocomplete-up"></ul>
+                    </div>
                     </div>
                     <div style="text-align:right; margin-top:20px;">
                         <button class="btn" onclick="document.getElementById('editClientModal').style.display='none'" style="background: #6c757d; color:white; margin-right:10px; border:none; padding:8px 15px; border-radius:6px; cursor:pointer;">Annuler</button>
                         <button class="btn btn-success" onclick="window.app.views.clientsList.saveClientEdit()" style="background: #10b981; color:white; border:none; padding:8px 15px; border-radius:6px; cursor:pointer;">Enregistrer</button>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- MODAL NOUVEAU CLIENT -->
+            <div id="newClientModal" class="modal" style="display:none; position:fixed; z-index:1000; left:0; top:0; width:100%; height:100%; background-color:rgba(15, 23, 42, 0.6); align-items:center; justify-content:center; backdrop-filter: blur(4px);">
+                <div class="modal-content" style="background:#fff; padding:0; width:90%; max-width:450px; border-radius:16px; overflow:hidden; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25);">
+                    <div style="display:flex; justify-content:space-between; align-items:center; padding:20px; border-bottom:1px solid #e2e8f0; background:#f8fafc;">
+                        <h2 style="margin:0; font-size:18px; color:#0f172a;">➕ Nouveau client</h2>
+                        <button onclick="document.getElementById('newClientModal').style.display='none'" style="background:none; border:none; font-size:24px; cursor:pointer; color:#64748b;">✕</button>
+                    </div>
+                    <div style="padding:20px;">
+                        <div style="font-size:13px; color:#64748b; margin-bottom:20px;">Créer un nouvel expéditeur dans le système</div>
+                        
+                        <div style="margin-bottom:15px;">
+                            <label style="display:block; margin-bottom:5px; font-weight:600; font-size:13px; color:#1e293b;">👤 Nom *</label>
+                            <input type="text" id="newClientNom" style="width:100%; padding:10px; border:1px solid #cbd5e1; border-radius:8px; box-sizing:border-box; font-size:14px;" placeholder="Nom du client">
+                        </div>
+                        <div style="margin-bottom:15px;">
+                            <label style="display:block; margin-bottom:5px; font-weight:600; font-size:13px; color:#1e293b;">👤 Prénom</label>
+                            <input type="text" id="newClientPrenom" style="width:100%; padding:10px; border:1px solid #cbd5e1; border-radius:8px; box-sizing:border-box; font-size:14px;" placeholder="Prénom du client">
+                        </div>
+                        <div style="margin-bottom:15px;">
+                            <label style="display:block; margin-bottom:5px; font-weight:600; font-size:13px; color:#1e293b;">📞 Téléphone *</label>
+                            <input type="text" id="newClientTel" style="width:100%; padding:10px; border:1px solid #cbd5e1; border-radius:8px; box-sizing:border-box; font-size:14px;" placeholder="Numéro de téléphone">
+                        </div>
+                        <div style="margin-bottom:15px;">
+                            <label style="display:block; margin-bottom:5px; font-weight:600; font-size:13px; color:#1e293b;">📧 Email</label>
+                            <input type="email" id="newClientEmail" style="width:100%; padding:10px; border:1px solid #cbd5e1; border-radius:8px; box-sizing:border-box; font-size:14px;" placeholder="Adresse email">
+                        </div>
+                    <div style="margin-bottom:20px;">
+                            <label style="display:block; margin-bottom:5px; font-weight:600; font-size:13px; color:#1e293b;">📍 Adresse</label>
+                        <div style="position: relative;">
+                            <input type="text" id="newClientAdresse" autocomplete="off" style="width:100%; padding:10px; border:1px solid #cbd5e1; border-radius:8px; box-sizing:border-box; font-size:14px;" placeholder="Adresse complète">
+                            <ul id="newClientAdresseSuggestions" class="autocomplete-suggestions autocomplete-up"></ul>
+                        </div>
+                        </div>
+                        <div style="display:flex; justify-content:flex-end; gap:10px; padding-top:15px; border-top:1px solid #e2e8f0;">
+                            <button class="btn btn-outline" onclick="document.getElementById('newClientModal').style.display='none'" style="padding:10px 15px; border-radius:8px; font-weight:600;">Annuler</button>
+                            <button id="saveNewClientBtn" class="btn btn-primary" onclick="window.app.views.clientsList.saveNewClient()" style="padding:10px 15px; border-radius:8px; font-weight:600; display:flex; align-items:center; gap:6px;">✓ Créer le client</button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -338,6 +392,10 @@ export const ClientsListView = {
                 }
             });
         }
+        
+        // --- AUTO-COMPLÉTION DES ADRESSES ---
+        Autocomplete.initAddress('newClientAdresse', 'newClientAdresseSuggestions');
+        Autocomplete.initAddress('editClientAdresse', 'editClientAdresseSuggestions');
 
         // --- 1. CHARGEMENT DES CLIENTS ---
         const qClients = query(collection(db, "clients"), where("agency", "==", activeAgency));
@@ -612,6 +670,66 @@ export const ClientsListView = {
         } catch (error) {
             console.error(error);
             this.app.showToast("Erreur lors de la modification : " + error.message, "error");
+        }
+    }
+    ,
+    
+    openNewClientModal() {
+        document.getElementById('newClientNom').value = '';
+        document.getElementById('newClientPrenom').value = '';
+        document.getElementById('newClientTel').value = '';
+        document.getElementById('newClientEmail').value = '';
+        document.getElementById('newClientAdresse').value = '';
+        
+        const btn = document.getElementById('saveNewClientBtn');
+        if (btn) {
+            btn.innerHTML = '✓ Créer le client';
+            btn.disabled = false;
+        }
+        
+        document.getElementById('newClientModal').style.display = 'flex';
+    },
+
+    async saveNewClient() {
+        const nom = document.getElementById('newClientNom').value.trim();
+        const prenom = document.getElementById('newClientPrenom').value.trim();
+        const tel = document.getElementById('newClientTel').value.trim();
+        const email = document.getElementById('newClientEmail').value.trim();
+        const adresse = document.getElementById('newClientAdresse').value.trim();
+
+        if (!nom || !tel) {
+            this.app.showToast("Veuillez remplir le nom et le téléphone.", "error");
+            return;
+        }
+
+        const btn = document.getElementById('saveNewClientBtn');
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Création...';
+        btn.disabled = true;
+
+        const fullName = `${nom} ${prenom}`.trim();
+        const activeAgency = sessionStorage.getItem('currentActiveAgency') || 'paris';
+
+        try {
+            await addDoc(collection(db, "clients"), {
+                nom: fullName,
+                tel: tel,
+                email: email,
+                adresse: adresse,
+                dateAjout: new Date().toISOString(),
+                agency: activeAgency,
+                risque: 'low',
+                segment: 'nouveau',
+                taille: 'petit',
+                ca: 0,
+                factures: 0
+            });
+            this.app.showToast("Client créé avec succès !", "success");
+            document.getElementById('newClientModal').style.display = 'none';
+        } catch (error) {
+            console.error("Erreur création client :", error);
+            this.app.showToast("Erreur lors de la création du client.", "error");
+            btn.innerHTML = '✓ Créer le client';
+            btn.disabled = false;
         }
     }
 };
