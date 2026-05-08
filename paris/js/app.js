@@ -17,6 +17,9 @@ import { ChauffeursListView } from './views/chauffeurs-list.js';
 import { TousLesDevisView } from './views/touslesdevis.js';
 import { DemandesDevisView } from './views/demandesdevis.js';
 import { GestionConteneursView } from './views/gestion-conteneurs.js';
+import { ConfectionConteneursView } from './views/confection-conteneurs.js';
+import { BateauxDepartView } from './views/bateaux-depart.js';
+import { ScanHistoryView } from './views/scan-history.js';
 import { FinanceCaisseView } from './views/finance-caisse.js';
 import { FinanceDepensesView } from './views/finance-depenses.js';
 import { FinanceChequesView } from './views/finance-cheques.js';
@@ -26,6 +29,8 @@ import { SettingsCompanyView } from './views/settings-company.js';
 import { SettingsMenusView } from './views/settings-menus.js';
 import { ConfigInvoiceView } from './views/config-invoice.js';
 import { ConfigLabelView } from './views/config-label.js';
+import { ScanWarehouseView } from './views/scan-warehouse.js';
+import { ScanContainerView } from './views/scan-container.js';
 
 // Configuration de l'application Paris
 const app = {
@@ -40,7 +45,7 @@ const app = {
         'appointment-new': 'rdv', 'appointments-list': 'rdv', 'appointments-pending': 'rdv', 'appointments-calendar': 'rdv',
         'program-new': 'operations', 'program-my': 'operations', 'program-history': 'operations', 'drivers': 'operations', 'departures-calendar': 'operations',
         'quotes-list': 'devis', 'quote-new': 'devis', 'quote-requests': 'devis',
-        'loading-container': 'chargement', 'loading-boats': 'chargement',
+        'loading-container': 'chargement', 'confection-containers': 'chargement', 'loading-boats': 'chargement',
         'scan-warehouse': 'scan', 'scan-container': 'scan', 'scan-classic': 'scan', 'scan-history': 'scan',
         'clients-list': 'clients', 'clients-app': 'clients', 'clients-analytics': 'clients',
         'chat': 'comms', 'sms-send': 'comms', 'sms-history': 'comms', 'notifications': 'comms', 'notifications-history': 'comms',
@@ -334,6 +339,7 @@ const app = {
             'quote-new': 'Nouveau devis',
             'quote-requests': 'Demandes reçues',
             'loading-container': 'Gestion Conteneur',
+            'confection-containers': 'Confection Conteneurs',
             'loading-boats': 'Bateaux départ',
             'scan-warehouse': 'Mise en entrepôt',
             'scan-container': 'Charger conteneur',
@@ -402,11 +408,12 @@ const app = {
             'quote-new': () => NouveauDevisView.render(this),
             'quote-requests': () => DemandesDevisView.render(this),
             'loading-container': () => GestionConteneursView.render(this),
-            'loading-boats': () => this.renderLoadingBoats(),
-            'scan-warehouse': () => this.renderScanWarehouse(),
-            'scan-container': () => this.renderScanContainer(),
-            'scan-classic': () => this.renderScanClassic(),
-            'scan-history': () => this.renderScanHistory(),
+            'confection-containers': () => ConfectionConteneursView.render(this),
+            'loading-boats': () => BateauxDepartView.render(this),
+            'scan-warehouse': () => ScanWarehouseView.render(this),
+            'scan-container': () => ScanContainerView.render(this),
+            'scan-classic': () => ScanWarehouseView.render(this),
+            'scan-history': () => ScanHistoryView.render(this),
             'clients-list': () => ClientsListView.render(this),
             'clients-app': () => this.renderClientsApp(),
             'clients-analytics': () => this.renderClientsAnalytics(),
@@ -419,6 +426,7 @@ const app = {
             'finance-cashier': () => FinanceCaisseView.render(this),
             'finance-cheques': () => FinanceChequesView.render(this),
             'finance-expenses': () => FinanceDepensesView.render(this),
+            'stock-list': () => this.renderStockList(),
             'balance-monthly': () => this.renderBalanceMonthly(),
             'balance-yearly': () => this.renderBalanceYearly(),
             'balance-boat': () => this.renderBalanceBoat(),
@@ -602,49 +610,6 @@ const app = {
                         <tr><td>MSC</td><td>18/12/2024</td><td>23/12/2024</td><td><span class="badge badge-info">Planifié</span></td></tr>
                     </tbody>
                 </table>
-            </div>
-        `;
-        document.getElementById('contentContainer').innerHTML = html;
-    },
-
-    renderScanWarehouse() {
-        const html = `
-            <div class="form-card" style="text-align: center;">
-                <div style="background: #f8fafc; border-radius: 16px; padding: 30px;">
-                    <i class="fas fa-qrcode" style="font-size: 64px; color: #3b82f6;"></i>
-                    <h3 style="margin: 20px 0 10px;">Scanner un colis</h3>
-                    <p style="color: #64748b; margin-bottom: 20px;">Pointez la caméra vers le code-barres</p>
-                    <div id="scanArea" style="width: 100%; max-width: 400px; margin: 0 auto; background: #1e293b; border-radius: 12px; padding: 20px;">
-                        <div style="background: #0f172a; border-radius: 8px; padding: 60px 20px; text-align: center; border: 2px dashed #475569;">
-                            <i class="fas fa-camera" style="font-size: 48px; color: #64748b;"></i>
-                            <p style="color: #94a3b8; margin-top: 10px;">Scan en préparation...</p>
-                        </div>
-                    </div>
-                    <div style="margin-top: 20px;">
-                        <input type="text" id="manualScan" placeholder="Ou saisir le code manuellement" style="padding: 10px; width: 100%; max-width: 300px; border: 1px solid #e2e8f0; border-radius: 8px;">
-                        <button class="btn btn-primary" onclick="app.manualScan()" style="margin-top: 10px;">Valider</button>
-                    </div>
-                </div>
-            </div>
-        `;
-        document.getElementById('contentContainer').innerHTML = html;
-    },
-
-    renderScanContainer() {
-        const html = `
-            <div class="form-card">
-                <h3>Charger un conteneur</h3>
-                <div class="form-grid">
-                    <div class="form-group"><label>Conteneur cible</label><select id="targetContainer"><option>CONT-PAR-001</option><option>CONT-PAR-002</option></select></div>
-                    <div class="form-group"><label>Scanner le colis</label><input type="text" id="scanBarcode" placeholder="Code-barres du colis"></div>
-                </div>
-                <button class="btn btn-primary" onclick="app.addToContainer()" style="margin-top:15px;">Ajouter au conteneur</button>
-                <div style="margin-top: 20px;">
-                    <h4>Colis chargés (45)</h4>
-                    <div style="max-height: 300px; overflow-y: auto;">
-                        ${Array(10).fill().map((_, i) => `<div style="padding: 8px; border-bottom: 1px solid #f1f5f9;"><code>MD-127-E2_${i+1}</code> - Ajouté à 10:${i+5}</div>`).join('')}
-                    </div>
-                </div>
             </div>
         `;
         document.getElementById('contentContainer').innerHTML = html;
