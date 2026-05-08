@@ -10,6 +10,10 @@ import { DailyUsersView } from './views/daily-users.js';
 import { NouveauRdvView } from './views/nouveaurdv.js';
 import { TousLesRdvView } from './views/touslesrdv.js';
 import { CalendrierRdvView } from './views/calendrierrdv.js';
+import { NouveauProgrammeView } from './views/nouveauprogramme.js';
+import { MonProgrammeView } from './views/monprogramme.js';
+import { HistoriqueProgrammesView } from './views/historique-programmes.js';
+import { ChauffeursListView } from './views/chauffeurs-list.js';
 import { TousLesDevisView } from './views/touslesdevis.js';
 import { DemandesDevisView } from './views/demandesdevis.js';
 import { GestionConteneursView } from './views/gestion-conteneurs.js';
@@ -18,6 +22,7 @@ import { FinanceDepensesView } from './views/finance-depenses.js';
 import { FinanceChequesView } from './views/finance-cheques.js';
 import { SettingsAgencyView } from './views/settings-agency.js';
 import { SettingsAgentsView } from './views/settings-agents.js';
+import { SettingsCompanyView } from './views/settings-company.js';
 import { SettingsMenusView } from './views/settings-menus.js';
 import { ConfigInvoiceView } from './views/config-invoice.js';
 import { ConfigLabelView } from './views/config-label.js';
@@ -388,10 +393,10 @@ const app = {
             'appointments-list': () => TousLesRdvView.render(this, 'all'),
             'appointments-pending': () => TousLesRdvView.render(this, 'pending'),
             'appointments-calendar': () => CalendrierRdvView.render(this),
-            'program-new': () => this.renderProgramNew(),
-            'program-my': () => this.renderProgramMy(),
-            'program-history': () => this.renderProgramHistory(),
-            'drivers': () => this.renderDrivers(),
+            'program-new': () => NouveauProgrammeView.render(this),
+            'program-my': () => MonProgrammeView.render(this),
+            'program-history': () => HistoriqueProgrammesView.render(this),
+            'drivers': () => ChauffeursListView.render(this),
             'departures-calendar': () => this.renderDeparturesCalendar(),
             'quotes-list': () => TousLesDevisView.render(this),
             'quote-new': () => NouveauDevisView.render(this),
@@ -422,7 +427,7 @@ const app = {
             'stats-monthly': () => this.renderStatsMonthly(),
             'stats-yearly': () => this.renderStatsYearly(),
             'settings-agency': () => SettingsAgencyView.render(this),
-            'settings-company': () => this.renderSettingsCompany(),
+            'settings-company': () => SettingsCompanyView.render(this),
             'settings-software': () => this.renderSettingsSoftware(),
             'settings-sms': () => this.renderSettingsSms(),
             'settings-notifications': () => this.renderSettingsNotifications(),
@@ -554,84 +559,6 @@ const app = {
             <div class="invoice-preview" id="invoicePreview" style="display:none;">
                 <h4>Aperçu facture</h4>
                 <div id="previewContent"></div>
-            </div>
-        `;
-        document.getElementById('contentContainer').innerHTML = html;
-    },
-
-    renderProgramNew() {
-        const html = `
-            <div class="form-card">
-                <h3>Créer un nouveau programme</h3>
-                <div class="form-grid">
-                    <div class="form-group"><label>Nom du programme</label><input type="text" id="progName" placeholder="Ex: Programme Décembre 2024"></div>
-                    <div class="form-group"><label>Date début</label><input type="date" id="progStart"></div>
-                    <div class="form-group"><label>Date fin</label><input type="date" id="progEnd"></div>
-                    <div class="form-group"><label>Description</label><textarea id="progDesc" rows="3"></textarea></div>
-                </div>
-                <div style="margin-top: 20px;"><button class="btn btn-primary" onclick="app.createProgram()">Enregistrer</button></div>
-            </div>
-        `;
-        document.getElementById('contentContainer').innerHTML = html;
-    },
-
-    renderProgramMy() {
-        const html = `
-            <div class="form-card">
-                <h3>Mon programme en cours</h3>
-                ${this.data.programs.filter(p => p.status === 'en_cours').map(prog => `
-                    <div style="padding: 15px; border: 1px solid #e2e8f0; border-radius: 12px; margin-bottom: 15px;">
-                        <div style="display: flex; justify-content: space-between;">
-                            <div><strong>${prog.name}</strong><br><span style="font-size:12px;">${prog.startDate} → ${prog.endDate}</span></div>
-                            <span class="badge badge-success">En cours</span>
-                        </div>
-                        <div style="margin-top: 10px;">
-                            <div class="progress-bar"><div style="width:65%; background:#3b82f6; height:100%; border-radius:10px;"></div></div>
-                            <div style="margin-top: 8px; font-size:12px;">65% réalisé</div>
-                        </div>
-                    </div>
-                `).join('')}
-                <button class="btn btn-outline" onclick="app.renderPage('program-history')">Voir historique</button>
-            </div>
-        `;
-        document.getElementById('contentContainer').innerHTML = html;
-    },
-
-    renderProgramHistory() {
-        const html = `
-            <div class="form-card">
-                <h3>Historique des programmes</h3>
-                <table class="data-table">
-                    <thead><tr><th>Nom</th><th>Période</th><th>Statut</th><th>Réalisations</th></tr></thead>
-                    <tbody>
-                        <tr><td>Programme Novembre 2024</td><td>01/11 - 30/11</td><td><span class="badge badge-info">Terminé</span></td><td>78%</td></tr>
-                        <tr><td>Programme Octobre 2024</td><td>01/10 - 31/10</td><td><span class="badge badge-info">Terminé</span></td><td>92%</td></tr>
-                    </tbody>
-                </table>
-            </div>
-        `;
-        document.getElementById('contentContainer').innerHTML = html;
-    },
-
-    renderDrivers() {
-        const html = `
-            <div class="quick-actions">
-                <button class="btn btn-primary" onclick="app.addDriver()"><i class="fas fa-plus"></i> Ajouter chauffeur</button>
-            </div>
-            <div class="form-card">
-                <table class="data-table">
-                    <thead><tr><th>Nom</th><th>Véhicule</th><th>Statut</th><th>Actions</th></tr></thead>
-                    <tbody>
-                        ${this.data.drivers.map(d => `
-                            <tr>
-                                <td><strong>${d.name}</strong></td>
-                                <td>${d.vehicle}</td>
-                                <td><span class="badge ${d.status === 'disponible' ? 'badge-success' : 'badge-warning'}">${d.status}</span></td>
-                                <td><button class="btn btn-outline btn-small" onclick="app.assignDriver(${d.id})">Assigner</button></td>
-                            </tr>
-                        `).join('')}
-                    </tbody>
-                </table>
             </div>
         `;
         document.getElementById('contentContainer').innerHTML = html;
@@ -968,7 +895,6 @@ const app = {
     },
 
     // Paramètres pages
-    renderSettingsCompany() { this.renderSettingsForm('Entreprise', { name: 'AMT TRANS\'IT', siret: '929 865 103 R.C.S. Paris', vat: 'FR929865103', legal: 'SARL' }); },
     renderSettingsSoftware() { this.renderSettingsForm('Paramètres logiciel', { theme: 'Clair', language: 'Français', notifications: true, autoBackup: true }); },
     renderSettingsSms() { this.renderSettingsForm('Configuration SMS', { provider: 'API SMS', apiKey: '••••••••', sender: 'AMT PARIS' }); },
     renderSettingsNotifications() { this.renderSettingsForm('Notifications', { emailAlerts: true, smsAlerts: true, pushEnabled: true }); },

@@ -245,8 +245,15 @@ export const CalendrierRdvView = {
         const year = this.currentDate.getFullYear();
         const month = this.currentDate.getMonth();
         
-        document.getElementById('calendarMonthLabel').textContent = this.currentDate.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
-        document.getElementById('calendarCapacityLabel').textContent = `${this.capacityPerDay} places/jour`;
+        const monthLabel = document.getElementById('calendarMonthLabel');
+        const capacityLabel = document.getElementById('calendarCapacityLabel');
+        const grid = document.getElementById('calendarGrid');
+        const kpiContainer = document.getElementById('kpiContainer');
+
+        if (!monthLabel || !capacityLabel || !grid || !kpiContainer) return; // Sécurité si on a changé de page
+
+        monthLabel.textContent = this.currentDate.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
+        capacityLabel.textContent = `${this.capacityPerDay} places/jour`;
 
         // Premier jour du mois (0 = Dimanche, 1 = Lundi, etc.)
         let firstDay = new Date(year, month, 1).getDay();
@@ -346,12 +353,12 @@ export const CalendrierRdvView = {
             gridHtml += `<div class="${classes.join(' ')}" ${onClickAttr}>${contentHtml}</div>`;
         }
 
-        document.getElementById('calendarGrid').innerHTML = gridHtml;
+        grid.innerHTML = gridHtml;
 
         // MAJ KPIs globaux du mois
         const occRate = (validDaysCount * this.capacityPerDay) > 0 ? Math.round((totalProgrammes / (validDaysCount * this.capacityPerDay)) * 100) : 0;
         
-        document.getElementById('kpiContainer').innerHTML = `
+        kpiContainer.innerHTML = `
             <div class="kpi kpi--blue"><div class="kpi__icon"><i class="fas fa-calendar-check"></i></div><div class="kpi__body"><div class="kpi__value">${totalProgrammes}</div><div class="kpi__label">RDV programmés</div></div></div>
             <div class="kpi kpi--green"><div class="kpi__icon"><i class="fas fa-ticket-alt"></i></div><div class="kpi__body"><div class="kpi__value">${totalDispo}</div><div class="kpi__label">Places disponibles</div></div></div>
             <div class="kpi kpi--orange"><div class="kpi__icon"><i class="fas fa-chart-pie"></i></div><div class="kpi__body"><div class="kpi__value">${occRate}%</div><div class="kpi__label">Taux occupation</div></div></div>

@@ -325,6 +325,7 @@ export const TousLesRdvView = {
                     </div>
                     <div class="em-footer">
                         <button class="em-btn em-btn--ghost" type="button" onclick="window.app.views.tousLesRdv.closeEditModal()">Annuler</button>
+                        <button class="em-btn" id="emBtnValider" type="button" onclick="window.app.views.tousLesRdv.validerEtFermer()" style="background:#10b981; color:white; border:none; display:none; align-items:center; gap:8px;"><i class="fas fa-check"></i> Valider ce RDV</button>
                         <button class="em-btn em-btn--save" type="button" onclick="window.app.views.tousLesRdv.saveEditModal()">💾 Enregistrer les modifications</button>
                     </div>
                 </div>
@@ -421,8 +422,15 @@ export const TousLesRdvView = {
                     <button class="btn-del" onclick="window.app.views.tousLesRdv.changeStatus('${rdv.id}', 'annulé')" title="Refuser"><i class="fas fa-times"></i></button>
                     <button class="btn-edit" onclick="window.app.views.tousLesRdv.openEditModal('${rdv.id}')" title="Modifier">✏️</button>
                 `;
+            } else if (isConfirmed) {
+                actions = `
+                    <button class="btn-del" onclick="window.app.views.tousLesRdv.changeStatus('${rdv.id}', 'annulé')" title="Annuler le RDV" style="background:#fee2e2; color:#b91c1c; border-color:#fecaca;"><i class="fas fa-ban"></i></button>
+                    <button class="btn-edit" onclick="window.app.views.tousLesRdv.openEditModal('${rdv.id}')" title="Modifier">✏️</button>
+                    <button class="btn-del" onclick="window.app.views.tousLesRdv.deleteRdv('${rdv.id}')" title="Supprimer">🗑️</button>
+                `;
             } else {
                 actions = `
+                    <button class="btn-edit" onclick="window.app.views.tousLesRdv.changeStatus('${rdv.id}', 'confirmé')" title="Re-valider" style="background:#dcfce7; color:#166534; border-color:#166534;"><i class="fas fa-check"></i></button>
                     <button class="btn-edit" onclick="window.app.views.tousLesRdv.openEditModal('${rdv.id}')" title="Modifier">✏️</button>
                     <button class="btn-del" onclick="window.app.views.tousLesRdv.deleteRdv('${rdv.id}')" title="Supprimer">🗑️</button>
                 `;
@@ -492,6 +500,11 @@ export const TousLesRdvView = {
         document.getElementById('emTelInput').value = rdv.tel || '';
         document.getElementById('emNotes').value = rdv.notes || '';
 
+        const btnValider = document.getElementById('emBtnValider');
+        if (btnValider) {
+            btnValider.style.display = (isPending || rdv.status === 'annulé') ? 'flex' : 'none';
+        }
+
         document.getElementById('rdvEditModal').classList.add('active');
     },
 
@@ -532,6 +545,13 @@ export const TousLesRdvView = {
         } finally {
             btn.innerHTML = '💾 Enregistrer les modifications';
             btn.disabled = false;
+        }
+    },
+
+    validerEtFermer() {
+        if (this.currentEditingId) {
+            this.changeStatus(this.currentEditingId, 'confirmé');
+            this.closeEditModal();
         }
     },
 

@@ -1,5 +1,5 @@
 import { db } from '../../../firebase-config.js';
-import { collection, addDoc, getDocs, query, where, limit, onSnapshot, orderBy } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
+import { collection, addDoc, getDocs, query, where, limit, onSnapshot, orderBy, doc, updateDoc } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 import { Autocomplete } from './autocomplete.js';
 
 export const NouveauRdvView = {
@@ -477,6 +477,11 @@ export const NouveauRdvView = {
                 statusText = '❌ Annulé';
             }
 
+            let validateBtn = '';
+            if (rdv.status === 'en_attente' || rdv.status === 'annulé') {
+                validateBtn = `<button class="btn-action" title="Valider ce RDV" onclick="window.app.views.nouveauRdv.changeStatus('${rdv.id}', 'confirmé')" style="border-color: #86efac; color: #16a34a; background: #f0fdf4;">✅ Valider</button>`;
+            }
+
             return `
                 <div class="rdv-card">
                     <div class="rdv-card__header">
@@ -500,6 +505,7 @@ export const NouveauRdvView = {
                     <div class="rdv-card__footer">
                         <span class="rdv-status ${statusClass}">${statusText}</span>
                         <div class="rdv-card__actions">
+                            ${validateBtn}
                             <button class="btn-action btn-action--depot" title="Créer un dépôt pour ce prospect" onclick="window.app.renderPage('invoice-new')">+Dépôt</button>
                             <button class="btn-action btn-action--recup" title="Créer une récupération pour ce prospect" onclick="window.app.renderPage('invoice-new')">+Récup</button>
                             <button class="btn-action btn-action--edit" title="Modifier ce RDV" onclick="window.app.renderPage('appointments-list')">✏️</button>
@@ -589,6 +595,15 @@ export const NouveauRdvView = {
         } finally {
             btn.innerHTML = '✅ Créer le RDV';
             btn.disabled = false;
+        }
+    },
+
+    async changeStatus(id, newStatus) {
+        try {
+            await updateDoc(doc(db, "appointments", id), { status: newStatus });
+            this.app.showToast(`Rendez-vous ${newStatus === 'confirmé' ? 'validé' : newStatus} !`, newStatus === 'confirmé' ? 'success' : 'info');
+        } catch(e) {
+            this.app.showToast("Erreur de mise à jour", "error");
         }
     }
 };
