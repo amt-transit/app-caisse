@@ -1,14 +1,13 @@
 export const Autocomplete = {
-    // Variable pour stocker l'index sélectionné
-    currentSelectedIndex: -1,
-    currentSuggestionsList: [],
-    currentInputElement: null,
-    currentSuggestionsBox: null,
-
-    initAddress(inputId, suggestionsId, onSelectCallback = null) {
+    initAddress(inputId, suggestionsId, onSelectCallback = null, options = {}) {
         const input = document.getElementById(inputId);
         const suggestionsBox = document.getElementById(suggestionsId);
         if (!input || !suggestionsBox) return;
+
+        // Isolement total de la mémoire (État local pour CHAQUE champ)
+        let currentSelectedIndex = -1;
+        let currentSuggestionsList = [];
+        let lastSelectedValue = input.value.trim();
 
         // Ajouter une classe pour le style
         suggestionsBox.classList.add('autocomplete-suggestions');
@@ -21,7 +20,7 @@ export const Autocomplete = {
         // Cache la liste si l'utilisateur clique ailleurs et que l'input perd le focus
         input.addEventListener('blur', () => {
             suggestionsBox.style.display = 'none';
-            this.currentSelectedIndex = -1;
+            currentSelectedIndex = -1;
         });
 
         let timeout;
@@ -31,9 +30,25 @@ export const Autocomplete = {
             clearTimeout(timeout);
             const query = input.value.trim();
             
+            // SÉCURITÉ : Nettoyage intelligent des champs liés si l'utilisateur modifie une sélection validée
+            if (lastSelectedValue && query !== lastSelectedValue) {
+                lastSelectedValue = '';
+                if (options.clearOnMismatch) {
+                    options.clearOnMismatch.forEach(id => {
+                        const el = document.getElementById(id);
+                        if (el) {
+                            el.value = '';
+                            el.dispatchEvent(new Event('input', { bubbles: true }));
+                            el.dispatchEvent(new Event('change', { bubbles: true }));
+                        }
+                    });
+                }
+                if (options.onMismatch) options.onMismatch(input);
+            }
+            
             if (query.length < 3) {
                 suggestionsBox.style.display = 'none';
-                this.currentSelectedIndex = -1;
+                currentSelectedIndex = -1;
                 return;
             }
 
@@ -46,21 +61,39 @@ export const Autocomplete = {
                     const response = await fetch(`https://api-adresse.data.gouv.fr/search/?q=${encodeURIComponent(query)}&limit=5`);
                     const data = await response.json();
                     
-                    // Sécurité : on annule l'affichage si l'input a été vidé ou modifié pendant le temps de réponse de l'API
-                    if (input.value.trim() !== query) return;
+                    // SÉCURITÉ ANTI-GHOST : on annule l'affichage si l'input a été vidé/modifié 
+                    // OU si l'utilisateur a déjà cliqué ailleurs sur la page (perte de focus)
+                    if (input.value.trim() !== query || document.activeElement !== input) return;
 
                     if (data.features && data.features.length > 0) {
-                        this.currentSuggestionsList = data.features;
-                        this.currentSelectedIndex = -1;
-                        this.renderSuggestions(suggestionsBox, data.features, (item, index) => {
-                            input.value = item.properties.label;
-                            suggestionsBox.style.display = 'none';
-                            input.dispatchEvent(new Event('change'));
-                            if (onSelectCallback) onSelectCallback(item, input);
-                            this.currentSelectedIndex = -1;
-                        }, (index) => {
-                            this.currentSelectedIndex = index;
-                            this.updateHighlight(suggestionsBox, index);
+                        currentSuggestionsList = data.features;
+                        currentSelectedIndex = -1;
+                        
+                        suggestionsBox.innerHTML = data.features.map((item, index) => `
+                            <li data-index="${index}" class="suggestion-item">
+                                ${item.properties.label}
+                            </li>
+                        `).join('');
+                        suggestionsBox.style.display = 'block';
+                        
+                        // Ajouter les événements localement
+                        const lis = suggestionsBox.querySelectorAll('li');
+                        lis.forEach((li, idx) => {
+                            li.addEventListener('click', (e) => {
+                                e.stopPropagation();
+                                const item = data.features[idx];
+                                input.value = item.properties.label;
+                                lastSelectedValue = input.value.trim();
+                                suggestionsBox.style.display = 'none';
+                                input.dispatchEvent(new Event('change'));
+                                if (onSelectCallback) onSelectCallback(item, input);
+                                currentSelectedIndex = -1;
+                            });
+                            
+                            li.addEventListener('mouseenter', () => {
+                                currentSelectedIndex = idx;
+                                this.updateHighlight(suggestionsBox, idx);
+                            });
                         });
                     } else {
                         suggestionsBox.innerHTML = '<li class="no-results">Aucune adresse trouvée</li>';
@@ -84,25 +117,25 @@ export const Autocomplete = {
             switch(e.key) {
                 case 'ArrowDown':
                     e.preventDefault();
-                    this.currentSelectedIndex = (this.currentSelectedIndex + 1) % items.length;
-                    this.updateHighlight(suggestionsBox, this.currentSelectedIndex);
-                    this.scrollToSelected(items[this.currentSelectedIndex]);
+                    currentSelectedIndex = (currentSelectedIndex + 1) % items.length;
+                    this.updateHighlight(suggestionsBox, currentSelectedIndex);
+                    this.scrollToSelected(items[currentSelectedIndex]);
                     break;
                 case 'ArrowUp':
                     e.preventDefault();
-                    this.currentSelectedIndex = this.currentSelectedIndex <= 0 ? items.length - 1 : this.currentSelectedIndex - 1;
-                    this.updateHighlight(suggestionsBox, this.currentSelectedIndex);
-                    this.scrollToSelected(items[this.currentSelectedIndex]);
+                    currentSelectedIndex = currentSelectedIndex <= 0 ? items.length - 1 : currentSelectedIndex - 1;
+                    this.updateHighlight(suggestionsBox, currentSelectedIndex);
+                    this.scrollToSelected(items[currentSelectedIndex]);
                     break;
                 case 'Enter':
                     e.preventDefault();
-                    if (this.currentSelectedIndex >= 0 && items[this.currentSelectedIndex]) {
-                        items[this.currentSelectedIndex].click();
+                    if (currentSelectedIndex >= 0 && items[currentSelectedIndex]) {
+                        items[currentSelectedIndex].click();
                     }
                     break;
                 case 'Escape':
                     suggestionsBox.style.display = 'none';
-                    this.currentSelectedIndex = -1;
+                    currentSelectedIndex = -1;
                     break;
             }
         });
@@ -111,33 +144,8 @@ export const Autocomplete = {
         document.addEventListener('click', (e) => {
             if (e.target !== input && !suggestionsBox.contains(e.target)) {
                 suggestionsBox.style.display = 'none';
-                this.currentSelectedIndex = -1;
+                currentSelectedIndex = -1;
             }
-        });
-    },
-
-    renderSuggestions(container, items, onSelect, onHighlight) {
-        container.innerHTML = items.map((item, index) => `
-            <li data-index="${index}" class="suggestion-item">
-                ${item.properties.label}
-            </li>
-        `).join('');
-        
-        container.style.display = 'block';
-        
-        // Ajouter les événements
-        const lis = container.querySelectorAll('li');
-        lis.forEach((li, idx) => {
-            li.addEventListener('click', (e) => {
-                e.stopPropagation();
-                onSelect(items[idx], idx);
-            });
-            
-            li.addEventListener('mouseenter', () => {
-                this.currentSelectedIndex = idx;
-                this.updateHighlight(container, idx);
-                if (onHighlight) onHighlight(idx);
-            });
         });
     },
 
@@ -162,10 +170,15 @@ export const Autocomplete = {
         }
     },
 
-    initCustom(inputId, suggestionsId, searchCallback, renderItemCallback, onSelectCallback) {
+    initCustom(inputId, suggestionsId, searchCallback, renderItemCallback, onSelectCallback, options = {}) {
         const input = document.getElementById(inputId);
         const suggestionsBox = document.getElementById(suggestionsId);
         if (!input || !suggestionsBox) return;
+
+        // Isolement total de la mémoire
+        let currentSelectedIndex = -1;
+        let currentSuggestionsList = [];
+        let lastSelectedValue = input.value.trim();
 
         suggestionsBox.classList.add('autocomplete-suggestions', 'custom-suggestions');
         
@@ -177,7 +190,7 @@ export const Autocomplete = {
         // Cache la liste si l'utilisateur clique ailleurs et que l'input perd le focus
         input.addEventListener('blur', () => {
             suggestionsBox.style.display = 'none';
-            this.currentSelectedIndex = -1;
+            currentSelectedIndex = -1;
         });
 
         let timeout;
@@ -185,10 +198,26 @@ export const Autocomplete = {
         input.addEventListener('input', () => {
             clearTimeout(timeout);
             const query = input.value.trim();
+
+            // SÉCURITÉ : Nettoyage intelligent des champs liés si l'utilisateur modifie une sélection validée
+            if (lastSelectedValue && query !== lastSelectedValue) {
+                lastSelectedValue = '';
+                if (options.clearOnMismatch) {
+                    options.clearOnMismatch.forEach(id => {
+                        const el = document.getElementById(id);
+                        if (el) {
+                            el.value = '';
+                            el.dispatchEvent(new Event('input', { bubbles: true }));
+                            el.dispatchEvent(new Event('change', { bubbles: true }));
+                        }
+                    });
+                }
+                if (options.onMismatch) options.onMismatch(input);
+            }
             
             if (query.length < 2) {
                 suggestionsBox.style.display = 'none';
-                this.currentSelectedIndex = -1;
+                currentSelectedIndex = -1;
                 return;
             }
 
@@ -197,11 +226,13 @@ export const Autocomplete = {
 
             timeout = setTimeout(async () => {
                 const matches = await searchCallback(query);
-                // Sécurité : on annule si l'utilisateur a effacé ou tapé autre chose entre-temps
-                if (input.value.trim() !== query) return;
+                
+                // SÉCURITÉ ANTI-GHOST : focus et texte vérifiés
+                if (input.value.trim() !== query || document.activeElement !== input) return;
+                
                 if (matches && matches.length > 0) {
-                    this.currentSuggestionsList = matches;
-                    this.currentSelectedIndex = -1;
+                    currentSuggestionsList = matches;
+                    currentSelectedIndex = -1;
                     
                     suggestionsBox.innerHTML = matches.map((m, idx) => {
                         const html = renderItemCallback(m);
@@ -216,12 +247,13 @@ export const Autocomplete = {
                             e.stopPropagation();
                             const item = matches[idx];
                             suggestionsBox.style.display = 'none';
+                            lastSelectedValue = input.value.trim();
                             if (onSelectCallback) onSelectCallback(item, input);
-                            this.currentSelectedIndex = -1;
+                            currentSelectedIndex = -1;
                         });
                         
                         li.addEventListener('mouseenter', () => {
-                            this.currentSelectedIndex = idx;
+                            currentSelectedIndex = idx;
                             this.updateHighlight(suggestionsBox, idx);
                         });
                     });
@@ -242,25 +274,25 @@ export const Autocomplete = {
             switch(e.key) {
                 case 'ArrowDown':
                     e.preventDefault();
-                    this.currentSelectedIndex = (this.currentSelectedIndex + 1) % items.length;
-                    this.updateHighlight(suggestionsBox, this.currentSelectedIndex);
-                    this.scrollToSelected(items[this.currentSelectedIndex]);
+                    currentSelectedIndex = (currentSelectedIndex + 1) % items.length;
+                    this.updateHighlight(suggestionsBox, currentSelectedIndex);
+                    this.scrollToSelected(items[currentSelectedIndex]);
                     break;
                 case 'ArrowUp':
                     e.preventDefault();
-                    this.currentSelectedIndex = this.currentSelectedIndex <= 0 ? items.length - 1 : this.currentSelectedIndex - 1;
-                    this.updateHighlight(suggestionsBox, this.currentSelectedIndex);
-                    this.scrollToSelected(items[this.currentSelectedIndex]);
+                    currentSelectedIndex = currentSelectedIndex <= 0 ? items.length - 1 : currentSelectedIndex - 1;
+                    this.updateHighlight(suggestionsBox, currentSelectedIndex);
+                    this.scrollToSelected(items[currentSelectedIndex]);
                     break;
                 case 'Enter':
                     e.preventDefault();
-                    if (this.currentSelectedIndex >= 0 && items[this.currentSelectedIndex]) {
-                        items[this.currentSelectedIndex].click();
+                    if (currentSelectedIndex >= 0 && items[currentSelectedIndex]) {
+                        items[currentSelectedIndex].click();
                     }
                     break;
                 case 'Escape':
                     suggestionsBox.style.display = 'none';
-                    this.currentSelectedIndex = -1;
+                    currentSelectedIndex = -1;
                     break;
             }
         });
@@ -268,7 +300,7 @@ export const Autocomplete = {
         document.addEventListener('click', (e) => {
             if (e.target !== input && !suggestionsBox.contains(e.target)) {
                 suggestionsBox.style.display = 'none';
-                this.currentSelectedIndex = -1;
+                currentSelectedIndex = -1;
             }
         });
     }

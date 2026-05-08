@@ -217,7 +217,8 @@ export const NouvelleFactureView = {
                 return Array.from(this.clientsData.values()).filter(c => (c.nom && c.nom.toLowerCase().includes(query)) || (c.tel && c.tel.includes(query))).slice(0, 8);
             },
             (c) => `<div style="font-weight: 600;">${c.nom}</div><div style="font-size: 11px; opacity: 0.7;">📞 ${c.tel || 'N/A'}</div>`,
-            (c, input) => { input.value = c.nom; this.handleExpediteurChange(); }
+            (c, input) => { input.value = c.nom; this.handleExpediteurChange(); },
+            { clearOnMismatch: ['nfDestinataire', 'nfLieu'] } // Nettoyage Automatique
         );
         document.getElementById('nfExpediteur').addEventListener('input', (e) => { if(e.target.value.trim().length < 2) this.handleExpediteurChange(); });
 
@@ -232,7 +233,8 @@ export const NouvelleFactureView = {
                 return matches.slice(0, 8);
             },
             (d) => `<div style="font-weight: 600;">${d}</div>`,
-            (d, input) => { input.value = d; this.handleDestinataireChange(); }
+            (d, input) => { input.value = d; this.handleDestinataireChange(); },
+            { clearOnMismatch: ['nfLieu'] } // Nettoyage Automatique
         );
         document.getElementById('nfDestinataire').addEventListener('input', (e) => { if(e.target.value.trim().length < 2) this.handleDestinataireChange(); });
 

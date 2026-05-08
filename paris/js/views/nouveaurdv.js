@@ -87,6 +87,36 @@ export const NouveauRdvView = {
                     grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
                     gap: 20px;
                 }
+                
+                /* --- STYLES DES CARTES RDV DU JOUR --- */
+                .rdv-card { background: white; border-radius: 12px; border: 1px solid #e2e8f0; overflow: hidden; box-shadow: 0 2px 4px rgba(0,0,0,0.02); display: flex; flex-direction: column; transition: transform 0.2s; }
+                .rdv-card:hover { transform: translateY(-2px); box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
+                .rdv-card__header { display: flex; justify-content: space-between; align-items: center; padding: 12px 15px; border-bottom: 1px solid #f1f5f9; background: #f8fafc; }
+                .rdv-type-badge { padding: 4px 8px; border-radius: 6px; font-size: 11px; font-weight: 800; letter-spacing: 0.5px; }
+                .badge-depot { background: #e0f2fe; color: #0284c7; border: 1px solid #bae6fd; }
+                .badge-recup { background: #f3e8ff; color: #7e22ce; border: 1px solid #e9d5ff; }
+                .rdv-time { font-weight: 800; color: #0f172a; font-size: 14px; }
+                .rdv-card__body { padding: 15px; flex: 1; }
+                .rdv-client { display: flex; gap: 12px; margin-bottom: 15px; align-items: center; }
+                .rdv-client-icon { font-size: 20px; color: #94a3b8; background: #f1f5f9; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; border-radius: 50%; }
+                .rdv-client-info { flex: 1; }
+                .rdv-client-name { font-weight: 800; color: #1e293b; font-size: 14px; text-transform: uppercase; margin-bottom: 2px; }
+                .rdv-client-phone { color: #64748b; font-size: 12px; font-weight: 600; }
+                .rdv-address { display: flex; gap: 10px; align-items: flex-start; background: #f8fafc; padding: 12px; border-radius: 8px; font-size: 12px; color: #475569; line-height: 1.4; border: 1px solid #e2e8f0; }
+                .rdv-address-icon { font-size: 14px; }
+                .rdv-card__footer { display: flex; justify-content: space-between; align-items: center; padding: 12px 15px; border-top: 1px solid #e2e8f0; background: #fff; }
+                .rdv-status { font-size: 12px; font-weight: 700; }
+                .rdv-status--validated { color: #10b981; }
+                .rdv-status--pending { color: #f59e0b; }
+                .rdv-status--cancelled { color: #ef4444; }
+                .rdv-card__actions { display: flex; gap: 6px; }
+                .btn-action { padding: 6px 10px; border-radius: 6px; font-size: 12px; font-weight: 700; cursor: pointer; border: 1px solid transparent; background: white; transition: 0.2s; }
+                .btn-action--depot { border-color: #bae6fd; color: #0284c7; background: #f0f9ff; }
+                .btn-action--depot:hover { background: #e0f2fe; }
+                .btn-action--recup { border-color: #e9d5ff; color: #7e22ce; background: #faf5ff; }
+                .btn-action--recup:hover { background: #f3e8ff; }
+                .btn-action--edit { border-color: #cbd5e1; color: #475569; background: #f8fafc; }
+                .btn-action--edit:hover { background: #e2e8f0; }
             </style>
             
             <div style="max-width: 1000px; margin: 0 auto; animation: fadeIn 0.3s ease-in-out;">
@@ -286,9 +316,6 @@ export const NouveauRdvView = {
 
         document.getElementById('rdvDateFilter').addEventListener('change', () => this.loadTodayRdv());
 
-        // Nettoyer l'écouteur précédent si nécessaire
-        if (this.unsubTodayRdv) this.unsubTodayRdv();
-        
         // Initialiser l'auto-complétion personnalisée pour les clients
         Autocomplete.initCustom('rdvClient', 'rdvClientSuggestions', 
             (q) => {
@@ -306,10 +333,11 @@ export const NouveauRdvView = {
             (c, input) => {
                 input.value = c.nom;
                 this.handleClientChange();
-            }
+            },
+            { clearOnMismatch: ['rdvTel', 'rdvAdresse'] } // Nettoyage Automatique
         );
         document.getElementById('rdvClient').addEventListener('input', (e) => {
-            if (e.target.value.trim().length < 2) this.handleClientChange();
+            this.handleClientChange();
         });
 
         // Initialiser l'auto-complétion des adresses via l'API Gouvernementale
@@ -378,10 +406,17 @@ export const NouveauRdvView = {
         const adresseInput = document.getElementById('rdvAdresse');
         const feedback = document.getElementById('rdvClientFeedback');
 
+        if (!clientName) {
+            if (telInput) telInput.value = '';
+            if (adresseInput) adresseInput.value = '';
+            if (feedback) feedback.innerHTML = '';
+            return;
+        }
+
         if (this.clientsMap.has(clientName)) {
             const clientData = this.clientsMap.get(clientName);
-            if (!telInput.value) telInput.value = clientData.tel || '';
-            if (!adresseInput.value) adresseInput.value = clientData.adresse || '';
+            if (telInput) telInput.value = clientData.tel || '';
+            if (adresseInput) adresseInput.value = clientData.adresse || '';
             if (feedback) feedback.innerHTML = `<span style="color:#059669;"><i class="fas fa-check-circle"></i> Client reconnu</span>`;
         } else {
             if (feedback) feedback.innerHTML = `<span style="color:#f59e0b;"><i class="fas fa-info-circle"></i> Nouveau client</span>`;
@@ -410,6 +445,8 @@ export const NouveauRdvView = {
             this.todayRdv = snapshot.docs.map(d => ({id: d.id, ...d.data()}));
             this.todayRdv.sort((a, b) => (a.time || '00:00').localeCompare(b.time || '00:00'));
             this.renderTodayRdv();
+        }, (error) => {
+            console.error("Erreur lors du chargement des RDV du jour :", error);
         });
     },
 
@@ -428,43 +465,44 @@ export const NouveauRdvView = {
         container.innerHTML = this.todayRdv.map(rdv => {
             const isDepot = rdv.rdvType === 'DEPOT';
             const typeLabel = isDepot ? 'DÉPÔT' : 'RÉCUPÉRATION';
-            const typeBg = isDepot ? '#e0f2fe' : '#f3e8ff';
-            const typeColor = isDepot ? '#0284c7' : '#7e22ce';
+            const typeClass = isDepot ? 'badge-depot' : 'badge-recup';
 
-            let statusClass = '✅ Validé';
-            let statusColor = '#10b981';
+            let statusClass = 'rdv-status--validated';
+            let statusText = '✅ Validé';
             if (rdv.status === 'en_attente') {
-                statusClass = '⏳ En attente';
-                statusColor = '#f59e0b';
+                statusClass = 'rdv-status--pending';
+                statusText = '⏳ En attente';
             } else if (rdv.status === 'annulé') {
-                statusClass = '❌ Annulé';
-                statusColor = '#ef4444';
+                statusClass = 'rdv-status--cancelled';
+                statusText = '❌ Annulé';
             }
 
             return `
-                <div class="rdv-card" style="background: white; border-radius: 12px; border: 1px solid #e2e8f0; overflow: hidden; box-shadow: 0 2px 4px rgba(0,0,0,0.02);">
-                    <div class="rdv-card__header" style="display: flex; justify-content: space-between; align-items: center; padding: 12px 15px; border-bottom: 1px solid #e2e8f0; background: #f8fafc;">
-                        <span style="background: ${typeBg}; color: ${typeColor}; padding: 4px 8px; border-radius: 6px; font-size: 11px; font-weight: 700;">${typeLabel}</span>
-                        <span style="font-weight: 700; color: #0f172a;">${rdv.time || '--:--'}</span>
+                <div class="rdv-card">
+                    <div class="rdv-card__header">
+                        <span class="rdv-type-badge ${typeClass}">${typeLabel}</span>
+                        <span class="rdv-time">${rdv.time || '--:--'}</span>
                     </div>
-                    <div class="rdv-card__body" style="padding: 15px;">
-                        <div style="display: flex; gap: 10px; margin-bottom: 12px;">
-                            <div style="font-size: 20px; color: #94a3b8;">👤</div>
-                            <div>
-                                <div style="font-weight: 700; color: #1e293b; font-size: 14px;">${rdv.client || 'Client'}</div>
-                                <div style="color: #64748b; font-size: 12px; margin-top: 2px;">📞 ${rdv.tel || 'Non renseigné'}</div>
-                                <div style="color: #94a3b8; font-size: 11px; margin-top: 2px;">👷 Pris par: ${rdv.saisiPar || '—'}</div>
+                    <div class="rdv-card__body">
+                        <div class="rdv-client">
+                            <div class="rdv-client-icon">👤</div>
+                            <div class="rdv-client-info">
+                                <div class="rdv-client-name">${rdv.client || 'Client'}</div>
+                                <div class="rdv-client-phone">📞 ${rdv.tel || 'Non renseigné'}</div>
+                                <div class="rdv-client-phone">👷 Pris par : ${rdv.saisiPar || '—'}</div>
                             </div>
                         </div>
-                        <div style="display: flex; gap: 10px; align-items: flex-start; background: #f8fafc; padding: 10px; border-radius: 8px;">
-                            <span style="font-size: 14px; color: #94a3b8;">📍</span>
-                            <span style="font-size: 12px; color: #475569; line-height: 1.4;">${rdv.adresse || 'Adresse non spécifiée'}</span>
+                        <div class="rdv-address">
+                            <span class="rdv-address-icon">📍</span>
+                            <span>${rdv.adresse || 'Adresse non spécifiée'}</span>
                         </div>
                     </div>
-                    <div class="rdv-card__footer" style="display: flex; justify-content: space-between; align-items: center; padding: 12px 15px; border-top: 1px solid #e2e8f0; background: #f8fafc;">
-                        <span style="font-size: 12px; font-weight: 600; color: ${statusColor};">${statusClass}</span>
-                        <div style="display: flex; gap: 5px;">
-                            <button class="btn-small" onclick="window.app.renderPage('appointments-list')" title="Voir tous les RDV" style="background: white; border: 1px solid #e2e8f0; border-radius: 6px; cursor: pointer; padding: 4px 8px;">✏️ Éditer</button>
+                    <div class="rdv-card__footer">
+                        <span class="rdv-status ${statusClass}">${statusText}</span>
+                        <div class="rdv-card__actions">
+                            <button class="btn-action btn-action--depot" title="Créer un dépôt pour ce prospect" onclick="window.app.renderPage('invoice-new')">+Dépôt</button>
+                            <button class="btn-action btn-action--recup" title="Créer une récupération pour ce prospect" onclick="window.app.renderPage('invoice-new')">+Récup</button>
+                            <button class="btn-action btn-action--edit" title="Modifier ce RDV" onclick="window.app.renderPage('appointments-list')">✏️</button>
                         </div>
                     </div>
                 </div>
