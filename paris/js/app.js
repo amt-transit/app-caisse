@@ -64,16 +64,19 @@ const app = {
     data: appData,
 
     init() {
+        // Expose l'objet app à l'objet global Window AVANT de rendre la page
+        window.app = this;
+        
         this.loadMenuConfig(); // Charge la configuration et applique les accès aux menus
-        this.renderPage('dashboard');
+        
+        const savedPage = sessionStorage.getItem('parisCurrentPage') || 'dashboard';
+        this.renderPage(savedPage);
+        
         this.initSidebarEvents();
         this.initMobileToggle();
         this.initGlobalEvents();
         this.updateBadges();
         this.loadUserProfile();
-        
-        // Expose l'objet app à l'objet global Window pour les appels onclick HTML
-        window.app = this;
     },
 
     async loadMenuConfig() {
@@ -186,11 +189,25 @@ const app = {
                 const page = item.dataset.page;
                 if (page) {
                     this.renderPage(page);
-                    document.querySelectorAll('.sidebar-item').forEach(i => i.classList.remove('active'));
-                    item.classList.add('active');
                     // La fermeture sidebar mobile est gérée dans initMobileToggle
                 }
             });
+        });
+
+        // Initialisation de l'accordéon (listes déroulantes) pour la sidebar
+        document.querySelectorAll('.sidebar-category').forEach(category => {
+            const title = category.querySelector('.sidebar-category-title');
+            
+            // Réduire par défaut les catégories qui ne contiennent pas l'élément actif
+            if (!category.querySelector('.sidebar-item.active')) {
+                category.classList.add('collapsed');
+            }
+
+            if (title) {
+                title.addEventListener('click', () => {
+                    category.classList.toggle('collapsed');
+                });
+            }
         });
     },
 
@@ -320,6 +337,9 @@ const app = {
         }
 
         this.currentPage = page;
+        // Sauvegarde de la page courante pour la conserver après actualisation
+        sessionStorage.setItem('parisCurrentPage', page);
+        
         const titleMap = {
             'dashboard': 'Tableau de bord',
             'daily-bilan': 'Bilan du jour',
@@ -388,6 +408,11 @@ const app = {
         document.querySelectorAll('.bottom-nav-item').forEach(b => b.classList.remove('active'));
         const activeBnav = document.querySelector(`.bottom-nav-item[data-target="${page}"]`);
         if (activeBnav) activeBnav.classList.add('active');
+        
+        // Mise à jour de l'état actif dans la Sidebar (Desktop)
+        document.querySelectorAll('.sidebar-item').forEach(i => i.classList.remove('active'));
+        const activeSidebar = document.querySelector(`.sidebar-item[data-page="${page}"]`);
+        if (activeSidebar) activeSidebar.classList.add('active');
 
         const renderers = {
             'dashboard': () => this.renderDashboard(),

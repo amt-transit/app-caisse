@@ -32,6 +32,29 @@
         .user-dropdown-menu a.logout { color: #ef4444; }
         .user-dropdown-menu a.logout:hover { background: #fef2f2; }
         @keyframes slideDown { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
+
+        /* Styles de l'accordéon pour la sidebar */
+        .sidebar-category-title {
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            user-select: none;
+        }
+        .sidebar-category-title::after {
+            content: "\f078"; /* icône chevron-down de FontAwesome */
+            font-family: "Font Awesome 6 Free";
+            font-weight: 900;
+            font-size: 12px;
+            transition: transform 0.3s ease;
+            color: #94a3b8;
+        }
+        .sidebar-category.collapsed .sidebar-category-title::after {
+            transform: rotate(-90deg); /* pointe vers la droite */
+        }
+        .sidebar-category.collapsed .sidebar-item {
+            display: none !important;
+        }
     </style>
 </head>
 <body>

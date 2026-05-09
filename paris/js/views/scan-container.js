@@ -1,5 +1,5 @@
 import { db } from '../../../firebase-config.js';
-import { collection, query, where, getDocs, updateDoc, doc, arrayUnion, limit } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
+import { collection, query, where, getDocs, updateDoc, doc, arrayUnion, limit, addDoc } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 
 export const ScanContainerView = {
     scannerActive: false,
@@ -11,20 +11,40 @@ export const ScanContainerView = {
     lastScanText: '',
     lastScanTime: 0,
     recentScans: [],
+    stats: { total: 0, success: 0, duplicate: 0, error: 0 },
+    isSoundEnabled: true,
 
     render(app) {
         this.app = app;
         window.app.views = window.app.views || {};
         window.app.views.scanContainer = this;
         this.recentScans = [];
+        this.stats = { total: 0, success: 0, duplicate: 0, error: 0 };
 
         const html = `
             <style>
                 .sw-page { max-width: 800px; margin: 0 auto; animation: fadeIn 0.3s ease; }
-                .sw-header { background: white; border-radius: 16px; padding: 20px; display: flex; align-items: center; gap: 15px; border: 1px solid #e2e8f0; margin-bottom: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.02); }
-                .sw-header__icon { font-size: 28px; background: #fffbeb; color: #f59e0b; width: 50px; height: 50px; display: flex; align-items: center; justify-content: center; border-radius: 12px; }
-                .sw-header__title { margin: 0; font-size: 20px; font-weight: 800; color: #0f172a; }
-                .sw-header__sub { margin: 2px 0 0 0; font-size: 13px; color: #64748b; }
+                
+                /* --- NOUVEAU HEADER & KPIs --- */
+                .sm__header { border-radius: 16px; padding: 20px; margin-bottom: 20px; color: white; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); background: linear-gradient(135deg, rgb(245, 158, 11) 0%, rgb(217, 119, 6) 100%); }
+                .sm__header-inner { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px; }
+                .sm__header-info { display: flex; align-items: center; gap: 15px; }
+                .sm__header-icon { font-size: 28px; background: rgba(255,255,255,0.2); width: 50px; height: 50px; display: flex; align-items: center; justify-content: center; border-radius: 12px; }
+                .sm__header-title { margin: 0; font-size: 20px; font-weight: 800; }
+                .sm__header-desc { margin: 4px 0 0 0; font-size: 13px; opacity: 0.9; }
+                .sm__header-actions { display: flex; gap: 10px; }
+                .sm__btn-sound, .sm__btn-clear { background: rgba(255,255,255,0.2); border: none; width: 40px; height: 40px; border-radius: 10px; font-size: 18px; cursor: pointer; transition: 0.2s; color: white; display: flex; align-items: center; justify-content: center; }
+                .sm__btn-sound:hover, .sm__btn-clear:hover { background: rgba(255,255,255,0.3); transform: translateY(-2px); }
+                
+                .sm__kpi-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; margin-bottom: 25px; }
+                @media (max-width: 640px) { .sm__kpi-row { grid-template-columns: repeat(2, 1fr); } }
+                .sm__kpi { background: white; padding: 15px; border-radius: 12px; text-align: center; border: 1px solid #e2e8f0; box-shadow: 0 2px 4px rgba(0,0,0,0.02); }
+                .sm__kpi--blue { border-bottom: 4px solid #3b82f6; }
+                .sm__kpi--green { border-bottom: 4px solid #10b981; }
+                .sm__kpi--orange { border-bottom: 4px solid #f59e0b; }
+                .sm__kpi--red { border-bottom: 4px solid #ef4444; }
+                .sm__kpi-val { font-size: 24px; font-weight: 800; color: #0f172a; margin-bottom: 4px; transition: 0.3s; }
+                .sm__kpi-lbl { font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase; }
 
                 .container-selector { background: white; border-radius: 16px; padding: 20px; border: 1px solid #e2e8f0; margin-bottom: 20px; display: flex; flex-direction: column; gap: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.02); }
                 .container-selector label { font-weight: 700; color: #1e293b; font-size: 14px; }
@@ -65,15 +85,43 @@ export const ScanContainerView = {
                 .scan-item-client { font-size: 12px; color: #64748b; }
                 .scan-item-status { padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 700; }
                 .status-ok { background: #dcfce7; color: #166534; }
+                .status-warn { background: #ffedd5; color: #c2410c; }
                 .status-err { background: #fee2e2; color: #991b1b; }
             </style>
 
             <div class="sw-page" id="sw-page">
-                <div class="sw-header">
-                    <div class="sw-header__icon"><i class="fas fa-ship"></i></div>
-                    <div>
-                        <h1 class="sw-header__title">Charger Conteneur</h1>
-                        <p class="sw-header__sub">Associez les colis à un conteneur et passez-les "En Transit"</p>
+                <div class="sm__header">
+                    <div class="sm__header-inner">
+                        <div class="sm__header-info">
+                            <span class="sm__header-icon">🚢</span>
+                            <div>
+                                <h1 class="sm__header-title">Charger Conteneur</h1>
+                                <p class="sm__header-desc">Associez les colis à un conteneur pour l'expédition.</p>
+                            </div>
+                        </div>
+                        <div class="sm__header-actions">
+                            <button class="sm__btn-sound" id="btn-sound-ctn" type="button" title="Activer/Désactiver le son" onclick="window.app.views.scanContainer.toggleSound()">🔊</button>
+                            <button class="sm__btn-clear" type="button" title="Effacer la session" onclick="window.app.views.scanContainer.clearSession()">🗑️</button>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="sm__kpi-row">
+                    <div class="sm__kpi sm__kpi--blue">
+                        <div class="sm__kpi-val" id="ctn-kpi-total">0</div>
+                        <div class="sm__kpi-lbl">Total</div>
+                    </div>
+                    <div class="sm__kpi sm__kpi--green">
+                        <div class="sm__kpi-val" id="ctn-kpi-success">0</div>
+                        <div class="sm__kpi-lbl">Succès</div>
+                    </div>
+                    <div class="sm__kpi sm__kpi--orange">
+                        <div class="sm__kpi-val" id="ctn-kpi-duplicate">0</div>
+                        <div class="sm__kpi-lbl">Déjà traité</div>
+                    </div>
+                    <div class="sm__kpi sm__kpi--red">
+                        <div class="sm__kpi-val" id="ctn-kpi-error">0</div>
+                        <div class="sm__kpi-lbl">Erreurs</div>
                     </div>
                 </div>
 
@@ -127,6 +175,29 @@ export const ScanContainerView = {
 
         this.loadContainers();
         this.loadScannerScript();
+    },
+
+    toggleSound() {
+        this.isSoundEnabled = !this.isSoundEnabled;
+        const btn = document.getElementById('btn-sound-ctn');
+        if (btn) btn.textContent = this.isSoundEnabled ? '🔊' : '🔇';
+    },
+
+    clearSession() {
+        if (confirm("Voulez-vous vraiment effacer les données de scan de cette session ?")) {
+            this.stats = { total: 0, success: 0, duplicate: 0, error: 0 };
+            this.recentScans = [];
+            this.updateKPIs();
+            const list = document.getElementById('sw-recent-list');
+            if (list) list.innerHTML = '<div style="padding: 30px; text-align: center; color: #94a3b8; font-size: 14px;">Aucun colis chargé pour le moment.</div>';
+        }
+    },
+
+    updateKPIs() {
+        document.getElementById('ctn-kpi-total').textContent = this.stats.total;
+        document.getElementById('ctn-kpi-success').textContent = this.stats.success;
+        document.getElementById('ctn-kpi-duplicate').textContent = this.stats.duplicate;
+        document.getElementById('ctn-kpi-error').textContent = this.stats.error;
     },
 
     async loadContainers() {
@@ -255,10 +326,20 @@ export const ScanContainerView = {
         this.lastScanTime = Date.now();
 
         this.isScanningPaused = true;
-        if (navigator.vibrate) navigator.vibrate([30, 20, 30]);
         
         const baseRefMatch = text.match(/^([A-Z]{2}[-_\s.]\d{3}[-_\s.][A-Z0-9]+)(?:_.*)?$/i);
         const baseRef = baseRefMatch ? baseRefMatch[1] : text;
+        
+        const logData = {
+            scanRef: text,
+            date: new Date().toISOString(),
+            type: 'CONTENEUR_CHARGEMENT',
+            agent: sessionStorage.getItem('userName') || 'Agent',
+            agency: sessionStorage.getItem('currentActiveAgency') || 'paris',
+            container: targetCont
+        };
+
+        this.stats.total++;
 
         try {
             // 1. Mettre à jour Logistique
@@ -268,25 +349,48 @@ export const ScanContainerView = {
             if (!snapLiv.empty) {
                 const docId = snapLiv.docs[0].id;
                 const data = snapLiv.docs[0].data();
-                await updateDoc(doc(db, 'livraisons', docId), {
-                    conteneur: targetCont,
-                    containerStatus: 'A_VENIR',
-                    scanHistory: arrayUnion({ scanRef: text, date: new Date().toISOString(), type: 'CONTENEUR_CHARGEMENT' })
-                });
                 
-                // 2. Mettre à jour Caisse (Transactions)
-                const qTrans = query(collection(db, 'transactions'), where('reference', '==', baseRef), limit(1));
-                const snapTrans = await getDocs(qTrans);
-                if (!snapTrans.empty) {
-                    await updateDoc(doc(db, 'transactions', snapTrans.docs[0].id), { conteneur: targetCont });
+                if (data.containerStatus === 'A_VENIR' && data.conteneur === targetCont) {
+                    this.stats.duplicate++;
+                    logData.status = 'DOUBLON';
+                    this.addRecentScan(text, data.destinataire || data.expediteur || 'Client inconnu', 'Déjà dans ce conteneur', 'warn');
+                    if (this.isSoundEnabled && navigator.vibrate) navigator.vibrate([50, 50, 50]);
+                } else {
+                    await updateDoc(doc(db, 'livraisons', docId), {
+                        conteneur: targetCont,
+                        containerStatus: 'A_VENIR',
+                        scanHistory: arrayUnion({ scanRef: text, date: new Date().toISOString(), type: 'CONTENEUR_CHARGEMENT' })
+                    });
+                    
+                    // 2. Mettre à jour Caisse (Transactions)
+                    const qTrans = query(collection(db, 'transactions'), where('reference', '==', baseRef), limit(1));
+                    const snapTrans = await getDocs(qTrans);
+                    if (!snapTrans.empty) {
+                        await updateDoc(doc(db, 'transactions', snapTrans.docs[0].id), { conteneur: targetCont });
+                    }
+    
+                    this.stats.success++;
+                    logData.status = 'SUCCES';
+                    this.addRecentScan(text, data.destinataire || data.expediteur || 'Client inconnu', 'Chargé avec succès', 'ok');
+                    if (this.isSoundEnabled && navigator.vibrate) navigator.vibrate([30, 20, 30]);
                 }
-
-                this.addRecentScan(text, data.destinataire || data.expediteur || 'Client inconnu', 'Chargé', 'ok');
             } else {
+                this.stats.error++;
+                logData.status = 'ERREUR';
                 this.addRecentScan(text, 'Non trouvé en base', 'Colis inconnu', 'err');
-                if(navigator.vibrate) navigator.vibrate([100, 50, 100]);
+                if(this.isSoundEnabled && navigator.vibrate) navigator.vibrate([100, 50, 100]);
             }
-        } catch(e) { console.error(e); this.app.showToast("Erreur de connexion", "error"); }
+        } catch(e) { 
+            console.error(e); 
+            this.stats.error++;
+            logData.status = 'ERREUR';
+            this.app.showToast("Erreur de connexion", "error"); 
+        }
+        
+        // Sauvegarde silencieuse du log
+        addDoc(collection(db, 'scan_logs'), logData).catch(e => console.error("Log error", e));
+
+        this.updateKPIs();
 
         setTimeout(() => { this.isScanningPaused = false; }, 1500);
     },

@@ -17,6 +17,12 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     const exportExcelBtn = document.getElementById('exportExcelBtn');
     const exportPdfBtn = document.getElementById('exportPdfBtn');
+    const exportRecipientsBtn = document.getElementById('exportRecipientsBtn');
+
+    const activeAgency = sessionStorage.getItem('currentActiveAgency') || 'abidjan';
+    if (activeAgency === 'abidjan' && exportRecipientsBtn) {
+        exportRecipientsBtn.style.display = 'inline-block';
+    }
 
     const profileName = document.getElementById('profileName');
     const profileTotalSpent = document.getElementById('profileTotalSpent');
@@ -799,6 +805,91 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     // Export
+    if (exportRecipientsBtn) {
+        exportRecipientsBtn.addEventListener('click', async () => {
+            try {
+                exportRecipientsBtn.disabled = true;
+                const originalText = exportRecipientsBtn.innerHTML;
+                exportRecipientsBtn.innerHTML = '⏳ Extraction de la base complète...';
+
+                const recipientsMap = new Map();
+                
+                const processDocs = (snapshot) => {
+                    snapshot.forEach(doc => {
+                        const d = doc.data();
+                        if (d.destinataire && d.destinataire.trim() !== '') {
+                            let name = d.destinataire.trim();
+                            const phoneMatch = name.match(/(?:(?:\+|00)225[\s.-]?)?(?:01|05|07|0)\d(?:[\s.-]?\d{2}){4}|(?:(?:\+|00)225[\s.-]?)?(?:01|05|07|0)\d{8,}/);
+                            let extractedPhone = d.numero || '';
+                            if (phoneMatch) {
+                                extractedPhone = extractedPhone || phoneMatch[0].replace(/[\s.-]/g, '');
+                                name = name.replace(phoneMatch[0], '').replace(/[-–,;:\/\s]+$/, '').trim();
+                            }
+                            const upperName = name.toUpperCase();
+
+                            if (!recipientsMap.has(upperName)) {
+                                recipientsMap.set(upperName, {
+                                    Nom: name,
+                                    Telephone: extractedPhone,
+                                    Adresse: d.lieuLivraison || d.commune || '',
+                                    Nombre_Colis: parseInt(d.quantite) || 1,
+                                    Derniere_Livraison: d.dateAjout ? new Date(d.dateAjout).toLocaleDateString('fr-FR') : '',
+                                    RawDate: d.dateAjout || ''
+                                });
+                            } else {
+                                const existing = recipientsMap.get(upperName);
+                                existing.Nombre_Colis += (parseInt(d.quantite) || 1);
+                                if (!existing.Telephone && extractedPhone) existing.Telephone = extractedPhone;
+                                if (!existing.Adresse && (d.lieuLivraison || d.commune)) existing.Adresse = d.lieuLivraison || d.commune;
+                                
+                                // Mettre à jour avec la date la plus récente
+                                if (d.dateAjout) {
+                                    const currentLast = existing.RawDate ? new Date(existing.RawDate) : new Date(0);
+                                    const newDate = new Date(d.dateAjout);
+                                    if (newDate > currentLast) {
+                                        existing.RawDate = d.dateAjout;
+                                        existing.Derniere_Livraison = newDate.toLocaleDateString('fr-FR');
+                                    }
+                                }
+                            }
+                        }
+                    });
+                };
+
+                // 1. Scanner toutes les livraisons actives
+                const livSnap = await getDocs(collection(db, "livraisons"));
+                processDocs(livSnap);
+
+                // 2. Scanner toutes les livraisons archivées
+                const archSnap = await getDocs(collection(db, "livraisons_archives"));
+                processDocs(archSnap);
+                
+                // Nettoyer l'objet (retirer RawDate) et trier par plus gros client
+                const data = Array.from(recipientsMap.values()).map(r => {
+                    delete r.RawDate;
+                    return r;
+                }).sort((a, b) => b.Nombre_Colis - a.Nombre_Colis);
+                
+                if (data.length === 0) {
+                    alert("Aucun destinataire trouvé dans la base de données.");
+                } else {
+                    const wb = XLSX.utils.book_new();
+                    const ws = XLSX.utils.json_to_sheet(data);
+                    XLSX.utils.book_append_sheet(wb, ws, "Destinataires");
+                    XLSX.writeFile(wb, `Carnet_Adresses_Complet_${new Date().toISOString().split('T')[0]}.xlsx`);
+                }
+
+                exportRecipientsBtn.innerHTML = originalText;
+                exportRecipientsBtn.disabled = false;
+            } catch (error) {
+                console.error("Erreur lors de l'extraction globale :", error);
+                alert("Une erreur est survenue lors de l'extraction.");
+                exportRecipientsBtn.innerHTML = '📞 Exporter Destinataires';
+                exportRecipientsBtn.disabled = false;
+            }
+        });
+    }
+
     exportExcelBtn.addEventListener('click', () => {
         const table = document.getElementById('topClientsTable');
         const wb = XLSX.utils.table_to_book(table, {sheet: "Top Clients"});
