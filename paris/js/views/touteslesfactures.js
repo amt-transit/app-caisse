@@ -696,12 +696,6 @@ export const ToutesLesFacturesView = {
             const labels = liv.labels && liv.labels.length > 0 ? liv.labels : [liv.ref];
             totalSubColis += labels.length;
             
-            let statusDisplay = 'À traiter';
-            let statusBadgeClass = 'colis-pending';
-            if (liv.containerStatus === 'PARIS') { statusDisplay = 'Mise en Entrepôt'; statusBadgeClass = 'colis-paris'; }
-            if (liv.containerStatus === 'A_VENIR') { statusDisplay = 'En Transit (Mer)'; statusBadgeClass = 'colis-transit'; }
-            if (liv.containerStatus === 'EN_COURS') { statusDisplay = 'Arrivé à Abidjan'; statusBadgeClass = 'colis-abidjan'; }
-            if (liv.status === 'LIVRE') { statusDisplay = 'Livré au destinataire'; statusBadgeClass = 'colis-delivered'; }
 
             labels.forEach(lbl => {
                 let specificDesc = liv.description || invoice.description || 'Colis';
@@ -710,12 +704,49 @@ export const ToutesLesFacturesView = {
                     specificDesc = descMap[parseInt(match[1])];
                 }
 
+                // 1. Statut individuel par défaut (Non scanné)
+                let lblStatusDisplay = 'À traiter (Non scanné)';
+                let lblStatusClass = 'colis-pending';
+                let lblContainer = '-';
+
+                // 2. Vérification individuelle via l'historique des scans
+                if (liv.scanHistory && Array.isArray(liv.scanHistory)) {
+                    const myScans = liv.scanHistory.filter(s => s.scanRef === lbl);
+                    myScans.sort((a, b) => new Date(b.date) - new Date(a.date)); // Du plus récent au plus ancien
+
+                    if (myScans.length > 0) {
+                        const lastScan = myScans[0];
+                        if (lastScan.type === 'ENTREPOT_PARIS') {
+                            lblStatusDisplay = 'Mise en Entrepôt';
+                            lblStatusClass = 'colis-paris';
+                        } else if (lastScan.type === 'CONTENEUR_CHARGEMENT') {
+                            lblStatusDisplay = 'Chargé (Conteneur)';
+                            lblStatusClass = 'colis-transit';
+                            lblContainer = lastScan.container || liv.conteneur || '-';
+                        }
+                    }
+                }
+
+                // 3. Surcharges globales pour les étapes ultérieures
+                if (liv.containerStatus === 'A_VENIR' && lblStatusClass === 'colis-transit') {
+                    lblStatusDisplay = 'En Transit (Mer)';
+                } else if (liv.containerStatus === 'EN_COURS') {
+                    lblStatusDisplay = 'Arrivé à Abidjan';
+                    lblStatusClass = 'colis-abidjan';
+                    lblContainer = liv.conteneur || lblContainer;
+                }
+                if (liv.status === 'LIVRE') {
+                    lblStatusDisplay = 'Livré au destinataire';
+                    lblStatusClass = 'colis-delivered';
+                    lblContainer = liv.conteneur || lblContainer;
+                }
+
                 trackingRows += `
                     <tr>
                         <td style="font-weight: 900; font-family: monospace;">${lbl}</td>
                         <td class="modal-table__desc">${specificDesc}</td>
-                        <td><span class="status-badge ${statusBadgeClass}">${statusDisplay}</span></td>
-                        <td><span style="background:#f1f5f9; padding:4px 8px; border-radius:6px; font-weight:600;">${liv.conteneur || '-'}</span></td>
+                        <td><span class="status-badge ${lblStatusClass}">${lblStatusDisplay}</span></td>
+                        <td><span style="background:#f1f5f9; padding:4px 8px; border-radius:6px; font-weight:600;">${lblContainer}</span></td>
                         <td>${liv.departureDate ? new Date(liv.departureDate).toLocaleDateString('fr-FR') : '-'}</td>
                         <td>${liv.arrivalDate ? new Date(liv.arrivalDate).toLocaleDateString('fr-FR') : '-'}</td>
                     </tr>

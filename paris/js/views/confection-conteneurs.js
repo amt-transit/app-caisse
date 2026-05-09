@@ -248,8 +248,12 @@ export const ConfectionConteneursView = {
             );
         }
 
-        document.getElementById('leftBadge').textContent = available.length;
-        document.getElementById('headerDossierCount').textContent = available.length;
+        const leftBadgeEl = document.getElementById('leftBadge');
+        if (!leftBadgeEl) return; // Sécurité : la vue n'est plus active, on annule l'affichage
+        leftBadgeEl.textContent = available.length;
+        
+        const headerDossierCountEl = document.getElementById('headerDossierCount');
+        if (headerDossierCountEl) headerDossierCountEl.textContent = available.length;
 
         const listEl = document.getElementById('leftList');
         if (available.length === 0) {
@@ -317,8 +321,12 @@ export const ConfectionConteneursView = {
 
     renderRightPanel() {
         const activeCtns = this.containers.filter(c => c.status === 'EN_CHARGEMENT');
-        document.getElementById('rightBadge').textContent = activeCtns.length;
-        document.getElementById('headerCtnCount').textContent = activeCtns.length;
+        const rightBadgeEl = document.getElementById('rightBadge');
+        if (!rightBadgeEl) return; // Sécurité
+        rightBadgeEl.textContent = activeCtns.length;
+        
+        const headerCtnCountEl = document.getElementById('headerCtnCount');
+        if (headerCtnCountEl) headerCtnCountEl.textContent = activeCtns.length;
 
         const tabsEl = document.getElementById('rightTabs');
         if (activeCtns.length === 0) {
@@ -380,9 +388,12 @@ export const ConfectionConteneursView = {
 
     renderBottomPanel() {
         const tbody = document.getElementById('bottomList');
+        if (!tbody) return; // Sécurité
+        
         const regCtns = this.containers.filter(c => c.status === 'EN_ATTENTE_BATEAU');
         
-        document.getElementById('bottomBadge').textContent = regCtns.length;
+        const bottomBadgeEl = document.getElementById('bottomBadge');
+        if (bottomBadgeEl) bottomBadgeEl.textContent = regCtns.length;
 
         if (regCtns.length === 0) {
             tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 20px; color: #64748b;">Aucun conteneur en attente de bateau.</td></tr>';

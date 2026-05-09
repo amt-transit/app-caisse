@@ -350,7 +350,9 @@ export const ScanContainerView = {
                 const docId = snapLiv.docs[0].id;
                 const data = snapLiv.docs[0].data();
                 
-                if (data.containerStatus === 'A_VENIR' && data.conteneur === targetCont) {
+                const isAlreadyScanned = data.scanHistory && data.scanHistory.some(s => s.scanRef === text && s.type === 'CONTENEUR_CHARGEMENT');
+
+                if (isAlreadyScanned) {
                     this.stats.duplicate++;
                     logData.status = 'DOUBLON';
                     this.addRecentScan(text, data.destinataire || data.expediteur || 'Client inconnu', 'Déjà dans ce conteneur', 'warn');
@@ -359,9 +361,9 @@ export const ScanContainerView = {
                     await updateDoc(doc(db, 'livraisons', docId), {
                         conteneur: targetCont,
                         containerStatus: 'A_VENIR',
-                        scanHistory: arrayUnion({ scanRef: text, date: new Date().toISOString(), type: 'CONTENEUR_CHARGEMENT' })
+                        scanHistory: arrayUnion({ scanRef: text, date: new Date().toISOString(), type: 'CONTENEUR_CHARGEMENT', container: targetCont })
                     });
-                    
+
                     // 2. Mettre à jour Caisse (Transactions)
                     const qTrans = query(collection(db, 'transactions'), where('reference', '==', baseRef), limit(1));
                     const snapTrans = await getDocs(qTrans);

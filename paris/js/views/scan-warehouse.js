@@ -311,7 +311,10 @@ export const ScanWarehouseView = {
                 const docId = snap.docs[0].id;
                 const data = snap.docs[0].data();
                 
-                if (data.containerStatus === 'PARIS') {
+                // Vérifier si CE sous-colis spécifique a déjà été scanné en entrepôt
+                const isAlreadyScanned = data.scanHistory && data.scanHistory.some(s => s.scanRef === text && s.type === 'ENTREPOT_PARIS');
+
+                if (isAlreadyScanned) {
                     this.stats.duplicate++;
                     logData.status = 'DOUBLON';
                     this.addRecentScan(text, data.destinataire || data.expediteur || 'Client inconnu', 'Déjà en entrepôt', 'warn');
