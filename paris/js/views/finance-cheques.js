@@ -69,7 +69,7 @@ export const FinanceChequesView = {
         tbody.innerHTML = this.cheques.map(c => {
             const amountEUR = (parseFloat(c.montantParis) || 0) / 656; // Le montant payé à Paris converti
             return `
-            <tr style="border-bottom: 1px solid #f1f5f9; transition: background 0.2s;" onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background='transparent'">
+            <tr>
                 <td data-label="Date" style="padding: 14px 12px;">${c.date ? new Date(c.date).toLocaleDateString('fr-FR') : '-'}</td>
                 <td data-label="Facture" style="padding: 14px 12px; font-weight: bold; color: #3b82f6;">${c.reference || '-'}</td>
                 <td data-label="Client" style="padding: 14px 12px; font-weight: 600; color: #0f172a;">${c.nom || '-'}</td>

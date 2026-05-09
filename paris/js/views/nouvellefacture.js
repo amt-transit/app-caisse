@@ -3,7 +3,7 @@ import { collection, doc, writeBatch, getDocs, query, where, limit } from "https
 import { Autocomplete } from './autocomplete.js';
 
 export const NouvelleFactureView = {
-    items: [{ id: Date.now(), desc: '', qty: 1, pu: 0, total: 0 }],
+    items: [{ id: Date.now(), desc: '', qty: 1, pu: 0, total: 0, vol: 0 }],
     destMap: new Map(),
     destInfos: new Map(),
     destExpMap: new Map(),
@@ -12,7 +12,8 @@ export const NouvelleFactureView = {
 
     render(app) {
         this.app = app;
-        this.items = [{ id: Date.now(), desc: '', qty: 1, pu: 0, total: 0 }]; // Reset des lignes
+        this.currentContainer = 'ATT'; // Conteneur par défaut le temps du chargement
+        this.items = [{ id: Date.now(), desc: '', qty: 1, pu: 0, total: 0, vol: 0 }]; // Reset des lignes
         this.destMap.clear();
         this.destInfos.clear();
         this.destExpMap.clear();
@@ -22,13 +23,18 @@ export const NouvelleFactureView = {
         const html = `
             <div style="max-width: 1000px; margin: 0 auto; animation: fadeIn 0.3s ease-in-out;">
                 
-                <div style="display: flex; align-items: center; gap: 15px; margin-bottom: 25px; background: white; padding: 20px; border-radius: 16px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); border: 1px solid #e2e8f0;">
-                    <div style="background: #eff6ff; color: #3b82f6; width: 50px; height: 50px; display: flex; align-items: center; justify-content: center; border-radius: 12px; font-size: 24px;">
-                        <i class="fas fa-file-invoice"></i>
+                <div style="display: flex; align-items: center; justify-content: space-between; gap: 15px; margin-bottom: 25px; background: white; padding: 20px; border-radius: 16px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); border: 1px solid #e2e8f0; flex-wrap: wrap;">
+                    <div style="display: flex; align-items: center; gap: 15px;">
+                        <div style="background: #eff6ff; color: #3b82f6; width: 50px; height: 50px; display: flex; align-items: center; justify-content: center; border-radius: 12px; font-size: 24px;">
+                            <i class="fas fa-file-invoice"></i>
+                        </div>
+                        <div>
+                            <h2 style="margin: 0; color: #0f172a; font-size: 22px;">Nouvelle Facture / Envoi</h2>
+                            <p style="margin: 0; color: #64748b; font-size: 13px;">Créer une nouvelle expédition depuis Paris</p>
+                        </div>
                     </div>
-                    <div>
-                        <h2 style="margin: 0; color: #0f172a; font-size: 22px;">Nouvelle Facture / Envoi</h2>
-                        <p style="margin: 0; color: #64748b; font-size: 13px;">Créer une nouvelle expédition depuis Paris</p>
+                    <div id="nfActiveContainerBadge" style="padding: 10px 20px; background: #e0f2fe; color: #0369a1; border: 2px solid #bae6fd; border-radius: 12px; font-weight: 900; font-size: 20px; box-shadow: 0 2px 4px rgba(3,105,161,0.1); display: flex; align-items: center; gap: 10px;" title="Conteneur Actif">
+                        <i class="fas fa-spinner fa-spin"></i>
                     </div>
                 </div>
 
@@ -56,10 +62,6 @@ export const NouvelleFactureView = {
                                 <option value="DAKAR">DAKAR</option>
                                 <option value="LIBREVILLE">LIBREVILLE</option>
                             </select>
-                        </div>
-                        <div class="form-group">
-                            <label>Conteneur prévisionnel</label>
-                            <input type="text" id="nfConteneur" placeholder="Ex: E10, D45...">
                         </div>
                     </div>
                 </div>
@@ -131,6 +133,10 @@ export const NouvelleFactureView = {
                             <div class="form-group">
                                 <label>Valeur déclarée colis (€)</label>
                                 <input type="number" id="nfValeur" placeholder="Optionnel">
+                            </div>
+                            <div class="form-group">
+                                <label>Volume (CBM) <i class="fas fa-info-circle" style="color:#3b82f6;" title="Alimente la jauge globale de l'agence"></i></label>
+                                <input type="number" step="0.01" id="nfVolume" placeholder="Ex: 0.5">
                             </div>
                         </div>
 
@@ -247,6 +253,19 @@ export const NouvelleFactureView = {
             (c) => `<div style="font-weight: 600;">${c}</div>`,
             (c, input) => { input.value = c; }
         );
+
+        // --- RÉCUPÉRATION POUR "RÉUTILISER FACTURE" ---
+        setTimeout(() => {
+            const reuseExp = sessionStorage.getItem('reuseExpediteur');
+            if (reuseExp) {
+                const expInput = document.getElementById('nfExpediteur');
+                if (expInput) {
+                    expInput.value = reuseExp;
+                    this.handleExpediteurChange(); // Déclenche l'auto-complétion (Téléphone, Adresse...)
+                }
+                sessionStorage.removeItem('reuseExpediteur');
+            }
+        }, 500); // Petit délai pour laisser l'auto-complétion charger d'abord
     },
 
     async loadAutocompleteData() {
@@ -475,7 +494,7 @@ export const NouvelleFactureView = {
     },
 
     addRow() {
-        this.items.push({ id: Date.now(), desc: '', qty: 1, pu: 0, total: 0 });
+        this.items.push({ id: Date.now(), desc: '', qty: 1, pu: 0, total: 0, vol: 0 });
         this.renderItems();
     },
 
@@ -490,9 +509,13 @@ export const NouvelleFactureView = {
                 if (this.productsData && this.productsData.has(item.desc)) {
                     const prod = this.productsData.get(item.desc);
                     item.pu = parseFloat(prod.price) || 0;
+                    // Auto-remplissage du volume caché pour le calcul total
+                    item.vol = parseFloat(prod.dim) || 0;
                     // Mise à jour visuelle du champ P.U
                     const puInput = document.querySelector(`.item-pu[data-id="${id}"]`);
                     if (puInput) puInput.value = item.pu;
+                } else {
+                    item.vol = 0;
                 }
             }
             if (field === 'qty') item.qty = parseInt(e.target.value) || 0;
@@ -562,6 +585,19 @@ export const NouvelleFactureView = {
             if (prodList) {
                 prodList.innerHTML = Array.from(this.productsData.keys()).sort().map(desc => `<option value="${desc}"></option>`).join('');
             }
+            
+            // --- NOUVEAU : CHARGEMENT DU CONTENEUR ACTIF ---
+            const { getDoc, doc } = await import("https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js");
+            const activeAgency = sessionStorage.getItem('currentActiveAgency') || 'paris';
+            const configSnap = await getDoc(doc(db, "settings", `container_config_${activeAgency}`));
+            if (configSnap.exists() && configSnap.data().activeContainer) {
+                this.currentContainer = configSnap.data().activeContainer.trim().toUpperCase();
+            } else {
+                this.currentContainer = 'ATT';
+            }
+            
+            const badge = document.getElementById('nfActiveContainerBadge');
+            if (badge) badge.innerHTML = `<i class="fas fa-box-open"></i> ${this.currentContainer}`;
 
         } catch (e) {
             console.error("Erreur de chargement de l'auto-complétion :", e);
@@ -575,6 +611,17 @@ export const NouvelleFactureView = {
 
         document.getElementById('nfTotalFret').textContent = totalFret + ' €';
         document.getElementById('nfReste').textContent = reste + ' €';
+        
+        // Auto-calcul du volume total (CBM)
+        const totalVol = this.items.reduce((sum, item) => sum + ((item.vol || 0) * item.qty), 0);
+        const volInput = document.getElementById('nfVolume');
+        if (volInput) {
+            if (totalVol > 0) {
+                volInput.value = parseFloat(totalVol.toFixed(2));
+            } else if (this.items.length === 1 && this.items[0].desc === '') {
+                volInput.value = ''; // Reset si le formulaire est vidé
+            }
+        }
     },
 
     async submitInvoice() {
@@ -603,38 +650,98 @@ export const NouvelleFactureView = {
 
         const batch = writeBatch(db);
         const dateIso = document.getElementById('nfDate').value || new Date().toISOString().split('T')[0];
+        const volumeCBM = parseFloat(document.getElementById('nfVolume').value) || 0;
         
+        // --- EXTRACTION ET RÉCUPÉRATION DES CONTACTS ---
+        let expPhone = '';
+        let expAddr = '';
+        const expMatch = expediteur.match(/(.*?)\s*((?:\+|00)?\d{8,})/);
+        let finalExpName = expediteur;
+        if (expMatch) {
+            finalExpName = expMatch[1].trim();
+            expPhone = expMatch[2].trim();
+        }
+        if (this.clientsData && this.clientsData.has(finalExpName)) {
+            const cData = this.clientsData.get(finalExpName);
+            if (!expPhone) expPhone = cData.tel || '';
+            if (!expAddr) expAddr = cData.adresse || '';
+        }
+
+        let destPhone = '';
+        const destMatch = destinataire.match(/(.*?)\s*((?:\+|00)?\d{8,})/);
+        let finalDestName = destinataire;
+        if (destMatch) {
+            finalDestName = destMatch[1].trim();
+            destPhone = destMatch[2].trim();
+        }
+        if (!destPhone && this.destInfos && this.destInfos.has(finalDestName)) {
+            destPhone = this.destInfos.get(finalDestName) || '';
+        }
+
+        const lieuLivraison = document.getElementById('nfLieu').value.trim();
+
         // --- GÉNÉRATION DE LA RÉFÉRENCE ET DES ÉTIQUETTES ---
         const userName = sessionStorage.getItem('userName') || 'Agent Paris';
-        const initialsMatch = userName.match(/\b\w/g) || ['A', 'P'];
-        const initials = initialsMatch.join('').substring(0, 2).toUpperCase();
+        let initials = sessionStorage.getItem('userInitials');
 
-        const qToday = query(collection(db, "transactions"), where("date", "==", dateIso));
-        const todaySnap = await getDocs(qToday);
-        const orderNum = (todaySnap.size + 1).toString().padStart(3, '0');
+        if (!initials) {
+            try {
+                const { getAuth } = await import('https://www.gstatic.com/firebasejs/9.22.0/firebase-auth.js');
+                const { getDoc, doc: fsDoc } = await import('https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js');
+                const auth = getAuth();
+                if (auth.currentUser) {
+                    const userSnap = await getDoc(fsDoc(db, "users", auth.currentUser.uid));
+                    if (userSnap.exists() && userSnap.data().initials) {
+                        initials = userSnap.data().initials.trim().toUpperCase();
+                        sessionStorage.setItem('userInitials', initials); // Cache pour les prochaines factures de la session
+                    }
+                }
+            } catch (err) {
+                console.warn("Erreur de récupération des initiales de l'agent", err);
+            }
+        }
 
-        let conteneurInput = document.getElementById('nfConteneur')?.value.trim().toUpperCase() || '';
-        const conteneurCode = conteneurInput || 'ATT';
+        if (!initials) {
+            const initialsMatch = userName.match(/\b\w/g) || ['A', 'P'];
+            initials = initialsMatch.join('').substring(0, 2).toUpperCase();
+        }
+
+        const conteneurCode = this.currentContainer || 'ATT';
+
+        // Le numéro s'incrémente par rapport au conteneur, pas par rapport à la journée
+        const qContainer = query(collection(db, "transactions"), where("conteneur", "==", conteneurCode), where("agency", "==", "paris"));
+        const containerSnap = await getDocs(qContainer);
+        const orderNum = (containerSnap.size + 1).toString().padStart(3, '0');
 
         const ref = `${initials}-${orderNum}-${conteneurCode}`;
 
         // Génération des sous-étiquettes uniques (ex: KA-018-E10_1_71)
         const totalColis = this.items.reduce((sum, item) => sum + item.qty, 0);
         const generatedLabels = [];
-        for (let i = 1; i <= totalColis; i++) {
-            const uniqueId = Math.floor(10 + Math.random() * 90); // 2 chiffres aléatoires
-            generatedLabels.push(`${ref}_${i}_${uniqueId}`);
-        }
+        const printLabelsData = [];
+        let labelIndex = 1;
+
+        this.items.forEach(item => {
+            for (let i = 0; i < item.qty; i++) {
+                const uniqueId = Math.floor(10 + Math.random() * 90);
+                const sousRef = `${ref}_${labelIndex}_${uniqueId}`;
+                generatedLabels.push(sousRef);
+                printLabelsData.push({ sousRef: sousRef, desc: item.desc, index: labelIndex, total: totalColis });
+                labelIndex++;
+            }
+        });
 
         // 1. Logistique (Livraisons)
         const livRef = doc(collection(db, "livraisons"));
         batch.set(livRef, {
             ref: ref,
             labels: generatedLabels,
-            conteneur: conteneurInput,
-            expediteur: expediteur,
-            destinataire: destinataire,
-            lieuLivraison: document.getElementById('nfLieu').value,
+            conteneur: conteneurCode,
+            volumeCBM: volumeCBM,
+            expediteur: finalExpName,
+            destinataire: finalDestName,
+            numero: destPhone,
+            lieuLivraison: lieuLivraison,
             description: this.items.map(i => `${i.qty}x ${i.desc}`).join(', '),
             quantite: this.items.reduce((sum, item) => sum + item.qty, 0),
             montant: resteCFA + " CFA",
@@ -649,9 +756,13 @@ export const NouvelleFactureView = {
         const transRef = doc(collection(db, "transactions"));
         batch.set(transRef, {
             reference: ref,
-            nom: expediteur,
-            nomDestinataire: destinataire,
-            conteneur: conteneurInput,
+            nom: finalExpName,
+            nomDestinataire: finalDestName,
+            numero: destPhone,
+            tel: expPhone,
+            adresseDestinataire: lieuLivraison,
+            conteneur: conteneurCode,
+            volumeCBM: volumeCBM,
             date: dateIso,
             prix: totalCFA,
             montantParis: payeCFA,
@@ -659,6 +770,8 @@ export const NouvelleFactureView = {
             reste: -resteCFA, // Négatif car c'est une dette
             modePaiement: document.getElementById('nfModePay').value,
             description: this.items.map(i => `${i.qty}x ${i.desc}`).join(', '),
+            items: this.items,
+            quantite: totalColis,
             agency: "paris",
             isDeleted: false,
             saisiPar: sessionStorage.getItem('userName') || 'Agent Paris',
@@ -671,15 +784,42 @@ export const NouvelleFactureView = {
             }] : []
         });
 
+        // 3. Création automatique du conteneur s'il n'existe pas déjà
+        if (conteneurCode && conteneurCode !== 'ATT') {
+            const containerRef = doc(db, "containers", conteneurCode);
+            batch.set(containerRef, {
+                number: conteneurCode,
+                status: 'EN_CHARGEMENT',
+                destination: document.getElementById('nfAgence').value || 'ABIDJAN',
+                createdAt: new Date(dateIso).toISOString()
+            }, { merge: true }); // merge: true permet de l'ajouter uniquement s'il n'est pas déjà présent
+        }
+
         try {
             await batch.commit();
             this.app.showToast("Facture créée et synchronisée vers Abidjan !", "success");
             
+            // --- IMPRESSION AUTOMATIQUE DES ÉTIQUETTES ---
+            const now = new Date();
+            const formattedDate = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}:${String(now.getSeconds()).padStart(2,'0')}`;
+            
+            this.app.printLabels({
+                ref: ref,
+                date: formattedDate,
+                destName: finalDestName,
+                destPhone: destPhone,
+                destAddress: lieuLivraison,
+                expName: finalExpName,
+                expAddress: expAddr,
+                labels: printLabelsData
+            });
+
             // Réinitialisation du formulaire
-            this.items = [{ id: Date.now(), desc: '', qty: 1, pu: 0, total: 0 }];
+            this.items = [{ id: Date.now(), desc: '', qty: 1, pu: 0, total: 0, vol: 0 }];
             document.getElementById('nfExpediteur').value = '';
             document.getElementById('nfDestinataire').value = '';
             document.getElementById('nfMontantPaye').value = '0';
+            if (document.getElementById('nfVolume')) document.getElementById('nfVolume').value = '';
             this.renderItems();
             this.calculateTotals();
             

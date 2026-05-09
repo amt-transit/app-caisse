@@ -11,6 +11,7 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/fullcalendar@5.11.3/main.min.css">
     <script src="https://cdn.jsdelivr.net/npm/fullcalendar@5.11.3/main.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     
     <link rel="stylesheet" href="css/style.css">
     <link rel="stylesheet" href="css/responsive-paris.css"> <!-- Votre nouvelle ligne -->
@@ -54,6 +55,60 @@
         }
         .sidebar-category.collapsed .sidebar-item {
             display: none !important;
+        }
+        /* Styles de la jauge globale de chargement */
+        .container-gauge-wrapper {
+            display: flex; align-items: center; gap: 10px; margin-right: auto; margin-left: 20px;
+            background: white; padding: 5px 15px; border-radius: 8px; border: 1px solid #e2e8f0;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+        }
+        @media (max-width: 768px) {
+            .container-gauge-wrapper { display: none !important; }
+        }
+
+        /* Couleurs interlignes (Zebra Striping) unifiées pour l'Agence Paris */
+        table.data-table tbody tr:nth-child(even),
+        table.factures-table tbody tr:nth-child(even),
+        table.rdv-table tbody tr:nth-child(even),
+        table.history-table tbody tr:nth-child(even),
+        table.chauffeurs-table tbody tr:nth-child(even),
+        table.daily-table tbody tr:nth-child(even),
+        table.am__table tbody tr:nth-child(even),
+        table.ma-table tbody tr:nth-child(even),
+        table.reg-table tbody tr:nth-child(even),
+        table.modal-table tbody tr:nth-child(even) {
+            background-color: #f8fafc !important;
+        }
+
+        table.data-table tbody tr:nth-child(odd),
+        table.factures-table tbody tr:nth-child(odd),
+        table.rdv-table tbody tr:nth-child(odd),
+        table.history-table tbody tr:nth-child(odd),
+        table.chauffeurs-table tbody tr:nth-child(odd),
+        table.daily-table tbody tr:nth-child(odd),
+        table.am__table tbody tr:nth-child(odd),
+        table.ma-table tbody tr:nth-child(odd),
+        table.reg-table tbody tr:nth-child(odd),
+        table.modal-table tbody tr:nth-child(odd) {
+            background-color: #ffffff !important;
+        }
+
+        table.data-table tbody tr:hover,
+        table.factures-table tbody tr:hover,
+        table.rdv-table tbody tr:hover,
+        table.history-table tbody tr:hover,
+        table.chauffeurs-table tbody tr:hover,
+        table.daily-table tbody tr:hover,
+        table.am__table tbody tr:hover,
+        table.ma-table tbody tr:hover,
+        table.reg-table tbody tr:hover,
+        table.modal-table tbody tr:hover {
+            background-color: #f1f5f9 !important;
+        }
+        
+        /* Préserver la couleur des lignes sélectionnées au clic */
+        table tbody tr.selected {
+            background-color: #eff6ff !important;
         }
     </style>
 </head>
@@ -116,7 +171,6 @@
 
             <div class="sidebar-category">
                 <div class="sidebar-category-title">Chargement</div>
-                <div class="sidebar-item" data-page="loading-container"><i class="fas fa-box"></i><span>Conteneur</span></div>
                 <div class="sidebar-item" data-page="confection-containers"><i class="fas fa-boxes"></i><span>Confection</span></div>
                 <div class="sidebar-item" data-page="loading-boats"><i class="fas fa-ship"></i><span>Bateaux départ</span></div>
             </div>
@@ -194,6 +248,7 @@
                 <div class="sidebar-category-title">Configuration</div>
                 <div class="sidebar-item" data-page="config-invoice"><i class="fas fa-file-invoice"></i><span>Choix facture</span></div>
                 <div class="sidebar-item" data-page="config-label"><i class="fas fa-tag"></i><span>Choix étiquette</span></div>
+                <div class="sidebar-item" data-page="config-container"><i class="fas fa-box-open"></i><span>Conteneur Actif</span></div>
                 <div class="sidebar-item" data-page="config-objectives"><i class="fas fa-bullseye"></i><span>Objectifs</span></div>
                 <div class="sidebar-item" data-page="config-charges"><i class="fas fa-charging-station"></i><span>Charges</span></div>
             </div>
@@ -215,6 +270,20 @@
                 <i class="fas fa-bars"></i>
             </button>
             <h1 class="page-title" id="pageTitle">Tableau de bord</h1>
+            <!-- JAUGE DE CHARGEMENT GLOBALE -->
+            <div class="container-gauge-wrapper" id="topBarGauge">
+                <div style="font-size: 20px;" title="Conteneur Actif">📦</div>
+                <div style="display: flex; flex-direction: column; width: 150px;">
+                    <div style="display: flex; justify-content: space-between; font-size: 11px; font-weight: 700; color: #475569; margin-bottom: 4px;">
+                        <span id="globalActiveContainerName">ATT</span>
+                        <span id="globalContainerVolume">0 / 68 CBM</span>
+                    </div>
+                    <div style="height: 6px; background: #e2e8f0; border-radius: 3px; overflow: hidden;">
+                        <div id="globalContainerGaugeBar" style="height: 100%; width: 0%; background: #10b981; transition: width 0.3s ease, background-color 0.3s ease;"></div>
+                    </div>
+                </div>
+            </div>
+
             <div class="user-info">
                 <span id="userName">Agent Paris</span>
             <div class="user-dropdown-container">

@@ -74,7 +74,7 @@ export const GestionConteneursView = {
             else if (c.status === 'ARRIVE') { badgeClass = 'badge-success'; statusText = 'Arrivé'; }
 
             return `
-                <tr style="border-bottom: 1px solid #f1f5f9; transition: background 0.2s;" onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background='transparent'">
+                <tr>
                     <td data-label="N° Conteneur" style="padding: 14px 12px; font-weight: bold; color: #0f172a; font-size: 15px;">${c.number || c.id}</td>
                     <td data-label="Création" style="padding: 14px 12px;">${c.createdAt ? new Date(c.createdAt).toLocaleDateString('fr-FR') : '-'}</td>
                     <td data-label="Destination" style="padding: 14px 12px; font-weight: 600;">${c.destination || 'Abidjan'}</td>

@@ -101,7 +101,7 @@ export const FinanceDepensesView = {
             return;
         }
         tbody.innerHTML = this.expenses.map(e => `
-            <tr style="border-bottom: 1px solid #f1f5f9; transition: background 0.2s;" onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background='transparent'">
+            <tr>
                 <td data-label="Date" style="padding: 14px 12px;">${e.date ? new Date(e.date).toLocaleDateString('fr-FR') : '-'}</td>
                 <td data-label="Description" style="padding: 14px 12px; font-weight: 600; color: #0f172a;">${e.description || '-'}</td>
                 <td data-label="Catégorie" style="padding: 14px 12px;"><span class="badge" style="background:#f1f5f9; color:#475569;">${e.category || 'Mensuelle'}</span></td>

@@ -203,7 +203,7 @@ export const ProductsListView = {
         };
 
         tbody.innerHTML = this.filteredProducts.map(p => `
-            <tr style="transition: background 0.2s;" onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background='transparent'">
+            <tr>
                 <td style="padding: 15px;"><span class="badge" style="${getCatStyle(p.category)} padding: 4px 10px; border-radius: 12px; font-weight: 600; font-size: 11px;">${p.category}</span></td>
                 <td style="font-weight: 600; color: #1e293b;">${p.desc} ${p.dim ? `<br><span style="font-size: 11px; color: #64748b; font-weight: normal;">📏 ${p.dim}</span>` : ''}</td>
                 <td style="text-align: right; font-weight: 700; font-family: monospace; font-size: 14px; ${p.price < 0 ? 'color: #ef4444;' : 'color: #0f172a;'}">${this.app.formatMoney(p.price)}</td>

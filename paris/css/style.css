@@ -405,3 +405,200 @@ input[id$="Adresse"]:focus {
     opacity: 1;
     content: "✓";
 }
+/* ============================================
+    CONFIGURATION ETIQUETTES - STYLES
+============================================ */
+
+/* Animation pour l'aperçu */
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.page {
+    animation: fadeIn 0.3s ease-out;
+}
+
+/* Style pour les options de couleur */
+.color-option {
+    transition: all 0.2s ease;
+    cursor: pointer;
+}
+
+.color-option:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+}
+
+/* Style pour l'aperçu de l'étiquette */
+#labelPreviewContainer {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 500px;
+}
+
+#thermalLabel {
+    transition: transform 0.3s ease;
+    box-shadow: 0 10px 25px -5px rgba(0,0,0,0.15);
+}
+
+/* Style pour les selects de configuration */
+.config-select {
+    transition: all 0.2s ease;
+    background: white;
+    cursor: pointer;
+}
+
+.config-select:hover {
+    border-color: #3b82f6;
+}
+
+.config-select:focus {
+    outline: none;
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 3px rgba(59,130,246,0.1);
+}
+
+/* Responsive pour la page config-label */
+@media (max-width: 768px) {
+    .page > div[style*="grid-template-columns"] {
+        grid-template-columns: 1fr !important;
+        gap: 20px !important;
+    }
+    
+    #labelPreviewContainer {
+        overflow-x: auto;
+        padding: 20px;
+    }
+    
+    #thermalLabel {
+        transform: scale(0.95) !important;
+        transform-origin: top center !important;
+    }
+}
+
+/* Impression des étiquettes */
+@media print {
+    @page {
+        margin: 0;
+        size: landscape;
+    }
+    
+    body * {
+        visibility: hidden;
+    }
+    
+    .label, .label * {
+        visibility: visible;
+    }
+    
+    .label {
+        position: absolute;
+        top: 0;
+        left: 0;
+        margin: 0;
+        padding: 0;
+        page-break-after: always;
+    }
+}
+/* ============================================
+    CONFIGURATION ETIQUETTES - STYLES ADDITIONNELS
+============================================ */
+
+/* Animation pour l'aperçu */
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.page {
+    animation: fadeIn 0.3s ease-out;
+}
+
+/* Style pour les options de couleur */
+.color-option {
+    transition: all 0.2s ease;
+    cursor: pointer;
+}
+
+.color-option:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+}
+
+/* Style pour l'aperçu de l'étiquette */
+#labelPreviewContainer {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 500px;
+    background: #f1f5f9;
+    border-radius: 16px;
+}
+
+#thermalLabel {
+    transition: transform 0.3s ease;
+    box-shadow: 0 10px 25px -5px rgba(0,0,0,0.15);
+    border-radius: 2px;
+}
+
+/* Style pour les selects de configuration */
+.config-select {
+    transition: all 0.2s ease;
+    background: white;
+    cursor: pointer;
+}
+
+.config-select:hover {
+    border-color: #3b82f6;
+}
+
+.config-select:focus {
+    outline: none;
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 3px rgba(59,130,246,0.1);
+}
+
+/* Responsive pour la page config-label */
+@media (max-width: 768px) {
+    .page > div[style*="grid-template-columns"] {
+        grid-template-columns: 1fr !important;
+        gap: 20px !important;
+    }
+    
+    #labelPreviewContainer {
+        overflow-x: auto;
+        padding: 20px;
+    }
+    
+    #thermalLabel {
+        transform: scale(0.95) !important;
+        transform-origin: top center !important;
+    }
+}
+
+/* Impression des étiquettes */
+@media print {
+    @page {
+        margin: 0;
+        size: landscape;
+    }
+    
+    body * {
+        visibility: hidden;
+    }
+    
+    .label, .label * {
+        visibility: visible;
+    }
+    
+    .label {
+        position: absolute;
+        top: 0;
+        left: 0;
+        margin: 0;
+        padding: 0;
+        page-break-after: always;
+    }
+}

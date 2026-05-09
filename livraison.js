@@ -2437,6 +2437,22 @@ async function printDeliverySlip(id) {
         console.error("Erreur récupération transaction :", e);
     }
 
+    let logoBase64 = null;
+    let companyName = "AMT TRANS'IT";
+    let invoiceConfig = null;
+    try {
+        const compSnap = await getDoc(doc(db, "settings", `company_${window.activeAgency}`));
+        if (compSnap.exists()) {
+            if (compSnap.data().logoBase64) logoBase64 = compSnap.data().logoBase64;
+            if (compSnap.data().name) companyName = compSnap.data().name;
+        }
+        const invConfigSnap = await getDoc(doc(db, "settings", `invoice_config_${window.activeAgency}`));
+        if (invConfigSnap.exists()) {
+            invoiceConfig = invConfigSnap.data();
+            if (invoiceConfig.companyName) companyName = invoiceConfig.companyName;
+        }
+    } catch(e) {}
+
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF('p', 'mm', 'a4');
     const pageWidth = doc.internal.pageSize.getWidth();
@@ -2447,28 +2463,41 @@ async function printDeliverySlip(id) {
     doc.setFillColor(16, 185, 129); // Accent Vert (pour la livraison)
     doc.rect(0, 35, pageWidth, 2, 'F');
 
-    try {
-        const logoElement = document.querySelector('.app-logo');
-        if (logoElement && logoElement.complete && logoElement.naturalWidth > 0) {
-            const ratio = logoElement.naturalWidth / logoElement.naturalHeight;
-            let imgW = 20 * ratio;
-            if (imgW > 50) imgW = 50;
-            doc.addImage(logoElement, 'PNG', 15, 7, imgW, 20);
-        } else {
-            doc.setTextColor(255, 255, 255);
-            doc.setFont("helvetica", "bold");
-            doc.setFontSize(20);
-            doc.text("AMT TRANS'IT", 15, 22);
-        }
-    } catch(e) {
-        doc.setTextColor(255, 255, 255);
-        doc.setFontSize(20);
-        doc.text("AMT TRANS'IT", 15, 22);
+    let textY = 22;
+    if (logoBase64) {
+        try {
+            const props = doc.getImageProperties(logoBase64);
+            const ratio = props.width / props.height;
+            let imgH = 14;
+            let imgW = imgH * ratio;
+            if (imgW > 40) { imgW = 40; imgH = imgW / ratio; }
+            doc.addImage(logoBase64, 'PNG', 15, 5, imgW, imgH);
+            textY = 5 + imgH + 6;
+        } catch(e) {}
+    } else {
+        try {
+            const logoElement = document.querySelector('.app-logo');
+            if (logoElement && logoElement.complete && logoElement.naturalWidth > 0) {
+                const ratio = logoElement.naturalWidth / logoElement.naturalHeight;
+                let imgH = 14;
+                let imgW = imgH * ratio;
+                if (imgW > 40) { imgW = 40; imgH = imgW / ratio; }
+                doc.addImage(logoElement, 'PNG', 15, 5, imgW, imgH);
+                textY = 5 + imgH + 6;
+            }
+        } catch(e) {}
     }
 
     doc.setTextColor(255, 255, 255);
     doc.setFont("helvetica", "bold");
     doc.setFontSize(18);
+    if (logoBase64 || document.querySelector('.app-logo')) {
+        doc.text(companyName, 15, textY);
+    } else {
+        doc.setFontSize(20);
+        doc.text(companyName, 15, 22);
+    }
+    
     doc.text("BON DE LIVRAISON", pageWidth - 15, 22, { align: 'right' });
     
     // --- Informations Colis & Client ---
@@ -2499,16 +2528,30 @@ async function printDeliverySlip(id) {
     const addrStr = doc.splitTextToSize(`${d.lieuLivraison || d.commune || transData?.adresseDestinataire || ''}`, 70);
     doc.text(addrStr, 120, 73);
 
-    // --- Tableau Descriptif ---
-    const tableColumn = ["Description / Nature du Colis", "Conteneur", "Quantité"];
-    const tableRows = [[d.description || transData?.description || 'Colis divers', d.conteneur || '-', d.quantite || transData?.quantite || 1]];
+    const tableColumn = ["Description / Nature du Colis", "Qté", "P.U", "Total"];
+    const tableRows = [];
+    if (transData && transData.items && Array.isArray(transData.items)) {
+        transData.items.forEach(item => {
+            tableRows.push([
+                item.desc,
+                item.qty.toString(),
+                new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(item.pu || 0),
+                new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(item.total || 0)
+            ]);
+        });
+    } else {
+        const descSource = d.description || transData?.description || 'Colis divers';
+        const qtySource = d.quantite || transData?.quantite || 1;
+        tableRows.push([descSource, qtySource.toString(), "-", "-"]);
+    }
 
     doc.autoTable({
         startY: 90,
         head: [tableColumn],
         body: tableRows,
         theme: 'grid',
-        headStyles: { fillColor: [16, 185, 129] } // Vert
+        headStyles: { fillColor: [16, 185, 129] },
+        columnStyles: { 1: { halign: 'center' }, 2: { halign: 'right' }, 3: { halign: 'right' } }
     });
 
     // --- Montant à encaisser ---
@@ -2589,7 +2632,8 @@ async function printDeliverySlip(id) {
     doc.setFont("helvetica", "normal");
     doc.setFontSize(8);
     doc.setTextColor(100, 116, 139);
-    doc.text("AMT TRANS'IT | 81 AVENUE ARISTIDE BRIAND 93240 STAINS | Tel. 0186900380 | amt.transit@gmail.com", pageWidth / 2, doc.internal.pageSize.getHeight() - 10, { align: 'center' });
+    const footerText = invoiceConfig?.footer || "AMT TRANS'IT | 81 AVENUE ARISTIDE BRIAND 93240 STAINS | Tel. 0186900380 | amt.transit@gmail.com";
+    doc.text(footerText, pageWidth / 2, doc.internal.pageSize.getHeight() - 10, { align: 'center' });
 
     doc.save(`BL_${d.ref}.pdf`);
 }
@@ -2610,6 +2654,22 @@ window.printInvoice = async function(id) {
         console.error("Erreur récupération transaction :", e);
     }
 
+    let logoBase64 = null;
+    let companyName = "AMT TRANS'IT";
+    let invoiceConfig = null;
+    try {
+        const compSnap = await getDoc(doc(db, "settings", `company_${window.activeAgency}`));
+        if (compSnap.exists()) {
+            if (compSnap.data().logoBase64) logoBase64 = compSnap.data().logoBase64;
+            if (compSnap.data().name) companyName = compSnap.data().name;
+        }
+        const invConfigSnap = await getDoc(doc(db, "settings", `invoice_config_${window.activeAgency}`));
+        if (invConfigSnap.exists()) {
+            invoiceConfig = invConfigSnap.data();
+            if (invoiceConfig.companyName) companyName = invoiceConfig.companyName;
+        }
+    } catch(e) {}
+
     // 2. Initialisation du Document PDF
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF('p', 'mm', 'a4');
@@ -2621,28 +2681,41 @@ window.printInvoice = async function(id) {
     doc.setFillColor(59, 130, 246);
     doc.rect(0, 35, pageWidth, 2, 'F');
 
-    try {
-        const logoElement = document.querySelector('.app-logo');
-        if (logoElement && logoElement.complete && logoElement.naturalWidth > 0) {
-            const ratio = logoElement.naturalWidth / logoElement.naturalHeight;
-            let imgW = 20 * ratio;
-            if (imgW > 50) imgW = 50;
-            doc.addImage(logoElement, 'PNG', 15, 7, imgW, 20);
-        } else {
-            doc.setTextColor(255, 255, 255);
-            doc.setFont("helvetica", "bold");
-            doc.setFontSize(20);
-            doc.text("AMT TRANS'IT", 15, 22);
-        }
-    } catch(e) {
-        doc.setTextColor(255, 255, 255);
-        doc.setFontSize(20);
-        doc.text("AMT TRANS'IT", 15, 22);
+    let textY = 22;
+    if (logoBase64) {
+        try {
+            const props = doc.getImageProperties(logoBase64);
+            const ratio = props.width / props.height;
+            let imgH = 14;
+            let imgW = imgH * ratio;
+            if (imgW > 40) { imgW = 40; imgH = imgW / ratio; }
+            doc.addImage(logoBase64, 'PNG', 15, 5, imgW, imgH);
+            textY = 5 + imgH + 6;
+        } catch(e) {}
+    } else {
+        try {
+            const logoElement = document.querySelector('.app-logo');
+            if (logoElement && logoElement.complete && logoElement.naturalWidth > 0) {
+                const ratio = logoElement.naturalWidth / logoElement.naturalHeight;
+                let imgH = 14;
+                let imgW = imgH * ratio;
+                if (imgW > 40) { imgW = 40; imgH = imgW / ratio; }
+                doc.addImage(logoElement, 'PNG', 15, 5, imgW, imgH);
+                textY = 5 + imgH + 6;
+            }
+        } catch(e) {}
     }
 
     doc.setTextColor(255, 255, 255);
     doc.setFont("helvetica", "bold");
     doc.setFontSize(18);
+    if (logoBase64 || document.querySelector('.app-logo')) {
+        doc.text(companyName, 15, textY);
+    } else {
+        doc.setFontSize(20);
+        doc.text(companyName, 15, 22);
+    }
+    
     doc.text("FACTURE", pageWidth - 15, 22, { align: 'right' });
 
     // --- Informations Colis & Client ---
@@ -2673,16 +2746,30 @@ window.printInvoice = async function(id) {
     const addrStr = doc.splitTextToSize(`${d.lieuLivraison || d.commune || transData?.adresseDestinataire || ''}`, 70);
     doc.text(addrStr, 120, 73);
 
-    // --- Tableau Descriptif ---
-    const tableColumn = ["Description / Nature du Colis", "Quantité"];
-    const tableRows = [[d.description || transData?.description || 'Colis divers', d.quantite || transData?.quantite || 1]];
+    const tableColumn = ["Description / Nature du Colis", "Qté", "P.U", "Total"];
+    const tableRows = [];
+    if (transData && transData.items && Array.isArray(transData.items)) {
+        transData.items.forEach(item => {
+            tableRows.push([
+                item.desc,
+                item.qty.toString(),
+                new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(item.pu || 0),
+                new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(item.total || 0)
+            ]);
+        });
+    } else {
+        const descSource = d.description || transData?.description || 'Colis divers';
+        const qtySource = d.quantite || transData?.quantite || 1;
+        tableRows.push([descSource, qtySource.toString(), "-", "-"]);
+    }
 
     doc.autoTable({
         startY: 90,
         head: [tableColumn],
         body: tableRows,
         theme: 'grid',
-        headStyles: { fillColor: [59, 130, 246] }
+        headStyles: { fillColor: [59, 130, 246] },
+        columnStyles: { 1: { halign: 'center' }, 2: { halign: 'right' }, 3: { halign: 'right' } }
     });
 
     // --- Bilan Financier ---
@@ -2777,30 +2864,22 @@ window.printInvoice = async function(id) {
     
     doc.setFont("helvetica", "normal");
     doc.setFontSize(7);
-    const cgvLines = [
-        "1- Les temps et les délais de transports sont donnés à titre indicatifs par AMT TRANS'IT. Les retards des navires et les delais rallongés de dedouannement et de manutentiuons au port ne sauraient être imputés a AMT TRANS'IT, qui s'éfforcera de communiquer en cas d'éventuelles retards.",
-        "2- Les enlèvements à domicile sont gratuits dans la limite géographique définie par AMT TRANS'IT (dans un rayon de 20 Kilomètres autour de Paris).",
-        "3- Les livraisons sont gratuites dans toutes les communes d'Abidjan dans la limite d'accessibilité des véhicules et dans les 3 jours suivants l'arrivée du conteneur. Après cette date les livraisons sont payantes ou alors le client pourra récuperer lui même ses colis à sa charge dans nos locaux.",
-        "4- AMT TRANS'IT s'engage à stocker gratuitement les marchandises pendant une semaine après leur arrivées à Abidjan, au delà les clients devront payer un forfait de 10.000 Francs CFA à partir de la 2ème semaine plus 1.000 Francs par jour et par colis (majoré à 3.000 Francs par jour pour les palettes).",
-        "5- Tous les colis et ou marchandises devront être intégralement payés avant la remise au destinataire.",
-        "6- Les dommages causés lors du transport sont dédommagés dans la limite des coûts de transports sauf en cas de souscription a une assurance sur demande du client.",
-        "7- Les clients devront fournir leur marchandises dans un emballage correct et devront s'assurer que ceux-ci sont bien protegées pour un transport par conteneur. Un colis mal ou non emballés sera réemballés mais les coûts seront repercutés au client.",
-        "8- AMT TRANS'IT s'engage à conserver les colis non récupérés ou non payés pendant une période limite de 3 mois à partir de la date d'arrivée. Ce délais dépassé les marchandises seront considérées comme abandonnées et seront vendus si ils ont une valeur marchandes ou données à des oeuvres caritatives.",
-        "9- Toute contestation doit être formulée par écrit dans un délai raisonnable après réception de la facture.",
-        "10- En cas de litige, une solution amiable est privilégiée avant toute procédure contentieuse."
-    ];
+    const defaultCgv = "1- Les temps et les délais de transports sont donnés à titre indicatifs par AMT TRANS'IT.\\n2- Les enlèvements à domicile sont gratuits dans la limite géographique.\\n3- Tous les colis et marchandises devront être intégralement payés avant la remise au destinataire.\\n4- En cas de litige, une solution amiable est privilégiée.";
+    const cgvText = invoiceConfig?.cgv || defaultCgv;
+    const cgvLines = cgvText.split('\\n');
     
     cgvLines.forEach(line => {
         const splitLine = doc.splitTextToSize(line, pageWidth - 30);
         doc.text(splitLine, 15, cgvY);
-        cgvY += (splitLine.length * 3);
+        cgvY += (splitLine.length * 3.5);
     });
 
     // --- Pied de page ---
     doc.setFont("helvetica", "normal");
     doc.setFontSize(8);
     doc.setTextColor(100, 116, 139);
-    doc.text("81 AVENUE ARISTIDE BRIAND 93240 STAINS | Tel. 0186900380 | amt.transit@gmail.com", pageWidth / 2, doc.internal.pageSize.getHeight() - 10, { align: 'center' });
+    const footerText = invoiceConfig?.footer || "AMT TRANS'IT | 81 AVENUE ARISTIDE BRIAND 93240 STAINS | Tel. 0186900380 | amt.transit@gmail.com";
+    doc.text(footerText, pageWidth / 2, doc.internal.pageSize.getHeight() - 10, { align: 'center' });
 
     doc.save(`Facture_${d.ref}.pdf`);
 };

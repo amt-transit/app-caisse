@@ -73,7 +73,7 @@ export const DemandesDevisView = {
                 actions = `<button class="btn btn-primary btn-small" onclick="window.app.views.demandesDevis.processRequest('${r.id}')" title="Marquer Traité" style="padding: 6px;"><i class="fas fa-file-signature"></i> Traiter</button> ${actions}`;
             }
             return `
-                <tr style="border-bottom: 1px solid #f1f5f9; transition: background 0.2s;" onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background='transparent'">
+                <tr>
                     <td data-label="Date" style="padding: 14px 12px; font-weight: bold;">${r.date ? new Date(r.date).toLocaleDateString('fr-FR') : '-'}</td>
                     <td data-label="Client" style="padding: 14px 12px; font-weight: 600; color: #0f172a;">${r.client || '-'}</td>
                     <td data-label="Contact" style="padding: 14px 12px;">${r.phone || r.email || '-'}</td>

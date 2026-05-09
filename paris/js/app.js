@@ -16,7 +16,6 @@ import { HistoriqueProgrammesView } from './views/historique-programmes.js';
 import { ChauffeursListView } from './views/chauffeurs-list.js';
 import { TousLesDevisView } from './views/touslesdevis.js';
 import { DemandesDevisView } from './views/demandesdevis.js';
-import { GestionConteneursView } from './views/gestion-conteneurs.js';
 import { ConfectionConteneursView } from './views/confection-conteneurs.js';
 import { BateauxDepartView } from './views/bateaux-depart.js';
 import { ScanHistoryView } from './views/scan-history.js';
@@ -29,6 +28,7 @@ import { SettingsCompanyView } from './views/settings-company.js';
 import { SettingsMenusView } from './views/settings-menus.js';
 import { ConfigInvoiceView } from './views/config-invoice.js';
 import { ConfigLabelView } from './views/config-label.js';
+import { ConfigContainerView } from './views/config-container.js';
 import { ScanWarehouseView } from './views/scan-warehouse.js';
 import { ScanContainerView } from './views/scan-container.js';
 
@@ -45,7 +45,7 @@ const app = {
         'appointment-new': 'rdv', 'appointments-list': 'rdv', 'appointments-pending': 'rdv', 'appointments-calendar': 'rdv',
         'program-new': 'operations', 'program-my': 'operations', 'program-history': 'operations', 'drivers': 'operations', 'departures-calendar': 'operations',
         'quotes-list': 'devis', 'quote-new': 'devis', 'quote-requests': 'devis',
-        'loading-container': 'chargement', 'confection-containers': 'chargement', 'loading-boats': 'chargement',
+        'confection-containers': 'chargement', 'loading-boats': 'chargement',
         'scan-warehouse': 'scan', 'scan-container': 'scan', 'scan-classic': 'scan', 'scan-history': 'scan',
         'clients-list': 'clients', 'clients-app': 'clients', 'clients-analytics': 'clients',
         'chat': 'comms', 'sms-send': 'comms', 'sms-history': 'comms', 'notifications': 'comms', 'notifications-history': 'comms',
@@ -55,7 +55,7 @@ const app = {
         'balance-monthly': 'bilans-financiers', 'balance-yearly': 'bilans-financiers', 'balance-boat': 'bilans-financiers', 'balance-12m': 'bilans-financiers',
         'stats-boat': 'statistique', 'stats-monthly': 'statistique', 'stats-yearly': 'statistique',
         'settings-agency': 'settings', 'settings-company': 'settings', 'settings-software': 'settings', 'settings-sms': 'settings', 'settings-notifications': 'settings', 'settings-menus': 'settings', 'settings-agents': 'settings', 'settings-appointments': 'settings', 'settings-profile': 'settings',
-        'config-invoice': 'configuration', 'config-label': 'configuration', 'config-objectives': 'configuration', 'config-charges': 'configuration',
+        'config-invoice': 'configuration', 'config-label': 'configuration', 'config-container': 'configuration', 'config-objectives': 'configuration', 'config-charges': 'configuration',
         'prospecting': 'prospecting',
         'audit-log': 'audit-log'
     },
@@ -68,6 +68,7 @@ const app = {
         window.app = this;
         
         this.loadMenuConfig(); // Charge la configuration et applique les accès aux menus
+        this.initContainerGauge(); // Initialise la jauge de chargement globale
         
         const savedPage = sessionStorage.getItem('parisCurrentPage') || 'dashboard';
         this.renderPage(savedPage);
@@ -181,6 +182,43 @@ const app = {
             return false;
         }
         return true;
+    },
+
+    async initContainerGauge() {
+        try {
+            const { db } = await import('../../../firebase-config.js');
+            const { doc, onSnapshot, collection, query, where } = await import('https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js');
+            const activeAgency = sessionStorage.getItem('currentActiveAgency') || 'paris';
+
+            onSnapshot(doc(db, "settings", `container_config_${activeAgency}`), (configSnap) => {
+                let activeContainer = 'ATT';
+                if (configSnap.exists() && configSnap.data().activeContainer) {
+                    activeContainer = configSnap.data().activeContainer.trim().toUpperCase();
+                }
+                const nameEl = document.getElementById('globalActiveContainerName');
+                if (nameEl) nameEl.textContent = activeContainer;
+
+                if (activeContainer === 'ATT') return this.updateGaugeUI(0);
+
+                if (this.unsubContainerGauge) this.unsubContainerGauge();
+                const q = query(collection(db, "transactions"), where("conteneur", "==", activeContainer), where("agency", "==", activeAgency), where("isDeleted", "==", false));
+                
+                this.unsubContainerGauge = onSnapshot(q, (transSnap) => {
+                    let totalCBM = 0;
+                    transSnap.forEach(doc => { totalCBM += parseFloat(doc.data().volumeCBM) || 0; });
+                    this.updateGaugeUI(totalCBM);
+                });
+            });
+        } catch (e) { console.error("Erreur initContainerGauge:", e); }
+    },
+
+    updateGaugeUI(currentCBM) {
+        const maxCBM = 68;
+        const percentage = Math.min(100, Math.max(0, (currentCBM / maxCBM) * 100));
+        const volEl = document.getElementById('globalContainerVolume');
+        const barEl = document.getElementById('globalContainerGaugeBar');
+        if (volEl) volEl.textContent = `${currentCBM.toFixed(2)} / ${maxCBM} CBM`;
+        if (barEl) { barEl.style.width = `${percentage}%`; barEl.style.backgroundColor = percentage < 50 ? '#10b981' : (percentage < 85 ? '#f59e0b' : '#ef4444'); }
     },
 
     initSidebarEvents() {
@@ -358,7 +396,6 @@ const app = {
             'quotes-list': 'Tous les devis',
             'quote-new': 'Nouveau devis',
             'quote-requests': 'Demandes reçues',
-            'loading-container': 'Gestion Conteneur',
             'confection-containers': 'Confection Conteneurs',
             'loading-boats': 'Bateaux départ',
             'scan-warehouse': 'Mise en entrepôt',
@@ -396,6 +433,7 @@ const app = {
             'settings-profile': 'Mon profil',
             'config-invoice': 'Choix facture',
             'config-label': 'Choix étiquette',
+            'config-container': 'Conteneur Actif',
             'config-objectives': 'Objectifs',
             'config-charges': 'Charges',
             'prospecting': 'Prospections',
@@ -432,7 +470,6 @@ const app = {
             'quotes-list': () => TousLesDevisView.render(this),
             'quote-new': () => NouveauDevisView.render(this),
             'quote-requests': () => DemandesDevisView.render(this),
-            'loading-container': () => GestionConteneursView.render(this),
             'confection-containers': () => ConfectionConteneursView.render(this),
             'loading-boats': () => BateauxDepartView.render(this),
             'scan-warehouse': () => ScanWarehouseView.render(this),
@@ -470,6 +507,7 @@ const app = {
             'settings-profile': () => this.renderSettingsProfile(),
             'config-invoice': () => ConfigInvoiceView.render(this),
             'config-label': () => ConfigLabelView.render(this),
+            'config-container': () => ConfigContainerView.render(this),
             'config-objectives': () => this.renderConfigObjectives(),
             'config-charges': () => this.renderConfigCharges(),
             'prospecting': () => this.renderProspecting(),
@@ -1234,7 +1272,236 @@ const app = {
     addStock() { this.showToast('Nouveau stock'); },
     addAgent() { this.showToast('Ajout agent'); },
     editAgent(id) { this.showToast('Modification agent'); },
-    saveSettings() { this.showToast('Paramètres enregistrés'); }
+    saveSettings() { this.showToast('Paramètres enregistrés'); },
+    
+    // ==================== IMPRESSION ETIQUETTES ====================
+// ==================== IMPRESSION ETIQUETTES ====================
+async printLabels(data) {
+    const format = localStorage.getItem('amt_label_format') || 'A5';
+    const model = localStorage.getItem('amt_label_model') || 'classic';
+    const colorScheme = localStorage.getItem('amt_label_color') || 'default';
+    
+    const dimensions = {
+        A5: { width: 210, height: 148 },
+        A6: { width: 148, height: 105 }
+    };
+    const dim = dimensions[format] || dimensions.A5;
+    const widthMm = dim.width;
+    const heightMm = dim.height;
+    const pageSizeCss = `${widthMm}mm ${heightMm}mm`;
+    
+    const colors = {
+        default: { border: '#000', text: '#000' },
+        blue: { border: '#1e40af', text: '#1e3a8a' },
+        green: { border: '#065f46', text: '#064e3b' }
+    };
+    const theme = colors[colorScheme] || colors.default;
+    
+    const loadingToast = document.createElement('div');
+    loadingToast.style.cssText = 'position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: #3b82f6; color: white; padding: 12px 20px; border-radius: 8px; z-index: 9999; box-shadow: 0 4px 6px rgba(0,0,0,0.1); font-weight: bold;';
+    loadingToast.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Génération des étiquettes en cours...';
+    document.body.appendChild(loadingToast);
+
+    const generateQR = (text) => {
+        return new Promise(resolve => {
+            const div = document.createElement('div');
+            new QRCode(div, { text: text, width: 300, height: 300, correctLevel: QRCode.CorrectLevel.H });
+            setTimeout(() => {
+                const canvas = div.querySelector('canvas');
+                if (canvas) resolve(canvas.toDataURL('image/png'));
+                else {
+                    const img = div.querySelector('img');
+                    resolve(img ? img.src : '');
+                }
+            }, 150);
+        });
+    };
+    
+    let labelsHtml = '';
+    for (const label of data.labels) {
+        const qrDataUrl = await generateQR(label.sousRef);
+        
+        if (model === 'compact') {
+            labelsHtml += this.renderCompactLabel(widthMm, heightMm, qrDataUrl, data, label, theme);
+        } else if (model === 'premium') {
+            labelsHtml += this.renderPremiumLabel(widthMm, heightMm, qrDataUrl, data, label, theme);
+        } else {
+            labelsHtml += this.renderClassicLabel(widthMm, heightMm, qrDataUrl, data, label, theme);
+        }
+    }
+    
+    const iframe = document.createElement('iframe');
+    iframe.style.position = 'fixed';
+    iframe.style.right = '-10000px';
+    iframe.style.bottom = '-10000px';
+    document.body.appendChild(iframe);
+    
+    const doc = iframe.contentWindow.document;
+    doc.open();
+    doc.write(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <style>
+                @page { size: ${pageSizeCss} landscape; margin: 0; }
+                body { margin: 0; padding: 0; font-family: 'Arial', sans-serif; background: #fff; }
+                .label { 
+                    box-sizing: border-box; 
+                    page-break-after: always;
+                    display: flex;
+                    flex-direction: column;
+                    overflow: hidden;
+                }
+                .label:last-child { page-break-after: auto; }
+            </style>
+        </head>
+        <body>
+            ${labelsHtml}
+        </body>
+        </html>
+    `);
+    doc.close();
+    
+    loadingToast.remove();
+    
+    iframe.onload = () => {
+        setTimeout(() => {
+            iframe.contentWindow.focus();
+            iframe.contentWindow.print();
+            setTimeout(() => document.body.removeChild(iframe), 2000);
+        }, 500);
+    };
+},
+
+renderClassicLabel(widthMm, heightMm, qrDataUrl, data, label, theme) {
+    const isA5 = widthMm === 210;
+    const fontSize = isA5 ? '11pt' : '9pt';
+    const titleFont = isA5 ? '14pt' : '11pt';
+    const refFont = isA5 ? '28pt' : '16pt';
+    
+    return `
+        <div class="label" style="width: ${widthMm}mm; height: ${heightMm}mm;">
+            <div style="height: 100%; display: flex; flex-direction: column; padding: 6mm;">
+                <div style="display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid ${theme.border}; padding-bottom: 3mm; margin-bottom: 4mm;">
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <div style="background: black; padding: 2px 4px; border-radius: 6px; display: flex; align-items: center; justify-content: center;">
+                            <img src="../LOGOAMT.png" style="height: ${isA5 ? '8mm' : '6mm'}; object-fit: contain;" alt="Logo" />
+                        </div>
+                        <div>
+                            <div style="font-size: ${fontSize}; font-weight: bold;">AMT TRANSIT CI FRET</div>
+                            <div style="font-size: ${isA5 ? '9pt' : '7pt'};">81 AV. ARISTIDE BRIAND - 0180893370</div>
+                        </div>
+                    </div>
+                    <div style="text-align: right;">
+                        <div style="font-size: ${fontSize};"><strong>DATE</strong> ${new Date().toLocaleDateString()}</div>
+                        <div style="font-size: ${fontSize};"><strong>HEURE</strong> ${new Date().toLocaleTimeString()}</div>
+                    </div>
+                </div>
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5mm;">
+                    <div style="font-size: ${titleFont}; font-weight: bold;">${label.sousRef}</div>
+                    <img src="${qrDataUrl}" style="width: ${isA5 ? '45mm' : '35mm'}; height: ${isA5 ? '45mm' : '35mm'};" />
+                </div>
+                <div style="margin-bottom: 5mm;">
+                    <div style="font-size: ${titleFont}; font-weight: bold; margin-bottom: 2mm;">DESTINATAIRE</div>
+                    <div style="font-size: ${titleFont}; font-weight: bold;">${data.destName}</div>
+                    <div style="font-size: ${fontSize};">${data.destPhone || ''}</div>
+                </div>
+                <div style="margin-bottom: 5mm;">
+                    <div style="font-size: ${titleFont}; font-weight: bold; margin-bottom: 2mm;">EXPEDITEUR</div>
+                    <div style="font-size: ${titleFont}; font-weight: bold;">${data.expName}</div>
+                    <div style="font-size: ${fontSize};">${data.expAddress?.replace(/\n/g, '<br>') || ''}</div>
+                </div>
+                <div style="flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; width: 100%;">
+                    <div style="font-size: ${refFont}; font-weight: 900; letter-spacing: 2px; word-break: break-all;">${data.ref}</div>
+                    <div style="font-size: ${fontSize}; font-weight: bold; margin-top: 2mm; text-transform: uppercase;">${label.desc}</div>
+                </div>
+            </div>
+        </div>
+    `;
+},
+
+renderCompactLabel(widthMm, heightMm, qrDataUrl, data, label, theme) {
+    const isA5 = widthMm === 210;
+    
+    return `
+        <div class="label" style="width: ${widthMm}mm; height: ${heightMm}mm;">
+            <div style="height: 100%; display: flex; flex-direction: column; padding: 5mm;">
+                <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid ${theme.border}; padding-bottom: 2mm; margin-bottom: 3mm;">
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <div style="background: black; padding: 2px 4px; border-radius: 4px; display: flex; align-items: center; justify-content: center;">
+                            <img src="../LOGOAMT.png" style="height: ${isA5 ? '6mm' : '4mm'}; object-fit: contain;" alt="Logo" />
+                        </div>
+                        <div style="font-size: ${isA5 ? '9pt' : '7pt'}; font-weight: bold;">AMT TRANSIT CI FRET<br><span style="font-weight: normal; font-size: ${isA5 ? '8pt' : '6pt'};">81 AV. ARISTIDE BRIAND - 0180893370</span></div>
+                    </div>
+                    <div style="font-size: ${isA5 ? '8pt' : '7pt'}; text-align: right;">
+                        ${new Date().toLocaleDateString()}<br>${new Date().toLocaleTimeString()}
+                    </div>
+                </div>
+                <div style="flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;">
+                    <div style="font-size: ${isA5 ? '12pt' : '10pt'}; font-weight: bold; margin-bottom: 3mm;">${label.sousRef}</div>
+                    <img src="${qrDataUrl}" style="width: ${isA5 ? '65mm' : '50mm'}; height: ${isA5 ? '65mm' : '50mm'};" />
+                    <div style="margin-top: 4mm; font-size: ${isA5 ? '16pt' : '14pt'}; font-weight: 900; text-align: center; word-break: break-all; width: 100%;">${data.ref}</div>
+                    <div style="font-size: ${isA5 ? '10pt' : '8pt'}; font-weight: bold; margin-top: 1.5mm; text-transform: uppercase; color: #475569;">${label.desc}</div>
+                </div>
+                <div style="display: flex; justify-content: space-between; border-top: 2px solid ${theme.border}; padding-top: 2mm; margin-top: 3mm; font-size: ${isA5 ? '9pt' : '7pt'};">
+                    <div><strong>Exp:</strong> ${data.expName?.split(' ')[0] || ''}</div>
+                    <div><strong>Dest:</strong> ${data.destName?.split(' ')[0] || ''}</div>
+                </div>
+            </div>
+        </div>
+    `;
+},
+
+renderPremiumLabel(widthMm, heightMm, qrDataUrl, data, label, theme) {
+    const isA5 = widthMm === 210;
+    
+    return `
+        <div class="label" style="width: ${widthMm}mm; height: ${heightMm}mm;">
+            <div style="height: 100%; display: flex; flex-direction: column;">
+                    <div style="background: ${theme.border}; color: white; padding: 3mm 4mm; display: flex; justify-content: center; align-items: center; gap: 10px;">
+                        <div style="background: black; padding: 2px 4px; border-radius: 6px; display: flex; align-items: center; justify-content: center;">
+                            <img src="../LOGOAMT.png" style="height: ${isA5 ? '8mm' : '6mm'}; object-fit: contain;" alt="Logo" />
+                        </div>
+                        <span style="font-size: ${isA5 ? '12pt' : '10pt'}; font-weight: bold; margin: 0;">AMT TRANSIT CI FRET INTERNATIONAL</span>
+                </div>
+                <div style="padding: 5mm; flex: 1; display: flex; flex-direction: column;">
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 5mm;">
+                        <div>
+                            <div style="font-size: ${isA5 ? '9pt' : '8pt'};">81 AVENUE ARISTIDE BRIAND, 93240 STAINS</div>
+                            <div style="font-size: ${isA5 ? '9pt' : '8pt'};">TEL: 01 80 89 33 70</div>
+                        </div>
+                        <div style="text-align: right; font-size: ${isA5 ? '8pt' : '7pt'};">
+                            ${new Date().toLocaleDateString()} ${new Date().toLocaleTimeString()}
+                        </div>
+                    </div>
+                    <div style="display: flex; gap: 5mm; flex: 1;">
+                        <div style="flex: 1; display: flex; flex-direction: column; justify-content: center;">
+                            <div style="margin-bottom: 3mm;">
+                                <div style="font-size: ${isA5 ? '10pt' : '9pt'}; font-weight: bold;">📤 EXPÉDITEUR</div>
+                                <div style="font-size: ${isA5 ? '12pt' : '10pt'}; font-weight: bold;">${data.expName}</div>
+                                <div style="font-size: ${isA5 ? '9pt' : '8pt'};">${data.expAddress?.replace(/\n/g, '<br>') || ''}</div>
+                            </div>
+                            <div>
+                                <div style="font-size: ${isA5 ? '10pt' : '9pt'}; font-weight: bold;">📥 DESTINATAIRE</div>
+                                <div style="font-size: ${isA5 ? '12pt' : '10pt'}; font-weight: bold;">${data.destName}</div>
+                                <div style="font-size: ${isA5 ? '9pt' : '8pt'};">TEL: ${data.destPhone || ''}</div>
+                                <div style="font-size: ${isA5 ? '9pt' : '8pt'};">${data.destAddress || ''}</div>
+                            </div>
+                        </div>
+                        <div style="display: flex; flex-direction: column; align-items: center; justify-content: center;">
+                            <img src="${qrDataUrl}" style="width: ${isA5 ? '50mm' : '40mm'}; height: ${isA5 ? '50mm' : '40mm'};" />
+                            <span style="font-size: ${isA5 ? '8pt' : '7pt'}; font-weight: bold; margin-top: 2mm;">${label.sousRef}</span>
+                        </div>
+                    </div>
+                    <div style="text-align: center; margin-top: 4mm; padding-top: 3mm; border-top: 2px solid ${theme.border}; width: 100%;">
+                        <div style="font-size: ${isA5 ? '24pt' : '16pt'}; font-weight: 900; letter-spacing: 1px; word-break: break-all;">${data.ref}</div>
+                        <div style="font-size: ${isA5 ? '10pt' : '8pt'}; font-weight: bold; margin-top: 1.5mm; text-transform: uppercase; color: #475569;">${label.desc}</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+}
 };
 
 // Démarrage une fois le DOM chargé

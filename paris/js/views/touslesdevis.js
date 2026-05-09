@@ -113,7 +113,7 @@ export const TousLesDevisView = {
                 `;
             }
             return `
-                <tr style="border-bottom: 1px solid #f1f5f9; transition: background 0.2s;" onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background='transparent'">
+                <tr>
                     <td data-label="N° Devis" style="padding: 14px 12px; font-weight: bold;">${q.reference || '-'}</td>
                     <td data-label="Date" style="padding: 14px 12px;">${q.date ? new Date(q.date).toLocaleDateString('fr-FR') : '-'}</td>
                     <td data-label="Client" style="padding: 14px 12px; font-weight: 600; color: #0f172a;">${q.client || '-'}</td>

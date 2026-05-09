@@ -252,8 +252,11 @@ export const SettingsAgentsView = {
         const isUserOnline = (a) => a.isOnline === true || (a.lastActive && (new Date() - new Date(a.lastActive)) < 5 * 60 * 1000);
         const onlineCount = this.agents.filter(isUserOnline).length;
 
+        const kpiContainer = document.getElementById('kpiContainer');
+        if (!kpiContainer) return; // Sécurité : arrête la fonction si on a quitté la page
+
         // MAJ KPIs
-        document.getElementById('kpiContainer').innerHTML = `
+        kpiContainer.innerHTML = `
             <div class="am__kpi am__kpi--blue"><div class="am__kpi-icon"><i class="fas fa-users"></i></div><div><div class="am__kpi-val">${this.agents.length}</div><div class="am__kpi-lbl">Total agents</div></div></div>
             <div class="am__kpi am__kpi--green"><div class="am__kpi-icon"><i class="fas fa-check-circle"></i></div><div><div class="am__kpi-val">${activeCount}</div><div class="am__kpi-lbl">Actifs</div></div></div>
             <div class="am__kpi am__kpi--red"><div class="am__kpi-icon"><i class="fas fa-ban"></i></div><div><div class="am__kpi-val">${inactiveCount}</div><div class="am__kpi-lbl">Inactifs</div></div></div>

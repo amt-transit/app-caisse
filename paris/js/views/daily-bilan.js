@@ -249,10 +249,17 @@ export const DailyBilanView = {
     },
 
     updateKPIs() {
-        document.getElementById('kpiCA').textContent = this.app.formatMoney(this.todayData.totalCA);
-        document.getElementById('kpiColis').textContent = this.todayData.totalColis;
-        document.getElementById('kpiClients').textContent = this.todayData.totalClients;
-        document.getElementById('kpiImpayes').textContent = this.app.formatMoney(this.todayData.totalImpayes);
+        const elCA = document.getElementById('kpiCA');
+        if (elCA) elCA.textContent = this.app.formatMoney(this.todayData.totalCA);
+        
+        const elColis = document.getElementById('kpiColis');
+        if (elColis) elColis.textContent = this.todayData.totalColis;
+        
+        const elClients = document.getElementById('kpiClients');
+        if (elClients) elClients.textContent = this.todayData.totalClients;
+        
+        const elImpayes = document.getElementById('kpiImpayes');
+        if (elImpayes) elImpayes.textContent = this.app.formatMoney(this.todayData.totalImpayes);
     },
 
     renderTransactions() {

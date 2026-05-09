@@ -1,5 +1,5 @@
 import { db } from '../../../firebase-config.js';
-import { collection, query, where, onSnapshot, doc, updateDoc, writeBatch } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
+import { collection, query, where, onSnapshot, doc, updateDoc, writeBatch, setDoc } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 
 export const ConfectionConteneursView = {
     unsubLivraisons: null,
@@ -473,17 +473,36 @@ export const ConfectionConteneursView = {
         }
 
         if (window.AppModal) {
-            if (!await window.AppModal.confirm(`Verrouiller et enregistrer le conteneur ${ctnName} avec ses ${items.length} dossiers ?\n\nIl passera en attente de départ (bateau).`, "Enregistrer le conteneur")) return;
-        } else if (!confirm("Enregistrer le conteneur ?")) return;
+            if (!await window.AppModal.confirm(`Verrouiller et enregistrer le conteneur ${ctnName} avec ses ${items.length} dossiers ?\n\nIl passera en attente de départ (bateau) et un NOUVEAU conteneur sera automatiquement activé pour les prochaines factures.`, "Enregistrer le conteneur")) return;
+        } else if (!confirm(`Enregistrer le conteneur ${ctnName} et passer au suivant ?`)) return;
 
         try {
+            // 1. Verrouiller le conteneur actuel
             await updateDoc(doc(db, "containers", this.activeTabId), {
                 status: 'EN_ATTENTE_BATEAU',
                 registeredAt: new Date().toISOString()
             });
-            this.app.showToast(`Conteneur ${ctnName} enregistré et prêt pour le départ !`, "success");
+
+            // 2. Calculer le nom du prochain conteneur (ex: E15 -> E16, D09 -> D10)
+            let nextCtnName = ctnName;
+            const match = ctnName.match(/^(.*?)(\d+)$/);
+            if (match) {
+                const prefix = match[1];
+                const numStr = match[2];
+                const nextNum = parseInt(numStr, 10) + 1;
+                nextCtnName = prefix + String(nextNum).padStart(numStr.length, '0');
+            } else {
+                nextCtnName = ctnName + "-SUIVANT"; // Fallback de sécurité si le nom ne finit pas par un chiffre
+            }
+
+            // 3. Mettre à jour le Conteneur Actif globalement
+            const activeAgency = sessionStorage.getItem('currentActiveAgency') || 'paris';
+            await setDoc(doc(db, "settings", `container_config_${activeAgency}`), { activeContainer: nextCtnName }, { merge: true });
+
+            this.app.showToast(`Conteneur ${ctnName} enregistré ! Le nouveau conteneur en cours est ${nextCtnName}.`, "success");
             this.activeTabId = null; // Réinitialise la sélection
         } catch(e) {
+            console.error(e);
             this.app.showToast("Erreur lors de l'enregistrement.", "error");
         }
     }

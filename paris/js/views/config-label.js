@@ -1,200 +1,363 @@
-import { db } from '../../../firebase-config.js';
-import { doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
-
 export const ConfigLabelView = {
-    docRef: null,
-    config: {
-        paperSize: "A6",
-        showPhone: true,
-        showPrice: false,
-        autoPrint: true
+    settings: {
+        format: 'A5',
+        model: 'classic',
+        colorScheme: 'default'
     },
 
     render(app) {
         this.app = app;
-        window.app.views = window.app.views || {};
-        window.app.views.configLabel = this;
-
-        const activeAgency = sessionStorage.getItem('currentActiveAgency') || 'paris';
-        this.docRef = doc(db, "settings", `label_config_${activeAgency}`);
-
+        this.loadSavedSettings();
+        
         const html = `
-            <style>
-                .cl-page { max-width: 1200px; margin: 0 auto; animation: fadeIn 0.3s ease-in-out; }
-                .cl-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px; background: white; padding: 20px 25px; border-radius: 16px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); border: 1px solid #e2e8f0; flex-wrap: wrap; gap: 15px; }
-                .cl-header__left { display: flex; align-items: center; gap: 15px; }
-                .cl-icon-wrap { background: #fdf4ff; color: #db2777; width: 50px; height: 50px; display: flex; align-items: center; justify-content: center; border-radius: 12px; font-size: 24px; }
-                .cl-title { margin: 0; color: #0f172a; font-size: 22px; font-weight: 800; }
-                .cl-subtitle { margin: 4px 0 0 0; color: #64748b; font-size: 13px; }
+            <div class="page" style="max-width: 1400px; margin: 0 auto; animation: fadeIn 0.3s ease;">
                 
-                .cl-layout { display: grid; grid-template-columns: 1fr 1fr; gap: 25px; }
-                @media (max-width: 992px) { .cl-layout { grid-template-columns: 1fr; } }
-
-                .cl-card { background: white; border-radius: 16px; border: 1px solid #e2e8f0; box-shadow: 0 2px 4px rgba(0,0,0,0.02); padding: 20px; }
-                .cl-card-title { font-size: 16px; font-weight: 700; color: #1e293b; margin-bottom: 20px; display: flex; align-items: center; gap: 10px; border-bottom: 1px solid #e2e8f0; padding-bottom: 10px; }
-
-                /* Aperçu Étiquette */
-                .label-preview-container {
-                    background: #f1f5f9; padding: 30px; border-radius: 8px; display: flex; justify-content: center; align-items: center;
-                }
-                .label-preview {
-                    background: white; border: 2px dashed #cbd5e1; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.1); 
-                    width: 100%; max-width: 400px; aspect-ratio: 1.5; /* Ratio typique 10x15 cm */
-                    font-family: 'Helvetica', 'Arial', sans-serif; position: relative; overflow: hidden;
-                    display: flex; flex-direction: column; justify-content: space-between; padding: 20px; box-sizing: border-box;
-                }
-                .toggle-switch {
-                    position: relative; display: inline-block; width: 44px; height: 24px;
-                }
-                .toggle-switch input { opacity: 0; width: 0; height: 0; }
-                .slider {
-                    position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #cbd5e1; transition: .3s; border-radius: 24px;
-                }
-                .slider:before {
-                    position: absolute; content: ""; height: 18px; width: 18px; left: 3px; bottom: 3px; background-color: white; transition: .3s; border-radius: 50%; box-shadow: 0 1px 2px rgba(0,0,0,0.2);
-                }
-                input:checked + .slider { background-color: #10b981; }
-                input:checked + .slider:before { transform: translateX(20px); }
-            </style>
-
-            <div class="cl-page">
-                <div class="cl-header">
-                    <div class="cl-header__left">
-                        <div class="cl-icon-wrap"><i class="fas fa-tag"></i></div>
-                        <div>
-                            <h1 class="cl-title">Paramètres d'Étiquettes</h1>
-                            <p class="cl-subtitle">Configurez le format et les informations visibles sur les étiquettes colis</p>
-                        </div>
-                    </div>
-                    <button class="btn btn-primary" id="saveLabelConfigBtn" onclick="window.app.views.configLabel.saveData()" style="padding: 10px 20px; display: flex; align-items: center; gap: 8px;">
-                        <i class="fas fa-save"></i> Enregistrer
-                    </button>
-                </div>
-
-                <div class="cl-layout">
-                    <!-- Formulaire de Configuration -->
-                    <div class="cl-card" style="align-self: start;">
-                        <div class="cl-card-title"><i class="fas fa-sliders-h text-pink-500"></i> Paramètres d'impression</div>
+                <div style="display: grid; grid-template-columns: 320px 1fr; gap: 25px; align-items: start;">
+                    
+                    <!-- Panneau de configuration -->
+                    <div style="background: white; padding: 25px; border-radius: 16px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); border: 1px solid #e2e8f0;">
+                        <h3 style="margin: 0 0 20px 0; font-size: 18px; font-weight: 800; color: #0f172a;">
+                            <i class="fas fa-tag"></i> Configuration étiquette
+                        </h3>
                         
-                        <div class="form-group" style="margin-bottom: 15px;">
-                            <label style="font-weight: 600; font-size: 13px; color: #475569; margin-bottom: 6px; display: block;">Format du papier</label>
-                            <select id="clPaperSize" style="width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 8px;" onchange="window.app.views.configLabel.updatePreview()">
-                                <option value="A6" selected>A6 (10x15 cm) - Imprimante thermique</option>
-                                <option value="A4_4">A4 (4 étiquettes par page) - Imprimante classique</option>
+                        <!-- Format -->
+                        <div class="form-group" style="margin-bottom: 20px;">
+                            <label style="font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase; margin-bottom: 8px; display: block;">
+                                📏 Format de papier
+                            </label>
+                            <select id="labelFormat" class="config-select" style="width: 100%; padding: 12px; border-radius: 10px; border: 1px solid #e2e8f0; font-weight: 500;" onchange="window.app.views.configLabel.updatePreview()">
+                                <option value="A5" ${this.settings.format === 'A5' ? 'selected' : ''}>A5 Paysage (210 x 148 mm)</option>
+                                <option value="A6" ${this.settings.format === 'A6' ? 'selected' : ''}>A6 Paysage (148 x 105 mm)</option>
                             </select>
                         </div>
 
-                        <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid #f1f5f9;">
-                            <div>
-                                <div style="font-weight: 600; color: #1e293b; font-size: 14px;">Afficher le téléphone</div>
-                                <div style="font-size: 11px; color: #64748b;">Affiche le numéro du destinataire sur l'étiquette</div>
-                            </div>
-                            <label class="toggle-switch">
-                                <input type="checkbox" id="clShowPhone" onchange="window.app.views.configLabel.updatePreview()">
-                                <span class="slider"></span>
+                        <!-- Modèle -->
+                        <div class="form-group" style="margin-bottom: 20px;">
+                            <label style="font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase; margin-bottom: 8px; display: block;">
+                                🏷️ Modèle d'étiquette
                             </label>
+                            <select id="labelModel" class="config-select" style="width: 100%; padding: 12px; border-radius: 10px; border: 1px solid #e2e8f0; font-weight: 500;" onchange="window.app.views.configLabel.updatePreview()">
+                                <option value="classic" ${this.settings.model === 'classic' ? 'selected' : ''}>Classique AMT (Design original)</option>
+                                <option value="compact" ${this.settings.model === 'compact' ? 'selected' : ''}>Compact (QR Code Focus)</option>
+                                <option value="premium" ${this.settings.model === 'premium' ? 'selected' : ''}>Premium (Design moderne)</option>
+                            </select>
                         </div>
 
-                        <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid #f1f5f9;">
-                            <div>
-                                <div style="font-weight: 600; color: #1e293b; font-size: 14px;">Impression automatique</div>
-                                <div style="font-size: 11px; color: #64748b;">Proposer l'impression dès la création de la facture</div>
-                            </div>
-                            <label class="toggle-switch">
-                                <input type="checkbox" id="clAutoPrint" onchange="window.app.views.configLabel.updatePreview()">
-                                <span class="slider"></span>
+                        <!-- Thème de couleur -->
+                        <div class="form-group" style="margin-bottom: 20px;">
+                            <label style="font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase; margin-bottom: 8px; display: block;">
+                                🎨 Thème de couleur
                             </label>
+                            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;">
+                                <div class="color-option ${this.settings.colorScheme === 'default' ? 'active' : ''}" data-color="default" onclick="window.app.views.configLabel.setColorScheme('default')" style="cursor: pointer; border-radius: 10px; overflow: hidden; border: 2px solid ${this.settings.colorScheme === 'default' ? '#3b82f6' : '#e2e8f0'};">
+                                    <div style="background: linear-gradient(135deg, #1e3a5f, #0f172a); width: 100%; height: 40px;"></div>
+                                    <span style="font-size: 11px; text-align: center; display: block; margin: 5px 0;">Classique</span>
+                                </div>
+                                <div class="color-option ${this.settings.colorScheme === 'blue' ? 'active' : ''}" data-color="blue" onclick="window.app.views.configLabel.setColorScheme('blue')" style="cursor: pointer; border-radius: 10px; overflow: hidden; border: 2px solid ${this.settings.colorScheme === 'blue' ? '#3b82f6' : '#e2e8f0'};">
+                                    <div style="background: linear-gradient(135deg, #1e40af, #3b82f6); width: 100%; height: 40px;"></div>
+                                    <span style="font-size: 11px; text-align: center; display: block; margin: 5px 0;">Bleu</span>
+                                </div>
+                                <div class="color-option ${this.settings.colorScheme === 'green' ? 'active' : ''}" data-color="green" onclick="window.app.views.configLabel.setColorScheme('green')" style="cursor: pointer; border-radius: 10px; overflow: hidden; border: 2px solid ${this.settings.colorScheme === 'green' ? '#3b82f6' : '#e2e8f0'};">
+                                    <div style="background: linear-gradient(135deg, #065f46, #10b981); width: 100%; height: 40px;"></div>
+                                    <span style="font-size: 11px; text-align: center; display: block; margin: 5px 0;">Vert</span>
+                                </div>
+                            </div>
                         </div>
-                        
-                        <div style="padding: 15px; background: #eff6ff; border-radius: 8px; border: 1px solid #bfdbfe; font-size: 12px; color: #1e40af; display: flex; gap: 10px; margin-top: 20px;">
-                            <i class="fas fa-info-circle" style="font-size: 16px;"></i>
-                            <div>La référence du colis (ex: <b>KA-018-E10_1_71</b>) contient les initiales de l'agent, l'ordre du jour, le conteneur, le numéro du colis et une clé unique anti-doublon.</div>
+
+                        <div style="padding-top: 15px; border-top: 1px solid #f1f5f9;">
+                            <button class="btn btn-primary" style="width: 100%; justify-content: center; padding: 14px;" onclick="window.app.views.configLabel.saveConfig()">
+                                <i class="fas fa-save"></i> Enregistrer par défaut
+                            </button>
+                            <button class="btn btn-outline" style="width: 100%; justify-content: center; margin-top: 10px;" onclick="window.app.views.configLabel.printTest()">
+                                <i class="fas fa-print"></i> Imprimer un test
+                            </button>
                         </div>
                     </div>
 
-                    <!-- Aperçu Visuel -->
-                    <div class="cl-card">
-                        <div class="cl-card-title"><i class="fas fa-eye text-indigo-500"></i> Aperçu en temps réel</div>
-                        <div class="label-preview-container">
-                            
-                            <div class="label-preview" id="labelPreviewCard">
-                                <div style="display: flex; justify-content: space-between; border-bottom: 2px solid #0f172a; padding-bottom: 10px;">
-                                    <div>
-                                        <strong style="font-size: 18px; color: #0f172a;">AMT TRANS'IT</strong><br>
-                                        <span style="font-size: 12px; color: #475569;">Destination: <b style="color: #0f172a;">ABIDJAN</b></span>
-                                    </div>
-                                    <div style="text-align: right;">
-                                        <strong style="font-size: 20px; color: #0f172a;">KA-018-E10</strong><br>
-                                        <span style="font-size: 12px; background: #0f172a; color: white; padding: 2px 8px; border-radius: 4px; font-weight: bold; display: inline-block; margin-top: 4px;">Colis 1 / 3</span>
-                                    </div>
+                    <!-- Aperçu -->
+                    <div style="background: #f8fafc; padding: 40px; border-radius: 24px; border: 1px dashed #cbd5e1; display: flex; flex-direction: column; align-items: center; min-height: 550px;">
+                        <div id="labelPreviewContainer" style="transition: all 0.3s ease; transform-origin: top center;"></div>
+                        <p style="margin-top: 20px; color: #64748b; font-size: 13px; font-style: italic;"><i class="fas fa-info-circle"></i> Aperçu tel qu'il apparaîtra sur l'imprimante thermique</p>
+                    </div>
+
+                </div>
+            </div>
+        `;
+        document.getElementById('contentContainer').innerHTML = html;
+        window.app.views = window.app.views || {};
+        window.app.views.configLabel = this;
+
+        this.updatePreview();
+    },
+
+    loadSavedSettings() {
+        const savedFormat = localStorage.getItem('amt_label_format');
+        const savedModel = localStorage.getItem('amt_label_model');
+        const savedColor = localStorage.getItem('amt_label_color');
+        
+        if (savedFormat) this.settings.format = savedFormat;
+        if (savedModel) this.settings.model = savedModel;
+        if (savedColor) this.settings.colorScheme = savedColor;
+    },
+
+    setColorScheme(color) {
+        this.settings.colorScheme = color;
+        this.updatePreview();
+        document.querySelectorAll('.color-option').forEach(opt => {
+            opt.style.borderColor = '#e2e8f0';
+            if (opt.getAttribute('data-color') === color) {
+                opt.style.borderColor = '#3b82f6';
+            }
+        });
+    },
+
+    getColorStyles() {
+        const colors = {
+            default: { border: '#000', text: '#000', accent: '#1e293b' },
+            blue: { border: '#1e40af', text: '#1e3a8a', accent: '#2563eb' },
+            green: { border: '#065f46', text: '#064e3b', accent: '#059669' }
+        };
+        return colors[this.settings.colorScheme] || colors.default;
+    },
+
+    updatePreview() {
+        const format = document.getElementById('labelFormat')?.value || this.settings.format;
+        const model = document.getElementById('labelModel')?.value || this.settings.model;
+        const colors = this.getColorStyles();
+        
+        const dimensions = {
+            A5: { width: 210, height: 148, scale: 1.1 },
+            A6: { width: 148, height: 105, scale: 1 }
+        };
+        const dim = dimensions[format] || dimensions.A5;
+        
+        const container = document.getElementById('labelPreviewContainer');
+        
+        let contentHtml = '';
+        if (model === 'compact') {
+            contentHtml = this.renderCompactModel(dim.width, dim.height, colors);
+        } else if (model === 'premium') {
+            contentHtml = this.renderPremiumModel(dim.width, dim.height, colors);
+        } else {
+            contentHtml = this.renderClassicModel(dim.width, dim.height, colors);
+        }
+        
+        container.innerHTML = contentHtml;
+        
+        const labelDiv = document.getElementById('thermalLabel');
+        if (labelDiv) {
+            labelDiv.style.transform = `scale(${dim.scale})`;
+            labelDiv.style.transformOrigin = 'top center';
+        }
+
+        setTimeout(() => {
+            if (typeof QRCode !== 'undefined') {
+                const qrContainer = document.getElementById('previewQRCode');
+                if (qrContainer) {
+                    qrContainer.innerHTML = '';
+                    new QRCode(qrContainer, {
+                        text: 'AB-169-D20',
+                        width: format === 'A5' ? 180 : 140,
+                        height: format === 'A5' ? 180 : 140,
+                        correctLevel: QRCode.CorrectLevel.H
+                    });
+                    const qrImg = qrContainer.querySelector('img') || qrContainer.querySelector('canvas');
+                    if(qrImg) {
+                        qrImg.style.width = "100%";
+                        qrImg.style.height = "100%";
+                    }
+                }
+            }
+        }, 100);
+    },
+
+    // Modèle Classique AMT (inspiré de votre PDF)
+    renderClassicModel(widthMm, heightMm, colors) {
+        const isA5 = widthMm === 210;
+        const fontSize = isA5 ? '11pt' : '9pt';
+        const titleFont = isA5 ? '14pt' : '11pt';
+        const refFont = isA5 ? '28pt' : '16pt';
+        
+        return `
+            <div id="thermalLabel" style="width: ${widthMm}mm; height: ${heightMm}mm; background: white; color: ${colors.text}; font-family: 'Arial', sans-serif; box-sizing: border-box; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.1);">
+                <div style="height: 100%; display: flex; flex-direction: column; padding: 6mm;">
+                    
+                    <!-- En-tête avec coordonnées AMT -->
+                    <div style="display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid ${colors.border}; padding-bottom: 3mm; margin-bottom: 4mm;">
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <div style="background: black; padding: 2px 4px; border-radius: 6px; display: flex; align-items: center; justify-content: center;">
+                                <img src="../LOGOAMT.png" style="height: ${isA5 ? '8mm' : '6mm'}; object-fit: contain;" alt="Logo" />
+                            </div>
+                            <div>
+                                <div style="font-size: ${fontSize}; font-weight: bold;">AMT TRANSIT CI FRET</div>
+                                <div style="font-size: ${isA5 ? '9pt' : '7pt'};">81 AV. ARISTIDE BRIAND - 0180893370</div>
+                            </div>
+                        </div>
+                        <div style="text-align: right;">
+                            <div style="font-size: ${fontSize};"><strong>DATE</strong> ${new Date().toLocaleDateString()}</div>
+                            <div style="font-size: ${fontSize};"><strong>HEURE</strong> ${new Date().toLocaleTimeString()}</div>
+                        </div>
+                    </div>
+
+                    <!-- Zone QR Code -->
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5mm;">
+                        <div style="font-size: ${titleFont}; font-weight: bold;">AB-169-D20_1_71</div>
+                        <div id="previewQRCode" style="width: ${isA5 ? '45mm' : '35mm'}; height: ${isA5 ? '45mm' : '35mm'};"></div>
+                    </div>
+
+                    <!-- Informations Destinataire -->
+                    <div style="margin-bottom: 5mm;">
+                        <div style="font-size: ${titleFont}; font-weight: bold; margin-bottom: 2mm;">DESTINATAIRE</div>
+                        <div style="font-size: ${titleFont}; font-weight: bold;">CEDRIC DADIE</div>
+                        <div style="font-size: ${fontSize};">0767007528</div>
+                    </div>
+
+                    <!-- Informations Expéditeur -->
+                    <div style="margin-bottom: 5mm;">
+                        <div style="font-size: ${titleFont}; font-weight: bold; margin-bottom: 2mm;">EXPEDITEUR</div>
+                        <div style="font-size: ${titleFont}; font-weight: bold;">WILLIAM DADIE</div>
+                        <div style="font-size: ${fontSize};">22 ALLEE DES SYCOMORES</div>
+                        <div style="font-size: ${fontSize};">95870 BEZONS</div>
+                    </div>
+
+                    <!-- Référence principale -->
+                    <div style="flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; width: 100%;">
+                        <div style="font-size: ${refFont}; font-weight: 900; letter-spacing: 2px; word-break: break-all;">AB-169-D20</div>
+                        <div style="font-size: ${fontSize}; font-weight: bold; margin-top: 2mm; text-transform: uppercase;">CARTON LONG</div>
+                    </div>
+                </div>
+            </div>
+        `;
+    },
+
+    renderCompactModel(widthMm, heightMm, colors) {
+        const isA5 = widthMm === 210;
+        
+        return `
+            <div id="thermalLabel" style="width: ${widthMm}mm; height: ${heightMm}mm; background: white; color: ${colors.text}; font-family: 'Arial', sans-serif; box-sizing: border-box; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.1);">
+                <div style="height: 100%; display: flex; flex-direction: column; padding: 5mm;">
+                    
+                    <!-- En-tête simplifié -->
+                    <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid ${colors.border}; padding-bottom: 2mm; margin-bottom: 3mm;">
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <div style="background: black; padding: 2px 4px; border-radius: 4px; display: flex; align-items: center; justify-content: center;">
+                                <img src="../LOGOAMT.png" style="height: ${isA5 ? '6mm' : '4mm'}; object-fit: contain;" alt="Logo" />
+                            </div>
+                            <div style="font-size: ${isA5 ? '9pt' : '7pt'}; font-weight: bold;">AMT TRANSIT CI FRET<br><span style="font-weight: normal; font-size: ${isA5 ? '8pt' : '6pt'};">81 AV. ARISTIDE BRIAND - 0180893370</span></div>
+                        </div>
+                        <div style="font-size: ${isA5 ? '8pt' : '7pt'}; text-align: right;">
+                            ${new Date().toLocaleDateString()}<br>${new Date().toLocaleTimeString()}
+                        </div>
+                    </div>
+
+                    <!-- QR Code géant -->
+                    <div style="flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;">
+                        <div style="font-size: ${isA5 ? '12pt' : '10pt'}; font-weight: bold; margin-bottom: 3mm;">AB-169-D20_1_71</div>
+                        <div id="previewQRCode" style="width: ${isA5 ? '65mm' : '50mm'}; height: ${isA5 ? '65mm' : '50mm'};"></div>
+                        <div style="margin-top: 4mm; font-size: ${isA5 ? '16pt' : '14pt'}; font-weight: 900; text-align: center; word-break: break-all; width: 100%;">AB-169-D20</div>
+                        <div style="font-size: ${isA5 ? '10pt' : '8pt'}; font-weight: bold; margin-top: 1mm; text-transform: uppercase; color: #475569;">CARTON LONG</div>
+                    </div>
+
+                    <!-- Infos minimales -->
+                    <div style="display: flex; justify-content: space-between; border-top: 2px solid ${colors.border}; padding-top: 2mm; margin-top: 3mm; font-size: ${isA5 ? '9pt' : '7pt'};">
+                        <div><strong>Exp:</strong> WILLIAM DADIE</div>
+                        <div><strong>Dest:</strong> CEDRIC DADIE</div>
+                    </div>
+                </div>
+            </div>
+        `;
+    },
+
+    renderPremiumModel(widthMm, heightMm, colors) {
+        const isA5 = widthMm === 210;
+        
+        return `
+            <div id="thermalLabel" style="width: ${widthMm}mm; height: ${heightMm}mm; background: white; color: ${colors.text}; font-family: 'Arial', sans-serif; box-sizing: border-box; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.1);">
+                <div style="height: 100%; display: flex; flex-direction: column;">
+                    
+                    <!-- Bandeau supérieur -->
+                    <div style="background: ${colors.border}; color: white; padding: 3mm 4mm; display: flex; justify-content: center; align-items: center; gap: 10px;">
+                        <div style="background: black; padding: 2px 4px; border-radius: 6px; display: flex; align-items: center; justify-content: center;">
+                            <img src="../LOGOAMT.png" style="height: ${isA5 ? '8mm' : '6mm'}; object-fit: contain;" alt="Logo" />
+                        </div>
+                        <span style="font-size: ${isA5 ? '12pt' : '10pt'}; font-weight: bold; margin: 0;">AMT TRANSIT CI FRET INTERNATIONAL</span>
+                    </div>
+
+                    <div style="padding: 5mm; flex: 1; display: flex; flex-direction: column;">
+                        
+                        <!-- Coordonnées et date -->
+                        <div style="display: flex; justify-content: space-between; margin-bottom: 5mm;">
+                            <div>
+                                <div style="font-size: ${isA5 ? '9pt' : '8pt'};">81 AVENUE ARISTIDE BRIAND, 93240 STAINS</div>
+                                <div style="font-size: ${isA5 ? '9pt' : '8pt'};">TEL: 01 80 89 33 70</div>
+                            </div>
+                            <div style="text-align: right; font-size: ${isA5 ? '8pt' : '7pt'};">
+                                ${new Date().toLocaleDateString()} ${new Date().toLocaleTimeString()}
+                            </div>
+                        </div>
+
+                        <!-- QR Code et infos -->
+                        <div style="display: flex; gap: 5mm; flex: 1;">
+                            <div style="flex: 1; display: flex; flex-direction: column; justify-content: center;">
+                                <div style="margin-bottom: 3mm;">
+                                    <div style="font-size: ${isA5 ? '10pt' : '9pt'}; font-weight: bold; color: ${colors.accent};">📤 EXPÉDITEUR</div>
+                                    <div style="font-size: ${isA5 ? '12pt' : '10pt'}; font-weight: bold;">WILLIAM DADIE</div>
+                                    <div style="font-size: ${isA5 ? '9pt' : '8pt'};">22 ALLEE DES SYCOMORES, 95870 BEZONS</div>
                                 </div>
-                                <div style="display: flex; justify-content: space-between; margin-top: 15px;">
-                                    <div style="flex: 1;">
-                                        <div style="font-size: 10px; color: #64748b; font-weight: bold;">EXPÉDITEUR</div>
-                                        <div style="font-weight: bold; font-size: 14px; color: #0f172a;">Jean Dupont</div>
-                                    </div>
-                                    <div style="flex: 1; text-align: right;">
-                                        <div style="font-size: 10px; color: #64748b; font-weight: bold;">DESTINATAIRE</div>
-                                        <div style="font-weight: bold; font-size: 14px; color: #0f172a;">Marie Koné</div>
-                                        <div id="prevLabelPhone" style="font-size: 13px; color: #0f172a; font-weight: 600; margin-top: 2px;">01 23 45 67 89</div>
-                                    </div>
-                                </div>
-                                <div style="text-align: center; margin-top: auto; padding-top: 15px;">
-                                    <div style="height: 50px; background: repeating-linear-gradient(90deg, #0f172a, #0f172a 2px, transparent 2px, transparent 4px, #0f172a 4px, #0f172a 8px, transparent 8px, transparent 10px); width: 80%; margin: 0 auto; opacity: 0.8;"></div>
-                                    <div style="font-family: monospace; font-size: 16px; margin-top: 5px; font-weight: bold; letter-spacing: 1px; color: #0f172a;">KA-018-E10_1_71</div>
+                                <div>
+                                    <div style="font-size: ${isA5 ? '10pt' : '9pt'}; font-weight: bold; color: ${colors.accent};">📥 DESTINATAIRE</div>
+                                    <div style="font-size: ${isA5 ? '12pt' : '10pt'}; font-weight: bold;">CEDRIC DADIE</div>
+                                    <div style="font-size: ${isA5 ? '9pt' : '8pt'};">TEL: 07 67 00 75 28</div>
+                                    <div style="font-size: ${isA5 ? '9pt' : '8pt'};">COCODY ANGRÉ, ABIDJAN</div>
                                 </div>
                             </div>
-                            
+                            <div style="display: flex; flex-direction: column; align-items: center; justify-content: center;">
+                                <div id="previewQRCode" style="width: ${isA5 ? '50mm' : '40mm'}; height: ${isA5 ? '50mm' : '40mm'};"></div>
+                                <span style="font-size: ${isA5 ? '8pt' : '7pt'}; font-weight: bold; margin-top: 2mm;">AB-169-D20_1_71</span>
+                            </div>
+                        </div>
+
+                        <!-- Référence -->
+                        <div style="text-align: center; margin-top: 4mm; padding-top: 3mm; border-top: 2px solid ${colors.border}; width: 100%;">
+                            <div style="font-size: ${isA5 ? '24pt' : '16pt'}; font-weight: 900; letter-spacing: 1px; word-break: break-all;">AB-169-D20</div>
+                            <div style="font-size: ${isA5 ? '10pt' : '8pt'}; font-weight: bold; margin-top: 1.5mm; text-transform: uppercase; color: #475569;">CARTON LONG</div>
                         </div>
                     </div>
                 </div>
             </div>
         `;
-
-        document.getElementById('contentContainer').innerHTML = html;
-        this.loadData();
     },
 
-    async loadData() {
-        try {
-            const docSnap = await getDoc(this.docRef);
-            if (docSnap.exists()) {
-                this.config = { ...this.config, ...docSnap.data() };
-            }
-
-            document.getElementById('clPaperSize').value = this.config.paperSize || 'A6';
-            document.getElementById('clShowPhone').checked = this.config.showPhone !== false;
-            document.getElementById('clAutoPrint').checked = this.config.autoPrint !== false;
-            
-            this.updatePreview();
-        } catch (error) {
-            console.error("Erreur chargement config étiquette:", error);
-        }
+    saveConfig() {
+        const format = document.getElementById('labelFormat').value;
+        const model = document.getElementById('labelModel').value;
+        localStorage.setItem('amt_label_format', format);
+        localStorage.setItem('amt_label_model', model);
+        localStorage.setItem('amt_label_color', this.settings.colorScheme);
+        this.app.showToast(`Configuration ${format} - Modèle ${model} enregistrée !`, "success");
     },
 
-    updatePreview() {
-        const showPhone = document.getElementById('clShowPhone').checked;
-        document.getElementById('prevLabelPhone').style.display = showPhone ? 'block' : 'none';
-    },
-
-    async saveData() {
-        const btn = document.getElementById('saveLabelConfigBtn');
-        const originalHTML = btn.innerHTML;
-        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Enregistrement...';
-        btn.disabled = true;
-
-        try {
-            this.config.paperSize = document.getElementById('clPaperSize').value;
-            this.config.showPhone = document.getElementById('clShowPhone').checked;
-            this.config.autoPrint = document.getElementById('clAutoPrint').checked;
-            
-            await setDoc(this.docRef, this.config);
-            this.app.showToast("Paramètres d'étiquette enregistrés avec succès !", "success");
-        } catch (error) {
-            this.app.showToast("Erreur lors de la sauvegarde.", "error");
-        } finally {
-            btn.innerHTML = originalHTML;
-            btn.disabled = false;
+    printTest() {
+        const format = localStorage.getItem('amt_label_format') || 'A5';
+        const model = localStorage.getItem('amt_label_model') || 'classic';
+        const colorScheme = localStorage.getItem('amt_label_color') || 'default';
+        
+        const testData = {
+            ref: 'AB-169-D20',
+            expName: 'WILLIAM DADIE',
+            expAddress: '22 ALLEE DES SYCOMORES\n95870 BEZONS',
+            destName: 'CEDRIC DADIE',
+            destPhone: '07 67 00 75 28',
+            destAddress: 'COCODY ANGRÉ, ABIDJAN',
+            labels: [
+                { sousRef: 'AB-169-D20', desc: 'COLIS', index: 1, total: 1 }
+            ]
+        };
+        
+        if (this.app.printLabels) {
+            this.app.printLabels(testData);
+        } else {
+            this.app.showToast("Fonction d'impression non disponible", "error");
         }
     }
 };

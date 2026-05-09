@@ -120,7 +120,7 @@ export const FinanceCaisseView = {
             const color = op.type === 'Entrée' ? '#10b981' : '#ef4444';
             const sign = op.type === 'Entrée' ? '+' : '-';
             return `
-                <tr style="border-bottom: 1px solid #f1f5f9; transition: background 0.2s;" onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background='transparent'">
+                <tr>
                     <td data-label="Date" style="padding: 14px 12px;">${op.date ? new Date(op.date).toLocaleDateString('fr-FR') : '-'}</td>
                     <td data-label="Libellé" style="padding: 14px 12px; font-weight: 600; color: #0f172a;">${op.label}</td>
                     <td data-label="Type" style="padding: 14px 12px; text-align: center;"><span class="badge" style="background: ${op.type==='Entrée'?'#dcfce7':'#fee2e2'}; color: ${color};">${op.type}</span></td>
