@@ -1139,6 +1139,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     renderAllTables();
     populateDatalist(); 
     initBackToTopButton();
+    initMobileApp();
 });
 
 // --- MODE LIVREUR (SPA MOBILE) ---
@@ -1172,7 +1173,6 @@ function initMobileApp() {
     const mobTotalOut = document.getElementById('mob-totalOut');
     const mobTotalNet = document.getElementById('mob-totalNet');
     const mobValidateDayBtn = document.getElementById('mob-validateDayBtn');
-    const mobLogoutBtn = document.getElementById('mob-logoutBtn');
 
     let mobile_dailyTransactions = JSON.parse(localStorage.getItem('mobile_dailyTransactions')) || [];
     let mobile_dailyDepenses = JSON.parse(localStorage.getItem('mobile_dailyDepenses')) || [];
@@ -1615,31 +1615,6 @@ function initMobileApp() {
                 mobValidateDayBtn.disabled = false;
                 mobValidateDayBtn.textContent = "✅ Valider la journée";
             }
-        });
-    }
-
-    if (mobLogoutBtn) {
-        if (!document.getElementById('mob-profileBtn')) {
-            const profileBtn = document.createElement('button');
-            profileBtn.id = 'mob-profileBtn';
-            profileBtn.innerHTML = '👤 Profil';
-            profileBtn.style.cssText = "background-color: #3b82f6; color: white; border: none; padding: 12px 15px; border-radius: 8px; font-weight: bold; cursor: pointer; margin-right: 10px; flex: 1;";
-            
-            mobLogoutBtn.style.flex = "1";
-            mobLogoutBtn.parentNode.style.display = "flex";
-            
-            profileBtn.addEventListener('click', () => {
-                if(window.openAbidjanProfileModal) window.openAbidjanProfileModal();
-            });
-            mobLogoutBtn.parentNode.insertBefore(profileBtn, mobLogoutBtn);
-        }
-
-        mobLogoutBtn.addEventListener('click', async () => {
-            const { auth } = await import('./firebase-config.js');
-            const { signOut } = await import("https://www.gstatic.com/firebasejs/9.22.0/firebase-auth.js");
-            signOut(auth).then(() => {
-                window.location.href = 'login.html';
-            });
         });
     }
 

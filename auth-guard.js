@@ -41,6 +41,10 @@ window.openAbidjanProfileModal = async () => {
                     </div>
                     
                     <button id="abjSaveProfileBtn" style="width:100%; padding:14px; border-radius:8px; font-weight:bold; background:#3b82f6; color:white; border:none; cursor:pointer; font-size:14px; transition:0.2s;" onmouseover="this.style.background='#2563eb'" onmouseout="this.style.background='#3b82f6'" onclick="window.saveAbjProfile()"><i class="fas fa-save"></i> Enregistrer les modifications</button>
+                    
+                    <div style="margin-top: 15px; text-align: center;">
+                        <button onclick="window.appHandleLogout(); return false;" style="background:none; border:none; color:#ef4444; font-weight:bold; font-size:13px; cursor:pointer;"><i class="fas fa-sign-out-alt"></i> Déconnexion</button>
+                    </div>
                 </div>
             </div>
         `;
@@ -206,55 +210,60 @@ onAuthStateChanged(auth, async (user) => {
         sessionStorage.setItem('userName', userName || 'Utilisateur');
         sessionStorage.setItem('userAgency', userData.agency || 'abidjan');
 
-        // --- INJECTION DYNAMIQUE DU MENU PROFIL (POUR TOUTES LES PAGES ABIDJAN) ---
-        const header = document.querySelector('.app-header');
-        if (header) {
-            // 1. Supprimer l'ancien bouton déconnexion isolé s'il existe (pour le Tableau de bord, Historique, etc.)
+        // --- INJECTION DYNAMIQUE DU MENU PROFIL (POUR TOUTES LES PAGES ET MOBILES) ---
+        const headers = document.querySelectorAll('.app-header, .mob-header');
+        headers.forEach((header) => {
+            // 1. Nettoyage des anciens boutons
             const oldLogoutBtn = Array.from(header.children).find(el => el.id === 'logoutBtn' && el.tagName === 'BUTTON');
             if (oldLogoutBtn) oldLogoutBtn.remove();
+            const mobProfileBtn = header.querySelector('#mob-profileBtn');
+            if (mobProfileBtn) mobProfileBtn.remove();
 
             // 2. Injecter le nouveau bloc utilisateur s'il n'existe pas encore
             if (!header.querySelector('.user-info')) {
-            const avatarStyle = userData.photoURL 
-                ? `background-image: url('${userData.photoURL}'); background-size: cover; background-position: center; color: transparent;`
-                : '';
-            const avatarInner = userData.photoURL ? '' : '<i class="fas fa-user"></i>';
+                const avatarStyle = userData.photoURL 
+                    ? `background-image: url('${userData.photoURL}'); background-size: cover; background-position: center; color: transparent;`
+                    : '';
+                const avatarInner = userData.photoURL ? '' : '<i class="fas fa-user"></i>';
+                
+                // On masque le texte du nom sur la version mobile pour gagner de la place
+                const hideName = header.classList.contains('mob-header') ? 'display: none;' : '';
 
                 const userInfoHtml = `
                     <div class="user-info" style="position: absolute; right: 20px; display: flex; align-items: center; gap: 10px;">
-                        <span id="userName" style="font-weight: bold; font-size: 14px;">${userName || 'Utilisateur'}</span>
+                        <span class="user-name-display" style="font-weight: bold; font-size: 14px; ${hideName}">${userName || 'Utilisateur'}</span>
                         <div class="user-dropdown-container">
-                        <div class="user-avatar avatar" id="userAvatar" title="Menu Utilisateur" style="${avatarStyle}">
-                            ${avatarInner}
+                            <div class="user-avatar avatar" title="Menu Utilisateur" style="${avatarStyle}">
+                                ${avatarInner}
                             </div>
-                            <div class="user-dropdown-menu" id="userDropdownMenu">
-                            <a href="#" id="menuProfile" onclick="if(window.app && window.app.renderPage) { window.app.renderPage('settings-profile'); } else { if(window.openAbidjanProfileModal) window.openAbidjanProfileModal(); } const menu = document.getElementById('userDropdownMenu'); if(menu) menu.classList.remove('active'); return false;"><i class="fas fa-user-circle"></i> Profil</a>
-                                <a href="#" id="menuAgencySwitch" style="display: none;"><i class="fas fa-globe"></i> Vue Paris</a>
+                            <div class="user-dropdown-menu">
+                                <a href="#" onclick="if(window.app && window.app.renderPage) { window.app.renderPage('settings-profile'); } else { if(window.openAbidjanProfileModal) window.openAbidjanProfileModal(); } const menu = this.closest('.user-dropdown-menu'); if(menu) menu.classList.remove('active'); return false;"><i class="fas fa-user-circle"></i> Profil</a>
+                                <a href="#" class="menuAgencySwitch" style="display: none;"><i class="fas fa-globe"></i> Vue Paris</a>
                                 <hr style="margin: 5px 0; border: none; border-top: 1px solid #e2e8f0;">
-                                <a href="#" id="logoutBtn" class="logout-btn logout" onclick="window.appHandleLogout(); return false;"><i class="fas fa-sign-out-alt"></i> Déconnexion</a>
+                                <a href="#" class="logout-btn logout" onclick="window.appHandleLogout(); return false;"><i class="fas fa-sign-out-alt"></i> Déconnexion</a>
                             </div>
                         </div>
                     </div>
                 `;
                 header.insertAdjacentHTML('beforeend', userInfoHtml);
-            if (userData.photoURL) {
-                localStorage.setItem('userProfilePhoto', userData.photoURL);
-            }
+                if (userData.photoURL) {
+                    localStorage.setItem('userProfilePhoto', userData.photoURL);
+                }
             } else {
-                const userNameEl = document.getElementById('userName');
+                const userNameEl = header.querySelector('.user-name-display');
                 if (userNameEl) userNameEl.textContent = userName || 'Utilisateur';
-            
-            const userAvatarEl = document.getElementById('userAvatar');
-            if (userAvatarEl && userData.photoURL) {
-                userAvatarEl.style.backgroundImage = `url('${userData.photoURL}')`;
-                userAvatarEl.style.backgroundSize = 'cover';
-                userAvatarEl.style.backgroundPosition = 'center';
-                userAvatarEl.style.color = 'transparent';
-                userAvatarEl.innerHTML = '';
-                localStorage.setItem('userProfilePhoto', userData.photoURL);
+                
+                const userAvatarEl = header.querySelector('.user-avatar');
+                if (userAvatarEl && userData.photoURL) {
+                    userAvatarEl.style.backgroundImage = `url('${userData.photoURL}')`;
+                    userAvatarEl.style.backgroundSize = 'cover';
+                    userAvatarEl.style.backgroundPosition = 'center';
+                    userAvatarEl.style.color = 'transparent';
+                    userAvatarEl.innerHTML = '';
+                    localStorage.setItem('userProfilePhoto', userData.photoURL);
+                }
             }
-            }
-        }
+        });
 
         // Détermination de l'agence actuellement "Active"
         let currentActiveAgency = sessionStorage.getItem('currentActiveAgency');
@@ -285,19 +294,18 @@ onAuthStateChanged(auth, async (user) => {
         // --- INJECTION DU SÉLECTEUR D'AGENCE (Pour les comptes Globaux) ---
         if (userData.agency === 'all' || userRole === 'super_admin') {
 
-            // --- INJECTION DU SÉLECTEUR D'AGENCE (Menu Utilisateur Paris/Abidjan) ---
-            const menuAgencySwitch = document.getElementById('menuAgencySwitch');
-            if (menuAgencySwitch) {
+            // --- INJECTION DU SÉLECTEUR D'AGENCE MULTIPLE (Menu Utilisateur Paris/Abidjan) ---
+            document.querySelectorAll('.menuAgencySwitch, #menuAgencySwitch').forEach(menuAgencySwitch => {
                 menuAgencySwitch.style.display = 'block';
                 const isCurrentlyInParis = window.location.pathname.includes('/paris/');
                 menuAgencySwitch.innerHTML = isCurrentlyInParis ? '<i class="fas fa-globe"></i> Vue Abidjan' : '<i class="fas fa-globe"></i> Vue Paris';
-                menuAgencySwitch.addEventListener('click', (e) => {
+                menuAgencySwitch.onclick = (e) => {
                     e.preventDefault();
                     const targetAgency = isCurrentlyInParis ? 'abidjan' : 'paris';
                     sessionStorage.setItem('currentActiveAgency', targetAgency);
                     window.location.href = isCurrentlyInParis ? '../index.html' : 'paris/index.html';
-                });
-            }
+                };
+            });
         }
 
         // --- GESTION GLOBALE DU BADGE DE NOTIFICATION (Placé ici pour s'exécuter AVANT les return) ---
