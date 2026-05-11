@@ -2,6 +2,133 @@ import { auth, db } from './firebase-config.js';
 import { onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-auth.js";
 import { doc, getDoc, updateDoc, collection, query, where, orderBy, onSnapshot } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 
+// --- FONCTION GLOBALE PROFIL (ABIDJAN / MOBILE) ---
+window.openAbidjanProfileModal = async () => {
+    let modal = document.getElementById('abidjanProfileModal');
+    if (!modal) {
+        const userName = sessionStorage.getItem('userName') || 'Utilisateur';
+        const userRole = sessionStorage.getItem('userRole') || 'Non défini';
+        const userAgency = sessionStorage.getItem('userAgency') || 'abidjan';
+        
+        let agencyDisplay = userAgency === 'paris' ? '🇫🇷 Paris' : (userAgency === 'abidjan' ? '🇨🇮 Abidjan' : '🌍 Global');
+        const roleDisplay = userRole.replace(/_/g, ' ').toUpperCase();
+        const savedPhoto = localStorage.getItem('userProfilePhoto') || '';
+
+        const html = `
+            <div id="abidjanProfileModal" style="display:flex; position:fixed; z-index:99999; left:0; top:0; width:100%; height:100%; background:rgba(15,23,42,0.8); align-items:center; justify-content:center; backdrop-filter: blur(4px);">
+                <div style="background:white; border-radius:16px; width:90%; max-width:400px; padding:25px; box-shadow:0 25px 50px -12px rgba(0,0,0,0.25); position:relative;">
+                    <button onclick="document.getElementById('abidjanProfileModal').style.display='none'" style="position:absolute; right:15px; top:15px; background:none; border:none; font-size:24px; color:#64748b; cursor:pointer;">&times;</button>
+                    
+                    <h2 style="margin:0 0 20px 0; color:#0f172a; font-size:20px; text-align:center;">Mon Profil</h2>
+                    
+                    <div style="display:flex; flex-direction:column; align-items:center; margin-bottom:20px;">
+                        <div class="user-avatar avatar" id="abjProfileAvatar" style="width:100px; height:100px; border-radius:50%; font-size:40px; background-color:#eff6ff; color:#3b82f6; display:flex; align-items:center; justify-content:center; margin-bottom:15px; cursor:pointer; border:3px solid #e2e8f0; background-image:url('${savedPhoto}'); background-size:cover; background-position:center;" onclick="document.getElementById('abjProfilePhotoInput').click()">
+                            ${savedPhoto ? '' : '<i class="fas fa-user"></i>'}
+                        </div>
+                        <input type="file" id="abjProfilePhotoInput" accept="image/*" style="display:none;" onchange="window.handleAbjProfilePhoto(event)">
+                        <button style="background:white; border:1px solid #cbd5e1; color:#475569; font-weight:bold; font-size:12px; padding:6px 12px; border-radius:20px; cursor:pointer; transition:0.2s;" onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background='white'" onclick="document.getElementById('abjProfilePhotoInput').click()"><i class="fas fa-camera"></i> Changer la photo</button>
+                    </div>
+                    
+                    <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:12px; padding:15px; margin-bottom:20px;">
+                        <div style="margin-bottom:10px;"><label style="font-size:11px; color:#64748b; font-weight:bold; text-transform:uppercase;">Nom d'utilisateur</label><div style="font-weight:bold; color:#0f172a; font-size:15px;">${userName}</div></div>
+                        <div style="margin-bottom:10px;"><label style="font-size:11px; color:#64748b; font-weight:bold; text-transform:uppercase;">Rôle</label><div style="font-weight:bold; color:#3b82f6; font-size:14px;">${roleDisplay}</div></div>
+                        <div><label style="font-size:11px; color:#64748b; font-weight:bold; text-transform:uppercase;">Agence</label><div style="font-weight:bold; color:#0f172a; font-size:14px;">${agencyDisplay}</div></div>
+                    </div>
+                    
+                    <div style="margin-bottom:20px;">
+                        <label style="font-size:12px; font-weight:bold; color:#475569; display:block; margin-bottom:5px;">Nouveau mot de passe</label>
+                        <input type="password" id="abjProfileNewPwd" placeholder="••••••••" style="width:100%; padding:12px; border:1px solid #cbd5e1; border-radius:8px; box-sizing:border-box; outline:none; transition:0.2s;" onfocus="this.style.borderColor='#3b82f6'" onblur="this.style.borderColor='#cbd5e1'">
+                    </div>
+                    
+                    <button id="abjSaveProfileBtn" style="width:100%; padding:14px; border-radius:8px; font-weight:bold; background:#3b82f6; color:white; border:none; cursor:pointer; font-size:14px; transition:0.2s;" onmouseover="this.style.background='#2563eb'" onmouseout="this.style.background='#3b82f6'" onclick="window.saveAbjProfile()"><i class="fas fa-save"></i> Enregistrer les modifications</button>
+                </div>
+            </div>
+        `;
+        document.body.insertAdjacentHTML('beforeend', html);
+
+        window.tempAbjPhotoFile = null;
+        window.handleAbjProfilePhoto = (event) => {
+            const file = event.target.files[0];
+            if (file) {
+                window.tempAbjPhotoFile = file;
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    const avatar = document.getElementById('abjProfileAvatar');
+                    avatar.style.backgroundImage = `url('${e.target.result}')`;
+                    avatar.innerHTML = '';
+                    avatar.style.color = 'transparent';
+                };
+                reader.readAsDataURL(file);
+            }
+        };
+
+        window.saveAbjProfile = async () => {
+            const pwd = document.getElementById('abjProfileNewPwd').value;
+            const btn = document.getElementById('abjSaveProfileBtn');
+            btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Enregistrement...';
+            
+            try {
+                const { updateProfile, updatePassword } = await import('https://www.gstatic.com/firebasejs/9.22.0/firebase-auth.js');
+                const { getStorage, ref: storageRef, uploadBytes, getDownloadURL } = await import('https://www.gstatic.com/firebasejs/9.22.0/firebase-storage.js');
+                const { doc, updateDoc } = await import('https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js');
+                
+                const u = auth.currentUser;
+                if(!u) throw new Error("Utilisateur non connecté");
+
+                const updates = {};
+                
+                // Enregistrement Photo
+                if (window.tempAbjPhotoFile) {
+                    const storage = getStorage();
+                    const ext = window.tempAbjPhotoFile.name.split('.').pop();
+                    const sRef = storageRef(storage, `profile_photos/${u.uid}_${Date.now()}.${ext}`);
+                    await uploadBytes(sRef, window.tempAbjPhotoFile);
+                    const url = await getDownloadURL(sRef);
+                    await updateProfile(u, { photoURL: url });
+                    updates.photoURL = url;
+                    localStorage.setItem('userProfilePhoto', url);
+                    
+                    document.querySelectorAll('.user-avatar, .avatar, #abjProfileAvatar').forEach(el => {
+                        el.style.backgroundImage = `url('${url}')`;
+                        el.style.backgroundSize = 'cover';
+                        el.style.backgroundPosition = 'center';
+                        el.innerHTML = '';
+                        el.style.color = 'transparent';
+                    });
+                    window.tempAbjPhotoFile = null;
+                }
+                
+                // Enregistrement Mot de passe
+                if (pwd) {
+                    if (pwd.length < 6) throw new Error("Le mot de passe doit faire au moins 6 caractères.");
+                    await updatePassword(u, pwd);
+                    updates.password = pwd;
+                }
+                
+                if (Object.keys(updates).length > 0) {
+                    await updateDoc(doc(db, 'users', u.uid), updates);
+                }
+                
+                if (window.AppModal) await window.AppModal.success("Profil mis à jour avec succès !");
+                else alert("Profil mis à jour avec succès !");
+                
+                document.getElementById('abjProfileNewPwd').value = '';
+                document.getElementById('abidjanProfileModal').style.display = 'none';
+                
+            } catch (e) {
+                console.error(e);
+                let msg = e.message;
+                if(e.code === 'auth/requires-recent-login') msg = "Veuillez vous déconnecter et vous reconnecter pour modifier votre mot de passe.";
+                if (window.AppModal) window.AppModal.error(msg);
+                else alert("Erreur : " + msg);
+            } finally {
+                btn.disabled = false; btn.innerHTML = '<i class="fas fa-save"></i> Enregistrer les modifications';
+            }
+        };
+    }
+    document.getElementById('abidjanProfileModal').style.display = 'flex';
+};
+
 // --- FONCTION GLOBALE DE DÉCONNEXION ---
 window.appHandleLogout = async () => {
     const confirmLogout = window.AppModal ? 
@@ -101,7 +228,7 @@ onAuthStateChanged(auth, async (user) => {
                             ${avatarInner}
                             </div>
                             <div class="user-dropdown-menu" id="userDropdownMenu">
-                            <a href="#" id="menuProfile" onclick="if(window.app && window.app.renderPage) { window.app.renderPage('settings-profile'); } else { alert('Le module Profil sera bientôt adapté pour Abidjan.'); } document.getElementById('userDropdownMenu').classList.remove('active'); return false;"><i class="fas fa-user-circle"></i> Profil</a>
+                            <a href="#" id="menuProfile" onclick="if(window.app && window.app.renderPage) { window.app.renderPage('settings-profile'); } else { if(window.openAbidjanProfileModal) window.openAbidjanProfileModal(); } const menu = document.getElementById('userDropdownMenu'); if(menu) menu.classList.remove('active'); return false;"><i class="fas fa-user-circle"></i> Profil</a>
                                 <a href="#" id="menuAgencySwitch" style="display: none;"><i class="fas fa-globe"></i> Vue Paris</a>
                                 <hr style="margin: 5px 0; border: none; border-top: 1px solid #e2e8f0;">
                                 <a href="#" id="logoutBtn" class="logout-btn logout" onclick="window.appHandleLogout(); return false;"><i class="fas fa-sign-out-alt"></i> Déconnexion</a>
