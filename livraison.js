@@ -2062,7 +2062,7 @@ function renderTable() {
             computedFee = _calc1.fee;
 
             if (computedFee > 0) {
-                const formattedFee = new Intl.NumberFormat('fr-CI', { style: 'currency', currency: 'XOF' }).format(computedFee);
+                const formattedFee = new Intl.NumberFormat('fr-CI', { style: 'currency', currency: 'XOF' }).format(computedFee).replace(/[\u202F\u00A0]/g, ' ').replace(/\s*\/\s*/g, ' ');
                 const qte = d.quantiteRestante !== undefined ? parseInt(d.quantiteRestante) : (parseInt(d.quantite) || 1);
                 const badgeColor = computedFee > (10000 * qte) ? '#dc2626' : '#f97316';
                 const borderColor = computedFee > (10000 * qte) ? '#dc2626' : '#f97316';
@@ -2450,6 +2450,7 @@ async function printDeliverySlip(id) {
         if (invConfigSnap.exists()) {
             invoiceConfig = invConfigSnap.data();
             if (invoiceConfig.companyName) companyName = invoiceConfig.companyName;
+            if (invoiceConfig.logoUrl) logoBase64 = invoiceConfig.logoUrl;
         }
     } catch(e) {}
 
@@ -2460,30 +2461,35 @@ async function printDeliverySlip(id) {
     // --- En-tête Graphique ---
     doc.setFillColor(30, 41, 59);
     doc.rect(0, 0, pageWidth, 35, 'F');
-    doc.setFillColor(16, 185, 129); // Accent Vert (pour la livraison)
+    
+    let accentColor = invoiceConfig?.primaryColor ? JSON.parse(invoiceConfig.primaryColor) : [16, 185, 129];
+    doc.setFillColor(...accentColor);
     doc.rect(0, 35, pageWidth, 2, 'F');
 
+    let textX = 15;
     let textY = 22;
     if (logoBase64) {
         try {
             const props = doc.getImageProperties(logoBase64);
             const ratio = props.width / props.height;
-            let imgH = 14;
+            let imgH = 16;
             let imgW = imgH * ratio;
             if (imgW > 40) { imgW = 40; imgH = imgW / ratio; }
-            doc.addImage(logoBase64, 'PNG', 15, 5, imgW, imgH);
-            textY = 5 + imgH + 6;
+            doc.addImage(logoBase64, 'PNG', 15, 10, imgW, imgH);
+            textX = 15 + imgH + 5;
+             textY = 22;
         } catch(e) {}
     } else {
         try {
             const logoElement = document.querySelector('.app-logo');
             if (logoElement && logoElement.complete && logoElement.naturalWidth > 0) {
                 const ratio = logoElement.naturalWidth / logoElement.naturalHeight;
-                let imgH = 14;
+                let imgH = 16;
                 let imgW = imgH * ratio;
                 if (imgW > 40) { imgW = 40; imgH = imgW / ratio; }
                 doc.addImage(logoElement, 'PNG', 15, 5, imgW, imgH);
-                textY = 5 + imgH + 6;
+                textX = 15 + imgH + 5;
+                textY = 22
             }
         } catch(e) {}
     }
@@ -2491,12 +2497,7 @@ async function printDeliverySlip(id) {
     doc.setTextColor(255, 255, 255);
     doc.setFont("helvetica", "bold");
     doc.setFontSize(18);
-    if (logoBase64 || document.querySelector('.app-logo')) {
-        doc.text(companyName, 15, textY);
-    } else {
-        doc.setFontSize(20);
-        doc.text(companyName, 15, 22);
-    }
+    doc.text(companyName, textX, textY);
     
     doc.text("BON DE LIVRAISON", pageWidth - 15, 22, { align: 'right' });
     
@@ -2528,21 +2529,26 @@ async function printDeliverySlip(id) {
     const addrStr = doc.splitTextToSize(`${d.lieuLivraison || d.commune || transData?.adresseDestinataire || ''}`, 70);
     doc.text(addrStr, 120, 73);
 
-    const tableColumn = ["Description / Nature du Colis", "Qté", "P.U", "Total"];
+    const tableColumn = ["Description / Nature du Colis", "Qté", "Statut", "Observations"];
     const tableRows = [];
+    
+    let statusTxt = 'À LIVRER';
+    if (d.status === 'LIVRE') statusTxt = 'LIVRÉ';
+    else if (d.status === 'PARTIEL' || d.status === 'LIVRAISON_PARTIELLE') statusTxt = 'PARTIEL';
+
     if (transData && transData.items && Array.isArray(transData.items)) {
         transData.items.forEach(item => {
             tableRows.push([
                 item.desc,
                 item.qty.toString(),
-                new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(item.pu || 0),
-                new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(item.total || 0)
+                statusTxt,
+                d.info || '-'
             ]);
         });
     } else {
         const descSource = d.description || transData?.description || 'Colis divers';
         const qtySource = d.quantite || transData?.quantite || 1;
-        tableRows.push([descSource, qtySource.toString(), "-", "-"]);
+        tableRows.push([descSource, qtySource.toString(), statusTxt, d.info || '-']);
     }
 
     doc.autoTable({
@@ -2550,69 +2556,14 @@ async function printDeliverySlip(id) {
         head: [tableColumn],
         body: tableRows,
         theme: 'grid',
-        headStyles: { fillColor: [16, 185, 129] },
-        columnStyles: { 1: { halign: 'center' }, 2: { halign: 'right' }, 3: { halign: 'right' } }
+        headStyles: { fillColor: accentColor },
+        columnStyles: { 1: { halign: 'center' }, 2: { halign: 'center' } }
     });
 
-    // --- Montant à encaisser ---
-    let reste = 0;
-    let magasinageFee = 0;
-    
-    if (transData) {
-        let prixFret = transData.prix || 0;
-        let paye = (transData.montantAbidjan || 0) + (transData.montantParis || 0);
-        let reduction = 0;
-        if (transData.adjustmentType === 'reduction' && transData.adjustmentVal > 0) {
-            reduction = transData.adjustmentVal;
-        } else if (transData.adjustmentType === 'augmentation' && transData.adjustmentVal > 0) {
-            magasinageFee = transData.adjustmentVal;
-        }
-        
-        if (magasinageFee === 0 && !transData.storageFeeWaived && d.dateAjout && d.status !== 'LIVRE' && d.status !== 'ABANDONNE') {
-            magasinageFee = calculateMagasinageFee(d.dateAjout, d, transData).fee;
-        }
-        const totalAPayer = prixFret - reduction + magasinageFee;
-        reste = totalAPayer - paye;
-        if (reste < 0) reste = 0;
-    } else {
-        reste = parseFloat(String(d.montant || '0').replace(/[^\d]/g, '')) || 0;
-        if (d.dateAjout && d.status !== 'LIVRE' && d.status !== 'ABANDONNE') {
-            magasinageFee = calculateMagasinageFee(d.dateAjout, d, null).fee;
-            reste += magasinageFee;
-        }
-    }
-
-    const formatMontant = (num) => new Intl.NumberFormat('fr-CI', { style: 'currency', currency: 'XOF' }).format(num).replace(/[\u202F\u00A0]/g, ' ');
     const finalY = doc.lastAutoTable.finalY + 15;
     
-    if (reste > 0) {
-        doc.setFillColor(254, 242, 242);
-        doc.setDrawColor(220, 38, 38);
-        doc.setLineWidth(0.5);
-        doc.rect(95, finalY, 100, 14, 'FD');
-        
-        doc.setFont("helvetica", "bold");
-        doc.setFontSize(10);
-        doc.setTextColor(220, 38, 38);
-        doc.text("À REMETTRE AU LIVREUR :", 100, finalY + 9);
-        
-        doc.setFontSize(14);
-        doc.text(`${formatMontant(reste)}`, 190, finalY + 9.5, { align: 'right' });
-    } else {
-        doc.setFillColor(240, 253, 244);
-        doc.setDrawColor(22, 163, 74);
-        doc.setLineWidth(0.5);
-        doc.rect(95, finalY, 100, 14, 'FD');
-        
-        doc.setFont("helvetica", "bold");
-        doc.setFontSize(12);
-        doc.setTextColor(22, 163, 74);
-        doc.text("COLIS SOLDÉ (Rien à payer)", 145, finalY + 9, { align: 'center' });
-    }
-    doc.setTextColor(0, 0, 0);
-
     // --- Zone de Signatures ---
-    let sigY = finalY + 35;
+    let sigY = finalY + 10;
     doc.setFontSize(10);
     doc.setFont("helvetica", "bold");
     doc.text("Livreur / Agent AMT :", 25, sigY);
@@ -2667,6 +2618,7 @@ window.printInvoice = async function(id) {
         if (invConfigSnap.exists()) {
             invoiceConfig = invConfigSnap.data();
             if (invoiceConfig.companyName) companyName = invoiceConfig.companyName;
+            if (invoiceConfig.logoUrl) logoBase64 = invoiceConfig.logoUrl;
         }
     } catch(e) {}
 
@@ -2675,33 +2627,64 @@ window.printInvoice = async function(id) {
     const doc = new jsPDF('p', 'mm', 'a4');
     const pageWidth = doc.internal.pageSize.getWidth();
 
+    if (logoBase64 && (typeof logoBase64 === 'string' && logoBase64.startsWith('http'))) {
+        try {
+            const response = await fetch(logoBase64);
+            const blob = await response.blob();
+            logoBase64 = await new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onloadend = () => resolve(reader.result);
+                reader.onerror = reject;
+                reader.readAsDataURL(blob);
+            });
+        } catch(e) { logoBase64 = null; }
+    }
+
     // --- En-tête Graphique ---
     doc.setFillColor(30, 41, 59);
     doc.rect(0, 0, pageWidth, 35, 'F');
-    doc.setFillColor(59, 130, 246);
+    
+    let accentColor = invoiceConfig?.primaryColor ? JSON.parse(invoiceConfig.primaryColor) : [59, 130, 246];
+    doc.setFillColor(...accentColor);
     doc.rect(0, 35, pageWidth, 2, 'F');
 
+    if (logoBase64 && (typeof logoBase64 === 'string' && logoBase64.startsWith('http'))) {
+        try {
+            const response = await fetch(logoBase64);
+            const blob = await response.blob();
+            logoBase64 = await new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onloadend = () => resolve(reader.result);
+                reader.onerror = reject;
+                reader.readAsDataURL(blob);
+            });
+        } catch(e) { logoBase64 = null; }
+    }
+
+    let textX = 15;
     let textY = 22;
     if (logoBase64) {
         try {
             const props = doc.getImageProperties(logoBase64);
             const ratio = props.width / props.height;
-            let imgH = 14;
+            let imgH = 16;
             let imgW = imgH * ratio;
             if (imgW > 40) { imgW = 40; imgH = imgW / ratio; }
-            doc.addImage(logoBase64, 'PNG', 15, 5, imgW, imgH);
-            textY = 5 + imgH + 6;
+            doc.addImage(logoBase64, 'PNG', 15, 10, imgW, imgH);
+            textX = 15 + imgW + 5;
+            textY = 22;
         } catch(e) {}
     } else {
         try {
             const logoElement = document.querySelector('.app-logo');
             if (logoElement && logoElement.complete && logoElement.naturalWidth > 0) {
                 const ratio = logoElement.naturalWidth / logoElement.naturalHeight;
-                let imgH = 14;
+                let imgH = 16;
                 let imgW = imgH * ratio;
                 if (imgW > 40) { imgW = 40; imgH = imgW / ratio; }
-                doc.addImage(logoElement, 'PNG', 15, 5, imgW, imgH);
-                textY = 5 + imgH + 6;
+                doc.addImage(logoElement, 'PNG', 15, 10, imgW, imgH);
+                textX = 15 + imgW + 5;
+                textY = 22;
             }
         } catch(e) {}
     }
@@ -2709,12 +2692,7 @@ window.printInvoice = async function(id) {
     doc.setTextColor(255, 255, 255);
     doc.setFont("helvetica", "bold");
     doc.setFontSize(18);
-    if (logoBase64 || document.querySelector('.app-logo')) {
-        doc.text(companyName, 15, textY);
-    } else {
-        doc.setFontSize(20);
-        doc.text(companyName, 15, 22);
-    }
+    doc.text(companyName, textX, textY);
     
     doc.text("FACTURE", pageWidth - 15, 22, { align: 'right' });
 
@@ -2753,8 +2731,8 @@ window.printInvoice = async function(id) {
             tableRows.push([
                 item.desc,
                 item.qty.toString(),
-                new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(item.pu || 0),
-                new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(item.total || 0)
+                new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(item.pu || 0).replace(/[\u202F\u00A0]/g, ' ').replace(/\s*\/\s*/g, ' '),
+                new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(item.total || 0).replace(/[\u202F\u00A0]/g, ' ').replace(/\s*\/\s*/g, ' ')
             ]);
         });
     } else {
@@ -2768,7 +2746,7 @@ window.printInvoice = async function(id) {
         head: [tableColumn],
         body: tableRows,
         theme: 'grid',
-        headStyles: { fillColor: [59, 130, 246] },
+        headStyles: { fillColor: accentColor },
         columnStyles: { 1: { halign: 'center' }, 2: { halign: 'right' }, 3: { halign: 'right' } }
     });
 
@@ -2804,7 +2782,7 @@ window.printInvoice = async function(id) {
         }
     }
 
-    const formatMontant = (num) => new Intl.NumberFormat('fr-CI', { style: 'currency', currency: 'XOF' }).format(num).replace(/[\u202F\u00A0]/g, ' ');
+    const formatMontant = (num) => new Intl.NumberFormat('fr-CI', { style: 'currency', currency: 'XOF' }).format(num).replace(/[\u202F\u00A0]/g, ' ').replace(/\s*\/\s*/g, ' ');
     const finalY = doc.lastAutoTable.finalY + 15;
     
     doc.setFont("helvetica", "bold");
@@ -2866,7 +2844,7 @@ window.printInvoice = async function(id) {
     doc.setFontSize(7);
     const defaultCgv = "1- Les temps et les délais de transports sont donnés à titre indicatifs par AMT TRANS'IT.\\n2- Les enlèvements à domicile sont gratuits dans la limite géographique.\\n3- Tous les colis et marchandises devront être intégralement payés avant la remise au destinataire.\\n4- En cas de litige, une solution amiable est privilégiée.";
     const cgvText = invoiceConfig?.cgv || defaultCgv;
-    const cgvLines = cgvText.split('\\n');
+    const cgvLines = cgvText.replace(/\\n/g, '\n').split('\n');
     
     cgvLines.forEach(line => {
         const splitLine = doc.splitTextToSize(line, pageWidth - 30);

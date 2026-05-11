@@ -492,9 +492,7 @@ export const ConfectionConteneursView = {
             return;
         }
 
-        if (window.AppModal) {
-            if (!await window.AppModal.confirm(`Verrouiller et enregistrer le conteneur ${ctnName} avec ses ${items.length} dossiers ?\n\nIl passera en attente de départ (bateau) et un NOUVEAU conteneur sera automatiquement activé pour les prochaines factures.`, "Enregistrer le conteneur")) return;
-        } else if (!confirm(`Enregistrer le conteneur ${ctnName} et passer au suivant ?`)) return;
+        if (!await window.AppModal.confirm(`Verrouiller et enregistrer le conteneur ${ctnName} avec ses ${items.length} dossiers ?\n\nIl passera en attente de départ (bateau) et un NOUVEAU conteneur sera automatiquement activé pour les prochaines factures.`, "Enregistrer le conteneur")) return;
 
         try {
             // 1. Verrouiller le conteneur actuel

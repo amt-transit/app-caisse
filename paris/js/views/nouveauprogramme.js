@@ -166,8 +166,8 @@ export const NouveauProgrammeView = {
                         </div>
                     </div>
                     <div class="prog-header__actions">
-                        <button class="btn-add-chauffeur" onclick="window.app.renderPage('settings-agents')">
-                            ➕ Gérer les chauffeurs
+                        <button class="btn-add-chauffeur" onclick="window.app.views.nouveauProgramme.openAddDriverModal()">
+                            ➕ Ajouter un chauffeur
                         </button>
                     </div>
                 </div>
@@ -313,6 +313,32 @@ export const NouveauProgrammeView = {
                 </div>
                 <div class="opti-footer" id="optiFooterContent"></div>
             </div>
+
+            <!-- Modal Ajouter Chauffeur -->
+            <div id="addDriverModal" class="modal" style="display:none; position:fixed; z-index:9999; left:0; top:0; width:100%; height:100%; background:rgba(15, 23, 42, 0.6); backdrop-filter: blur(4px); align-items:center; justify-content:center;">
+                <div class="modal-box" style="max-width: 450px;">
+                    <div class="modal-header">
+                        <h2 style="margin:0; font-size:18px; color:#0f172a;">➕ Ajouter un chauffeur</h2>
+                        <button class="icon-btn" onclick="window.app.views.nouveauProgramme.closeAddDriverModal()" style="background:none; border:none; font-size:24px; cursor:pointer; color:#64748b;">&times;</button>
+                    </div>
+                    <div class="modal-body" style="padding: 20px;">
+                        <div class="form-group" style="margin-bottom: 15px;">
+                            <label style="font-size: 12px; font-weight: 600; color: #475569; display: block; margin-bottom: 6px;">Sélectionner un chauffeur *</label>
+                            <select id="addDriverSelect" class="filter-select" onchange="window.app.views.nouveauProgramme.onDriverSelectChange()" style="width: 100%; padding: 10px; border-radius: 8px; border: 1px solid #cbd5e1;">
+                                <option value="">-- Choisir --</option>
+                            </select>
+                        </div>
+                        <div class="form-group" style="margin-bottom: 15px;">
+                            <label style="font-size: 12px; font-weight: 600; color: #475569; display: block; margin-bottom: 6px;">Numéro de téléphone</label>
+                            <input type="text" id="addDriverPhone" class="filter-input" placeholder="Ex: 0123456789" style="width: 100%; padding: 10px; border-radius: 8px; border: 1px solid #cbd5e1;">
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button class="btn btn--ghost" onclick="window.app.views.nouveauProgramme.closeAddDriverModal()" style="padding: 10px 15px; border-radius: 8px; background: white; border: 1px solid #cbd5e1; font-weight: 600; cursor: pointer;">Annuler</button>
+                        <button class="btn btn--primary" id="saveDriverPhoneBtn" onclick="window.app.views.nouveauProgramme.saveDriverPhone()" style="padding: 10px 20px; border-radius: 8px; background: #3b82f6; border: none; color: white; font-weight: 600; cursor: pointer;">Enregistrer</button>
+                    </div>
+                </div>
+            </div>
         `;
 
         document.getElementById('contentContainer').innerHTML = html;
@@ -328,6 +354,7 @@ export const NouveauProgrammeView = {
 
     async loadDrivers() {
         try {
+            const activeAgency = sessionStorage.getItem('currentActiveAgency') || 'paris';
             // On récupère les utilisateurs avec le rôle 'chauf' et on fusionne avec la collection 'agents' au cas où
             const usersSnap = await getDocs(collection(db, "users"));
             const agentsSnap = await getDocs(collection(db, "agents"));
@@ -336,20 +363,21 @@ export const NouveauProgrammeView = {
             
             usersSnap.forEach(doc => {
                 const data = doc.data();
-                if (data.role === 'chauf') {
+                if ((data.role === 'chauf' || data.isChauffeur) && (data.agency === activeAgency || data.agency === 'all')) {
                     const name = data.displayName || data.email || 'Inconnu';
-                    driverMap.set(name.toLowerCase().trim(), name);
+                    driverMap.set(name.toLowerCase().trim(), { name, photoURL: data.photoURL, id: doc.id, col: 'users', phone: data.phone || data.tel || '' });
                 }
             });
             
             agentsSnap.forEach(doc => {
-                const name = doc.data().name;
-                if (name && !driverMap.has(name.toLowerCase().trim())) {
-                    driverMap.set(name.toLowerCase().trim(), name);
+                const data = doc.data();
+                const name = data.name;
+                if (name && (data.agency === activeAgency || data.agency === 'all') && !driverMap.has(name.toLowerCase().trim())) {
+                    driverMap.set(name.toLowerCase().trim(), { name, photoURL: data.photoURL, id: doc.id, col: 'agents', phone: data.phone || data.tel || '' });
                 }
             });
 
-            this.drivers = Array.from(driverMap.values()).sort();
+            this.drivers = Array.from(driverMap.values()).sort((a,b) => a.name.localeCompare(b.name));
         } catch (e) {
             console.error("Erreur chargement chauffeurs:", e);
         }
@@ -407,19 +435,24 @@ export const NouveauProgrammeView = {
         let selectHtml = `<option value="">Tous les chauffeurs</option>`;
         let listHtml = '';
 
-        this.drivers.forEach(driver => {
+        this.drivers.forEach(driverObj => {
+            const driver = driverObj.name;
             const driverRdvs = this.rdvs.filter(r => r.livreur === driver);
             const isActive = this.selectedDriver === driver;
             
             selectHtml += `<option value="${driver}" ${isActive ? 'selected' : ''}>${driver}</option>`;
             
+            const avatarHtml = driverObj.photoURL 
+                ? `<div class="chauffeur-avatar" style="background-image: url('${driverObj.photoURL}'); background-size: cover; background-position: center; color: transparent;"></div>`
+                : `<div class="chauffeur-avatar">${driver.substring(0, 2).toUpperCase()}</div>`;
+            
             listHtml += `
                 <div class="chauffeur-card ${isActive ? 'active' : ''}" onclick="window.app.views.nouveauProgramme.selectDriver('${driver}')">
                     <div class="chauffeur-card__header">
-                        <div class="chauffeur-avatar">${driver.substring(0, 2).toUpperCase()}</div>
+                        ${avatarHtml}
                         <div class="chauffeur-info">
                             <div class="chauffeur-name">${driver}</div>
-                            <div class="chauffeur-meta">📞 Profil assigné</div>
+                            <div class="chauffeur-meta">📞 ${driverObj.phone || 'Non renseigné'}</div>
                         </div>
                     </div>
                     <div class="chauffeur-stats">
@@ -751,5 +784,107 @@ export const NouveauProgrammeView = {
     printRoadmap(driver) {
         this.app.showToast("L'impression de la feuille de route sera bientôt disponible.", "info");
         // TODO: Implement PDF Export for the driver's roadmap
+    },
+
+    async openAddDriverModal() {
+        const select = document.getElementById('addDriverSelect');
+        const phoneInput = document.getElementById('addDriverPhone');
+        if (select) {
+            select.innerHTML = '<option value="">-- Chargement... --</option>';
+            document.getElementById('addDriverModal').style.display = 'flex';
+            
+            try {
+                const activeAgency = sessionStorage.getItem('currentActiveAgency') || 'paris';
+                const usersSnap = await getDocs(collection(db, "users"));
+                const agentsSnap = await getDocs(collection(db, "agents"));
+                
+                this.availableAgentsForDropdown = [];
+                
+                usersSnap.forEach(doc => {
+                    const data = doc.data();
+                    if (data.agency === activeAgency || data.agency === 'all') {
+                        const name = data.displayName || data.email || 'Inconnu';
+                        this.availableAgentsForDropdown.push({ id: doc.id, name, phone: data.phone || data.tel || '', col: 'users' });
+                    }
+                });
+                
+                agentsSnap.forEach(doc => {
+                    const data = doc.data();
+                    const name = data.name;
+                    if (name && (data.agency === activeAgency || data.agency === 'all')) {
+                        if (!this.availableAgentsForDropdown.find(a => a.name.toLowerCase() === name.toLowerCase())) {
+                            this.availableAgentsForDropdown.push({ id: doc.id, name, phone: data.phone || data.tel || '', col: 'agents' });
+                        }
+                    }
+                });
+
+                this.availableAgentsForDropdown.sort((a,b) => a.name.localeCompare(b.name));
+                
+                select.innerHTML = '<option value="">-- Choisir un utilisateur --</option>' + this.availableAgentsForDropdown.map(d => `<option value="${d.id}">${d.name}</option>`).join('');
+                
+            } catch (error) {
+                console.error("Erreur chargement agents:", error);
+                select.innerHTML = '<option value="">-- Erreur --</option>';
+            }
+        }
+        
+        if (phoneInput) phoneInput.value = '';
+    },
+
+    closeAddDriverModal() {
+        document.getElementById('addDriverModal').style.display = 'none';
+    },
+
+    onDriverSelectChange() {
+        const select = document.getElementById('addDriverSelect');
+        const phoneInput = document.getElementById('addDriverPhone');
+        if (!select || !phoneInput) return;
+        
+        const selectedId = select.value;
+        const driver = (this.availableAgentsForDropdown || this.drivers).find(d => d.id === selectedId);
+        if (driver) {
+            phoneInput.value = driver.phone || '';
+        } else {
+            phoneInput.value = '';
+        }
+    },
+
+    async saveDriverPhone() {
+        const select = document.getElementById('addDriverSelect');
+        const phoneInput = document.getElementById('addDriverPhone');
+        
+        const selectedId = select?.value;
+        const newPhone = phoneInput?.value.trim();
+        
+        if (!selectedId) {
+            this.app.showToast("Veuillez sélectionner un utilisateur.", "error");
+            return;
+        }
+
+        const driver = (this.availableAgentsForDropdown || this.drivers).find(d => d.id === selectedId);
+        if (!driver) return;
+
+        const btn = document.getElementById('saveDriverPhoneBtn');
+        const originalText = btn.textContent;
+        btn.textContent = "Enregistrement...";
+        btn.disabled = true;
+
+        try {
+            await updateDoc(doc(db, driver.col, driver.id), {
+                phone: newPhone,
+                isChauffeur: true
+            });
+            
+            this.app.showToast("Utilisateur ajouté comme chauffeur avec succès.", "success");
+            this.closeAddDriverModal();
+            await this.loadDrivers();
+            this.renderDriversSidebar();
+        } catch (error) {
+            console.error("Erreur enregistrement téléphone:", error);
+            this.app.showToast("Erreur lors de l'enregistrement.", "error");
+        } finally {
+            btn.textContent = originalText;
+            btn.disabled = false;
+        }
     }
 };

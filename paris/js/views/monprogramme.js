@@ -179,20 +179,22 @@ export const MonProgrammeView = {
 
     async loadDrivers() {
         try {
+            const activeAgency = sessionStorage.getItem('currentActiveAgency') || 'paris';
             const usersSnap = await getDocs(collection(db, "users"));
             const agentsSnap = await getDocs(collection(db, "agents"));
             
             const driverMap = new Map();
             usersSnap.forEach(doc => {
                 const data = doc.data();
-                if (data.role === 'chauf') {
+                if ((data.role === 'chauf' || data.isChauffeur) && (data.agency === activeAgency || data.agency === 'all')) {
                     const name = data.displayName || data.email || 'Inconnu';
                     driverMap.set(name.toLowerCase().trim(), name);
                 }
             });
             agentsSnap.forEach(doc => {
-                const name = doc.data().name;
-                if (name && !driverMap.has(name.toLowerCase().trim())) {
+                const data = doc.data();
+                const name = data.name;
+                if (name && (data.agency === activeAgency || data.agency === 'all') && !driverMap.has(name.toLowerCase().trim())) {
                     driverMap.set(name.toLowerCase().trim(), name);
                 }
             });
@@ -227,6 +229,9 @@ export const MonProgrammeView = {
     },
 
     renderTable() {
+        const tbody = document.getElementById('progMyTableBody');
+        if (!tbody) return; // Sécurité : arrête la fonction si on a quitté la page
+
         const currentUser = sessionStorage.getItem('userName') || '';
         
         // Remplissage du select Chauffeurs
@@ -257,13 +262,12 @@ export const MonProgrammeView = {
         const depotsCount = filtered.filter(r => r.rdvType === 'DEPOT').length;
         const recupsCount = filtered.filter(r => r.rdvType === 'RECUPERATION').length;
 
-        document.getElementById('kpiTotal').textContent = filtered.length;
-        document.getElementById('kpiDepots').textContent = depotsCount;
-        document.getElementById('kpiRecups').textContent = recupsCount;
-        document.getElementById('kpiValides').textContent = validesCount;
-        document.getElementById('progMyCount').textContent = filtered.length;
+        if (document.getElementById('kpiTotal')) document.getElementById('kpiTotal').textContent = filtered.length;
+        if (document.getElementById('kpiDepots')) document.getElementById('kpiDepots').textContent = depotsCount;
+        if (document.getElementById('kpiRecups')) document.getElementById('kpiRecups').textContent = recupsCount;
+        if (document.getElementById('kpiValides')) document.getElementById('kpiValides').textContent = validesCount;
+        if (document.getElementById('progMyCount')) document.getElementById('progMyCount').textContent = filtered.length;
 
-        const tbody = document.getElementById('progMyTableBody');
         if (filtered.length === 0) {
             tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; padding: 40px; color: #64748b;">Aucun rendez-vous trouvé pour ce programme.</td></tr>`;
             return;

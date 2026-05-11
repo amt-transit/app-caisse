@@ -44,7 +44,7 @@ setTimeout(removeLoader, 3000);
 
 // --- FORMATAGE MONÉTAIRE (CFA) ---
 function formatCFA(n) {
-    return new Intl.NumberFormat('fr-CI', { style: 'currency', currency: 'XOF' }).format(n || 0);
+    return new Intl.NumberFormat('fr-CI', { style: 'currency', currency: 'XOF' }).format(n || 0).replace(/[\u202F\u00A0]/g, ' ').replace(/\s*\/\s*/g, ' ');
 }
 
 // --- TEXTE VERS CLASSNAME (CSS) ---

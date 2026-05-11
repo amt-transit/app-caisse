@@ -21,6 +21,31 @@ export const NouvelleFactureView = {
         this.availableCommunes = [];
 
         const html = `
+            <style>
+                .nf-item-grid {
+                    display: grid;
+                    grid-template-columns: 2fr 0.6fr 1fr 1fr auto;
+                    gap: 10px;
+                }
+                @media (max-width: 768px) {
+                    .nf-item-grid {
+                        grid-template-columns: 1fr 1fr;
+                        gap: 15px;
+                    }
+                    .nf-item-grid .nf-desc-col { grid-column: 1 / -1; }
+                    .nf-item-grid .nf-total-col { grid-column: 1; }
+                    .nf-item-grid .nf-action-col {
+                        grid-column: 2;
+                        display: flex;
+                        align-items: flex-end;
+                    }
+                    .nf-item-grid input {
+                        padding: 12px !important;
+                        font-size: 15px !important;
+                    }
+                    .nf-item-grid .item-qty { font-size: 18px !important; font-weight: bold; }
+                }
+            </style>
             <div style="max-width: 1000px; margin: 0 auto; animation: fadeIn 0.3s ease-in-out;">
                 
                 <div style="display: flex; align-items: center; justify-content: space-between; gap: 15px; margin-bottom: 25px; background: white; padding: 20px; border-radius: 16px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); border: 1px solid #e2e8f0; flex-wrap: wrap;">
@@ -441,8 +466,8 @@ export const NouvelleFactureView = {
     renderItems() {
         const container = document.getElementById('nfItemsContainer');
         container.innerHTML = this.items.map((item, index) => `
-            <div class="form-grid" style="grid-template-columns: 2fr 0.5fr 1fr 1fr auto; align-items: end; background: #f8fafc; padding: 15px; border-radius: 8px; margin-bottom: 10px; border: 1px solid #e2e8f0;">
-                <div class="form-group" style="margin: 0;">
+            <div class="nf-item-grid" style="align-items: end; background: #f8fafc; padding: 15px; border-radius: 8px; margin-bottom: 10px; border: 1px solid #e2e8f0;">
+                <div class="form-group nf-desc-col" style="margin: 0;">
                     <label style="font-size: 11px;">Description *</label>
                     <div style="position: relative; width: 100%;">
                         <input type="text" class="item-desc" id="nfProduct_${item.id}" data-id="${item.id}" value="${item.desc}" placeholder="Ex: TV 55 pouces" style="margin: 0; width: 100%;" autocomplete="off">
@@ -457,11 +482,13 @@ export const NouvelleFactureView = {
                     <label style="font-size: 11px;">P.U (€) *</label>
                     <input type="number" class="item-pu" data-id="${item.id}" value="${item.pu}" min="0" style="margin: 0; text-align: right; width: 100%;">
                 </div>
-                <div class="form-group" style="margin: 0;">
+                <div class="form-group nf-total-col" style="margin: 0;">
                     <label style="font-size: 11px;">Total</label>
                     <input type="text" value="${item.total} €" readonly style="margin: 0; background: #e2e8f0; font-weight: bold; text-align: right; width: 100%;">
                 </div>
-                <button class="btn btn-danger btn-small" onclick="window.nfRemoveRow(${item.id})" style="height: 36px; display: flex; align-items: center; justify-content: center; width: 100%;" ${this.items.length === 1 ? 'disabled' : ''}><i class="fas fa-trash"></i></button>
+                <div class="nf-action-col">
+                    <button class="btn btn-danger btn-small" onclick="window.nfRemoveRow(${item.id})" style="height: 36px; display: flex; align-items: center; justify-content: center; width: 100%;" ${this.items.length === 1 ? 'disabled' : ''}><i class="fas fa-trash"></i></button>
+                </div>
             </div>
         `).join('');
 

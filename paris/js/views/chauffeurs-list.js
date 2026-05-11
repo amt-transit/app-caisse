@@ -186,6 +186,7 @@ export const ChauffeursListView = {
 
     async loadData() {
         try {
+            const activeAgency = sessionStorage.getItem('currentActiveAgency') || 'paris';
             // 1. Charger la liste des chauffeurs uniques (users + agents)
             const usersSnap = await getDocs(collection(db, "users"));
             const agentsSnap = await getDocs(collection(db, "agents"));
@@ -194,16 +195,17 @@ export const ChauffeursListView = {
             
             usersSnap.forEach(doc => {
                 const data = doc.data();
-                if (data.role === 'chauf') {
+                if ((data.role === 'chauf' || data.isChauffeur) && (data.agency === activeAgency || data.agency === 'all')) {
                     const name = data.displayName || data.email || 'Inconnu';
-                    driverMap.set(name.toLowerCase().trim(), { id: doc.id, name });
+                    driverMap.set(name.toLowerCase().trim(), { id: doc.id, name, photoURL: data.photoURL });
                 }
             });
             
             agentsSnap.forEach(doc => {
-                const name = doc.data().name;
-                if (name && !driverMap.has(name.toLowerCase().trim())) {
-                    driverMap.set(name.toLowerCase().trim(), { id: doc.id, name });
+                const data = doc.data();
+                const name = data.name;
+                if (name && (data.agency === activeAgency || data.agency === 'all') && !driverMap.has(name.toLowerCase().trim())) {
+                    driverMap.set(name.toLowerCase().trim(), { id: doc.id, name, photoURL: data.photoURL });
                 }
             });
 
@@ -217,7 +219,7 @@ export const ChauffeursListView = {
             }
 
             // 2. Charger les RDV et Transactions en temps réel pour l'agence
-            const activeAgency = sessionStorage.getItem('currentActiveAgency') || 'paris';
+            // (activeAgency déjà défini plus haut)
 
             if (this.unsubAppts) this.unsubAppts();
             this.unsubAppts = onSnapshot(query(collection(db, "appointments"), where("agency", "==", activeAgency)), snap => {
@@ -263,6 +265,9 @@ export const ChauffeursListView = {
         tbody.innerHTML = driversToRender.map(driver => {
             // Initiales pour l'avatar
             const initials = driver.name.substring(0, 2).toUpperCase();
+            const avatarHtml = driver.photoURL 
+                ? `<div class="driver-avatar" style="background-image: url('${driver.photoURL}'); background-size: cover; background-position: center; color: transparent;"></div>`
+                : `<div class="driver-avatar">${initials}</div>`;
 
             // Filtrer les RDVs (Par date de création "dateAjout" ou "date" du RDV)
             const driverRdvs = this.appointments.filter(a => {
@@ -310,7 +315,7 @@ export const ChauffeursListView = {
                 <tr onclick="window.app.views.chauffeursList.openDriverDetail('${driver.name.replace(/'/g, "\\'")}')">
                     <td>
                         <div class="driver-cell">
-                            <div class="driver-avatar">${initials}</div>
+                            ${avatarHtml}
                             <div class="driver-info">
                                 <div class="driver-name">${driver.name}</div>
                                 <div class="driver-id">ID ${driver.id.substring(0, 4).toUpperCase()}</div>
@@ -417,6 +422,11 @@ export const ChauffeursListView = {
 
         const driverId = this.driversData.find(d => d.name === driverName)?.id.substring(0,4).toUpperCase() || '----';
         const initials = driverName.substring(0, 2).toUpperCase();
+        
+        const driverObj = this.driversData.find(d => d.name === driverName);
+        const avatarHtml = driverObj && driverObj.photoURL
+            ? `<div class="avatar--lg" style="background-image: url('${driverObj.photoURL}'); background-size: cover; background-position: center; color: transparent;"></div>`
+            : `<div class="avatar--lg">${initials}</div>`;
 
         const modalPanel = document.getElementById('driverDetailPanel');
         modalPanel.innerHTML = `
@@ -432,7 +442,7 @@ export const ChauffeursListView = {
             </div>
             <div class="modal__body">
                 <div class="detailTop">
-                    <div class="avatar--lg">${initials}</div>
+                    ${avatarHtml}
                     <div>
                         <div class="detailName">${driverName}</div>
                         <div class="muted"><span class="mono" style="background:#f1f5f9; padding:2px 6px; border-radius:4px;">ID ${driverId}</span></div>

@@ -67,26 +67,64 @@ export const GestionConteneursView = {
             tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 40px; color: #64748b;">Aucun conteneur. Cliquez sur Nouveau Conteneur pour commencer.</td></tr>';
             return;
         }
-        tbody.innerHTML = this.containers.map(c => {
-            let badgeClass = 'badge-info';
-            let statusText = 'En chargement';
-            if (c.status === 'EN_TRANSIT') { badgeClass = 'badge-warning'; statusText = 'En mer'; }
-            else if (c.status === 'ARRIVE') { badgeClass = 'badge-success'; statusText = 'Arrivé'; }
 
-            return `
-                <tr>
-                    <td data-label="N° Conteneur" style="padding: 14px 12px; font-weight: bold; color: #0f172a; font-size: 15px;">${c.number || c.id}</td>
-                    <td data-label="Création" style="padding: 14px 12px;">${c.createdAt ? new Date(c.createdAt).toLocaleDateString('fr-FR') : '-'}</td>
-                    <td data-label="Destination" style="padding: 14px 12px; font-weight: 600;">${c.destination || 'Abidjan'}</td>
-                    <td data-label="Statut" style="padding: 14px 12px; text-align: center;"><span class="badge ${badgeClass}" style="padding: 4px 10px; border-radius: 12px; font-size: 11px;">${statusText}</span></td>
-                    <td data-label="Actions" style="padding: 14px 12px; text-align: right;"><button class="btn btn-outline btn-small" onclick="window.app.views.gestionConteneurs.deleteContainer('${c.id}')" title="Supprimer" style="color: #ef4444; border-color: #ef4444; padding: 6px;"><i class="fas fa-trash"></i></button></td>
-                </tr>
-            `;
-        }).join('');
+        const isMobile = window.innerWidth <= 768;
+
+        if (isMobile) {
+            tbody.innerHTML = this.containers.map(c => {
+                let badgeClass = 'badge-info';
+                let statusText = 'En chargement';
+                if (c.status === 'EN_TRANSIT') { badgeClass = 'badge-warning'; statusText = 'En mer'; }
+                else if (c.status === 'ARRIVE') { badgeClass = 'badge-success'; statusText = 'Arrivé'; }
+
+                return `
+                    <tr class="compact-row">
+                        <td colspan="5">
+                            <div class="compact-mob-card">
+                                <div class="cmc-header">
+                                    <div class="cmc-ref-group">
+                                        <span class="cmc-ref">${c.number || c.id}</span>
+                                        <span class="cmc-date">${c.createdAt ? new Date(c.createdAt).toLocaleDateString('fr-FR', {day: '2-digit', month: 'short'}) : '-'}</span>
+                                    </div>
+                                    <span class="status-badge ${badgeClass}" style="font-size:9px; padding:2px 6px;">${statusText}</span>
+                                </div>
+                                <div class="cmc-body">
+                                    <div class="cmc-route">
+                                        Destination: <strong>${c.destination || 'Abidjan'}</strong>
+                                    </div>
+                                </div>
+                                <div class="cmc-footer" style="justify-content: flex-end;">
+                                    <div class="cmc-actions">
+                                        <button class="cmc-btn cmc-btn-del" onclick="window.app.views.gestionConteneurs.deleteContainer('${c.id}')" title="Supprimer"><i class="fas fa-trash"></i></button>
+                                    </div>
+                                </div>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        } else {
+            tbody.innerHTML = this.containers.map(c => {
+                let badgeClass = 'badge-info';
+                let statusText = 'En chargement';
+                if (c.status === 'EN_TRANSIT') { badgeClass = 'badge-warning'; statusText = 'En mer'; }
+                else if (c.status === 'ARRIVE') { badgeClass = 'badge-success'; statusText = 'Arrivé'; }
+
+                return `
+                    <tr>
+                        <td data-label="N° Conteneur" style="padding: 14px 12px; font-weight: bold; color: #0f172a; font-size: 15px;">${c.number || c.id}</td>
+                        <td data-label="Création" style="padding: 14px 12px;">${c.createdAt ? new Date(c.createdAt).toLocaleDateString('fr-FR') : '-'}</td>
+                        <td data-label="Destination" style="padding: 14px 12px; font-weight: 600;">${c.destination || 'Abidjan'}</td>
+                        <td data-label="Statut" style="padding: 14px 12px; text-align: center;"><span class="badge ${badgeClass}" style="padding: 4px 10px; border-radius: 12px; font-size: 11px;">${statusText}</span></td>
+                        <td data-label="Actions" style="padding: 14px 12px; text-align: right;"><button class="btn btn-outline btn-small" onclick="window.app.views.gestionConteneurs.deleteContainer('${c.id}')" title="Supprimer" style="color: #ef4444; border-color: #ef4444; padding: 6px;"><i class="fas fa-trash"></i></button></td>
+                    </tr>
+                `;
+            }).join('');
+        }
     },
 
     async openAddModal() {
-        const num = await (window.AppModal ? window.AppModal.prompt("Identifiant / Numéro du nouveau conteneur :", "", "Nouveau Conteneur") : prompt("Nouveau conteneur :"));
+        const num = await window.AppModal.prompt("Identifiant / Numéro du nouveau conteneur :", "", "Nouveau Conteneur");
         if (!num || !num.trim()) return;
         try {
             const id = num.trim().toUpperCase();
@@ -96,8 +134,7 @@ export const GestionConteneursView = {
     },
 
     async deleteContainer(id) {
-        if (window.AppModal) { if (!await window.AppModal.confirm(`Supprimer le conteneur ${id} ?`, "Supprimer", true)) return; } 
-        else if (!confirm(`Supprimer ${id} ?`)) return;
+        if (!await window.AppModal.confirm(`Supprimer le conteneur ${id} ?`, "Supprimer", true)) return;
         try { await deleteDoc(doc(db, "containers", id)); this.app.showToast("Supprimé !", "success"); } 
         catch(e) { this.app.showToast("Erreur", "error"); }
     }

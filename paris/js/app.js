@@ -1,5 +1,4 @@
-import { appData } from './data.js';
-import { DashboardView } from './views/dashboard.js';
+// import { DashboardView } from './views/dashboard.js'; // Remplacé par la version dynamique
 import { NouvelleFactureView } from './views/nouvellefacture.js';
 import { ClientsListView } from './views/clients-list.js';
 import { ProductsListView } from './views/products-list.js';
@@ -14,6 +13,7 @@ import { NouveauProgrammeView } from './views/nouveauprogramme.js';
 import { MonProgrammeView } from './views/monprogramme.js';
 import { HistoriqueProgrammesView } from './views/historique-programmes.js';
 import { ChauffeursListView } from './views/chauffeurs-list.js';
+import { DeparturesCalendarView } from './views/departures-calendar.js';
 import { TousLesDevisView } from './views/touslesdevis.js';
 import { DemandesDevisView } from './views/demandesdevis.js';
 import { ConfectionConteneursView } from './views/confection-conteneurs.js';
@@ -31,6 +31,9 @@ import { ConfigLabelView } from './views/config-label.js';
 import { ConfigContainerView } from './views/config-container.js';
 import { ScanWarehouseView } from './views/scan-warehouse.js';
 import { ScanContainerView } from './views/scan-container.js';
+import { BilansFinanciersView } from './views/bilans-financiers.js';
+import { StatistiquesView } from './views/statistiques.js';
+import { AppModal } from './utils/app-modal.js';
 
 // Configuration de l'application Paris
 const app = {
@@ -60,12 +63,12 @@ const app = {
         'audit-log': 'audit-log'
     },
 
-    // Données simulées externalisées
-    data: appData,
-
     init() {
         // Expose l'objet app à l'objet global Window AVANT de rendre la page
         window.app = this;
+        // Initialisation du système de modales custom
+        window.AppModal = AppModal;
+        window.AppModal.init();
         
         this.loadMenuConfig(); // Charge la configuration et applique les accès aux menus
         this.initContainerGauge(); // Initialise la jauge de chargement globale
@@ -313,9 +316,21 @@ const app = {
     },
 
     updateBadges() {
-        const pendingQuotes = this.data.quoteRequests.length;
-        const unreadMessages = this.data.messages.filter(m => !m.read).length;
-        const unreadNotifications = this.data.notifications.filter(n => !n.read).length;
+        // Compteur réel des demandes de devis
+        import('https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js').then(module => {
+            const { collection, query, where, getDocs } = module;
+            import('../../../firebase-config.js').then(async cfg => {
+                const activeAgency = sessionStorage.getItem('currentActiveAgency') || 'paris';
+                const q = query(collection(cfg.db, "quote_requests"), where("agency", "==", activeAgency), where("status", "==", "NOUVEAU"));
+                const snap = await getDocs(q);
+                const quoteBadge = document.getElementById('quoteRequestsBadge');
+                if (quoteBadge) quoteBadge.textContent = snap.size;
+            });
+        });
+
+        // A FAIRE : Connecter les messages et notifications
+        const unreadMessages = 0; 
+        const unreadNotifications = 0;
 
         // Compteur réel depuis la vue "TousLesRdvView" si elle est chargée, 
         // sinon on fera une requête rapide (Pour l'instant, on utilise le cache si disponible)
@@ -346,9 +361,6 @@ const app = {
 
         const pendingBadge = document.getElementById('pendingAppointmentsBadge');
         if (pendingBadge) pendingBadge.textContent = pendingAppointments;
-        
-        const quoteBadge = document.getElementById('quoteRequestsBadge');
-        if (quoteBadge) quoteBadge.textContent = pendingQuotes;
         
         const chatBadge = document.getElementById('chatBadge');
         if (chatBadge) chatBadge.textContent = unreadMessages;
@@ -453,7 +465,7 @@ const app = {
         if (activeSidebar) activeSidebar.classList.add('active');
 
         const renderers = {
-            'dashboard': () => this.renderDashboard(),
+            'dashboard': () => this.renderDynamicDashboard(),
             'daily-bilan': () => DailyBilanView.render(this),
             'daily-users': () => DailyUsersView.render(this),
             'invoices-list': () => ToutesLesFacturesView.render(this),
@@ -466,7 +478,7 @@ const app = {
             'program-my': () => MonProgrammeView.render(this),
             'program-history': () => HistoriqueProgrammesView.render(this),
             'drivers': () => ChauffeursListView.render(this),
-            'departures-calendar': () => this.renderDeparturesCalendar(),
+            'departures-calendar': () => DeparturesCalendarView.render(this),
             'quotes-list': () => TousLesDevisView.render(this),
             'quote-new': () => NouveauDevisView.render(this),
             'quote-requests': () => DemandesDevisView.render(this),
@@ -524,8 +536,222 @@ const app = {
 
     // ==================== RENDU DES PAGES ====================
 
-    renderDashboard() {
-        DashboardView.render(this);
+    async renderDynamicDashboard() {
+        document.getElementById('contentContainer').innerHTML = '<div style="padding: 50px; text-align: center;"><i class="fas fa-spinner fa-spin fa-2x" style="color:#3b82f6;"></i><br><br><span style="color:#64748b;">Chargement de votre espace...</span></div>';
+        
+        try {
+            const { db } = await import('../../../firebase-config.js');
+            const { getDocs, query, collection, where } = await import("https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js");
+            
+            const activeAgency = sessionStorage.getItem('currentActiveAgency') || 'paris';
+            const now = new Date();
+            const currentMonth = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+            const TAUX = 656; // Taux de conversion pour Paris si la caisse est en CFA
+
+            // 1. Chiffre d'Affaires du Mois & Dernières factures
+            const qTrans = query(collection(db, "transactions"), where("agency", "==", activeAgency), where("isDeleted", "==", false));
+            const snapTrans = await getDocs(qTrans);
+            
+            let monthCA = 0;
+            const recentInvoices = [];
+            const agentStats = {};
+            const monthlyData = {}; // Pour le graphique
+            
+            snapTrans.forEach(doc => {
+                const t = doc.data();
+                const valCFA = t.prix || 0;
+                const valEUR = valCFA / TAUX;
+
+                // Graphique évolution
+                if (t.date && t.date.length >= 7) {
+                    const m = t.date.substring(0, 7);
+                    if (!monthlyData[m]) monthlyData[m] = 0;
+                    monthlyData[m] += valEUR;
+                }
+
+                // Stats du mois courant
+                if (t.date && t.date.startsWith(currentMonth)) {
+                    monthCA += valEUR;
+                    recentInvoices.push({ ...t, amountEur: valEUR });
+                    
+                    if (t.saisiPar) {
+                        if (!agentStats[t.saisiPar]) agentStats[t.saisiPar] = 0;
+                        agentStats[t.saisiPar] += valEUR;
+                    }
+                }
+            });
+
+            // Tri et extraction
+            recentInvoices.sort((a, b) => new Date(b.date) - new Date(a.date));
+            const topInvoices = recentInvoices.slice(0, 5);
+            const topAgents = Object.entries(agentStats).sort((a, b) => b[1] - a[1]).slice(0, 3);
+            
+            // Récupération des photos des agents pour le dashboard
+            const snapUsers = await getDocs(collection(db, "users"));
+            const usersPhotos = {};
+            snapUsers.forEach(doc => {
+                const u = doc.data();
+                if (u.displayName) usersPhotos[u.displayName] = u.photoURL;
+                if (u.email) usersPhotos[u.email.split('@')[0]] = u.photoURL;
+            });
+            
+            // 2. RDV en attente
+            const qAppt = query(collection(db, "appointments"), where("agency", "==", activeAgency), where("status", "==", "en_attente"));
+            const snapAppt = await getDocs(qAppt);
+            const pendingAppointments = snapAppt.size;
+
+            // 3. Programmes Actifs
+            const qProg = query(collection(db, "appointments"), where("agency", "==", activeAgency), where("status", "==", "en_cours"));
+            const snapProg = await getDocs(qProg);
+            const activePrograms = new Set(snapProg.docs.map(d => d.data().livreur)).size;
+
+            // 4. Conteneurs en transit
+            const qCont = query(collection(db, "containers"), where("status", "==", "EN_TRANSIT"));
+            const snapCont = await getDocs(qCont);
+            const activeContainers = snapCont.size;
+
+            // 5. Génération du HTML Dynamique
+            const renderQuickActionButton = (page, icon, label, color) => {
+                if (!this.checkPageAccess(page)) return ''; 
+                return `
+                    <button onclick="app.renderPage('${page}')" class="quick-action-btn" style="display:flex; flex-direction:column; align-items:center; padding:15px; background:white; border:1px solid #e2e8f0; border-radius:12px; cursor:pointer; transition:all 0.2s; box-shadow:0 2px 4px rgba(0,0,0,0.02);">
+                        <i class="fas ${icon}" style="font-size:24px; color:${color}; margin-bottom:10px;"></i>
+                        <span style="font-weight:600; color:#334155; font-size:12px; text-align:center;">${label}</span>
+                    </button>
+                `;
+            };
+
+            const html = `
+                <style>
+                    .quick-action-btn:hover { transform: translateY(-3px) !important; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1) !important; border-color: #cbd5e1 !important; }
+                </style>
+                
+                <h3 style="margin: 0 0 20px 0; color: #0f172a; font-size: 20px; font-weight: 800;">🚀 Accès rapide</h3>
+                <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(min(130px, 45%), 1fr)); gap: 12px; margin-bottom: 30px;">
+                    ${renderQuickActionButton('invoice-new', 'fa-file-invoice', 'Nouvelle facture', '#3b82f6')}
+                    ${renderQuickActionButton('invoices-list', 'fa-list', 'Liste factures', '#64748b')}
+                    ${renderQuickActionButton('quote-new', 'fa-file-signature', 'Nouveau devis', '#10b981')}
+                    ${renderQuickActionButton('quote-requests', 'fa-inbox', 'Demandes devis', '#f59e0b')}
+                    ${renderQuickActionButton('appointments-pending', 'fa-calendar-check', 'RDV à valider', '#ef4444')}
+                    ${renderQuickActionButton('notifications', 'fa-bell', 'Notifications', '#8b5cf6')}
+                    ${renderQuickActionButton('sms-send', 'fa-sms', 'Envoi SMS', '#ec4899')}
+                    ${renderQuickActionButton('loading-boats', 'fa-ship', 'Bateaux & Départs', '#0ea5e9')}
+                    ${renderQuickActionButton('clients-list', 'fa-users', 'Clients', '#14b8a6')}
+                    ${renderQuickActionButton('balance-monthly', 'fa-chart-line', 'Bilan mois', '#f43f5e')}
+                    ${renderQuickActionButton('scan-warehouse', 'fa-barcode', 'Numérisation', '#6366f1')}
+                    ${renderQuickActionButton('finance-expenses', 'fa-money-bill-wave', 'Dépenses', '#f97316')}
+                </div>
+
+                <h3 style="margin: 0 0 20px 0; color: #0f172a; font-size: 20px; font-weight: 800;">📊 Indicateurs du mois (${new Date().toLocaleDateString('fr-FR', {month:'long'})})</h3>
+                <div class="stats-grid" style="margin-bottom: 30px;">
+                    <div class="stat-card">
+                        <div class="stat-icon" style="background:#dbeafe; color:#2563eb;"><i class="fas fa-file-invoice"></i></div>
+                        <div class="stat-value">${this.formatMoney(monthCA)}</div>
+                        <div class="stat-label">Chiffre d'affaires facturé</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon" style="background:#d1fae5; color:#059669;"><i class="fas fa-calendar"></i></div>
+                        <div class="stat-value">${pendingAppointments}</div>
+                        <div class="stat-label">RDV en attente</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon" style="background:#fef3c7; color:#d97706;"><i class="fas fa-tasks"></i></div>
+                        <div class="stat-value">${activePrograms}</div>
+                        <div class="stat-label">Chauffeurs en tournée</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon" style="background:#ede9fe; color:#7c3aed;"><i class="fas fa-box"></i></div>
+                        <div class="stat-value">${activeContainers}</div>
+                        <div class="stat-label">Conteneurs en mer</div>
+                    </div>
+                </div>
+                
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 25px; margin-bottom: 30px;">
+                    <div style="background: white; border-radius: 16px; padding: 20px; border: 1px solid #e2e8f0; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);">
+                        <h3 style="margin: 0 0 20px; font-size: 16px;">📈 Évolution Facturation (Général)</h3>
+                        <div style="position: relative; height: 250px; width: 100%;">
+                            <canvas id="revenueChart"></canvas>
+                        </div>
+                    </div>
+                    
+                    <div style="background: white; border-radius: 16px; padding: 20px; border: 1px solid #e2e8f0; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);">
+                        <h3 style="margin: 0 0 20px; font-size: 16px;">🧾 Dernières Factures</h3>
+                        <div style="max-height: 250px; overflow-y: auto; padding-right: 5px;">
+                            ${topInvoices.length === 0 ? '<div style="color:#94a3b8; text-align:center; padding: 20px;">Aucune facture ce mois-ci.</div>' : ''}
+                            ${topInvoices.map(inv => {
+                                const reste = Math.abs(parseFloat(inv.reste) || 0) / TAUX;
+                                const statusTxt = reste <= 0 ? 'Payée' : 'Impayée';
+                                const statusCls = reste <= 0 ? 'badge-success' : 'badge-warning';
+                                return `
+                                <div style="display: flex; justify-content: space-between; padding: 12px 0; border-bottom: 1px solid #f1f5f9; cursor: pointer;" onclick="window.app.renderPage('invoices-list')">
+                                    <div><strong>${inv.reference}</strong><br><span style="font-size:12px; color:#64748b;">${inv.nom}</span></div>
+                                    <div style="text-align: right;"><strong>${this.formatMoney(inv.amountEur)}</strong><br><span class="badge ${statusCls}">${statusTxt}</span></div>
+                                </div>
+                            `}).join('')}
+                        </div>
+                    </div>
+                </div>
+
+                <h3 style="margin: 0 0 20px 0; color: #0f172a; font-size: 20px; font-weight: 800;">🏆 Meilleurs agents (Mois en cours)</h3>
+                <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 15px; margin-bottom: 30px;">
+                    ${topAgents.length === 0 ? '<div style="grid-column: 1/-1; color:#94a3b8;">Pas de données pour le moment.</div>' : ''}
+                ${topAgents.map(([name, amount], i) => {
+                    const photo = usersPhotos[name];
+                    const avatarHtml = photo 
+                        ? `<div style="width: 50px; height: 50px; border-radius: 50%; background-image: url('${photo}'); background-size: cover; background-position: center; box-shadow: 0 2px 4px rgba(0,0,0,0.1); flex-shrink: 0;"></div>`
+                        : `<div style="width: 50px; height: 50px; border-radius: 50%; background: #eff6ff; display: flex; justify-content: center; align-items: center; font-size: 20px; color: #3b82f6; flex-shrink: 0;"><i class="fas fa-user"></i></div>`;
+                    return `
+                        <div style="background: white; padding: 15px; border-radius: 12px; border: 1px solid #e2e8f0; display: flex; align-items: center; gap: 15px; box-shadow: 0 2px 4px rgba(0,0,0,0.02);">
+                        ${avatarHtml}
+                            <div style="flex: 1;">
+                                <h4 style="margin: 0; color: #1e293b; font-size: 14px; text-transform: uppercase;">${name}</h4>
+                                <p style="margin: 2px 0 0 0; color: #10b981; font-size: 12px; font-weight: bold;">${this.formatMoney(amount)}</p>
+                            </div>
+                            <div style="font-size: 20px;">
+                                ${i === 0 ? '🥇' : i === 1 ? '🥈' : '🥉'}
+                            </div>
+                        </div>
+                `}).join('')}
+                </div>
+            `;
+            
+            document.getElementById('contentContainer').innerHTML = html;
+            
+            // Graphique d'évolution
+            setTimeout(() => {
+                const ctx = document.getElementById('revenueChart')?.getContext('2d');
+                if (ctx && typeof Chart !== 'undefined') {
+                    const sortedLabels = Object.keys(monthlyData).sort();
+                    const dataPoints = sortedLabels.map(l => monthlyData[l]);
+                    
+                    // Format des labels (ex: 2024-12 -> Déc 24)
+                    const displayLabels = sortedLabels.map(l => {
+                        const d = new Date(l + '-01');
+                        return d.toLocaleDateString('fr-FR', {month: 'short', year: '2-digit'}).replace('.', '');
+                    });
+
+                    new Chart(ctx, {
+                        type: 'line',
+                        data: {
+                            labels: displayLabels.length > 0 ? displayLabels : ['Aucune donnée'],
+                            datasets: [{
+                                label: 'CA Facturé (€)',
+                                data: dataPoints.length > 0 ? dataPoints : [0],
+                                borderColor: '#3b82f6',
+                                backgroundColor: 'rgba(59,130,246,0.1)',
+                                fill: true,
+                                tension: 0.4
+                            }]
+                        },
+                        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }
+                    });
+                }
+            }, 100);
+
+        } catch(e) {
+            console.error("Dashboard Error:", e);
+            document.getElementById('contentContainer').innerHTML = '<div style="padding: 50px; text-align: center; color: #ef4444;"><i class="fas fa-exclamation-triangle fa-2x"></i><br><br>Erreur lors du chargement des données.</div>';
+        }
     },
 
     renderDailyBilan() {
@@ -633,29 +859,6 @@ const app = {
             </div>
         `;
         document.getElementById('contentContainer').innerHTML = html;
-    },
-
-    renderDeparturesCalendar() {
-        const html = `
-            <div class="calendar-container">
-                <div id="departureCalendar" style="height: 500px;"></div>
-            </div>
-        `;
-        document.getElementById('contentContainer').innerHTML = html;
-        
-        setTimeout(() => {
-            if (typeof Calendar !== 'undefined') {
-                const calendarEl = document.getElementById('departureCalendar');
-                new Calendar(calendarEl, {
-                    initialView: 'dayGridMonth',
-                    locale: 'fr',
-                    events: [
-                        { title: 'Départ CONT-001', start: '2024-12-20', color: '#3b82f6' },
-                        { title: 'Arrivée CONT-002', start: '2024-12-25', color: '#10b981' }
-                    ]
-                }).render();
-            }
-        }, 100);
     },
 
 
@@ -874,53 +1077,13 @@ const app = {
         document.getElementById('contentContainer').innerHTML = html;
     },
 
-    renderBalanceMonthly() { this.renderChartPage('balance-monthly', 'monthly'); },
-    renderBalanceYearly() { this.renderChartPage('balance-yearly', 'yearly'); },
-    renderBalanceBoat() { this.renderChartPage('balance-boat', 'boat'); },
-    renderBalance12M() { this.renderChartPage('balance-12m', 'yearly'); },
-    renderStatsBoat() { this.renderChartPage('stats-boat', 'boat'); },
-    renderStatsMonthly() { this.renderChartPage('stats-monthly', 'monthly'); },
-    renderStatsYearly() { this.renderChartPage('stats-yearly', 'yearly'); },
-
-    renderChartPage(pageId, type) {
-        const html = `
-            <div class="form-card">
-                <h3>Graphiques et Statistiques</h3>
-                <div style="position: relative; height: 300px; width: 100%;">
-                    <canvas id="chart-${type}"></canvas>
-                </div>
-            </div>
-        `;
-        document.getElementById('contentContainer').innerHTML = html;
-        setTimeout(() => {
-            const ctx = document.getElementById(`chart-${type}`)?.getContext('2d');
-            if (ctx) {
-                let data, labels;
-                if (type === 'monthly') {
-                    labels = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Jun'];
-                    data = [12500, 15000, 18000, 22000, 25000, 28000];
-                } else if (type === 'yearly') {
-                    labels = ['2020', '2021', '2022', '2023', '2024'];
-                    data = [85000, 102000, 128000, 159000, 198000];
-                } else if (type === 'boat') {
-                    labels = ['CMA CGM', 'MSC', 'MAERSK', 'HAPAG'];
-                    data = [24500, 21000, 17500, 19000];
-                } else {
-                    labels = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Jun', 'Jul', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc'];
-                    data = [12500, 13200, 14800, 16500, 18500, 21000, 23500, 26000, 28500, 31000, 34000, 37000];
-                }
-                
-                new Chart(ctx, {
-                    type: 'bar',
-                    data: {
-                        labels: labels,
-                        datasets: [{ label: 'Montant (€)', data: data, backgroundColor: '#3b82f6' }]
-                    },
-                    options: { responsive: true, scales: { y: { ticks: { callback: v => this.formatMoney(v) } } } }
-                });
-            }
-        }, 100);
-    },
+    renderBalanceMonthly() { BilansFinanciersView.render(this, 'monthly'); },
+    renderBalanceYearly() { BilansFinanciersView.render(this, 'yearly'); },
+    renderBalanceBoat() { BilansFinanciersView.render(this, 'boat'); },
+    renderBalance12M() { BilansFinanciersView.render(this, 'yearly'); }, // Redirige vers annuel
+    renderStatsBoat() { StatistiquesView.render(this, 'boat'); },
+    renderStatsMonthly() { StatistiquesView.render(this, 'monthly'); },
+    renderStatsYearly() { StatistiquesView.render(this, 'yearly'); },
 
     // Paramètres pages
     renderSettingsSoftware() { this.renderSettingsForm('Paramètres logiciel', { theme: 'Clair', language: 'Français', notifications: true, autoBackup: true }); },
@@ -1097,19 +1260,21 @@ const app = {
     loadUserProfile() {
         const savedPhoto = localStorage.getItem('userProfilePhoto');
         if (savedPhoto) {
-            const headerAvatar = document.getElementById('userAvatar');
-            if (headerAvatar) {
-                headerAvatar.innerHTML = '';
-                headerAvatar.style.backgroundImage = `url(${savedPhoto})`;
-                headerAvatar.style.backgroundSize = 'cover';
-                headerAvatar.style.backgroundPosition = 'center';
-            }
+            // Met à jour dynamiquement toutes les div ayant la classe 'avatar' ou 'user-avatar'
+            document.querySelectorAll('.user-avatar, .avatar, #userAvatar, #profileAvatarPreview').forEach(el => {
+                el.innerHTML = '';
+                el.style.backgroundImage = `url('${savedPhoto}')`;
+                el.style.backgroundSize = 'cover';
+                el.style.backgroundPosition = 'center';
+                el.style.color = 'transparent';
+            });
         }
     },
 
     handleProfilePhotoChange(event) {
         const file = event.target.files[0];
         if (file) {
+            this.tempProfileFile = file;
             const reader = new FileReader();
             reader.onload = (e) => {
                 const avatar = document.getElementById('profileAvatarPreview');
@@ -1138,9 +1303,10 @@ const app = {
         btn.disabled = true;
 
         try {
-            const { auth, db } = await import('../../firebase-config.js');
+            const { auth, db, app: firebaseApp } = await import('../../firebase-config.js');
             const { updateProfile, updatePassword } = await import('https://www.gstatic.com/firebasejs/9.22.0/firebase-auth.js');
             const { doc, updateDoc } = await import('https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js');
+            const { getStorage, ref: storageRef, uploadBytes, getDownloadURL } = await import('https://www.gstatic.com/firebasejs/9.22.0/firebase-storage.js');
 
             const user = auth.currentUser;
             if (!user) throw new Error("Utilisateur non connecté.");
@@ -1156,11 +1322,21 @@ const app = {
                 if (headerName) headerName.textContent = newName;
             }
 
-            // 2. Mise à jour de la Photo
-            if (this.tempProfilePhoto) {
-                updates.photoURL = this.tempProfilePhoto;
-                localStorage.setItem('userProfilePhoto', this.tempProfilePhoto);
+            // 2. Mise à jour de la Photo via Storage
+            if (this.tempProfileFile) {
+                const storage = getStorage(firebaseApp);
+                const fileExt = this.tempProfileFile.name.split('.').pop();
+                const fileName = `profile_photos/${user.uid}_${Date.now()}.${fileExt}`;
+                const sRef = storageRef(storage, fileName);
+                
+                await uploadBytes(sRef, this.tempProfileFile);
+                const downloadUrl = await getDownloadURL(sRef);
+                
+                updates.photoURL = downloadUrl;
+                await updateProfile(user, { photoURL: downloadUrl });
+                localStorage.setItem('userProfilePhoto', downloadUrl);
                 this.loadUserProfile();
+                this.tempProfileFile = null;
             }
 
             // Mise à jour dans Firestore (Synchronisation)
@@ -1207,7 +1383,7 @@ const app = {
     
     // FORMATAGE EN EURO (€) 🇫🇷
     formatMoney(amount) {
-        return new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(amount || 0);
+        return new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(amount || 0).replace(/[\u202F\u00A0]/g, ' ').replace(/\s*\/\s*/g, ' ');
     },
 
     showToast(message, type = 'success') {
@@ -1377,7 +1553,7 @@ renderClassicLabel(widthMm, heightMm, qrDataUrl, data, label, theme) {
     const isA5 = widthMm === 210;
     const fontSize = isA5 ? '11pt' : '9pt';
     const titleFont = isA5 ? '14pt' : '11pt';
-    const refFont = isA5 ? '28pt' : '16pt';
+    const refFont = isA5 ? '28pt' : '22pt';
     
     return `
         <div class="label" style="width: ${widthMm}mm; height: ${heightMm}mm;">

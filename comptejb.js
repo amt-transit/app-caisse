@@ -30,7 +30,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // 2. UTILITAIRES
     // =========================================================
     const fmt = (val) =>
-        new Intl.NumberFormat('fr-CI', { style: 'currency', currency: 'XOF' }).format(val || 0);
+        new Intl.NumberFormat('fr-CI', { style: 'currency', currency: 'XOF' }).format(val || 0).replace(/[\u202F\u00A0]/g, ' ').replace(/\s*\/\s*/g, ' ');
 
     const parseNum = (s) =>
         parseFloat(String(s).replace(/\s/g, '').replace(',', '.')) || 0;

@@ -202,14 +202,48 @@ export const ProductsListView = {
             }
         };
 
-        tbody.innerHTML = this.filteredProducts.map(p => `
-            <tr>
-                <td data-label="Catégorie" style="padding: 15px;"><span class="badge" style="${getCatStyle(p.category)} padding: 4px 10px; border-radius: 12px; font-weight: 600; font-size: 11px;">${p.category}</span></td>
-                <td data-label="Description" style="font-weight: 600; color: #1e293b;">${p.desc} ${p.dim ? `<br><span style="font-size: 11px; color: #64748b; font-weight: normal;">📏 ${p.dim}</span>` : ''}</td>
-                <td data-label="Prix" style="text-align: right; font-weight: 700; font-family: monospace; font-size: 14px; ${p.price < 0 ? 'color: #ef4444;' : 'color: #0f172a;'}">${this.app.formatMoney(p.price)}</td>
-                <td data-label="Actions" style="text-align: center;"><button class="btn-small" onclick="window.app.views.productsList.openEditModal('${p.id}')" style="background: transparent; border: none; font-size: 16px; cursor: pointer; opacity: 0.7; transition: 0.2s;" title="Modifier" onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=0.7">✏️</button></td>
-            </tr>
-        `).join('');
+        const isMobile = window.innerWidth <= 768;
+
+        if (isMobile) {
+            tbody.innerHTML = this.filteredProducts.map(p => {
+                return `
+                    <tr class="compact-row">
+                        <td colspan="4">
+                            <div class="compact-mob-card">
+                                <div class="cmc-header">
+                                    <div class="cmc-ref-group">
+                                        <span class="cmc-ref" style="font-family: 'Inter', sans-serif;">${p.desc}</span>
+                                    </div>
+                                    <span class="status-badge" style="${getCatStyle(p.category)} font-size:9px; padding:2px 6px;">${p.category}</span>
+                                </div>
+                                <div class="cmc-body">
+                                    <div class="cmc-route">
+                                        ${p.dim ? `📏 ${p.dim}` : 'Pas de dimension'}
+                                    </div>
+                                </div>
+                                <div class="cmc-footer">
+                                    <div class="cmc-finance">
+                                        <div class="cmc-amount" style="${p.price < 0 ? 'color: #ef4444;' : ''}">${this.app.formatMoney(p.price)}</div>
+                                    </div>
+                                    <div class="cmc-actions">
+                                        <button class="cmc-btn cmc-btn-edit" onclick="window.app.views.productsList.openEditModal('${p.id}')" title="Modifier"><i class="fas fa-edit"></i></button>
+                                    </div>
+                                </div>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        } else {
+            tbody.innerHTML = this.filteredProducts.map(p => `
+                <tr>
+                    <td data-label="Catégorie" style="padding: 15px;"><span class="badge" style="${getCatStyle(p.category)} padding: 4px 10px; border-radius: 12px; font-weight: 600; font-size: 11px;">${p.category}</span></td>
+                    <td data-label="Description" style="font-weight: 600; color: #1e293b;">${p.desc} ${p.dim ? `<br><span style="font-size: 11px; color: #64748b; font-weight: normal;">📏 ${p.dim}</span>` : ''}</td>
+                    <td data-label="Prix" style="text-align: right; font-weight: 700; font-family: monospace; font-size: 14px; ${p.price < 0 ? 'color: #ef4444;' : 'color: #0f172a;'}">${this.app.formatMoney(p.price)}</td>
+                    <td data-label="Actions" style="text-align: center;"><button class="btn-small" onclick="window.app.views.productsList.openEditModal('${p.id}')" style="background: transparent; border: none; font-size: 16px; cursor: pointer; opacity: 0.7; transition: 0.2s;" title="Modifier" onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=0.7">✏️</button></td>
+                </tr>
+            `).join('');
+        }
     },
 
     closeProductModal() {
@@ -287,11 +321,7 @@ export const ProductsListView = {
         const id = document.getElementById('editProductId').value;
         if (!id) return;
         
-        if (window.AppModal) {
-            if (!await window.AppModal.confirm("Voulez-vous vraiment supprimer ce produit de la base de données ?", "Supprimer", true)) return;
-        } else {
-            if (!confirm("Voulez-vous vraiment supprimer ce produit ?")) return;
-        }
+        if (!await window.AppModal.confirm("Voulez-vous vraiment supprimer ce produit de la base de données ?", "Supprimer", true)) return;
 
         try {
             await deleteDoc(doc(db, "products", id));

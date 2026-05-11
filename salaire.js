@@ -727,7 +727,7 @@ console.log("✅ Mode Production (Salaire) : Connecté");
 
         const formatMoney = (m) => {
             if (!m && m !== 0) return '0 F';
-            return new Intl.NumberFormat('fr-FR').format(m).replace(/\s/g, ' ') + ' F';
+            return new Intl.NumberFormat('fr-FR').format(m).replace(/[\u202F\u00A0\s]/g, ' ').replace(/\s*\/\s*/g, ' ') + ' F';
         };
         const formatDate = (ts) => { if (!ts) return '-'; const d = ts.toDate ? ts.toDate() : new Date(ts); const day = d.getDate().toString().padStart(2, '0'); let month = d.toLocaleString('fr-FR', { month: 'short' }).replace('.', ''); month = month.charAt(0).toUpperCase() + month.slice(1); const year = d.getFullYear(); return `${day}-${month}-${year}`; };
         

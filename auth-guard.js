@@ -88,15 +88,20 @@ onAuthStateChanged(auth, async (user) => {
 
             // 2. Injecter le nouveau bloc utilisateur s'il n'existe pas encore
             if (!header.querySelector('.user-info')) {
+            const avatarStyle = userData.photoURL 
+                ? `background-image: url('${userData.photoURL}'); background-size: cover; background-position: center; color: transparent;`
+                : '';
+            const avatarInner = userData.photoURL ? '' : '<i class="fas fa-user"></i>';
+
                 const userInfoHtml = `
                     <div class="user-info" style="position: absolute; right: 20px; display: flex; align-items: center; gap: 10px;">
                         <span id="userName" style="font-weight: bold; font-size: 14px;">${userName || 'Utilisateur'}</span>
                         <div class="user-dropdown-container">
-                            <div class="user-avatar" id="userAvatar" title="Menu Utilisateur">
-                                <i class="fas fa-user"></i>
+                        <div class="user-avatar avatar" id="userAvatar" title="Menu Utilisateur" style="${avatarStyle}">
+                            ${avatarInner}
                             </div>
                             <div class="user-dropdown-menu" id="userDropdownMenu">
-                                <a href="#" id="menuProfile" onclick="alert('Le module Profil sera bientôt adapté pour Abidjan.'); document.getElementById('userDropdownMenu').classList.remove('active'); return false;"><i class="fas fa-user-circle"></i> Profil</a>
+                            <a href="#" id="menuProfile" onclick="if(window.app && window.app.renderPage) { window.app.renderPage('settings-profile'); } else { alert('Le module Profil sera bientôt adapté pour Abidjan.'); } document.getElementById('userDropdownMenu').classList.remove('active'); return false;"><i class="fas fa-user-circle"></i> Profil</a>
                                 <a href="#" id="menuAgencySwitch" style="display: none;"><i class="fas fa-globe"></i> Vue Paris</a>
                                 <hr style="margin: 5px 0; border: none; border-top: 1px solid #e2e8f0;">
                                 <a href="#" id="logoutBtn" class="logout-btn logout" onclick="window.appHandleLogout(); return false;"><i class="fas fa-sign-out-alt"></i> Déconnexion</a>
@@ -105,9 +110,22 @@ onAuthStateChanged(auth, async (user) => {
                     </div>
                 `;
                 header.insertAdjacentHTML('beforeend', userInfoHtml);
+            if (userData.photoURL) {
+                localStorage.setItem('userProfilePhoto', userData.photoURL);
+            }
             } else {
                 const userNameEl = document.getElementById('userName');
                 if (userNameEl) userNameEl.textContent = userName || 'Utilisateur';
+            
+            const userAvatarEl = document.getElementById('userAvatar');
+            if (userAvatarEl && userData.photoURL) {
+                userAvatarEl.style.backgroundImage = `url('${userData.photoURL}')`;
+                userAvatarEl.style.backgroundSize = 'cover';
+                userAvatarEl.style.backgroundPosition = 'center';
+                userAvatarEl.style.color = 'transparent';
+                userAvatarEl.innerHTML = '';
+                localStorage.setItem('userProfilePhoto', userData.photoURL);
+            }
             }
         }
 

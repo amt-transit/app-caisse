@@ -66,23 +66,63 @@ export const DemandesDevisView = {
             tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 40px; color: #64748b;">Aucune demande de devis en attente.</td></tr>';
             return;
         }
-        tbody.innerHTML = this.requests.map(r => {
-            const isTreated = r.status === 'TRAITÉ';
-            let actions = `<button class="btn btn-outline btn-small" onclick="window.app.views.demandesDevis.deleteRequest('${r.id}')" title="Supprimer" style="color: #ef4444; border-color: #ef4444; padding: 6px;"><i class="fas fa-trash"></i></button>`;
-            if (!isTreated) {
-                actions = `<button class="btn btn-primary btn-small" onclick="window.app.views.demandesDevis.processRequest('${r.id}')" title="Marquer Traité" style="padding: 6px;"><i class="fas fa-file-signature"></i> Traiter</button> ${actions}`;
-            }
-            return `
-                <tr>
-                    <td data-label="Date" style="padding: 14px 12px; font-weight: bold;">${r.date ? new Date(r.date).toLocaleDateString('fr-FR') : '-'}</td>
-                    <td data-label="Client" style="padding: 14px 12px; font-weight: 600; color: #0f172a;">${r.client || '-'}</td>
-                    <td data-label="Contact" style="padding: 14px 12px;">${r.phone || r.email || '-'}</td>
-                    <td data-label="Détails" style="padding: 14px 12px; max-width: 300px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${r.details || ''}">${r.details || '-'}</td>
-                    <td data-label="Statut" style="padding: 14px 12px; text-align: center;"><span class="badge ${isTreated ? 'badge-success' : 'badge-warning'}" style="padding: 4px 10px; border-radius: 12px; font-size: 11px;">${r.status || 'NOUVEAU'}</span></td>
-                    <td data-label="Actions" style="padding: 14px 12px; text-align: right; display: flex; gap: 8px; justify-content: flex-end;">${actions}</td>
-                </tr>
-            `;
-        }).join('');
+
+        const isMobile = window.innerWidth <= 768;
+
+        if (isMobile) {
+            tbody.innerHTML = this.requests.map(r => {
+                const isTreated = r.status === 'TRAITÉ';
+                const statusClass = isTreated ? 'badge--success' : 'badge--warning';
+                const statusText = r.status || 'NOUVEAU';
+
+                let actions = `<button class="cmc-btn cmc-btn-del" onclick="window.app.views.demandesDevis.deleteRequest('${r.id}')" title="Supprimer"><i class="fas fa-trash"></i></button>`;
+                if (!isTreated) {
+                    actions = `<button class="cmc-btn cmc-btn-pay" onclick="window.app.views.demandesDevis.processRequest('${r.id}')" title="Marquer Traité"><i class="fas fa-file-signature"></i></button> ${actions}`;
+                }
+
+                return `
+                    <tr class="compact-row">
+                        <td colspan="6">
+                            <div class="compact-mob-card">
+                                <div class="cmc-header">
+                                    <div class="cmc-ref-group">
+                                        <span class="cmc-ref">${r.client || '-'}</span>
+                                        <span class="cmc-date">${r.date ? new Date(r.date).toLocaleDateString('fr-FR', {day: '2-digit', month: 'short'}) : '-'}</span>
+                                    </div>
+                                    <span class="status-badge ${statusClass}" style="font-size:9px; padding:2px 6px;">${statusText}</span>
+                                </div>
+                                <div class="cmc-body">
+                                    <div class="cmc-route" style="white-space: normal;">
+                                        ${r.details || 'Aucun détail'}
+                                    </div>
+                                </div>
+                                <div class="cmc-footer" style="justify-content: flex-end;">
+                                    <div class="cmc-actions">${actions}</div>
+                                </div>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        } else {
+            tbody.innerHTML = this.requests.map(r => {
+                const isTreated = r.status === 'TRAITÉ';
+                let actions = `<button class="btn btn-outline btn-small" onclick="window.app.views.demandesDevis.deleteRequest('${r.id}')" title="Supprimer" style="color: #ef4444; border-color: #ef4444; padding: 6px;"><i class="fas fa-trash"></i></button>`;
+                if (!isTreated) {
+                    actions = `<button class="btn btn-primary btn-small" onclick="window.app.views.demandesDevis.processRequest('${r.id}')" title="Marquer Traité" style="padding: 6px;"><i class="fas fa-file-signature"></i> Traiter</button> ${actions}`;
+                }
+                return `
+                    <tr>
+                        <td data-label="Date" style="padding: 14px 12px; font-weight: bold;">${r.date ? new Date(r.date).toLocaleDateString('fr-FR') : '-'}</td>
+                        <td data-label="Client" style="padding: 14px 12px; font-weight: 600; color: #0f172a;">${r.client || '-'}</td>
+                        <td data-label="Contact" style="padding: 14px 12px;">${r.phone || r.email || '-'}</td>
+                        <td data-label="Détails" style="padding: 14px 12px; max-width: 300px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${r.details || ''}">${r.details || '-'}</td>
+                        <td data-label="Statut" style="padding: 14px 12px; text-align: center;"><span class="badge ${isTreated ? 'badge-success' : 'badge-warning'}" style="padding: 4px 10px; border-radius: 12px; font-size: 11px;">${r.status || 'NOUVEAU'}</span></td>
+                        <td data-label="Actions" style="padding: 14px 12px; text-align: right; display: flex; gap: 8px; justify-content: flex-end;">${actions}</td>
+                    </tr>
+                `;
+            }).join('');
+        }
     },
     async processRequest(id) {
         try {
@@ -92,7 +132,7 @@ export const DemandesDevisView = {
         } catch(e) { this.app.showToast("Erreur", "error"); }
     },
     async deleteRequest(id) {
-        if (window.AppModal) { if (!await window.AppModal.confirm("Supprimer cette demande ?", "Supprimer", true)) return; } else if (!confirm("Supprimer ?")) return;
+        if (!await window.AppModal.confirm("Supprimer cette demande ?", "Supprimer", true)) return;
         try { await deleteDoc(doc(db, "quote_requests", id)); this.app.showToast("Demande supprimée", "success"); } 
         catch(e) { this.app.showToast("Erreur suppression", "error"); }
     }

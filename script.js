@@ -50,7 +50,7 @@ window.goToMobileStep = (step) => {
         if (!summary) return;
         const ref = document.getElementById('reference').value || 'N/A';
         const resteVal = parseFloat(document.getElementById('reste').value) || 0;
-        const formatCFA = (n) => new Intl.NumberFormat('fr-CI', { style: 'currency', currency: 'XOF' }).format(n);
+        const formatCFA = (n) => new Intl.NumberFormat('fr-CI', { style: 'currency', currency: 'XOF' }).format(n).replace(/[\u202F\u00A0]/g, ' ').replace(/\s*\/\s*/g, ' ');
         
         let resteHTML = `<h2 style="color:${resteVal <= 0 ? '#10b981' : '#ef4444'}; margin: 10px 0; font-size: 22px;">RESTE À PAYER : ${formatCFA(Math.abs(resteVal))}</h2>`;
         if (resteVal <= 0) resteHTML = `<h2 style="color:#10b981; margin: 10px 0; font-size: 22px;">✅ COLIS SOLDÉ</h2>`;
@@ -1116,7 +1116,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         resteInput.className = reste >= 0 ? 'reste-positif' : 'reste-negatif'; // Utilisation de >= 0 pour que "0" soit en vert (Soldé)
     }
 
-    function formatCFA(n) { return new Intl.NumberFormat('fr-CI', { style: 'currency', currency: 'XOF' }).format(n || 0); }
+    function formatCFA(n) { return new Intl.NumberFormat('fr-CI', { style: 'currency', currency: 'XOF' }).format(n || 0).replace(/[\u202F\u00A0]/g, ' ').replace(/\s*\/\s*/g, ' '); }
     
     function populateDatalist() {
         const qDatalist = query(collection(db, "transactions"), where("isDeleted", "!=", true), where("agency", "==", activeAgency), orderBy("isDeleted"), orderBy("date", "desc"));
@@ -1177,7 +1177,7 @@ function initMobileApp() {
     let mobile_dailyTransactions = JSON.parse(localStorage.getItem('mobile_dailyTransactions')) || [];
     let mobile_dailyDepenses = JSON.parse(localStorage.getItem('mobile_dailyDepenses')) || [];
 
-    function formatCFA(n) { return new Intl.NumberFormat('fr-CI', { style: 'currency', currency: 'XOF' }).format(n || 0); }
+    function formatCFA(n) { return new Intl.NumberFormat('fr-CI', { style: 'currency', currency: 'XOF' }).format(n || 0).replace(/[\u202F\u00A0]/g, ' ').replace(/\s*\/\s*/g, ' '); }
 
     // --- 1. RECHERCHE INTÉLLIGENTE & AUTO-COMPLÉTION (Comme Desktop) ---
     getDocs(query(collection(db, "transactions"), where("isDeleted", "!=", true), orderBy("isDeleted"), orderBy("date", "desc"))).then(snapshot => {
@@ -1674,5 +1674,4 @@ window.reparerCalculsFinanciers = async function() {
         console.error(e);
         alert("Erreur lors de la réparation : " + e.message);
     }
-};
-document.addEventListener('DOMContentLoaded', initMobileApp);
+}

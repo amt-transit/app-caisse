@@ -389,6 +389,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (typeof initBackToTopButton === 'function') initBackToTopButton();
     if (typeof formatCFA !== 'function') {
-        window.formatCFA = (n) => new Intl.NumberFormat('fr-CI', { style: 'currency', currency: 'XOF' }).format(n || 0);
+        window.formatCFA = (n) => new Intl.NumberFormat('fr-CI', { style: 'currency', currency: 'XOF' }).format(n || 0).replace(/[\u202F\u00A0]/g, ' ').replace(/\s*\/\s*/g, ' ');
     }
 });

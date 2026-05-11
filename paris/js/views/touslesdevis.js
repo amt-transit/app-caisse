@@ -98,32 +98,80 @@ export const TousLesDevisView = {
             tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; padding: 40px; color: #64748b;">Aucun devis trouvé.</td></tr>';
             return;
         }
-        tbody.innerHTML = filtered.map(q => {
-            const isAccepted = q.status === 'ACCEPTÉ';
-            const isRefused = q.status === 'REFUSÉ';
-            const badgeClass = isAccepted ? 'badge-success' : (isRefused ? 'badge-danger' : 'badge-info');
-            const devise = q.devise === 'FCFA' ? 'CFA' : '€';
-            let actions = `<button class="btn btn-outline btn-small" onclick="window.app.views.tousLesDevis.deleteQuote('${q.id}')" title="Supprimer" style="color: #ef4444; border-color: #ef4444; padding: 6px;"><i class="fas fa-trash"></i></button>`;
 
-            if (!isAccepted && !isRefused) {
-                actions = `
-                    <button class="btn btn-success btn-small" onclick="window.app.views.tousLesDevis.changeStatus('${q.id}', 'ACCEPTÉ')" title="Marquer comme Accepté" style="padding: 6px;"><i class="fas fa-check"></i></button>
-                    <button class="btn btn-danger btn-small" onclick="window.app.views.tousLesDevis.changeStatus('${q.id}', 'REFUSÉ')" title="Marquer comme Refusé" style="padding: 6px;"><i class="fas fa-times"></i></button>
-                    ${actions}
+        const isMobile = window.innerWidth <= 768;
+
+        if (isMobile) {
+            tbody.innerHTML = filtered.map(q => {
+                const isAccepted = q.status === 'ACCEPTÉ';
+                const isRefused = q.status === 'REFUSÉ';
+                const badgeClass = isAccepted ? 'badge-success' : (isRefused ? 'badge-danger' : 'badge-info');
+                const devise = q.devise === 'FCFA' ? 'CFA' : '€';
+
+                let actions = `<button class="cmc-btn cmc-btn-del" onclick="window.app.views.tousLesDevis.deleteQuote('${q.id}')" title="Supprimer"><i class="fas fa-trash"></i></button>`;
+                if (!isAccepted && !isRefused) {
+                    actions = `
+                        <button class="cmc-btn cmc-btn-pay" onclick="window.app.views.tousLesDevis.changeStatus('${q.id}', 'ACCEPTÉ')" title="Marquer comme Accepté"><i class="fas fa-check"></i></button>
+                        <button class="cmc-btn cmc-btn-del" onclick="window.app.views.tousLesDevis.changeStatus('${q.id}', 'REFUSÉ')" title="Marquer comme Refusé"><i class="fas fa-times"></i></button>
+                        ${actions}
+                    `;
+                }
+
+                return `
+                    <tr class="compact-row">
+                        <td colspan="7">
+                            <div class="compact-mob-card">
+                                <div class="cmc-header">
+                                    <div class="cmc-ref-group">
+                                        <span class="cmc-ref">${q.reference || '-'}</span>
+                                        <span class="cmc-date">${q.date ? new Date(q.date).toLocaleDateString('fr-FR', {day: '2-digit', month: 'short'}) : '-'}</span>
+                                    </div>
+                                    <span class="status-badge ${badgeClass}" style="font-size:9px; padding:2px 6px;">${q.status || 'ENVOYÉ'}</span>
+                                </div>
+                                <div class="cmc-body">
+                                    <div class="cmc-route">
+                                        <strong>${q.client || '-'}</strong> <i class="fas fa-arrow-right" style="color:#cbd5e1; font-size:10px; margin:0 4px;"></i> ${q.destinataire || '-'}
+                                    </div>
+                                </div>
+                                <div class="cmc-footer">
+                                    <div class="cmc-finance">
+                                        <div class="cmc-amount">${q.totalNet || 0} ${devise}</div>
+                                    </div>
+                                    <div class="cmc-actions">${actions}</div>
+                                </div>
+                            </div>
+                        </td>
+                    </tr>
                 `;
-            }
-            return `
-                <tr>
-                    <td data-label="N° Devis" style="padding: 14px 12px; font-weight: bold;">${q.reference || '-'}</td>
-                    <td data-label="Date" style="padding: 14px 12px;">${q.date ? new Date(q.date).toLocaleDateString('fr-FR') : '-'}</td>
-                    <td data-label="Client" style="padding: 14px 12px; font-weight: 600; color: #0f172a;">${q.client || '-'}</td>
-                    <td data-label="Destinataire" style="padding: 14px 12px;">${q.destinataire || '-'}</td>
-                    <td data-label="Montant Net" style="padding: 14px 12px; text-align: right; font-weight: bold; color: #0f172a;">${q.totalNet || 0} ${devise}</td>
-                    <td data-label="Statut" style="padding: 14px 12px; text-align: center;"><span class="badge ${badgeClass}" style="padding: 4px 10px; border-radius: 12px; font-size: 11px;">${q.status || 'ENVOYÉ'}</span></td>
-                    <td data-label="Actions" style="padding: 14px 12px; text-align: right; display: flex; gap: 8px; justify-content: flex-end;">${actions}</td>
-                </tr>
-            `;
-        }).join('');
+            }).join('');
+        } else {
+            tbody.innerHTML = filtered.map(q => {
+                const isAccepted = q.status === 'ACCEPTÉ';
+                const isRefused = q.status === 'REFUSÉ';
+                const badgeClass = isAccepted ? 'badge-success' : (isRefused ? 'badge-danger' : 'badge-info');
+                const devise = q.devise === 'FCFA' ? 'CFA' : '€';
+                let actions = `<button class="btn btn-outline btn-small" onclick="window.app.views.tousLesDevis.deleteQuote('${q.id}')" title="Supprimer" style="color: #ef4444; border-color: #ef4444; padding: 6px;"><i class="fas fa-trash"></i></button>`;
+
+                if (!isAccepted && !isRefused) {
+                    actions = `
+                        <button class="btn btn-success btn-small" onclick="window.app.views.tousLesDevis.changeStatus('${q.id}', 'ACCEPTÉ')" title="Marquer comme Accepté" style="padding: 6px;"><i class="fas fa-check"></i></button>
+                        <button class="btn btn-danger btn-small" onclick="window.app.views.tousLesDevis.changeStatus('${q.id}', 'REFUSÉ')" title="Marquer comme Refusé" style="padding: 6px;"><i class="fas fa-times"></i></button>
+                        ${actions}
+                    `;
+                }
+                return `
+                    <tr>
+                        <td data-label="N° Devis" style="padding: 14px 12px; font-weight: bold;">${q.reference || '-'}</td>
+                        <td data-label="Date" style="padding: 14px 12px;">${q.date ? new Date(q.date).toLocaleDateString('fr-FR') : '-'}</td>
+                        <td data-label="Client" style="padding: 14px 12px; font-weight: 600; color: #0f172a;">${q.client || '-'}</td>
+                        <td data-label="Destinataire" style="padding: 14px 12px;">${q.destinataire || '-'}</td>
+                        <td data-label="Montant Net" style="padding: 14px 12px; text-align: right; font-weight: bold; color: #0f172a;">${q.totalNet || 0} ${devise}</td>
+                        <td data-label="Statut" style="padding: 14px 12px; text-align: center;"><span class="badge ${badgeClass}" style="padding: 4px 10px; border-radius: 12px; font-size: 11px;">${q.status || 'ENVOYÉ'}</span></td>
+                        <td data-label="Actions" style="padding: 14px 12px; text-align: right; display: flex; gap: 8px; justify-content: flex-end;">${actions}</td>
+                    </tr>
+                `;
+            }).join('');
+        }
     },
     async changeStatus(id, newStatus) {
         try {

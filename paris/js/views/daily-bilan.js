@@ -262,36 +262,79 @@ export const DailyBilanView = {
         if (elImpayes) elImpayes.textContent = this.app.formatMoney(this.todayData.totalImpayes);
     },
 
-    renderTransactions() {
+    renderTransactions(filtered = null) {
         const tbody = document.getElementById('transactionsTableBody');
         if (!tbody) return;
         
-        if (this.todayData.transactions.length === 0) {
+        const dataToRender = filtered || this.todayData.transactions;
+        
+        if (dataToRender.length === 0) {
             tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 40px; color: #64748b;">Aucune transaction aujourd\'hui</td></tr>';
             return;
         }
         
         const TAUX = 656;
-        tbody.innerHTML = this.todayData.transactions.map(t => {
-            const montant = (parseFloat(t.prix) || 0) / TAUX;
-            const reste = Math.abs(parseFloat(t.reste) || 0) / TAUX;
-            const isPayee = reste <= 0;
-            
-            return `
-                <tr>
-                    <td>${t.date || '-'}</td>
-                    <td><strong>${t.reference || '-'}</strong></td>
-                    <td>${t.nom || '-'}</td>
-                    <td>${t.modePaiement || 'Facture'}</td>
-                    <td style="text-align: right; font-weight: 600;">${this.app.formatMoney(montant)}</td>
-                    <td style="text-align: center;">
-                        <span class="badge ${isPayee ? 'badge-success' : 'badge-danger'}">
-                            ${isPayee ? 'Payée' : 'Impayée'}
-                        </span>
-                    </td>
-                </tr>
-            `;
-        }).join('');
+        const isMobile = window.innerWidth <= 768;
+        
+        if (isMobile) {
+            tbody.innerHTML = dataToRender.map(t => {
+                const montant = (parseFloat(t.prix) || 0) / TAUX;
+                const reste = Math.abs(parseFloat(t.reste) || 0) / TAUX;
+                const isPayee = reste <= 0;
+                
+                return `
+                    <tr class="compact-row">
+                        <td colspan="6">
+                            <div class="compact-mob-card">
+                                <div class="cmc-header">
+                                    <div class="cmc-ref-group">
+                                        <span class="cmc-ref">${t.reference || '-'}</span>
+                                    </div>
+                                    <span class="status-badge ${isPayee ? 'badge-success' : 'badge-danger'}" style="font-size:9px; padding:2px 6px;">
+                                        ${isPayee ? 'Payée' : 'Impayée'}
+                                    </span>
+                                </div>
+                                <div class="cmc-body">
+                                    <div class="cmc-route">
+                                        <strong>${t.nom || '-'}</strong>
+                                    </div>
+                                    <div class="cmc-meta" style="margin-top:4px;">
+                                        <i class="fas fa-credit-card"></i> ${t.modePaiement || 'Facture'}
+                                    </div>
+                                </div>
+                                <div class="cmc-footer" style="justify-content: space-between;">
+                                    <div style="font-size:12px; color:#64748b;">${t.date || '-'}</div>
+                                    <div class="cmc-finance">
+                                        <div class="cmc-amount" style="color: #10b981;">${this.app.formatMoney(montant)}</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        } else {
+            tbody.innerHTML = dataToRender.map(t => {
+                const montant = (parseFloat(t.prix) || 0) / TAUX;
+                const reste = Math.abs(parseFloat(t.reste) || 0) / TAUX;
+                const isPayee = reste <= 0;
+                
+                return `
+                    <tr>
+                        <td>${t.date || '-'}</td>
+                        <td><strong>${t.reference || '-'}</strong></td>
+                        <td>${t.nom || '-'}</td>
+                        <td>${t.modePaiement || 'Facture'}</td>
+                        <td style="text-align: right; font-weight: 600;">${this.app.formatMoney(montant)}</td>
+                        <td style="text-align: center;">
+                            <span class="badge ${isPayee ? 'badge-success' : 'badge-danger'}">
+                                ${isPayee ? 'Payée' : 'Impayée'}
+                            </span>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        }
     },
 
     renderTopProducts() {
@@ -365,30 +408,7 @@ export const DailyBilanView = {
             if (typeFilter === 'facture') filtered = filtered.filter(t => !t.modePaiement);
             else if (typeFilter === 'paiement') filtered = filtered.filter(t => t.modePaiement);
         }
-        
-        const TAUX = 656;
-        const tbody = document.getElementById('transactionsTableBody');
-        
-        if (filtered.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 40px;">Aucun résultat</td></tr>';
-            return;
-        }
-        
-        tbody.innerHTML = filtered.map(t => {
-            const montant = (parseFloat(t.prix) || 0) / TAUX;
-            const reste = Math.abs(parseFloat(t.reste) || 0) / TAUX;
-            const isPayee = reste <= 0;
-            return `
-                <tr>
-                    <td>${t.date || '-'}</td>
-                    <td><strong>${t.reference || '-'}</strong></td>
-                    <td>${t.nom || '-'}</td>
-                    <td>${t.modePaiement || 'Facture'}</td>
-                    <td style="text-align: right; font-weight: 600;">${this.app.formatMoney(montant)}</td>
-                    <td style="text-align: center;"><span class="badge ${isPayee ? 'badge-success' : 'badge-danger'}">${isPayee ? 'Payée' : 'Impayée'}</span></td>
-                </tr>
-            `;
-        }).join('');
+        this.renderTransactions(filtered);
     },
 
     initChart() {

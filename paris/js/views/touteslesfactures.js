@@ -384,6 +384,23 @@ export const ToutesLesFacturesView = {
                     white-space: nowrap;
                     z-index: 10;
                 }
+
+                @media (max-width: 768px) {
+                    .factures-header { margin-bottom: 12px; border-radius: 12px; }
+                    .factures-header__content { padding: 12px 15px; gap: 12px; }
+                    .factures-header__icon { width: 40px; height: 40px; font-size: 20px; border-radius: 10px; }
+                    .factures-header__title { font-size: 18px; }
+                    .factures-header__subtitle { font-size: 11px; margin-top: 2px; }
+                    .btn-create-invoice { width: 100%; justify-content: center; padding: 10px; font-size: 13px; border-radius: 8px; }
+                    
+                    .factures-filters { padding: 12px 15px; gap: 10px; margin-bottom: 15px; border-radius: 12px; }
+                    .filter-group { min-width: calc(50% - 5px); flex: 1 1 auto; margin: 0; }
+                    .filter-group--wide { min-width: 100%; }
+                    .filter-label { margin-bottom: 4px; font-size: 10px; }
+                    .filter-input, .filter-select { padding: 8px 10px; font-size: 13px; height: 36px; border-radius: 8px; }
+                    .filter-actions-group { width: 100%; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 5px; }
+                    .btn-export { width: 100%; padding: 8px; font-size: 12px; border-radius: 8px; justify-content: center; display: flex; align-items: center; }
+                }
             </style>
         `;
 
@@ -541,21 +558,94 @@ export const ToutesLesFacturesView = {
         this.renderTable();
     },
 
-    renderTable() {
-        const tbody = document.getElementById('invoicesTableBody');
-        const countSpan = document.getElementById('invoiceCount');
-        
-        if (!tbody) return;
-        
-        if (countSpan) countSpan.textContent = this.filteredInvoices.length;
+    // Dans touteslesfactures.js - Remplacer la méthode renderTable par celle-ci
 
-        if (this.filteredInvoices.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="10" style="text-align: center; padding: 40px; color: #64748b;">Aucune facture trouvée</td></tr>';
-            return;
-        }
+renderTable() {
+    const tbody = document.getElementById('invoicesTableBody');
+    const countSpan = document.getElementById('invoiceCount');
+    
+    if (!tbody) return;
+    
+    if (countSpan) countSpan.textContent = this.filteredInvoices.length;
 
-        const TAUX = 656;
-        
+    if (this.filteredInvoices.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="10" style="text-align: center; padding: 40px; color: #64748b;">Aucune facture trouvée</td></tr>';
+        return;
+    }
+
+    const TAUX = 656;
+    const isMobile = window.innerWidth <= 768;
+    
+    if (isMobile) {
+        // Version mobile : Cartes ultra-compactes
+        tbody.innerHTML = this.filteredInvoices.map(inv => {
+            const totalEUR = (parseFloat(inv.prix) || 0) / TAUX;
+            const resteEUR = Math.abs(parseFloat(inv.reste) || 0) / TAUX;
+            const isPayee = resteEUR <= 0;
+            const isDeposit = resteEUR > 0 && resteEUR < totalEUR;
+            
+            let statusClass = 'badge--unpaid';
+            let statusText = 'Impayée';
+            if (isPayee) {
+                statusClass = 'badge--paid';
+                statusText = 'Payée';
+            } else if (isDeposit) {
+                statusClass = 'badge--deposit';
+                statusText = 'Acompte';
+            }
+
+            // Calcul nb colis
+            let nbColis = 1;
+            if (inv.items && Array.isArray(inv.items)) {
+                nbColis = inv.items.reduce((sum, item) => sum + (parseInt(item.qty) || 1), 0);
+            } else if (inv.quantite) {
+                nbColis = inv.quantite;
+            }
+
+            // Noms raccourcis pour tenir sur une ligne
+            const clientName = (inv.nom || '-').substring(0, 12);
+            const destName = (inv.nomDestinataire || '-').substring(0, 12);
+            
+            return `
+                <tr data-invoice-id="${inv.id}" class="compact-row">
+                    <td colspan="10">
+                        <div class="compact-mob-card">
+                            <div class="cmc-header">
+                                <div class="cmc-ref-group">
+                                    <span class="cmc-ref">${inv.reference || '-'}</span>
+                                    <span class="cmc-date">${inv.date ? new Date(inv.date).toLocaleDateString('fr-FR', {day: '2-digit', month: 'short'}) : '-'}</span>
+                                </div>
+                                <span class="status-badge ${statusClass}" style="font-size:9px; padding:2px 6px;">${statusText}</span>
+                            </div>
+                            
+                            <div class="cmc-body">
+                                <div class="cmc-route">
+                                    <strong>${clientName}</strong> <i class="fas fa-arrow-right" style="color:#cbd5e1; font-size:10px; margin:0 4px;"></i> ${destName}
+                                </div>
+                                <div class="cmc-meta">
+                                    <i class="fas fa-box"></i> ${nbColis} art.
+                                </div>
+                            </div>
+
+                            <div class="cmc-footer">
+                                <div class="cmc-finance">
+                                    <div class="cmc-amount">${this.app.formatMoney(totalEUR)}</div>
+                                    ${!isPayee ? `<div class="cmc-reste">Reste: ${this.app.formatMoney(resteEUR)}</div>` : ''}
+                                </div>
+                                <div class="cmc-actions">
+                                    <button class="cmc-btn cmc-btn-view" onclick="window.app.views.toutesLesFactures.viewInvoice('${inv.id}')" title="Détails"><i class="fas fa-eye"></i></button>
+                                    <button class="cmc-btn cmc-btn-pay" onclick="window.app.views.toutesLesFactures.addPayment('${inv.id}')" title="Payer" ${isPayee ? 'disabled style="opacity:0.3"' : ''}><i class="fas fa-coins"></i></button>
+                                    <button class="cmc-btn cmc-btn-edit" onclick="window.app.views.toutesLesFactures.editInvoice('${inv.id}')" title="Modifier"><i class="fas fa-edit"></i></button>
+                                    <button class="cmc-btn cmc-btn-del" onclick="window.app.views.toutesLesFactures.deleteInvoice('${inv.id}')" title="Supprimer"><i class="fas fa-trash"></i></button>
+                                </div>
+                            </div>
+                        </div>
+                    </td>
+                </tr>
+            `;
+        }).join('');
+    } else {
+        // Version desktop : tableau classique
         tbody.innerHTML = this.filteredInvoices.map(inv => {
             const totalEUR = (parseFloat(inv.prix) || 0) / TAUX;
             const resteEUR = Math.abs(parseFloat(inv.reste) || 0) / TAUX;
@@ -575,20 +665,11 @@ export const ToutesLesFacturesView = {
             const address = inv.adresseDestinataire || inv.adresse || '-';
             const shortAddress = address.length > 30 ? address.substring(0, 27) + '...' : address;
 
-            // Calcul précis et rétroactif du nombre de colis
             let nbColis = 1;
             if (inv.items && Array.isArray(inv.items)) {
                 nbColis = inv.items.reduce((sum, item) => sum + (parseInt(item.qty) || 1), 0);
             } else if (inv.quantite) {
                 nbColis = inv.quantite;
-            } else if (inv.description) {
-                let parsedQty = 0;
-                inv.description.split(',').forEach(part => {
-                    const m = part.trim().match(/^(\d+)x/);
-                    if (m) parsedQty += parseInt(m[1]);
-                    else parsedQty += 1;
-                });
-                nbColis = parsedQty > 0 ? parsedQty : 1;
             }
 
             return `
@@ -598,16 +679,14 @@ export const ToutesLesFacturesView = {
                         <button class="amount-link" onclick="window.app.views.toutesLesFactures.viewInvoice('${inv.id}')">${inv.reference || '-'}</button>
                     </td>
                     <td data-label="Date">${inv.date ? new Date(inv.date).toLocaleDateString('fr-FR') : '-'}</td>
-                    <td data-label="Client" class="cell--client"><strong>${inv.nom || '-'}</strong></td>
-                    <td data-label="Adresse" class="cell--address"><span class="tooltip" data-tooltip="${address.replace(/"/g, '&quot;')}">${shortAddress}</span></td>
+                    <td data-label="Client"><strong>${inv.nom || '-'}</strong></td>
+                    <td data-label="Adresse"><span class="tooltip" data-tooltip="${address.replace(/"/g, '&quot;')}">${shortAddress}</span></td>
                     <td data-label="Téléphone">${inv.tel || '-'}</td>
                     <td data-label="Destinataire">${inv.nomDestinataire || '-'}</td>
-                    <td data-label="Montant" class="cell--amount"><button class="amount-link" onclick="window.app.views.toutesLesFactures.viewInvoice('${inv.id}')">${this.app.formatMoney(totalEUR)}</button></td>
-                    <td data-label="Nb colis" style="text-align: right; font-weight: bold; color: #0f172a;">${nbColis}</td>
+                    <td data-label="Nb colis" style="text-align: right; font-weight: bold;">${nbColis}</td>
+                    <td data-label="Montant" class="cell--amount"><button class="amount-link" onclick="window.app.views.toutesLesFactures.addPayment('${inv.id}')">${this.app.formatMoney(totalEUR)}</button></td>
                     <td data-label="Actions" style="text-align: right;">
                         <div class="row-actions">
-                            <button class="icon-btn btn--view" onclick="window.app.views.toutesLesFactures.viewInvoice('${inv.id}')" title="Voir">👁️</button>
-                            <button class="icon-btn btn--pay" onclick="window.app.views.toutesLesFactures.addPayment('${inv.id}')" title="Ajouter paiement">💰</button>
                             <button class="icon-btn btn--edit" onclick="window.app.views.toutesLesFactures.editInvoice('${inv.id}')" title="Modifier">✏️</button>
                             <button class="icon-btn btn--reuse" onclick="window.app.views.toutesLesFactures.reuseInvoice('${inv.id}')" title="Réutiliser">📋</button>
                             <button class="icon-btn btn--del" onclick="window.app.views.toutesLesFactures.deleteInvoice('${inv.id}')" title="Supprimer">🗑️</button>
@@ -616,8 +695,10 @@ export const ToutesLesFacturesView = {
                 </tr>
             `;
         }).join('');
+    }
 
-        // Mettre à jour les indicateurs de tri
+    // Mettre à jour les indicateurs de tri (uniquement en desktop)
+    if (!isMobile) {
         document.querySelectorAll('.th-sort').forEach(th => {
             th.classList.remove('th-sort--asc', 'th-sort--desc');
         });
@@ -625,8 +706,8 @@ export const ToutesLesFacturesView = {
         if (activeTh) {
             activeTh.classList.add(`th-sort--${this.currentSort.direction}`);
         }
-    },
-
+    }
+},
     async viewInvoice(id) {
         const invoice = this.invoices.find(i => i.id === id);
         if (!invoice) return;
@@ -1609,9 +1690,7 @@ export const ToutesLesFacturesView = {
         const inv = this.invoices.find(i => i.id === id);
         if (!inv) return;
         
-        if (window.AppModal) {
-            if (!await window.AppModal.confirm(`Voulez-vous vraiment supprimer la facture ${inv.reference} ?\n\nCela supprimera également les données logistiques associées. Cette action est irréversible.`, "Supprimer la facture", true)) return;
-        } else if (!confirm(`Voulez-vous vraiment supprimer la facture ${inv.reference} ?`)) return;
+        if (!await window.AppModal.confirm(`Voulez-vous vraiment supprimer la facture ${inv.reference} ?\n\nCela supprimera également les données logistiques associées. Cette action est irréversible.`, "Supprimer la facture", true)) return;
 
         try {
             const btn = document.querySelector('#tlfModalsContainer .btn-outline[onclick*="deleteInvoice"]');
@@ -1786,10 +1865,12 @@ export const ToutesLesFacturesView = {
             if (invConfigSnap.exists()) {
                 invoiceConfig = invConfigSnap.data();
                 if (invoiceConfig.companyName) companyName = invoiceConfig.companyName;
+                if (invoiceConfig.logoUrl) logoBase64 = invoiceConfig.logoUrl;
             }
         } catch(e) { console.error(e); }
 
-        let accentColor = [59, 130, 246]; // Bleu standard
+        let defaultColor = invoiceConfig?.primaryColor ? JSON.parse(invoiceConfig.primaryColor) : [59, 130, 246];
+        let accentColor = defaultColor;
         if (docType === 'BL' || docType === 'ATTESTATION') accentColor = [16, 185, 129]; // Vert
 
         // Bandeau supérieur
@@ -1799,27 +1880,42 @@ export const ToutesLesFacturesView = {
         doc.rect(0, 35, pageWidth, 2, 'F');
 
         // Injection du Logo
+        if (logoBase64 && logoBase64.startsWith('http')) {
+            try {
+                const response = await fetch(logoBase64);
+                const blob = await response.blob();
+                logoBase64 = await new Promise((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.onloadend = () => resolve(reader.result);
+                    reader.onerror = reject;
+                    reader.readAsDataURL(blob);
+                });
+            } catch(e) { logoBase64 = null; }
+        }
+        let textX = 15;
         let textY = 22;
         if (logoBase64) {
             try {
                 const props = doc.getImageProperties(logoBase64);
                 const ratio = props.width / props.height;
-                let imgH = 14;
+                let imgH = 16;
                 let imgW = imgH * ratio;
                 if (imgW > 40) { imgW = 40; imgH = imgW / ratio; }
-                doc.addImage(logoBase64, 'PNG', 15, 5, imgW, imgH);
-                textY = 5 + imgH + 6;
+                doc.addImage(logoBase64, 'PNG', 15, 10, imgW, imgH);
+                textX = 15 + imgW + 5;
+                textY = 22;
             } catch(e) {}
         } else {
             try {
                 const logoElement = document.querySelector('.app-logo');
                 if (logoElement && logoElement.complete && logoElement.naturalWidth > 0) {
                     const ratio = logoElement.naturalWidth / logoElement.naturalHeight;
-                    let imgH = 14;
+                    let imgH = 16;
                     let imgW = imgH * ratio;
                     if (imgW > 40) { imgW = 40; imgH = imgW / ratio; }
-                    doc.addImage(logoElement, 'PNG', 15, 5, imgW, imgH);
-                    textY = 5 + imgH + 6;
+                    doc.addImage(logoElement, 'PNG', 15, 10, imgW, imgH);
+                    textX = 15 + imgW + 5;
+                    textY = 22;
                 }
             } catch(e) {}
         }
@@ -1827,14 +1923,14 @@ export const ToutesLesFacturesView = {
         doc.setTextColor(255, 255, 255);
         doc.setFont("helvetica", "bold");
         doc.setFontSize(18);
-        if (logoBase64 || document.querySelector('.app-logo')) {
-            doc.text(companyName, 15, textY);
-        } else {
-            doc.setFontSize(20);
-            doc.text(companyName, 15, 22);
-        }
+        doc.text(companyName, textX, textY);
 
         let titleText = "FACTURE";
+        if (docType === 'BL') titleText = "BON DE LIVRAISON";
+        if (docType === 'ATTESTATION') titleText = "ATTESTATION";
+        if (docType === 'RECU') titleText = "REÇU";
+        
+        doc.text(titleText, pageWidth - 15, 22, { align: 'right' });
 
         doc.setTextColor(0, 0, 0);
         doc.setFontSize(10);
@@ -1850,7 +1946,7 @@ export const ToutesLesFacturesView = {
         doc.setDrawColor(226, 232, 240);
         doc.roundedRect(115, 45, 80, 35, 2, 2, 'FD');
         doc.setFont("helvetica", "bold");
-        doc.text(docType === 'FACTURE' ? "FACTURÉ À :" : "LIVRÉ À :", 120, 52);
+        doc.text(docType === 'BL' || docType === 'ATTESTATION' ? "LIVRÉ À :" : "FACTURÉ À :", 120, 52);
         doc.setFont("helvetica", "normal");
         
         let clientName = invoice.nomDestinataire || '';
@@ -1866,24 +1962,37 @@ export const ToutesLesFacturesView = {
         const addrStr = doc.splitTextToSize(`${invoice.adresseDestinataire || ''}`, 70);
         doc.text(addrStr, 120, 73);
 
-        const tableColumn = ["Description / Nature du Colis", "Qté", "P.U", "Total"];
+        const isBL = docType === 'BL' || docType === 'ATTESTATION';
+        const tableColumn = isBL 
+            ? ["Description / Nature du Colis", "Qté", "Statut", "Observations"]
+            : ["Description / Nature du Colis", "Qté", "P.U", "Total"];
         const tableRows = [];
         if (invoice.items && Array.isArray(invoice.items)) {
             invoice.items.forEach(item => {
-                tableRows.push([
-                    item.desc,
-                    item.qty.toString(),
-                    this.app.formatMoney(item.pu),
-                    this.app.formatMoney(item.total)
-                ]);
+                if (isBL) {
+                    tableRows.push([item.desc, item.qty.toString(), "À LIVRER", "-"]);
+                } else {
+                    tableRows.push([
+                        item.desc,
+                        item.qty.toString(),
+                        this.app.formatMoney(item.pu),
+                        this.app.formatMoney(item.total)
+                    ]);
+                }
             });
         } else {
             (invoice.description || '').split(',').forEach(d => {
                 const match = d.trim().match(/^(\d+)x\s+(.+)$/);
-                if(match) tableRows.push([match[2], match[1], "-", "-"]);
-                else tableRows.push([d.trim(), '1', "-", "-"]);
+                const desc = match ? match[2] : d.trim();
+                const qty = match ? match[1] : '1';
+                if (isBL) tableRows.push([desc, qty, "À LIVRER", "-"]);
+                else tableRows.push([desc, qty, "-", "-"]);
             });
         }
+
+        const columnStyles = isBL 
+            ? { 1: { halign: 'center' }, 2: { halign: 'center' } }
+            : { 1: { halign: 'center' }, 2: { halign: 'right' }, 3: { halign: 'right' } };
 
         doc.autoTable({
             startY: 90,
@@ -1891,7 +2000,7 @@ export const ToutesLesFacturesView = {
             body: tableRows,
             theme: 'grid',
             headStyles: { fillColor: accentColor },
-            columnStyles: { 1: { halign: 'center' }, 2: { halign: 'right' }, 3: { halign: 'right' } }
+            columnStyles: columnStyles
         });
 
         // --- RÉCAPITULATIF FINANCIER ---
@@ -1926,33 +2035,7 @@ export const ToutesLesFacturesView = {
             doc.text("La Direction AMT TRANS'IT", 15, currentLineY + 9);
         } else {
             // BL / ATTESTATION
-            if (reste > 0) {
-                doc.setFillColor(254, 242, 242);
-                doc.setDrawColor(220, 38, 38);
-                doc.setLineWidth(0.5);
-                doc.rect(95, finalY, 100, 14, 'FD');
-                
-                doc.setFont("helvetica", "bold");
-                doc.setFontSize(10);
-                doc.setTextColor(220, 38, 38);
-                doc.text("À REMETTRE AU LIVREUR :", 100, finalY + 9);
-                
-                doc.setFontSize(14);
-                doc.text(`${this.app.formatMoney(reste)}`, 190, finalY + 9.5, { align: 'right' });
-            } else {
-                doc.setFillColor(240, 253, 244);
-                doc.setDrawColor(22, 163, 74);
-                doc.setLineWidth(0.5);
-                doc.rect(95, finalY, 100, 14, 'FD');
-                
-                doc.setFont("helvetica", "bold");
-                doc.setFontSize(12);
-                doc.setTextColor(22, 163, 74);
-                doc.text("COLIS SOLDÉ (Rien à payer)", 145, finalY + 9, { align: 'center' });
-            }
-            doc.setTextColor(0, 0, 0);
-
-            let sigY = finalY + 35;
+            let sigY = finalY + 15;
             doc.setFontSize(10);
             doc.setFont("helvetica", "bold");
             doc.text("Livreur / Agent AMT :", 25, sigY);
@@ -1988,7 +2071,7 @@ export const ToutesLesFacturesView = {
             doc.setFontSize(7);
             const defaultCgv = "1- Les temps et les délais de transports sont donnés à titre indicatifs par AMT TRANS'IT.\\n2- Les enlèvements à domicile sont gratuits dans la limite géographique.\\n3- Tous les colis et marchandises devront être intégralement payés avant la remise au destinataire.\\n4- En cas de litige, une solution amiable est privilégiée.";
             const cgvText = invoiceConfig?.cgv || defaultCgv;
-            const cgvLines = cgvText.split('\\n');
+            const cgvLines = cgvText.replace(/\\n/g, '\n').split('\n');
             
             cgvLines.forEach(line => {
                 const splitLine = doc.splitTextToSize(line, pageWidth - 30);

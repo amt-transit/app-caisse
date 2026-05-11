@@ -265,6 +265,7 @@ export const SettingsAgentsView = {
 
         const tbody = document.getElementById('agentTableBody');
         const cards = document.getElementById('agentCardsContainer');
+        const isMobile = window.innerWidth <= 768;
 
         if (this.filteredAgents.length === 0) {
             const emptyHtml = `<tr><td colspan="6" style="text-align: center; padding: 40px; color: #64748b;">Aucun agent trouvé.</td></tr>`;
@@ -273,71 +274,93 @@ export const SettingsAgentsView = {
             return;
         }
 
-        let rowsHtml = '';
-        let cardsHtml = '';
+        if (isMobile) {
+            cards.innerHTML = this.filteredAgents.map(a => {
+                const isActive = a.active !== false;
+                const name = a.displayName || a.email || 'Sans nom';
+                const agency = a.agency === 'paris' ? 'PARIS' : (a.agency === 'abidjan' ? 'ABIDJAN' : (a.agency === 'all' ? 'GLOBAL' : (a.agency || 'N/A')));
+                const isOnline = isUserOnline(a);
+                
+                // Affichage direct si c'est l'utilisateur connecté (évite le délai serveur)
+                const auth = getAuth();
+                const displayPhoto = (auth.currentUser && a.id === auth.currentUser.uid && localStorage.getItem('userProfilePhoto')) ? localStorage.getItem('userProfilePhoto') : a.photoURL;
 
-        this.filteredAgents.forEach((a, index) => {
-            const isActive = a.active !== false; // Actif par défaut
-            const name = a.displayName || a.email || 'Sans nom';
-            const agency = a.agency === 'paris' ? 'PARIS AMT TRANSIT' : (a.agency === 'abidjan' ? 'ABIDJAN (AMT CARGO)' : (a.agency === 'all' ? 'GLOBAL' : (a.agency || 'Non définie')));
-            
-            rowsHtml += `
-                <tr style="opacity: ${isActive ? '1' : '0.6'};">
-                    <td>
-                        <div class="am__agent-cell">
-                            <div class="am__avatar">${this.getInitials(name, a.initials)}</div>
-                            <div>
-                                <div class="am__agent-name">${name}</div>
-                                <div class="am__agent-id">${a.email || 'Pas d\'email'} &middot; ${a.initials || this.getInitials(name)}</div>
+                return `
+                    <div class="compact-mob-card" style="margin-bottom: 12px; opacity: ${isActive ? '1' : '0.6'};">
+                        <div class="cmc-header">
+                            <div class="cmc-ref-group" style="display: flex; align-items: center; gap: 10px;">
+                                ${displayPhoto 
+                                    ? `<div style="width: 28px; height: 28px; border-radius: 50%; background-image: url('${displayPhoto}'); background-size: cover; background-position: center; flex-shrink: 0;"></div>` 
+                                    : `<div style="width: 28px; height: 28px; border-radius: 50%; background: linear-gradient(135deg, #3b82f6, #1d4ed8); color: white; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 10px; flex-shrink: 0;">${this.getInitials(name, a.initials)}</div>`
+                                }
+                                <span class="cmc-ref" style="font-family: 'Inter', sans-serif; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${name}</span>
                             </div>
-                        </div>
-                    </td>
-                    <td>${this.getRoleBadge(a.role)}</td>
-                    <td><span style="font-size: 11px; font-weight: 600; color: #475569;">${agency}</span></td>
-                    <td style="text-align: center;">
-                        <button class="am__toggle ${isActive ? 'am__toggle--on' : 'am__toggle--off'}" onclick="window.app.views.settingsAgents.toggleStatus('${a.id}', ${isActive})">
-                            <span class="am__toggle-knob"></span>
-                        </button>
-                    </td>
-                    <td><span class="am__online-dot ${isUserOnline(a) ? 'am__online-dot--on' : 'am__online-dot--off'}"></span> <span style="font-size:11px; color:${isUserOnline(a) ? '#10b981' : '#64748b'};">${isUserOnline(a) ? 'En ligne' : 'Hors ligne'}</span></td>
-                    <td style="text-align: right;">
-                        <div class="am__actions" style="justify-content: flex-end;">
-                            <button class="am__btn-sm" onclick="window.app.views.settingsAgents.openModal('${a.id}')" title="Modifier">✏️</button>
-                            <button class="am__btn-sm" onclick="window.app.views.settingsAgents.deleteAgent('${a.id}')" title="Supprimer" style="color: #ef4444;">🗑️</button>
-                        </div>
-                    </td>
-                </tr>
-            `;
-
-            cardsHtml += `
-                <div class="am__card" style="opacity: ${isActive ? '1' : '0.6'};">
-                    <div class="am__card-top">
-                        <div class="am__avatar">${this.getInitials(name, a.initials)}</div>
-                        <div class="am__card-info">
-                            <div class="am__agent-name">${name}</div>
-                            <div class="am__agent-id" style="margin-bottom: 5px;">${a.email || 'Pas d\'email'} &middot; ${a.initials || this.getInitials(name)}</div>
                             ${this.getRoleBadge(a.role)}
                         </div>
-                        <span class="am__online-dot am__online-dot--card ${isUserOnline(a) ? 'am__online-dot--on' : 'am__online-dot--off'}"></span>
-                    </div>
-                    <div class="am__card-details">
-                        <div><strong>Agence :</strong> ${agency}</div>
-                    </div>
-                    <div class="am__card-bottom">
-                        <button class="am__toggle ${isActive ? 'am__toggle--on' : 'am__toggle--off'}" onclick="window.app.views.settingsAgents.toggleStatus('${a.id}', ${isActive})">
-                            <span class="am__toggle-knob"></span>
-                        </button>
-                        <div class="am__actions">
-                            <button class="am__btn-sm" onclick="window.app.views.settingsAgents.openModal('${a.id}')">✏️</button>
-                            <button class="am__btn-sm" onclick="window.app.views.settingsAgents.deleteAgent('${a.id}')" style="color: #ef4444;">🗑️</button>
+                        <div class="cmc-body">
+                            <div class="cmc-route" style="font-size: 11px;">
+                                ${a.email || 'Pas d\'email'}
+                            </div>
+                            <div class="cmc-meta">
+                                <span class="am__online-dot ${isOnline ? 'am__online-dot--on' : 'am__online-dot--off'}"></span> ${agency}
+                            </div>
+                        </div>
+                        <div class="cmc-footer">
+                            <button class="am__toggle ${isActive ? 'am__toggle--on' : 'am__toggle--off'}" onclick="window.app.views.settingsAgents.toggleStatus('${a.id}', ${isActive})">
+                                <span class="am__toggle-knob"></span>
+                            </button>
+                            <div class="cmc-actions">
+                                <button class="cmc-btn cmc-btn-edit" onclick="window.app.views.settingsAgents.openModal('${a.id}')" title="Modifier"><i class="fas fa-edit"></i></button>
+                                <button class="cmc-btn cmc-btn-del" onclick="window.app.views.settingsAgents.deleteAgent('${a.id}')" title="Supprimer"><i class="fas fa-trash"></i></button>
+                            </div>
                         </div>
                     </div>
-                </div>
-            `;
-        });
-
-        tbody.innerHTML = rowsHtml;
-        cards.innerHTML = cardsHtml;
+                `;
+            }).join('');
+            tbody.innerHTML = ''; // Clear desktop table
+        } else {
+            tbody.innerHTML = this.filteredAgents.map(a => {
+                const isActive = a.active !== false; // Actif par défaut
+                const name = a.displayName || a.email || 'Sans nom';
+                const agency = a.agency === 'paris' ? 'PARIS AMT TRANSIT' : (a.agency === 'abidjan' ? 'ABIDJAN (AMT CARGO)' : (a.agency === 'all' ? 'GLOBAL' : (a.agency || 'Non définie')));
+                
+                // Affichage direct si c'est l'utilisateur connecté
+                const auth = getAuth();
+                const displayPhoto = (auth.currentUser && a.id === auth.currentUser.uid && localStorage.getItem('userProfilePhoto')) ? localStorage.getItem('userProfilePhoto') : a.photoURL;
+                
+                return `
+                    <tr style="opacity: ${isActive ? '1' : '0.6'};">
+                        <td>
+                            <div class="am__agent-cell">
+                                ${displayPhoto 
+                                    ? `<div class="am__avatar" style="background-image: url('${displayPhoto}'); background-size: cover; background-position: center; color: transparent;"></div>`
+                                    : `<div class="am__avatar">${this.getInitials(name, a.initials)}</div>`
+                                }
+                                <div>
+                                    <div class="am__agent-name">${name}</div>
+                                    <div class="am__agent-id">${a.email || 'Pas d\'email'} &middot; ${a.initials || this.getInitials(name)}</div>
+                                </div>
+                            </div>
+                        </td>
+                        <td>${this.getRoleBadge(a.role)}</td>
+                        <td><span style="font-size: 11px; font-weight: 600; color: #475569;">${agency}</span></td>
+                        <td style="text-align: center;">
+                            <button class="am__toggle ${isActive ? 'am__toggle--on' : 'am__toggle--off'}" onclick="window.app.views.settingsAgents.toggleStatus('${a.id}', ${isActive})">
+                                <span class="am__toggle-knob"></span>
+                            </button>
+                        </td>
+                        <td><span class="am__online-dot ${isUserOnline(a) ? 'am__online-dot--on' : 'am__online-dot--off'}"></span> <span style="font-size:11px; color:${isUserOnline(a) ? '#10b981' : '#64748b'};">${isUserOnline(a) ? 'En ligne' : 'Hors ligne'}</span></td>
+                        <td style="text-align: right;">
+                            <div class="am__actions" style="justify-content: flex-end;">
+                                <button class="am__btn-sm" onclick="window.app.views.settingsAgents.openModal('${a.id}')" title="Modifier">✏️</button>
+                                <button class="am__btn-sm" onclick="window.app.views.settingsAgents.deleteAgent('${a.id}')" title="Supprimer" style="color: #ef4444;">🗑️</button>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+            cards.innerHTML = ''; // Clear mobile cards
+        }
     },
 
     openModal(id = null) {
@@ -456,7 +479,7 @@ export const SettingsAgentsView = {
     },
 
     async deleteAgent(id) {
-        if (!confirm("Voulez-vous vraiment supprimer cet agent ?\n\nCette action supprimera définitivement sa fiche dans la base de données ET son accès de connexion Firebase.")) return;
+        if (!await window.AppModal.confirm("Voulez-vous vraiment supprimer cet agent ?\n\nCette action supprimera définitivement sa fiche dans la base de données ET son accès de connexion Firebase.", "Supprimer l'agent", true)) return;
         
         try {
             // 1. Récupérer les informations de l'agent pour obtenir son mot de passe
