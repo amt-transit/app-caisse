@@ -830,7 +830,7 @@ renderTable() {
 
                 trackingRows += `
                     <tr>
-                        <td style="font-weight: 900; font-family: monospace;">${lbl}</td>
+                        <td style="font-weight: 900; font-family: monospace;"><a href="#" onclick="event.preventDefault(); window.app.views.toutesLesFactures.showSubPackageHistory('${liv.id}', '${lbl}');" style="color: #3b82f6; text-decoration: underline;" title="Voir l'historique des scans">${lbl}</a></td>
                         <td class="modal-table__desc">${specificDesc}</td>
                         <td><span class="status-badge ${lblStatusClass}">${lblStatusDisplay}</span></td>
                         <td><span style="background:#f1f5f9; padding:4px 8px; border-radius:6px; font-weight:600;">${lblContainer}</span></td>
@@ -1101,6 +1101,57 @@ renderTable() {
         `;
         
         document.getElementById('tlfModalsContainer').innerHTML = html;
+    },
+
+    async showSubPackageHistory(livId, label) {
+        const { getDoc, doc } = await import("https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js");
+        const docSnap = await getDoc(doc(db, "livraisons", livId));
+        if (!docSnap.exists()) return;
+        const liv = docSnap.data();
+
+        let scansHtml = '';
+        if (liv.scanHistory && Array.isArray(liv.scanHistory)) {
+            const myScans = liv.scanHistory.filter(s => s.scanRef === label);
+            myScans.sort((a, b) => new Date(b.date) - new Date(a.date)); // Du plus récent au plus ancien
+
+            if (myScans.length > 0) {
+                scansHtml = myScans.map(s => {
+                    let typeLabel = s.type === 'ENTREPOT_PARIS' ? '🏭 Mise en entrepôt' : (s.type === 'CONTENEUR_CHARGEMENT' ? '🚢 Chargement Conteneur' : s.type);
+                    const containerInfo = s.container && s.container !== '-' ? ` <span style="font-size:11px; background:#f1f5f9; padding:2px 6px; border-radius:4px; margin-left:8px; color:#475569;">Conteneur: <b>${s.container}</b></span>` : '';
+                    return `
+                        <div style="display: flex; justify-content: space-between; align-items: center; padding: 15px 25px; border-bottom: 1px solid #f1f5f9;">
+                            <div>
+                                <div style="font-weight: 700; color: #0f172a; font-size: 14px;">${typeLabel}${containerInfo}</div>
+                                <div style="font-size: 12px; color: #64748b; margin-top: 4px;">Par : <span style="font-weight: 600;">${s.agent || 'Système'}</span></div>
+                            </div>
+                            <div style="font-size: 13px; color: #334155; font-weight: 600; background: #f8fafc; padding: 6px 12px; border-radius: 8px; border: 1px solid #e2e8f0;">
+                                ${new Date(s.date).toLocaleString('fr-FR')}
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+            }
+        }
+
+        if (!scansHtml) {
+            scansHtml = '<div style="padding: 40px; text-align: center; color: #64748b;">Aucun historique de scan enregistré pour ce colis précis.</div>';
+        }
+
+        const html = `
+            <div class="modal active" id="subPackageHistoryModal" style="z-index: 10005; position: fixed; inset: 0; background: rgba(15,23,42,0.6); display: flex; align-items: center; justify-content: center; backdrop-filter: blur(4px);">
+                <div style="background: white; border-radius: 16px; width: 500px; max-width: 90%; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25);">
+                    <div style="padding: 20px 25px; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center; background: #f8fafc;">
+                        <div>
+                            <h3 style="margin: 0; font-size: 16px; font-weight: 800; color: #0f172a;">Historique des scans</h3>
+                            <div style="font-size: 13px; color: #3b82f6; font-weight: bold; margin-top: 4px; font-family: monospace; letter-spacing: 0.5px;">${label}</div>
+                        </div>
+                        <button onclick="document.getElementById('subPackageHistoryModal').remove()" style="background: white; border: 1px solid #cbd5e1; width: 32px; height: 32px; border-radius: 8px; font-size: 18px; cursor: pointer; color: #64748b; display: flex; justify-content: center; align-items: center; transition: 0.2s;" onmouseover="this.style.background='#f1f5f9'" onmouseout="this.style.background='white'">✕</button>
+                    </div>
+                    <div style="padding: 0; max-height: 400px; overflow-y: auto;">${scansHtml}</div>
+                </div>
+            </div>
+        `;
+        document.getElementById('tlfModalsContainer').insertAdjacentHTML('beforeend', html);
     },
 
     async addPayment(id) {
