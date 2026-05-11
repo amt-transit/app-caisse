@@ -188,12 +188,12 @@ export const DailyUsersView = {
             
             return `
                 <tr onclick="window.app.views.dailyUsers.showAgentDetails('${user.name.replace(/'/g, "\\'")}')" style="cursor: pointer;">
-                    <td style="font-size: 18px;">${medal || (index + 1)}</td>
-                    <td><strong>${user.name}</strong></td>
-                    <td style="text-align: right; font-weight: 700; color: #3b82f6;">${this.app.formatMoney(user.ca)}</td>
-                    <td style="text-align: center;">${user.factures}</td>
-                    <td style="text-align: center;">${user.colis}</td>
-                    <td style="text-align: center;">
+                    <td data-label="Rang" style="font-size: 18px;">${medal || (index + 1)}</td>
+                    <td data-label="Agent"><strong>${user.name}</strong></td>
+                    <td data-label="CA Généré" style="text-align: right; font-weight: 700; color: #3b82f6;">${this.app.formatMoney(user.ca)}</td>
+                    <td data-label="Factures" style="text-align: center;">${user.factures}</td>
+                    <td data-label="Colis" style="text-align: center;">${user.colis}</td>
+                    <td data-label="Perf." style="text-align: center;">
                         <div style="background: #e2e8f0; border-radius: 10px; height: 10px; width: 100%; position: relative;">
                             <div style="width: ${performance}%; background: #10b981; height: 100%; border-radius: 10px;"></div>
                         </div>

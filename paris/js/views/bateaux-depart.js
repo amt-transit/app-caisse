@@ -655,7 +655,8 @@ export const BateauxDepartView = {
                 snap.forEach(d => {
                     batch.update(d.ref, {
                         containerStatus: 'EN_COURS', // Les colis débarquent à Abidjan
-                        dateAjout: new Date().toISOString() // Le compteur de magasinage démarre
+                        dateAjout: realArrivalDate, // Le compteur de magasinage démarre
+                        arrivalDate: realArrivalDate // On met à jour la date d'arrivée réelle
                     });
                 });
             }

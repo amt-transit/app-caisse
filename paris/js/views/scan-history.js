@@ -259,15 +259,15 @@ export const ScanHistoryView = {
 
             return `
                 <tr class="table-row ${isChecked ? 'selected' : ''}" onclick="window.app.views.scanHistory.toggleRow('${s.id}')">
-                    <td class="col-checkbox">
+                    <td data-label="Sélect." class="col-checkbox">
                         <input type="checkbox" class="table-checkbox" value="${s.id}" ${isChecked ? 'checked' : ''} onclick="event.stopPropagation(); window.app.views.scanHistory.toggleRow('${s.id}')">
                     </td>
-                    <td class="col-time">${dateStr}</td>
-                    <td class="col-qr"><code>${s.scanRef || '-'}</code></td>
-                    <td class="col-container">${s.container === '-' || !s.container ? '<span style="color:#94a3b8;">-</span>' : s.container}</td>
-                    <td>${statusBadge}</td>
-                    <td><span style="font-size:11px; font-weight:600; color:#64748b;">${typeLabel}</span></td>
-                    <td class="col-agent">${s.agent || '-'}</td>
+                    <td data-label="Heure" class="col-time">${dateStr}</td>
+                    <td data-label="QR Code" class="col-qr"><code>${s.scanRef || '-'}</code></td>
+                    <td data-label="Conteneur" class="col-container">${s.container === '-' || !s.container ? '<span style="color:#94a3b8;">-</span>' : s.container}</td>
+                    <td data-label="Statut">${statusBadge}</td>
+                    <td data-label="Type"><span style="font-size:11px; font-weight:600; color:#64748b;">${typeLabel}</span></td>
+                    <td data-label="Agent" class="col-agent">${s.agent || '-'}</td>
                 </tr>
             `;
         }).join('');

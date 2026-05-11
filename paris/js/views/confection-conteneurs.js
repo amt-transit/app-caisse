@@ -329,10 +329,14 @@ export const ConfectionConteneursView = {
         if (headerCtnCountEl) headerCtnCountEl.textContent = activeCtns.length;
 
         const tabsEl = document.getElementById('rightTabs');
+        if (!tabsEl) return; // SÉCURITÉ
+
         if (activeCtns.length === 0) {
             tabsEl.innerHTML = '<div style="padding: 12px 20px; color: #64748b;">Aucun conteneur en cours. Créez-en un dans "Gestion Conteneurs".</div>';
-            document.getElementById('rightStats').innerHTML = '';
-            document.getElementById('rightList').innerHTML = '';
+            const rightStatsEl = document.getElementById('rightStats');
+            if (rightStatsEl) rightStatsEl.innerHTML = '';
+            const rightListEl = document.getElementById('rightList');
+            if (rightListEl) rightListEl.innerHTML = '';
             return;
         }
 
@@ -359,30 +363,35 @@ export const ConfectionConteneursView = {
             return sum + (parseFloat(String(item.prixOriginal || item.montant || '0').replace(/[^\d]/g, '')) || 0);
         }, 0);
 
-        document.getElementById('rightStats').innerHTML = `
-            <div class="ctn-stat"><div class="ctn-stat__label">Référence</div><div class="ctn-stat__value mono">${ctnName}</div></div>
-            <div class="ctn-stat"><div class="ctn-stat__label">Dossiers</div><div class="ctn-stat__value">${ctnItems.length}</div></div>
-            <div class="ctn-stat"><div class="ctn-stat__label">Total colis</div><div class="ctn-stat__value">${totalColis}</div></div>
-            <div class="ctn-stat"><div class="ctn-stat__label">CA total</div><div class="ctn-stat__value">${this.app.formatMoney(totalCA / 656)}</div></div>
-        `;
+        const rightStatsEl = document.getElementById('rightStats');
+        if (rightStatsEl) {
+            rightStatsEl.innerHTML = `
+                <div class="ctn-stat"><div class="ctn-stat__label">Référence</div><div class="ctn-stat__value mono">${ctnName}</div></div>
+                <div class="ctn-stat"><div class="ctn-stat__label">Dossiers</div><div class="ctn-stat__value">${ctnItems.length}</div></div>
+                <div class="ctn-stat"><div class="ctn-stat__label">Total colis</div><div class="ctn-stat__value">${totalColis}</div></div>
+                <div class="ctn-stat"><div class="ctn-stat__label">CA total</div><div class="ctn-stat__value">${this.app.formatMoney(totalCA / 656)}</div></div>
+            `;
+        }
 
         const listEl = document.getElementById('rightList');
-        if (ctnItems.length === 0) {
-            listEl.innerHTML = `<div style="text-align: center; padding: 30px; color: #94a3b8;">Conteneur vide. Ajoutez des dossiers depuis la liste de gauche.</div>`;
-        } else {
-            listEl.innerHTML = ctnItems.map(l => `
-                <div class="ctn-dossier-item">
-                    <div class="ctn-dossier-item__info">
-                        <div class="ctn-dossier-item__ref mono">${l.ref}</div>
-                        <div class="ctn-dossier-item__meta">
-                            <span class="meta-tag meta-tag--client">👤 ${l.destinataire || l.expediteur || 'Client'}</span>
-                            <span class="meta-tag">📦 ${l.quantite || 1} colis</span>
-                            <span class="meta-tag meta-tag--money">${l.prixOriginal || l.montant || '0 CFA'}</span>
+        if (listEl) {
+            if (ctnItems.length === 0) {
+                listEl.innerHTML = `<div style="text-align: center; padding: 30px; color: #94a3b8;">Conteneur vide. Ajoutez des dossiers depuis la liste de gauche.</div>`;
+            } else {
+                listEl.innerHTML = ctnItems.map(l => `
+                    <div class="ctn-dossier-item">
+                        <div class="ctn-dossier-item__info">
+                            <div class="ctn-dossier-item__ref mono">${l.ref}</div>
+                            <div class="ctn-dossier-item__meta">
+                                <span class="meta-tag meta-tag--client">👤 ${l.destinataire || l.expediteur || 'Client'}</span>
+                                <span class="meta-tag">📦 ${l.quantite || 1} colis</span>
+                                <span class="meta-tag meta-tag--money">${l.prixOriginal || l.montant || '0 CFA'}</span>
+                            </div>
                         </div>
+                        <button class="btn-remove" type="button" title="Retirer du conteneur" onclick="window.app.views.confectionConteneurs.removeFromContainer('${l.id}')">✕</button>
                     </div>
-                    <button class="btn-remove" type="button" title="Retirer du conteneur" onclick="window.app.views.confectionConteneurs.removeFromContainer('${l.id}')">✕</button>
-                </div>
-            `).join('');
+                `).join('');
+            }
         }
     },
 

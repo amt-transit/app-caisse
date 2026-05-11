@@ -593,18 +593,18 @@ export const ToutesLesFacturesView = {
 
             return `
                 <tr data-invoice-id="${inv.id}">
-                    <td><span class="status-badge ${statusClass}">${statusText}</span></td>
-                    <td style="font-weight: 900;">
+                    <td data-label="Statut"><span class="status-badge ${statusClass}">${statusText}</span></td>
+                    <td data-label="Référence" style="font-weight: 900;">
                         <button class="amount-link" onclick="window.app.views.toutesLesFactures.viewInvoice('${inv.id}')">${inv.reference || '-'}</button>
                     </td>
-                    <td>${inv.date ? new Date(inv.date).toLocaleDateString('fr-FR') : '-'}</td>
-                    <td class="cell--client"><strong>${inv.nom || '-'}</strong></td>
-                    <td class="cell--address"><span class="tooltip" data-tooltip="${address.replace(/"/g, '&quot;')}">${shortAddress}</span></td>
-                    <td>${inv.tel || '-'}</td>
-                    <td>${inv.nomDestinataire || '-'}</td>
-                    <td class="cell--amount"><button class="amount-link" onclick="window.app.views.toutesLesFactures.viewInvoice('${inv.id}')">${this.app.formatMoney(totalEUR)}</button></td>
-                    <td style="text-align: right; font-weight: bold; color: #0f172a;">${nbColis}</td>
-                    <td style="text-align: right;">
+                    <td data-label="Date">${inv.date ? new Date(inv.date).toLocaleDateString('fr-FR') : '-'}</td>
+                    <td data-label="Client" class="cell--client"><strong>${inv.nom || '-'}</strong></td>
+                    <td data-label="Adresse" class="cell--address"><span class="tooltip" data-tooltip="${address.replace(/"/g, '&quot;')}">${shortAddress}</span></td>
+                    <td data-label="Téléphone">${inv.tel || '-'}</td>
+                    <td data-label="Destinataire">${inv.nomDestinataire || '-'}</td>
+                    <td data-label="Montant" class="cell--amount"><button class="amount-link" onclick="window.app.views.toutesLesFactures.viewInvoice('${inv.id}')">${this.app.formatMoney(totalEUR)}</button></td>
+                    <td data-label="Nb colis" style="text-align: right; font-weight: bold; color: #0f172a;">${nbColis}</td>
+                    <td data-label="Actions" style="text-align: right;">
                         <div class="row-actions">
                             <button class="icon-btn btn--view" onclick="window.app.views.toutesLesFactures.viewInvoice('${inv.id}')" title="Voir">👁️</button>
                             <button class="icon-btn btn--pay" onclick="window.app.views.toutesLesFactures.addPayment('${inv.id}')" title="Ajouter paiement">💰</button>
@@ -707,7 +707,7 @@ export const ToutesLesFacturesView = {
                 // 1. Statut individuel par défaut (Non scanné)
                 let lblStatusDisplay = 'À traiter (Non scanné)';
                 let lblStatusClass = 'colis-pending';
-                let lblContainer = '-';
+                let lblContainer = liv.conteneur || '-';
 
                 // 2. Vérification individuelle via l'historique des scans
                 if (liv.scanHistory && Array.isArray(liv.scanHistory)) {
@@ -728,8 +728,14 @@ export const ToutesLesFacturesView = {
                 }
 
                 // 3. Surcharges globales pour les étapes ultérieures
-                if (liv.containerStatus === 'A_VENIR' && lblStatusClass === 'colis-transit') {
-                    lblStatusDisplay = 'En Transit (Mer)';
+                if (liv.containerStatus === 'A_VENIR') {
+                    if (lblStatusClass === 'colis-transit') {
+                        lblStatusDisplay = 'En Transit (Mer)';
+                    } else {
+                        lblStatusDisplay = 'Assigné (Conteneur)';
+                        lblStatusClass = 'colis-transit';
+                    }
+                    lblContainer = liv.conteneur || lblContainer;
                 } else if (liv.containerStatus === 'EN_COURS') {
                     lblStatusDisplay = 'Arrivé à Abidjan';
                     lblStatusClass = 'colis-abidjan';

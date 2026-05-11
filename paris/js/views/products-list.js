@@ -204,10 +204,10 @@ export const ProductsListView = {
 
         tbody.innerHTML = this.filteredProducts.map(p => `
             <tr>
-                <td style="padding: 15px;"><span class="badge" style="${getCatStyle(p.category)} padding: 4px 10px; border-radius: 12px; font-weight: 600; font-size: 11px;">${p.category}</span></td>
-                <td style="font-weight: 600; color: #1e293b;">${p.desc} ${p.dim ? `<br><span style="font-size: 11px; color: #64748b; font-weight: normal;">📏 ${p.dim}</span>` : ''}</td>
-                <td style="text-align: right; font-weight: 700; font-family: monospace; font-size: 14px; ${p.price < 0 ? 'color: #ef4444;' : 'color: #0f172a;'}">${this.app.formatMoney(p.price)}</td>
-                <td style="text-align: center;"><button class="btn-small" onclick="window.app.views.productsList.openEditModal('${p.id}')" style="background: transparent; border: none; font-size: 16px; cursor: pointer; opacity: 0.7; transition: 0.2s;" title="Modifier" onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=0.7">✏️</button></td>
+                <td data-label="Catégorie" style="padding: 15px;"><span class="badge" style="${getCatStyle(p.category)} padding: 4px 10px; border-radius: 12px; font-weight: 600; font-size: 11px;">${p.category}</span></td>
+                <td data-label="Description" style="font-weight: 600; color: #1e293b;">${p.desc} ${p.dim ? `<br><span style="font-size: 11px; color: #64748b; font-weight: normal;">📏 ${p.dim}</span>` : ''}</td>
+                <td data-label="Prix" style="text-align: right; font-weight: 700; font-family: monospace; font-size: 14px; ${p.price < 0 ? 'color: #ef4444;' : 'color: #0f172a;'}">${this.app.formatMoney(p.price)}</td>
+                <td data-label="Actions" style="text-align: center;"><button class="btn-small" onclick="window.app.views.productsList.openEditModal('${p.id}')" style="background: transparent; border: none; font-size: 16px; cursor: pointer; opacity: 0.7; transition: 0.2s;" title="Modifier" onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=0.7">✏️</button></td>
             </tr>
         `).join('');
     },

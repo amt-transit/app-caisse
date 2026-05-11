@@ -110,6 +110,46 @@
         table tbody tr.selected {
             background-color: #eff6ff !important;
         }
+
+        /* Transformation des tableaux en cartes sur mobile */
+        @media (max-width: 768px) {
+            .data-table, .factures-table, .table-as-cards, .reg-table, .daily-table, .chauffeurs-table, .am__table { 
+                display: block; width: 100%; border: none !important; background: transparent !important;
+            }
+            .data-table thead, .factures-table thead, .table-as-cards thead, .reg-table thead, .daily-table thead, .chauffeurs-table thead, .am__table thead { 
+                display: none; 
+            }
+            .data-table tbody, .factures-table tbody, .table-as-cards tbody, .reg-table tbody, .daily-table tbody, .chauffeurs-table tbody, .am__table tbody { 
+                display: block; width: 100%; 
+            }
+            .data-table tr, .factures-table tr, .table-as-cards tr, .reg-table tr, .daily-table tr, .chauffeurs-table tr, .am__table tr {
+                display: flex; flex-direction: column; margin-bottom: 15px; background: white !important; 
+                border: 1px solid #e2e8f0; border-radius: 12px; padding: 10px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);
+            }
+            .data-table td, .factures-table td, .table-as-cards td, .reg-table td, .daily-table td, .chauffeurs-table td, .am__table td {
+                display: flex; justify-content: space-between; align-items: center; text-align: right;
+                padding: 10px 5px !important; border-bottom: 1px solid #f1f5f9 !important;
+            }
+            .data-table td:last-child, .factures-table td:last-child, .table-as-cards td:last-child, .reg-table td:last-child, .daily-table td:last-child, .chauffeurs-table td:last-child, .am__table td:last-child {
+                border-bottom: none !important;
+            }
+            .data-table td::before, .factures-table td::before, .table-as-cards td::before, .reg-table td::before, .daily-table td::before, .chauffeurs-table td::before, .am__table td::before {
+                content: attr(data-label); font-size: 11px; font-weight: 800; color: #64748b; 
+                text-transform: uppercase; text-align: left; padding-right: 10px; flex-shrink: 0;
+            }
+            
+            /* Ajustement pour les cellules d'actions ou contenus longs */
+            .data-table td > *, .factures-table td > * {
+                max-width: 65%;
+                text-align: right;
+            }
+            .row-actions, .td-actions {
+                width: 100%;
+                justify-content: flex-end;
+                max-width: 100% !important;
+                margin-top: 5px;
+            }
+        }
     </style>
 </head>
 <body>
