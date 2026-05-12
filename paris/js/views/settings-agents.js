@@ -9,6 +9,7 @@ export const SettingsAgentsView = {
     agents: [],
     filteredAgents: [],
     tempPhotoFile: null,
+    cropper: null,
 
     render(app) {
         this.app = app;
@@ -142,6 +143,20 @@ export const SettingsAgentsView = {
                         </div>
                         <span style="font-size: 11px; color: #64748b; margin-top: 8px;">Photo de profil</span>
                         <input type="file" id="agentPhotoInput" accept="image/*" style="display:none;" onchange="window.app.views.settingsAgents.handlePhotoSelect(event)">
+                    </div>
+
+                    <!-- MODAL DE RECADRAGE PHOTO -->
+                    <div id="photoCropModal" class="modal" style="display:none; z-index: 2001;">
+                        <div class="modal-content" style="max-width: 500px; padding: 20px;">
+                            <h3 style="margin-top:0; color: #0f172a;">Recadrer la photo</h3>
+                            <div style="width: 100%; max-height: 40vh; margin: 20px 0; background: #f1f5f9; border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden;">
+                                <img id="imageToCrop" src="" style="max-width: 100%; display: block;">
+                            </div>
+                            <div style="display: flex; justify-content: flex-end; gap: 10px;">
+                                <button class="btn btn-outline" onclick="window.app.views.settingsAgents.closeCropModal()">Annuler</button>
+                                <button class="btn btn-primary" onclick="window.app.views.settingsAgents.cropImage()">Recadrer et utiliser</button>
+                            </div>
+                        </div>
                     </div>
 
                     <div class="form-group" style="margin-bottom: 15px;">
@@ -424,18 +439,57 @@ export const SettingsAgentsView = {
 
     handlePhotoSelect(event) {
         const file = event.target.files[0];
-        if (!file) return;
-        this.tempPhotoFile = file;
+        if (!file || !file.type.startsWith('image/')) return;
 
+        // Utilisation de FileReader pour obtenir une URL de données pour Cropper.js
         const reader = new FileReader();
         reader.onload = (e) => {
-            const preview = document.getElementById('agentPhotoPreview');
-            preview.style.backgroundImage = `url('${e.target.result}')`;
-            preview.style.backgroundSize = 'cover';
-            preview.style.backgroundPosition = 'center';
-            document.getElementById('agentPhotoPlaceholder').style.display = 'none';
+            const modal = document.getElementById('photoCropModal');
+            const image = document.getElementById('imageToCrop');
+            
+            image.src = e.target.result;
+            modal.style.display = 'flex';
+
+            if (this.cropper) {
+                this.cropper.destroy();
+            }
+
+            this.cropper = new Cropper(image, {
+                aspectRatio: 1,
+                viewMode: 1,
+                background: false,
+                autoCropArea: 0.8,
+            });
         };
         reader.readAsDataURL(file);
+    },
+
+    closeCropModal() {
+        if (this.cropper) {
+            this.cropper.destroy();
+            this.cropper = null;
+        }
+        document.getElementById('photoCropModal').style.display = 'none';
+        document.getElementById('agentPhotoInput').value = ''; // Réinitialise l'input
+    },
+
+    cropImage() {
+        if (!this.cropper) return;
+
+        const canvas = this.cropper.getCroppedCanvas({
+            width: 256, height: 256, imageSmoothingQuality: 'high',
+        });
+
+        const croppedImageUrl = canvas.toDataURL('image/jpeg');
+        
+        const preview = document.getElementById('agentPhotoPreview');
+        preview.style.backgroundImage = `url('${croppedImageUrl}')`;
+        preview.style.backgroundSize = 'cover';
+        preview.style.backgroundPosition = 'center';
+        document.getElementById('agentPhotoPlaceholder').style.display = 'none';
+
+        canvas.toBlob((blob) => { this.tempPhotoFile = blob; }, 'image/jpeg');
+        this.closeCropModal();
     },
 
     async saveAgent() {
@@ -464,8 +518,8 @@ export const SettingsAgentsView = {
             
             if (this.tempPhotoFile) {
                 const storage = getStorage(firebaseApp);
-                const fileExt = this.tempPhotoFile.name.split('.').pop();
-                const fileName = `profile_photos/agent_${Date.now()}_${Math.floor(Math.random()*1000)}.${fileExt}`;
+                // Les Blobs n'ont pas de nom, on force l'extension .jpg
+                const fileName = `profile_photos/agent_${Date.now()}_${Math.floor(Math.random()*1000)}.jpg`;
                 const sRef = storageRef(storage, fileName);
                 await uploadBytes(sRef, this.tempPhotoFile);
                 uploadedPhotoURL = await getDownloadURL(sRef);

@@ -36,6 +36,8 @@ import { BilansFinanciersView } from './views/bilans-financiers.js';
 import { StatistiquesView } from './views/statistiques.js';
 import { AppModal } from './utils/app-modal.js';
 import { ChatView } from './views/chat.js';
+import { AuditLogView } from './views/audit-log.js';
+import { ProspectingView } from './views/prospecting.js';
 import { NotificationsView } from './views/notifications.js';
 
 // Configuration de l'application Paris
@@ -548,8 +550,8 @@ const app = {
             'config-container': () => ConfigContainerView.render(this),
             'config-objectives': () => this.renderConfigObjectives(),
             'config-charges': () => this.renderConfigCharges(),
-            'prospecting': () => this.renderProspecting(),
-            'audit-log': () => this.renderAuditLog()
+            'prospecting': () => ProspectingView.render(this),
+            'audit-log': () => AuditLogView.render(this)
         };
         
         const renderer = renderers[page];
@@ -1026,27 +1028,7 @@ const app = {
     renderConfigLabel() { this.renderSettingsForm('Choix étiquette', { format: 'A6', template: 'Étiquette standard', barcode: true }); },
     renderConfigObjectives() { this.renderSettingsForm('Objectifs', { monthlyTarget: 50000, quarterlyTarget: 150000, yearlyTarget: 600000 }); },
     renderConfigCharges() { this.renderSettingsForm('Charges', { rent: 1500, utilities: 250, salaries: 8000, other: 500 }); },
-    renderProspecting() { this.renderChartPage('prospections', 'monthly'); },
     
-    renderAuditLog() {
-        const html = `
-            <div class="form-card">
-                <h3>Journal d'activités</h3>
-                <div style="margin-bottom: 15px;">
-                    <input type="text" placeholder="Filtrer par utilisateur, action..." style="padding: 8px; width: 100%; border: 1px solid #e2e8f0; border-radius: 8px;">
-                </div>
-                <table class="data-table">
-                    <thead><tr><th>Date/Heure</th><th>Utilisateur</th><th>Action</th><th>Détails</th></tr></thead>
-                    <tbody>
-                        <tr><td>2024-12-14 10:30</td><td>Agent Paris</td><td>Création facture</td><td>FAC-2024-003 créée pour Ibrahim Touré</td></tr>
-                        <tr><td>2024-12-14 09:15</td><td>Agent Paris</td><td>Connexion</td><td>Connexion réussie</td></tr>
-                    </tbody>
-                </table>
-            </div>
-        `;
-        document.getElementById('contentContainer').innerHTML = html;
-    },
-
     renderSettingsForm(title, fields) {
         const html = `
             <div class="form-card">
