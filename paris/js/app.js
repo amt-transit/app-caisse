@@ -34,6 +34,8 @@ import { ScanContainerView } from './views/scan-container.js';
 import { BilansFinanciersView } from './views/bilans-financiers.js';
 import { StatistiquesView } from './views/statistiques.js';
 import { AppModal } from './utils/app-modal.js';
+import { ChatView } from './views/chat.js';
+import { NotificationsView } from './views/notifications.js';
 
 // Configuration de l'application Paris
 const app = {
@@ -55,7 +57,7 @@ const app = {
         'products-list': 'produits',
         'finance-cashier': 'finance', 'finance-cheques': 'finance', 'finance-expenses': 'finance',
         'stock-list': 'stock',
-        'balance-monthly': 'bilans-financiers', 'balance-yearly': 'bilans-financiers', 'balance-boat': 'bilans-financiers', 'balance-12m': 'bilans-financiers',
+        'balance-monthly': 'bilans-financiers', 'balance-12m': 'bilans-financiers',
         'stats-boat': 'statistique', 'stats-monthly': 'statistique', 'stats-yearly': 'statistique',
         'settings-agency': 'settings', 'settings-company': 'settings', 'settings-software': 'settings', 'settings-sms': 'settings', 'settings-notifications': 'settings', 'settings-menus': 'settings', 'settings-agents': 'settings', 'settings-appointments': 'settings', 'settings-profile': 'settings',
         'config-invoice': 'configuration', 'config-label': 'configuration', 'config-container': 'configuration', 'config-objectives': 'configuration', 'config-charges': 'configuration',
@@ -203,13 +205,40 @@ const app = {
 
                 if (activeContainer === 'ATT') return this.updateGaugeUI(0);
 
-                if (this.unsubContainerGauge) this.unsubContainerGauge();
-                const q = query(collection(db, "transactions"), where("conteneur", "==", activeContainer), where("agency", "==", activeAgency), where("isDeleted", "==", false));
+                if (this.unsubContainerGauge1) this.unsubContainerGauge1();
+                if (this.unsubContainerGauge2) this.unsubContainerGauge2();
                 
-                this.unsubContainerGauge = onSnapshot(q, (transSnap) => {
+                let snapTransDocs = [];
+                let snapLivDocs = [];
+
+                const updateVolume = () => {
                     let totalCBM = 0;
-                    transSnap.forEach(doc => { totalCBM += parseFloat(doc.data().volumeCBM) || 0; });
+                    
+                    // 1. Volume basé sur les factures (transactions) du conteneur actif
+                    snapTransDocs.forEach(d => { totalCBM += parseFloat(d.data().volumeCBM) || 0; });
+                    
+                    // 2. Ajout du volume des reliquats (colis toujours à Paris mais facturés sur d'anciens conteneurs)
+                    snapLivDocs.forEach(d => {
+                        if (d.data().conteneur !== activeContainer) {
+                            totalCBM += parseFloat(d.data().volumeCBM) || 0;
+                        }
+                    });
+                    
                     this.updateGaugeUI(totalCBM);
+                };
+
+                // Requête 1 : Factures du conteneur en cours
+                const qTrans = query(collection(db, "transactions"), where("conteneur", "==", activeContainer), where("agency", "==", activeAgency), where("isDeleted", "==", false));
+                this.unsubContainerGauge1 = onSnapshot(qTrans, (snap) => {
+                    snapTransDocs = snap.docs;
+                    updateVolume();
+                });
+
+                // Requête 2 : Tous les colis physiquement en attente à Paris
+                const qLiv = query(collection(db, "livraisons"), where("containerStatus", "==", "PARIS"), where("agency", "==", activeAgency));
+                this.unsubContainerGauge2 = onSnapshot(qLiv, (snap) => {
+                    snapLivDocs = snap.docs;
+                    updateVolume();
                 });
             });
         } catch (e) { console.error("Erreur initContainerGauge:", e); }
@@ -427,9 +456,7 @@ const app = {
             'finance-cheques': 'Liste des chèques',
             'finance-expenses': 'Dépenses',
             'stock-list': 'Stock produits',
-            'balance-monthly': 'Bilan mensuel',
-            'balance-yearly': 'Bilan annuel',
-            'balance-boat': 'Bilan bateau',
+            'balance-monthly': 'Bilan Comparatif',
             'balance-12m': 'Direction 12 mois',
             'stats-boat': 'Statistiques bateau',
             'stats-monthly': 'Statistiques mensuelles',
@@ -491,20 +518,18 @@ const app = {
             'clients-list': () => ClientsListView.render(this),
             'clients-app': () => this.renderClientsApp(),
             'clients-analytics': () => this.renderClientsAnalytics(),
-            'chat': () => this.renderChat(),
+            'chat': () => ChatView.render(this),
             'sms-send': () => this.renderSmsSend(),
             'sms-history': () => this.renderSmsHistory(),
-            'notifications': () => this.renderNotifications(),
-            'notifications-history': () => this.renderNotificationsHistory(),
+            'notifications': () => NotificationsView.render(this),
+            'notifications-history': () => NotificationsView.render(this),
             'products-list': () => ProductsListView.render(this),
             'finance-cashier': () => FinanceCaisseView.render(this),
             'finance-cheques': () => FinanceChequesView.render(this),
             'finance-expenses': () => FinanceDepensesView.render(this),
             'stock-list': () => this.renderStockList(),
-            'balance-monthly': () => this.renderBalanceMonthly(),
-            'balance-yearly': () => this.renderBalanceYearly(),
-            'balance-boat': () => this.renderBalanceBoat(),
-            'balance-12m': () => this.renderBalance12M(),
+            'balance-monthly': () => BilansFinanciersView.render(this),
+            'balance-12m': () => BilansFinanciersView.render(this),
             'stats-boat': () => this.renderStatsBoat(),
             'stats-monthly': () => this.renderStatsMonthly(),
             'stats-yearly': () => this.renderStatsYearly(),
@@ -637,7 +662,7 @@ const app = {
                     ${renderQuickActionButton('sms-send', 'fa-sms', 'Envoi SMS', '#ec4899')}
                     ${renderQuickActionButton('loading-boats', 'fa-ship', 'Bateaux & Départs', '#0ea5e9')}
                     ${renderQuickActionButton('clients-list', 'fa-users', 'Clients', '#14b8a6')}
-                    ${renderQuickActionButton('balance-monthly', 'fa-chart-line', 'Bilan mois', '#f43f5e')}
+                ${renderQuickActionButton('balance-monthly', 'fa-chart-line', 'Bilan Comparatif', '#f43f5e')}
                     ${renderQuickActionButton('scan-warehouse', 'fa-barcode', 'Numérisation', '#6366f1')}
                     ${renderQuickActionButton('finance-expenses', 'fa-money-bill-wave', 'Dépenses', '#f97316')}
                 </div>
@@ -754,153 +779,6 @@ const app = {
         }
     },
 
-    renderDailyBilan() {
-        const today = new Date().toISOString().split('T')[0];
-        const todayInvoices = this.data.invoices.filter(i => i.date === today);
-        const total = todayInvoices.reduce((s, i) => s + i.amount, 0);
-        
-        const html = `
-            <div class="stats-grid">
-                <div class="stat-card">
-                    <div class="stat-value">${this.formatMoney(total)}</div>
-                    <div class="stat-label">Encaissements du jour</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-value">${todayInvoices.length}</div>
-                    <div class="stat-label">Factures émises</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-value">${this.data.appointments.filter(a => a.date === today).length}</div>
-                    <div class="stat-label">RDV aujourd'hui</div>
-                </div>
-            </div>
-            
-            <div class="form-card">
-                <h3>Résumé détaillé</h3>
-                <table class="data-table">
-                    <thead>
-                        <tr><th>Client</th><th>Facture</th><th>Montant</th><th>Statut</th><th>Action</th></tr>
-                    </thead>
-                    <tbody>
-                        ${todayInvoices.length === 0 ? '<tr><td colspan="5" style="text-align:center;">Aucune opération aujourd\'hui</td></tr>' : todayInvoices.map(inv => `
-                            <tr>
-                                <td>${inv.client}</td>
-                                <td>${inv.number}</td>
-                                <td>${this.formatMoney(inv.amount)}</td>
-                                <td><span class="badge ${inv.status === 'payée' ? 'badge-success' : 'badge-warning'}">${inv.status}</span></td>
-                                <td><button class="btn btn-outline btn-small" onclick="app.viewInvoice(${inv.id})">Détails</button></td>
-                            </tr>
-                        `).join('')}
-                    </tbody>
-                </table>
-            </div>
-        `;
-        document.getElementById('contentContainer').innerHTML = html;
-    },
-
-    renderDailyUsers() {
-        const userStats = {
-            'Jean Dupont': { invoices: 2, amount: 450.00 },
-            'Marie Koné': { invoices: 1, amount: 180.00 },
-            'Ibrahim Touré': { invoices: 1, amount: 320.00 }
-        };
-        
-        const html = `
-            <div class="form-card">
-                <h3>Bilan par utilisateur</h3>
-                <table class="data-table">
-                    <thead><tr><th>Utilisateur</th><th>Nb factures</th><th>Montant total</th><th>Actions</th></tr></thead>
-                    <tbody>
-                        ${Object.entries(userStats).map(([user, stats]) => `
-                            <tr>
-                                <td><strong>${user}</strong></td>
-                                <td>${stats.invoices}</td>
-                                <td>${this.formatMoney(stats.amount)}</td>
-                                <td><button class="btn btn-outline btn-small" onclick="app.showToast('Détails de ${user}')">Voir détail</button></td>
-                            </tr>
-                        `).join('')}
-                    </tbody>
-                </table>
-            </div>
-        `;
-        document.getElementById('contentContainer').innerHTML = html;
-    },
-
-    renderInvoiceNew() {
-        const html = `
-            <div class="form-card">
-                <h3>Créer une nouvelle facture</h3>
-                <div class="form-grid">
-                    <div class="form-group">
-                        <label>Client</label>
-                        <input type="text" id="invoiceClient" placeholder="Nom du client">
-                    </div>
-                    <div class="form-group">
-                        <label>Date</label>
-                        <input type="date" id="invoiceDate" value="${new Date().toISOString().split('T')[0]}">
-                    </div>
-                    <div class="form-group">
-                        <label>Montant (€)</label>
-                        <input type="number" id="invoiceAmount" placeholder="Montant">
-                    </div>
-                    <div class="form-group">
-                        <label>Description</label>
-                        <textarea id="invoiceDesc" rows="3" placeholder="Détail de la prestation"></textarea>
-                    </div>
-                </div>
-                <div style="margin-top: 20px; display: flex; gap: 10px;">
-                    <button class="btn btn-primary" onclick="app.createInvoice()"><i class="fas fa-save"></i> Générer la facture</button>
-                    <button class="btn btn-outline" onclick="app.renderPage('invoices-list')">Annuler</button>
-                </div>
-            </div>
-            <div class="invoice-preview" id="invoicePreview" style="display:none;">
-                <h4>Aperçu facture</h4>
-                <div id="previewContent"></div>
-            </div>
-        `;
-        document.getElementById('contentContainer').innerHTML = html;
-    },
-
-
-    renderLoadingBoats() {
-        const html = `
-            <div class="form-card">
-                <h3>Départs bateaux</h3>
-                <div style="margin-bottom: 20px;">
-                    <button class="btn btn-primary" onclick="app.addBoatDeparture()"><i class="fas fa-plus"></i> Planifier départ</button>
-                </div>
-                <table class="data-table">
-                    <thead><tr><th>Bateau</th><th>Date départ</th><th>Date arrivée prévue</th><th>Statut</th></tr></thead>
-                    <tbody>
-                        <tr><td>CMA CGM</td><td>15/12/2024</td><td>20/12/2024</td><td><span class="badge badge-info">Planifié</span></td></tr>
-                        <tr><td>MSC</td><td>18/12/2024</td><td>23/12/2024</td><td><span class="badge badge-info">Planifié</span></td></tr>
-                    </tbody>
-                </table>
-            </div>
-        `;
-        document.getElementById('contentContainer').innerHTML = html;
-    },
-
-    renderScanClassic() {
-        this.renderScanWarehouse();
-    },
-
-    renderScanHistory() {
-        const html = `
-            <div class="form-card">
-                <h3>Historique des scans</h3>
-                <table class="data-table">
-                    <thead><tr><th>Date</th><th>Code-barres</th><th>Opération</th><th>Utilisateur</th></tr></thead>
-                    <tbody>
-                        <tr><td>2024-12-14 10:30</td><td><code>MD-127-E2</code></td><td>Mise en entrepôt</td><td>Agent Paris</td></tr>
-                        <tr><td>2024-12-14 11:20</td><td><code>AB-031-E6</code></td><td>Chargement conteneur</td><td>Agent Paris</td></tr>
-                    </tbody>
-                </table>
-            </div>
-        `;
-        document.getElementById('contentContainer').innerHTML = html;
-    },
-
     renderClientsApp() {
         const html = `
             <div class="form-card">
@@ -961,29 +839,6 @@ const app = {
         }, 100);
     },
 
-    renderChat() {
-        const html = `
-            <div class="form-card" style="height: 70vh; display: flex; flex-direction: column;">
-                <div style="flex: 1; overflow-y: auto; padding: 15px; background: #f8fafc; border-radius: 12px;">
-                    ${this.data.messages.map(msg => `
-                        <div style="margin-bottom: 15px; ${msg.from === 'Agent Paris' ? 'text-align: right;' : ''}">
-                            <div style="display: inline-block; max-width: 70%; padding: 10px 15px; border-radius: 15px; ${msg.from === 'Agent Paris' ? 'background: #3b82f6; color: white;' : 'background: white; border: 1px solid #e2e8f0;'}">
-                                <div style="font-size: 12px; font-weight: bold;">${msg.from}</div>
-                                <div style="margin-top: 4px;">${msg.message}</div>
-                                <div style="font-size: 10px; opacity: 0.7; margin-top: 4px;">${msg.time}</div>
-                            </div>
-                        </div>
-                    `).join('')}
-                </div>
-                <div style="display: flex; gap: 10px; margin-top: 15px;">
-                    <input type="text" id="chatMessage" placeholder="Votre message..." style="flex: 1; padding: 10px; border: 1px solid #e2e8f0; border-radius: 8px;">
-                    <button class="btn btn-primary" onclick="app.sendMessage()"><i class="fas fa-paper-plane"></i> Envoyer</button>
-                </div>
-            </div>
-        `;
-        document.getElementById('contentContainer').innerHTML = html;
-    },
-
     renderSmsSend() {
         const html = `
             <div class="form-card">
@@ -1018,49 +873,6 @@ const app = {
         document.getElementById('contentContainer').innerHTML = html;
     },
 
-    renderNotifications() {
-        const unread = this.data.notifications.filter(n => !n.read);
-        const html = `
-            <div class="form-card">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-                    <h3>Notifications (${unread.length} non lues)</h3>
-                    <button class="btn btn-outline btn-small" onclick="app.markAllRead()">Tout marquer comme lu</button>
-                </div>
-                <div>
-                    ${this.data.notifications.map(notif => `
-                        <div style="padding: 15px; border-bottom: 1px solid #f1f5f9; ${!notif.read ? 'background: #eff6ff;' : ''}">
-                            <div style="display: flex; justify-content: space-between;">
-                                <strong>${notif.title}</strong>
-                                <span style="font-size: 11px; color:#64748b;">${notif.time}</span>
-                            </div>
-                            <p style="margin-top: 5px; font-size: 13px;">${notif.message}</p>
-                            <div style="margin-top: 8px;">
-                                <button class="btn btn-outline btn-small" onclick="app.markRead(${notif.id})">Marquer lu</button>
-                            </div>
-                        </div>
-                    `).join('')}
-                </div>
-            </div>
-        `;
-        document.getElementById('contentContainer').innerHTML = html;
-    },
-
-    renderNotificationsHistory() {
-        const html = `
-            <div class="form-card">
-                <h3>Historique des notifications</h3>
-                <table class="data-table">
-                    <thead><tr><th>Date</th><th>Titre</th><th>Message</th><th>Lu le</th></tr></thead>
-                    <tbody>
-                        <tr><td>2024-12-10</td><td>Nouvelle facture</td><td>Facture FAC-2024-001 émise</td><td>2024-12-10 14:30</td></tr>
-                        <tr><td>2024-12-05</td><td>Rappel RDV</td><td>RDV avec Jean Dupont</td><td>2024-12-05 09:15</td></tr>
-                    </tbody>
-                </table>
-            </div>
-        `;
-        document.getElementById('contentContainer').innerHTML = html;
-    },
-
     renderStockList() {
         const html = `
             <div class="form-card">
@@ -1077,10 +889,6 @@ const app = {
         document.getElementById('contentContainer').innerHTML = html;
     },
 
-    renderBalanceMonthly() { BilansFinanciersView.render(this, 'monthly'); },
-    renderBalanceYearly() { BilansFinanciersView.render(this, 'yearly'); },
-    renderBalanceBoat() { BilansFinanciersView.render(this, 'boat'); },
-    renderBalance12M() { BilansFinanciersView.render(this, 'yearly'); }, // Redirige vers annuel
     renderStatsBoat() { StatistiquesView.render(this, 'boat'); },
     renderStatsMonthly() { StatistiquesView.render(this, 'monthly'); },
     renderStatsYearly() { StatistiquesView.render(this, 'yearly'); },
@@ -1421,10 +1229,7 @@ const app = {
     createAppointment() { this.showToast('RDV enregistré'); this.renderPage('appointments-list'); },
     createProgram() { this.showToast('Programme créé'); this.renderPage('program-my'); },
     createQuote() { this.showToast('Devis généré'); this.renderPage('quotes-list'); },
-    sendMessage() { this.showToast('Message envoyé'); document.getElementById('chatMessage').value = ''; },
     sendSms() { this.showToast('SMS envoyé avec succès'); },
-    markRead(id) { this.showToast('Notification marquée comme lue'); },
-    markAllRead() { this.showToast('Toutes les notifications marquées comme lues'); },
     confirmAppointment(id) { this.showToast('RDV confirmé'); },
     deleteAppointment(id) { this.showToast('RDV supprimé'); },
     validateAppointment(id) { this.showToast('RDV validé'); },

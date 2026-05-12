@@ -63,7 +63,22 @@
             box-shadow: 0 1px 2px rgba(0,0,0,0.05);
         }
         @media (max-width: 768px) {
-            .container-gauge-wrapper { display: none !important; }
+            .container-gauge-wrapper { 
+                position: fixed;
+                bottom: 85px; 
+                left: 16px;
+                z-index: 980;
+                margin: 0;
+                padding: 6px 12px;
+                border-radius: 20px;
+                box-shadow: 0 4px 15px rgba(0,0,0,0.15);
+                background: rgba(255, 255, 255, 0.95);
+                backdrop-filter: blur(5px);
+                border: 1px solid #cbd5e1;
+                gap: 8px;
+            }
+            .container-gauge-wrapper > div:first-child { font-size: 16px !important; }
+            .container-gauge-wrapper > div:nth-child(2) { width: 110px !important; }
         }
 
         /* Couleurs interlignes (Zebra Striping) unifiées pour l'Agence Paris */
@@ -287,9 +302,7 @@
 
             <div class="sidebar-category">
                 <div class="sidebar-category-title">Bilans financiers</div>
-                <div class="sidebar-item" data-page="balance-monthly"><i class="fas fa-chart-line"></i><span>Bilan mensuel</span></div>
-                <div class="sidebar-item" data-page="balance-yearly"><i class="fas fa-chart-bar"></i><span>Bilan annuel</span></div>
-                <div class="sidebar-item" data-page="balance-boat"><i class="fas fa-ship"></i><span>Bilan bateau</span></div>
+                <div class="sidebar-item" data-page="balance-monthly"><i class="fas fa-chart-line"></i><span>Bilan Comparatif</span></div>
                 <div class="sidebar-item" data-page="balance-12m"><i class="fas fa-chart-simple"></i><span>Direction 12M</span></div>
             </div>
 

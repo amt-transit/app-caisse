@@ -63,6 +63,20 @@ export const ClientsListView = {
                 .cd-kpi__hint { font-size: 11px; color: #94a3b8; }
                 .cd-tables-row { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px; }
                 @media(max-width: 768px){ .cd-tables-row { grid-template-columns: 1fr; } }
+                @media(max-width: 768px) {
+                    .compact-row { padding: 0 !important; border: none !important; background: transparent !important; box-shadow: none !important; margin-bottom: 12px !important; }
+                    .compact-row td { padding: 0 !important; border: none !important; display: block !important; text-align: left !important; width: 100% !important; }
+                    .compact-row td::before { display: none !important; }
+                    .compact-mob-card { width: 100%; box-sizing: border-box; }
+                }
+                .cl-filters { display: grid; grid-template-columns: 2fr 1fr 1fr auto; align-items: end; gap: 15px; margin: 0; }
+                @media (max-width: 768px) {
+                    .cl-filters { grid-template-columns: 1fr 1fr; }
+                    .cl-filters .form-group { margin: 0; }
+                    .cl-filters .cl-filter-search { grid-column: 1 / -1; }
+                    .cl-filters .cl-filter-export { grid-column: 1 / -1; }
+                    .cl-filters .cl-filter-export button { width: 100%; justify-content: center; }
+                }
                 .cd-table-card { background: white; border-radius: 12px; border: 1px solid #e2e8f0; box-shadow: 0 1px 2px rgba(0,0,0,0.02); padding: 20px; overflow: hidden;}
                 .cd-profile-grid { display: grid; grid-template-columns: 1fr; gap: 15px; background: white; padding: 20px; border-radius: 12px; border: 1px solid #e2e8f0; }
                 tr.clickable-row { transition: background 0.2s; cursor: pointer; }
@@ -96,11 +110,11 @@ export const ClientsListView = {
                 </div>
 
                 <div class="form-card" style="margin-bottom: 25px; box-shadow: 0 2px 4px rgba(0,0,0,0.02);">
-                    <div class="form-grid" style="grid-template-columns: 2fr 1fr 1fr 1fr auto; align-items: end; margin: 0;">
-                        <div class="form-group" style="margin: 0;"><label>🔍 Recherche</label><input type="text" id="clSearchInput" placeholder="Nom, prénom, téléphone..."></div>
-                        <div class="form-group" style="margin: 0;"><label>⚠️ Risque</label><select id="clRiskFilter"><option value="">Tous</option><option value="low">🟢 Low</option><option value="medium">🟡 Medium</option><option value="high">🔴 High</option></select></div>
-                        <div class="form-group" style="margin: 0;"><label>📊 Segment</label><select id="clSegmentFilter"><option value="">Tous</option><option value="dormant">😴 Dormant</option><option value="habituel">👤 Habituel</option><option value="regulier">⭐ Régulier</option></select></div>
-                        <div class="form-group" style="margin: 0;"><button class="btn btn-outline" style="height: 36px; display: flex; align-items: center; gap: 8px;"><i class="fas fa-file-excel"></i> Exporter</button></div>
+                    <div class="cl-filters">
+                        <div class="form-group cl-filter-search"><label>🔍 Recherche</label><input type="text" id="clSearchInput" placeholder="Nom, prénom, téléphone..."></div>
+                        <div class="form-group"><label>⚠️ Risque</label><select id="clRiskFilter"><option value="">Tous</option><option value="low">🟢 Low</option><option value="medium">🟡 Medium</option><option value="high">🔴 High</option></select></div>
+                        <div class="form-group"><label>📊 Segment</label><select id="clSegmentFilter"><option value="">Tous</option><option value="dormant">😴 Dormant</option><option value="habituel">👤 Habituel</option><option value="regulier">⭐ Régulier</option></select></div>
+                        <div class="form-group cl-filter-export"><button class="btn btn-outline" style="height: 36px; display: flex; align-items: center; gap: 8px;"><i class="fas fa-file-excel"></i> Exporter</button></div>
                     </div>
                 </div>
 
@@ -498,18 +512,56 @@ export const ClientsListView = {
             return;
         }
 
-        tbody.innerHTML = top100.map(c => `
-            <tr class="clickable-row" onclick="window.app.views.clientsList.showDetail('${c.id}')">
-                <td style="padding: 15px; font-weight: 700; color: #0f172a;">${c.nom}</td>
-                <td style="color: #64748b;">${c.tel}</td>
-                <td style="color: #64748b;">${c.date}</td>
-                <td><span class="badge" style="background: #dcfce7; color: #166534; padding: 4px 10px; border-radius: 12px; font-weight: 600;">${c.risque}</span></td>
-                <td><span class="badge" style="background: ${c.segment === 'regulier' ? '#e0f2fe' : '#f3e8ff'}; color: ${c.segment === 'regulier' ? '#0369a1' : '#7e22ce'}; padding: 4px 10px; border-radius: 12px; font-weight: 600;">${c.segment}</span></td>
-                <td style="text-align: right; font-weight: 700; font-family: monospace; font-size: 14px;">${this.app.formatMoney(c.ca)}</td>
-                <td style="text-align: right; font-weight: 600; color: #475569;">${c.factures}</td>
-                <td style="text-align: center;"><button class="btn-small" style="background: transparent; border: none; font-size: 16px; cursor: pointer;">👉</button></td>
-            </tr>
-        `).join('');
+        const isMobile = window.innerWidth <= 768;
+
+        if (isMobile) {
+            tbody.innerHTML = top100.map(c => `
+                <tr class="clickable-row compact-row" onclick="window.app.views.clientsList.showDetail('${c.id}')">
+                    <td colspan="8">
+                        <div class="compact-mob-card" style="background: white; border-radius: 12px; border: 1px solid #e2e8f0; padding: 15px; box-shadow: 0 2px 4px rgba(0,0,0,0.02);">
+                            <div class="cmc-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; padding-bottom: 10px; border-bottom: 1px solid #f1f5f9;">
+                                <div class="cmc-ref-group">
+                                    <span class="cmc-ref" style="font-weight: 800; color: #0f172a; font-size: 15px;">${c.nom}</span>
+                                </div>
+                                <span class="badge" style="background: #dcfce7; color: #166534; font-size: 10px; padding: 3px 8px; border-radius: 12px; font-weight: 700;">${(c.risque || 'LOW').toUpperCase()}</span>
+                            </div>
+                            <div class="cmc-body" style="margin-bottom: 12px;">
+                                <div style="display:flex; justify-content:space-between; margin-bottom:8px; font-size:13px; color: #475569;">
+                                    <span><i class="fas fa-phone" style="margin-right: 4px; color: #94a3b8;"></i> ${c.tel || '-'}</span>
+                                    <span><i class="fas fa-calendar" style="margin-right: 4px; color: #94a3b8;"></i> ${c.date}</span>
+                                </div>
+                                <div style="display:flex; justify-content:space-between; align-items: center; font-size:12px; color: #475569;">
+                                    <span class="badge" style="background: ${c.segment === 'regulier' ? '#e0f2fe' : '#f3e8ff'}; color: ${c.segment === 'regulier' ? '#0369a1' : '#7e22ce'}; padding: 4px 10px; border-radius: 12px; font-weight: 700; font-size: 10px;">${(c.segment || 'DORMANT').toUpperCase()}</span>
+                                    <span style="font-weight: 600;"><i class="fas fa-box" style="margin-right: 4px; color: #3b82f6;"></i> ${c.factures} expédition(s)</span>
+                                </div>
+                            </div>
+                            <div class="cmc-footer" style="display: flex; justify-content: space-between; align-items: flex-end; padding-top: 12px; border-top: 1px dashed #e2e8f0;">
+                                <div class="cmc-finance">
+                                    <div style="font-size: 10px; color: #64748b; text-transform: uppercase; font-weight: 700; margin-bottom: 2px;">CA Généré</div>
+                                    <div class="cmc-amount" style="color: #0f172a; font-weight: 800; font-size: 16px;">${this.app.formatMoney(c.ca)}</div>
+                                </div>
+                                <div class="cmc-actions">
+                                    <button class="btn btn-outline" style="padding: 6px 14px; font-size: 13px; font-weight: 600; border-radius: 8px; display: flex; align-items: center; gap: 6px;"><i class="fas fa-eye"></i> Voir</button>
+                                </div>
+                            </div>
+                        </div>
+                    </td>
+                </tr>
+            `).join('');
+        } else {
+            tbody.innerHTML = top100.map(c => `
+                <tr class="clickable-row" onclick="window.app.views.clientsList.showDetail('${c.id}')">
+                    <td style="padding: 15px; font-weight: 700; color: #0f172a;">${c.nom}</td>
+                    <td style="color: #64748b;">${c.tel}</td>
+                    <td style="color: #64748b;">${c.date}</td>
+                    <td><span class="badge" style="background: #dcfce7; color: #166534; padding: 4px 10px; border-radius: 12px; font-weight: 600;">${c.risque}</span></td>
+                    <td><span class="badge" style="background: ${c.segment === 'regulier' ? '#e0f2fe' : '#f3e8ff'}; color: ${c.segment === 'regulier' ? '#0369a1' : '#7e22ce'}; padding: 4px 10px; border-radius: 12px; font-weight: 600;">${c.segment}</span></td>
+                    <td style="text-align: right; font-weight: 700; font-family: monospace; font-size: 14px;">${this.app.formatMoney(c.ca)}</td>
+                    <td style="text-align: right; font-weight: 600; color: #475569;">${c.factures}</td>
+                    <td style="text-align: center;"><button class="btn-small" style="background: transparent; border: none; font-size: 16px; cursor: pointer;">👉</button></td>
+                </tr>
+            `).join('');
+        }
     },
 
     async showDetail(clientId) {
