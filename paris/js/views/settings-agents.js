@@ -1,12 +1,14 @@
-import { db } from '../../../firebase-config.js';
+import { db, app as firebaseApp } from '../../../firebase-config.js';
 import { collection, query, onSnapshot, doc, getDoc, setDoc, updateDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 import { initializeApp, deleteApp } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js";
 import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, deleteUser, signOut } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-auth.js";
+import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-storage.js";
 
 export const SettingsAgentsView = {
     unsub: null,
     agents: [],
     filteredAgents: [],
+    tempPhotoFile: null,
 
     render(app) {
         this.app = app;
@@ -134,6 +136,14 @@ export const SettingsAgentsView = {
                     
                     <input type="hidden" id="agentId">
                     
+                    <div style="display: flex; flex-direction: column; align-items: center; margin-bottom: 20px;">
+                        <div id="agentPhotoPreview" style="width: 80px; height: 80px; border-radius: 50%; background: #f1f5f9; border: 2px dashed #cbd5e1; display: flex; align-items: center; justify-content: center; cursor: pointer; overflow: hidden; position: relative; transition: all 0.2s;" onclick="document.getElementById('agentPhotoInput').click()" title="Cliquez pour ajouter une photo">
+                            <i class="fas fa-camera" style="color: #94a3b8; font-size: 24px;" id="agentPhotoPlaceholder"></i>
+                        </div>
+                        <span style="font-size: 11px; color: #64748b; margin-top: 8px;">Photo de profil</span>
+                        <input type="file" id="agentPhotoInput" accept="image/*" style="display:none;" onchange="window.app.views.settingsAgents.handlePhotoSelect(event)">
+                    </div>
+
                     <div class="form-group" style="margin-bottom: 15px;">
                         <label style="font-weight: 600; color: #1e293b; margin-bottom: 6px; display: block;">Nom complet *</label>
                         <input type="text" id="agentName" style="width: 100%; padding: 12px; border: 1px solid #cbd5e1; border-radius: 8px;" placeholder="Ex: Mouhamad Fofana">
@@ -368,8 +378,24 @@ export const SettingsAgentsView = {
         document.getElementById('agentModalTitle').textContent = isEdit ? 'Modifier l\'Agent' : 'Nouvel Agent';
         document.getElementById('agentId').value = id || '';
         
+        this.tempPhotoFile = null;
+        const preview = document.getElementById('agentPhotoPreview');
+        const placeholder = document.getElementById('agentPhotoPlaceholder');
+        document.getElementById('agentPhotoInput').value = '';
+
         if (isEdit) {
             const agent = this.agents.find(a => a.id === id);
+            
+            if (agent.photoURL) {
+                preview.style.backgroundImage = `url('${agent.photoURL}')`;
+                preview.style.backgroundSize = 'cover';
+                preview.style.backgroundPosition = 'center';
+                placeholder.style.display = 'none';
+            } else {
+                preview.style.backgroundImage = '';
+                placeholder.style.display = 'block';
+            }
+            
             document.getElementById('agentName').value = agent.displayName || '';
             // On masque le @amt.com dans le formulaire pour la modification
             document.getElementById('agentEmail').value = (agent.email || '').replace('@amt.com', '');
@@ -378,6 +404,9 @@ export const SettingsAgentsView = {
             document.getElementById('agentRole').value = agent.role || 'agent';
             document.getElementById('agentAgency').value = agent.agency || 'paris';
         } else {
+            preview.style.backgroundImage = '';
+            placeholder.style.display = 'block';
+            
             document.getElementById('agentName').value = '';
             document.getElementById('agentEmail').value = '';
             document.getElementById('agentPassword').value = '';
@@ -391,6 +420,22 @@ export const SettingsAgentsView = {
 
     closeModal() {
         document.getElementById('agentModal').style.display = 'none';
+    },
+
+    handlePhotoSelect(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+        this.tempPhotoFile = file;
+
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            const preview = document.getElementById('agentPhotoPreview');
+            preview.style.backgroundImage = `url('${e.target.result}')`;
+            preview.style.backgroundSize = 'cover';
+            preview.style.backgroundPosition = 'center';
+            document.getElementById('agentPhotoPlaceholder').style.display = 'none';
+        };
+        reader.readAsDataURL(file);
     },
 
     async saveAgent() {
@@ -415,6 +460,17 @@ export const SettingsAgentsView = {
         btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>...';
 
         try {
+            let uploadedPhotoURL = null;
+            
+            if (this.tempPhotoFile) {
+                const storage = getStorage(firebaseApp);
+                const fileExt = this.tempPhotoFile.name.split('.').pop();
+                const fileName = `profile_photos/agent_${Date.now()}_${Math.floor(Math.random()*1000)}.${fileExt}`;
+                const sRef = storageRef(storage, fileName);
+                await uploadBytes(sRef, this.tempPhotoFile);
+                uploadedPhotoURL = await getDownloadURL(sRef);
+            }
+
             const payload = {
                 displayName: name,
                 email: email,
@@ -424,6 +480,8 @@ export const SettingsAgentsView = {
                 agency: agency,
                 updatedAt: new Date().toISOString()
             };
+
+            if (uploadedPhotoURL) payload.photoURL = uploadedPhotoURL;
 
             if (id) {
                 await updateDoc(doc(db, "users", id), payload);

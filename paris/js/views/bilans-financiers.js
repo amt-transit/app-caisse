@@ -33,6 +33,10 @@ export const BilansFinanciersView = {
             title = "Bilan par Conteneur";
             subtitle = "Analyse de la rentabilité par expédition";
             selectorLabel = "Conteneur de référence";
+        } else if (subView === '12m') {
+            title = "Tableau de Bord Direction";
+            subtitle = "Analyse sur 12 mois glissants";
+            selectorLabel = "Fin de période";
         }
 
         const html = `
@@ -123,6 +127,35 @@ export const BilansFinanciersView = {
                 .metric-content { flex: 1; display: flex; flex-direction: column; }
                 .metric-label { font-size: 12px; font-weight: 700; color: #64748b; text-transform: uppercase; }
                 .metric-value { font-size: 18px; font-weight: 900; color: #0f172a; }
+                
+                /* --- STYLES SPECIFIQUES DIRECTION 12M --- */
+                .kpi-grid--3 { grid-template-columns: repeat(3, 1fr); }
+                .human-note { background: #f8fafc; border-left: 4px solid #3b82f6; padding: 15px; border-radius: 8px; margin-bottom: 24px; }
+                .human-note__title { font-weight: bold; margin-bottom: 5px; color: #1e293b; font-size: 14px; }
+                .human-note__text { font-size: 13px; color: #475569; margin: 0 0 10px 0; }
+                .human-chip { background: #e2e8f0; padding: 4px 10px; border-radius: 12px; font-size: 11px; margin-right: 5px; display: inline-block; font-weight: 600; color: #334155; }
+                .kpi-card--violet { border-top: 4px solid #8b5cf6; }
+                .kpi-card--cyan { border-top: 4px solid #06b6d4; }
+                .kpi-card__sub { font-size: 12px; color: #64748b; margin-top: 5px; }
+                .pct-up { color: #10b981; background: #dcfce7; padding: 2px 6px; border-radius: 4px; font-size: 11px; font-weight: 700; }
+                .pct-down { color: #ef4444; background: #fee2e2; padding: 2px 6px; border-radius: 4px; font-size: 11px; font-weight: 700; }
+                .actions-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 24px; }
+                .action-card { background: white; padding: 15px; border-radius: 12px; border: 1px solid #e2e8f0; text-align: left; display: flex; flex-direction: column; gap: 5px; cursor: pointer; transition: 0.2s; box-shadow: 0 1px 2px rgba(0,0,0,0.02); }
+                .action-card:hover { transform: translateY(-2px); box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); }
+                .action-card--red { border-left: 4px solid #ef4444; }
+                .action-card--orange { border-left: 4px solid #f59e0b; }
+                .action-card--blue { border-left: 4px solid #3b82f6; }
+                .action-card--green { border-left: 4px solid #10b981; }
+                .filters-grid { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 24px; }
+                .filter-chip { padding: 8px 16px; border-radius: 20px; border: 1px solid #cbd5e1; background: white; cursor: pointer; font-weight: 600; font-size: 13px; color: #475569; transition: 0.2s; }
+                .filter-chip:hover { background: #f1f5f9; color: #0f172a; }
+                .containers-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 15px; margin-bottom: 24px; }
+                .container-card { background: white; padding: 15px; border-radius: 12px; border: 1px solid #e2e8f0; box-shadow: 0 1px 2px rgba(0,0,0,0.02); }
+                .container-card__ref { font-size: 20px; font-weight: 900; margin-bottom: 12px; color: #0f172a; }
+                .container-card__stats { display: flex; gap: 15px; }
+                .container-card__stat { display: flex; flex-direction: column; }
+                .container-card__stat-value { font-weight: 800; font-size: 15px; color: #1e293b; }
+                .container-card__stat-label { font-size: 11px; color: #64748b; text-transform: uppercase; }
             </style>
 
             <div class="bilan-page">
@@ -131,6 +164,7 @@ export const BilansFinanciersView = {
                     <a href="#" class="bf-tab ${this.activeTab === 'monthly' ? 'active' : ''}" onclick="window.app.views.bilansFinanciers.switchTab('monthly')">Bilan Mensuel</a>
                     <a href="#" class="bf-tab ${this.activeTab === 'yearly' ? 'active' : ''}" onclick="window.app.views.bilansFinanciers.switchTab('yearly')">Bilan Annuel</a>
                     <a href="#" class="bf-tab ${this.activeTab === 'boat' ? 'active' : ''}" onclick="window.app.views.bilansFinanciers.switchTab('boat')">Bilan par Conteneur</a>
+                    <a href="#" class="bf-tab ${this.activeTab === '12m' ? 'active' : ''}" onclick="window.app.views.bilansFinanciers.switchTab('12m')">Direction 12M</a>
                 </div>
                 
                 <div class="page-header">
@@ -149,6 +183,7 @@ export const BilansFinanciersView = {
                             <button class="btn-refresh" onclick="window.app.views.bilansFinanciers.loadData()">
                                 🔄 Rafraîchir
                             </button>
+                            ${this.activeTab === '12m' ? '<button class="btn-refresh" onclick="window.print()"><i class="fas fa-file-pdf"></i> PDF</button>' : ''}
                         </div>
                     </div>
                 </div>
@@ -227,6 +262,12 @@ export const BilansFinanciersView = {
         const container = document.getElementById('bilanContent');
         const select = document.getElementById('bfPeriodSelect');
         if (!container) return;
+
+        if (this.activeTab === '12m') {
+            if (select) select.parentElement.style.display = 'none'; // Pas besoin du selecteur mensuel
+            return this.render12MContent(container);
+        }
+        if (select) select.parentElement.style.display = '';
 
         // Traitement global des données
         const data = this.processData();
@@ -630,6 +671,324 @@ export const BilansFinanciersView = {
         }
 
         return grouped;
+    },
+
+    render12MContent(container) {
+        const now = new Date();
+        const t7 = new Date(now); t7.setDate(now.getDate() - 7);
+        const t30 = new Date(now); t30.setDate(now.getDate() - 30);
+        const t60 = new Date(now); t60.setDate(now.getDate() - 60);
+        const t90 = new Date(now); t90.setDate(now.getDate() - 90);
+        const t365 = new Date(now); t365.setFullYear(now.getFullYear() - 1);
+        const t730 = new Date(now); t730.setFullYear(now.getFullYear() - 2);
+
+        let ca7j=0, fact7j=0, ca30j=0, fact30j=0, ca12m=0, fact12m=0, caN1=0, factN1=0;
+        let totalImpayes=0, factImpayes=0;
+
+        const clients12M = new Map(); const clientsN1 = new Map(); const allClients = new Map();
+        const agents12M = new Map();
+        const monthlyData = {};
+
+        // Init des 13 derniers mois pour le chart
+        for(let i=12; i>=0; i--) {
+            const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+            const mk = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+            monthlyData[mk] = { key: mk, ca: 0, factures: 0, clients: new Set(), newClients: new Set(), caNew: 0, caExist: 0 };
+        }
+
+        this.transactions.forEach(t => {
+            if (t.isDeleted) return;
+            const date = new Date(t.date);
+            const ca = (parseFloat(t.prix) || 0) / this.TAUX_CONVERSION;
+            const nom = (t.nom || 'Inconnu').trim().toUpperCase();
+            const agent = (t.saisiPar || 'Système').trim().toUpperCase();
+            const reste = (parseFloat(t.reste) || 0) / this.TAUX_CONVERSION;
+
+            if (!allClients.has(nom)) allClients.set(nom, { firstDate: date, totalUnpaid: 0, phone: t.numero || t.tel || '', factures: 0, ca: 0 });
+            if (date < allClients.get(nom).firstDate) allClients.get(nom).firstDate = date;
+            
+            allClients.get(nom).factures++;
+            allClients.get(nom).ca += ca;
+
+            if (reste < 0) {
+                totalImpayes += Math.abs(reste); factImpayes++;
+                allClients.get(nom).totalUnpaid += Math.abs(reste);
+            }
+
+            if (date >= t7) { ca7j+=ca; fact7j++; }
+            if (date >= t30) { ca30j+=ca; fact30j++; }
+
+            if (date >= t365) {
+                ca12m += ca; fact12m++;
+                if (!clients12M.has(nom)) clients12M.set(nom, { ca: 0, factures: 0, lastDate: date, phone: t.numero || t.tel || '' });
+                clients12M.get(nom).ca += ca;
+                clients12M.get(nom).factures++;
+                if (date > clients12M.get(nom).lastDate) clients12M.get(nom).lastDate = date;
+
+                agents12M.set(agent, (agents12M.get(agent) || {ca:0, factures:0, clients:new Set()}));
+                agents12M.get(agent).ca += ca; agents12M.get(agent).factures++; agents12M.get(agent).clients.add(nom);
+
+                const mk = `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}`;
+                if (monthlyData[mk]) {
+                    monthlyData[mk].ca += ca;
+                    monthlyData[mk].factures++;
+                    monthlyData[mk].clients.add(nom);
+                }
+            } else if (date >= t730 && date < t365) {
+                caN1 += ca; factN1++;
+                clientsN1.set(nom, (clientsN1.get(nom)||0) + 1);
+            }
+        });
+
+        // Identification Nouveaux vs Existants par mois
+        this.transactions.forEach(t => {
+            if (t.isDeleted) return;
+            const date = new Date(t.date);
+            if (date >= t365) {
+                const nom = (t.nom || 'Inconnu').trim().toUpperCase();
+                const mk = `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}`;
+                const ca = (parseFloat(t.prix) || 0) / this.TAUX_CONVERSION;
+
+                if (monthlyData[mk]) {
+                    const firstD = allClients.get(nom).firstDate;
+                    const mkFirst = `${firstD.getFullYear()}-${String(firstD.getMonth()+1).padStart(2,'0')}`;
+                    if (mkFirst === mk) {
+                        monthlyData[mk].newClients.add(nom);
+                        monthlyData[mk].caNew += ca;
+                    } else {
+                        monthlyData[mk].caExist += ca;
+                    }
+                }
+            }
+        });
+
+        // Calculs avancés
+        let actifs30j = 0, actifs60j = 0, actifs90j = 0;
+        let reactives = 0;
+        let top10CA = 0;
+        let top20CA = 0;
+        let caARisque = 0;
+        let new30j = 0;
+        
+        const clientsArr = Array.from(clients12M.entries()).map(([nom, d]) => ({ nom, ...d }));
+        clientsArr.sort((a,b) => b.ca - a.ca); // Tri par CA 12M
+
+        clientsArr.forEach((c, idx) => {
+            if (c.lastDate >= t30) actifs30j++;
+            if (c.lastDate >= t60) actifs60j++;
+            if (c.lastDate >= t90) actifs90j++;
+            else caARisque += c.ca; // Inactif > 90j
+
+            if (idx < 10) top10CA += c.ca;
+            if (idx < 20) top20CA += c.ca;
+
+            if (!clientsN1.has(c.nom) && allClients.get(c.nom).firstDate < t730) reactives++;
+            
+            if (allClients.get(c.nom).firstDate >= t30) new30j++;
+        });
+
+        let churnes = 0;
+        clientsN1.forEach((count, nom) => { if (!clients12M.has(nom)) churnes++; });
+
+        const tauxChurn = clientsN1.size > 0 ? (churnes / clientsN1.size) * 100 : 0;
+        const tauxReac = clients12M.size > 0 ? (reactives / clients12M.size) * 100 : 0;
+        const partTop10 = ca12m > 0 ? (top10CA / ca12m) * 100 : 0;
+        
+        const getEvol = (curr, prev) => {
+            if (prev === 0) return curr > 0 ? `<div class="kpi-card__evolution positive"><span class="evolution-icon">📈</span><span>Nouveau</span></div>` : '';
+            const pct = ((curr - prev) / prev) * 100;
+            const cls = pct >= 0 ? 'positive' : 'negative';
+            const ico = pct >= 0 ? '📈' : '📉';
+            return `<div class="kpi-card__evolution ${cls}"><span class="evolution-icon">${ico}</span><span>${pct > 0 ? '+' : ''}${pct.toFixed(1)}% vs N-1</span></div>`;
+        };
+
+        // Segments
+        let caReg = 0, caHab = 0, caDor = 0;
+        clientsArr.forEach(c => {
+            if (c.factures >= 5) caReg += c.ca;
+            else if (c.factures >= 2) caHab += c.ca;
+            else caDor += c.ca;
+        });
+
+        const topImpayes = Array.from(allClients.entries())
+            .filter(c => c[1].totalUnpaid > 0)
+            .sort((a,b) => b[1].totalUnpaid - a[1].totalUnpaid)
+            .slice(0, 15);
+
+        const agentsArr = Array.from(agents12M.entries()).map(([nom, d]) => ({nom, ...d})).sort((a,b) => b.ca - a.ca);
+        const topCtns = this.containers.slice(0, 5);
+
+        container.innerHTML = `
+            <div class="kpi-grid kpi-grid--3">
+                <div class="kpi-card kpi-card--blue">
+                    <div class="kpi-card__header"><span class="kpi-card__icon">⚡</span><span class="kpi-card__label">CA 7 jours</span></div>
+                    <div class="kpi-card__value">${this.app.formatMoney(ca7j)}</div>
+                    <div class="kpi-card__sub">${fact7j} factures</div>
+                </div>
+                <div class="kpi-card kpi-card--green">
+                    <div class="kpi-card__header"><span class="kpi-card__icon">📅</span><span class="kpi-card__label">CA 30 jours</span></div>
+                    <div class="kpi-card__value">${this.app.formatMoney(ca30j)}</div>
+                    <div class="kpi-card__sub">${fact30j} factures</div>
+                </div>
+                <div class="kpi-card kpi-card--red">
+                    <div class="kpi-card__header"><span class="kpi-card__icon">🚨</span><span class="kpi-card__label">Impayés en cours</span></div>
+                    <div class="kpi-card__value">${this.app.formatMoney(totalImpayes)}</div>
+                    <div class="kpi-card__sub">${factImpayes} factures concernées</div>
+                </div>
+            </div>
+            
+            <div class="section-header">
+                <h2 class="section-title">📊 Performance 12 mois</h2>
+                <p class="section-subtitle">Indicateurs clés avec évolution annuelle</p>
+            </div>
+            
+            <div class="human-note">
+                <div class="human-note__title">Comment lire ces KPI ?</div>
+                <p class="human-note__text">Ces cartes donnent une vue rapide de la santé commerciale : volume facturé, activité client, acquisition et risque. Le badge <strong>vs N-1</strong> permet de voir l'évolution annuelle.</p>
+                <div class="human-note__chips">
+                    <span class="human-chip">Hausse = momentum positif</span>
+                    <span class="human-chip">Baisse = zone à investiguer</span>
+                </div>
+            </div>
+            
+            <div class="kpi-grid">
+                <div class="kpi-card kpi-card--success"><div class="kpi-card__header"><span class="kpi-card__icon">💚</span><span class="kpi-card__label">CA 12M</span></div><div class="kpi-card__value">${this.app.formatMoney(ca12m)}</div>${getEvol(ca12m, caN1)}</div>
+                <div class="kpi-card kpi-card--info"><div class="kpi-card__header"><span class="kpi-card__icon">💙</span><span class="kpi-card__label">Factures 12M</span></div><div class="kpi-card__value">${fact12m}</div>${getEvol(fact12m, factN1)}</div>
+                <div class="kpi-card kpi-card--violet"><div class="kpi-card__header"><span class="kpi-card__icon">💜</span><span class="kpi-card__label">Clients 12M</span></div><div class="kpi-card__value">${clients12M.size}</div>${getEvol(clients12M.size, clientsN1.size)}</div>
+                <div class="kpi-card kpi-card--cyan"><div class="kpi-card__header"><span class="kpi-card__icon">🩵</span><span class="kpi-card__label">Actifs 30j</span></div><div class="kpi-card__value">${actifs30j}</div><div class="kpi-card__sub">Activité récente</div></div>
+                <div class="kpi-card kpi-card--cyan"><div class="kpi-card__header"><span class="kpi-card__icon">🩵</span><span class="kpi-card__label">Actifs 60j</span></div><div class="kpi-card__value">${actifs60j}</div><div class="kpi-card__sub">Activité intermédiaire</div></div>
+                <div class="kpi-card kpi-card--cyan"><div class="kpi-card__header"><span class="kpi-card__icon">🩵</span><span class="kpi-card__label">Actifs 90j</span></div><div class="kpi-card__value">${actifs90j}</div><div class="kpi-card__sub">Base régulière</div></div>
+                <div class="kpi-card kpi-card--primary"><div class="kpi-card__header"><span class="kpi-card__icon">🔷</span><span class="kpi-card__label">Panier moyen</span></div><div class="kpi-card__value">${this.app.formatMoney(fact12m ? ca12m/fact12m : 0)}</div></div>
+                <div class="kpi-card kpi-card--primary"><div class="kpi-card__header"><span class="kpi-card__icon">🔷</span><span class="kpi-card__label">Fréquence</span></div><div class="kpi-card__value">${clients12M.size ? (fact12m/clients12M.size).toFixed(1) : 0}</div></div>
+            </div>
+
+            <div class="section-header">
+                <h2 class="section-title">⚠️ Risques & Rétention</h2>
+            </div>
+            <div class="kpi-grid">
+                <div class="kpi-card kpi-card--danger"><div class="kpi-card__header"><span class="kpi-card__icon">🔴</span><span class="kpi-card__label">Clients perdus (12M)</span></div><div class="kpi-card__value">${churnes}</div><div class="kpi-card__sub">Absents depuis 1 an</div></div>
+                <div class="kpi-card kpi-card--danger"><div class="kpi-card__header"><span class="kpi-card__icon">🔴</span><span class="kpi-card__label">Taux perte (12M)</span></div><div class="kpi-card__value">${tauxChurn.toFixed(1)}%</div><div class="kpi-card__sub">Churnés / Base N-1</div></div>
+                <div class="kpi-card kpi-card--success"><div class="kpi-card__header"><span class="kpi-card__icon">💚</span><span class="kpi-card__label">Réactivés (12M)</span></div><div class="kpi-card__value">${reactives}</div><div class="kpi-card__sub">Anciens clients de retour</div></div>
+                <div class="kpi-card kpi-card--success"><div class="kpi-card__header"><span class="kpi-card__icon">💚</span><span class="kpi-card__label">Taux réactivation</span></div><div class="kpi-card__value">${tauxReac.toFixed(1)}%</div><div class="kpi-card__sub">Sur les actifs 12M</div></div>
+                <div class="kpi-card kpi-card--warning"><div class="kpi-card__header"><span class="kpi-card__icon">🟡</span><span class="kpi-card__label">CA à risque</span></div><div class="kpi-card__value">${this.app.formatMoney(caARisque)}</div><div class="kpi-card__sub">Clients inactifs > 90j</div></div>
+                <div class="kpi-card kpi-card--warning"><div class="kpi-card__header"><span class="kpi-card__icon">🟡</span><span class="kpi-card__label">Part CA Top 10</span></div><div class="kpi-card__value">${partTop10.toFixed(1)}%</div><div class="kpi-card__sub">Dépendance aux plus gros</div></div>
+            </div>
+
+            <div class="section-header"><h2 class="section-title">📈 Tendances</h2></div>
+            
+            <div class="charts-row">
+                <div class="chart-card chart-card--large">
+                    <div class="chart-header"><h3 class="chart-title">💰 CA mensuel</h3><p class="chart-subtitle">Évolution sur 13 mois</p></div>
+                    <div class="chart-canvas-wrap"><canvas id="c12m-ca"></canvas></div>
+                </div>
+                <div class="chart-card">
+                    <div class="chart-header"><h3 class="chart-title">👥 Clients Actifs vs Nouveaux</h3></div>
+                    <div class="chart-canvas-wrap"><canvas id="c12m-clients"></canvas></div>
+                </div>
+            </div>
+
+            <div class="charts-row">
+                <div class="chart-card chart-card--large">
+                    <div class="chart-header"><h3 class="chart-title">📊 Mix de Croissance (CA Existant vs Nouveau)</h3></div>
+                    <div class="chart-canvas-wrap"><canvas id="c12m-mix"></canvas></div>
+                </div>
+                <div class="chart-card">
+                    <div class="chart-header"><h3 class="chart-title">🛒 Panier Moyen Mensuel</h3></div>
+                    <div class="chart-canvas-wrap"><canvas id="c12m-panier"></canvas></div>
+                </div>
+            </div>
+
+            <div class="section-header"><h2 class="section-title">📑 Segmentation clients</h2></div>
+            <div class="charts-row">
+                <div class="chart-card">
+                    <div class="chart-header"><h3 class="chart-title">🎯 Dépendance CA</h3><p class="chart-subtitle">Top 10 / 11-20 / Autres</p></div>
+                    <div class="chart-canvas-wrap"><canvas id="c12m-pie1"></canvas></div>
+                </div>
+                <div class="chart-card">
+                    <div class="chart-header"><h3 class="chart-title">📈 CA par Segment</h3><p class="chart-subtitle">Régulier / Habituel / Dormant</p></div>
+                    <div class="chart-canvas-wrap"><canvas id="c12m-pie2"></canvas></div>
+                </div>
+            </div>
+
+            <div class="section-header"><h2 class="section-title">🎯 Actions commerciales</h2></div>
+            <div class="actions-grid">
+                <div class="action-card action-card--red"><div style="font-size:12px; font-weight:700;">🔴 Réactiver</div><div style="font-size:24px; font-weight:900;">${clientsArr.filter(c => c.ca > 500 && c.lastDate < t90).length}</div><div style="font-size:11px; color:#64748b;">Inactifs > 90j, valeur > 500€</div></div>
+                <div class="action-card action-card--orange"><div style="font-size:12px; font-weight:700;">🟠 Sécuriser</div><div style="font-size:24px; font-weight:900;">${clientsArr.slice(0,20).filter(c => c.lastDate < t60).length}</div><div style="font-size:11px; color:#64748b;">Top 20 clients, inactifs > 60j</div></div>
+                <div class="action-card action-card--blue"><div style="font-size:12px; font-weight:700;">🔵 Développer</div><div style="font-size:24px; font-weight:900;">${clientsArr.filter(c => c.factures >= 2 && c.factures < 5).length}</div><div style="font-size:11px; color:#64748b;">Clients habituels (2-4 factures)</div></div>
+                <div class="action-card action-card--green"><div style="font-size:12px; font-weight:700;">🟢 Onboarder</div><div style="font-size:24px; font-weight:900;">${new30j}</div><div style="font-size:11px; color:#64748b;">Nouveaux de moins de 30j</div></div>
+            </div>
+
+            <div class="section-header"><h2 class="section-title">👥 Équipe & Impayés</h2></div>
+            <div class="charts-row">
+                <div class="chart-card chart-card--large">
+                    <div class="chart-header"><h3 class="chart-title">💼 Performance Agents (12M)</h3></div>
+                    <div class="table-wrap">
+                        <table class="data-table" style="width:100%;">
+                            <thead><tr><th>Agent</th><th style="text-align:right;">CA</th><th style="text-align:right;">Factures</th><th style="text-align:right;">Clients</th></tr></thead>
+                            <tbody>
+                                ${agentsArr.slice(0, 10).map(a => `<tr><td style="font-weight:700;">${a.nom}</td><td style="text-align:right; font-weight:700; color:#3b82f6;">${this.app.formatMoney(a.ca)}</td><td style="text-align:right;">${a.factures}</td><td style="text-align:right;">${a.clients.size}</td></tr>`).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="chart-card">
+                    <div class="chart-header"><h3 class="chart-title">🚨 Top 15 Impayés</h3></div>
+                    <div class="table-wrap">
+                        <table class="data-table" style="width:100%;">
+                            <thead><tr><th>Client</th><th style="text-align:right;">Reste Dû</th></tr></thead>
+                            <tbody>
+                                ${topImpayes.length === 0 ? '<tr><td colspan="2" style="text-align:center;">Aucun impayé majeur</td></tr>' : topImpayes.map(c => `<tr><td style="font-weight:700; font-size:12px;">${c[0]}<br><span style="font-weight:normal; color:#64748b;">${c[1].phone}</span></td><td style="text-align:right; font-weight:700; color:#ef4444;">${this.app.formatMoney(c[1].totalUnpaid)}</td></tr>`).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <div class="section-header"><h2 class="section-title">📦 Derniers Conteneurs</h2></div>
+            <div class="containers-grid">
+                ${topCtns.map(c => `<div class="container-card"><div class="container-card__ref">${c.number || c.id}</div><div class="container-card__stats"><span class="badge" style="background:#e0f2fe; color:#0369a1;">${new Date(c.createdAt).toLocaleDateString('fr-FR')}</span><span class="badge" style="background:#dcfce7; color:#166534;">${c.status}</span></div></div>`).join('')}
+            </div>
+        `;
+
+        this.render12MCharts(monthlyData, top10CA, top20CA - top10CA, ca12m - top20CA, caReg, caHab, caDor);
+    },
+
+    render12MCharts(monthlyData, top10, top11_20, rest, caReg, caHab, caDor) {
+        if (typeof Chart === 'undefined') return;
+        const labels = Object.keys(monthlyData).sort();
+        const mLabels = labels.map(l => { const d = new Date(l+'-01'); return d.toLocaleDateString('fr-FR', {month:'short', year:'2-digit'}).replace('.',''); });
+
+        const destroyChart = id => { if(this.charts[id]) this.charts[id].destroy(); };
+        const cOptions = { responsive: true, maintainAspectRatio: false };
+
+        // 1. CA Mensuel
+        destroyChart('c12m-ca');
+        this.charts['c12m-ca'] = new Chart(document.getElementById('c12m-ca'), { type: 'line', data: { labels: mLabels, datasets: [{ label: 'CA Facturé', data: labels.map(l => monthlyData[l].ca), borderColor: '#3b82f6', backgroundColor: 'rgba(59,130,246,0.1)', fill: true, tension: 0.4 }] }, options: cOptions });
+
+        // 2. Clients (Stack)
+        destroyChart('c12m-clients');
+        this.charts['c12m-clients'] = new Chart(document.getElementById('c12m-clients'), { type: 'bar', data: { labels: mLabels, datasets: [
+            { label: 'Existants', data: labels.map(l => monthlyData[l].clients.size - monthlyData[l].newClients.size), backgroundColor: '#0ea5e9' },
+            { label: 'Nouveaux', data: labels.map(l => monthlyData[l].newClients.size), backgroundColor: '#f59e0b' }
+        ]}, options: { ...cOptions, scales: { x: { stacked: true }, y: { stacked: true } } }});
+
+        // 3. Mix CA (Stack)
+        destroyChart('c12m-mix');
+        this.charts['c12m-mix'] = new Chart(document.getElementById('c12m-mix'), { type: 'bar', data: { labels: mLabels, datasets: [
+            { label: 'CA Existants', data: labels.map(l => monthlyData[l].caExist), backgroundColor: '#10b981' },
+            { label: 'CA Nouveaux', data: labels.map(l => monthlyData[l].caNew), backgroundColor: '#8b5cf6' }
+        ]}, options: { ...cOptions, scales: { x: { stacked: true }, y: { stacked: true } } }});
+
+        // 4. Panier
+        destroyChart('c12m-panier');
+        this.charts['c12m-panier'] = new Chart(document.getElementById('c12m-panier'), { type: 'line', data: { labels: mLabels, datasets: [{ label: 'Panier Moyen', data: labels.map(l => monthlyData[l].factures ? monthlyData[l].ca/monthlyData[l].factures : 0), borderColor: '#6366f1', tension: 0.4 }] }, options: cOptions });
+
+        // 5. Pies
+        destroyChart('c12m-pie1');
+        this.charts['c12m-pie1'] = new Chart(document.getElementById('c12m-pie1'), { type: 'doughnut', data: { labels: ['Top 10', 'Top 11-20', 'Autres'], datasets: [{ data: [top10, top11_20, rest], backgroundColor: ['#f59e0b', '#6366f1', '#10b981'] }] }, options: cOptions });
+
+        destroyChart('c12m-pie2');
+        this.charts['c12m-pie2'] = new Chart(document.getElementById('c12m-pie2'), { type: 'doughnut', data: { labels: ['Régulier', 'Habituel', 'Dormant'], datasets: [{ data: [caReg, caHab, caDor], backgroundColor: ['#22c55e', '#0ea5e9', '#ef4444'] }] }, options: cOptions });
     },
 
     renderCharts(dataObj, allLabels) {

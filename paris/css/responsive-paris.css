@@ -67,7 +67,7 @@
 }
 
 .bottom-nav-item.active {
-    color: #3b82f6;
+    color: #1d4ed8;
 }
 
 .bottom-nav-item.active::after {
@@ -76,7 +76,7 @@
     top: 6px;
     width: 4px;
     height: 4px;
-    background: #3b82f6;
+    background: #dc2626;
     border-radius: 50%;
     display: none; 
 }
@@ -107,14 +107,14 @@
     right: 16px;
     width: 52px;
     height: 52px;
-    background: #3b82f6;
+    background: linear-gradient(135deg, #1d4ed8 0%, #dc2626 100%);
     border-radius: 50%;
     border: none;
     color: white;
     font-size: 22px;
     cursor: pointer;
     z-index: 148;
-    box-shadow: 0 4px 14px rgba(59, 130, 246, 0.45);
+    box-shadow: 0 4px 14px rgba(29, 78, 216, 0.45);
     align-items: center;
     justify-content: center;
     transition: transform 0.15s, box-shadow 0.15s;
@@ -123,7 +123,7 @@
 
 .fab-btn:active {
     transform: scale(0.92);
-    box-shadow: 0 2px 8px rgba(59, 130, 246, 0.35);
+    box-shadow: 0 2px 8px rgba(29, 78, 216, 0.35);
 }
 
 /* ============================================

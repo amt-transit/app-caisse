@@ -26,6 +26,7 @@ import { SettingsAgencyView } from './views/settings-agency.js';
 import { SettingsAgentsView } from './views/settings-agents.js';
 import { SettingsCompanyView } from './views/settings-company.js';
 import { SettingsMenusView } from './views/settings-menus.js';
+import { SettingsAppointmentsView } from './views/settings-appointments.js';
 import { ConfigInvoiceView } from './views/config-invoice.js';
 import { ConfigLabelView } from './views/config-label.js';
 import { ConfigContainerView } from './views/config-container.js';
@@ -529,7 +530,7 @@ const app = {
             'finance-expenses': () => FinanceDepensesView.render(this),
             'stock-list': () => this.renderStockList(),
             'balance-monthly': () => BilansFinanciersView.render(this),
-            'balance-12m': () => BilansFinanciersView.render(this),
+            'balance-12m': () => BilansFinanciersView.render(this, '12m'),
             'stats-boat': () => this.renderStatsBoat(),
             'stats-monthly': () => this.renderStatsMonthly(),
             'stats-yearly': () => this.renderStatsYearly(),
@@ -540,7 +541,7 @@ const app = {
             'settings-notifications': () => this.renderSettingsNotifications(),
             'settings-menus': () => SettingsMenusView.render(this),
             'settings-agents': () => SettingsAgentsView.render(this),
-            'settings-appointments': () => this.renderSettingsAppointments(),
+            'settings-appointments': () => SettingsAppointmentsView.render(this),
             'settings-profile': () => this.renderSettingsProfile(),
             'config-invoice': () => ConfigInvoiceView.render(this),
             'config-label': () => ConfigLabelView.render(this),
@@ -897,8 +898,6 @@ const app = {
     renderSettingsSoftware() { this.renderSettingsForm('Paramètres logiciel', { theme: 'Clair', language: 'Français', notifications: true, autoBackup: true }); },
     renderSettingsSms() { this.renderSettingsForm('Configuration SMS', { provider: 'API SMS', apiKey: '••••••••', sender: 'AMT PARIS' }); },
     renderSettingsNotifications() { this.renderSettingsForm('Notifications', { emailAlerts: true, smsAlerts: true, pushEnabled: true }); },
-    
-    renderSettingsAppointments() { this.renderSettingsForm('Paramètres RDV', { duration: 30, slotInterval: 15, workingHours: '09:00-18:00', reminderDelay: 24 }); },
     renderSettingsProfile() { 
         const userName = sessionStorage.getItem('userName') || 'Utilisateur';
         const userAgency = sessionStorage.getItem('userAgency') || 'Non définie';
