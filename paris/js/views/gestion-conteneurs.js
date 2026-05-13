@@ -1,4 +1,4 @@
-import { db } from '../../../firebase-config.js';
+import { db } from '../../../abidjan/firebase-config.js';
 import { collection, query, onSnapshot, doc, setDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 
 export const GestionConteneursView = {

@@ -11,7 +11,7 @@
     loader.innerHTML = `
         <div style="position: relative; width: 70px; height: 70px; display: flex; justify-content: center; align-items: center;">
             <div style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; border: 4px solid #cbd5e1; border-top-color: #3b82f6; border-radius: 50%; animation: spinLoader 1s linear infinite; box-sizing: border-box;"></div>
-            <img src="favicon.png" alt="Favicon" style="width: 32px; height: 32px; object-fit: contain;">
+            <div style="font-size: 24px;">📦</div>
         </div>
         <p style="margin-top:20px; color:#475569; font-family:sans-serif; font-weight:600; font-size:16px;">Chargement en cours...</p>
         <style>@keyframes spinLoader { 100% { transform: rotate(360deg); } }</style>
@@ -139,63 +139,44 @@ function initBackToTopButton() {
 
 // --- MENU HAMBURGER (MOBILE) ---
 function initHamburgerMenu() {
-    const nav = document.querySelector('.navigation');
-    if (!nav) return;
+    const toggle  = document.getElementById('mobileToggle');
+    const sidebar = document.getElementById('sidebar');
+    const overlay = document.getElementById('sidebarOverlay');
 
-    // Créer l'Overlay (assombrissement du fond)
-    let overlay = document.querySelector('.mobile-overlay');
-    if (!overlay) {
-        overlay = document.createElement('div');
-        overlay.className = 'mobile-overlay';
-        document.body.appendChild(overlay);
+    // Fonction utilitaire : ouvrir la sidebar
+    const openSidebar = (e) => {
+        if (e) e.stopPropagation();
+        if (sidebar) sidebar.classList.add('open');
+        if (overlay) overlay.classList.add('show');
+        document.body.style.overflow = 'hidden'; // Empêche le scroll du fond
+    };
+
+    // Fonction utilitaire : fermer la sidebar
+    const closeSidebar = () => {
+        if (sidebar) sidebar.classList.remove('open');
+        if (overlay) overlay.classList.remove('show');
+        document.body.style.overflow = '';
+    };
+
+    if (toggle) {
+        toggle.addEventListener('click', openSidebar);
     }
 
-    let isMenuOpen = false;
+    if (overlay) {
+        overlay.addEventListener('click', closeSidebar);
+    }
 
-    // Logique d'ouverture/fermeture fluide
-    const toggleMenu = () => {
-        isMenuOpen = !isMenuOpen;
-        if (!isMenuOpen) {
-            nav.classList.remove('open');
-            overlay.classList.remove('active');
-            document.querySelectorAll('.hamburger-btn').forEach(btn => {
-                btn.innerHTML = '☰';
-                btn.classList.remove('open');
-            });
-        } else {
-            nav.classList.add('open');
-            overlay.classList.add('active');
-            document.querySelectorAll('.hamburger-btn').forEach(btn => {
-                btn.innerHTML = '✖';
-                btn.classList.add('open');
+    // Initialisation de l'accordéon pour la sidebar
+    document.querySelectorAll('.sidebar-category').forEach(category => {
+        const title = category.querySelector('.sidebar-category-title');
+        if (!category.querySelector('.sidebar-item.active')) {
+            category.classList.add('collapsed');
+        }
+        if (title) {
+            title.addEventListener('click', () => {
+                category.classList.toggle('collapsed');
             });
         }
-    };
-
-    const attachToHeader = (selector) => {
-        const header = document.querySelector(selector);
-        if (!header) return;
-        if (header.querySelector('.hamburger-btn')) return;
-        
-        const btn = document.createElement('button');
-        btn.className = 'hamburger-btn';
-        btn.innerHTML = '☰';
-        btn.title = 'Menu';
-        btn.addEventListener('click', (e) => { e.stopPropagation(); toggleMenu(); });
-        header.appendChild(btn);
-    };
-
-    attachToHeader('.app-header');
-    attachToHeader('.mob-header');
-
-    overlay.addEventListener('click', toggleMenu);
-
-    // Fermer automatiquement le menu après un clic sur un lien de navigation
-    const navLinks = nav.querySelectorAll('a');
-    navLinks.forEach(link => {
-        link.addEventListener('click', () => {
-            if (window.innerWidth <= 768 && nav.classList.contains('open')) toggleMenu();
-        });
     });
 }
 

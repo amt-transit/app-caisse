@@ -1,0 +1,1344 @@
+import { db } from '../../../firebase-config.js';
+import { collection, getDocs, query, where, onSnapshot } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
+
+export const DashboardView = {
+    render(app, container) {
+        this.app = app;
+        
+        container.innerHTML = `
+            <div class="dashboard-container modern-dashboard">
+                <!-- HEADER & FILTRES MODERNES -->
+                <div class="dashboard-header-modern">
+                    <div class="header-titles">
+                        <h2>Vue d'Ensemble</h2>
+                        <p>Suivez vos indicateurs de performance clés (KPIs) en temps réel.</p>
+                    </div>
+                    <div class="filter-controls-modern">
+                        <div class="date-filter-modern">
+                            <span>Du</span>
+                            <input type="date" id="startDate" title="Date de début">
+                            <span>au</span>
+                            <input type="date" id="endDate" title="Date de fin">
+                        </div>
+                        <button id="clearFilterBtn" class="btn-modern-reset" title="Réinitialiser les filtres">✖</button>
+                    </div>
+                </div>
+
+                <!-- 1. PERFORMANCE FINANCIÈRE -->
+                <h3 class="kpi-section-title"><span class="icon-bg">📈</span> Performance Financière</h3>
+                <div class="totals-container" style="margin-bottom: 30px;">
+                    <div class="total-card colored-card span-2" id="card-percu" onclick="app.renderPage('livraison')" style="cursor: pointer;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; width: 100%; gap: 15px; flex-wrap: wrap;">
+                            <div style="flex: 1; min-width: 150px;">
+                                <h3>Total Conteneurs (A)</h3>
+                                <p id="grandTotalPercu">0 CFA</p>
+                                <span id="grandTotalParisHidden" class="card-subtext">Dont Paris: 0 CFA</span>
+                            </div>
+                            <div style="flex: 1.2; min-width: 180px; border-left: 1px solid rgba(255,255,255,0.2); padding-left: 15px;">
+                                <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
+                                    <span style="opacity: 0.85; font-size: 12px;">Encaissements Cash :</span>
+                                    <span id="percuBreakdownCash" style="font-weight: 700; font-size: 13px;">0 CFA</span>
+                                </div>
+                                <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
+                                    <span style="opacity: 0.85; font-size: 12px;">Chèques Reçus :</span>
+                                    <span id="percuBreakdownCheques" style="font-weight: 700; font-size: 13px;">0 CFA</span>
+                                </div>
+                                <div style="display: flex; justify-content: space-between;">
+                                    <span style="opacity: 0.85; font-size: 12px;">Virements Reçus :</span>
+                                    <span id="percuBreakdownVirements" style="font-weight: 700; font-size: 13px;">0 CFA</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="card-watermark">📦</div>
+                    </div>
+                    <div class="total-card colored-card" id="card-other" onclick="app.renderPage('other-income')" style="cursor: pointer;">
+                        <h3>Autres Entrées</h3>
+                        <p id="grandTotalOtherIncome">0 CFA</p>
+                        <div class="card-watermark">💵</div>
+                    </div>
+                    <div class="total-card colored-card span-2" id="card-depenses" onclick="app.renderPage('expenses')" style="cursor: pointer;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; width: 100%; gap: 15px; flex-wrap: wrap;">
+                            <div style="flex: 1; min-width: 150px;">
+                                <h3>Dépenses Totales</h3>
+                                <p id="grandTotalDepenses">0 CFA</p>
+                                <span id="detailDepensesConteneur" class="card-subtext">Conteneurs: 0 CFA</span>
+                                <span id="detailDepensesMensuelles" class="card-subtext">Mensuelles: 0 CFA</span>
+                            </div>
+                            <div style="flex: 1.2; min-width: 180px; border-left: 1px solid rgba(255,255,255,0.2); padding-left: 15px;">
+                                <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
+                                    <span style="opacity: 0.85; font-size: 12px;">Dépenses Cash :</span>
+                                    <span id="depensesBreakdownCash" style="font-weight: 700; font-size: 13px;">0 CFA</span>
+                                </div>
+                                <div style="display: flex; justify-content: space-between;">
+                                    <span style="opacity: 0.85; font-size: 12px;">Dépenses Banque :</span>
+                                    <span id="depensesBreakdownBanque" style="font-weight: 700; font-size: 13px;">0 CFA</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="card-watermark">📉</div>
+                    </div>
+                    <div class="total-card" id="card-benefice" onclick="app.renderPage('audit')" style="cursor: pointer;">
+                        <h3>Bénéfice Total</h3>
+                        <p id="grandTotalBenefice">0 CFA</p>
+                        <div class="card-watermark">🏆</div>
+                    </div>
+                </div>
+
+                <!-- 3. TRÉSORERIE, FLUX BANCAIRES & ACTIVITÉ -->
+                <h3 class="kpi-section-title"><span class="icon-bg">🏦</span> Trésorerie, Flux Bancaires & Activité</h3>
+                
+                <!-- Ligne 1 : Détail Entrées Caisse -->
+                <div class="totals-container" style="margin-bottom: 20px;">
+                    <div class="total-card colored-card" id="card-other-cash" onclick="app.renderPage('other-income')" style="cursor: pointer;">
+                        <h3>Autres Entrées Cash</h3>
+                        <p id="grandTotalOtherCash">0 CFA</p>
+                        <div class="card-watermark">💵</div>
+                    </div>
+                    <div class="total-card colored-card" id="card-retraits" onclick="app.renderPage('bank')" style="cursor: pointer;">
+                        <h3>Retraits (Banque ➔ Caisse)</h3>
+                        <p id="grandTotalRetraits">0 CFA</p>
+                        <div class="card-watermark">🏧</div>
+                    </div>
+                </div>
+
+                <!-- Ligne 2 : Détail Sorties & Solde Caisse -->
+                <div class="totals-container" style="margin-bottom: 20px;">
+                    <div class="total-card colored-card span-2" id="card-sorties-cash" onclick="app.renderPage('expenses')" style="cursor: pointer;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; width: 100%; gap: 15px; flex-wrap: wrap;">
+                            <div style="flex: 1; min-width: 150px;">
+                                <h3>Décaissements Cash</h3>
+                                <p id="grandTotalSortiesCash">0 CFA</p>
+                            </div>
+                            <div style="flex: 1.2; min-width: 180px; border-left: 1px solid rgba(255,255,255,0.2); padding-left: 15px;">
+                                <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
+                                    <span style="opacity: 0.85; font-size: 12px;">Dépenses Cash :</span>
+                                    <span id="sortiesBreakdownDepenses" style="font-weight: 700; font-size: 13px;">0 CFA</span>
+                                </div>
+                                <div style="display: flex; justify-content: space-between;">
+                                    <span style="opacity: 0.85; font-size: 12px;">Dépôts (➔ Banque) :</span>
+                                    <span id="sortiesBreakdownDepots" style="font-weight: 700; font-size: 13px;">0 CFA</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="card-watermark">💸</div>
+                    </div>
+                    <div class="total-card colored-card card-positif" id="card-caisse-especes" onclick="app.renderPage('index')" style="cursor: pointer; border: 2px solid #059669 !important; transform: scale(1.02);">
+                        <h3>Solde Caisse (Espèces + MM)</h3>
+                        <p id="grandTotalCaisse">0 CFA</p>
+                        <div class="card-watermark">🪙</div>
+                    </div>
+                </div>
+
+                <!-- Ligne 3 : Banque, Dettes, Opérations -->
+                <div class="totals-container">
+                    <div class="total-card colored-card" id="card-solde-banque" onclick="app.renderPage('bank')" style="cursor: pointer;">
+                        <h3>Solde Banque</h3>
+                        <p id="grandTotalSoldeBanque">0 CFA</p>
+                        <div class="card-watermark">💳</div>
+                    </div>
+                    <div class="total-card colored-card" id="card-reste" onclick="app.renderPage('clients')" style="cursor: pointer;">
+                        <h3>Dettes Clients (Reste Total)</h3>
+                        <p id="grandTotalReste">0 CFA</p>
+                        <div class="card-watermark">⚠️</div>
+                    </div>
+                    <div class="total-card colored-card" id="card-operations" onclick="app.renderPage('history')" style="cursor: pointer;">
+                        <h3>Opérations Totales</h3>
+                        <p id="grandTotalCount">0</p>
+                        <div class="card-watermark">📊</div>
+                    </div>
+                </div> 
+                
+                <div class="sub-nav">
+                    <a href="#panel-conteneurs" class="active">Par Conteneur</a>
+                    <a href="#panel-clients">Top 100 Clients</a>
+                    <a href="#panel-agents">Par Agent</a>
+                    <a href="#panel-ventes">Ventes (par Mois)</a>
+                    <a href="#panel-depenses">Dépenses (Mensuelles)</a>
+                    <a href="#panel-banque">Mouvements Banque</a>
+                    <a href="#panel-impayes" style="color: #dc3545;">⚠️ Impayés</a>
+                    <a href="#panel-adjustments">Ajustements</a>
+                </div>
+
+                <div id="panel-conteneurs" class="tab-panel active">
+                    <h2 style="margin-top: 30px;">Récapitulatif Mensuel (Conteneurs)</h2>
+                    <table id="containerSummaryTable" class="table">
+                        <thead>
+                            <tr>
+                                <th>Mois</th><th>Nb. Conteneurs</th><th>Chiffre d'Affaires (CA)</th><th>Total Dépenses (%)</th><th>BÉNÉFICE Total (%)</th>
+                            </tr>
+                        </thead>
+                        <tbody id="containerSummaryTableBody"></tbody>
+                    </table>
+                </div>
+
+                <div id="panel-clients" class="tab-panel">
+                    <h2 style="margin-top: 30px;">Top 100 Clients</h2>
+                    <table id="topClientsTable" class="table">
+                        <thead><tr><th>Rang</th><th>Client (Nom)</th><th>Destinataire</th><th>Nb. Opérations</th><th>Chiffre d'Affaires</th></tr></thead>
+                        <tbody id="topClientsTableBody"></tbody>
+                    </table>
+                </div>
+
+                <div id="panel-agents" class="tab-panel">
+                    <h2 style="margin-top: 30px;">Récapitulatif par Agent</h2>
+                    <table id="agentSummaryTable" class="table">
+                        <thead><tr><th>Agent</th><th>Nombre d'Opérations</th><th>Chiffre d'Affaires</th></tr></thead>
+                        <tbody id="agentSummaryTableBody"></tbody>
+                    </table>
+                </div>
+
+                <div id="panel-ventes" class="tab-panel">
+                    <h2 style="margin-top: 30px;">Récapitulatif par Mois (Ventes)</h2>
+                    <table id="summaryTable" class="table">
+                        <thead><tr><th>Mois</th><th>Nombre d'Opérations</th><th>Total des Prix</th></tr></thead>
+                        <tbody id="summaryTableBody"></tbody>
+                    </table>
+                </div>
+
+                <div id="panel-depenses" class="tab-panel">
+                    <h2 style="margin-top: 30px;">Récapitulatif des Dépenses Mensuelles</h2>
+                    <table id="monthlyExpensesTable" class="table">
+                        <thead><tr><th>Date</th><th>Description</th><th>Montant</th></tr></thead>
+                        <tbody id="monthlyExpensesTableBody"></tbody>
+                    </table>
+                </div>
+
+                <div id="panel-banque" class="tab-panel">
+                    <h2 style="margin-top: 30px;">Récapitulatif des Mouvements de Banque</h2>
+                    <table id="bankMovementsTable" class="table">
+                        <thead><tr><th>Date</th><th>Description</th><th>Type</th><th>Montant</th></tr></thead>
+                        <tbody id="bankMovementsTableBody"></tbody>
+                    </table>
+                </div>
+
+                <div id="panel-impayes" class="tab-panel">
+                    <h2 style="margin-top: 30px; color: #dc3545;">Liste des Colis Impayés (Dettes)</h2>
+                    <table id="unpaidTable" class="table">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Conteneur</th>
+                                <th>Référence</th>
+                                <th>Client / Destinataire</th>
+                                <th>Prix Total</th>
+                                <th>Déjà Payé</th>
+                                <th>Reste à Payer</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="unpaidTableBody"></tbody>
+                    </table>
+                </div>
+
+                <div id="panel-adjustments" class="tab-panel">
+                    <h2 style="margin-top: 30px;">Liste des Réductions & Augmentations</h2>
+                    <table id="adjustmentsTable" class="table">
+                        <thead>
+                            <tr>
+                                <th>Date</th><th>Client / Destinataire</th><th>Référence</th><th>Type</th><th>Montant</th>
+                            </tr>
+                        </thead>
+                        <tbody id="adjustmentsTableBody"></tbody>
+                    </table>
+                </div>
+
+            </div>
+
+            <!-- NOUVELLE SECTION GRAPHIQUES -->
+            <div class="dashboard-container" style="margin-top: 20px;">
+                <h2 style="margin-top:0;">📈 Évolution & Statistiques</h2>
+                <div class="charts-grid" style="grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 20px;">
+                    <div class="chart-card">
+                        <h3>Dépenses : Mensuelles vs Conteneurs</h3>
+                        <canvas id="expenseEvolutionChart"></canvas>
+                    </div>
+                    <div class="chart-card">
+                        <h3>Activité Conteneurs (Arrivées & CA)</h3>
+                        <canvas id="containerEvolutionChart"></canvas>
+                    </div>
+                    <div class="chart-card">
+                        <h3>Répartition des Paiements</h3>
+                        <canvas id="paymentModeChart"></canvas>
+                    </div>
+                    <div class="chart-card">
+                        <h3>Top 10 Conteneurs (Rentabilité)</h3>
+                        <canvas id="topContainerProfitChart"></canvas>
+                    </div>
+                    <div class="chart-card">
+                        <h3>Ratio Dettes vs Encaissé</h3>
+                        <canvas id="debtVsCollectedChart"></canvas>
+                    </div>
+                    <div class="chart-card">
+                        <h3>Performance par Agent</h3>
+                        <canvas id="agentPerformanceChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- SECTION ANALYSES STRATÉGIQUES -->
+            <div id="analyticsContainer" class="dashboard-container" style="margin-top: 20px;">
+                <h2 style="margin-top:0;">📊 Analyses Stratégiques</h2>
+                <div class="charts-grid" style="grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px;">
+                    <!-- Balance Âgée -->
+                    <div class="chart-card">
+                        <h3>⏳ Balance Âgée (Dettes)</h3>
+                        <table class="table">
+                            <thead><tr><th>Ancienneté</th><th>Reste à Payer</th></tr></thead>
+                            <tbody id="agedBalanceBody"></tbody>
+                        </table>
+                    </div>
+                    
+                    <!-- Performance Logistique -->
+                    <div class="chart-card">
+                        <h3>✈️ Performance Logistique</h3>
+                        <div style="text-align:center; padding: 20px;">
+                            <div style="font-size: 12px; color: #64748b;">Délai Moyen (Paris -> Abidjan)</div>
+                            <div id="avgLeadTime" style="font-size: 32px; font-weight: bold; color: #4f46e5;">-</div>
+                            <div style="font-size: 11px; color: #64748b; margin-top:5px;">Basé sur les dates réelles</div>
+                        </div>
+                    </div>
+
+                    <!-- Clients Dormants -->
+                    <div class="chart-card" style="grid-column: span 2;">
+                        <h3>💤 Clients à Relancer (Inactifs > 3 mois)</h3>
+                        <div style="max-height: 200px; overflow-y: auto;">
+                            <table class="table">
+                                <thead><tr><th>Client</th><th>Dernier Envoi</th><th>CA Perdu Potentiel</th></tr></thead>
+                                <tbody id="dormantClientsBody"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="containerDetailsModal" class="modal" style="z-index: 1050;">
+                <div class="modal-content modal-lg" style="display: flex; flex-direction: column; overflow: hidden; padding: 0; max-height: 90vh;">
+                    <div style="padding: 20px 25px 10px 25px; background: #fff; border-bottom: 1px solid #e2e8f0; flex-shrink: 0;">
+                        <div class="modal-header" style="position: static; margin: 0; padding: 0 0 15px 0; border: none; box-shadow: none;">
+                            <h2 id="modalContainerTitle" style="margin:0;">Détails du Conteneur</h2>
+                            <div style="display: flex; align-items: center; gap: 10px;">
+                                <button id="downloadContainerExcelBtn" style="background-color: #217346; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 12px; display: flex; align-items: center; gap: 5px;">📊 Excel</button>
+                                <button id="downloadContainerPdfBtn" style="background-color: #d32f2f; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 12px; display: flex; align-items: center; gap: 5px;">📄 PDF</button>
+                                <span class="close-modal" id="closeContainerModal">&times;</span>
+                            </div>
+                        </div>
+                        
+                        <div id="containerStats" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; background: #f8fafc; padding: 10px; border-radius: 8px; border: 1px solid #e2e8f0;">
+                            <div style="text-align:center;"><div style="font-size:11px; color:#64748b; text-transform:uppercase;">Total Prix</div><div id="topTotalPrix" style="font-weight:bold; font-size:1.2em; color:#0f172a;">0</div></div>
+                            <div style="text-align:center;"><div style="font-size:11px; color:#64748b; text-transform:uppercase;">Total Abidjan</div><div id="topTotalPayeAbj" style="font-weight:bold; font-size:1.2em; color:#d97706;">0</div></div>
+                            <div style="text-align:center;"><div style="font-size:11px; color:#64748b; text-transform:uppercase;">Total Paris</div><div id="topTotalPayePar" style="font-weight:bold; font-size:1.2em; color:#2563eb;">0</div></div>
+                            <div style="text-align:center;"><div style="font-size:11px; color:#64748b; text-transform:uppercase;">Total Reste</div><div id="topTotalReste" style="font-weight:bold; font-size:1.2em;">0</div></div>
+                            <div style="text-align:center;"><div style="font-size:11px; color:#64748b; text-transform:uppercase;">Dépenses</div><div id="topTotalDep" style="font-weight:bold; font-size:1.2em; color:#ef4444;">0</div></div>
+                            <div style="text-align:center;"><div style="font-size:11px; color:#64748b; text-transform:uppercase;">Bénéfice</div><div id="topTotalBen" style="font-weight:bold; font-size:1.2em; color:#10b981;">0</div></div>
+                        </div>
+                    </div>
+
+                    <div style="overflow-y: auto; padding: 0 25px 25px 25px; flex-grow: 1;">
+                        <div style="overflow-x: auto;">
+                        <table id="containerDetailsTable" class="table"> 
+                            <thead style="position: sticky; top: 0; z-index: 10;">
+                                <tr>
+                                    <th>Date</th>
+                                    <th>Client / Destinataire</th>
+                                    <th>REF</th>
+                                    <th>Prix</th>
+                                    <th>Payé ABJ (%)</th>
+                                    <th>Payé PAR (%)</th>
+                                    <th>Reste (%)</th>
+                                </tr>
+                            </thead>
+                            <tbody id="containerDetailsTableBody">
+                            </tbody>
+                        </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- MODAL DÉTAILS MOIS (LISTE CONTENEURS) -->
+            <div id="monthDetailsModal" class="modal">
+                <div class="modal-content modal-lg" style="width: 95% !important; max-width: 1200px !important;">
+                    <div class="modal-header">
+                        <h2 id="modalMonthTitle">Détails du Mois</h2>
+                        <span class="close-modal" onclick="document.getElementById('monthDetailsModal').style.display='none'">&times;</span>
+                    </div>
+                    <div style="overflow-x: auto;">
+                        <table id="monthContainersTable" class="table">
+                            <thead>
+                                <tr>
+                                    <th>Conteneur</th><th>Op.</th><th>Non Payés</th><th>CA</th><th>Paris</th><th>Abidjan</th>
+                                    <th>Perçu</th><th>Reste</th><th>Dépenses</th><th>BÉNÉFICE</th>
+                                </tr>
+                            </thead>
+                            <tbody id="modalMonthBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        `;
+        setTimeout(() => this.initLogic(), 50);
+    },
+
+    initLogic() {
+        const activeAgency = sessionStorage.getItem('currentActiveAgency') || 'abidjan';
+
+        // SERVICE TRANSACTION
+        const transactionService = {
+            getCleanTransactions(transactions, validatedSessions) {
+                return transactions.reduce((acc, t) => {
+                    let effectivePrix = t.prix || 0;
+                    if (t.adjustmentType && String(t.adjustmentType).toLowerCase() === 'reduction') {
+                        effectivePrix -= (t.adjustmentVal || 0);
+                    }
+
+                    if (!t.paymentHistory || !Array.isArray(t.paymentHistory) || t.paymentHistory.length === 0) {
+                        acc.push({
+                            ...t,
+                            prix: effectivePrix,
+                            reste: ((t.montantParis || 0) + (t.montantAbidjan || 0)) - effectivePrix
+                        });
+                        return acc;
+                    }
+                    const validPayments = t.paymentHistory.filter(p => !p.sessionId || validatedSessions.has(p.sessionId));
+                    const newParis = validPayments.reduce((sum, p) => sum + (p.montantParis || 0), 0);
+                    const newAbidjan = validPayments.reduce((sum, p) => sum + (p.montantAbidjan || 0), 0);
+                    const tClean = {
+                        ...t,
+                        prix: effectivePrix,
+                        paymentHistory: validPayments,
+                        montantParis: newParis,
+                        montantAbidjan: newAbidjan,
+                        reste: (newParis + newAbidjan) - effectivePrix
+                    };
+                    acc.push(tClean);
+                    return acc;
+                }, []);
+            },
+            async calculateAvailableBalance(db, unconfirmedSessions) {
+                const transSnap = await getDocs(query(collection(db, "transactions"), where("isDeleted", "!=", true), where("agency", "==", activeAgency)));
+                let totalVentes = 0;
+                transSnap.forEach(doc => {
+                    const d = doc.data();
+                    if (d.paymentHistory && d.paymentHistory.length > 0) {
+                        d.paymentHistory.forEach(pay => {
+                            if (pay.sessionId && unconfirmedSessions.has(pay.sessionId)) return;
+                            if (pay.modePaiement !== 'Chèque' && pay.modePaiement !== 'Virement') {
+                                totalVentes += (pay.montantAbidjan || 0);
+                            }
+                        });
+                    } else {
+                        if (d.modePaiement !== 'Chèque' && d.modePaiement !== 'Virement') {
+                            totalVentes += (d.montantAbidjan || 0);
+                        }
+                    }
+                });
+                const incSnap = await getDocs(query(collection(db, "other_income"), where("isDeleted", "!=", true), where("agency", "==", activeAgency)));
+                let totalAutres = 0;
+                incSnap.forEach(doc => {
+                    const d = doc.data();
+                    if (d.mode !== 'Virement' && d.mode !== 'Chèque') {
+                        totalAutres += (d.montant || 0);
+                    }
+                });
+                const expSnap = await getDocs(query(collection(db, "expenses"), where("isDeleted", "!=", true), where("agency", "==", activeAgency)));
+                let totalDepenses = 0;
+                expSnap.forEach(doc => {
+                    const d = doc.data();
+                    if (d.sessionId && unconfirmedSessions.has(d.sessionId)) return;
+                    if (d.mode !== 'Virement' && d.mode !== 'Chèque') {
+                        totalDepenses += (d.montant || 0);
+                    }
+                });
+                const bankSnap = await getDocs(query(collection(db, "bank_movements"), where("isDeleted", "!=", true), where("agency", "==", activeAgency)));
+                let totalRetraits = 0;
+                let totalDepots = 0;
+                bankSnap.forEach(doc => {
+                    const d = doc.data();
+                    if (d.type === 'Retrait') totalRetraits += (d.montant || 0);
+                    if (d.type === 'Depot' && d.source !== 'Remise Chèques' && d.source !== 'Solde Initial') totalDepots += (d.montant || 0);
+                });
+                return (totalVentes + totalAutres + totalRetraits) - (totalDepenses + totalDepots);
+            },
+            calculateStorageFee(dateString, quantityOrItem = 1, compareDate = new Date()) {
+                if (!dateString) return { days: 0, fee: 0 };
+                let qte = 1;
+                let tarifJour = 1000;
+                if (typeof quantityOrItem === 'object' && quantityOrItem !== null) {
+                    qte = quantityOrItem.quantiteRestante !== undefined ? parseInt(quantityOrItem.quantiteRestante) : (parseInt(quantityOrItem.quantite) || 1);
+                    const desc = (quantityOrItem.description || '').toLowerCase();
+                    if (desc.includes('palette')) {
+                        tarifJour = 3000;
+                    }
+                } else {
+                    qte = parseInt(quantityOrItem) || 1;
+                }
+                const arrivalDate = new Date(dateString);
+                const diffTime = compareDate - arrivalDate;
+                if (diffTime < 0) return { days: 0, fee: 0 };
+                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                if (diffDays <= 7) return { days: diffDays, fee: 0 };
+                else if (diffDays <= 14) return { days: diffDays, fee: 10000 * qte };
+                else {
+                    const extraDays = diffDays - 14;
+                    const unitFee = 10000 + (extraDays * tarifJour);
+                    return { days: diffDays, fee: unitFee * qte };
+                }
+            }
+        };
+
+        // --- 1. DOM ELEMENTS & CONFIG ---
+        const startDateInput = document.getElementById('startDate');
+        const endDateInput = document.getElementById('endDate');
+        const clearFilterBtn = document.getElementById('clearFilterBtn');
+
+        // --- GESTION DES ONGLETS ---
+        const tabs = document.querySelectorAll('.sub-nav a');
+        const panels = document.querySelectorAll('.tab-panel');
+
+        tabs.forEach(tab => {
+            tab.addEventListener('click', (e) => {
+                e.preventDefault();
+                const targetId = tab.getAttribute('href');
+                const targetPanel = document.querySelector(targetId);
+                
+                tabs.forEach(t => t.classList.remove('active'));
+                panels.forEach(p => p.classList.remove('active'));
+                
+                tab.classList.add('active');
+                if (targetPanel) targetPanel.classList.add('active');
+            });
+        });
+        
+        // Tableaux
+        const containerSummaryBody = document.getElementById('containerSummaryTableBody');
+        const topClientsBody = document.getElementById('topClientsTableBody');
+        const agentSummaryBody = document.getElementById('agentSummaryTableBody');
+        const monthlySummaryBody = document.getElementById('summaryTableBody');
+        const monthlyExpensesBody = document.getElementById('monthlyExpensesTableBody');
+        const bankMovementsBody = document.getElementById('bankMovementsTableBody');
+        const unpaidBody = document.getElementById('unpaidTableBody');
+        const adjustmentsBody = document.getElementById('adjustmentsTableBody');
+
+        // Totaux Généraux (Cartes)
+        const els = {
+            percu: document.getElementById('grandTotalPercu'),
+            parisHidden: document.getElementById('grandTotalParisHidden'),
+            other: document.getElementById('grandTotalOtherIncome'),
+            depenses: document.getElementById('grandTotalDepenses'),
+            benefice: document.getElementById('grandTotalBenefice'),
+            caisse: document.getElementById('grandTotalCaisse'),
+            otherCash: document.getElementById('grandTotalOtherCash'),
+            banque: document.getElementById('grandTotalSoldeBanque'),
+            count: document.getElementById('grandTotalCount'),
+            reste: document.getElementById('grandTotalReste'),
+            retraits: document.getElementById('grandTotalRetraits'),
+            depots: document.getElementById('grandTotalDepots'),
+            depContainer: document.getElementById('detailDepensesConteneur'),
+            depMensuelle: document.getElementById('detailDepensesMensuelles'),
+            depBreakdownCash: document.getElementById('depensesBreakdownCash'),
+            depBreakdownBanque: document.getElementById('depensesBreakdownBanque'),
+            sortiesCash: document.getElementById('grandTotalSortiesCash'),
+            sortiesBreakdownDepenses: document.getElementById('sortiesBreakdownDepenses'),
+            sortiesBreakdownDepots: document.getElementById('sortiesBreakdownDepots'),
+            percuBreakdownCash: document.getElementById('percuBreakdownCash'),
+            percuBreakdownCheques: document.getElementById('percuBreakdownCheques'),
+            percuBreakdownVirements: document.getElementById('percuBreakdownVirements')
+        };
+
+        // Gestion Rôle Saisie Full (Masquage)
+        const userRole = sessionStorage.getItem('userRole');
+        if (userRole === 'saisie_full') {
+            document.querySelectorAll('.total-card, canvas, #summaryTableBody, #agentSummaryTableBody, #monthlyExpensesTableBody, #bankMovementsTableBody, #agedBalanceBody, #dormantClientsBody, #avgLeadTime').forEach(el => {
+                const container = el.closest('.card') || el.closest('.chart-card') || el.closest('section') || el.parentElement;
+                if (container) container.style.display = 'none';
+            });
+        }
+
+        // --- 2. STATE MANAGEMENT ---
+        let allTransactions = [];
+        let allExpenses = [];
+        let allOtherIncome = [];
+        let allBankMovements = [];
+        let validatedSessions = new Set(); 
+        
+        let charts = {}; 
+
+        // --- 3. CORE LOGIC : NETTOYAGE & SÉCURITÉ ---
+
+        function getCleanTransactions(transactions) {
+            return transactionService.getCleanTransactions(transactions, validatedSessions);
+        }
+
+        function updateDashboard() {
+            const cleanTransactions = getCleanTransactions(allTransactions);
+            const cleanExpenses = allExpenses.filter(e => !e.sessionId || validatedSessions.has(e.sessionId));
+
+            const start = startDateInput.value;
+            const end = endDateInput.value;
+            
+            const filteredTrans = filterByDate(cleanTransactions, start, end);
+            const filteredExp = filterByDate(cleanExpenses, start, end);
+            const filteredInc = filterByDate(allOtherIncome, start, end);
+            const filteredBank = filterByDate(allBankMovements, start, end);
+
+            calculateTotals(filteredTrans, filteredExp, filteredInc, filteredBank);
+            
+            renderContainerSummary(filteredTrans, filteredExp, cleanTransactions);
+            renderTopClients(filteredTrans);
+            renderAgentSummary(filteredTrans);
+            renderMonthlySales(filteredTrans);
+            renderMonthlyExpenses(filteredExp);
+            renderBankMovements(filteredBank);
+            renderUnpaid(cleanTransactions); 
+            renderAdjustments(filteredTrans);
+            
+            renderCharts(filteredTrans, filteredExp);
+            renderAdvancedAnalytics(cleanTransactions);
+        }
+
+        function filterByDate(items, start, end) {
+            if (!start && !end) return items;
+            return items.filter(item => {
+                if ((!start || item.date >= start) && (!end || item.date <= end)) return true;
+                if (item.paymentHistory) {
+                    return item.paymentHistory.some(p => (!start || p.date >= start) && (!end || p.date <= end));
+                }
+                return false;
+            });
+        }
+
+        // --- 4. CALCULS FINANCIERS ---
+
+        function calculateTotals(transactions, expenses, incomes, bank) {
+            let totalAbidjan = 0, totalParis = 0, totalCheques = 0, totalVirements = 0;
+            let totalVentesCash = 0; 
+            let abidjanCheques = 0, abidjanVirements = 0; 
+
+            transactions.forEach(t => {
+                const payments = t.paymentHistory || [{ ...t, date: t.date }]; 
+                payments.forEach(p => {
+                    if (p.sessionId && !validatedSessions.has(p.sessionId)) return;
+
+                    if (isInDateRange(p.date)) {
+                        totalAbidjan += (p.montantAbidjan || 0);
+                        totalParis += (p.montantParis || 0);
+
+                        const mode = p.modePaiement || t.modePaiement || 'Espèce';
+                        if (['Espèce', 'Wave', 'OM', 'Mobile Money'].includes(mode)) {
+                            totalVentesCash += (p.montantAbidjan || 0);
+                        }
+                        if (mode === 'Chèque') {
+                            totalCheques += ((p.montantAbidjan || 0) + (p.montantParis || 0));
+                            abidjanCheques += (p.montantAbidjan || 0);
+                        }
+                        if (mode === 'Virement') {
+                            totalVirements += ((p.montantAbidjan || 0) + (p.montantParis || 0));
+                            abidjanVirements += (p.montantAbidjan || 0);
+                        }
+                    }
+                });
+            });
+
+            const totalOther = incomes.reduce((sum, i) => sum + (i.montant || 0), 0);
+            const totalOtherCash = incomes.filter(i => i.mode !== 'Chèque' && i.mode !== 'Virement').reduce((sum, i) => sum + (i.montant || 0), 0);
+
+            const realExpenses = expenses.filter(e => e.action !== 'Allocation'); 
+            const totalDep = realExpenses.reduce((sum, e) => sum + (e.montant || 0), 0);
+            const totalDepCash = realExpenses.filter(e => e.mode !== 'Chèque' && e.mode !== 'Virement').reduce((sum, e) => sum + (e.montant || 0), 0);
+            const totalDepBanque = totalDep - totalDepCash;
+
+            const depConteneur = realExpenses.filter(e => {
+                return e.conteneur && e.conteneur.trim() !== '';
+            }).reduce((sum, e) => sum + e.montant, 0);
+            const depMensuelle = totalDep - depConteneur;
+
+            const depots = bank.filter(m => m.type === 'Depot' && m.source !== 'Remise Chèques' && m.source !== 'Solde Initial').reduce((sum, m) => sum + m.montant, 0); 
+            const depotsAll = bank.filter(m => m.type === 'Depot').reduce((sum, m) => sum + m.montant, 0);
+            const retraitsEspeces = bank.filter(m => m.type === 'Retrait').reduce((sum, m) => sum + m.montant, 0);
+            const totalSortiesBanque = bank.filter(m => m.type === 'Retrait' || m.type === 'Paiement').reduce((sum, m) => sum + m.montant, 0);
+            
+            const benefice = (totalAbidjan + totalOther) - totalDep;
+            const soldeCaisse = (totalVentesCash + totalOtherCash + retraitsEspeces) - (totalDepCash + depots);
+            const soldeBanque = depotsAll + totalVirements + totalCheques - totalSortiesBanque;
+            
+            const resteTotal = transactions.reduce((sum, t) => sum + (t.reste || 0), 0);
+
+            if(els.percu) els.percu.textContent = formatCFA(totalAbidjan);
+            if(els.parisHidden) els.parisHidden.textContent = `Dont Paris: ${formatCFA(totalParis)}`;
+            if(els.percuBreakdownCash) els.percuBreakdownCash.textContent = formatCFA(totalVentesCash);
+            if(els.percuBreakdownCheques) els.percuBreakdownCheques.textContent = formatCFA(abidjanCheques);
+            if(els.percuBreakdownVirements) els.percuBreakdownVirements.textContent = formatCFA(abidjanVirements);
+            if(els.other) els.other.textContent = formatCFA(totalOther);
+            if(els.depenses) els.depenses.textContent = formatCFA(totalDep);
+            if(els.benefice) {
+                els.benefice.textContent = formatCFA(benefice);
+                els.benefice.parentElement.className = `total-card ${benefice >= 0 ? 'card-positif' : 'card-negatif'}`;
+            }
+            if(els.caisse) els.caisse.textContent = formatCFA(soldeCaisse);
+            if(els.otherCash) els.otherCash.textContent = formatCFA(totalOtherCash);
+            if(els.sortiesCash) els.sortiesCash.textContent = formatCFA(totalDepCash + depots);
+            if(els.sortiesBreakdownDepenses) els.sortiesBreakdownDepenses.textContent = formatCFA(totalDepCash);
+            if(els.sortiesBreakdownDepots) els.sortiesBreakdownDepots.textContent = formatCFA(depots);
+            if(els.banque) els.banque.textContent = formatCFA(soldeBanque);
+            if(els.retraits) els.retraits.textContent = formatCFA(retraitsEspeces);
+            if(els.count) els.count.textContent = transactions.length;
+            if(els.reste) els.reste.textContent = formatCFA(resteTotal);
+            if(els.depContainer) els.depContainer.textContent = `Conteneurs: ${formatCFA(depConteneur)}`;
+            if(els.depMensuelle) els.depMensuelle.textContent = `Mensuelles: ${formatCFA(depMensuelle)}`;
+            if(els.depBreakdownCash) els.depBreakdownCash.textContent = formatCFA(totalDepCash);
+            if(els.depBreakdownBanque) els.depBreakdownBanque.textContent = formatCFA(totalDepBanque);
+        }
+
+        function isInDateRange(dateStr) {
+            const start = startDateInput.value;
+            const end = endDateInput.value;
+            return (!start || dateStr >= start) && (!end || dateStr <= end);
+        }
+
+        // --- 5. RENDUS TABLEAUX ---
+
+        function renderContainerSummary(transactions, expenses, allCleanTransactions) {
+            if (!containerSummaryBody) return;
+            containerSummaryBody.innerHTML = '<tr><td colspan="5">Calcul en cours...</td></tr>';
+
+            const containerOrigins = {};
+            if (allCleanTransactions) {
+                allCleanTransactions.forEach(t => {
+                    if (!t.conteneur) return;
+                    const cName = t.conteneur.trim().toUpperCase();
+                    if (!containerOrigins[cName] || t.date < containerOrigins[cName]) {
+                        containerOrigins[cName] = t.date;
+                    }
+                });
+            }
+
+            const months = {};
+            const getMonthKey = (dateStr) => (dateStr && typeof dateStr === 'string' && dateStr.length >= 7) ? dateStr.substring(0, 7) : '0000-00';
+            const getMonthLabel = (dateStr) => {
+                if(!dateStr) return 'Indéfini';
+                const d = new Date(dateStr);
+                return d.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' }).replace(/^\w/, c => c.toUpperCase());
+            };
+
+            transactions.forEach(t => {
+                const cName = (t.conteneur || "Non spécifié").trim().toUpperCase();
+
+                let refDate = String(t.date || '');
+                const originDate = containerOrigins[cName];
+                if (cName !== "NON SPÉCIFIÉ" && originDate) {
+                    refDate = String(originDate);
+                }
+
+                const mKey = getMonthKey(refDate);
+                const mLabel = getMonthLabel(refDate);
+
+                if (!months[mKey]) months[mKey] = { key: mKey, label: mLabel, containers: {}, stats: { ca: 0, dep: 0, count: 0 } };
+                if (!months[mKey].containers[cName]) {
+                    months[mKey].containers[cName] = { name: cName, ca: 0, paris: 0, abidjan: 0, reste: 0, count: 0, unpaid: 0, dep: 0 };
+                }
+                
+                const c = months[mKey].containers[cName];
+                c.ca += (t.prix || 0);
+                c.paris += (t.montantParis || 0);
+                c.abidjan += (t.montantAbidjan || 0);
+                c.reste += (t.reste || 0);
+                c.count++;
+                if ((t.reste || 0) < -1) c.unpaid++;
+
+                months[mKey].stats.ca += (t.prix || 0);
+            });
+
+            expenses.forEach(e => {
+                const cName = (e.conteneur || "").trim().toUpperCase();
+                if (cName !== "") {
+
+                    let refDate = String(e.date || '');
+                    const originDate = containerOrigins[cName];
+                    if (originDate) {
+                        refDate = String(originDate);
+                    }
+
+                    const mKey = getMonthKey(refDate);
+                    const mLabel = getMonthLabel(refDate);
+
+                    if (!months[mKey]) months[mKey] = { key: mKey, label: mLabel, containers: {}, stats: { ca: 0, dep: 0, count: 0 } };
+                    if (!months[mKey].containers[cName]) {
+                        months[mKey].containers[cName] = { name: cName, ca: 0, paris: 0, abidjan: 0, reste: 0, count: 0, unpaid: 0, dep: 0 };
+                    }
+                    
+                    months[mKey].containers[cName].dep += (e.montant || 0);
+                    months[mKey].stats.dep += (e.montant || 0);
+                }
+            });
+
+            const sortedMonths = Object.values(months).sort((a, b) => b.key.localeCompare(a.key));
+            
+            containerSummaryBody.innerHTML = '';
+            if (sortedMonths.length === 0) { containerSummaryBody.innerHTML = '<tr><td colspan="5">Aucune donnée.</td></tr>'; return; }
+
+            sortedMonths.forEach(m => {
+                const benef = m.stats.ca - m.stats.dep;
+                const nbConteneurs = Object.keys(m.containers).length;
+                
+                const pctDep = m.stats.ca ? Math.round((m.stats.dep / m.stats.ca) * 100) : 0;
+                const pctBen = m.stats.ca ? Math.round((benef / m.stats.ca) * 100) : 0;
+
+                const tr = document.createElement('tr');
+                tr.style.cursor = 'pointer';
+                tr.onclick = () => window.openMonthDetails(m.key);
+                tr.title = "Cliquez pour voir les détails du mois";
+                
+                tr.innerHTML = `
+                    <td><b>${m.label}</b></td>
+                    <td><span class="tag" style="background:#64748b;">${nbConteneurs} Conteneurs</span></td>
+                    <td>${formatCFA(m.stats.ca)}</td>
+                    <td style="color:#ef4444;">${formatCFA(m.stats.dep)} <span style="font-size:0.8em">(${pctDep}%)</span></td>
+                    <td style="font-weight:bold; color:${benef >= 0 ? '#10b981' : '#ef4444'}">${formatCFA(benef)} <span style="font-size:0.8em">(${pctBen}%)</span></td>
+                `;
+                containerSummaryBody.appendChild(tr);
+            });
+            
+            window.monthlyData = months;
+        }
+
+        window.openMonthDetails = function(monthKey) {
+            const m = window.monthlyData && window.monthlyData[monthKey];
+            if (!m) return;
+            
+            const modal = document.getElementById('monthDetailsModal');
+            const title = document.getElementById('modalMonthTitle');
+            const tbody = document.getElementById('modalMonthBody');
+            
+            title.textContent = `Détails du Mois : ${m.label}`;
+            tbody.innerHTML = '';
+            
+            Object.values(m.containers).sort((a, b) => a.name.localeCompare(b.name)).forEach(c => {
+                const benef = c.ca - c.dep;
+                const percu = c.paris + c.abidjan;
+                
+                const pctReste = c.ca ? Math.round((c.reste / c.ca) * 100) : 0;
+                const pctBenef = c.ca ? Math.round((benef / c.ca) * 100) : 0;
+                
+                const tr = document.createElement('tr');
+                tr.style.cursor = 'pointer';
+                tr.onclick = () => window.openContainerDetails(c.name); 
+                
+                tr.innerHTML = `
+                    <td><b>${c.name}</b></td>
+                    <td>${c.count}</td>
+                    <td style="color:${c.unpaid > 0 ? 'red' : 'green'}">${c.unpaid}</td>
+                    <td>${formatCFA(c.ca)}</td>
+                    <td>${formatCFA(c.paris)}</td>
+                    <td>${formatCFA(c.abidjan)}</td>
+                    <td style="font-weight:bold">${formatCFA(percu)}</td>
+                    <td>${formatCFA(c.dep)}</td>
+                    <td class="${c.reste < 0 ? 'reste-negatif' : 'reste-positif'}">${formatCFA(c.reste)} <span style="font-size:0.8em">(${pctReste}%)</span></td>
+                    <td>${formatCFA(c.dep)}</td>
+                    <td class="${benef < 0 ? 'reste-negatif' : 'reste-positif'}"><b>${formatCFA(benef)}</b> <span style="font-size:0.8em; font-weight:normal;">(${pctBenef}%)</span></td>
+                `;
+                tbody.appendChild(tr);
+            });
+            
+            modal.style.display = 'flex';
+        }
+
+        function renderTopClients(transactions) {
+            if (!topClientsBody) return;
+            const clients = {};
+            transactions.forEach(t => {
+                const name = t.nom || "Inconnu";
+                if (!clients[name]) clients[name] = { count: 0, ca: 0, dest: t.nomDestinataire || '' };
+                clients[name].count++;
+                clients[name].ca += (t.prix || 0);
+            });
+
+            const sorted = Object.entries(clients).sort((a, b) => b[1].ca - a[1].ca).slice(0, 100);
+            topClientsBody.innerHTML = sorted.map(([name, d], i) => `
+                <tr><td>#${i+1}</td><td>${name}</td><td>${d.dest}</td><td>${d.count}</td><td>${formatCFA(d.ca)}</td></tr>
+            `).join('');
+        }
+
+        function renderAgentSummary(transactions) {
+            if (!agentSummaryBody) return;
+            const agents = {};
+            transactions.forEach(t => {
+                if (!t.agent) return;
+                t.agent.split(',').forEach(a => {
+                    const name = a.trim();
+                    if (!agents[name]) agents[name] = { count: 0, ca: 0 };
+                    agents[name].count++;
+                    if (name.toLowerCase().includes('paris')) agents[name].ca += (t.montantParis || 0);
+                    else agents[name].ca += (t.montantAbidjan || 0);
+                });
+            });
+            const sorted = Object.entries(agents).sort((a, b) => b[1].ca - a[1].ca);
+            agentSummaryBody.innerHTML = sorted.map(([n, d]) => `<tr><td>${n}</td><td>${d.count}</td><td>${formatCFA(d.ca)}</td></tr>`).join('');
+        }
+
+        function renderMonthlySales(transactions) {
+            if (!monthlySummaryBody) return;
+            const months = {};
+            transactions.forEach(t => {
+                const dateStr = String(t.date || '');
+                if (dateStr.length < 7) return;
+                const m = dateStr.substring(0, 7);
+                if (!months[m]) months[m] = { count: 0, ca: 0 };
+                months[m].count++;
+                months[m].ca += (t.prix || 0);
+            });
+            const sorted = Object.entries(months).sort((a, b) => b[0].localeCompare(a[0]));
+            monthlySummaryBody.innerHTML = sorted.map(([m, d]) => `<tr><td>${m}</td><td>${d.count}</td><td>${formatCFA(d.ca)}</td></tr>`).join('');
+        }
+
+        function renderMonthlyExpenses(expenses) {
+            if (!monthlyExpensesBody) return;
+            const monthly = expenses.filter(e => e.type === 'Mensuelle' && e.action !== 'Allocation' && e.date);
+            monthly.sort((a, b) => new Date(b.date) - new Date(a.date));
+            monthlyExpensesBody.innerHTML = monthly.map(e => `<tr><td>${e.date}</td><td>${e.description}</td><td>${formatCFA(e.montant)}</td></tr>`).join('');
+        }
+
+        function renderBankMovements(movements) {
+            if (!bankMovementsBody) return;
+            const sorted = movements.filter(m => m.date).sort((a, b) => new Date(b.date) - new Date(a.date));
+            bankMovementsBody.innerHTML = sorted.map(m => {
+                const isNegativeDisplay = (m.type === 'Depot' && m.source === 'Saisie Manuelle') || m.type === 'Paiement';
+                const amountClass = isNegativeDisplay ? 'reste-negatif' : 'reste-positif';
+                return `
+                    <tr><td>${m.date}</td><td>${m.description}</td><td>${m.type}</td><td class="${amountClass}">${formatCFA(m.montant)}</td></tr>
+                `;
+            }).join('');
+        }
+
+        function renderUnpaid(transactions) {
+            if (!unpaidBody) return;
+            const unpaid = transactions.filter(t => (t.reste || 0) < -1);
+            unpaid.sort((a, b) => a.reste - b.reste); 
+
+            unpaidBody.innerHTML = unpaid.map(t => {
+                const paid = (t.montantParis || 0) + (t.montantAbidjan || 0);
+                const waLink = `https://wa.me/?text=${encodeURIComponent(`Bonjour ${t.nom}, solde restant pour ${t.reference}: ${formatCFA(Math.abs(t.reste))}`)}`;
+                return `
+                    <tr>
+                        <td>${t.date}</td><td>${t.conteneur}</td><td><b>${t.reference}</b></td>
+                        <td>${t.nom}<br><small>${t.nomDestinataire||''}</small></td>
+                        <td>${formatCFA(t.prix)}</td><td>${formatCFA(paid)}</td>
+                        <td class="reste-negatif"><b>${formatCFA(t.reste)}</b></td>
+                        <td><a href="${waLink}" target="_blank" style="color:green;text-decoration:none;">📱 Relancer</a></td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        function renderAdjustments(transactions) {
+            if (!adjustmentsBody) return;
+            const adj = transactions.filter(t => t.adjustmentVal > 0);
+            adjustmentsBody.innerHTML = adj.map(t => `
+                <tr>
+                    <td>${t.date}</td><td>${t.nom}</td><td>${t.reference}</td>
+                    <td><span class="tag" style="background:${t.adjustmentType && String(t.adjustmentType).toLowerCase()==='reduction'?'#10b981':'#ef4444'}">${t.adjustmentType}</span></td>
+                    <td>${formatCFA(t.adjustmentVal)}</td>
+                </tr>
+            `).join('');
+        }
+
+        // --- 6. GRAPHIQUES & ANALYSES ---
+
+        function renderCharts(transactions, expenses) {
+            if (userRole === 'saisie_full') return;
+            if (typeof Chart === 'undefined') return console.warn("Chart.js non chargé");
+            
+            try {
+                const ctx = document.getElementById('expenseEvolutionChart');
+                if (ctx) {
+                    if (charts.expense) charts.expense.destroy();
+                    
+                    const months = {};
+                    expenses.forEach(e => {
+                        const dateStr = String(e.date || '');
+                        if (dateStr.length < 7) return;
+                        const m = dateStr.substring(0, 7);
+                        if (!months[m]) months[m] = { mens: 0, cont: 0 };
+                        if (e.type === 'Conteneur') months[m].cont += e.montant;
+                        else if (e.action !== 'Allocation') months[m].mens += e.montant;
+                    });
+                    const labels = Object.keys(months).sort();
+                    
+                    charts.expense = new Chart(ctx, {
+                        type: 'line',
+                        data: {
+                            labels: labels,
+                            datasets: [
+                                { label: 'Mensuelles', data: labels.map(l => months[l].mens), borderColor: '#ef4444', fill: false },
+                                { label: 'Conteneurs', data: labels.map(l => months[l].cont), borderColor: '#3b82f6', fill: false }
+                            ]
+                        }
+                    });
+                }
+
+                const ctxActivity = document.getElementById('containerEvolutionChart');
+                if (ctxActivity) {
+                    if (charts.activity) charts.activity.destroy();
+                    
+                    const activityData = {};
+                    transactions.forEach(t => {
+                        const dateStr = String(t.date || '');
+                        if (dateStr.length < 7) return;
+                        const m = dateStr.substring(0, 7);
+                        if (!activityData[m]) activityData[m] = { ca: 0, count: 0 };
+                        activityData[m].ca += (t.prix || 0);
+                        activityData[m].count++;
+                    });
+                    const labels = Object.keys(activityData).sort();
+                    
+                    charts.activity = new Chart(ctxActivity, {
+                        type: 'bar',
+                        data: {
+                            labels: labels,
+                            datasets: [
+                                { label: 'Chiffre d\'Affaires', data: labels.map(l => activityData[l].ca), backgroundColor: '#4f46e5', yAxisID: 'y' },
+                                { label: 'Nombre Colis', data: labels.map(l => activityData[l].count), type: 'line', borderColor: '#f59e0b', yAxisID: 'y1' }
+                            ]
+                        },
+                        options: {
+                            responsive: true,
+                            scales: {
+                                y: { type: 'linear', display: true, position: 'left' },
+                                y1: { type: 'linear', display: true, position: 'right', grid: { drawOnChartArea: false } }
+                            }
+                        }
+                    });
+                }
+
+                const ctxPayments = document.getElementById('paymentModeChart');
+                if (ctxPayments) {
+                    if (charts.payments) charts.payments.destroy();
+                    const paymentStats = {};
+                    transactions.forEach(t => {
+                        if (t.paymentHistory) {
+                            t.paymentHistory.forEach(p => {
+                                const mode = p.modePaiement || 'Espèce';
+                                if (!paymentStats[mode]) paymentStats[mode] = 0;
+                                paymentStats[mode] += (p.montantAbidjan || 0) + (p.montantParis || 0);
+                            });
+                        } else {
+                            const mode = t.modePaiement || 'Espèce';
+                            if (!paymentStats[mode]) paymentStats[mode] = 0;
+                            paymentStats[mode] += (t.montantAbidjan || 0) + (t.montantParis || 0);
+                        }
+                    });
+                    
+                    charts.payments = new Chart(ctxPayments, {
+                        type: 'doughnut',
+                        data: {
+                            labels: Object.keys(paymentStats),
+                            datasets: [{
+                                data: Object.values(paymentStats),
+                                backgroundColor: ['#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6', '#64748b']
+                            }]
+                        }
+                    });
+                }
+
+                const ctxTopContainers = document.getElementById('topContainerProfitChart');
+                if (ctxTopContainers) {
+                    if (charts.topContainers) charts.topContainers.destroy();
+                    const containerStats = {};
+                    
+                    transactions.forEach(t => {
+                        const c = (t.conteneur || "Inconnu").trim().toUpperCase();
+                        if (!containerStats[c]) containerStats[c] = { ca: 0, dep: 0 };
+                        containerStats[c].ca += (t.prix || 0);
+                    });
+                    
+                    expenses.forEach(e => {
+                        const c = (e.conteneur || "").trim().toUpperCase();
+                        if (c !== "") {
+                            if (!containerStats[c]) containerStats[c] = { ca: 0, dep: 0 };
+                            containerStats[c].dep += (e.montant || 0);
+                        }
+                    });
+
+                    const sortedContainers = Object.entries(containerStats)
+                        .map(([name, stats]) => ({ name, profit: stats.ca - stats.dep }))
+                        .sort((a, b) => b.profit - a.profit)
+                        .slice(0, 10);
+
+                    charts.topContainers = new Chart(ctxTopContainers, {
+                        type: 'bar',
+                        data: {
+                            labels: sortedContainers.map(c => c.name),
+                            datasets: [{
+                                label: 'Marge Bénéficiaire',
+                                data: sortedContainers.map(c => c.profit),
+                                backgroundColor: sortedContainers.map(c => c.profit >= 0 ? '#10b981' : '#ef4444')
+                            }]
+                        },
+                        options: { indexAxis: 'y' }
+                    });
+                }
+
+                const ctxDebt = document.getElementById('debtVsCollectedChart');
+                if (ctxDebt) {
+                    if (charts.debt) charts.debt.destroy();
+                    let totalPaid = 0;
+                    let totalDebt = 0;
+                    
+                    transactions.forEach(t => {
+                        totalPaid += (t.montantParis || 0) + (t.montantAbidjan || 0);
+                        if ((t.reste || 0) < -1) totalDebt += Math.abs(t.reste);
+                    });
+
+                    charts.debt = new Chart(ctxDebt, {
+                        type: 'pie',
+                        data: {
+                            labels: ['Encaissé', 'Dettes (Reste à percevoir)'],
+                            datasets: [{
+                                data: [totalPaid, totalDebt],
+                                backgroundColor: ['#10b981', '#ef4444']
+                            }]
+                        }
+                    });
+                }
+
+                const ctxAgents = document.getElementById('agentPerformanceChart');
+                if (ctxAgents) {
+                    if (charts.agents) charts.agents.destroy();
+                    const agentStats = {};
+                    
+                    transactions.forEach(t => {
+                        if (t.agent) {
+                            t.agent.split(',').forEach(a => {
+                                const name = a.trim();
+                                if (!agentStats[name]) agentStats[name] = 0;
+                                agentStats[name] += (t.prix || 0);
+                            });
+                        }
+                    });
+
+                    const sortedAgents = Object.entries(agentStats)
+                        .sort((a, b) => b[1] - a[1])
+                        .slice(0, 10);
+
+                    charts.agents = new Chart(ctxAgents, {
+                        type: 'bar',
+                        data: {
+                            labels: sortedAgents.map(a => a[0]),
+                            datasets: [{
+                                label: 'Chiffre d\'Affaires Généré',
+                                data: sortedAgents.map(a => a[1]),
+                                backgroundColor: '#8b5cf6'
+                            }]
+                        }
+                    });
+                }
+
+                let ctxAbidjanParis = document.getElementById('abidjanVsParisChart');
+                if (!ctxAbidjanParis) {
+                    const firstChartCard = document.querySelector('.chart-card');
+                    if (firstChartCard && firstChartCard.parentNode) {
+                        const newCard = document.createElement('div');
+                        newCard.className = 'chart-card';
+                        newCard.innerHTML = '<h3>Évolution Encaissements (Abidjan vs Paris)</h3><canvas id="abidjanVsParisChart"></canvas>';
+                        firstChartCard.parentNode.appendChild(newCard);
+                        ctxAbidjanParis = document.getElementById('abidjanVsParisChart');
+                    }
+                }
+
+                if (ctxAbidjanParis) {
+                    if (charts.abidjanParis) charts.abidjanParis.destroy();
+                    const abidjanParisStats = {};
+                    
+                    transactions.forEach(t => {
+                        const payments = t.paymentHistory || [{ date: t.date, montantAbidjan: t.montantAbidjan, montantParis: t.montantParis }];
+                        payments.forEach(p => {
+                            const dateStr = String(p.date || '');
+                            if (dateStr.length < 7) return;
+                            const m = dateStr.substring(0, 7);
+                            if (!abidjanParisStats[m]) abidjanParisStats[m] = { abidjan: 0, paris: 0 };
+                            abidjanParisStats[m].abidjan += (p.montantAbidjan || 0);
+                            abidjanParisStats[m].paris += (p.montantParis || 0);
+                        });
+                    });
+
+                    const labels = Object.keys(abidjanParisStats).sort();
+                    
+                    charts.abidjanParis = new Chart(ctxAbidjanParis, {
+                        type: 'line',
+                        data: {
+                            labels: labels,
+                            datasets: [
+                                { label: 'Abidjan (Arrivée)', data: labels.map(l => abidjanParisStats[l].abidjan), borderColor: '#f59e0b', backgroundColor: 'rgba(245, 158, 11, 0.1)', tension: 0.4, fill: true, pointRadius: 4 },
+                                { label: 'Paris (Départ)', data: labels.map(l => abidjanParisStats[l].paris), borderColor: '#3b82f6', backgroundColor: 'rgba(59, 130, 246, 0.1)', tension: 0.4, fill: true, pointRadius: 4 }
+                            ]
+                        },
+                        options: {
+                            responsive: true,
+                            interaction: { mode: 'index', intersect: false },
+                            plugins: { legend: { position: 'top' } },
+                            scales: { y: { beginAtZero: true } }
+                        }
+                    });
+                }
+            } catch (e) {
+                console.error("Erreur lors de l'affichage des graphiques :", e);
+            }
+        }
+
+        function renderAdvancedAnalytics(transactions) {
+            const now = new Date();
+            const buckets = { '0-30j': 0, '31-60j': 0, '61-90j': 0, '+90j': 0 };
+            transactions.forEach(t => {
+                if ((t.reste || 0) < -1) {
+                    const dateStr = String(t.date || '');
+                    if (dateStr.length < 10) return;
+                    const days = (now - new Date(dateStr)) / (1000 * 60 * 60 * 24);
+                    if (days <= 30) buckets['0-30j'] += Math.abs(t.reste);
+                    else if (days <= 60) buckets['31-60j'] += Math.abs(t.reste);
+                    else if (days <= 90) buckets['61-90j'] += Math.abs(t.reste);
+                    else buckets['+90j'] += Math.abs(t.reste);
+                }
+            });
+            const agedBody = document.getElementById('agedBalanceBody');
+            if (agedBody) {
+                agedBody.innerHTML = Object.entries(buckets).map(([k, v]) => `<tr><td>${k}</td><td class="reste-negatif">${formatCFA(v)}</td></tr>`).join('');
+            }
+        }
+
+        // --- 7. MODAL DÉTAILS CONTENEUR ---
+        window.openContainerDetails = function(containerName) {
+            const modal = document.getElementById('containerDetailsModal');
+            const tbody = document.getElementById('containerDetailsTableBody');
+            const title = document.getElementById('modalContainerTitle');
+            
+            title.textContent = `Détails : ${containerName}`;
+            tbody.innerHTML = '';
+
+            const cleanTrans = getCleanTransactions(allTransactions).filter(t => {
+                const cName = (t.conteneur || "Non spécifié").trim().toUpperCase();
+                return cName === containerName;
+            });
+            const cleanExp = allExpenses.filter(e => {
+                const cName = (e.conteneur || "").trim().toUpperCase();
+                if (cName === "") return false;
+                return cName === containerName && (!e.sessionId || validatedSessions.has(e.sessionId));
+            });
+
+            cleanTrans.sort((a, b) => {
+                const refA = (a.reference || "").trim();
+                const refB = (b.reference || "").trim();
+                
+                const partsA = refA.split('-');
+                const partsB = refB.split('-');
+                
+                if (partsA.length >= 3 && partsB.length >= 3) {
+                    const suffixA = partsA[partsA.length - 1];
+                    const suffixB = partsB[partsB.length - 1];
+                    const suffixComp = suffixA.localeCompare(suffixB, undefined, { numeric: true, sensitivity: 'base' });
+                    if (suffixComp !== 0) return suffixComp;
+                    
+                    const numA = parseInt(partsA[partsA.length - 2], 10);
+                    const numB = parseInt(partsB[partsB.length - 2], 10);
+                    if (!isNaN(numA) && !isNaN(numB)) return numA - numB;
+                }
+                
+                return refA.localeCompare(refB, undefined, { numeric: true });
+            });
+
+            let totalPrix = 0, totalAbj = 0, totalPar = 0, totalReste = 0;
+
+            cleanTrans.forEach(t => {
+                totalPrix += (t.prix || 0);
+                totalAbj += (t.montantAbidjan || 0);
+                totalPar += (t.montantParis || 0);
+                totalReste += (t.reste || 0);
+
+                tbody.innerHTML += `
+                    <tr>
+                        <td>${t.date}</td>
+                        <td>${t.nom} <small>(${t.reference})</small></td>
+                        <td>${t.reference}</td>
+                        <td>${formatCFA(t.prix)}</td>
+                        <td>${formatCFA(t.montantAbidjan)}</td>
+                        <td>${formatCFA(t.montantParis)}</td>
+                        <td class="${t.reste < 0 ? 'reste-negatif' : 'reste-positif'}">${formatCFA(t.reste)}</td>
+                    </tr>
+                `;
+            });
+
+            cleanExp.forEach(e => {
+                tbody.innerHTML += `
+                    <tr style="background:#fff1f2; color:#991b1b;">
+                        <td>${e.date}</td>
+                        <td colspan="2">DÉPENSE : ${e.description}</td>
+                        <td>-</td><td>-</td><td>-</td>
+                        <td>-${formatCFA(e.montant)}</td>
+                    </tr>
+                `;
+            });
+
+            const totalDep = cleanExp.reduce((sum, e) => sum + (e.montant || 0), 0);
+            const benefice = totalPrix - totalDep;
+
+            const pctAbjTotal = totalPrix ? Math.round((totalAbj / totalPrix) * 100) : 0;
+            const pctParTotal = totalPrix ? Math.round((totalPar / totalPrix) * 100) : 0;
+            const pctResteTotal = totalPrix ? Math.round((totalReste / totalPrix) * 100) : 0;
+
+            document.getElementById('topTotalPrix').textContent = formatCFA(totalPrix);
+            document.getElementById('topTotalPayeAbj').innerHTML = `${formatCFA(totalAbj)} <span style="font-size:0.8em">(${pctAbjTotal}%)</span>`;
+            document.getElementById('topTotalPayePar').innerHTML = `${formatCFA(totalPar)} <span style="font-size:0.8em">(${pctParTotal}%)</span>`;
+            document.getElementById('topTotalReste').innerHTML = `${formatCFA(totalReste)} <span style="font-size:0.8em">(${pctResteTotal}%)</span>`;
+            document.getElementById('topTotalDep').textContent = formatCFA(totalDep);
+            document.getElementById('topTotalBen').textContent = formatCFA(benefice);
+            document.getElementById('topTotalBen').style.color = benefice >= 0 ? '#10b981' : '#ef4444';
+
+            const btnExcel = document.getElementById('downloadContainerExcelBtn');
+            if(btnExcel) {
+                btnExcel.onclick = () => {
+                    const wb = XLSX.utils.table_to_book(document.getElementById('containerDetailsTable'));
+                    XLSX.writeFile(wb, `Details_${containerName}.xlsx`);
+                };
+            }
+
+            modal.style.display = 'block';
+            document.getElementById('closeContainerModal').onclick = () => modal.style.display = 'none';
+            window.onclick = (e) => { if (e.target == modal) modal.style.display = 'none'; };
+        };
+
+        // --- 8. DATA LOADING (LISTENERS) ---
+        
+        onSnapshot(query(collection(db, "audit_logs"), where("action", "==", "VALIDATION_JOURNEE"), where("agency", "==", activeAgency)), snap => {
+            validatedSessions.clear();
+            snap.forEach(doc => {
+                if (doc.data().status === "VALIDATED") validatedSessions.add(doc.id);
+            });
+            if (allTransactions.length > 0) updateDashboard();
+        });
+
+        onSnapshot(query(collection(db, "transactions"), where("isDeleted", "!=", true), where("agency", "==", activeAgency)), snap => {
+            allTransactions = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+            updateDashboard();
+        });
+        onSnapshot(query(collection(db, "expenses"), where("isDeleted", "!=", true), where("agency", "==", activeAgency)), snap => {
+            allExpenses = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+            updateDashboard();
+        });
+        onSnapshot(query(collection(db, "other_income"), where("isDeleted", "!=", true), where("agency", "==", activeAgency)), snap => {
+            allOtherIncome = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+            updateDashboard();
+        });
+        onSnapshot(query(collection(db, "bank_movements"), where("isDeleted", "!=", true), where("agency", "==", activeAgency)), snap => {
+            allBankMovements = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+            updateDashboard();
+        });
+
+        function formatCFA(n) { return new Intl.NumberFormat('fr-CI', { style: 'currency', currency: 'XOF' }).format(n || 0).replace(/[\u202F\u00A0]/g, ' ').replace(/\s*\/\s*/g, ' '); }
+
+        startDateInput.addEventListener('change', updateDashboard);
+        endDateInput.addEventListener('change', updateDashboard);
+        clearFilterBtn.addEventListener('click', () => {
+            startDateInput.value = ''; endDateInput.value = ''; updateDashboard();
+        });
+        
+        if (typeof initBackToTopButton === 'function') initBackToTopButton();
+    }
+};

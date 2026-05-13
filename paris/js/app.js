@@ -39,6 +39,7 @@ import { ChatView } from './views/chat.js';
 import { AuditLogView } from './views/audit-log.js';
 import { ProspectingView } from './views/prospecting.js';
 import { NotificationsView } from './views/notifications.js';
+import { ProfilView } from '../../profil-view.js';
 
 // Configuration de l'application Paris
 const app = {
@@ -85,12 +86,11 @@ const app = {
         this.initMobileToggle();
         this.initGlobalEvents();
         this.updateBadges();
-        this.loadUserProfile();
     },
 
     async loadMenuConfig() {
         try {
-            const { db } = await import('../../../firebase-config.js');
+            const { db } = await import('../../firebase-config.js');
             const { doc, getDoc } = await import('https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js');
             const activeAgency = sessionStorage.getItem('currentActiveAgency') || 'paris';
             const docSnap = await getDoc(doc(db, "settings", `menus_${activeAgency}`));
@@ -544,7 +544,7 @@ const app = {
             'settings-menus': () => SettingsMenusView.render(this),
             'settings-agents': () => SettingsAgentsView.render(this),
             'settings-appointments': () => SettingsAppointmentsView.render(this),
-            'settings-profile': () => this.renderSettingsProfile(),
+            'settings-profile': () => ProfilView.render(this, document.getElementById('contentContainer')),
             'config-invoice': () => ConfigInvoiceView.render(this),
             'config-label': () => ConfigLabelView.render(this),
             'config-container': () => ConfigContainerView.render(this),
@@ -1042,130 +1042,6 @@ const app = {
             </div>
         `;
         document.getElementById('contentContainer').innerHTML = html;
-    },
-
-    // ==================== PROFIL & UTILISATEUR ====================
-
-    loadUserProfile() {
-        const savedPhoto = localStorage.getItem('userProfilePhoto');
-        if (savedPhoto) {
-            // Met à jour dynamiquement toutes les div ayant la classe 'avatar' ou 'user-avatar'
-            document.querySelectorAll('.user-avatar, .avatar, #userAvatar, #profileAvatarPreview').forEach(el => {
-                el.innerHTML = '';
-                el.style.backgroundImage = `url('${savedPhoto}')`;
-                el.style.backgroundSize = 'cover';
-                el.style.backgroundPosition = 'center';
-                el.style.color = 'transparent';
-            });
-        }
-    },
-
-    handleProfilePhotoChange(event) {
-        const file = event.target.files[0];
-        if (file) {
-            this.tempProfileFile = file;
-            const reader = new FileReader();
-            reader.onload = (e) => {
-                const avatar = document.getElementById('profileAvatarPreview');
-                avatar.innerHTML = '';
-                avatar.style.backgroundImage = `url(${e.target.result})`;
-                avatar.style.backgroundSize = 'cover';
-                avatar.style.backgroundPosition = 'center';
-                this.tempProfilePhoto = e.target.result;
-            };
-            reader.readAsDataURL(file);
-        }
-    },
-
-    async saveProfile() {
-        const newName = document.getElementById('profileName').value.trim();
-        const newPassword = document.getElementById('profileNewPassword').value;
-        
-        if (!newName) {
-            this.showToast("Le nom d'utilisateur ne peut pas être vide.", "error");
-            return;
-        }
-
-        const btn = document.querySelector('#contentContainer .btn-primary');
-        const oldText = btn.innerHTML;
-        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Enregistrement...';
-        btn.disabled = true;
-
-        try {
-            const { auth, db, app: firebaseApp } = await import('../../firebase-config.js');
-            const { updateProfile, updatePassword } = await import('https://www.gstatic.com/firebasejs/9.22.0/firebase-auth.js');
-            const { doc, updateDoc } = await import('https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js');
-            const { getStorage, ref: storageRef, uploadBytes, getDownloadURL } = await import('https://www.gstatic.com/firebasejs/9.22.0/firebase-storage.js');
-
-            const user = auth.currentUser;
-            if (!user) throw new Error("Utilisateur non connecté.");
-
-            const updates = {};
-
-            // 1. Mise à jour du Nom
-            if (newName !== user.displayName) {
-                await updateProfile(user, { displayName: newName });
-                updates.displayName = newName;
-                sessionStorage.setItem('userName', newName);
-                const headerName = document.getElementById('userName');
-                if (headerName) headerName.textContent = newName;
-            }
-
-            // 2. Mise à jour de la Photo via Storage
-            if (this.tempProfileFile) {
-                const storage = getStorage(firebaseApp);
-                const fileExt = this.tempProfileFile.name.split('.').pop();
-                const fileName = `profile_photos/${user.uid}_${Date.now()}.${fileExt}`;
-                const sRef = storageRef(storage, fileName);
-                
-                await uploadBytes(sRef, this.tempProfileFile);
-                const downloadUrl = await getDownloadURL(sRef);
-                
-                updates.photoURL = downloadUrl;
-                await updateProfile(user, { photoURL: downloadUrl });
-                localStorage.setItem('userProfilePhoto', downloadUrl);
-                this.loadUserProfile();
-                this.tempProfileFile = null;
-            }
-
-            // Mise à jour dans Firestore (Synchronisation)
-            if (Object.keys(updates).length > 0) {
-                await updateDoc(doc(db, 'users', user.uid), updates);
-            }
-
-            // 3. Mise à jour du Mot de passe
-            if (newPassword) {
-                if (newPassword.length < 6) {
-                    this.showToast("Le mot de passe doit faire au moins 6 caractères.", "error");
-                    btn.innerHTML = oldText;
-                    btn.disabled = false;
-                    return;
-                }
-                try {
-                    await updatePassword(user, newPassword);
-                    await updateDoc(doc(db, 'users', user.uid), { password: newPassword });
-                } catch (pwError) {
-                    if (pwError.code === 'auth/requires-recent-login') {
-                        this.showToast("Par sécurité, veuillez vous déconnecter et vous reconnecter pour modifier le mot de passe.", "error");
-                        btn.innerHTML = oldText;
-                        btn.disabled = false;
-                        return;
-                    } else {
-                        throw pwError;
-                    }
-                }
-            }
-
-            this.showToast("Profil mis à jour avec succès !", "success");
-            document.getElementById('profileNewPassword').value = '';
-
-        } catch (error) {
-            console.error("Erreur lors de la mise à jour du profil :", error);
-            this.showToast("Erreur : " + error.message, "error");
-        } finally {
-            btn.innerHTML = oldText;
-            btn.disabled = false;
-        }
     },
 
     // ==================== ACTIONS ====================

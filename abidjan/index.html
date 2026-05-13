@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tableau de Bord - Abidjan</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Comfortaa:wght@400;700&display=swap" rel="stylesheet">
+    <!-- Note: on pointe vers les fichiers racines -->
+    <link rel="stylesheet" href="../style.css"> 
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/choices.js/public/assets/styles/choices.min.css"/>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.css">
+    <link rel="icon" type="image/png" href="./favicon.png">
+</head>
+<body style="display:none"> <!-- Auth guard s'occupera d'afficher le body après vérification -->
+
+    <!-- OVERLAY SIDEBAR MOBILE -->
+    <div class="sidebar-overlay" id="sidebarOverlay"></div>
+
+    <aside class="sidebar" id="sidebar">
+        <div class="sidebar-header">
+            <div class="sidebar-logo">
+                <img src="../LOGOAMT.png" alt="Logo AMT">
+            </div>
+            <div>
+                <h2>AMT Abidjan</h2>
+                <p>Espace de Gestion</p>
+            </div>
+        </div>
+
+        <nav class="sidebar-nav" id="sidebarNav">
+            <div class="sidebar-category">
+                <div class="sidebar-category-title">Dashboard</div>
+                <a href="#" onclick="app.renderPage('dashboard'); return false;" class="sidebar-item active" data-page="dashboard">
+                    <i class="fas fa-chart-line"></i><span>Tableau de bord</span>
+                </a>
+            </div>
+
+            <div class="sidebar-category">
+                <div class="sidebar-category-title">Entrées Caisse</div>
+                <a href="#" onclick="app.renderPage('index'); return false;" class="sidebar-item" data-page="index">
+                    <i class="fas fa-money-bill-wave"></i><span>Saisie</span>
+                </a>
+                <a href="#" onclick="app.renderPage('confirmation'); return false;" class="sidebar-item" data-page="confirmation">
+                    <i class="fas fa-check-double"></i><span>Confirmation</span>
+                </a>
+                <a href="#" onclick="app.renderPage('history'); return false;" class="sidebar-item" data-page="history">
+                    <i class="fas fa-history"></i><span>Historique</span>
+                </a>
+                <a href="#" onclick="app.renderPage('other-income'); return false;" class="sidebar-item" data-page="other-income">
+                    <i class="fas fa-plus-circle"></i><span>Autres Entrées</span>
+                </a>
+            </div>
+
+            <div class="sidebar-category">
+                <div class="sidebar-category-title">Logistique</div>
+                <a href="#" onclick="app.renderPage('livraison'); return false;" class="sidebar-item" data-page="livraison">
+                    <i class="fas fa-truck"></i><span>LIVRAISON</span>
+                </a>
+                <a href="#" onclick="app.renderPage('livreurscan'); return false;" class="sidebar-item" style="color:#16a34a; font-weight:bold;" data-page="livreurscan">
+                    <i class="fas fa-mobile-alt"></i><span>MODE LIVREUR</span>
+                </a>
+                <a href="#" onclick="app.renderPage('voiture'); return false;" class="sidebar-item" data-page="voiture">
+                    <i class="fas fa-car"></i><span>Gestion Véhicules</span>
+                </a>
+                <a href="#" onclick="app.renderPage('magasinage'); return false;" class="sidebar-item" data-page="magasinage">
+                    <i class="fas fa-warehouse"></i><span>Magasinage</span>
+                </a>
+                <a href="#" onclick="app.renderPage('points'); return false;" class="sidebar-item" data-page="points">
+                    <i class="fas fa-star"></i><span>Points</span>
+                </a>
+                <a href="#" onclick="app.renderPage('clients'); return false;" class="sidebar-item" data-page="clients">
+                    <i class="fas fa-users"></i><span>Clients</span>
+                </a>
+            </div>
+
+            <div class="sidebar-category">
+                <div class="sidebar-category-title">Scan</div>
+                <a href="#" onclick="app.renderPage('scan-dechargement'); return false;" class="sidebar-item" data-page="scan-dechargement">
+                    <i class="fas fa-box-open"></i><span>Déchargement</span>
+                </a>
+                <a href="#" onclick="app.renderPage('scan-livraison'); return false;" class="sidebar-item" data-page="scan-livraison">
+                    <i class="fas fa-truck-loading"></i><span>En livraison</span>
+                </a>
+            </div>
+
+            <div class="sidebar-category">
+                <div class="sidebar-category-title">Sorties & Tréso</div>
+                <a href="#" onclick="app.renderPage('expenses'); return false;" class="sidebar-item" data-page="expenses">
+                    <i class="fas fa-file-invoice-dollar"></i><span>Dépenses</span>
+                </a>
+                <a href="#" onclick="app.renderPage('bank'); return false;" class="sidebar-item" data-page="bank">
+                    <i class="fas fa-university"></i><span>Banque</span>
+                </a>
+                <a href="#" onclick="app.renderPage('audit'); return false;" class="sidebar-item" data-page="audit">
+                    <i class="fas fa-clipboard-check"></i><span>Audit</span>
+                </a>
+            </div>
+
+            <div class="sidebar-category">
+                <div class="sidebar-category-title">Administration</div>
+                <a href="#" onclick="app.renderPage('admin-panel'); return false;" class="sidebar-item" data-page="admin-panel">
+                    <i class="fas fa-user-shield"></i><span>Gestion des agents</span>
+                </a>
+                <a href="#" onclick="app.renderPage('salaire'); return false;" class="sidebar-item" data-page="salaire">
+                    <i class="fas fa-hand-holding-usd"></i><span>Salaire</span>
+                </a>
+                <a href="#" onclick="app.renderPage('comptejb'); return false;" class="sidebar-item" data-page="comptejb">
+                    <i class="fas fa-wallet"></i><span>Compte JB</span>
+                </a>
+                <a href="#" onclick="app.renderPage('settings-profile'); return false;" class="sidebar-item" data-page="settings-profile">
+                    <i class="fas fa-user"></i><span>Mon Profil</span>
+                </a>
+            </div>
+
+            <div class="sidebar-category">
+                <div class="sidebar-category-title">Prospect</div>
+                <a href="#" onclick="app.renderPage('prospecting'); return false;" class="sidebar-item" data-page="prospecting">
+                    <i class="fas fa-chart-line"></i><span>Prospections</span>
+                </a>
+            </div>
+            <div class="sidebar-category">
+                <div class="sidebar-category-title">Audit Log</div>
+                <a href="#" onclick="app.renderPage('audit-log'); return false;" class="sidebar-item" data-page="audit-log">
+                    <i class="fas fa-history"></i><span>Activités log</span>
+                </a>
+            </div>
+        </nav>
+    </aside>
+
+    <main class="main-content">
+        <div class="top-bar" id="desktop-header">
+            <button class="mobile-toggle" id="mobileToggle">
+                <i class="fas fa-bars"></i>
+            </button>
+            <h1 class="page-title" id="pageTitle">Chargement...</h1>
+            
+            <div class="user-info" style="display: flex; align-items: center; gap: 10px;">
+                <span id="userName" style="font-weight: bold; font-size: 14px;">Utilisateur</span>
+                <div class="user-dropdown-container">
+                    <div class="user-avatar" id="userAvatar" title="Menu Utilisateur">
+                        <i class="fas fa-user"></i>
+                    </div>
+                    <div class="user-dropdown-menu" id="userDropdownMenu">
+                        <a href="#" id="menuProfile" onclick="app.renderPage('settings-profile'); document.getElementById('userDropdownMenu').classList.remove('active'); return false;"><i class="fas fa-user-circle"></i> Profil</a>
+                        <a href="#" id="menuAgencySwitch" style="display: none;"><i class="fas fa-globe"></i> Vue Paris</a>
+                        <hr style="margin: 5px 0; border: none; border-top: 1px solid #e2e8f0;">
+                        <a href="#" id="logoutBtn" class="logout-btn logout"><i class="fas fa-sign-out-alt"></i> Déconnexion</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- CONTENEUR PRINCIPAL SPA -->
+        <div id="contentContainer" class="content-container">
+            <div class="loading" style="padding: 50px; text-align: center; color: #64748b;">
+                <i class="fas fa-spinner fa-spin fa-2x"></i><br><br>Chargement de l'application...
+            </div>
+        </div>
+    </main>
+
+    <script src="https://cdn.jsdelivr.net/npm/choices.js/public/assets/scripts/choices.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.js"></script>
+    
+    <!-- Scripts d'authentification et outils partagés -->
+    <script type="module" src="../auth-guard.js"></script>
+    <script src="../utils.js"></script>
+    
+    <!-- ROUTEUR SPA ABIDJAN -->
+    <script type="module" src="js/app.js"></script>
+</body>
+</html>
