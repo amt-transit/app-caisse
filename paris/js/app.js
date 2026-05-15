@@ -24,13 +24,12 @@ import { FinanceCaisseView } from './views/finance-caisse.js';
 import { FinanceDepensesView } from './views/finance-depenses.js';
 import { FinanceChequesView } from './views/finance-cheques.js';
 import { SettingsAgencyView } from './views/settings-agency.js';
-import { SettingsAgentsView } from './views/settings-agents.js';
+import { SettingsAgentsView } from '../../shared/views/settings-agents.js';
 import { SettingsAgenciesView } from './views/settings-agencies.js';
-import { SettingsRolesView } from './views/settings-roles.js';
 import { SettingsCompanyView } from './views/settings-company.js';
 import { SettingsSoftwareView } from './views/settings-software.js';
 import { SettingsDesignView } from './views/settings-design.js';
-import { SettingsMenusView } from './views/settings-menus.js';
+import { SettingsRolesMenusView } from '../../shared/views/settings-roles-menus.js';
 import { SettingsAppointmentsView } from './views/settings-appointments.js';
 import { ConfigInvoiceView } from './views/config-invoice.js';
 import { ConfigLabelView } from './views/config-label.js';
@@ -45,7 +44,6 @@ import { AuditLogView } from './views/audit-log.js';
 import { ProspectingView } from './views/prospecting.js';
 import { NotificationsView } from './views/notifications.js';
 import { ProfilView } from '../../profil-view.js';
-import { ChineDashboardView } from '../../shared/views/chine-dashboard.js';
 import { ParrainageView } from '../../shared/views/parrainage.js';
 
 // Configuration de l'application Paris
@@ -442,8 +440,11 @@ const app = {
             if (page !== 'dashboard') {
                 this.renderPage('dashboard');
             } else {
-                document.getElementById('contentContainer').innerHTML = '<div style="padding: 50px; text-align: center; color: #ef4444;"><h2>⛔ Accès Restreint</h2><p>Vous n\'avez accès à aucun module. Contactez l\'administrateur.</p></div>';
-                document.getElementById('pageTitle').textContent = "Accès Restreint";
+                const container = document.getElementById('contentContainer');
+                if (container) container.innerHTML = '<div style="padding: 50px; text-align: center; color: #ef4444;"><h2>⛔ Accès Restreint</h2><p>Vous n\'avez accès à aucun module. Contactez l\'administrateur.</p></div>';
+                
+                const titleEl = document.getElementById('pageTitle') || document.querySelector('.page-title');
+                if (titleEl) titleEl.textContent = "Accès Restreint";
             }
             return;
         }
@@ -517,7 +518,8 @@ const app = {
             'parrainage': 'Parrainage & Partenaires'
         };
         
-        document.getElementById('pageTitle').textContent = titleMap[page] || page;
+        const titleEl = document.getElementById('pageTitle') || document.querySelector('.page-title');
+        if (titleEl) titleEl.textContent = titleMap[page] || page;
         
         // Mise à jour de l'état actif dans la Bottom Nav Mobile
         document.querySelectorAll('.bottom-nav-item').forEach(b => b.classList.remove('active'));
@@ -577,10 +579,10 @@ const app = {
             'settings-design': () => SettingsDesignView.render(this),
             'settings-sms': () => this.renderSettingsSms(),
             'settings-notifications': () => this.renderSettingsNotifications(),
-            'settings-menus': () => SettingsMenusView.render(this),
             'settings-agents': () => SettingsAgentsView.render(this),
             'settings-agencies': () => SettingsAgenciesView.render(this),
-            'settings-roles': () => SettingsRolesView.render(this),
+            'settings-menus': () => SettingsRolesMenusView.render(this),
+            'settings-roles': () => SettingsRolesMenusView.render(this),
             'settings-appointments': () => SettingsAppointmentsView.render(this),
             'settings-profile': () => ProfilView.render(this, document.getElementById('contentContainer')),
             'config-invoice': () => ConfigInvoiceView.render(this),
@@ -590,7 +592,6 @@ const app = {
             'config-charges': () => this.renderConfigCharges(),
             'prospecting': () => ProspectingView.render(this),
             'audit-log': () => AuditLogView.render(this),
-            'chine-dashboard': () => ChineDashboardView.render(this),
             'parrainage': () => ParrainageView.render(this)
         };
         

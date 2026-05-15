@@ -84,7 +84,7 @@ export const SettingsAgenciesView = {
                 <!-- Formulaire de création / modification -->
                 <div class="ag-form-card" v-if="showForm">
                     <h3 style="margin-top: 0; color: #1e293b; border-bottom: 1px solid #e2e8f0; padding-bottom: 15px; margin-bottom: 20px;">
-                        {{ isEditing ? 'Modifier l\\'agence' : 'Créer une nouvelle agence' }}
+                        {{ isEditing ? "Modifier l'agence" : "Créer une nouvelle agence" }}
                     </h3>
                     
                     <div class="form-grid">

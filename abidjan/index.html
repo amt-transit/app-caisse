@@ -9,6 +9,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Comfortaa:wght@400;700&display=swap" rel="stylesheet">
     <!-- Note: on pointe vers les fichiers racines -->
     <link rel="stylesheet" href="../style.css"> 
+    <link rel="stylesheet" href="../responsive.css">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/choices.js/public/assets/styles/choices.min.css"/>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.css">
@@ -171,7 +172,9 @@
                 <a href="#" onclick="window.app.renderPage('admin-panel'); return false;" class="sidebar-item" data-page="admin-panel">
                     <i class="fas fa-user-shield"></i><span>Gestion des agents</span>
                 </a>
-                <div class="sidebar-item" data-page="settings-roles"><i class="fas fa-user-shield"></i><span>Rôles & Permissions</span></div>
+                <a href="#" onclick="window.app.renderPage('settings-roles'); return false;" class="sidebar-item" data-page="settings-roles">
+                    <i class="fas fa-user-shield"></i><span>Rôles & Menus</span>
+                </a>
                 <a href="#" onclick="window.app.renderPage('salaire'); return false;" class="sidebar-item" data-page="salaire">
                     <i class="fas fa-hand-holding-usd"></i><span>Salaire</span>
                 </a>
@@ -211,7 +214,7 @@
     </aside>
 
     <main class="main-content">
-        <div class="top-bar" id="desktop-header">
+        <div class="top-bar">
             <button class="mobile-toggle" id="mobileToggle">
                 <i class="fas fa-bars"></i>
             </button>
@@ -246,6 +249,25 @@
             </div>
         </div>
     </main>
+
+    <!-- BOTTOM NAVIGATION MOBILE -->
+    <nav class="bottom-nav" id="bottomNav" role="navigation" aria-label="Navigation principale">
+        <button class="bottom-nav-item active" data-target="dashboard" onclick="window.app.renderPage('dashboard')">
+            <i class="fas fa-home"></i><span>Accueil</span>
+        </button>
+        <button class="bottom-nav-item" data-target="index" onclick="window.app.renderPage('index')">
+            <i class="fas fa-money-bill-wave"></i><span>Caisse</span>
+        </button>
+        <button class="bottom-nav-item" data-target="livraison" onclick="window.app.renderPage('livraison')">
+            <i class="fas fa-truck"></i><span>Livraison</span>
+        </button>
+        <button class="bottom-nav-item" id="bnav-more">
+            <i class="fas fa-bars"></i><span>Menu</span>
+        </button>
+    </nav>
+
+    <!-- FAB (Nouvelle Opération) -->
+    <button class="fab-btn" id="fabBtn" onclick="window.app.renderPage('index')" title="Saisie de Caisse"><i class="fas fa-plus"></i></button>
 
     <script src="https://cdn.jsdelivr.net/npm/choices.js/public/assets/scripts/choices.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>

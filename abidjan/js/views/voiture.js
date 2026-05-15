@@ -45,6 +45,8 @@ export const VoitureView = {
         const activeAgency = sessionStorage.getItem('currentActiveAgency') || 'abidjan';
         const userRole = sessionStorage.getItem('userRole');
         const isViewer = userRole === 'spectateur';
+        const userPerms = JSON.parse(sessionStorage.getItem('userPermissions') || '[]');
+        const canManageFleet = userRole === 'super_admin' || userRole === 'admin' || userRole === 'saisie_full' || userPerms.includes('manage_fleet');
 
         // DOM Elements - Formulaire Transaction
         const transDate = document.getElementById('transDate');
@@ -135,9 +137,10 @@ export const VoitureView = {
         }
 
         // --- 1. GESTION DES VÉHICULES ---
-        const qVehicles = query(collection(db, "fleet_vehicles"), where("agency", "==", activeAgency), where("isDeleted", "!=", true));
+        const qVehicles = query(collection(db, "fleet_vehicles"), where("isDeleted", "!=", true));
         onSnapshot(qVehicles, snap => {
-            allVehicles = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            let list = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            allVehicles = list.filter(d => (d.agency || 'abidjan') === activeAgency);
             updateVehicleSelects();
         });
 
@@ -166,7 +169,7 @@ export const VoitureView = {
                     li.style.borderBottom = '1px solid #e2e8f0';
 
                     let delBtn = '';
-                    if (!isViewer && (userRole === 'admin' || userRole === 'super_admin' || userRole === 'saisie_full')) {
+                    if (!isViewer && canManageFleet) {
                         delBtn = `<button class="deleteVehicleBtn" data-id="${v.id}" style="background: #ef4444; color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 11px;" title="Supprimer">🗑️</button>`;
                     }
                     
@@ -176,7 +179,7 @@ export const VoitureView = {
             }
         }
 
-        if (addVehicleBtn && (userRole === 'admin' || userRole === 'super_admin')) {
+        if (addVehicleBtn && canManageFleet) {
             addVehicleBtn.addEventListener('click', async () => {
                 const name = newVehicleName.value.trim();
                 const plate = newVehiclePlate.value.trim();
@@ -245,7 +248,7 @@ export const VoitureView = {
         }
 
         // --- 2. GESTION DES TRANSACTIONS ---
-        if (addTransBtn && (userRole === 'admin' || userRole === 'super_admin' || userRole === 'saisie_full')) {
+        if (addTransBtn && canManageFleet) {
             addTransBtn.addEventListener('click', async () => {
                 const date = transDate.value;
                 const vehicleId = vehicleSelect.value;
@@ -289,18 +292,20 @@ export const VoitureView = {
         }
 
         // --- 3. AFFICHAGE ET ANALYSE ---
-        const qTrans = query(collection(db, "fleet_transactions"), where("agency", "==", activeAgency), where("isDeleted", "!=", true), orderBy("isDeleted"), orderBy("date", "desc"));
+        const qTrans = query(collection(db, "fleet_transactions"), where("isDeleted", "!=", true), orderBy("isDeleted"), orderBy("date", "desc"));
         onSnapshot(qTrans, snap => {
-            allTransactions = snap.docs.map(doc => ({ id: doc.id, ...doc.data(), _source: 'fleet' }));
+            let list = snap.docs.map(doc => ({ id: doc.id, ...doc.data(), _source: 'fleet' }));
+            allTransactions = list.filter(d => (d.agency || 'abidjan') === activeAgency);
             mergeAndRenderTransactions();
         });
 
         // Écoute des Dépenses générales (Caisse)
-        const qExp = query(collection(db, "expenses"), where("agency", "==", activeAgency), where("isDeleted", "!=", true));
+        const qExp = query(collection(db, "expenses"), where("isDeleted", "!=", true));
         onSnapshot(qExp, snap => {
             allExpenses = [];
             snap.docs.forEach(docSnap => {
                 const exp = docSnap.data();
+                if ((exp.agency || 'abidjan') !== activeAgency) return;
                 const desc = (exp.description || '');
                 const lowerDesc = desc.toLowerCase();
                 
@@ -373,7 +378,7 @@ export const VoitureView = {
                                 delBtn = `<button class="deleteBtn" data-id="${t.id}" data-source="expenses" style="padding: 4px 8px; font-size:12px; background:#f59e0b; border:none; color:white; border-radius:4px; cursor:pointer;" title="Supprimer de la Caisse">🗑️ Caisse</button>`;
                             }
                         } else {
-                            if (userRole === 'admin' || userRole === 'super_admin' || userRole === 'saisie_full') {
+                            if (canManageFleet) {
                                 delBtn = `<button class="deleteBtn" data-id="${t.id}" data-source="fleet" style="padding: 4px 8px; font-size:12px;">Suppr.</button>`;
                             }
                         }

@@ -166,25 +166,31 @@ export const SalaireView = {
                 const searchQuery = ref('');
                 const toast = ref({ show: false, message: '', type: 'success' });
                 const actionLoading = ref(false);
+                const activeAgency = sessionStorage.getItem('currentActiveAgency') || 'abidjan';
 
                 // --- CHARGEMENT DES DONNÉES ---
                 const loadEmployees = () => {
-                     onSnapshot(query(collection(db, "employees"), where("agency", "==", activeAgency)), (snap) => {
+                     onSnapshot(collection(db, "employees"), (snap) => {
                         let list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+                        list = list.filter(d => (d.agency || 'abidjan') === activeAgency);
                         list.sort((a, b) => a.name.localeCompare(b.name));
                         employeesList.value = list;
                     });
                 };
 
                 const loadSalaryHistory = () => {
-                     onSnapshot(query(collection(db, "salary_payments"), where("agency", "==", activeAgency), orderBy('timestamp', 'desc')), (snap) => {
-                        salaryHistory.value = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+                     onSnapshot(query(collection(db, "salary_payments"), orderBy('timestamp', 'desc')), (snap) => {
+                        let list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+                        list = list.filter(d => (d.agency || 'abidjan') === activeAgency);
+                        salaryHistory.value = list;
                     });
                 };
 
                 const loadSalaryFunds = () => {
-                     onSnapshot(query(collection(db, "salary_funds"), where("agency", "==", activeAgency), orderBy('timestamp', 'desc')), (snap) => {
-                        salaryFunds.value = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+                     onSnapshot(query(collection(db, "salary_funds"), orderBy('timestamp', 'desc')), (snap) => {
+                        let list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+                        list = list.filter(d => (d.agency || 'abidjan') === activeAgency);
+                        salaryFunds.value = list;
                     });
                 };
 
@@ -304,7 +310,6 @@ export const SalaireView = {
                     toast.value = { show: true, message: msg, type };
                     setTimeout(() => toast.value.show = false, 3000);
                 };
-                const activeAgency = sessionStorage.getItem('currentActiveAgency') || 'abidjan';
 
                 const openPayModal = (emp) => {
                     const baseAmount = calculateBase(emp);

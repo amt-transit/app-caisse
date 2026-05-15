@@ -97,6 +97,15 @@ onAuthStateChanged(auth, async (user) => {
             updateDoc(userDocRef, { lastActive: new Date().toISOString() }).catch(e => console.error(e));
         }, 3 * 60 * 1000);
 
+        // --- CHARGEMENT DES PERMISSIONS DYNAMIQUES ---
+        let userPermissions = [];
+        try {
+            const roleDocSnap = await getDoc(doc(db, 'roles', userRole));
+            if (roleDocSnap.exists()) {
+                userPermissions = roleDocSnap.data().permissions || [];
+            }
+        } catch (e) { console.warn("Impossible de charger les permissions:", e); }
+
         // Stockage session
         let userName = userData.displayName;
         if (!userName && userData.email) {
@@ -104,6 +113,7 @@ onAuthStateChanged(auth, async (user) => {
             userName = userName.charAt(0).toUpperCase() + userName.slice(1);
         }
         sessionStorage.setItem('userRole', userRole);
+        sessionStorage.setItem('userPermissions', JSON.stringify(userPermissions));
         sessionStorage.setItem('userName', userName || 'Utilisateur');
         sessionStorage.setItem('userAgency', userData.agency || 'abidjan');
 
@@ -422,36 +432,13 @@ onAuthStateChanged(auth, async (user) => {
             // On continue pour masquer les liens de navigation si nécessaire
         }
 
-        // SAISIE FULL
-        if (userRole === 'saisie_full') {
-            if (currentPage.includes('bank.html') || 
-                currentPage.includes('salaire.html')) {
-                await showErrorAndRedirect("Accès refusé : Votre rôle (Saisie Full) ne permet pas d'accéder à cette page.", "Accès Refusé");
-                return;
-            }
-        }
-
-        // SAISIE LIMITED
-        if (userRole === 'saisie_limited') {
-            if (!currentPage.includes('index.html') && !currentPage.includes('history.html') && !currentPage.includes('magasinage.html') && !currentPage.includes('livreurscan.html')) {
-                 await showErrorAndRedirect("Accès refusé : Votre rôle (Saisie Limited) ne permet pas d'accéder à cette page.", "Accès Refusé");
-                 return;
-            }
-        }
-
-        // Protection page Confirmation
-        if (currentPage.includes('confirmation.html') && userRole === 'saisie_limited') {
-            await showErrorAndRedirect("Accès refusé : Réservé aux Admins et Saisie Full.", "Accès Refusé");
-            return;
-        }
-
         const navAdmin = document.getElementById('nav-admin');
         const navAudit = document.getElementById('nav-audit');
         const navCompteJB = document.getElementById('nav-comptejb');
         const navParis = document.getElementById('nav-paris');
 
         if (navParis) {
-            if (userRole === 'super_admin' || userRole === 'admin' || userRole === 'agent_paris' || userData.agency === 'all' || userData.agency === 'paris') {
+            if (userRole === 'super_admin' || userRole === 'admin' || userData.agency === 'all' || userData.agency === 'paris') {
                 navParis.style.display = 'inline-flex';
             } else {
                 navParis.style.display = 'none';

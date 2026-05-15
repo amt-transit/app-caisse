@@ -1101,7 +1101,7 @@ export const CaisseView = {
         
             const desktopView = document.getElementById('desktop-view');
             const mobileView = document.getElementById('mobile-view');
-            const desktopHeader = document.getElementById('desktop-header');
+            const desktopHeader = document.querySelector('.top-bar');
             if (desktopHeader) desktopHeader.style.setProperty('display', 'none', 'important');
             if (desktopView) desktopView.style.setProperty('display', 'none', 'important');
             if (mobileView) mobileView.style.setProperty('display', 'block', 'important');

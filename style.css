@@ -749,7 +749,6 @@ body.login-page {
 @media (max-width: 768px) {
     /* Inversion de l'affichage principal */
     #desktop-view { display: none !important; }
-    #desktop-header { display: none !important; }
     #mobile-view { display: block !important; padding-bottom: 70px; }
 
     /* --- STYLES SPA LIVREUR (MOBILE) --- */

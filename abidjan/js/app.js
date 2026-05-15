@@ -5,7 +5,7 @@ import { MagasinageView } from './views/magasinage.js';
 import { LivraisonView } from './views/livraison.js';
 import { CaisseView } from './views/caisse.js';
 import { AuditView } from './views/audit.js';
-import { AdminView } from './views/admin.js';
+import { SettingsAgentsView } from '../../shared/views/settings-agents.js';
 import { HistoryView } from './views/history.js';
 import { BankView } from './views/bank.js';
 import { OtherIncomeView } from './views/other-income.js';
@@ -30,6 +30,7 @@ import { StatistiquesView } from '../../shared/views/statistiques.js';
 import { ToutesLesFacturesView } from '../../shared/views/touteslesfactures.js';
 import { ChineDashboardView } from '../../shared/views/chine-dashboard.js';
 import { ParrainageView } from '../../shared/views/parrainage.js';
+import { SettingsRolesMenusView } from '../../shared/views/settings-roles-menus.js';
 
 const app = {
     currentPage: 'clients',
@@ -114,10 +115,19 @@ const app = {
         const titleEl = document.getElementById('pageTitle') || document.querySelector('.page-title');
         if (titleEl) titleEl.textContent = titleMap[page] || page;
         
+        // 1b. Restaurer la barre du haut si elle a été masquée par la vue Caisse sur mobile
+        const topBar = document.querySelector('.top-bar');
+        if (topBar) topBar.style.removeProperty('display');
+
         // 2. Mettre à jour le menu actif
         document.querySelectorAll('.sidebar-item').forEach(el => el.classList.remove('active'));
         const activeLink = document.querySelector(`.sidebar-item[data-page="${page}"]`);
         if (activeLink) activeLink.classList.add('active');
+
+        // Mettre à jour le menu actif sur la Bottom Nav Mobile
+        document.querySelectorAll('.bottom-nav-item').forEach(el => el.classList.remove('active'));
+        const activeBnav = document.querySelector(`.bottom-nav-item[data-target="${page}"]`);
+        if (activeBnav) activeBnav.classList.add('active');
 
         // 3. Charger la vue dans le conteneur
         const container = document.getElementById('contentContainer');
@@ -142,7 +152,7 @@ const app = {
         } else if (page === 'audit') {
             AuditView.render(this, container);
         } else if (page === 'admin-panel') {
-            AdminView.render(this, container);
+            SettingsAgentsView.render(this, container);
         } else if (page === 'history') {
             HistoryView.render(this, container);
         } else if (page === 'bank') {
@@ -159,6 +169,8 @@ const app = {
             SalaireView.render(this, container);
         } else if (page === 'settings-software') {
             SettingsSoftwareView.render(this, container);
+        } else if (page === 'settings-roles' || page === 'settings-menus') {
+            SettingsRolesMenusView.render(this, container);
         } else if (page === 'confirmation') {
             ConfirmationView.render(this, container);
         } else if (page === 'livreurscan') {
@@ -357,13 +369,16 @@ const app = {
         const toggle = document.getElementById('mobileToggle');
         const sidebar = document.getElementById('sidebar');
         const overlay = document.getElementById('sidebarOverlay');
+        const bnavMore = document.getElementById('bnav-more');
 
-        if (toggle) {
-            toggle.addEventListener('click', () => {
-                sidebar?.classList.add('open');
-                overlay?.classList.add('show');
-            });
-        }
+        const openSidebar = (e) => {
+            if (e) e.stopPropagation();
+            sidebar?.classList.add('open');
+            overlay?.classList.add('show');
+        };
+
+        if (toggle) toggle.addEventListener('click', openSidebar);
+        if (bnavMore) bnavMore.addEventListener('click', openSidebar);
 
         if (overlay) {
             overlay.addEventListener('click', () => {

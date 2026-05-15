@@ -274,7 +274,7 @@ export const NouveauProgrammeView = {
                                     <tr v-else-if="filteredRdvs.length === 0"><td colspan="6" style="text-align: center; padding: 40px; color: #64748b;">Aucun RDV ne correspond aux critères.</td></tr>
                                     <tr v-else v-for="(r, index) in filteredRdvs" :key="r.id" style="transition: background 0.2s;">
                                         <td><span :class="['type-badge', r.rdvType === 'DEPOT' ? 'badge--depot' : 'badge--recup']">{{ r.rdvType === 'DEPOT' ? 'DÉPÔT' : 'RÉCUPÉRER' }}</span></td>
-                                        <td><div style="font-weight: 700; color: #1e293b;" v-html="r.livreur || '<span style=\\'color:#ef4444;font-style:italic;\\'>Non assigné</span>'"></div></td>
+                                        <td><div style="font-weight: 700; color: #1e293b;"><span v-if="r.livreur">{{ r.livreur }}</span><span v-else style="color:#ef4444;font-style:italic;">Non assigné</span></div></td>
                                         <td>
                                             <div class="client-cell__name">{{ r.client }}</div>
                                             <div class="client-cell__phone">📞 {{ r.tel || '--' }}</div>

@@ -5,14 +5,108 @@ import { createApp, ref, computed, reactive, onMounted, onUnmounted, nextTick } 
 export const TousLesRdvView = {
     vueApp: null,
 
-    render(app, mode = 'all') {
+    render(app, container, mode = 'all') {
+        // Sécurité si l'argument "container" contient en fait le texte du mode (ex: 'pending')
+        if (typeof container === 'string') {
+            mode = container;
+            container = null;
+        }
+
         const globalApp = app;
         const title = mode === 'pending' ? 'Rendez-vous à valider' : 'Tous les Rendez-vous';
         const subtitle = mode === 'pending' ? 'Confirmez ou refusez les demandes en attente' : 'Gestion complète de votre planning';
         const icon = mode === 'pending' ? '⏳' : '📅';
 
         const html = `
-            <style>[v-cloak] { display: none; }</style>
+            <style>
+                [v-cloak] { display: none; }
+                .rdv-page { max-width: 1400px; margin: 0 auto; animation: fadeIn 0.3s ease; }
+                .rdv-header { background: white; border-radius: 16px; padding: 20px 25px; display: flex; justify-content: space-between; align-items: center; border: 1px solid #e2e8f0; margin-bottom: 24px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); flex-wrap: wrap; gap: 15px; }
+                .rdv-header__content { display: flex; align-items: center; gap: 15px; width: 100%; }
+                .rdv-header__icon { font-size: 28px; background: #f8fafc; width: 56px; height: 56px; display: flex; align-items: center; justify-content: center; border-radius: 14px; }
+                .rdv-header__title { margin: 0; font-size: 22px; font-weight: 800; color: #0f172a; }
+                .rdv-header__subtitle { margin: 4px 0 0 0; font-size: 13px; color: #64748b; }
+                .rdv-header__actions { display: flex; gap: 10px; }
+                
+                .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 24px; }
+                .kpi-card { background: white; border-radius: 16px; padding: 20px; display: flex; align-items: center; gap: 15px; border: 1px solid #e2e8f0; box-shadow: 0 2px 4px rgba(0,0,0,0.02); }
+                .kpi-card__icon { font-size: 28px; width: 50px; height: 50px; display: flex; align-items: center; justify-content: center; border-radius: 12px; }
+                .kpi-card__value { font-size: 24px; font-weight: 800; color: #0f172a; line-height: 1; margin-bottom: 4px; display: flex; align-items: baseline; gap: 4px; }
+                .kpi-card__label { font-size: 12px; font-weight: 600; color: #64748b; text-transform: uppercase; }
+                .kpi-card__bar { width: 100%; height: 6px; background: #e2e8f0; border-radius: 3px; margin-top: 8px; overflow: hidden; }
+                .kpi-card__bar-fill { height: 100%; background: #4f46e5; border-radius: 3px; transition: width 0.3s ease; }
+                
+                .rdv-filters { display: flex; flex-wrap: wrap; gap: 15px; background: white; padding: 20px; border-radius: 16px; border: 1px solid #e2e8f0; margin-bottom: 24px; }
+                .filter-group { flex: 1; min-width: 150px; display: flex; flex-direction: column; gap: 6px; }
+                .filter-label { font-size: 11px; font-weight: 600; color: #475569; text-transform: uppercase; }
+                .filter-input, .filter-select { width: 100%; padding: 10px 12px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 14px; outline: none; transition: 0.2s; box-sizing: border-box; background: #f8fafc; }
+                .filter-input:focus, .filter-select:focus { border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59,130,246,0.1); background: white; }
+                .filter-actions { display: flex; align-items: flex-end; }
+                .btn-filter-reset { padding: 10px 16px; border-radius: 8px; font-weight: 600; font-size: 13px; cursor: pointer; transition: 0.2s; border: 1px solid #cbd5e1; background: white; color: #475569; height: 41px; }
+                .btn-filter-reset:hover { background: #f1f5f9; color: #0f172a; }
+                
+                .rdv-table-card { background: white; border-radius: 16px; border: 1px solid #e2e8f0; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.02); }
+                .rdv-table-header { padding: 15px 20px; border-bottom: 1px solid #e2e8f0; background: #f8fafc; display: flex; justify-content: space-between; align-items: center; }
+                .rdv-table-title { margin: 0; font-size: 16px; font-weight: 700; color: #1e293b; display: flex; align-items: center; gap: 10px; }
+                .rdv-count-badge { background: #cbd5e1; color: #0f172a; padding: 2px 8px; border-radius: 12px; font-size: 12px; font-weight: bold; }
+                
+                .table-wrap { overflow-x: auto; }
+                .rdv-table { width: 100%; border-collapse: collapse; }
+                .rdv-table th { text-align: left; padding: 12px 15px; background: white; font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase; border-bottom: 1px solid #e2e8f0; }
+                .rdv-table td { padding: 12px 15px; border-bottom: 1px solid #f1f5f9; font-size: 13px; color: #334155; vertical-align: middle; }
+                .rdv-table tr:hover td { background: #f8fafc; }
+                
+                .type-badge { padding: 4px 8px; border-radius: 6px; font-size: 10px; font-weight: 800; letter-spacing: 0.5px; display: inline-block; white-space: nowrap; }
+                .badge-depot { background: #e0f2fe; color: #0284c7; border: 1px solid #bae6fd; }
+                .badge-recup { background: #f3e8ff; color: #7e22ce; border: 1px solid #e9d5ff; }
+                .badge-executed { background: #dcfce7; color: #166534; border: 1px solid #bbf7d0; }
+                .badge-pending { background: #fef3c7; color: #b45309; border: 1px solid #fde68a; }
+                .badge-cancelled { background: #fee2e2; color: #b91c1c; border: 1px solid #fecaca; }
+                
+                .td-actions { display: flex; gap: 6px; justify-content: flex-end; }
+                .btn-edit, .btn-del { width: 32px; height: 32px; border-radius: 8px; border: 1px solid #cbd5e1; background: white; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 14px; transition: 0.2s; color: #475569; }
+                .btn-edit:hover { background: #f1f5f9; color: #0f172a; border-color: #94a3b8; }
+                .btn-del { color: #ef4444; border-color: #fecaca; background: #fef2f2; }
+                .btn-del:hover { background: #fee2e2; }
+
+                /* Edition Modal */
+                .em-modal { display: none; position: fixed; inset: 0; background: rgba(15,23,42,0.6); z-index: 1000; align-items: center; justify-content: center; backdrop-filter: blur(4px); }
+                .em-modal.active { display: flex; animation: fadeIn 0.2s; }
+                .em-content { background: white; width: 90%; max-width: 600px; border-radius: 16px; overflow: hidden; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25); display: flex; flex-direction: column; max-height: 90vh; }
+                .em-header { padding: 20px 25px; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center; background: #f8fafc; }
+                .em-header__left { display: flex; align-items: center; gap: 15px; }
+                .em-header__icon { font-size: 24px; background: #eff6ff; color: #3b82f6; width: 48px; height: 48px; display: flex; align-items: center; justify-content: center; border-radius: 12px; }
+                .em-header__title { font-size: 18px; font-weight: 800; color: #0f172a; margin: 0 0 4px 0; }
+                .em-header__sub { font-size: 13px; color: #64748b; }
+                .em-close { background: none; border: none; cursor: pointer; color: #64748b; transition: 0.2s; }
+                .em-close:hover { color: #0f172a; }
+                .em-body { padding: 25px; overflow-y: auto; }
+                .em-client-strip { display: flex; align-items: center; gap: 12px; background: #f8fafc; padding: 15px; border-radius: 12px; border: 1px solid #e2e8f0; margin-bottom: 20px; }
+                .em-client-strip__icon { font-size: 24px; width: 40px; height: 40px; background: white; display: flex; align-items: center; justify-content: center; border-radius: 50%; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
+                .em-client-strip__name { font-weight: 800; color: #0f172a; font-size: 15px; }
+                .em-client-strip__details { font-size: 12px; color: #64748b; margin-top: 2px; }
+                .em-grid { display: flex; flex-direction: column; gap: 20px; }
+                .em-card { border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden; }
+                .em-card__head { padding: 12px 15px; background: #f8fafc; border-bottom: 1px solid #e2e8f0; font-weight: 700; color: #1e293b; font-size: 14px; display: flex; align-items: center; gap: 8px; }
+                .em-card__head--purple { border-top: 3px solid #9333ea; }
+                .em-card__head--blue { border-top: 3px solid #3b82f6; }
+                .em-card__head--green { border-top: 3px solid #10b981; }
+                .em-card__body { padding: 15px; display: flex; flex-direction: column; gap: 15px; }
+                .em-type-selector { display: flex; gap: 10px; }
+                .em-type-option { flex: 1; padding: 10px; border: 1px solid #cbd5e1; border-radius: 8px; background: white; color: #475569; font-weight: 600; cursor: pointer; transition: 0.2s; display: flex; align-items: center; justify-content: center; gap: 6px; }
+                .em-type-option.active { border-color: #3b82f6; background: #eff6ff; color: #2563eb; }
+                .em-field { display: flex; flex-direction: column; gap: 6px; }
+                .em-field__label { font-size: 12px; font-weight: 600; color: #475569; }
+                .em-field__input { width: 100%; padding: 10px 12px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 13px; font-family: inherit; box-sizing: border-box; transition: 0.2s; }
+                .em-field__input:focus { border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59,130,246,0.1); outline: none; }
+                .em-footer { padding: 15px 25px; background: #f8fafc; border-top: 1px solid #e2e8f0; display: flex; justify-content: flex-end; gap: 10px; }
+                .em-btn { padding: 10px 16px; border-radius: 8px; font-weight: 600; font-size: 13px; cursor: pointer; transition: 0.2s; border: 1px solid transparent; }
+                .em-btn--ghost { background: white; border-color: #cbd5e1; color: #475569; }
+                .em-btn--ghost:hover { background: #f1f5f9; color: #0f172a; }
+                .em-btn--save { background: #3b82f6; color: white; }
+                .em-btn--save:hover { background: #2563eb; }
+                .em-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+            </style>
             <div id="vue-rdv-app" class="rdv-page" v-cloak>
                 <!-- Header Pending -->
                 <template v-if="isPendingMode">
@@ -140,13 +234,13 @@ export const TousLesRdvView = {
                                 </td>
                             </tr>
                             <tr v-else v-for="rdv in filteredRdvs" :key="rdv.id" class="rdv-row">
-                                <td><span :class="['type-badge', rdv.rdvType === 'DEPOT' ? 'badge-depot' : 'badge-recup']">{{ rdv.rdvType === 'DEPOT' ? '📦 DEPOT' : '🚚 RECUP' }}</span></td>
-                                <td><strong>{{ formatDate(rdv.date) }}</strong><br><span style="color:#64748b; font-size:11px;">{{ rdv.time || 'Heure à définir' }}</span></td>
-                                <td style="font-weight: 600; color: #0f172a;">{{ rdv.client }}</td>
-                                <td style="font-weight: bold;">{{ rdv.tel || '-' }}</td>
-                                <td><div style="max-width: 200px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" :title="rdv.adresse + '\n' + rdv.notes">{{ rdv.adresse || '-' }}<br><span style="color:#94a3b8; font-size:10px;">{{ rdv.notes || '' }}</span></div></td>
-                                <td><span :class="['type-badge', getStatusClass(rdv.status)]">{{ getStatusText(rdv.status) }}</span></td>
-                                <td class="td-actions">
+                                <td data-label="Type"><span :class="['type-badge', rdv.rdvType === 'DEPOT' ? 'badge-depot' : 'badge-recup']">{{ rdv.rdvType === 'DEPOT' ? '📦 DEPOT' : '🚚 RECUP' }}</span></td>
+                                <td data-label="Date & Heure"><strong>{{ formatDate(rdv.date) }}</strong><br><span style="color:#64748b; font-size:11px;">{{ rdv.time || 'Heure à définir' }}</span></td>
+                                <td data-label="Client" style="font-weight: 600; color: #0f172a;">{{ rdv.client }}</td>
+                                <td data-label="Téléphone" style="font-weight: bold;">{{ rdv.tel || '-' }}</td>
+                                <td data-label="Adresse / Notes"><div style="max-width: 200px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" :title="rdv.adresse + '\\n' + rdv.notes">{{ rdv.adresse || '-' }}<br><span style="color:#94a3b8; font-size:10px;">{{ rdv.notes || '' }}</span></div></td>
+                                <td data-label="Statut"><span :class="['type-badge', getStatusClass(rdv.status)]">{{ getStatusText(rdv.status) }}</span></td>
+                                <td data-label="Actions" class="td-actions">
                                     <template v-if="rdv.status === 'en_attente'">
                                         <button class="btn-edit" @click="changeStatus(rdv.id, 'confirmé')" title="Valider" style="background:#dcfce7; color:#166534; border-color:#166534;"><i class="fas fa-check"></i></button>
                                         <button class="btn-del" @click="changeStatus(rdv.id, 'annulé')" title="Refuser"><i class="fas fa-times"></i></button>
@@ -167,7 +261,6 @@ export const TousLesRdvView = {
                         </tbody>
                     </table>
                 </div>
-            </div>
 
             <!-- MODALE D'ÉDITION AVANCÉE -->
             <div v-if="showEditModal" class="em-modal active">
@@ -253,7 +346,9 @@ export const TousLesRdvView = {
             </div>
         `;
 
-        document.getElementById('contentContainer').innerHTML = html;
+        const targetContainer = container || document.getElementById('contentContainer');
+        if (targetContainer) targetContainer.innerHTML = html;
+
         this.initVue(globalApp, mode);
     },
 

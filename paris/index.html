@@ -15,7 +15,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     
     <link rel="stylesheet" href="css/style.css">
-    <link rel="stylesheet" href="css/responsive-paris.css"> <!-- Votre nouvelle ligne -->
+    <link rel="stylesheet" href="../responsive.css">
     <link rel="icon" type="image/png" href="../favicon.png">
     <script>
         // Anti-FOUC : Application synchrone du branding depuis le cache avant le rendu de la page
@@ -273,9 +273,6 @@
             <!-- Ce menu n'apparaîtra que pour les agences Chine -->
             <div class="sidebar-category menu-chine-only">
                 <div class="sidebar-category-title">Spécial Asie</div>
-                <div class="sidebar-item" data-page="chine-dashboard" onclick="window.app.renderPage('chine-dashboard'); return false;">
-                    <i class="fas fa-globe-asia"></i><span>Dashboard Chine</span>
-                </div>
                 <div class="sidebar-item" data-page="parrainage" onclick="window.app.renderPage('parrainage'); return false;">
                     <i class="fas fa-handshake"></i><span>Réseau Partenaires</span>
                 </div>
@@ -385,10 +382,9 @@
                 <div class="sidebar-item" data-page="settings-design"><i class="fas fa-palette"></i><span>Apparence & menus</span></div>
                 <div class="sidebar-item" data-page="settings-sms"><i class="fas fa-comment-dots"></i><span>Config SMS</span></div>
                 <div class="sidebar-item" data-page="settings-notifications"><i class="fas fa-bell"></i><span>Config notifs</span></div>
-                <div class="sidebar-item" data-page="settings-menus"><i class="fas fa-bars"></i><span>Gestion menus</span></div>
                 <div class="sidebar-item" data-page="settings-agents"><i class="fas fa-user-cog"></i><span>Gestion des agents</span></div>
                 <div class="sidebar-item" data-page="settings-agencies"><i class="fas fa-globe"></i><span>Gestion des agences</span></div>
-                <div class="sidebar-item" data-page="settings-roles"><i class="fas fa-user-shield"></i><span>Rôles & Permissions</span></div>
+                <div class="sidebar-item" data-page="settings-roles"><i class="fas fa-user-shield"></i><span>Rôles & Menus</span></div>
                 <div class="sidebar-item" data-page="settings-appointments"><i class="fas fa-calendar-check"></i><span>Paramètres RDV</span></div>
                 <div class="sidebar-item" data-page="settings-profile"><i class="fas fa-user"></i><span>Mon profil</span></div>
             </div>

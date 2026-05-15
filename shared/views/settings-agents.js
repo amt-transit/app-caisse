@@ -1,13 +1,15 @@
-import { db, app as firebaseApp, functions } from '../../../firebase-config.js';
+import { db, app as firebaseApp, functions } from '../../firebase-config.js';
 import { collection, query, onSnapshot, doc, getDoc, setDoc, updateDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 import { getAuth } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-auth.js";
 import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-storage.js";
 import { httpsCallable } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-functions.js";
-import { AGENCIES } from '../../../agencies-config.js';
+import { AGENCIES } from '../../agencies-config.js';
 
 export const SettingsAgentsView = {
     unsub: null,
+    unsubRoles: null,
     agents: [],
+    systemRoles: [],
     filteredAgents: [],
     tempPhotoFile: null,
     cropper: null,
@@ -200,14 +202,7 @@ export const SettingsAgentsView = {
                         <div class="form-group">
                             <label style="font-weight: 600; color: #1e293b; margin-bottom: 6px; display: block;">Rôle *</label>
                             <select id="agentRole" style="width: 100%; padding: 12px; border: 1px solid #cbd5e1; border-radius: 8px;">
-                                <option value="agent">Agent Standard</option>
-                                <option value="admin">Administrateur</option>
-                                <option value="super_admin">Super Admin</option>
-                                <option value="manager">Manager / Direction</option>
-                                <option value="chauf">Chauffeur / Livreur</option>
-                                <option value="saisie_full">Saisie Full</option>
-                                <option value="saisie_limited">Saisie Limited</option>
-                                <option value="spectateur">Spectateur</option>
+                            <!-- Les rôles sont chargés dynamiquement depuis Firebase -->
                             </select>
                         </div>
                     </div>
@@ -241,6 +236,12 @@ export const SettingsAgentsView = {
 
     loadData() {
         if (this.unsub) this.unsub();
+        if (this.unsubRoles) this.unsubRoles();
+        
+        this.unsubRoles = onSnapshot(collection(db, "roles"), (snapshot) => {
+            this.systemRoles = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            this.updateRolesDropdown();
+        });
         
         this.unsub = onSnapshot(query(collection(db, "users")), (snapshot) => {
             this.agents = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -257,6 +258,39 @@ export const SettingsAgentsView = {
             console.error("Erreur chargement agents:", error);
             this.app.showToast("Erreur de connexion à la base de données.", "error");
         });
+    },
+
+    updateRolesDropdown() {
+        const select = document.getElementById('agentRole');
+        if (!select) return;
+        const currentVal = select.value;
+        
+        const baseRoles = [
+            { id: 'agent', name: 'Agent Standard' },
+            { id: 'admin', name: 'Administrateur' },
+            { id: 'super_admin', name: 'Super Admin' },
+            { id: 'manager', name: 'Manager / Direction' },
+            { id: 'chauf', name: 'Chauffeur / Livreur' },
+            { id: 'spectateur', name: 'Spectateur' }
+        ];
+
+        const baseIds = baseRoles.map(r => r.id);
+        const dynamicRoles = (this.systemRoles || []).filter(r => !baseIds.includes(r.id));
+
+        let html = '';
+        
+        if (dynamicRoles.length > 0) {
+            html += `<optgroup label="Rôles Personnalisés">`;
+            dynamicRoles.forEach(r => { html += `<option value="${r.id}">${r.name}</option>`; });
+            html += `</optgroup>`;
+        }
+
+        html += `<optgroup label="Rôles Système (Défaut)">`;
+        baseRoles.forEach(r => { html += `<option value="${r.id}">${r.name}</option>`; });
+        html += `</optgroup>`;
+
+        select.innerHTML = html;
+        if (currentVal && select.querySelector(`option[value="${currentVal}"]`)) { select.value = currentVal; } else { select.value = 'agent'; }
     },
 
     applyFilters() {
