@@ -1,4 +1,5 @@
 import { auth, db } from './firebase-config.js';
+import { AGENCIES, getDepartureAgencies, getArrivalAgencies, getCollectionName } from './agencies-config.js';
 import { onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-auth.js";
 import { doc, getDoc, updateDoc, collection, query, where, orderBy, onSnapshot } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 
@@ -106,6 +107,13 @@ onAuthStateChanged(auth, async (user) => {
         sessionStorage.setItem('userName', userName || 'Utilisateur');
         sessionStorage.setItem('userAgency', userData.agency || 'abidjan');
 
+        // Détermination de l'agence actuellement "Active"
+        let currentActiveAgency = sessionStorage.getItem('currentActiveAgency');
+        if (!currentActiveAgency || (userData.agency !== 'all' && currentActiveAgency !== userData.agency)) {
+            currentActiveAgency = userData.agency === 'all' ? 'abidjan' : (userData.agency || 'abidjan');
+            sessionStorage.setItem('currentActiveAgency', currentActiveAgency);
+        }
+
         // --- INJECTION DYNAMIQUE DU MENU PROFIL (POUR TOUTES LES PAGES ET MOBILES) ---
         const headers = document.querySelectorAll('.app-header, .mob-header, .top-bar');
         headers.forEach((header) => {
@@ -114,6 +122,14 @@ onAuthStateChanged(auth, async (user) => {
             if (oldLogoutBtn) oldLogoutBtn.remove();
             const mobProfileBtn = header.querySelector('#mob-profileBtn');
             if (mobProfileBtn) mobProfileBtn.remove();
+
+            const agencyLinksHtml = Object.values(AGENCIES).map(a => {
+                const isActive = a.id === currentActiveAgency;
+                const style = isActive ? 'background-color: #eff6ff; color: #3b82f6; font-weight: bold; border-left: 3px solid #3b82f6;' : '';
+                const checkIcon = isActive ? '<i class="fas fa-check" style="margin-left: auto;"></i>' : '';
+                
+                return `<a href="#" onclick="window.switchAgency('${a.id}'); return false;" style="${style}"><i class="fas fa-plane-${a.type === 'departure' ? 'departure' : 'arrival'}"></i> ${a.name} ${a.flag} ${checkIcon}</a>`;
+            }).join('');
 
             // 2. Injecter le nouveau bloc utilisateur s'il n'existe pas encore
             if (!header.querySelector('.user-info')) {
@@ -124,7 +140,7 @@ onAuthStateChanged(auth, async (user) => {
                 
                 // On masque le texte du nom sur la version mobile pour gagner de la place
                 const hideName = header.classList.contains('mob-header') ? 'display: none;' : '';
-
+            
                 const userInfoHtml = `
                     <div class="user-info" style="position: absolute; right: 20px; display: flex; align-items: center; gap: 10px;">
                         <span class="user-name-display" style="font-weight: bold; font-size: 14px; ${hideName}">${userName || 'Utilisateur'}</span>
@@ -134,7 +150,10 @@ onAuthStateChanged(auth, async (user) => {
                             </div>
                             <div class="user-dropdown-menu">
                                 <a href="#" onclick="if(window.app && window.app.renderPage) { window.app.renderPage('settings-profile'); } else { window.location.href = 'profil.html'; } const menu = this.closest('.user-dropdown-menu'); if(menu) menu.classList.remove('active'); return false;"><i class="fas fa-user-circle"></i> Profil</a>
-                                <a href="#" class="menuAgencySwitch" style="display: none;"><i class="fas fa-globe"></i> Vue Paris</a>
+                                <div id="agencySwitcherContainer" style="display: none;">
+                                    <div style="padding: 5px 20px; font-size: 11px; font-weight: 800; color: #94a3b8; text-transform: uppercase; margin-top: 5px;">Changer d'agence</div>
+                                    ${agencyLinksHtml}
+                                </div>
                                 <hr style="margin: 5px 0; border: none; border-top: 1px solid #e2e8f0;">
                                 <a href="#" class="logout-btn logout" onclick="window.appHandleLogout(); return false;"><i class="fas fa-sign-out-alt"></i> Déconnexion</a>
                             </div>
@@ -158,15 +177,115 @@ onAuthStateChanged(auth, async (user) => {
                     userAvatarEl.innerHTML = '';
                     localStorage.setItem('userProfilePhoto', userData.photoURL);
                 }
+                
+                // Mettre à jour le menu des agences s'il existe déjà en dur dans le fichier HTML
+                const agencyContainer = header.querySelector('#agencySwitcherContainer');
+                if (agencyContainer) {
+                    agencyContainer.innerHTML = `
+                        <div style="padding: 5px 20px; font-size: 11px; font-weight: 800; color: #94a3b8; text-transform: uppercase; margin-top: 5px;">Changer d'agence</div>
+                        ${agencyLinksHtml}
+                    `;
+                }
             }
         });
 
-        // Détermination de l'agence actuellement "Active"
-        let currentActiveAgency = sessionStorage.getItem('currentActiveAgency');
-        if (!currentActiveAgency || (userData.agency !== 'all' && currentActiveAgency !== userData.agency)) {
-            currentActiveAgency = userData.agency === 'all' ? 'abidjan' : (userData.agency || 'abidjan');
-            sessionStorage.setItem('currentActiveAgency', currentActiveAgency);
-        }
+        // --- CHARGEMENT DU BRANDING DE L'AGENCE (Couleurs, Logo, Nom) ---
+        const loadAgencyBranding = async (agencyId) => {
+            try {
+                const cacheKey = `branding_${agencyId}`;
+                const cached = sessionStorage.getItem(cacheKey);
+                
+                const applyBranding = (branding) => {
+                    if (branding.color) document.documentElement.style.setProperty('--primary', branding.color);
+                    
+                    if (branding.secondary) document.documentElement.style.setProperty('--secondary', branding.secondary);
+                    else if (branding.color) document.documentElement.style.setProperty('--secondary', branding.color); // Menu uni si pas de couleur secondaire
+                    
+                    if (branding.bg) document.documentElement.style.setProperty('--bg-body', branding.bg);
+                    
+                    if (branding.logo) document.querySelectorAll('.app-logo, .sidebar-logo img').forEach(img => img.src = branding.logo);
+                    if (branding.name) document.querySelectorAll('.sidebar-header h2').forEach(h2 => h2.textContent = branding.name);
+
+                    if (branding.fontFamily) {
+                        const fontName = branding.fontFamily.split(',')[0].replace(/'/g, '').trim();
+                        if (fontName !== 'Inter') {
+                            let link = document.getElementById('dynamic-google-font');
+                            if (!link) {
+                                link = document.createElement('link');
+                                link.id = 'dynamic-google-font';
+                                link.rel = 'stylesheet';
+                                document.head.appendChild(link);
+                            }
+                            link.href = `https://fonts.googleapis.com/css2?family=${fontName.replace(/\\s+/g, '+')}:wght@300;400;500;600;700;800&display=swap`;
+                        }
+                        document.body.style.setProperty('font-family', branding.fontFamily, 'important');
+                    }
+                    if (branding.baseFontSize) {
+                        document.body.style.setProperty('font-size', branding.baseFontSize, 'important');
+                    }
+                    
+                    let styleEl = document.getElementById('dynamic-global-design');
+                    if (!styleEl) {
+                        styleEl = document.createElement('style');
+                        styleEl.id = 'dynamic-global-design';
+                        document.head.appendChild(styleEl);
+                    }
+                    styleEl.textContent = `
+                        body { background: var(--bg-body) !important; }
+                        .sidebar { background: var(--secondary) !important; }
+                        .btn-primary, .btn-primary:hover { background: var(--primary) !important; border-color: var(--primary) !important; }
+                        .stat-card .stat-icon { background: var(--primary) !important; color: white !important; }
+                    `;
+                };
+
+                if (cached) applyBranding(JSON.parse(cached));
+
+                // Résolution de l'agence "Mère" (Départ) pour charger les bons paramètres (Logo, Couleurs)
+                let settingAgencyId = agencyId;
+                if (AGENCIES[agencyId] && AGENCIES[agencyId].type === 'arrival') {
+                    if (agencyId === 'abidjan') settingAgencyId = 'paris'; // Mapping par défaut
+                    else if (agencyId.includes('_')) settingAgencyId = agencyId.split('_')[1]; // ex: abidjan_chine -> chine
+                }
+
+                const [cfgSnap, compSnap, designSnap] = await Promise.all([
+                    getDoc(doc(db, 'settings', `invoice_config_${settingAgencyId}`)),
+                    getDoc(doc(db, 'settings', `company_${settingAgencyId}`)),
+                    getDoc(doc(db, 'settings', `design_${agencyId}`))
+                ]);
+                
+                let branding = {};
+                if (cfgSnap.exists()) { branding.color = cfgSnap.data().primaryColorHex; branding.logo = cfgSnap.data().logoUrl; }
+                
+                if (cfgSnap.exists() && cfgSnap.data().secondaryColorHex) branding.secondary = cfgSnap.data().secondaryColorHex;
+                if (cfgSnap.exists() && cfgSnap.data().bgColorHex) branding.bg = cfgSnap.data().bgColorHex;
+                
+                if (compSnap.exists()) {
+                    const compData = compSnap.data();
+                    if (!branding.logo && compSnap.data().logoBase64) branding.logo = compSnap.data().logoBase64;
+                    if (compSnap.data().name) branding.name = compSnap.data().name;
+                    
+                    // Priorité aux couleurs définies globalement dans "Paramètres Entreprise"
+                    if (compData.appPrimaryColor) branding.color = compData.appPrimaryColor;
+                    if (compData.appSecondaryColor) branding.secondary = compData.appSecondaryColor;
+                    if (compData.appBgColor) branding.bg = compData.appBgColor;
+                }
+
+                if (designSnap.exists()) {
+                    const d = designSnap.data();
+                    if (d.primaryColor) branding.color = d.primaryColor;
+                    if (d.secondaryColor) branding.secondary = d.secondaryColor;
+                    if (d.bgColor) branding.bg = d.bgColor;
+                    if (d.logoBase64) branding.logo = d.logoBase64;
+                    if (d.agencyName) branding.name = d.agencyName;
+                    if (d.fontFamily) branding.fontFamily = d.fontFamily;
+                    if (d.baseFontSize) branding.baseFontSize = d.baseFontSize;
+                }
+                
+                sessionStorage.setItem(cacheKey, JSON.stringify(branding));
+                applyBranding(branding);
+            } catch(e) { console.error("Branding error:", e); }
+        };
+        await loadAgencyBranding(currentActiveAgency);
 
         // --- REDIRECTION AUTOMATIQUE VERS LA BONNE INTERFACE ---
         const pathUrl = window.location.pathname;
@@ -174,10 +293,14 @@ onAuthStateChanged(auth, async (user) => {
         const inAbidjanFolder = pathUrl.includes('/abidjan/');
         const isLogin = pathUrl.includes('login.html');
 
-        if (currentActiveAgency === 'paris' && !inParisFolder) {
+        // Séparation logique : Les agences de "Départ" vont dans le dossier /paris/, les agences "d'Arrivée" vont dans /abidjan/
+        const departureAgencies = getDepartureAgencies();
+        const arrivalAgencies = getArrivalAgencies();
+
+        if (departureAgencies.includes(currentActiveAgency) && !inParisFolder) {
             window.location.href = inAbidjanFolder ? '../paris/index.html' : 'paris/index.html';
             return;
-        } else if (currentActiveAgency === 'abidjan' && inParisFolder) {
+        } else if (arrivalAgencies.includes(currentActiveAgency) && inParisFolder) {
             window.location.href = '../abidjan/index.html';
             return;
         } else if (isLogin) {
@@ -190,28 +313,27 @@ onAuthStateChanged(auth, async (user) => {
 
         // --- INJECTION DU SÉLECTEUR D'AGENCE (Pour les comptes Globaux) ---
         if (userData.agency === 'all' || userRole === 'super_admin') {
-
-            // --- INJECTION DU SÉLECTEUR D'AGENCE MULTIPLE (Menu Utilisateur Paris/Abidjan) ---
-            document.querySelectorAll('.menuAgencySwitch, #menuAgencySwitch').forEach(menuAgencySwitch => {
-                menuAgencySwitch.style.display = 'block';
-                const isCurrentlyInParis = window.location.pathname.includes('/paris/');
-                menuAgencySwitch.innerHTML = isCurrentlyInParis ? '<i class="fas fa-globe"></i> Vue Abidjan' : '<i class="fas fa-globe"></i> Vue Paris';
-                menuAgencySwitch.onclick = (e) => {
-                    e.preventDefault();
-                    const targetAgency = isCurrentlyInParis ? 'abidjan' : 'paris';
-                    sessionStorage.setItem('currentActiveAgency', targetAgency);
-                if (targetAgency === 'paris') {
-                    window.location.href = window.location.pathname.includes('/abidjan/') ? '../paris/index.html' : 'paris/index.html';
-                } else {
-                    window.location.href = window.location.pathname.includes('/paris/') ? '../abidjan/index.html' : 'abidjan/index.html';
-                }
-                };
+            document.querySelectorAll('#agencySwitcherContainer').forEach(container => {
+                container.style.display = 'block';
             });
+            
+            window.switchAgency = (targetAgency) => {
+                sessionStorage.setItem('currentActiveAgency', targetAgency);
+                const needsDepartureApp = departureAgencies.includes(targetAgency);
+
+                if (needsDepartureApp && !inParisFolder) {
+                    window.location.href = inAbidjanFolder ? '../paris/index.html' : 'paris/index.html';
+                } else if (!needsDepartureApp && inParisFolder) {
+                    window.location.href = '../abidjan/index.html';
+                } else {
+                    window.location.reload();
+                }
+            };
         }
 
         // --- GESTION GLOBALE DU BADGE DE NOTIFICATION (Placé ici pour s'exécuter AVANT les return) ---
         // Vérification des sessions en attente sur toutes les pages
-        const logsRef = collection(db, "audit_logs");
+        const logsRef = collection(db, getCollectionName("audit_logs"));
         const badgeQuery = query(logsRef, where("action", "==", "VALIDATION_JOURNEE"), orderBy("date", "desc"));
         
         onSnapshot(badgeQuery, snapshot => {
@@ -323,21 +445,8 @@ onAuthStateChanged(auth, async (user) => {
             return;
         }
 
-        // --- MASQUER LES LIENS ---
-        const navDashboard = document.getElementById('nav-dashboard');
-        const navExpenses = document.getElementById('nav-expenses');
-        const navOtherIncome = document.getElementById('nav-other-income'); 
-        const navBank = document.getElementById('nav-bank'); 
-        const navArrivages = document.getElementById('nav-arrivages');
         const navAdmin = document.getElementById('nav-admin');
-        const navClients = document.getElementById('nav-clients');
-        const navMagasinage = document.getElementById('nav-magasinage'); 
-        const navConfirmation = document.getElementById('nav-confirmation');
-        const navSalaire = document.getElementById('nav-salaire');
-        const navPoints = document.getElementById('nav-points');
-        const navLivraison = document.getElementById('nav-livraison');
         const navAudit = document.getElementById('nav-audit');
-        const navVoiture = document.getElementById('nav-voiture');
         const navCompteJB = document.getElementById('nav-comptejb');
         const navParis = document.getElementById('nav-paris');
 
@@ -351,30 +460,9 @@ onAuthStateChanged(auth, async (user) => {
 
         if (navAdmin && userRole !== 'super_admin' && userRole !== 'admin') navAdmin.style.display = 'none';
         if (navCompteJB && userRole !== 'super_admin' && userRole !== 'admin') navCompteJB.style.display = 'none';
-        if (navPoints && (userRole !== 'admin' && userRole !== 'super_admin' && userRole !== 'spectateur')) navPoints.style.display = 'none';
         if (navAudit && (userRole !== 'admin' && userRole !== 'super_admin' && userRole !== 'spectateur')) navAudit.style.display = 'none';
 
-        if (userRole === 'saisie_full') {
-            if (navMagasinage) navMagasinage.style.display = 'inline';
-            if (navBank) navBank.style.display = 'none';
-            if (navSalaire) navSalaire.style.display = 'none';
-            if (navVoiture) navVoiture.style.display = 'inline';
-        }
-
-        if (userRole === 'saisie_limited') {
-            if (navMagasinage) navMagasinage.style.display = 'inline';
-            if (navDashboard) navDashboard.style.display = 'none';
-            if (navExpenses) navExpenses.style.display = 'none';
-            if (navOtherIncome) navOtherIncome.style.display = 'none';
-            if (navBank) navBank.style.display = 'none';
-            if (navArrivages) navArrivages.style.display = 'none';
-            if (navClients) navClients.style.display = 'none';
-            if (navConfirmation) navConfirmation.style.display = 'none';
-            if (navSalaire) navSalaire.style.display = 'none';
-            if (navLivraison) navLivraison.style.display = 'none';
-            if (navVoiture) navVoiture.style.display = 'none';
-        }
-
+        // Note : Le reste du masquage des menus est désormais géré dynamiquement par app.js via la configuration Firebase (settings-menus.js)
         document.body.style.display = 'block';
 
     } catch (error) {

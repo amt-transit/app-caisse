@@ -1,5 +1,5 @@
 import { db } from '../../../firebase-config.js';
-import { collection, query, orderBy, onSnapshot, doc, updateDoc, writeBatch, limit } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
+import { collection, query, where, orderBy, onSnapshot, doc, updateDoc, writeBatch, limit } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 
 export const NotificationsView = {
     unsub: null,
@@ -42,7 +42,8 @@ export const NotificationsView = {
 
     loadNotifications() {
         if (this.unsub) this.unsub();
-        const q = query(collection(db, "notifications"), orderBy("createdAt", "desc"), limit(50));
+        const activeAgency = sessionStorage.getItem('currentActiveAgency') || 'paris';
+        const q = query(collection(db, "notifications"), where("agency", "==", activeAgency), orderBy("createdAt", "desc"), limit(50));
         this.unsub = onSnapshot(q, (snapshot) => {
             this.notifications = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
             this.renderList();

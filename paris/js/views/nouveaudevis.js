@@ -1,26 +1,18 @@
 import { db } from '../../../firebase-config.js';
 import { collection, doc, writeBatch, getDocs, query, where, limit } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
-import { Autocomplete } from './autocomplete.js';
+import { createApp, ref, reactive, computed, onMounted } from "https://unpkg.com/vue@3/dist/vue.esm-browser.prod.js";
 
 export const NouveauDevisView = {
-    items: [{ id: Date.now(), desc: '', qty: 1, pu: 0, total: 0 }],
-    clientsData: new Map(),
-    destMap: new Map(),
-    destTel: new Map(),
-    destExpediteurMap: new Map(),
-    productsData: new Map(),
+    vueApp: null,
 
     render(app) {
-        this.app = app;
-        this.items = [{ id: Date.now(), desc: '', qty: 1, pu: 0, total: 0 }];
-        this.destMap.clear();
-        this.destTel.clear();
-        this.destExpediteurMap.clear();
-        this.availableDests = [];
-        this.availableCommunes = [];
+        const globalApp = app;
+        window.app.views = window.app.views || {};
+        window.app.views.nouveauDevis = this;
 
         const html = `
-            <div style="max-width: 1000px; margin: 0 auto; animation: fadeIn 0.3s ease-in-out;">
+            <style>[v-cloak] { display: none; }</style>
+            <div id="vue-nouveaudevis-app" style="max-width: 1000px; margin: 0 auto; animation: fadeIn 0.3s ease-in-out;" v-cloak>
                 
                 <div style="display: flex; align-items: center; gap: 15px; margin-bottom: 25px; background: white; padding: 20px; border-radius: 16px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); border: 1px solid #e2e8f0;">
                     <div style="background: #fef3c7; color: #f59e0b; width: 50px; height: 50px; display: flex; align-items: center; justify-content: center; border-radius: 12px; font-size: 24px;">
@@ -38,26 +30,26 @@ export const NouveauDevisView = {
                     <div class="form-grid">
                         <div class="form-group">
                             <label>Date</label>
-                            <input type="date" id="ndDate" value="${new Date().toISOString().split('T')[0]}">
+                            <input type="date" v-model="form.date">
                         </div>
                         <div class="form-group">
                             <label>Date de validité</label>
-                            <input type="date" id="ndValidite">
+                            <input type="date" v-model="form.validite">
                         </div>
                         <div class="form-group">
                             <label>Volume total</label>
-                            <input type="number" id="ndVolume" step="0.01" placeholder="Ex: 12.50 (m³)">
+                            <input type="number" step="0.01" v-model.number="form.volume" placeholder="Ex: 12.50 (m³)">
                         </div>
                         <div class="form-group">
                             <label>Devise</label>
-                            <select id="ndDevise">
+                            <select v-model="form.devise">
                                 <option value="EUR">Euro (EUR)</option>
                                 <option value="FCFA">Franc CFA (FCFA)</option>
                             </select>
                         </div>
                         <div class="form-group">
                             <label>Agence destination *</label>
-                            <select id="ndAgence" required>
+                            <select v-model="form.agence" required>
                                 <option value="ABIDJAN">ABIDJAN</option>
                                 <option value="BAMAKO">BAMAKO</option>
                                 <option value="CONAKRY">CONAKRY</option>
@@ -68,14 +60,16 @@ export const NouveauDevisView = {
                         <div class="form-group">
                             <label>Lieu de livraison prévu</label>
                             <div style="position: relative;">
-                                <input type="text" id="ndLieu" placeholder="Optionnel..." autocomplete="off">
-                                <ul id="ndLieuSuggestions" class="autocomplete-suggestions"></ul>
+                                <input type="text" v-model="form.lieu" @focus="showLieuSugg = true" @blur="hideSugg('lieu')" placeholder="Optionnel..." autocomplete="off">
+                                <ul v-if="showLieuSugg && filteredLieux.length > 0" class="autocomplete-suggestions" style="display: block;">
+                                    <li v-for="l in filteredLieux" :key="l" @mousedown.prevent="selectLieu(l)"><div style="font-weight: 600;">{{ l }}</div></li>
+                                </ul>
                             </div>
                         </div>
                     </div>
                     <div class="form-group" style="margin-top: 15px;">
                         <label>Conditions du devis</label>
-                        <textarea id="ndConditions" rows="3" placeholder="Conditions spécifiques à ce devis (ex: Acompte de 50% requis à la validation...)" style="width: 100%; border: 1px solid #cbd5e1; border-radius: 8px; padding: 10px; font-family: inherit; resize: none;"></textarea>
+                        <textarea v-model="form.conditions" rows="3" placeholder="Conditions spécifiques à ce devis (ex: Acompte de 50% requis à la validation...)" style="width: 100%; border: 1px solid #cbd5e1; border-radius: 8px; padding: 10px; font-family: inherit; resize: none;"></textarea>
                     </div>
                 </div>
 
@@ -85,10 +79,14 @@ export const NouveauDevisView = {
                         <h3 style="border-bottom: 1px solid #e2e8f0; padding-bottom: 10px; margin-bottom: 15px; display: flex; align-items: center; gap: 10px;"><i class="fas fa-upload text-orange-500"></i> Expéditeur (Client)</h3>
                         <div class="form-group">
                             <div style="position: relative;">
-                                <input type="text" id="ndExpediteur" placeholder="Rechercher nom ou téléphone..." required autocomplete="off">
-                                <ul id="ndExpediteurSuggestions" class="autocomplete-suggestions"></ul>
+                                <input type="text" v-model="form.expediteur" @input="handleExpediteurChange(); showExpSugg = true" @focus="showExpSugg = true" @blur="hideSugg('exp')" placeholder="Rechercher nom ou téléphone..." required autocomplete="off">
+                                <ul v-if="showExpSugg && filteredExpediteurs.length > 0" class="autocomplete-suggestions" style="display: block;">
+                                    <li v-for="c in filteredExpediteurs" :key="c.nom" @mousedown.prevent="selectExp(c)">
+                                        <div style="font-weight: 600;">{{ c.nom }}</div><div style="font-size: 11px; opacity: 0.7;">📞 {{ c.tel || 'N/A' }}</div>
+                                    </li>
+                                </ul>
                             </div>
-                            <div id="ndExpediteurFeedback" style="font-size: 12px; color: #64748b; margin-top: 5px;"></div>
+                            <div style="font-size: 12px; color: #64748b; margin-top: 5px;" v-html="expFeedback"></div>
                         </div>
                     </div>
                     
@@ -96,10 +94,14 @@ export const NouveauDevisView = {
                         <h3 style="border-bottom: 1px solid #e2e8f0; padding-bottom: 10px; margin-bottom: 15px; display: flex; align-items: center; gap: 10px;"><i class="fas fa-download text-emerald-500"></i> Destinataire</h3>
                         <div class="form-group">
                             <div style="position: relative;">
-                                <input type="text" id="ndDestinataire" placeholder="Nom ou téléphone (Optionnel pour un devis)..." autocomplete="off">
-                                <ul id="ndDestinataireSuggestions" class="autocomplete-suggestions"></ul>
+                                <input type="text" v-model="form.destinataire" @input="handleDestinataireChange(); showDestSugg = true" @focus="showDestSugg = true" @blur="hideSugg('dest')" placeholder="Nom ou téléphone (Optionnel pour un devis)..." autocomplete="off">
+                                <ul v-if="showDestSugg && filteredDestinataires.length > 0" class="autocomplete-suggestions" style="display: block;">
+                                    <li v-for="d in filteredDestinataires" :key="d" @mousedown.prevent="selectDest(d)">
+                                        <div style="font-weight: 600;">{{ d }}</div>
+                                    </li>
+                                </ul>
                             </div>
-                            <div id="ndDestinataireFeedback" style="font-size: 12px; color: #64748b; margin-top: 5px;"></div>
+                            <div style="font-size: 12px; color: #64748b; margin-top: 5px;" v-html="destFeedback"></div>
                         </div>
                     </div>
                 </div>
@@ -108,11 +110,27 @@ export const NouveauDevisView = {
                 <div class="form-card" style="box-shadow: 0 2px 4px rgba(0,0,0,0.02);">
                     <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #e2e8f0; padding-bottom: 10px; margin-bottom: 15px; flex-wrap: wrap; gap: 10px;">
                         <h3 style="margin: 0; display: flex; align-items: center; gap: 10px;"><i class="fas fa-box text-indigo-500"></i> Description des articles</h3>
-                        <button class="btn btn-outline btn-small" id="ndAddRowBtn"><i class="fas fa-plus"></i> Ajouter ligne</button>
+                        <button class="btn btn-outline btn-small" @click="addRow"><i class="fas fa-plus"></i> Ajouter ligne</button>
                     </div>
                     
                     <div style="width: 100%;">
-                        <div id="ndItemsContainer"></div>
+                        <div v-for="(item, index) in items" :key="item.id" class="form-grid" style="grid-template-columns: 2fr 0.5fr 1fr 1fr auto; align-items: end; background: #f8fafc; padding: 15px; border-radius: 8px; margin-bottom: 10px; border: 1px solid #e2e8f0;">
+                            <div class="form-group" style="margin: 0;">
+                                <label style="font-size: 11px;">Description *</label>
+                                <div style="position: relative; width: 100%;">
+                                    <input type="text" v-model="item.desc" @input="updateItem(item, 'desc')" @focus="item.showSugg = true" @blur="hideSugg('prod', item)" placeholder="Article..." style="margin: 0; width: 100%;" autocomplete="off">
+                                    <ul v-if="item.showSugg && getFilteredProducts(item.desc).length > 0" class="autocomplete-suggestions" style="display: block;">
+                                        <li v-for="p in getFilteredProducts(item.desc)" :key="p.desc" @mousedown.prevent="selectProduct(item, p)">
+                                            <div style="font-weight: 600;">{{ p.desc }}</div><div style="font-size: 11px; opacity: 0.7;">Prix: {{ p.price || 0 }} €</div>
+                                        </li>
+                                    </ul>
+                                </div>
+                            </div>
+                            <div class="form-group" style="margin: 0;"><label style="font-size: 11px;">Qté *</label><input type="number" v-model.number="item.qty" @input="updateItem(item, 'qty')" min="1" style="margin: 0; text-align: center; width: 100%;"></div>
+                            <div class="form-group" style="margin: 0;"><label style="font-size: 11px;">P.U *</label><input type="number" v-model.number="item.pu" @input="updateItem(item, 'pu')" min="0" style="margin: 0; text-align: right; width: 100%;"></div>
+                            <div class="form-group" style="margin: 0;"><label style="font-size: 11px;">Total</label><input type="text" :value="item.total + ' ' + (form.devise === 'CFA' ? 'FCFA' : '€')" readonly style="margin: 0; background: #e2e8f0; font-weight: bold; text-align: right; width: 100%;"></div>
+                            <button class="btn btn-danger btn-small" @click="removeRow(item.id)" style="height: 36px; display: flex; align-items: center; justify-content: center; width: 100%;" :disabled="items.length === 1"><i class="fas fa-trash"></i></button>
+                        </div>
                     </div>
                 </div>
 
@@ -125,15 +143,15 @@ export const NouveauDevisView = {
                         <div style="background: #f8fafc; padding: 15px; border-radius: 8px; border: 1px solid #e2e8f0;">
                             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; font-size: 16px;">
                                 <span>Montant HT :</span>
-                                <strong id="ndTotalHT">0</strong>
+                                <strong>{{ totalHT }} {{ form.devise === 'CFA' ? 'FCFA' : '€' }}</strong>
                             </div>
                             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; font-size: 16px;">
                                 <span>Remise :</span>
-                                <input type="number" id="ndRemise" value="0" style="width: 100px; text-align: right; padding: 4px;">
+                                <input type="number" v-model.number="form.remise" style="width: 100px; text-align: right; padding: 4px;">
                             </div>
                             <div style="display: flex; justify-content: space-between; align-items: center; font-size: 20px; border-top: 1px dashed #cbd5e1; padding-top: 10px; color: #0f172a;">
                                 <span>Total Net :</span>
-                                <strong id="ndTotalNet">0</strong>
+                                <strong>{{ totalNet }} {{ form.devise === 'CFA' ? 'FCFA' : '€' }}</strong>
                             </div>
                         </div>
                     </div>
@@ -156,364 +174,301 @@ export const NouveauDevisView = {
         document.getElementById('contentContainer').innerHTML = html;
         
         // --- Écouteurs pour la saisie intelligente ---
-        const destInput = document.getElementById('ndDestinataire');
-        const lieuInput = document.getElementById('ndLieu');
-
-        if (destInput && lieuInput) {
-            destInput.addEventListener('input', (e) => {
-                const selectedDest = e.target.value.trim();
-                if (this.destMap.has(selectedDest) && lieuInput.value.trim() === '') {
-                    lieuInput.value = this.destMap.get(selectedDest);
-                    lieuInput.style.backgroundColor = '#e0f2fe'; 
-                    setTimeout(() => lieuInput.style.backgroundColor = '', 1000);
-                }
-            });
-        }
-        
-        let expTimeout;
-        document.getElementById('ndExpediteur').addEventListener('input', () => {
-            clearTimeout(expTimeout);
-            expTimeout = setTimeout(() => this.handleExpediteurChange(), 300);
-        });
-        
-        let destTimeout;
-        document.getElementById('ndDestinataire').addEventListener('input', () => {
-            clearTimeout(destTimeout);
-            destTimeout = setTimeout(() => this.handleDestinataireChange(), 300);
-        });
-
-        this.renderItems();
-        this.loadAutocompleteData();
-
-        document.getElementById('ndAddRowBtn').addEventListener('click', () => this.addRow());
-        document.getElementById('ndRemise').addEventListener('input', () => this.calculateTotals());
-        document.getElementById('ndDevise').addEventListener('change', () => this.calculateTotals());
-        document.getElementById('ndSubmitBtn').addEventListener('click', () => this.submitQuote());
-        
-        Autocomplete.initCustom('ndExpediteur', 'ndExpediteurSuggestions',
-            (q) => {
-                const query = q.toLowerCase();
-                return Array.from(this.clientsData.values()).filter(c => (c.nom && c.nom.toLowerCase().includes(query)) || (c.tel && c.tel.includes(query))).slice(0, 8);
-            },
-            (c) => `<div style="font-weight: 600;">${c.nom}</div><div style="font-size: 11px; opacity: 0.7;">📞 ${c.tel || 'N/A'}</div>`,
-            (c, input) => { input.value = c.nom; this.handleExpediteurChange(); },
-            { clearOnMismatch: ['ndDestinataire', 'ndLieu'] } // Nettoyage Automatique
-        );
-        document.getElementById('ndExpediteur').addEventListener('input', (e) => { if(e.target.value.trim().length < 2) this.handleExpediteurChange(); });
-
-        Autocomplete.initCustom('ndDestinataire', 'ndDestinataireSuggestions',
-            (q) => {
-                const query = q.toLowerCase();
-                let matches = Array.from(this.destMap.keys()).filter(d => d.toLowerCase().includes(query));
-                if (matches.length < 5) {
-                    const globalMatches = (this.availableDests || []).filter(d => d.toLowerCase().includes(query));
-                    matches = [...new Set([...matches, ...globalMatches])];
-                }
-                return matches.slice(0, 8);
-            },
-            (d) => `<div style="font-weight: 600;">${d}</div>`,
-            (d, input) => { input.value = d; this.handleDestinataireChange(); },
-            { clearOnMismatch: ['ndLieu'] } // Nettoyage Automatique
-        );
-        document.getElementById('ndDestinataire').addEventListener('input', (e) => { if(e.target.value.trim().length < 2) this.handleDestinataireChange(); });
-
-        Autocomplete.initCustom('ndLieu', 'ndLieuSuggestions',
-            (q) => {
-                const query = q.toLowerCase();
-                const matches = (this.availableCommunes || []).filter(c => c.toLowerCase().includes(query));
-                return matches.slice(0, 8);
-            },
-            (c) => `<div style="font-weight: 600;">${c}</div>`,
-            (c, input) => { input.value = c; }
-        );
+        document.getElementById('contentContainer').innerHTML = html;
+        this.initVue(globalApp);
     },
+    
+    initVue(globalApp) {
+        if (this.vueApp) this.vueApp.unmount();
 
-    async loadAutocompleteData() {
-        try {
-            const clientsSnap = await getDocs(collection(db, "clients"));
-            this.clientsData.clear();
-            clientsSnap.forEach(doc => {
-                const data = doc.data();
-                if (data.nom) this.clientsData.set(data.nom.trim(), data);
-            });
-            
+        this.vueApp = createApp({
+            setup() {
+                const saving = ref(false);
+                
+                const clientsData = ref(new Map());
+                const destMap = ref(new Map());
+                const destInfos = ref(new Map());
+                const destExpMap = ref(new Map());
+                const productsData = ref(new Map());
+                const availableDests = ref([]);
+                const availableCommunes = ref([]);
+                
+                const form = reactive({
+                    date: new Date().toISOString().split('T')[0],
+                    validite: '',
+                    volume: '',
+                    devise: 'EUR',
+                    agence: 'ABIDJAN',
+                    expediteur: '',
+                    destinataire: '',
+                    lieu: '',
+                    conditions: '',
+                    remise: 0
+                });
+                
+                const items = ref([{ id: Date.now(), desc: '', qty: 1, pu: 0, total: 0, showSugg: false }]);
+                
+                // Feedback states
+                const expFeedback = ref('');
+                const destFeedback = ref('');
+                
+                // UI states for suggestions
+                const showExpSugg = ref(false);
+                const showDestSugg = ref(false);
+                const showLieuSugg = ref(false);
 
-            // NOUVEAU : Charger l'historique des destinataires (depuis les livraisons)
-            const livSnap = await getDocs(collection(db, "livraisons"));
-            const communesSet = new Set(['ABOBO', 'ADJAME', 'ATTECOUBE', 'BINGERVILLE', 'COCODY', 'KOUMASSI', 'MARCORY', 'PLATEAU', 'PORT-BOUET', 'YOPOUGON']);
-            const destSet = new Set();
+                // Loading Data
+                const loadAutocompleteData = async () => {
+                    try {
+                        const activeAgency = sessionStorage.getItem('currentActiveAgency') || 'paris';
+                        const clientsSnap = await getDocs(query(collection(db, "clients"), where("agency", "==", activeAgency)));
+                        const cd = new Map();
+                        clientsSnap.forEach(doc => {
+                            const data = doc.data();
+                            if (data.nom) cd.set(data.nom.trim(), data);
+                        });
+                        clientsData.value = cd;
 
-            livSnap.forEach(doc => {
-                const data = doc.data();
-                if (data.lieuLivraison && data.lieuLivraison.trim() !== '') communesSet.add(data.lieuLivraison.trim());
-                if (data.destinataire && data.destinataire.trim() !== '') {
-                    const destName = data.destinataire.trim();
-                    destSet.add(destName);
-                    if (data.lieuLivraison && !this.destMap.has(destName)) this.destMap.set(destName, data.lieuLivraison.trim());
-                    if (data.numero && !this.destTel.has(destName)) this.destTel.set(destName, data.numero.trim());
-                    if (data.expediteur && !this.destExpediteurMap.has(destName)) this.destExpediteurMap.set(destName, data.expediteur.trim());
-                }
-            });
+                        const livSnap = await getDocs(query(collection(db, "livraisons"), where("agency", "==", activeAgency)));
+                        const communesSet = new Set(['ABOBO', 'ADJAME', 'ATTECOUBE', 'BINGERVILLE', 'COCODY', 'KOUMASSI', 'MARCORY', 'PLATEAU', 'PORT-BOUET', 'YOPOUGON']);
+                        const destSet = new Set();
+                        const dMap = new Map();
+                        const dInfos = new Map();
+                        const dExpMap = new Map();
 
-            this.availableCommunes = Array.from(communesSet).sort();
-            this.availableDests = Array.from(destSet).sort();
+                        livSnap.forEach(doc => {
+                            const data = doc.data();
+                            if (data.lieuLivraison && data.lieuLivraison.trim() !== '') communesSet.add(data.lieuLivraison.trim());
+                            if (data.destinataire && data.destinataire.trim() !== '') {
+                                const destName = data.destinataire.trim();
+                                destSet.add(destName);
+                                if (data.lieuLivraison && !dMap.has(destName)) dMap.set(destName, data.lieuLivraison.trim());
+                                if (data.numero && !dInfos.has(destName)) dInfos.set(destName, data.numero.trim());
+                                if (data.expediteur && !dExpMap.has(destName)) dExpMap.set(destName, data.expediteur.trim());
+                            }
+                        });
 
-            const prodSnap = await getDocs(collection(db, "products"));
-            this.productsData.clear();
-            prodSnap.forEach(doc => {
-                const data = doc.data();
-                if (data.desc) this.productsData.set(data.desc.trim(), data);
-            });
-            
-        } catch (e) {
-            console.error("Erreur chargement auto-complétion :", e);
-        }
-    },
+                        availableCommunes.value = Array.from(communesSet).sort();
+                        availableDests.value = Array.from(destSet).sort();
+                        destMap.value = dMap;
+                        destInfos.value = dInfos;
+                        destExpMap.value = dExpMap;
 
-    async handleExpediteurChange() {
-        const expediteur = document.getElementById('ndExpediteur').value.trim();
-        const destinataireInput = document.getElementById('ndDestinataire');
-        const feedbackExp = document.getElementById('ndExpediteurFeedback');
-        
-        if (!expediteur) {
-            if(feedbackExp) feedbackExp.innerHTML = '';
-            return;
-        }
-
-        if (this.clientsData && this.clientsData.has(expediteur)) {
-            const clientInfo = this.clientsData.get(expediteur);
-            if (feedbackExp) feedbackExp.innerHTML = `<span style="color:#059669;"><i class="fas fa-check-circle"></i> <b>Tél:</b> ${clientInfo.tel || 'N/A'} | <b>Adresse:</b> ${clientInfo.adresse || 'N/A'}</span>`;
-        } else {
-            if (feedbackExp) feedbackExp.innerHTML = `<span style="color:#f59e0b;"><i class="fas fa-exclamation-triangle"></i> Nouveau client expéditeur</span>`;
-        }
-
-        try {
-            const qLiv = query(collection(db, "livraisons"), where("expediteur", "==", expediteur));
-            const livSnap = await getDocs(qLiv);
-            const localDestMap = new Map();
-            
-            livSnap.forEach(doc => {
-                const data = doc.data();
-                if (data.destinataire && data.destinataire.trim()) {
-                    const destName = data.destinataire.trim();
-                    localDestMap.set(destName, data.lieuLivraison || '');
-                    this.destMap.set(destName, data.lieuLivraison || '');
-                    this.destTel.set(destName, data.numero || '');
-                }
-            });
-
-            const uniqueDests = Array.from(localDestMap.keys());
-            if (uniqueDests.length > 0) {
-                if (uniqueDests.length === 1) {
-                    if (!destinataireInput.value || destinataireInput.value !== uniqueDests[0]) {
-                        destinataireInput.value = uniqueDests[0];
-                        this.handleDestinataireChange();
+                        const prodSnap = await getDocs(collection(db, "products"));
+                        const pd = new Map();
+                        prodSnap.forEach(doc => {
+                            const data = doc.data();
+                            if (data.desc) pd.set(data.desc.trim(), data);
+                        });
+                        productsData.value = pd;
+                        
+                    } catch (e) {
+                        console.error("Erreur de chargement :", e);
                     }
-                } else {
-                    if (feedbackExp) feedbackExp.innerHTML += `<br><span style="color:#3b82f6;"><i class="fas fa-info-circle"></i> ${uniqueDests.length} destinataires trouvés. Utilisez la flèche pour choisir.</span>`;
-                }
+                };
+
+                onMounted(() => {
+                    loadAutocompleteData();
+                });
+
+                // Computed suggestions
+                const expQuery = computed(() => form.expediteur.toLowerCase().trim());
+                const filteredExpediteurs = computed(() => {
+                    if (expQuery.value.length < 2) return [];
+                    return Array.from(clientsData.value.values())
+                        .filter(c => (c.nom && c.nom.toLowerCase().includes(expQuery.value)) || (c.tel && c.tel.includes(expQuery.value)))
+                        .slice(0, 8);
+                });
+
+                const destQuery = computed(() => form.destinataire.toLowerCase().trim());
+                const filteredDestinataires = computed(() => {
+                    if (destQuery.value.length < 2) return [];
+                    let matches = Array.from(destMap.value.keys()).filter(d => d.toLowerCase().includes(destQuery.value));
+                    if (matches.length < 5) {
+                        const globalMatches = availableDests.value.filter(d => d.toLowerCase().includes(destQuery.value));
+                        matches = [...new Set([...matches, ...globalMatches])];
+                    }
+                    return matches.slice(0, 8);
+                });
+
+                const lieuQuery = computed(() => form.lieu.toLowerCase().trim());
+                const filteredLieux = computed(() => {
+                    if (lieuQuery.value.length < 2) return [];
+                    return availableCommunes.value.filter(c => c.toLowerCase().includes(lieuQuery.value)).slice(0, 8);
+                });
+
+                const getFilteredProducts = (queryText) => {
+                    if (!queryText || queryText.length < 2) return [];
+                    const q = queryText.toLowerCase();
+                    return Array.from(productsData.value.values()).filter(p => p.desc && p.desc.toLowerCase().includes(q)).slice(0, 8);
+                };
+
+                // Selection handlers
+                const selectExp = (c) => { form.expediteur = c.nom; showExpSugg.value = false; handleExpediteurChange(); };
+                const selectDest = (d) => { form.destinataire = d; showDestSugg.value = false; handleDestinataireChange(); };
+                const selectLieu = (l) => { form.lieu = l; showLieuSugg.value = false; };
+                const selectProduct = (item, p) => { item.desc = p.desc; item.showSugg = false; updateItem(item, 'desc'); };
+
+                const hideSugg = (type, item = null) => {
+                    setTimeout(() => {
+                        if (type === 'exp') showExpSugg.value = false;
+                        if (type === 'dest') showDestSugg.value = false;
+                        if (type === 'lieu') showLieuSugg.value = false;
+                        if (type === 'prod' && item) item.showSugg = false;
+                    }, 200);
+                };
+
+                // Logic handlers
+                const handleExpediteurChange = async () => {
+                    const exp = form.expediteur.trim();
+                    if (!exp) { expFeedback.value = ''; return; }
+                    
+                    if (clientsData.value.has(exp)) {
+                        const info = clientsData.value.get(exp);
+                        expFeedback.value = `<span style="color:#059669;"><i class="fas fa-check-circle"></i> <b>Tél:</b> ${info.tel || 'N/A'} | <b>Adresse:</b> ${info.adresse || 'N/A'}</span>`;
+                    } else {
+                        expFeedback.value = `<span style="color:#f59e0b;"><i class="fas fa-exclamation-triangle"></i> Nouveau client expéditeur</span>`;
+                    }
+
+                    try {
+                        const qLiv = query(collection(db, "livraisons"), where("expediteur", "==", exp));
+                        const livSnap = await getDocs(qLiv);
+                        
+                        const localDestMap = new Map();
+                        livSnap.forEach(doc => {
+                            const data = doc.data();
+                            if (data.destinataire && data.destinataire.trim()) {
+                                const destName = data.destinataire.trim();
+                                localDestMap.set(destName, data.lieuLivraison || '');
+                                destMap.value.set(destName, data.lieuLivraison || '');
+                                destInfos.value.set(destName, data.numero || '');
+                            }
+                        });
+
+                        const uniqueDests = Array.from(localDestMap.keys());
+                        if (uniqueDests.length > 0) {
+                            if (uniqueDests.length === 1) {
+                                if (!form.destinataire || form.destinataire !== uniqueDests[0]) {
+                                    form.destinataire = uniqueDests[0];
+                                    handleDestinataireChange();
+                                }
+                            } else {
+                                expFeedback.value += `<br><span style="color:#3b82f6;"><i class="fas fa-info-circle"></i> ${uniqueDests.length} destinataires trouvés. Utilisez la flèche pour choisir.</span>`;
+                            }
+                        }
+                    } catch (error) {
+                        console.error("Erreur de recherche des destinataires :", error);
+                    }
+                };
+
+                const handleDestinataireChange = async () => {
+                    const dest = form.destinataire.trim();
+                    if (!dest) {
+                        destFeedback.value = '';
+                        form.lieu = '';
+                        return;
+                    }
+
+                    let lieu = '', num = '', exp = '', isFound = false;
+                    
+                    if (destMap.value.has(dest)) {
+                        lieu = destMap.value.get(dest);
+                        num = destInfos.value.get(dest);
+                        isFound = true;
+                    } else {
+                        const qLiv = query(collection(db, "livraisons"), where("destinataire", "==", dest), limit(1));
+                        const snap = await getDocs(qLiv);
+                        if (!snap.empty) {
+                            const data = snap.docs[0].data();
+                            lieu = data.lieuLivraison || data.commune || '';
+                            num = data.numero || '';
+                            exp = data.expediteur || '';
+                            isFound = true;
+                        }
+                    }
+                    
+                    if (!exp && destExpMap.value.has(dest)) exp = destExpMap.value.get(dest);
+
+                    if (isFound && exp && !form.expediteur) {
+                        form.expediteur = exp;
+                        handleExpediteurChange();
+                    }
+
+                    if (isFound && !form.lieu) form.lieu = lieu;
+
+                    if (isFound) destFeedback.value = `<span style="color:#059669;"><i class="fas fa-check-circle"></i> <b>Tél:</b> ${num || 'N/A'}</span>`;
+                    else destFeedback.value = `<span style="color:#f59e0b;"><i class="fas fa-exclamation-triangle"></i> Nouveau destinataire</span>`;
+                };
+
+                const addRow = () => items.value.push({ id: Date.now(), desc: '', qty: 1, pu: 0, total: 0, showSugg: false });
+                const removeRow = (id) => { if (items.value.length > 1) items.value = items.value.filter(i => i.id !== id); };
+
+                const updateItem = (item, field) => {
+                    if (field === 'desc' && productsData.value.has(item.desc)) {
+                        item.pu = parseFloat(productsData.value.get(item.desc).price) || 0;
+                    }
+                    item.total = (parseFloat(item.qty) || 0) * (parseFloat(item.pu) || 0);
+                };
+
+                const totalHT = computed(() => items.value.reduce((sum, item) => sum + item.total, 0));
+                const totalNet = computed(() => totalHT.value - (parseFloat(form.remise) || 0));
+
+                const submitQuote = async () => {
+                    if (!form.expediteur || items.value[0].desc === '') {
+                        globalApp.showToast("Veuillez remplir l'Expéditeur et au moins un article.", "error");
+                        return;
+                    }
+
+                    saving.value = true;
+                    const ref = "DEV-" + Date.now().toString().slice(-6);
+                    
+                    const quoteData = {
+                        reference: ref,
+                        client: form.expediteur,
+                        destinataire: form.destinataire,
+                        date: form.date,
+                        dateValidite: form.validite,
+                        volume: parseFloat(form.volume) || 0,
+                        devise: form.devise,
+                        agence: form.agence,
+                        lieuLivraison: form.lieu,
+                        conditions: form.conditions,
+                        items: items.value,
+                        totalHT: totalHT.value,
+                        remise: parseFloat(form.remise) || 0,
+                        totalNet: totalNet.value,
+                        status: "ENVOYÉ",
+                        agency: sessionStorage.getItem('currentActiveAgency') || 'paris',
+                        saisiPar: sessionStorage.getItem('userName') || 'Agent'
+                    };
+
+                    try {
+                        const batch = writeBatch(db);
+                        batch.set(doc(collection(db, "quotes")), quoteData);
+                        await batch.commit();
+                        
+                        globalApp.showToast(`Devis ${ref} généré avec succès !`, "success");
+                        globalApp.renderPage('quotes-list');
+                    } catch(e) {
+                        console.error(e);
+                        globalApp.showToast("Erreur lors de l'enregistrement", "error");
+                    } finally {
+                        saving.value = false;
+                    }
+                };
+
+                return {
+                    form, items, saving,
+                    expFeedback, destFeedback,
+                    showExpSugg, showDestSugg, showLieuSugg,
+                    filteredExpediteurs, filteredDestinataires, filteredLieux, getFilteredProducts,
+                    handleExpediteurChange, handleDestinataireChange,
+                    selectExp, selectDest, selectLieu, selectProduct, hideSugg,
+                    addRow, removeRow, updateItem, totalHT, totalNet, submitQuote
+                };
             }
-        } catch (error) {
-            console.error("Erreur de recherche des destinataires :", error);
-        }
-    },
-
-    async handleDestinataireChange() {
-        const destinataireInput = document.getElementById('ndDestinataire');
-        const lieuInput = document.getElementById('ndLieu');
-        const feedbackDest = document.getElementById('ndDestinataireFeedback');
-        const expInput = document.getElementById('ndExpediteur');
-        
-        const selectedDest = destinataireInput ? destinataireInput.value.trim() : '';
-        if (!selectedDest) {
-            if (feedbackDest) feedbackDest.innerHTML = '';
-            if (lieuInput) lieuInput.value = '';
-            return;
-        }
-
-         let lieu = '', num = '', exp = '', isFound = false;
-
-        if (this.destMap && this.destMap.has(selectedDest)) {
-            lieu = this.destMap.get(selectedDest);
-            num = this.destTel.get(selectedDest);
-            exp = this.destExpediteurMap.get(selectedDest) || '';
-            isFound = true;
-        } else {
-            try {
-                const qLiv = query(collection(db, "livraisons"), where("destinataire", "==", selectedDest), limit(1));
-                const snap = await getDocs(qLiv);
-                if (!snap.empty) {
-                    lieu = snap.docs[0].data().lieuLivraison || snap.docs[0].data().commune || '';
-                    num = snap.docs[0].data().numero || '';
-                    exp = snap.docs[0].data().expediteur || '';
-                    isFound = true;
-                }
-            } catch (e) { console.error(e); }
-        }
-
-        if (lieuInput && isFound && lieuInput.value.trim() === '') lieuInput.value = lieu || '';
-        if (expInput && isFound && exp && expInput.value.trim() === '') {
-            expInput.value = exp;
-            expInput.style.backgroundColor = '#e0f2fe';
-            setTimeout(() => expInput.style.backgroundColor = '', 1000);
-            this.handleExpediteurChange();
-        }
-        if (isFound && feedbackDest) feedbackDest.innerHTML = `<span style="color:#059669;"><i class="fas fa-check-circle"></i> <b>Tél:</b> ${num || 'N/A'}</span>`;
-        else if (feedbackDest) feedbackDest.innerHTML = `<span style="color:#f59e0b;"><i class="fas fa-exclamation-triangle"></i> Nouveau destinataire</span>`;
-    },
-
-    renderItems() {
-        const container = document.getElementById('ndItemsContainer');
-        const devise = document.getElementById('ndDevise')?.value === 'CFA' ? 'FCFA' : '€';
-
-        container.innerHTML = this.items.map((item) => `
-            <div class="form-grid" style="grid-template-columns: 2fr 0.5fr 1fr 1fr auto; align-items: end; background: #f8fafc; padding: 15px; border-radius: 8px; margin-bottom: 10px; border: 1px solid #e2e8f0;">
-                <div class="form-group" style="margin: 0;">
-                    <label style="font-size: 11px;">Description *</label>
-                    <div style="position: relative; width: 100%;">
-                        <input type="text" class="item-desc" id="ndProduct_${item.id}" data-id="${item.id}" value="${item.desc}" placeholder="Article..." style="margin: 0; width: 100%;" autocomplete="off">
-                        <ul id="ndProductSuggestions_${item.id}" class="autocomplete-suggestions"></ul>
-                    </div>
-                </div>
-                <div class="form-group" style="margin: 0;">
-                    <label style="font-size: 11px;">Qté *</label>
-                    <input type="number" class="item-qty" data-id="${item.id}" value="${item.qty}" min="1" style="margin: 0; text-align: center; width: 100%;">
-                </div>
-                <div class="form-group" style="margin: 0;">
-                    <label style="font-size: 11px;">P.U *</label>
-                    <input type="number" class="item-pu" data-id="${item.id}" value="${item.pu}" min="0" style="margin: 0; text-align: right; width: 100%;">
-                </div>
-                <div class="form-group" style="margin: 0;">
-                    <label style="font-size: 11px;">Total</label>
-                    <input type="text" value="${item.total} ${devise}" readonly style="margin: 0; background: #e2e8f0; font-weight: bold; text-align: right; width: 100%;">
-                </div>
-                <button class="btn btn-danger btn-small" onclick="window.ndRemoveRow(${item.id})" style="height: 36px; display: flex; align-items: center; justify-content: center; width: 100%;" ${this.items.length === 1 ? 'disabled' : ''}><i class="fas fa-trash"></i></button>
-            </div>
-        `).join('');
-
-        document.querySelectorAll('.item-desc').forEach(el => el.addEventListener('input', (e) => this.updateItem(e, 'desc')));
-        document.querySelectorAll('.item-qty').forEach(el => el.addEventListener('input', (e) => this.updateItem(e, 'qty')));
-        document.querySelectorAll('.item-pu').forEach(el => el.addEventListener('input', (e) => this.updateItem(e, 'pu')));
-
-        this.items.forEach(item => {
-            Autocomplete.initCustom(`ndProduct_${item.id}`, `ndProductSuggestions_${item.id}`,
-                (q) => {
-                    const query = q.toLowerCase();
-                    return Array.from(this.productsData.values()).filter(p => p.desc && p.desc.toLowerCase().includes(query)).slice(0, 8);
-                },
-                (p) => `<div style="font-weight: 600;">${p.desc}</div><div style="font-size: 11px; opacity: 0.7;">Prix: ${p.price || 0} €</div>`,
-                (p, input) => {
-                    input.value = p.desc;
-                    input.dispatchEvent(new Event('input')); // Déclenche le calcul automatique
-                }
-            );
         });
 
-        window.ndRemoveRow = (id) => {
-            if (this.items.length > 1) {
-                this.items = this.items.filter(i => i.id !== id);
-                this.renderItems();
-                this.calculateTotals();
-            }
-        };
-    },
-
-    addRow() {
-        this.items.push({ id: Date.now(), desc: '', qty: 1, pu: 0, total: 0 });
-        this.renderItems();
-    },
-
-    updateItem(e, field) {
-        const id = parseInt(e.target.dataset.id);
-        const item = this.items.find(i => i.id === id);
-        if (item) {
-            if (field === 'desc') {
-                item.desc = e.target.value;
-                if (this.productsData && this.productsData.has(item.desc)) {
-                    item.pu = parseFloat(this.productsData.get(item.desc).price) || 0;
-                    const puInput = document.querySelector(`.item-pu[data-id="${id}"]`);
-                    if (puInput) puInput.value = item.pu;
-                }
-            }
-            if (field === 'qty') item.qty = parseInt(e.target.value) || 0;
-            if (field === 'pu') item.pu = parseFloat(e.target.value) || 0;
-            
-            item.total = item.qty * item.pu;
-            
-            const row = e.target.closest('.form-grid');
-            if (row) {
-                const devise = document.getElementById('ndDevise')?.value === 'CFA' ? 'FCFA' : '€';
-                const totalInput = row.querySelector('input[readonly]');
-                if (totalInput) totalInput.value = `${item.total} ${devise}`;
-            }
-            
-            this.calculateTotals();
-        }
-    },
-
-    calculateTotals() {
-        const devise = document.getElementById('ndDevise')?.value === 'CFA' ? 'FCFA' : '€';
-        const totalHT = this.items.reduce((sum, item) => sum + item.total, 0);
-        const remise = parseFloat(document.getElementById('ndRemise').value) || 0;
-        const totalNet = totalHT - remise;
-
-        document.getElementById('ndTotalHT').textContent = `${totalHT} ${devise}`;
-        document.getElementById('ndTotalNet').textContent = `${totalNet} ${devise}`;
-        
-        // Rafraîchir les symboles des lignes si la devise change
-        document.querySelectorAll('#ndItemsContainer input[readonly]').forEach(input => {
-            input.value = input.value.replace(/€|FCFA/, devise);
-        });
-    },
-
-    async submitQuote() {
-        const expediteur = document.getElementById('ndExpediteur').value.trim();
-        const totalHT = this.items.reduce((sum, item) => sum + item.total, 0);
-        const devise = document.getElementById('ndDevise').value;
-
-        if (!expediteur || this.items[0].desc === '') {
-            this.app.showToast("Veuillez remplir l'Expéditeur et au moins un article.", "error");
-            return;
-        }
-
-        const btn = document.getElementById('ndSubmitBtn');
-        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Enregistrement...';
-        btn.disabled = true;
-
-        const ref = "DEV-" + Date.now().toString().slice(-6);
-        
-        const quoteData = {
-            reference: ref,
-            client: expediteur,
-            destinataire: document.getElementById('ndDestinataire').value.trim(),
-            date: document.getElementById('ndDate').value,
-            dateValidite: document.getElementById('ndValidite').value,
-            volume: parseFloat(document.getElementById('ndVolume').value) || 0,
-            devise: devise,
-            agence: document.getElementById('ndAgence').value,
-            lieuLivraison: document.getElementById('ndLieu').value.trim(),
-            conditions: document.getElementById('ndConditions').value.trim(),
-            items: this.items,
-            totalHT: totalHT,
-            remise: parseFloat(document.getElementById('ndRemise').value) || 0,
-            totalNet: totalHT - (parseFloat(document.getElementById('ndRemise').value) || 0),
-            status: "ENVOYÉ",
-            agency: sessionStorage.getItem('currentActiveAgency') || 'paris',
-            saisiPar: sessionStorage.getItem('userName') || 'Agent'
-        };
-
-        try {
-            const batch = writeBatch(db);
-            batch.set(doc(collection(db, "quotes")), quoteData);
-            await batch.commit();
-            
-            this.app.showToast(`Devis ${ref} généré avec succès !`, "success");
-            this.app.renderPage('quotes-list');
-        } catch(e) {
-            console.error(e);
-            this.app.showToast("Erreur lors de l'enregistrement", "error");
-            btn.innerHTML = '<i class="fas fa-check-circle"></i> Enregistrer le devis';
-            btn.disabled = false;
-        }
+        this.vueApp.mount('#vue-nouveaudevis-app');
     }
 };

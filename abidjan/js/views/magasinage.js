@@ -94,7 +94,7 @@ export const MagasinageView = {
         if (window.unsubMagTrans) window.unsubMagTrans();
         if (window.unsubMagLiv) window.unsubMagLiv();
 
-        const qTrans = query(collection(db, "transactions"), where("isDeleted", "!=", true), where("agency", "==", activeAgency), orderBy("isDeleted"), orderBy("date", "desc"));
+        const qTrans = query(collection(db, "transactions"), where("agency", "==", activeAgency), where("isDeleted", "!=", true), orderBy("isDeleted"), orderBy("date", "desc"));
         window.unsubMagTrans = onSnapshot(qTrans, snapshot => {
             allTransactions = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
             renderTable();

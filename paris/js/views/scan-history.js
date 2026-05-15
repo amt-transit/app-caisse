@@ -1,21 +1,18 @@
 import { db } from '../../../firebase-config.js';
 import { collection, query, where, onSnapshot, limit, orderBy, writeBatch, doc } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
+import { createApp, ref, reactive, computed, onMounted, onUnmounted, watch } from "https://unpkg.com/vue@3/dist/vue.esm-browser.prod.js";
 
 export const ScanHistoryView = {
-    unsub: null,
-    scans: [],
-    filteredScans: [],
-    selectedIds: new Set(),
-    currentLimit: 50,
+    vueApp: null,
 
     render(app) {
-        this.app = app;
+        const globalApp = app;
         window.app.views = window.app.views || {};
         window.app.views.scanHistory = this;
-        this.selectedIds.clear();
 
         const html = `
             <style>
+                [v-cloak] { display: none; }
                 .scan-history-page { max-width: 1400px; margin: 0 auto; animation: fadeIn 0.3s ease; }
                 .scan-history-header { background: white; border-radius: 16px; padding: 20px 25px; margin-bottom: 20px; border: 1px solid #e2e8f0; box-shadow: 0 2px 4px rgba(0,0,0,0.02); }
                 .scan-history-header__content { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 15px; }
@@ -77,16 +74,16 @@ export const ScanHistoryView = {
                 .status-badge--error { background: #fee2e2; color: #991b1b; border: 1px solid #fecaca; }
             </style>
 
-            <div class="scan-history-page">
+            <div id="vue-scan-history-app" class="scan-history-page" v-cloak>
                 <div class="scan-history-header">
                     <div class="scan-history-header__content">
                         <div class="scan-history-header__info">
                             <h1 class="scan-history-header__title">📊 Scan — Historique</h1>
-                            <p class="scan-history-header__subtitle" id="shSubtitle">Journal d'audit — 0 résultat(s)</p>
+                            <p class="scan-history-header__subtitle">Journal d'audit — {{ filteredScans.length }} résultat(s)</p>
                         </div>
                         <div class="scan-history-header__actions">
-                            <button class="btn-export btn-export--excel" type="button" onclick="window.app.views.scanHistory.exportExcel()"> 📄 Excel </button>
-                            <button class="btn-export btn-export--pdf" type="button" onclick="window.app.views.scanHistory.exportPDF()"> 📝 PDF </button>
+                            <button class="btn-export btn-export--excel" type="button" @click="exportExcel"> 📄 Excel </button>
+                            <button class="btn-export btn-export--pdf" type="button" @click="exportPDF"> 📝 PDF </button>
                         </div>
                     </div>
                 </div>
@@ -96,15 +93,18 @@ export const ScanHistoryView = {
                     <div class="filters-grid">
                         <div class="filter-field">
                             <label class="filter-label">🏷️ Type</label>
-                            <select id="shTypeFilter" class="filter-select" onchange="window.app.views.scanHistory.applyFilters()">
+                            <select class="filter-select" v-model="filters.type">
                                 <option value="">Tous les types</option>
-                                <option value="ENTREPOT_PARIS">Mise en entrepôt</option>
-                                <option value="CONTENEUR_CHARGEMENT">Chargement Conteneur</option>
+                                <option value="ENTREPOT_PARIS">Mise en entrepôt (Paris)</option>
+                                <option value="CONTENEUR_CHARGEMENT">Chargement Conteneur (Paris)</option>
+                                <option value="DECHARGEMENT_ABIDJAN">Déchargement Conteneur (Abidjan)</option>
+                                <option value="MISE_EN_LIVRAISON">Mise en Livraison (Abidjan)</option>
+                                <option value="REMISE_CLIENT">Remise au Client (Abidjan)</option>
                             </select>
                         </div>
                         <div class="filter-field">
                             <label class="filter-label">📊 Statut</label>
-                            <select id="shStatusFilter" class="filter-select" onchange="window.app.views.scanHistory.applyFilters()">
+                            <select class="filter-select" v-model="filters.status">
                                 <option value="">Tous les statuts</option>
                                 <option value="SUCCES">✅ Succès</option>
                                 <option value="DOUBLON">⚠️ Doublon</option>
@@ -113,15 +113,15 @@ export const ScanHistoryView = {
                         </div>
                         <div class="filter-field">
                             <label class="filter-label">📅 Date</label>
-                            <input id="shDateFilter" class="filter-input" type="date" onchange="window.app.views.scanHistory.applyFilters()">
+                            <input class="filter-input" type="date" v-model="filters.date">
                         </div>
                         <div class="filter-field" style="flex: 1.5;">
                             <label class="filter-label">🔍 Recherche QR</label>
-                            <input id="shSearchFilter" class="filter-input" placeholder="Ex: MD-125…" oninput="window.app.views.scanHistory.applyFilters()">
+                            <input class="filter-input" placeholder="Ex: MD-125…" v-model="filters.search">
                         </div>
                         <div class="filter-field">
                             <label class="filter-label">⚙️ Limite</label>
-                            <select id="shLimitFilter" class="filter-select" onchange="window.app.views.scanHistory.changeLimit(this.value)">
+                            <select class="filter-select" v-model="currentLimit">
                                 <option value="50">50 derniers</option>
                                 <option value="100">100 derniers</option>
                                 <option value="200">200 derniers</option>
@@ -129,7 +129,7 @@ export const ScanHistoryView = {
                             </select>
                         </div>
                         <div class="filter-field filter-field--action">
-                            <button class="btn-refresh" type="button" onclick="window.app.views.scanHistory.loadData()"> 🔄 Actualiser </button>
+                            <button class="btn-refresh" type="button" @click="loadData"> 🔄 Actualiser </button>
                         </div>
                     </div>
                 </div>
@@ -138,14 +138,14 @@ export const ScanHistoryView = {
                     <div class="bulk-actions-card">
                         <div class="bulk-actions-info">
                             <span class="bulk-count">
-                                <span class="bulk-count__number" id="shSelectedCount">0</span>
+                                <span class="bulk-count__number">{{ selectedIds.length }}</span>
                                 <span class="bulk-count__label">sélectionné(s)</span>
                             </span>
                         </div>
                         <div class="bulk-actions-buttons">
-                            <button class="btn-bulk btn-bulk--select" type="button" onclick="window.app.views.scanHistory.selectAll()"> ✓ Tout sélectionner </button>
-                            <button class="btn-bulk btn-bulk--clear" type="button" id="shBtnClear" disabled onclick="window.app.views.scanHistory.clearSelection()"> ✕ Vider </button>
-                            <button class="btn-bulk btn-bulk--update" type="button" id="shBtnDelete" disabled onclick="window.app.views.scanHistory.deleteSelected()"> 🗑️ Supprimer les logs </button>
+                            <button class="btn-bulk btn-bulk--select" type="button" @click="selectAll"> ✓ Tout sélectionner </button>
+                            <button class="btn-bulk btn-bulk--clear" type="button" :disabled="selectedIds.length === 0" @click="clearSelection"> ✕ Vider </button>
+                            <button class="btn-bulk btn-bulk--update" type="button" :disabled="selectedIds.length === 0" @click="deleteSelected"> 🗑️ Supprimer les logs </button>
                         </div>
                     </div>
                 </div>
@@ -156,7 +156,7 @@ export const ScanHistoryView = {
                             <thead>
                                 <tr>
                                     <th class="col-checkbox">
-                                        <input type="checkbox" id="shSelectAllCb" class="table-checkbox" onchange="window.app.views.scanHistory.toggleSelectAll(this.checked)">
+                                        <input type="checkbox" v-model="selectAllCb" class="table-checkbox">
                                     </th>
                                     <th>⏰ Heure</th>
                                     <th>📱 QR Code</th>
@@ -166,8 +166,28 @@ export const ScanHistoryView = {
                                     <th>👤 Agent</th>
                                 </tr>
                             </thead>
-                            <tbody id="shTableBody">
-                                <tr><td colspan="7" style="text-align: center; padding: 40px;"><i class="fas fa-spinner fa-spin"></i> Chargement du journal...</td></tr>
+                            <tbody>
+                                <tr v-if="loading"><td colspan="7" style="text-align: center; padding: 40px;"><i class="fas fa-spinner fa-spin"></i> Chargement du journal...</td></tr>
+                                <tr v-else-if="filteredScans.length === 0"><td colspan="7" style="text-align: center; padding: 40px; color:#64748b;">Aucun log ne correspond à vos filtres.</td></tr>
+                                <tr v-else v-for="s in filteredScans" :key="s.id" :class="['table-row', selectedIds.includes(s.id) ? 'selected' : '']" @click="toggleRow(s.id)">
+                                    <td data-label="Sélect." class="col-checkbox">
+                                        <input type="checkbox" class="table-checkbox" :value="s.id" v-model="selectedIds" @click.stop>
+                                    </td>
+                                    <td data-label="Heure" class="col-time">{{ formatDateStr(s.date) }}</td>
+                                    <td data-label="QR Code" class="col-qr"><code>{{ s.scanRef || '-' }}</code></td>
+                                    <td data-label="Conteneur" class="col-container">
+                                        <span v-if="!s.container || s.container === '-'" style="color:#94a3b8;">-</span>
+                                        <span v-else>{{ s.container }}</span>
+                                    </td>
+                                    <td data-label="Statut">
+                                        <span v-if="s.status === 'SUCCES'" class="status-badge status-badge--success">✅ SUCCÈS</span>
+                                        <span v-else-if="s.status === 'DOUBLON'" class="status-badge status-badge--warning">⚠️ DÉJÀ TRAITÉ</span>
+                                        <span v-else-if="s.status === 'ERREUR'" class="status-badge status-badge--error">❌ ERREUR</span>
+                                        <span v-else class="status-badge status-badge--error">❌ INCONNU</span>
+                                    </td>
+                                    <td data-label="Type"><span style="font-size:11px; font-weight:600; color:#64748b;">{{ getTypeLabel(s.type) }}</span></td>
+                                    <td data-label="Agent" class="col-agent">{{ s.agent || '-' }} <span style="font-size:10px; background:#e2e8f0; padding:2px 6px; border-radius:4px; margin-left:4px; color:#475569;">{{ getAgencyBadge(s.agency) }}</span></td>
+                                </tr>
                             </tbody>
                         </table>
                     </div>
@@ -176,176 +196,136 @@ export const ScanHistoryView = {
         `;
 
         document.getElementById('contentContainer').innerHTML = html;
-        this.loadData();
+        this.initVue(globalApp);
     },
 
-    changeLimit(val) {
-        this.currentLimit = parseInt(val) || 50;
-        this.loadData();
-    },
+    initVue(globalApp) {
+        if (this.vueApp) this.vueApp.unmount();
 
-    loadData() {
-        if (this.unsub) this.unsub();
-        
-        const activeAgency = sessionStorage.getItem('currentActiveAgency') || 'paris';
-        
-        try {
-            // NOUVEAU : On écoute la collection dédiée 'scan_logs'
-            const q = query(
-                collection(db, "scan_logs"), 
-                where("agency", "==", activeAgency), 
-                orderBy("date", "desc"), 
-                limit(this.currentLimit)
-            );
+        this.vueApp = createApp({
+            setup() {
+                const scans = ref([]);
+                const loading = ref(true);
+                const selectedIds = ref([]);
+                const currentLimit = ref(50);
+                
+                const filters = reactive({
+                    type: '',
+                    status: '',
+                    date: '',
+                    search: ''
+                });
+                
+                let unsub = null;
 
-            this.unsub = onSnapshot(q, (snapshot) => {
-                this.scans = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
-                this.applyFilters();
-            });
-        } catch(e) { 
-            console.error(e); 
-            this.app.showToast("Erreur de chargement", "error");
-        }
-    },
+                const loadData = () => {
+                    if (unsub) unsub();
+                    loading.value = true;
+                    
+                    try {
+                        const activeAgency = sessionStorage.getItem('currentActiveAgency') || 'paris';
+                        const q = query(collection(db, "scan_logs"), where("agency", "==", activeAgency), orderBy("date", "desc"), limit(parseInt(currentLimit.value)));
+                        
+                        unsub = onSnapshot(q, (snapshot) => {
+                            scans.value = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+                            loading.value = false;
+                            
+                            // Clean orphaned selections
+                            const validIds = new Set(scans.value.map(s => s.id));
+                            selectedIds.value = selectedIds.value.filter(id => validIds.has(id));
+                        }, (e) => {
+                            console.error(e);
+                            globalApp.showToast("Erreur de chargement", "error");
+                        });
+                    } catch(e) { 
+                        console.error(e); 
+                        globalApp.showToast("Erreur de chargement", "error");
+                    }
+                };
 
-    applyFilters() {
-        const typeFilter = document.getElementById('shTypeFilter')?.value || '';
-        const statusFilter = document.getElementById('shStatusFilter')?.value || '';
-        const dateFilter = document.getElementById('shDateFilter')?.value || '';
-        const searchFilter = (document.getElementById('shSearchFilter')?.value || '').toLowerCase().trim();
+                onMounted(() => { loadData(); });
+                onUnmounted(() => { if (unsub) unsub(); });
+                watch(currentLimit, () => { loadData(); });
 
-        this.filteredScans = this.scans.filter(s => {
-            if (typeFilter && s.type !== typeFilter) return false;
-            if (statusFilter && s.status !== statusFilter) return false;
-            if (dateFilter && (!s.date || !s.date.startsWith(dateFilter))) return false;
-            if (searchFilter) {
-                const str = `${s.scanRef} ${s.container} ${s.agent}`.toLowerCase();
-                if (!str.includes(searchFilter)) return false;
+                const filteredScans = computed(() => {
+                    return scans.value.filter(s => {
+                        if (filters.type && s.type !== filters.type) return false;
+                        if (filters.status && s.status !== filters.status) return false;
+                        if (filters.date && (!s.date || !s.date.startsWith(filters.date))) return false;
+                        if (filters.search) {
+                            const str = `${s.scanRef || ''} ${s.container || ''} ${s.agent || ''}`.toLowerCase();
+                            if (!str.includes(filters.search.toLowerCase().trim())) return false;
+                        }
+                        return true;
+                    });
+                });
+
+                const selectAllCb = computed({
+                    get: () => filteredScans.value.length > 0 && selectedIds.value.length === filteredScans.value.length,
+                    set: (val) => {
+                        if (val) selectedIds.value = filteredScans.value.map(s => s.id);
+                        else selectedIds.value = [];
+                    }
+                });
+
+                const toggleRow = (id) => {
+                    const index = selectedIds.value.indexOf(id);
+                    if (index > -1) selectedIds.value.splice(index, 1);
+                    else selectedIds.value.push(id);
+                };
+
+                const selectAll = () => { selectAllCb.value = true; };
+                const clearSelection = () => { selectedIds.value = []; };
+
+                const deleteSelected = async () => {
+                    if (selectedIds.value.length === 0) return;
+                    
+                    const msg = `Voulez-vous vraiment supprimer définitivement ces ${selectedIds.value.length} logs d'audit ?`;
+                    if (window.AppModal) {
+                        if (!await window.AppModal.confirm(msg, "Suppression de Logs", true)) return;
+                    } else if (!confirm(msg)) return;
+
+                    try {
+                        const batch = writeBatch(db);
+                        selectedIds.value.forEach(id => {
+                            batch.delete(doc(db, "scan_logs", id));
+                        });
+                        await batch.commit();
+                        
+                        globalApp.showToast("Logs supprimés avec succès.", "success");
+                        selectedIds.value = [];
+                    } catch(e) {
+                        console.error(e);
+                        globalApp.showToast("Erreur lors de la suppression.", "error");
+                    }
+                };
+
+                const exportExcel = () => { globalApp.showToast("L'export Excel sera bientôt disponible pour cet onglet.", "info"); };
+                const exportPDF = () => { globalApp.showToast("L'export PDF sera bientôt disponible pour cet onglet.", "info"); };
+
+                const formatDateStr = (dateStr) => dateStr ? new Date(dateStr).toLocaleString('fr-FR') : '-';
+
+                const getTypeLabel = (type) => {
+                    if (type === 'ENTREPOT_PARIS') return '🏭 Mise en entrepôt (Paris)';
+                    if (type === 'CONTENEUR_CHARGEMENT') return '🚢 Chargement Conteneur (Paris)';
+                    if (type === 'DECHARGEMENT_ABIDJAN') return '📦 Déchargement (Abidjan)';
+                    if (type === 'MISE_EN_LIVRAISON') return '🚚 Mise en Livraison (Abidjan)';
+                    if (type === 'REMISE_CLIENT') return '🤝 Remise Client (Abidjan)';
+                    return type || 'INCONNU';
+                };
+
+                const getAgencyBadge = (agency) => {
+                    return agency === 'paris' ? 'FR' : (agency === 'abidjan' ? 'CI' : 'N/A');
+                };
+
+                return {
+                    scans, loading, selectedIds, currentLimit, filters, filteredScans, selectAllCb,
+                    loadData, selectAll, clearSelection, toggleRow, deleteSelected, exportExcel, exportPDF,
+                    formatDateStr, getTypeLabel, getAgencyBadge
+                };
             }
-            return true;
         });
 
-        document.getElementById('shSubtitle').textContent = `Journal d'audit — ${this.filteredScans.length} résultat(s)`;
-        
-        // Si des lignes filtrées ne sont plus dans la sélection, on nettoie (optionnel, mais propre)
-        const validIds = new Set(this.filteredScans.map(s => s.id));
-        for (let id of this.selectedIds) {
-            if (!validIds.has(id)) this.selectedIds.delete(id);
-        }
-        this.updateBulkUI();
-
-        this.renderTable();
-    },
-
-    renderTable() {
-        const tbody = document.getElementById('shTableBody');
-        if (!tbody) return;
-
-        if (this.filteredScans.length === 0) { 
-            tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; padding: 40px; color:#64748b;">Aucun log ne correspond à vos filtres.</td></tr>'; 
-            return; 
-        }
-
-        tbody.innerHTML = this.filteredScans.map(s => {
-            const isChecked = this.selectedIds.has(s.id);
-            
-            let statusBadge = '<span class="status-badge status-badge--error">❌ INCONNU</span>';
-            if (s.status === 'SUCCES') statusBadge = '<span class="status-badge status-badge--success">✅ SUCCÈS</span>';
-            else if (s.status === 'DOUBLON') statusBadge = '<span class="status-badge status-badge--warning">⚠️ DÉJÀ TRAITÉ</span>';
-            else if (s.status === 'ERREUR') statusBadge = '<span class="status-badge status-badge--error">❌ ERREUR</span>';
-
-            const typeLabel = s.type === 'ENTREPOT_PARIS' ? '🏭 Mise en entrepôt' : '🚢 Chargement';
-            const dateStr = s.date ? new Date(s.date).toLocaleString('fr-FR') : '-';
-
-            return `
-                <tr class="table-row ${isChecked ? 'selected' : ''}" onclick="window.app.views.scanHistory.toggleRow('${s.id}')">
-                    <td data-label="Sélect." class="col-checkbox">
-                        <input type="checkbox" class="table-checkbox" value="${s.id}" ${isChecked ? 'checked' : ''} onclick="event.stopPropagation(); window.app.views.scanHistory.toggleRow('${s.id}')">
-                    </td>
-                    <td data-label="Heure" class="col-time">${dateStr}</td>
-                    <td data-label="QR Code" class="col-qr"><code>${s.scanRef || '-'}</code></td>
-                    <td data-label="Conteneur" class="col-container">${s.container === '-' || !s.container ? '<span style="color:#94a3b8;">-</span>' : s.container}</td>
-                    <td data-label="Statut">${statusBadge}</td>
-                    <td data-label="Type"><span style="font-size:11px; font-weight:600; color:#64748b;">${typeLabel}</span></td>
-                    <td data-label="Agent" class="col-agent">${s.agent || '-'}</td>
-                </tr>
-            `;
-        }).join('');
-
-        document.getElementById('shSelectAllCb').checked = this.filteredScans.length > 0 && this.selectedIds.size === this.filteredScans.length;
-    },
-
-    toggleRow(id) {
-        if (this.selectedIds.has(id)) {
-            this.selectedIds.delete(id);
-        } else {
-            this.selectedIds.add(id);
-        }
-        this.updateBulkUI();
-        this.renderTable();
-    },
-
-    toggleSelectAll(isChecked) {
-        if (isChecked) {
-            this.filteredScans.forEach(s => this.selectedIds.add(s.id));
-        } else {
-            this.selectedIds.clear();
-        }
-        this.updateBulkUI();
-        this.renderTable();
-    },
-
-    selectAll() {
-        this.toggleSelectAll(true);
-    },
-
-    clearSelection() {
-        this.selectedIds.clear();
-        this.updateBulkUI();
-        this.renderTable();
-    },
-
-    updateBulkUI() {
-        const count = this.selectedIds.size;
-        document.getElementById('shSelectedCount').textContent = count;
-        
-        const btnClear = document.getElementById('shBtnClear');
-        const btnDelete = document.getElementById('shBtnDelete');
-        
-        if (btnClear) btnClear.disabled = count === 0;
-        if (btnDelete) btnDelete.disabled = count === 0;
-    },
-
-    async deleteSelected() {
-        if (this.selectedIds.size === 0) return;
-        
-        const msg = `Voulez-vous vraiment supprimer définitivement ces ${this.selectedIds.size} logs d'audit ?`;
-        if (window.AppModal) {
-            if (!await window.AppModal.confirm(msg, "Suppression de Logs", true)) return;
-        } else if (!confirm(msg)) return;
-
-        try {
-            const batch = writeBatch(db);
-            this.selectedIds.forEach(id => {
-                batch.delete(doc(db, "scan_logs", id));
-            });
-            await batch.commit();
-            
-            this.app.showToast("Logs supprimés avec succès.", "success");
-            this.selectedIds.clear();
-            this.updateBulkUI();
-            // La vue se mettra à jour toute seule grâce au onSnapshot
-        } catch(e) {
-            console.error(e);
-            this.app.showToast("Erreur lors de la suppression.", "error");
-        }
-    },
-
-    exportExcel() {
-        this.app.showToast("L'export Excel sera bientôt disponible pour cet onglet.", "info");
-    },
-
-    exportPDF() {
-        this.app.showToast("L'export PDF sera bientôt disponible pour cet onglet.", "info");
+        this.vueApp.mount('#vue-scan-history-app');
     }
 };

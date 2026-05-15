@@ -1,5 +1,7 @@
 import { db } from '../../../firebase-config.js';
 import { collection, getDocs, query, where, onSnapshot } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
+import { CONSTANTS } from '../../../constants.js';
+import { getCollectionName } from '../../../agencies-config.js';
 
 export const DashboardView = {
     render(app, container) {

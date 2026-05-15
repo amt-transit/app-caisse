@@ -17,6 +17,55 @@
     <link rel="stylesheet" href="css/style.css">
     <link rel="stylesheet" href="css/responsive-paris.css"> <!-- Votre nouvelle ligne -->
     <link rel="icon" type="image/png" href="../favicon.png">
+    <script>
+        // Anti-FOUC : Application synchrone du branding depuis le cache avant le rendu de la page
+        (function() {
+            try {
+                var agency = sessionStorage.getItem('currentActiveAgency') || 'abidjan';
+                var cached = sessionStorage.getItem('branding_' + agency);
+                if (cached) {
+                    var branding = JSON.parse(cached);
+                    if (branding.color) document.documentElement.style.setProperty('--primary', branding.color);
+                    if (branding.secondary) document.documentElement.style.setProperty('--secondary', branding.secondary);
+                    else if (branding.color) document.documentElement.style.setProperty('--secondary', branding.color);
+                    if (branding.bg) document.documentElement.style.setProperty('--bg-body', branding.bg);
+                    
+                    if (branding.fontFamily) {
+                        var fontName = branding.fontFamily.split(',')[0].replace(/'/g, '').trim();
+                        if (fontName !== 'Inter') {
+                            var link = document.createElement('link');
+                            link.rel = 'stylesheet';
+                            link.href = 'https://fonts.googleapis.com/css2?family=' + fontName.replace(/\s+/g, '+') + ':wght@300;400;500;600;700;800&display=swap';
+                            document.head.appendChild(link);
+                        }
+                        var style = document.createElement('style');
+                        style.id = 'dynamic-global-design';
+                        style.textContent = 'body { font-family: ' + branding.fontFamily + ' !important; font-size: ' + (branding.baseFontSize || '14px') + ' !important; } ' +
+                            'body { background: var(--bg-body) !important; } ' +
+                            '.sidebar { background: var(--secondary) !important; } ' +
+                            '.btn-primary, .btn-primary:hover { background: var(--primary) !important; border-color: var(--primary) !important; } ' +
+                            '.stat-card .stat-icon { background: var(--primary) !important; color: white !important; }';
+                        document.head.appendChild(style);
+                    } else {
+                        var style = document.createElement('style');
+                        style.id = 'dynamic-global-design';
+                        style.textContent = 'body { background: var(--bg-body) !important; } .sidebar { background: var(--secondary) !important; } .btn-primary, .btn-primary:hover { background: var(--primary) !important; border-color: var(--primary) !important; } .stat-card .stat-icon { background: var(--primary) !important; color: white !important; }';
+                        document.head.appendChild(style);
+                    }
+                }
+            } catch(e) {}
+        })();
+    </script>
+    <script>
+        // Sécurité : Définit une fonction d'attente pour capturer les clics avant le chargement complet des modules (Top-level await)
+        window.app = {
+            renderPage: function(page) {
+                sessionStorage.setItem('parisCurrentPage', page);
+                var c = document.getElementById('contentContainer');
+                if(c) c.innerHTML = '<div style="padding:50px;text-align:center;color:#64748b;"><i class="fas fa-spinner fa-spin fa-2x"></i><br><br>Ouverture du module...</div>';
+            }
+        };
+    </script>
     <style>
         /* Styles du menu utilisateur (Dropdown) */
         .user-dropdown-container { position: relative; display: inline-block; }
@@ -195,9 +244,12 @@
         .app-modal-btn-danger { background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); color: white; box-shadow: 0 4px 6px rgba(239, 68, 68, 0.2); }
         .app-modal-btn-danger:hover { transform: translateY(-2px); box-shadow: 0 6px 12px rgba(239, 68, 68, 0.3); }
         @keyframes bounceIn { 0% { transform: scale(0.5); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
+        /* Masque le menu Chine par défaut, ne l'affiche que si l'agence active est liée à la Chine */
+        .menu-chine-only { display: none; }
+        body.agency-chine .menu-chine-only, body.agency-abidjan_chine .menu-chine-only { display: block; }
     </style>
 </head>
-<body>
+<body style="display:none"> <!-- Auth guard s'occupera d'afficher le body après vérification -->
 
     <aside class="sidebar" id="sidebar">
         <div class="sidebar-header">
@@ -215,6 +267,17 @@
                 <div class="sidebar-category-title">Dashboard</div>
                 <div class="sidebar-item active" data-page="dashboard">
                     <i class="fas fa-chart-line"></i><span>Tableau de bord</span>
+                </div>
+            </div>
+
+            <!-- Ce menu n'apparaîtra que pour les agences Chine -->
+            <div class="sidebar-category menu-chine-only">
+                <div class="sidebar-category-title">Spécial Asie</div>
+                <div class="sidebar-item" data-page="chine-dashboard" onclick="window.app.renderPage('chine-dashboard'); return false;">
+                    <i class="fas fa-globe-asia"></i><span>Dashboard Chine</span>
+                </div>
+                <div class="sidebar-item" data-page="parrainage" onclick="window.app.renderPage('parrainage'); return false;">
+                    <i class="fas fa-handshake"></i><span>Réseau Partenaires</span>
                 </div>
             </div>
 
@@ -319,10 +382,13 @@
                 <div class="sidebar-item" data-page="settings-agency"><i class="fas fa-building"></i><span>Agence</span></div>
                 <div class="sidebar-item" data-page="settings-company"><i class="fas fa-briefcase"></i><span>Entreprise</span></div>
                 <div class="sidebar-item" data-page="settings-software"><i class="fas fa-cog"></i><span>Paramètre logiciel</span></div>
+                <div class="sidebar-item" data-page="settings-design"><i class="fas fa-palette"></i><span>Apparence & menus</span></div>
                 <div class="sidebar-item" data-page="settings-sms"><i class="fas fa-comment-dots"></i><span>Config SMS</span></div>
                 <div class="sidebar-item" data-page="settings-notifications"><i class="fas fa-bell"></i><span>Config notifs</span></div>
                 <div class="sidebar-item" data-page="settings-menus"><i class="fas fa-bars"></i><span>Gestion menus</span></div>
                 <div class="sidebar-item" data-page="settings-agents"><i class="fas fa-user-cog"></i><span>Gestion des agents</span></div>
+                <div class="sidebar-item" data-page="settings-agencies"><i class="fas fa-globe"></i><span>Gestion des agences</span></div>
+                <div class="sidebar-item" data-page="settings-roles"><i class="fas fa-user-shield"></i><span>Rôles & Permissions</span></div>
                 <div class="sidebar-item" data-page="settings-appointments"><i class="fas fa-calendar-check"></i><span>Paramètres RDV</span></div>
                 <div class="sidebar-item" data-page="settings-profile"><i class="fas fa-user"></i><span>Mon profil</span></div>
             </div>
@@ -374,8 +440,14 @@
                     <i class="fas fa-user"></i>
                 </div>
                 <div class="user-dropdown-menu" id="userDropdownMenu">
-                    <a href="#" id="menuProfile" onclick="app.renderPage('settings-profile'); document.getElementById('userDropdownMenu').classList.remove('active'); return false;"><i class="fas fa-user-circle"></i> Profil</a>
-                    <a href="#" id="menuAgencySwitch" style="display: none;"><i class="fas fa-globe"></i> Vue Abidjan</a>
+                    <a href="#" id="menuProfile" onclick="window.app.renderPage('settings-profile'); document.getElementById('userDropdownMenu').classList.remove('active'); return false;"><i class="fas fa-user-circle"></i> Profil</a>
+                    <div id="agencySwitcherContainer" style="display: none;">
+                        <div style="padding: 5px 20px; font-size: 11px; font-weight: 800; color: #94a3b8; text-transform: uppercase; margin-top: 5px;">Changer d'agence</div>
+                        <a href="#" onclick="window.switchAgency('paris'); return false;"><i class="fas fa-plane-departure"></i> Paris (FR)</a>
+                        <a href="#" onclick="window.switchAgency('abidjan'); return false;"><i class="fas fa-plane-arrival"></i> Abidjan (FR)</a>
+                        <a href="#" onclick="window.switchAgency('chine'); return false;"><i class="fas fa-plane-departure"></i> Chine (CN)</a>
+                        <a href="#" onclick="window.switchAgency('abidjan_chine'); return false;"><i class="fas fa-plane-arrival"></i> Abidjan (CN)</a>
+                    </div>
                     <hr style="margin: 5px 0; border: none; border-top: 1px solid #e2e8f0;">
                     <a href="#" id="logoutBtnParis" class="logout-btn logout"><i class="fas fa-sign-out-alt"></i> Déconnexion</a>
                 </div>
@@ -398,13 +470,13 @@
 
     <!-- BOTTOM NAVIGATION MOBILE -->
     <nav class="bottom-nav" id="bottomNav" role="navigation" aria-label="Navigation principale">
-        <button class="bottom-nav-item active" data-target="dashboard" onclick="app.renderPage('dashboard')">
+        <button class="bottom-nav-item active" data-target="dashboard" onclick="window.app.renderPage('dashboard')">
             <i class="fas fa-home"></i><span>Accueil</span>
         </button>
-        <button class="bottom-nav-item" data-target="invoices-list" onclick="app.renderPage('invoices-list')">
+        <button class="bottom-nav-item" data-target="invoices-list" onclick="window.app.renderPage('invoices-list')">
             <i class="fas fa-file-invoice"></i><span>Factures</span>
         </button>
-        <button class="bottom-nav-item" data-target="appointments-pending" onclick="app.renderPage('appointments-pending')">
+        <button class="bottom-nav-item" data-target="appointments-pending" onclick="window.app.renderPage('appointments-pending')">
             <i class="fas fa-calendar-alt"></i><span>RDV</span>
             <span class="nav-badge" id="bnavBadgeRdv" style="display:none">0</span>
         </button>
@@ -414,7 +486,7 @@
     </nav>
 
     <!-- FAB (Nouvelle Facture) -->
-    <button class="fab-btn" id="fabBtn" onclick="app.renderPage('invoice-new')" title="Nouvelle facture"><i class="fas fa-plus"></i></button>
+    <button class="fab-btn" id="fabBtn" onclick="window.app.renderPage('invoice-new')" title="Nouvelle facture"><i class="fas fa-plus"></i></button>
 
     <script>
         // Gestion de l'affichage du menu déroulant Utilisateur

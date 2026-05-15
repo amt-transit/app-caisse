@@ -1,5 +1,6 @@
 import { db } from '../../../firebase-config.js';
 import { collection, doc, updateDoc, getDocs, query, where, orderBy, onSnapshot, limit, startAfter, writeBatch } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
+import { getCollectionName } from '../../../agencies-config.js';
 
 export const HistoryView = {
     render(app, container) {
@@ -184,7 +185,7 @@ export const HistoryView = {
 
             if (target.classList.contains('deleteBtn')) {
                 if (await AppModal.confirm("Voulez-vous vraiment supprimer cette transaction ?", "Suppression", true)) {
-                    updateDoc(doc(db, "transactions", target.dataset.id), { isDeleted: true, deletedBy: sessionStorage.getItem('userName') || 'Utilisateur' })
+                    updateDoc(doc(db, getCollectionName("transactions"), target.dataset.id), { isDeleted: true, deletedBy: sessionStorage.getItem('userName') || 'Utilisateur' })
                     .then(() => {
                         row.remove(); // Mise à jour visuelle immédiate
                         logAudit("SUPPRESSION", `Transaction ${target.dataset.id} supprimée`, target.dataset.id);
@@ -224,7 +225,7 @@ export const HistoryView = {
 
         // --- FONCTION JOURNAL D'AUDIT (SÉCURITÉ) ---
         function logAudit(action, details, docId) {
-            addDoc(collection(db, "audit_logs"), {
+            addDoc(collection(db, getCollectionName("audit_logs")), {
                 date: new Date().toISOString(),
                 user: sessionStorage.getItem('userName') || 'Utilisateur',
                 action: action,
@@ -240,7 +241,7 @@ export const HistoryView = {
         });
 
         // --- LISTENER SESSIONS NON VALIDÉES ---
-        onSnapshot(query(collection(db, "audit_logs"), where("action", "==", "VALIDATION_JOURNEE"), where("agency", "==", activeAgency)), snapshot => {
+        onSnapshot(query(collection(db, getCollectionName("audit_logs")), where("action", "==", "VALIDATION_JOURNEE")), snapshot => {
                 unconfirmedSessions.clear();
                 snapshot.forEach(doc => {
                     if (doc.data().status !== "VALIDATED") unconfirmedSessions.add(doc.id);
@@ -270,13 +271,13 @@ export const HistoryView = {
             const isFiltering = startDateInput.value || endDateInput.value || smartSearchInput.value || agentFilterInput.value || showDeletedCheckbox.checked || (showReductionsCheckbox && showReductionsCheckbox.checked);
 
             if (showDeletedCheckbox.checked) {
-                 constraints.push(where("isDeleted", "==", true), where("agency", "==", activeAgency), orderBy("isDeleted"), orderBy("date", "desc"));
+                 constraints.push(where("isDeleted", "==", true), orderBy("isDeleted"), orderBy("date", "desc"));
             } else {
                  // Cas normal : Non supprimés
                  if (!isFiltering) {
-                    constraints.push(where("isDeleted", "!=", true), where("agency", "==", activeAgency), orderBy("isDeleted"), orderBy("date", "desc"));
+                    constraints.push(where("isDeleted", "!=", true), orderBy("isDeleted"), orderBy("date", "desc"));
                  } else {
-                    constraints.push(where("isDeleted", "!=", true), where("agency", "==", activeAgency), orderBy("isDeleted"), orderBy("date", "desc"), limit(500));
+                    constraints.push(where("isDeleted", "!=", true), orderBy("isDeleted"), orderBy("date", "desc"), limit(500));
                  }
              }
             
@@ -288,7 +289,7 @@ export const HistoryView = {
                 }
             }
 
-            getDocs(query(collection(db, "transactions"), ...constraints)).then(snapshot => {
+            getDocs(query(collection(db, getCollectionName("transactions")), ...constraints)).then(snapshot => {
                 if (!snapshot.empty) {
                     lastVisibleDoc = snapshot.docs[snapshot.docs.length - 1];
                     if (loadMoreBtn) {
@@ -834,11 +835,11 @@ export const HistoryView = {
                 }
                 updates.agent = Array.from(uniqueAgents).join(', ');
 
-                await updateDoc(doc(db, "transactions", currentEditingTransaction.id), updates);
+                await updateDoc(doc(db, getCollectionName("transactions"), currentEditingTransaction.id), updates);
 
                 // --- SYNCHRONISATION AVEC LIVRAISON ---
                 try {
-                    const livQuery = await getDocs(query(collection(db, "livraisons"), where("ref", "==", currentEditingTransaction.reference), limit(1)));
+                    const livQuery = await getDocs(query(collection(db, getCollectionName("livraisons")), where("ref", "==", currentEditingTransaction.reference), limit(1)));
                     if (!livQuery.empty) {
                         await updateDoc(livQuery.docs[0].ref, {
                             conteneur: updates.conteneur,
@@ -880,7 +881,7 @@ export const HistoryView = {
             let count = 0;
 
             currentFilteredTransactions.forEach(t => {
-                const ref = doc(db, "transactions", t.id);
+                const ref = doc(db, getCollectionName("transactions"), t.id);
                 batch.update(ref, { date: newDate, lastPaymentDate: newDate }); 
                 count++;
             });

@@ -1,269 +1,12 @@
 import { db } from '../../../firebase-config.js';
 import { collection, doc, getDoc, getDocs, addDoc, setDoc, updateDoc, deleteDoc, query, where, orderBy, limit, onSnapshot, writeBatch, deleteField, arrayUnion } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
+import { getCollectionName } from '../../../agencies-config.js';
 
 export const LivraisonView = {
     async render(app, container) {
         this.app = app;
         
         container.innerHTML = `
-        <style>
-        :root {
-            --lv-blue:#3b82f6; --lv-blue-d:#1d4ed8;
-            --lv-green:#10b981; --lv-green-d:#059669;
-            --lv-amber:#f59e0b; --lv-red:#ef4444; --lv-red-d:#dc2626;
-            --lv-purple:#8b5cf6; --lv-slate:#64748b;
-            --lv-bg:#f8fafc; --lv-surface:#fff;
-            --lv-border:#e2e8f0; --lv-border2:#cbd5e1;
-            --lv-text:#1e293b; --lv-muted:#64748b;
-            --lv-shadow:0 1px 3px rgba(0,0,0,.08),0 1px 2px rgba(0,0,0,.04);
-            --lv-shadow2:0 4px 12px rgba(0,0,0,.1);
-        }
-        /* masque les éléments originaux (conservés pour la logique JS) */
-        .stats-bar,.delivery-tabs,#tabDescription,.toolbar { display:none!important; }
-
-        #livraison-content { padding:0; background:var(--lv-bg); }
-
-        /* ── COMMAND BAR ── */
-        .lv-command-bar {
-            background:var(--lv-surface); border-bottom:1px solid var(--lv-border);
-            padding:0 16px; position:sticky; top:0; z-index:100;
-            box-shadow:var(--lv-shadow);
-        }
-        .lv-toprow {
-            display:flex; align-items:center; gap:12px;
-            padding:8px 0 6px; border-bottom:1px solid var(--lv-border);
-            flex-wrap:wrap;
-        }
-        .lv-stat-chips { display:flex; gap:6px; align-items:center; flex-wrap:wrap; }
-        .lv-chip {
-            display:inline-flex; align-items:center; gap:5px;
-            padding:3px 9px; border-radius:20px; font-size:11.5px;
-            font-weight:700; border:1px solid; white-space:nowrap;
-        }
-        .lv-chip .n { font-size:14px; font-weight:800; line-height:1; }
-        .lv-chip.total   { background:#eff6ff; color:#1d4ed8; border-color:#bfdbfe; }
-        .lv-chip.attente { background:#fffbeb; color:#b45309; border-color:#fde68a; }
-        .lv-chip.livre   { background:#f0fdf4; color:#166534; border-color:#bbf7d0; }
-        .lv-chip.partiel { background:#fff7ed; color:#c2410c; border-color:#fed7aa; }
-        .lv-toprow-right { margin-left:auto; display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
-        .lv-container-badge {
-            display:inline-flex; align-items:center; gap:5px;
-            background:#eff6ff; border:1px solid #bfdbfe; border-radius:6px;
-            padding:4px 9px; font-size:12px; font-weight:700; color:#1565c0;
-            cursor:pointer; transition:background .15s; white-space:nowrap;
-        }
-        .lv-container-badge:hover { background:#dbeafe; }
-
-        /* ── ONGLETS ── */
-        .lv-tabs { display:flex; align-items:center; gap:2px; padding:5px 0 0; overflow-x:auto; }
-        .lv-tab {
-            padding:7px 14px; border:none; background:none;
-            font-size:13px; font-weight:600; color:var(--lv-muted); cursor:pointer;
-            border-bottom:2px solid transparent; margin-bottom:-1px;
-            border-radius:6px 6px 0 0; white-space:nowrap;
-            display:inline-flex; align-items:center; gap:5px; transition:color .15s;
-            font-family:inherit;
-        }
-        .lv-tab:not(.active):hover { background:#f1f5f9; }
-        #lvT-EN_COURS:not(.active):hover { color:var(--lv-blue); }
-        #lvT-A_VENIR:not(.active):hover { color:var(--lv-amber); }
-        #lvT-PARIS:not(.active):hover { color:var(--lv-red); }
-        #lvT-PROGRAMME:not(.active):hover { color:var(--lv-purple); }
-
-        .lv-badge {
-            background:#e0e7ff; color:#3730a3; border-radius:10px;
-            padding:1px 6px; font-size:10px; font-weight:700;
-        }
-        
-        /* Couleurs spécifiques par onglet actif (Encadrés) */
-        #lvT-EN_COURS.active { background-color:var(--lv-blue); color:#fff; border-bottom-color:var(--lv-blue); }
-        #lvT-EN_COURS.active .lv-badge { background:rgba(255,255,255,0.25); color:#fff; }
-        
-        #lvT-A_VENIR.active { background-color:var(--lv-amber); color:#fff; border-bottom-color:var(--lv-amber); }
-        #lvT-A_VENIR.active .lv-badge { background:rgba(255,255,255,0.25); color:#fff; }
-        
-        #lvT-PARIS.active { background-color:var(--lv-red); color:#fff; border-bottom-color:var(--lv-red); }
-        #lvT-PARIS.active .lv-badge { background:rgba(255,255,255,0.25); color:#fff; }
-        
-        #lvT-PROGRAMME.active { background-color:var(--lv-purple); color:#fff; border-bottom-color:var(--lv-purple); }
-        #lvT-PROGRAMME.active .lv-badge { background:rgba(255,255,255,0.25); color:#fff; }
-        .lv-tabs-spacer { flex:1; min-width:8px; }
-        .lv-help-btn {
-            padding:5px 10px; border-radius:6px; border:1px solid var(--lv-border2);
-            background:transparent; color:var(--lv-muted); font-size:12px; font-weight:600;
-            cursor:pointer; display:inline-flex; align-items:center; gap:4px;
-            white-space:nowrap; transition:all .15s; font-family:inherit;
-        }
-        .lv-help-btn:hover { background:#f1f5f9; color:var(--lv-text); }
-
-        /* ── TOOLBAR ── */
-        .lv-toolbar {
-            background:var(--lv-surface); border-bottom:1px solid var(--lv-border);
-            padding:7px 16px; display:flex; align-items:center; gap:5px;
-            flex-wrap:wrap; position:sticky; top:95px; z-index:99;
-        }
-        .lv-grp {
-            display:inline-flex; align-items:center; gap:1px;
-            padding:2px; background:#f8fafc; border:1px solid var(--lv-border);
-            border-radius:8px; flex-shrink:0;
-        }
-        .lv-sep { width:1px; height:22px; background:var(--lv-border); margin:0 4px; flex-shrink:0; }
-        .lv-btn {
-            display:inline-flex; align-items:center; gap:4px;
-            padding:5px 9px; border-radius:6px; border:none;
-            background:transparent; color:var(--lv-text); font-size:12px;
-            font-weight:600; cursor:pointer; transition:all .15s;
-            white-space:nowrap; font-family:inherit; line-height:1;
-        }
-        .lv-btn:hover { background:#e2e8f0; }
-        .lv-btn:active { transform:scale(.97); }
-        .lv-btn.ok     { background:var(--lv-blue);   color:#fff; }
-        .lv-btn.ok:hover { background:var(--lv-blue-d); }
-        .lv-btn.go     { background:var(--lv-green);  color:#fff; }
-        .lv-btn.go:hover { background:var(--lv-green-d); }
-        .lv-btn.rm     { background:var(--lv-red);    color:#fff; }
-        .lv-btn.rm:hover { background:var(--lv-red-d); }
-        .lv-btn.warn   { background:var(--lv-amber);  color:#fff; }
-        .lv-btn.purp   { background:var(--lv-purple); color:#fff; }
-        .lv-btn.ghost  { border:1px solid var(--lv-border2); }
-        .lv-btn.ghost:hover { background:#f1f5f9; border-color:var(--lv-blue); color:var(--lv-blue); }
-        .lv-import-lbl {
-            display:inline-flex; align-items:center; gap:4px;
-            padding:5px 9px; border-radius:6px; background:transparent;
-            color:var(--lv-text); font-size:12px; font-weight:600;
-            cursor:pointer; transition:background .15s; white-space:nowrap;
-        }
-        .lv-import-lbl:hover { background:#e2e8f0; }
-
-        /* ── MORE MENU ── */
-        .lv-more { position:relative; }
-        .lv-more-drop {
-            display:none; position:absolute; top:calc(100% + 4px); right:0;
-            background:var(--lv-surface); border:1px solid var(--lv-border);
-            border-radius:10px; box-shadow:var(--lv-shadow2); min-width:185px;
-            z-index:300; padding:4px; overflow:hidden;
-        }
-        .lv-more-drop.open { display:block; animation:lvSlide .12s ease-out; }
-        @keyframes lvSlide { from{opacity:0;transform:translateY(-4px)} to{opacity:1;transform:none} }
-        .lv-mi {
-            display:flex; align-items:center; gap:9px; padding:8px 11px;
-            border-radius:6px; font-size:13px; font-weight:500; color:var(--lv-text);
-            cursor:pointer; transition:background .1s; border:none; background:none;
-            width:100%; text-align:left; font-family:inherit;
-        }
-        .lv-mi:hover { background:#f1f5f9; }
-        .lv-mi.red { color:var(--lv-red); }
-        .lv-mi.red:hover { background:#fef2f2; }
-        .lv-mi-sec { padding:4px 11px 2px; font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:var(--lv-muted); }
-        .lv-mi-div { height:1px; background:var(--lv-border); margin:3px 0; }
-
-        /* ── FILTRE BAR ── */
-        .lv-filter-bar {
-            background:#f8fafc; border-bottom:1px solid var(--lv-border);
-            padding:6px 16px; display:flex; align-items:center; gap:7px; flex-wrap:wrap;
-        }
-        .lv-search-w { position:relative; flex:1; min-width:160px; max-width:300px; }
-        .lv-search-w .ico { position:absolute; left:9px; top:50%; transform:translateY(-50%); color:var(--lv-muted); font-size:12px; pointer-events:none; }
-        .lv-search {
-            width:100%; padding:6px 10px 6px 27px; border:1px solid var(--lv-border2);
-            border-radius:6px; font-size:13px; background:var(--lv-surface); color:var(--lv-text);
-            transition:border-color .15s;
-        }
-        .lv-search:focus { outline:none; border-color:var(--lv-blue); box-shadow:0 0 0 3px rgba(59,130,246,.12); }
-        .lv-cont-sec {
-            display:inline-flex; align-items:center; gap:5px;
-            background:#eff6ff; border:1px solid #bfdbfe; border-radius:7px; padding:3px 7px;
-        }
-        .lv-cont-label { font-size:11px; font-weight:700; color:#1565c0; white-space:nowrap; }
-        .lv-cont-input {
-            padding:3px 7px; border:1px solid #bfdbfe; border-radius:5px;
-            font-size:12px; font-weight:600; width:105px; background:#fff; color:#1565c0;
-        }
-        .lv-cont-input:focus { outline:none; border-color:var(--lv-blue); }
-        .lv-cont-ok {
-            padding:3px 7px; border-radius:5px; border:none;
-            background:var(--lv-blue); color:#fff; font-size:11px; font-weight:700;
-            cursor:pointer; transition:background .15s;
-        }
-        .lv-cont-ok:hover { background:var(--lv-blue-d); }
-        .lv-fcb { display:inline-flex; align-items:center; gap:4px; font-size:11px; font-weight:600; color:#0284c7; cursor:pointer; }
-        /* overrides sur les dropdown-toggle dans ce contexte */
-        .lv-filter-bar .dropdown-toggle {
-            font-size:12px; padding:5px 10px; font-weight:600;
-            border-radius:6px; border:1px solid var(--lv-border2);
-            background:var(--lv-surface); color:var(--lv-muted); transition:all .15s;
-        }
-        .lv-filter-bar .dropdown-toggle:hover { border-color:var(--lv-blue); color:var(--lv-blue); background:#eff6ff; }
-
-        /* ── BARRE DE SÉLECTION ── */
-        .lv-sel-bar {
-            display:none; align-items:center; gap:8px; padding:5px 16px;
-            background:#1e293b; color:#fff; font-size:12px; font-weight:600;
-            border-bottom:1px solid #334155; flex-wrap:wrap;
-        }
-        .lv-sel-bar.show { display:flex; }
-        .lv-sel-count { background:var(--lv-blue); border-radius:10px; padding:2px 7px; font-size:11px; font-weight:700; }
-        .lv-sel-sep { opacity:.3; }
-        .lv-sb {
-            padding:3px 9px; border-radius:5px; border:1px solid rgba(255,255,255,.2);
-            background:transparent; color:#fff; font-size:11px; font-weight:600;
-            cursor:pointer; transition:background .15s; font-family:inherit;
-            display:inline-flex; align-items:center; gap:3px; white-space:nowrap;
-        }
-        .lv-sb:hover { background:rgba(255,255,255,.15); }
-        .lv-sb.red   { color:#fca5a5; border-color:rgba(252,165,165,.4); }
-        .lv-sb.red:hover { background:rgba(239,68,68,.25); }
-        .lv-sb.green { color:#86efac; }
-        .lv-sel-x { margin-left:auto; opacity:.5; cursor:pointer; background:none; border:none; color:#fff; font-size:14px; line-height:1; }
-        .lv-sel-x:hover { opacity:1; }
-
-        /* ── MODALE CONTENEUR RAPIDE ── */
-        .lv-qmodal { position:fixed; inset:0; background:rgba(0,0,0,.4); z-index:3000; display:none; align-items:center; justify-content:center; backdrop-filter:blur(2px); }
-        .lv-qmodal.active { display:flex; }
-        .lv-qbox { background:#fff; border-radius:14px; padding:22px; min-width:300px; max-width:90vw; box-shadow:0 20px 40px rgba(0,0,0,.15); }
-        .lv-qbox-title { font-size:18px; font-weight:800; color:var(--lv-blue); margin-bottom:20px; display:flex; align-items:center; justify-content:center; gap:8px; text-align:center; }
-
-        /* ── CONTEXT DESC ── */
-        .lv-ctx {
-            background:linear-gradient(to right,#eff6ff,#f8fafc);
-            border-left:3px solid var(--lv-blue);
-            padding:7px 16px; font-size:12px; color:var(--lv-muted);
-            border-bottom:1px solid var(--lv-border); display:none;
-        }
-        .lv-ctx.show { display:block; }
-
-        /* ── MENU ACTIONS CONTEXTUEL ── */
-        .act-menu-wrap { position:relative; display:inline-block; }
-        .act-more-btn { background:#f1f5f9; color:#475569; border:1px solid #e2e8f0; padding:4px 8px; font-size:13px; border-radius:5px; cursor:pointer; transition:background .15s; }
-        .act-more-btn:hover { background:#e2e8f0; }
-        .act-dropdown {
-            display:none; position:absolute; right:0; top:calc(100% + 3px);
-            background:#fff; border:1px solid #e2e8f0; border-radius:8px;
-            box-shadow:0 4px 16px rgba(0,0,0,.12); min-width:170px; z-index:500;
-            padding:4px; white-space:nowrap;
-        }
-        .act-menu-wrap.open .act-dropdown { display:block; animation:lvSlide .1s ease-out; }
-        .act-mi {
-            display:flex; align-items:center; gap:8px; width:100%; padding:7px 10px;
-            border:none; background:none; font-size:12px; font-weight:600;
-            color:#334155; cursor:pointer; border-radius:5px; transition:background .1s;
-            font-family:inherit; text-align:left;
-        }
-        .act-mi:hover { background:#f8fafc; }
-        .act-mi.act-green { color:#059669; }
-        .act-mi.act-green:hover { background:#f0fdf4; }
-        .act-mi.act-red { color:#dc2626; }
-        .act-mi.act-red:hover { background:#fef2f2; }
-        .act-mi.act-dark { color:#1e293b; }
-        .act-div { height:1px; background:#e2e8f0; margin:3px 0; }
-
-        @media(max-width:768px){
-            .lv-toolbar{top:78px;padding:5px 8px;}
-            .lv-btn .lv-l{display:none;}
-            .lv-chip{padding:2px 6px;font-size:11px;}
-        }
-        </style>
-
         <div id="livraison-content">
             <div class="stats-bar" style="display:none!important">
                 <div class="stat-item"><div class="stat-number" id="totalDeliveries">0</div><div class="stat-label">Total</div></div>
@@ -866,8 +609,8 @@ export const LivraisonView = {
 
     initLogic() {
         const CONSTANTS = {
-            COLLECTION: 'livraisons',
-            ARCHIVE_COLLECTION: 'livraisons_archives',
+                COLLECTION: getCollectionName('livraisons'),
+                ARCHIVE_COLLECTION: getCollectionName('livraisons_archives'),
             STORAGE_KEYS: {
                 CONTAINER_NAME: 'currentContainerName'
             },
@@ -1014,7 +757,7 @@ export const LivraisonView = {
 
         function logLivraisonAudit(action, details, docId) {
             const userName = sessionStorage.getItem('userName') || 'Système';
-            addDoc(collection(db, "audit_logs"), {
+            addDoc(collection(db, getCollectionName("audit_logs")), {
                 date: new Date().toISOString(), user: userName, action: action, details: details, targetId: docId || ''
             }).catch(e => console.error("Erreur d'enregistrement de l'audit:", e));
         }
@@ -1034,7 +777,7 @@ export const LivraisonView = {
                 }
             }
 
-            const qLivraisons = query(collection(db, CONSTANTS.COLLECTION), where("agency", "==", window.activeAgency), orderBy('dateAjout', 'desc'));
+            const qLivraisons = query(collection(db, CONSTANTS.COLLECTION), orderBy('dateAjout', 'desc'));
             if (window.unsubLivraisons) window.unsubLivraisons();
             window.unsubLivraisons = onSnapshot(qLivraisons, (snapshot) => {
                     deliveries = [];
@@ -1043,7 +786,8 @@ export const LivraisonView = {
                     filterDeliveries(); updateStats(); updateAutocomplete(); updateLocationFilterOptions(); updateAvailableContainersList();
                 }, (error) => { console.error("Erreur sync livraisons:", error); showToast("Erreur de synchronisation !", "error"); });
 
-            const qTrans = query(collection(db, 'transactions'), where('isDeleted', '==', false), where("agency", "==", window.activeAgency));
+
+            const qTrans = query(collection(db, getCollectionName('transactions')), where('isDeleted', '==', false));
             if (window.unsubTransCaisse) window.unsubTransCaisse();
             window.unsubTransCaisse = onSnapshot(qTrans, (snap) => {
                     transactionsMap.clear();
@@ -1841,7 +1585,9 @@ export const LivraisonView = {
        
            // 2. Recherche Firestore Active (Pour les items hors limite 500)
            try {
-               const snapActive = await getDocs(query(collection(db, CONSTANTS.COLLECTION), where("agency", "==", window.activeAgency), where('destinataire', '==', val)));
+
+               const targetAgency = window.activeAgency === 'abidjan_chine' ? 'chine' : 'paris';
+               const snapActive = await getDocs(query(collection(db, CONSTANTS.COLLECTION), where('destinataire', '==', val), where('agency', '==', targetAgency)));
                
                for (const docSnap of snapActive.docs) {
                    const d = docSnap.data();
@@ -2078,7 +1824,7 @@ export const LivraisonView = {
                for (let i = 0; i < allRefs.length; i += 10) chunks.push(allRefs.slice(i, i + 10));
                
                // Exécuter les requêtes en parallèle (très rapide)
-               const transPromises = chunks.map(chunk => getDocs(query(collection(db, 'transactions'), where('reference', 'in', chunk))));
+               const transPromises = chunks.map(chunk => getDocs(query(collection(db, getCollectionName('transactions')), where('reference', 'in', chunk))));
                const archivePromises = chunks.map(chunk => getDocs(query(collection(db, CONSTANTS.ARCHIVE_COLLECTION), where('ref', 'in', chunk))));
                
                const [transSnapshots, archiveSnapshots] = await Promise.all([Promise.all(transPromises), Promise.all(archivePromises)]);
@@ -2270,6 +2016,7 @@ export const LivraisonView = {
                    // Nettoyage des valeurs undefined (Firestore ne les supporte pas)
                    Object.keys(itemData).forEach(key => itemData[key] === undefined && delete itemData[key]);
        
+                   const targetAgency = window.activeAgency === 'abidjan_chine' ? 'chine' : 'paris';
                    operations.push({ type: 'set', ref: docRef, data: { 
                        ...itemData, 
                        conteneur: conteneur || importItem.conteneur || '', 
@@ -2277,7 +2024,7 @@ export const LivraisonView = {
                        scanHistory: importItem.scanHistory || [], // Ajout du scan history
                        containerStatus: containerStatus,
                        dateAjout: itemData.dateAjout || new Date().toISOString(), // Respecte la date du fichier Excel
-                       agency: window.activeAgency
+                       agency: targetAgency
                    }});
                    createdCount++;
                }
@@ -2351,7 +2098,8 @@ export const LivraisonView = {
                            numero: importItem.numero || '', // Nouveau champ Numéro
                            saisiPar: sessionStorage.getItem('userName') || 'Import Livraison',
                            quantite: importItem.quantite || 1, // IMPORTANT : Pour le calcul magasinage
-                           paymentHistory: paymentHistory
+                           paymentHistory: paymentHistory,
+                           agency: targetAgency
                        }});
                    }
                }
@@ -3169,7 +2917,7 @@ export const LivraisonView = {
            // 1. Récupération des données financières exactes depuis la Caisse
            let transData = null;
            try {
-               const qTrans = await getDocs(query(collection(db, 'transactions'), where('reference', '==', d.ref), limit(1)));
+               const qTrans = await getDocs(query(collection(db, getCollectionName('transactions')), where('reference', '==', d.ref), limit(1)));
                if (!qTrans.empty) transData = qTrans.docs[0].data();
            } catch (e) {
                console.error("Erreur récupération transaction :", e);
@@ -3337,7 +3085,7 @@ export const LivraisonView = {
            // 1. Récupération des données financières exactes depuis la Caisse
            let transData = null;
            try {
-               const qTrans = await getDocs(query(collection(db, 'transactions'), where('reference', '==', d.ref), limit(1)));
+               const qTrans = await getDocs(query(collection(db, getCollectionName('transactions')), where('reference', '==', d.ref), limit(1)));
                if (!qTrans.empty) transData = qTrans.docs[0].data();
            } catch (e) {
                console.error("Erreur récupération transaction :", e);
@@ -3872,7 +3620,7 @@ export const LivraisonView = {
            for (let i = 0; i < refs.length; i += 10) {
                const chunk = refs.slice(i, i + 10);
                const snap = await getDocs(query(
-                   collection(db, 'transactions'),
+                   collection(db, getCollectionName('transactions')),
                    where('reference', 'in', chunk)
                ));
                snap.forEach(doc => transToUpdate.set(doc.data().reference, doc.id));
@@ -3891,7 +3639,7 @@ export const LivraisonView = {
        
                const transDocId = transToUpdate.get(item.ref);
                if (transDocId && newConteneur) {
-                   batch.update(doc(db, 'transactions', transDocId), {
+                   batch.update(doc(db, getCollectionName('transactions'), transDocId), {
                        conteneur: newConteneur
                    });
                }
@@ -3899,14 +3647,14 @@ export const LivraisonView = {
        
            // Création des transactions si on assigne manuellement vers EN_COURS
            for (const item of becomingEnCours) {
-               const check = await getDocs(query(collection(db, 'transactions'), where('reference', '==', item.ref), limit(1)));
+               const check = await getDocs(query(collection(db, getCollectionName('transactions')), where('reference', '==', item.ref), limit(1)));
                if (check.empty) {
                    const price = parseFloat((item.prixOriginal || item.montant || '0').replace(/[^\d]/g, '')) || 0;
                    let restant = parseFloat((item.montant || '0').replace(/[^\d]/g, '')) || 0;
                    let mParis = price > restant ? price - restant : 0;
                    if (price === 0 && restant > 0) { mParis = 0; }
                    
-                   const transRef = doc(collection(db, 'transactions'));
+                   const transRef = doc(collection(db, getCollectionName('transactions')));
                    batch.set(transRef, {
                        date: new Date().toISOString().split('T')[0],
                        reference: item.ref,
@@ -3965,7 +3713,7 @@ export const LivraisonView = {
        // Fonction utilitaire pour supprimer la transaction associée (Arrivages)
        function deleteTransactionByRef(ref) {
            if (!ref) return;
-           getDocs(query(collection(db, 'transactions'), where('reference', '==', ref)))
+               getDocs(query(collection(db, getCollectionName('transactions')), where('reference', '==', ref)))
                .then(snapshot => {
                    const batch = writeBatch(db);
                    snapshot.forEach(doc => {
@@ -4031,7 +3779,7 @@ export const LivraisonView = {
                for (const chunk of chunks) {
                    const refs = chunk.map(item => item.ref);
                    if (refs.length === 0) continue;
-                   const q = await getDocs(query(collection(db, 'transactions'), where('reference', 'in', refs)));
+                   const q = await getDocs(query(collection(db, getCollectionName('transactions')), where('reference', 'in', refs)));
                    
                    if (!q.empty) {
                        const batch = writeBatch(db);
@@ -4555,7 +4303,7 @@ export const LivraisonView = {
        
                // Synchroniser immédiatement la description avec l'onglet Caisse (transactions)
                if (d.ref) {
-                   const qTrans = await getDocs(query(collection(db, 'transactions'), where('reference', '==', d.ref), limit(1)));
+                   const qTrans = await getDocs(query(collection(db, getCollectionName('transactions')), where('reference', '==', d.ref), limit(1)));
                    if (!qTrans.empty) {
                        batch.update(qTrans.docs[0].ref, { description: cleanDesc });
                    }
@@ -4597,7 +4345,7 @@ export const LivraisonView = {
        
                // 2. Mise à jour de la Caisse (Transaction)
                if (d.ref) {
-                   const qTrans = await getDocs(query(collection(db, 'transactions'), where('reference', '==', d.ref), limit(1)));
+                   const qTrans = await getDocs(query(collection(db, getCollectionName('transactions')), where('reference', '==', d.ref), limit(1)));
                    if (!qTrans.empty) batch.update(qTrans.docs[0].ref, { date: newDate });
                }
        
@@ -4630,7 +4378,7 @@ export const LivraisonView = {
            let transDesc = '';
            if (d.ref) {
                try {
-                   const qTrans = await getDocs(query(collection(db, 'transactions'), where('reference', '==', d.ref), limit(1)));
+                   const qTrans = await getDocs(query(collection(db, getCollectionName('transactions')), where('reference', '==', d.ref), limit(1)));
                    if (!qTrans.empty) {
                        if (qTrans.docs[0].data().adjustmentType === 'augmentation' && qTrans.docs[0].data().adjustmentVal > 0) {
                            isFeeAlreadyApplied = true; // Déjà inclus dans baseReste
@@ -4874,7 +4622,7 @@ export const LivraisonView = {
                // Si le colis a été mis à jour récemment, sa dateAjout a pu être écrasée (affichant 0 jours de magasinage).
                // On va chercher la date de création de sa transaction dans la caisse pour réparer cela.
                if (item.ref) {
-                   const transQ = await getDocs(query(collection(db, 'transactions'), where('reference', '==', item.ref), limit(1)));
+                   const transQ = await getDocs(query(collection(db, getCollectionName('transactions')), where('reference', '==', item.ref), limit(1)));
                    if (!transQ.empty) {
                        const tData = transQ.docs[0].data();
                        if (tData.date) {
@@ -5292,7 +5040,7 @@ export const LivraisonView = {
                    // Si on ajoute manuellement un colis "En Cours", on crée la transaction financière correspondante
                    if (newItem.containerStatus === 'EN_COURS') {
                        const price = parseFloat((newItem.montant || '0').replace(/[^\d]/g, '')) || 0;
-                       const newTransRef = doc(collection(db, 'transactions'));
+                       const newTransRef = doc(collection(db, getCollectionName('transactions')));
                        setDoc(newTransRef, {
                            date: newItem.dateAjout.split('T')[0],
                            reference: newItem.ref,
@@ -5463,7 +5211,7 @@ export const LivraisonView = {
            }
        
            // On cherche la transaction correspondante dans la caisse
-           const q = await getDocs(query(collection(db, 'transactions'), where('reference', '==', d.ref), limit(1)));
+           const q = await getDocs(query(collection(db, getCollectionName('transactions')), where('reference', '==', d.ref), limit(1)));
            if (q.empty) {
                AppModal.error("Aucune transaction financière n'a été trouvée pour ce colis. Veuillez synchroniser la logistique avec la caisse.", "Transaction Introuvable");
                return;
@@ -5568,7 +5316,7 @@ export const LivraisonView = {
                let auditRef = null;
        
                if (amountAbidjan > 0 || amountParis > 0) {
-                   auditRef = doc(collection(db, "audit_logs"));
+                   auditRef = doc(collection(db, getCollectionName("audit_logs")));
                    sessionId = auditRef.id;
                    paymentHistory.push({
                        date: date,
@@ -5601,7 +5349,7 @@ export const LivraisonView = {
                };
        
                // 1. Mise à jour de la transaction (La facture)
-               batch.update(doc(db, 'transactions', currentPaymentTransId), updates);
+               batch.update(doc(db, getCollectionName('transactions'), currentPaymentTransId), updates);
        
                // 2. Création de la mini-session en attente (Pour l'onglet Confirmation)
                if (auditRef) {
@@ -5967,7 +5715,7 @@ export const LivraisonView = {
        
            try {
                // 1. Récupérer les sessions validées
-               const sessionsSnap = await getDocs(query(collection(db, "audit_logs"), where("action", "==", "VALIDATION_JOURNEE"), where("status", "==", "VALIDATED")));
+               const sessionsSnap = await getDocs(query(collection(db, getCollectionName("audit_logs")), where("action", "==", "VALIDATION_JOURNEE"), where("status", "==", "VALIDATED")));
                
                const validatedSessionIds = new Set(sessionsSnap.docs.map(d => d.id));
        
@@ -5987,7 +5735,7 @@ export const LivraisonView = {
                for (let i = 0; i < refsToCheck.length; i += 10) chunks.push(refsToCheck.slice(i, i + 10));
        
                for (const chunk of chunks) {
-                   const q = await getDocs(query(collection(db, "transactions"), where("reference", "in", chunk)));
+                   const q = await getDocs(query(collection(db, getCollectionName("transactions")), where("reference", "in", chunk)));
                    q.forEach(docSnap => {
                        const t = docSnap.data();
                        // Est validé si lié à une session validée

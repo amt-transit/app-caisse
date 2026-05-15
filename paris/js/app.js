@@ -1,11 +1,12 @@
-// import { DashboardView } from './views/dashboard.js'; // Remplacé par la version dynamique
+import { DashboardView } from './views/dashboard.js';
 import { NouvelleFactureView } from './views/nouvellefacture.js';
-import { ClientsListView } from './views/clients-list.js';
+import { ClientsView } from '../../shared/views/clients.js';
 import { ProductsListView } from './views/products-list.js';
-import { ToutesLesFacturesView } from './views/touteslesfactures.js';
+import { ToutesLesFacturesView } from '../../shared/views/touteslesfactures.js';
+
 import { NouveauDevisView } from './views/nouveaudevis.js';
-import { DailyBilanView } from './views/daily-bilan.js';
-import { DailyUsersView } from './views/daily-users.js';
+import { DailyBilanView } from '../../shared/views/daily-bilan.js';
+import { DailyUsersView } from '../../shared/views/daily-users.js';
 import { NouveauRdvView } from './views/nouveaurdv.js';
 import { TousLesRdvView } from './views/touslesrdv.js';
 import { CalendrierRdvView } from './views/calendrierrdv.js';
@@ -24,7 +25,11 @@ import { FinanceDepensesView } from './views/finance-depenses.js';
 import { FinanceChequesView } from './views/finance-cheques.js';
 import { SettingsAgencyView } from './views/settings-agency.js';
 import { SettingsAgentsView } from './views/settings-agents.js';
+import { SettingsAgenciesView } from './views/settings-agencies.js';
+import { SettingsRolesView } from './views/settings-roles.js';
 import { SettingsCompanyView } from './views/settings-company.js';
+import { SettingsSoftwareView } from './views/settings-software.js';
+import { SettingsDesignView } from './views/settings-design.js';
 import { SettingsMenusView } from './views/settings-menus.js';
 import { SettingsAppointmentsView } from './views/settings-appointments.js';
 import { ConfigInvoiceView } from './views/config-invoice.js';
@@ -33,13 +38,15 @@ import { ConfigContainerView } from './views/config-container.js';
 import { ScanWarehouseView } from './views/scan-warehouse.js';
 import { ScanContainerView } from './views/scan-container.js';
 import { BilansFinanciersView } from './views/bilans-financiers.js';
-import { StatistiquesView } from './views/statistiques.js';
+import { StatistiquesView } from '../../shared/views/statistiques.js';
 import { AppModal } from './utils/app-modal.js';
 import { ChatView } from './views/chat.js';
 import { AuditLogView } from './views/audit-log.js';
 import { ProspectingView } from './views/prospecting.js';
 import { NotificationsView } from './views/notifications.js';
 import { ProfilView } from '../../profil-view.js';
+import { ChineDashboardView } from '../../shared/views/chine-dashboard.js';
+import { ParrainageView } from '../../shared/views/parrainage.js';
 
 // Configuration de l'application Paris
 const app = {
@@ -59,11 +66,13 @@ const app = {
         'clients-list': 'clients', 'clients-app': 'clients', 'clients-analytics': 'clients',
         'chat': 'comms', 'sms-send': 'comms', 'sms-history': 'comms', 'notifications': 'comms', 'notifications-history': 'comms',
         'products-list': 'produits',
+        'chine-dashboard': 'special-asie',
+        'parrainage': 'parrainage',
         'finance-cashier': 'finance', 'finance-cheques': 'finance', 'finance-expenses': 'finance',
         'stock-list': 'stock',
         'balance-monthly': 'bilans-financiers', 'balance-12m': 'bilans-financiers',
         'stats-boat': 'statistique', 'stats-monthly': 'statistique', 'stats-yearly': 'statistique',
-        'settings-agency': 'settings', 'settings-company': 'settings', 'settings-software': 'settings', 'settings-sms': 'settings', 'settings-notifications': 'settings', 'settings-menus': 'settings', 'settings-agents': 'settings', 'settings-appointments': 'settings', 'settings-profile': 'settings',
+        'settings-agency': 'settings', 'settings-company': 'settings', 'settings-software': 'settings', 'settings-design': 'settings', 'settings-sms': 'settings', 'settings-notifications': 'settings', 'settings-menus': 'settings', 'settings-agents': 'settings', 'settings-agencies': 'settings', 'settings-roles': 'settings', 'settings-appointments': 'settings', 'settings-profile': 'settings',
         'config-invoice': 'configuration', 'config-label': 'configuration', 'config-container': 'configuration', 'config-objectives': 'configuration', 'config-charges': 'configuration',
         'prospecting': 'prospecting',
         'audit-log': 'audit-log'
@@ -93,17 +102,22 @@ const app = {
             const { db } = await import('../../firebase-config.js');
             const { doc, getDoc } = await import('https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js');
             const activeAgency = sessionStorage.getItem('currentActiveAgency') || 'paris';
-            const docSnap = await getDoc(doc(db, "settings", `menus_${activeAgency}`));
             
-            if (docSnap.exists()) {
-                this.applyMenuConfig(docSnap.data());
-            }
+            const [menusSnap, designSnap] = await Promise.all([
+                getDoc(doc(db, "settings", `menus_${activeAgency}`)),
+                getDoc(doc(db, "settings", `design_${activeAgency}`))
+            ]);
+            
+            let menuConfig = menusSnap.exists() ? menusSnap.data() : null;
+            let designConfig = designSnap.exists() ? designSnap.data() : null;
+            
+            this.applyMenuConfig(menuConfig, designConfig);
         } catch(e) {
             console.error("Erreur chargement configuration des menus:", e);
         }
     },
 
-    applyMenuConfig(config) {
+    applyMenuConfig(config, designConfig) {
         const userRole = sessionStorage.getItem('userRole') || 'agent';
         let baseRole = 'agent';
         if (userRole.includes('chauf')) baseRole = 'chauf';
@@ -111,9 +125,24 @@ const app = {
         
         // Les Admins et Super Admins ont accès à tout, sinon on regarde la liste des accès
         const isSuperUser = userRole === 'super_admin' || userRole === 'admin';
-        const allowedMenus = isSuperUser ? config.order : (config.roles[baseRole] || []);
+        const defaultOrder = ['main', 'special-asie', 'parrainage', 'bilan', 'factures', 'rdv', 'operations', 'devis', 'chargement', 'scan', 'clients', 'comms', 'produits', 'finance', 'stock', 'bilans-financiers', 'statistique', 'settings', 'configuration', 'prospecting', 'audit-log'];
+        let baseOrder = config && config.order ? config.order : [...defaultOrder];
+        
+        // Injection automatique des nouveaux menus dans l'ancienne configuration
+        defaultOrder.forEach(key => {
+            if (!baseOrder.includes(key)) baseOrder.push(key);
+        });
+
+        const defaultRoles = {
+            agent: ['main', 'bilan', 'factures', 'rdv', 'operations', 'devis', 'chargement', 'scan', 'clients', 'comms', 'produits'],
+            chauf: ['main', 'chargement', 'scan', 'operations'],
+            manager: ['main', 'bilan', 'factures', 'finance', 'statistique', 'bilans-financiers', 'clients', 'stock']
+        };
+
+        const allowedMenus = isSuperUser ? baseOrder : (config && config.roles ? config.roles[baseRole] || [] : defaultRoles[baseRole] || []);
         
         this.allowedMenus = allowedMenus; // On stocke la liste en mémoire pour sécuriser l'application
+
 
         const navContainer = document.querySelector('.sidebar-nav');
         if (!navContainer) return;
@@ -141,25 +170,25 @@ const app = {
             'Paramètres': 'settings',
             'Configuration': 'configuration',
             'Prospect': 'prospecting',
-            'Audit Log': 'audit-log'
+            'Audit Log': 'audit-log',
+            'Spécial Asie': 'special-asie'
         };
 
         // Détacher les sections du DOM pour les trier
         sections.forEach(sec => sec.remove());
 
         // Réinsérer dans l'ordre défini par Firestore
-        config.order.forEach(key => {
+        baseOrder.forEach(key => {
             const section = sections.find(sec => {
                 const titleEl = sec.querySelector('.sidebar-category-title');
                 return titleEl && titleToKey[titleEl.textContent.trim()] === key;
             });
             
             if (section) {
-                if (allowedMenus.includes(key)) {
+                const isAllowed = allowedMenus.includes(key);
+
+                if (isAllowed) {
                     section.style.display = '';
-                    navContainer.appendChild(section);
-                } else {
-                    section.style.display = 'none';
                     navContainer.appendChild(section);
                 }
             }
@@ -196,6 +225,7 @@ const app = {
         try {
             const { db } = await import('../../../firebase-config.js');
             const { doc, onSnapshot, collection, query, where } = await import('https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js');
+            const { getCollectionName } = await import('../../../agencies-config.js');
             const activeAgency = sessionStorage.getItem('currentActiveAgency') || 'paris';
 
             onSnapshot(doc(db, "settings", `container_config_${activeAgency}`), (configSnap) => {
@@ -231,14 +261,14 @@ const app = {
                 };
 
                 // Requête 1 : Factures du conteneur en cours
-                const qTrans = query(collection(db, "transactions"), where("conteneur", "==", activeContainer), where("agency", "==", activeAgency), where("isDeleted", "==", false));
+                const qTrans = query(collection(db, getCollectionName("transactions")), where("conteneur", "==", activeContainer), where("isDeleted", "==", false));
                 this.unsubContainerGauge1 = onSnapshot(qTrans, (snap) => {
                     snapTransDocs = snap.docs;
                     updateVolume();
                 });
 
                 // Requête 2 : Tous les colis physiquement en attente à Paris
-                const qLiv = query(collection(db, "livraisons"), where("containerStatus", "==", "PARIS"), where("agency", "==", activeAgency));
+                const qLiv = query(collection(db, getCollectionName("livraisons")), where("containerStatus", "==", "PARIS"));
                 this.unsubContainerGauge2 = onSnapshot(qLiv, (snap) => {
                     snapLivDocs = snap.docs;
                     updateVolume();
@@ -467,10 +497,13 @@ const app = {
             'settings-agency': 'Paramètres Agence',
             'settings-company': 'Paramètres Entreprise',
             'settings-software': 'Paramètres logiciel',
+            'settings-design': 'Apparence & Menus',
             'settings-sms': 'Configuration SMS',
             'settings-notifications': 'Configuration notifications',
             'settings-menus': 'Gestion menus',
             'settings-agents': 'Gestion des agents',
+            'settings-agencies': 'Gestion des agences',
+            'settings-roles': 'Rôles & Permissions',
             'settings-appointments': 'Paramètres RDV',
             'settings-profile': 'Mon profil',
             'config-invoice': 'Choix facture',
@@ -479,7 +512,9 @@ const app = {
             'config-objectives': 'Objectifs',
             'config-charges': 'Charges',
             'prospecting': 'Prospections',
-            'audit-log': 'Journal d\'activités'
+            'audit-log': 'Journal d\'activités',
+            'chine-dashboard': 'Tableau de Bord Asie',
+            'parrainage': 'Parrainage & Partenaires'
         };
         
         document.getElementById('pageTitle').textContent = titleMap[page] || page;
@@ -495,7 +530,7 @@ const app = {
         if (activeSidebar) activeSidebar.classList.add('active');
 
         const renderers = {
-            'dashboard': () => this.renderDynamicDashboard(),
+            'dashboard': () => DashboardView.render(this),
             'daily-bilan': () => DailyBilanView.render(this),
             'daily-users': () => DailyUsersView.render(this),
             'invoices-list': () => ToutesLesFacturesView.render(this),
@@ -518,7 +553,7 @@ const app = {
             'scan-container': () => ScanContainerView.render(this),
             'scan-classic': () => ScanWarehouseView.render(this),
             'scan-history': () => ScanHistoryView.render(this),
-            'clients-list': () => ClientsListView.render(this),
+            'clients-list': () => ClientsView.render(this),
             'clients-app': () => this.renderClientsApp(),
             'clients-analytics': () => this.renderClientsAnalytics(),
             'chat': () => ChatView.render(this),
@@ -538,11 +573,14 @@ const app = {
             'stats-yearly': () => this.renderStatsYearly(),
             'settings-agency': () => SettingsAgencyView.render(this),
             'settings-company': () => SettingsCompanyView.render(this),
-            'settings-software': () => this.renderSettingsSoftware(),
+            'settings-software': () => SettingsSoftwareView.render(this),
+            'settings-design': () => SettingsDesignView.render(this),
             'settings-sms': () => this.renderSettingsSms(),
             'settings-notifications': () => this.renderSettingsNotifications(),
             'settings-menus': () => SettingsMenusView.render(this),
             'settings-agents': () => SettingsAgentsView.render(this),
+            'settings-agencies': () => SettingsAgenciesView.render(this),
+            'settings-roles': () => SettingsRolesView.render(this),
             'settings-appointments': () => SettingsAppointmentsView.render(this),
             'settings-profile': () => ProfilView.render(this, document.getElementById('contentContainer')),
             'config-invoice': () => ConfigInvoiceView.render(this),
@@ -551,7 +589,9 @@ const app = {
             'config-objectives': () => this.renderConfigObjectives(),
             'config-charges': () => this.renderConfigCharges(),
             'prospecting': () => ProspectingView.render(this),
-            'audit-log': () => AuditLogView.render(this)
+            'audit-log': () => AuditLogView.render(this),
+            'chine-dashboard': () => ChineDashboardView.render(this),
+            'parrainage': () => ParrainageView.render(this)
         };
         
         const renderer = renderers[page];
@@ -562,225 +602,7 @@ const app = {
         }
     },
 
-    // ==================== RENDU DES PAGES ====================
-
-    async renderDynamicDashboard() {
-        document.getElementById('contentContainer').innerHTML = '<div style="padding: 50px; text-align: center;"><i class="fas fa-spinner fa-spin fa-2x" style="color:#3b82f6;"></i><br><br><span style="color:#64748b;">Chargement de votre espace...</span></div>';
-        
-        try {
-            const { db } = await import('../../../firebase-config.js');
-            const { getDocs, query, collection, where } = await import("https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js");
-            
-            const activeAgency = sessionStorage.getItem('currentActiveAgency') || 'paris';
-            const now = new Date();
-            const currentMonth = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
-            const TAUX = 656; // Taux de conversion pour Paris si la caisse est en CFA
-
-            // 1. Chiffre d'Affaires du Mois & Dernières factures
-            const qTrans = query(collection(db, "transactions"), where("agency", "==", activeAgency), where("isDeleted", "==", false));
-            const snapTrans = await getDocs(qTrans);
-            
-            let monthCA = 0;
-            const recentInvoices = [];
-            const agentStats = {};
-            const monthlyData = {}; // Pour le graphique
-            
-            snapTrans.forEach(doc => {
-                const t = doc.data();
-                const valCFA = t.prix || 0;
-                const valEUR = valCFA / TAUX;
-
-                // Graphique évolution
-                if (t.date && t.date.length >= 7) {
-                    const m = t.date.substring(0, 7);
-                    if (!monthlyData[m]) monthlyData[m] = 0;
-                    monthlyData[m] += valEUR;
-                }
-
-                // Stats du mois courant
-                if (t.date && t.date.startsWith(currentMonth)) {
-                    monthCA += valEUR;
-                    recentInvoices.push({ ...t, amountEur: valEUR });
-                    
-                    if (t.saisiPar) {
-                        if (!agentStats[t.saisiPar]) agentStats[t.saisiPar] = 0;
-                        agentStats[t.saisiPar] += valEUR;
-                    }
-                }
-            });
-
-            // Tri et extraction
-            recentInvoices.sort((a, b) => new Date(b.date) - new Date(a.date));
-            const topInvoices = recentInvoices.slice(0, 5);
-            const topAgents = Object.entries(agentStats).sort((a, b) => b[1] - a[1]).slice(0, 3);
-            
-            // Récupération des photos des agents pour le dashboard
-            const snapUsers = await getDocs(collection(db, "users"));
-            const usersPhotos = {};
-            snapUsers.forEach(doc => {
-                const u = doc.data();
-                if (u.displayName) usersPhotos[u.displayName] = u.photoURL;
-                if (u.email) usersPhotos[u.email.split('@')[0]] = u.photoURL;
-            });
-            
-            // 2. RDV en attente
-            const qAppt = query(collection(db, "appointments"), where("agency", "==", activeAgency), where("status", "==", "en_attente"));
-            const snapAppt = await getDocs(qAppt);
-            const pendingAppointments = snapAppt.size;
-
-            // 3. Programmes Actifs
-            const qProg = query(collection(db, "appointments"), where("agency", "==", activeAgency), where("status", "==", "en_cours"));
-            const snapProg = await getDocs(qProg);
-            const activePrograms = new Set(snapProg.docs.map(d => d.data().livreur)).size;
-
-            // 4. Conteneurs en transit
-            const qCont = query(collection(db, "containers"), where("status", "==", "EN_TRANSIT"));
-            const snapCont = await getDocs(qCont);
-            const activeContainers = snapCont.size;
-
-            // 5. Génération du HTML Dynamique
-            const renderQuickActionButton = (page, icon, label, color) => {
-                if (!this.checkPageAccess(page)) return ''; 
-                return `
-                    <button onclick="app.renderPage('${page}')" class="quick-action-btn" style="display:flex; flex-direction:column; align-items:center; padding:15px; background:white; border:1px solid #e2e8f0; border-radius:12px; cursor:pointer; transition:all 0.2s; box-shadow:0 2px 4px rgba(0,0,0,0.02);">
-                        <i class="fas ${icon}" style="font-size:24px; color:${color}; margin-bottom:10px;"></i>
-                        <span style="font-weight:600; color:#334155; font-size:12px; text-align:center;">${label}</span>
-                    </button>
-                `;
-            };
-
-            const html = `
-                <style>
-                    .quick-action-btn:hover { transform: translateY(-3px) !important; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1) !important; border-color: #cbd5e1 !important; }
-                </style>
-                
-                <h3 style="margin: 0 0 20px 0; color: #0f172a; font-size: 20px; font-weight: 800;">🚀 Accès rapide</h3>
-                <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(min(130px, 45%), 1fr)); gap: 12px; margin-bottom: 30px;">
-                    ${renderQuickActionButton('invoice-new', 'fa-file-invoice', 'Nouvelle facture', '#3b82f6')}
-                    ${renderQuickActionButton('invoices-list', 'fa-list', 'Liste factures', '#64748b')}
-                    ${renderQuickActionButton('quote-new', 'fa-file-signature', 'Nouveau devis', '#10b981')}
-                    ${renderQuickActionButton('quote-requests', 'fa-inbox', 'Demandes devis', '#f59e0b')}
-                    ${renderQuickActionButton('appointments-pending', 'fa-calendar-check', 'RDV à valider', '#ef4444')}
-                    ${renderQuickActionButton('notifications', 'fa-bell', 'Notifications', '#8b5cf6')}
-                    ${renderQuickActionButton('sms-send', 'fa-sms', 'Envoi SMS', '#ec4899')}
-                    ${renderQuickActionButton('loading-boats', 'fa-ship', 'Bateaux & Départs', '#0ea5e9')}
-                    ${renderQuickActionButton('clients-list', 'fa-users', 'Clients', '#14b8a6')}
-                ${renderQuickActionButton('balance-monthly', 'fa-chart-line', 'Bilan Comparatif', '#f43f5e')}
-                    ${renderQuickActionButton('scan-warehouse', 'fa-barcode', 'Numérisation', '#6366f1')}
-                    ${renderQuickActionButton('finance-expenses', 'fa-money-bill-wave', 'Dépenses', '#f97316')}
-                </div>
-
-                <h3 style="margin: 0 0 20px 0; color: #0f172a; font-size: 20px; font-weight: 800;">📊 Indicateurs du mois (${new Date().toLocaleDateString('fr-FR', {month:'long'})})</h3>
-                <div class="stats-grid" style="margin-bottom: 30px;">
-                    <div class="stat-card">
-                        <div class="stat-icon" style="background:#dbeafe; color:#2563eb;"><i class="fas fa-file-invoice"></i></div>
-                        <div class="stat-value">${this.formatMoney(monthCA)}</div>
-                        <div class="stat-label">Chiffre d'affaires facturé</div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-icon" style="background:#d1fae5; color:#059669;"><i class="fas fa-calendar"></i></div>
-                        <div class="stat-value">${pendingAppointments}</div>
-                        <div class="stat-label">RDV en attente</div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-icon" style="background:#fef3c7; color:#d97706;"><i class="fas fa-tasks"></i></div>
-                        <div class="stat-value">${activePrograms}</div>
-                        <div class="stat-label">Chauffeurs en tournée</div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-icon" style="background:#ede9fe; color:#7c3aed;"><i class="fas fa-box"></i></div>
-                        <div class="stat-value">${activeContainers}</div>
-                        <div class="stat-label">Conteneurs en mer</div>
-                    </div>
-                </div>
-                
-                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 25px; margin-bottom: 30px;">
-                    <div style="background: white; border-radius: 16px; padding: 20px; border: 1px solid #e2e8f0; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);">
-                        <h3 style="margin: 0 0 20px; font-size: 16px;">📈 Évolution Facturation (Général)</h3>
-                        <div style="position: relative; height: 250px; width: 100%;">
-                            <canvas id="revenueChart"></canvas>
-                        </div>
-                    </div>
-                    
-                    <div style="background: white; border-radius: 16px; padding: 20px; border: 1px solid #e2e8f0; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);">
-                        <h3 style="margin: 0 0 20px; font-size: 16px;">🧾 Dernières Factures</h3>
-                        <div style="max-height: 250px; overflow-y: auto; padding-right: 5px;">
-                            ${topInvoices.length === 0 ? '<div style="color:#94a3b8; text-align:center; padding: 20px;">Aucune facture ce mois-ci.</div>' : ''}
-                            ${topInvoices.map(inv => {
-                                const reste = Math.abs(parseFloat(inv.reste) || 0) / TAUX;
-                                const statusTxt = reste <= 0 ? 'Payée' : 'Impayée';
-                                const statusCls = reste <= 0 ? 'badge-success' : 'badge-warning';
-                                return `
-                                <div style="display: flex; justify-content: space-between; padding: 12px 0; border-bottom: 1px solid #f1f5f9; cursor: pointer;" onclick="window.app.renderPage('invoices-list')">
-                                    <div><strong>${inv.reference}</strong><br><span style="font-size:12px; color:#64748b;">${inv.nom}</span></div>
-                                    <div style="text-align: right;"><strong>${this.formatMoney(inv.amountEur)}</strong><br><span class="badge ${statusCls}">${statusTxt}</span></div>
-                                </div>
-                            `}).join('')}
-                        </div>
-                    </div>
-                </div>
-
-                <h3 style="margin: 0 0 20px 0; color: #0f172a; font-size: 20px; font-weight: 800;">🏆 Meilleurs agents (Mois en cours)</h3>
-                <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 15px; margin-bottom: 30px;">
-                    ${topAgents.length === 0 ? '<div style="grid-column: 1/-1; color:#94a3b8;">Pas de données pour le moment.</div>' : ''}
-                ${topAgents.map(([name, amount], i) => {
-                    const photo = usersPhotos[name];
-                    const avatarHtml = photo 
-                        ? `<div style="width: 50px; height: 50px; border-radius: 50%; background-image: url('${photo}'); background-size: cover; background-position: center; box-shadow: 0 2px 4px rgba(0,0,0,0.1); flex-shrink: 0;"></div>`
-                        : `<div style="width: 50px; height: 50px; border-radius: 50%; background: #eff6ff; display: flex; justify-content: center; align-items: center; font-size: 20px; color: #3b82f6; flex-shrink: 0;"><i class="fas fa-user"></i></div>`;
-                    return `
-                        <div style="background: white; padding: 15px; border-radius: 12px; border: 1px solid #e2e8f0; display: flex; align-items: center; gap: 15px; box-shadow: 0 2px 4px rgba(0,0,0,0.02);">
-                        ${avatarHtml}
-                            <div style="flex: 1;">
-                                <h4 style="margin: 0; color: #1e293b; font-size: 14px; text-transform: uppercase;">${name}</h4>
-                                <p style="margin: 2px 0 0 0; color: #10b981; font-size: 12px; font-weight: bold;">${this.formatMoney(amount)}</p>
-                            </div>
-                            <div style="font-size: 20px;">
-                                ${i === 0 ? '🥇' : i === 1 ? '🥈' : '🥉'}
-                            </div>
-                        </div>
-                `}).join('')}
-                </div>
-            `;
-            
-            document.getElementById('contentContainer').innerHTML = html;
-            
-            // Graphique d'évolution
-            setTimeout(() => {
-                const ctx = document.getElementById('revenueChart')?.getContext('2d');
-                if (ctx && typeof Chart !== 'undefined') {
-                    const sortedLabels = Object.keys(monthlyData).sort();
-                    const dataPoints = sortedLabels.map(l => monthlyData[l]);
-                    
-                    // Format des labels (ex: 2024-12 -> Déc 24)
-                    const displayLabels = sortedLabels.map(l => {
-                        const d = new Date(l + '-01');
-                        return d.toLocaleDateString('fr-FR', {month: 'short', year: '2-digit'}).replace('.', '');
-                    });
-
-                    new Chart(ctx, {
-                        type: 'line',
-                        data: {
-                            labels: displayLabels.length > 0 ? displayLabels : ['Aucune donnée'],
-                            datasets: [{
-                                label: 'CA Facturé (€)',
-                                data: dataPoints.length > 0 ? dataPoints : [0],
-                                borderColor: '#3b82f6',
-                                backgroundColor: 'rgba(59,130,246,0.1)',
-                                fill: true,
-                                tension: 0.4
-                            }]
-                        },
-                        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }
-                    });
-                }
-            }, 100);
-
-        } catch(e) {
-            console.error("Dashboard Error:", e);
-            document.getElementById('contentContainer').innerHTML = '<div style="padding: 50px; text-align: center; color: #ef4444;"><i class="fas fa-exclamation-triangle fa-2x"></i><br><br>Erreur lors du chargement des données.</div>';
-        }
-    },
+    // ==================== VUES CÔTÉ GESTION CLIENTS ====================
 
     renderClientsApp() {
         const html = `
@@ -852,7 +674,7 @@ const app = {
                     <div class="form-group full-width"><label>Message</label><textarea id="smsMessage" rows="4" placeholder="Votre message..."></textarea></div>
                 </div>
                 <div style="margin-top: 20px;">
-                    <button class="btn btn-primary" onclick="app.sendSms()"><i class="fas fa-paper-plane"></i> Envoyer</button>
+                    <button class="btn btn-primary" onclick="window.app.sendSms()"><i class="fas fa-paper-plane"></i> Envoyer</button>
                     <span id="smsCount" style="margin-left: 15px; color: #64748b;">0 SMS à envoyer</span>
                 </div>
             </div>
@@ -897,7 +719,6 @@ const app = {
     renderStatsYearly() { StatistiquesView.render(this, 'yearly'); },
 
     // Paramètres pages
-    renderSettingsSoftware() { this.renderSettingsForm('Paramètres logiciel', { theme: 'Clair', language: 'Français', notifications: true, autoBackup: true }); },
     renderSettingsSms() { this.renderSettingsForm('Configuration SMS', { provider: 'API SMS', apiKey: '••••••••', sender: 'AMT PARIS' }); },
     renderSettingsNotifications() { this.renderSettingsForm('Notifications', { emailAlerts: true, smsAlerts: true, pushEnabled: true }); },
     renderSettingsProfile() { 
@@ -923,7 +744,7 @@ const app = {
                             <p style="margin: 4px 0 0 0; color: #64748b; font-size: 13px;">Gérez vos informations, votre sécurité et vos accréditations.</p>
                         </div>
                     </div>
-                    <button class="btn btn-primary" onclick="app.saveProfile()" style="padding: 12px 24px; font-size: 14px; box-shadow: 0 4px 12px rgba(59,130,246,0.3);">
+                    <button class="btn btn-primary" onclick="window.app.saveProfile()" style="padding: 12px 24px; font-size: 14px; box-shadow: 0 4px 12px rgba(59,130,246,0.3);">
                         <i class="fas fa-save" style="margin-right: 6px;"></i> Enregistrer les modifications
                     </button>
                 </div>
@@ -940,7 +761,7 @@ const app = {
                         <div class="user-avatar" id="profileAvatarPreview" style="width: 130px; height: 130px; margin: 10px auto 15px; font-size: 50px; cursor: pointer; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.15); border: 4px solid white; transition: transform 0.2s;" onclick="document.getElementById('profilePhotoInput').click()" title="Changer la photo">
                             <i class="fas fa-user text-white"></i>
                         </div>
-                        <input type="file" id="profilePhotoInput" accept="image/*" style="display: none;" onchange="app.handleProfilePhotoChange(event)">
+                        <input type="file" id="profilePhotoInput" accept="image/*" style="display: none;" onchange="window.app.handleProfilePhotoChange(event)">
                         
                         <h3 style="margin: 0 0 5px 0; color: #0f172a; font-size: 18px; font-weight: 700;">${userName}</h3>
                         <p style="margin: 0 0 20px 0; color: #64748b; font-size: 13px; background: #f1f5f9; padding: 4px 12px; border-radius: 20px; display: inline-block;">${roleDisplay}</p>
@@ -1038,7 +859,7 @@ const app = {
                         <div class="form-group"><label>${key}</label><input type="text" value="${val}"></div>
                     `).join('')}
                 </div>
-                <div style="margin-top: 20px;"><button class="btn btn-primary" onclick="app.saveSettings()">Enregistrer</button></div>
+                <div style="margin-top: 20px;"><button class="btn btn-primary" onclick="window.app.saveSettings()">Enregistrer</button></div>
             </div>
         `;
         document.getElementById('contentContainer').innerHTML = html;
@@ -1118,6 +939,7 @@ async printLabels(data) {
     const format = localStorage.getItem('amt_label_format') || 'A5';
     const model = localStorage.getItem('amt_label_model') || 'classic';
     const colorScheme = localStorage.getItem('amt_label_color') || 'default';
+    const headerColor = localStorage.getItem('amt_label_header_color') || '#000000';
     
     const dimensions = {
         A5: { width: 210, height: 148 },
@@ -1160,11 +982,11 @@ async printLabels(data) {
         const qrDataUrl = await generateQR(label.sousRef);
         
         if (model === 'compact') {
-            labelsHtml += this.renderCompactLabel(widthMm, heightMm, qrDataUrl, data, label, theme);
+            labelsHtml += this.renderCompactLabel(widthMm, heightMm, qrDataUrl, data, label, theme, headerColor);
         } else if (model === 'premium') {
-            labelsHtml += this.renderPremiumLabel(widthMm, heightMm, qrDataUrl, data, label, theme);
+            labelsHtml += this.renderPremiumLabel(widthMm, heightMm, qrDataUrl, data, label, theme, headerColor);
         } else {
-            labelsHtml += this.renderClassicLabel(widthMm, heightMm, qrDataUrl, data, label, theme);
+            labelsHtml += this.renderClassicLabel(widthMm, heightMm, qrDataUrl, data, label, theme, headerColor);
         }
     }
     
@@ -1211,7 +1033,7 @@ async printLabels(data) {
     };
 },
 
-renderClassicLabel(widthMm, heightMm, qrDataUrl, data, label, theme) {
+renderClassicLabel(widthMm, heightMm, qrDataUrl, data, label, theme, headerColor) {
     const isA5 = widthMm === 210;
     const fontSize = isA5 ? '11pt' : '9pt';
     const titleFont = isA5 ? '14pt' : '11pt';
@@ -1222,7 +1044,7 @@ renderClassicLabel(widthMm, heightMm, qrDataUrl, data, label, theme) {
             <div style="height: 100%; display: flex; flex-direction: column; padding: 6mm;">
                 <div style="display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid ${theme.border}; padding-bottom: 3mm; margin-bottom: 4mm;">
                     <div style="display: flex; align-items: center; gap: 8px;">
-                        <div style="background: black; padding: 2px 4px; border-radius: 6px; display: flex; align-items: center; justify-content: center;">
+                        <div style="background: ${headerColor}; padding: 2px 4px; border-radius: 6px; display: flex; align-items: center; justify-content: center;">
                             <img src="../LOGOAMT.png" style="height: ${isA5 ? '8mm' : '6mm'}; object-fit: contain;" alt="Logo" />
                         </div>
                         <div>
@@ -1258,7 +1080,7 @@ renderClassicLabel(widthMm, heightMm, qrDataUrl, data, label, theme) {
     `;
 },
 
-renderCompactLabel(widthMm, heightMm, qrDataUrl, data, label, theme) {
+renderCompactLabel(widthMm, heightMm, qrDataUrl, data, label, theme, headerColor) {
     const isA5 = widthMm === 210;
     
     return `
@@ -1266,7 +1088,7 @@ renderCompactLabel(widthMm, heightMm, qrDataUrl, data, label, theme) {
             <div style="height: 100%; display: flex; flex-direction: column; padding: 5mm;">
                 <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid ${theme.border}; padding-bottom: 2mm; margin-bottom: 3mm;">
                     <div style="display: flex; align-items: center; gap: 8px;">
-                        <div style="background: black; padding: 2px 4px; border-radius: 4px; display: flex; align-items: center; justify-content: center;">
+                        <div style="background: ${headerColor}; padding: 2px 4px; border-radius: 4px; display: flex; align-items: center; justify-content: center;">
                             <img src="../LOGOAMT.png" style="height: ${isA5 ? '6mm' : '4mm'}; object-fit: contain;" alt="Logo" />
                         </div>
                         <div style="font-size: ${isA5 ? '9pt' : '7pt'}; font-weight: bold;">AMT TRANSIT CI FRET<br><span style="font-weight: normal; font-size: ${isA5 ? '8pt' : '6pt'};">81 AV. ARISTIDE BRIAND - 0180893370</span></div>
@@ -1290,14 +1112,14 @@ renderCompactLabel(widthMm, heightMm, qrDataUrl, data, label, theme) {
     `;
 },
 
-renderPremiumLabel(widthMm, heightMm, qrDataUrl, data, label, theme) {
+renderPremiumLabel(widthMm, heightMm, qrDataUrl, data, label, theme, headerColor) {
     const isA5 = widthMm === 210;
     
     return `
         <div class="label" style="width: ${widthMm}mm; height: ${heightMm}mm;">
             <div style="height: 100%; display: flex; flex-direction: column;">
-                    <div style="background: ${theme.border}; color: white; padding: 3mm 4mm; display: flex; justify-content: center; align-items: center; gap: 10px;">
-                        <div style="background: black; padding: 2px 4px; border-radius: 6px; display: flex; align-items: center; justify-content: center;">
+                    <div style="background: ${headerColor}; color: white; padding: 3mm 4mm; display: flex; justify-content: center; align-items: center; gap: 10px;">
+                        <div style="background: ${headerColor}; padding: 2px 4px; border-radius: 6px; display: flex; align-items: center; justify-content: center;">
                             <img src="../LOGOAMT.png" style="height: ${isA5 ? '8mm' : '6mm'}; object-fit: contain;" alt="Logo" />
                         </div>
                         <span style="font-size: ${isA5 ? '12pt' : '10pt'}; font-weight: bold; margin: 0;">AMT TRANSIT CI FRET INTERNATIONAL</span>
@@ -1342,7 +1164,11 @@ renderPremiumLabel(widthMm, heightMm, qrDataUrl, data, label, theme) {
 }
 };
 
-// Démarrage une fois le DOM chargé
-document.addEventListener('DOMContentLoaded', () => {
+// Démarrage sécurisé : si le DOM est déjà chargé à cause de l'attente de la base de données (Top-Level Await), on lance directement.
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => {
+        app.init();
+    });
+} else {
     app.init();
-});
+}

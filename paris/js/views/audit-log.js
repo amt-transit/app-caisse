@@ -1,14 +1,9 @@
 import { db } from '../../../firebase-config.js';
 import { collection, query, orderBy, onSnapshot, limit, where } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
+import { createApp, ref, reactive, computed, onMounted, onUnmounted } from "https://unpkg.com/vue@3/dist/vue.esm-browser.prod.js";
 
 export const AuditLogView = {
-    unsub: null,
-    logs: [],
-    filteredLogs: [],
-    autoRefresh: true,
-    currentPage: 1,
-    itemsPerPage: 50,
-    usersList: new Set(),
+    vueApp: null,
 
     render(app) {
         this.app = app;
@@ -120,7 +115,7 @@ export const AuditLogView = {
                 .al__page-info { font-size: 13px; color: #64748b; font-weight: 500; }
             </style>
 
-            <div class="al-page">
+            <div id="vue-audit-log" class="al-page" v-cloak>
                 <div class="al__header">
                     <div>
                         <h1 class="al__title">📋 Activités Log</h1>
@@ -128,30 +123,76 @@ export const AuditLogView = {
                     </div>
                     <div class="al__header-actions">
                         <label class="al__auto-refresh">
-                            <input type="checkbox" id="alAutoRefresh" checked onchange="window.app.views.auditLog.toggleAutoRefresh(this.checked)">
+                            <input type="checkbox" v-model="autoRefresh" @change="toggleAutoRefresh">
                             <span>Auto-refresh (Temps réel)</span>
                         </label>
-                        <button class="al__btn al__btn--primary" type="button" onclick="window.app.views.auditLog.loadData()">🔄 Actualiser</button>
+                        <button class="al__btn al__btn--primary" type="button" @click="loadData">🔄 Actualiser</button>
                     </div>
                 </div>
 
-                <!-- Conteneur KPIs injecté via JS -->
-                <div id="alKpiContainer"></div>
+                <!-- KPIs -->
+                <div class="al__kpi-row">
+                    <div class="al__kpi al__kpi--indigo"><div class="al__kpi-icon">📊</div><div><div class="al__kpi-val">{{ kpiTotal }}</div><div class="al__kpi-lbl">Actions aujourd'hui</div></div></div>
+                    <div class="al__kpi al__kpi--green"><div class="al__kpi-icon">➕</div><div><div class="al__kpi-val">{{ kpiCreates }}</div><div class="al__kpi-lbl">Créations</div></div></div>
+                    <div class="al__kpi al__kpi--blue"><div class="al__kpi-icon">✏️</div><div><div class="al__kpi-val">{{ kpiUpdates }}</div><div class="al__kpi-lbl">Modifications</div></div></div>
+                    <div class="al__kpi al__kpi--red"><div class="al__kpi-icon">🗑️</div><div><div class="al__kpi-val">{{ kpiDeletes }}</div><div class="al__kpi-lbl">Suppressions</div></div></div>
+                    <div class="al__kpi al__kpi--purple"><div class="al__kpi-icon">🔑</div><div><div class="al__kpi-val">{{ kpiLogins }}</div><div class="al__kpi-lbl">Connexions</div></div></div>
+                    <div class="al__kpi al__kpi--amber"><div class="al__kpi-icon">🏆</div><div><div class="al__kpi-val al__kpi-val--sm" :title="topAgentName">{{ topAgentName || '-' }}</div><div class="al__kpi-lbl">Le + actif ({{ topAgentCount }})</div></div></div>
+                </div>
 
-                <!-- Conteneur Charts injecté via JS -->
-                <div id="alChartsContainer"></div>
+                <!-- Charts -->
+                <div class="al__charts-row">
+                    <div class="al__chart-card">
+                        <h3 class="al__chart-title">📈 Actions 7 derniers jours</h3>
+                        <div class="al__bar-chart">
+                            <div v-for="(count, day) in last7DaysData" :key="day" class="al__bar-col">
+                                <div class="al__bar-value">{{ count }}</div>
+                                <div class="al__bar" :style="{ height: getBarHeight7(count) + 'px' }"></div>
+                                <div class="al__bar-label">{{ formatShortDay(day) }}</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="al__chart-card">
+                        <h3 class="al__chart-title">⏰ Activité par heure (aujourd'hui)</h3>
+                        <div class="al__hour-chart">
+                            <div v-for="(count, hour) in hourlyData" :key="hour" class="al__hour-col">
+                                <div class="al__hour-bar" :style="{ height: getBarHeightHour(count) + 'px' }" :title="count + ' actions'"></div>
+                                <div v-if="hour % 3 === 0" class="al__hour-label">{{ String(hour).padStart(2,'0') }}h</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="al__chart-card">
+                        <h3 class="al__chart-title">🏷️ Entités les plus sollicitées</h3>
+                        <div class="al__entity-list">
+                            <div v-for="(item, idx) in topEntities" :key="idx" class="al__entity-row">
+                                <span class="al__entity-name">{{ item.entity }}</span>
+                                <div class="al__entity-bar-bg"><div class="al__entity-bar-fill" :style="{ width: (item.count / maxEntityCount * 100) + '%' }"></div></div>
+                                <span class="al__entity-count">{{ item.count }}</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
 
                 <div class="al__section">
                     <h3 class="al__section-title">🏅 Performance des agents (7 derniers jours)</h3>
                     <div class="al__perf-wrap">
                         <table class="al__perf-table">
                             <thead>
-                                <tr>
-                                    <th>#</th><th>Agent</th><th>Total</th><th>Créations</th><th>Modifications</th><th>Suppressions</th><th>Connexions</th><th>Dernière action</th>
-                                </tr>
+                                <tr><th>#</th><th>Agent</th><th>Total</th><th>Créations</th><th>Modifications</th><th>Suppressions</th><th>Connexions</th><th>Dernière action</th></tr>
                             </thead>
-                            <tbody id="alPerfTableBody">
-                                <tr><td colspan="8" style="text-align: center; padding: 20px;">Chargement...</td></tr>
+                            <tbody>
+                                <tr v-if="loading"><td colspan="8" style="text-align: center; padding: 20px;"><i class="fas fa-spinner fa-spin"></i> Chargement...</td></tr>
+                                <tr v-else-if="agentPerformance.length === 0"><td colspan="8" style="text-align: center; padding: 20px; color: #64748b;">Aucune activité récente.</td></tr>
+                                <tr v-else v-for="(agent, idx) in agentPerformance" :key="agent.name">
+                                    <td><span class="al__rank" :class="getRankClass(idx)">{{ idx + 1 }}</span></td>
+                                    <td class="al__perf-name">{{ agent.name }}</td>
+                                    <td><strong>{{ agent.total }}</strong></td>
+                                    <td><span class="al__mini-badge al__mini-badge--green">{{ agent.creates }}</span></td>
+                                    <td><span class="al__mini-badge al__mini-badge--blue">{{ agent.updates }}</span></td>
+                                    <td><span class="al__mini-badge al__mini-badge--red">{{ agent.deletes }}</span></td>
+                                    <td><span class="al__mini-badge al__mini-badge--purple">{{ agent.logins }}</span></td>
+                                    <td class="al__td-date">{{ formatDate(agent.lastAction) }}</td>
+                                </tr>
                             </tbody>
                         </table>
                     </div>
@@ -160,8 +201,8 @@ export const AuditLogView = {
                 <div class="al__filters">
                     <h3 class="al__section-title">🔍 Journal détaillé</h3>
                     <div class="al__filter-row">
-                        <input type="text" id="alSearch" class="al__input" placeholder="Rechercher IP, Réf, Description..." oninput="window.app.views.auditLog.applyFilters()">
-                        <select id="alActionFilter" class="al__select" onchange="window.app.views.auditLog.applyFilters()">
+                        <input type="text" v-model="filters.search" class="al__input" placeholder="Rechercher IP, Réf, Description..." @input="applyFilters">
+                        <select v-model="filters.action" class="al__select" @change="applyFilters">
                             <option value="">Toutes les actions</option>
                             <option value="CREATE">Création (CREATE)</option>
                             <option value="UPDATE">Modification (UPDATE)</option>
@@ -170,375 +211,355 @@ export const AuditLogView = {
                             <option value="SCAN">Scan (SCAN)</option>
                             <option value="EXPORT">Export (EXPORT)</option>
                         </select>
-                        <select id="alUserFilter" class="al__select" onchange="window.app.views.auditLog.applyFilters()">
+                        <select v-model="filters.user" class="al__select" @change="applyFilters">
                             <option value="">Tous les agents</option>
-                            <!-- Injecté via JS -->
+                            <option v-for="u in usersList" :key="u" :value="u">{{ u }}</option>
                         </select>
-                        <input type="text" id="alEntityFilter" class="al__input" placeholder="Entité (ex: rdv, factures)..." oninput="window.app.views.auditLog.applyFilters()">
-                        <button class="al__btn al__btn--ghost" type="button" onclick="window.app.views.auditLog.resetFilters()">Reset</button>
+                        <input type="text" v-model="filters.entity" class="al__input" placeholder="Entité (ex: rdv, factures)..." @input="applyFilters">
+                        <button class="al__btn al__btn--ghost" type="button" @click="resetFilters">Reset</button>
                     </div>
                 </div>
 
                 <div class="al__table-wrap">
                     <table class="al__table">
                         <thead>
-                            <tr>
-                                <th>Date / Heure</th><th>Action</th><th>Description</th><th>Utilisateur</th><th>Entité</th><th>ID</th><th>Référence</th><th>IP</th><th>Status</th>
-                            </tr>
+                            <tr><th>Date / Heure</th><th>Action</th><th>Description</th><th>Utilisateur</th><th>Entité</th><th>ID</th><th>Référence</th><th>IP</th><th>Status</th></tr>
                         </thead>
-                        <tbody id="alLogTableBody">
-                            <tr><td colspan="9" style="text-align: center; padding: 40px;"><i class="fas fa-spinner fa-spin"></i> Chargement...</td></tr>
+                        <tbody>
+                            <tr v-if="loadingLogs"><td colspan="9" style="text-align: center; padding: 40px;"><i class="fas fa-spinner fa-spin"></i> Chargement...</td></tr>
+                            <tr v-else-if="paginatedLogs.length === 0"><td colspan="9" style="text-align: center; padding: 40px; color: #64748b;">Aucun log trouvé pour ces filtres.</td></tr>
+                            <tr v-else v-for="log in paginatedLogs" :key="log.id">
+                                <td class="al__td-date">{{ formatDateTime(log.date) }}</td>
+                                <td><span class="al__action-badge" :style="getActionStyle(log.action)">{{ getActionIcon(log.action) }} {{ log.action || 'UNKNOWN' }}</span></td>
+                                <td class="al__td-desc" :title="log.details">{{ log.details || log.action + ' — ' + (log.entity || 'inconnu') }}</td>
+                                <td><div class="al__user-cell"><span class="al__user-name">{{ log.user || '-' }}</span><span v-if="log.userId" class="al__user-id">#{{ log.userId.substring(0,4).toUpperCase() }}</span></div></td>
+                                <td><span class="al__entity-tag">{{ log.entity || '-' }}</span></td>
+                                <td class="al__td-id">{{ log.refId || '—' }}</td>
+                                <td class="al__td-ref">{{ log.docRef || '—' }}</td>
+                                <td class="al__td-ip">{{ log.ip || '—' }}</td>
+                                <td><span class="al__status-dot" :class="getStatusClass(log.status)">{{ log.status || '200' }}</span></td>
+                            </tr>
                         </tbody>
                     </table>
                     <div class="al__pagination">
-                        <button class="al__page-btn" id="alPrevPage" onclick="window.app.views.auditLog.changePage(-1)">← Précédent</button>
-                        <span class="al__page-info" id="alPageInfo">Page 1 / 1</span>
-                        <button class="al__page-btn" id="alNextPage" onclick="window.app.views.auditLog.changePage(1)">Suivant →</button>
+                        <button class="al__page-btn" @click="changePage(-1)" :disabled="currentPage === 1">← Précédent</button>
+                        <span class="al__page-info">Page {{ currentPage }} / {{ totalPages }} · {{ filteredLogs.length }} résultat(s)</span>
+                        <button class="al__page-btn" @click="changePage(1)" :disabled="currentPage === totalPages">Suivant →</button>
                     </div>
                 </div>
             </div>
         `;
         document.getElementById('contentContainer').innerHTML = html;
-        this.loadData();
+        this.initVue();
     },
 
-    toggleAutoRefresh(checked) {
-        this.autoRefresh = checked;
-        if (checked) {
-            this.loadData();
-        } else if (this.unsub) {
-            this.unsub();
-            this.unsub = null;
-        }
-    },
+    initVue() {
+        if (this.vueApp) this.vueApp.unmount();
+        const globalApp = this.app;
 
-    loadData() {
-        if (this.unsub) this.unsub();
-        
-        const activeAgency = sessionStorage.getItem('currentActiveAgency') || 'paris';
-        // Pour l'analyse complète (charts + table), on charge les 2000 derniers logs (environ 7-14 jours selon activité)
-        const q = query(
-            collection(db, "audit_logs"), 
-            where("agency", "==", activeAgency),
-            orderBy("date", "desc"),
-            limit(2000)
-        );
-
-        this.unsub = onSnapshot(q, (snapshot) => {
-            if (!this.autoRefresh && this.logs.length > 0) return; // Ignore updates if paused
-            
-            this.logs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-            this.processData();
-            this.applyFilters(); // Renders the log table
-        }, (error) => {
-            console.error("Erreur chargement logs:", error);
-            if(this.logs.length === 0) {
-                document.getElementById('alLogTableBody').innerHTML = `<tr><td colspan="9" style="text-align:center;color:#ef4444;">Erreur d'accès aux logs.</td></tr>`;
-            }
-        });
-    },
-
-    processData() {
-        const now = new Date();
-        const todayStr = now.toISOString().split('T')[0];
-        const sevenDaysAgo = new Date(now);
-        sevenDaysAgo.setDate(now.getDate() - 7);
-        
-        // Variables pour KPIs Aujourd'hui
-        let actionsToday = 0, creates = 0, updates = 0, deletes = 0, logins = 0;
-        const agentActivityToday = {};
-
-        // Variables pour Charts
-        const last7DaysCount = {};
-        for(let i=6; i>=0; i--) {
-            const d = new Date(now); d.setDate(d.getDate() - i);
-            last7DaysCount[d.toISOString().split('T')[0]] = 0;
-        }
-        const hourlyToday = new Array(24).fill(0);
-        const entities30d = {};
-        const perfAgents = {};
-
-        this.usersList.clear();
-
-        this.logs.forEach(log => {
-            if (!log.date) return;
-            const logDateObj = new Date(log.date);
-            const logDateStr = log.date.split('T')[0];
-            const user = log.user || 'Système';
-            const action = (log.action || '').toUpperCase();
-            const entity = (log.entity || 'inconnu').toLowerCase();
-
-            this.usersList.add(user);
-
-            // Stat Aujourd'hui
-            if (logDateStr === todayStr) {
-                actionsToday++;
-                if (action === 'CREATE') creates++;
-                if (action === 'UPDATE') updates++;
-                if (action === 'DELETE') deletes++;
-                if (action === 'LOGIN') logins++;
-
-                agentActivityToday[user] = (agentActivityToday[user] || 0) + 1;
-                hourlyToday[logDateObj.getHours()]++;
-            }
-
-            // Stats 7 jours
-            if (logDateObj >= sevenDaysAgo) {
-                if (last7DaysCount[logDateStr] !== undefined) {
-                    last7DaysCount[logDateStr]++;
-                }
+        this.vueApp = createApp({
+            setup() {
+                // State
+                const logs = ref([]);
+                const filteredLogs = ref([]);
+                const loading = ref(true);
+                const loadingLogs = ref(true);
+                const autoRefresh = ref(true);
+                const currentPage = ref(1);
+                const itemsPerPage = 50;
                 
-                // Perf Agent
-                if (!perfAgents[user]) {
-                    perfAgents[user] = { total: 0, creates: 0, updates: 0, deletes: 0, logins: 0, lastAction: log.date };
-                }
-                perfAgents[user].total++;
-                if (action === 'CREATE') perfAgents[user].creates++;
-                if (action === 'UPDATE') perfAgents[user].updates++;
-                if (action === 'DELETE') perfAgents[user].deletes++;
-                if (action === 'LOGIN') perfAgents[user].logins++;
-                if (log.date > perfAgents[user].lastAction) perfAgents[user].lastAction = log.date;
+                // Filters
+                const filters = reactive({
+                    search: '',
+                    action: '',
+                    user: '',
+                    entity: ''
+                });
+                
+                // Computed data
+                const usersList = ref([]);
+                
+                // KPIs
+                const kpiTotal = ref(0);
+                const kpiCreates = ref(0);
+                const kpiUpdates = ref(0);
+                const kpiDeletes = ref(0);
+                const kpiLogins = ref(0);
+                const topAgentName = ref('');
+                const topAgentCount = ref(0);
+                
+                // Charts data
+                const last7DaysData = ref({});
+                const hourlyData = ref(Array(24).fill(0));
+                const topEntities = ref([]);
+                const maxEntityCount = ref(1);
+                const agentPerformance = ref([]);
+                
+                let unsub = null;
+
+                // Helper functions
+                const formatMoney = (amount) => globalApp.formatMoney(amount);
+                const formatDate = (dateString) => dateString ? new Date(dateString).toLocaleDateString('fr-FR') : '-';
+                const formatDateTime = (dateString) => dateString ? new Date(dateString).toLocaleString('fr-FR') : '-';
+                const formatShortDay = (dateStr) => new Date(dateStr).toLocaleDateString('fr-FR', { weekday: 'short', day: '2-digit', month: '2-digit' }).replace('.', '');
+                
+                const getBarHeight7 = (count) => {
+                    const max = Math.max(...Object.values(last7DaysData.value), 1);
+                    return (count / max) * 120;
+                };
+                
+                const getBarHeightHour = (count) => {
+                    const max = Math.max(...hourlyData.value, 1);
+                    return (count / max) * 80;
+                };
+                
+                const getRankClass = (idx) => {
+                    if (idx === 0) return 'al__rank--gold';
+                    if (idx === 1) return 'al__rank--silver';
+                    if (idx === 2) return 'al__rank--bronze';
+                    return '';
+                };
+                
+                const getActionStyle = (action) => {
+                    switch(action) {
+                        case 'CREATE': return 'background: rgba(22, 163, 74, 0.1); color: rgb(22, 163, 74);';
+                        case 'UPDATE': return 'background: rgba(59, 130, 246, 0.1); color: rgb(59, 130, 246);';
+                        case 'DELETE': return 'background: rgba(239, 68, 68, 0.1); color: rgb(239, 68, 68);';
+                        case 'LOGIN': return 'background: rgba(168, 85, 247, 0.1); color: rgb(168, 85, 247);';
+                        case 'SCAN': return 'background: rgba(99, 102, 241, 0.1); color: rgb(99, 102, 241);';
+                        default: return 'background: rgba(100, 116, 139, 0.1); color: rgb(100, 116, 139);';
+                    }
+                };
+                
+                const getActionIcon = (action) => {
+                    switch(action) {
+                        case 'CREATE': return '➕';
+                        case 'UPDATE': return '✏️';
+                        case 'DELETE': return '🗑️';
+                        case 'LOGIN': return '🔑';
+                        case 'SCAN': return '📷';
+                        case 'EXPORT': return '📄';
+                        default: return '⚡';
+                    }
+                };
+                
+                const getStatusClass = (code) => {
+                    const c = parseInt(code);
+                    if (c >= 200 && c < 300) return 'al__status-dot--ok';
+                    if (c >= 400) return 'al__status-dot--err';
+                    return 'al__status-dot--warn';
+                };
+                
+                const totalPages = computed(() => Math.ceil(filteredLogs.value.length / itemsPerPage) || 1);
+                const paginatedLogs = computed(() => {
+                    const start = (currentPage.value - 1) * itemsPerPage;
+                    return filteredLogs.value.slice(start, start + itemsPerPage);
+                });
+                
+                const processData = () => {
+                    const now = new Date();
+                    const todayStr = now.toISOString().split('T')[0];
+                    const sevenDaysAgo = new Date(now);
+                    sevenDaysAgo.setDate(now.getDate() - 7);
+                    
+                    // Initialize last7Days
+                    const last7Days = {};
+                    for(let i = 6; i >= 0; i--) {
+                        const d = new Date(now);
+                        d.setDate(d.getDate() - i);
+                        last7Days[d.toISOString().split('T')[0]] = 0;
+                    }
+                    
+                    const hourly = new Array(24).fill(0);
+                    const entities = {};
+                    const perfAgents = {};
+                    const usersSet = new Set();
+                    
+                    let actionsToday = 0, creates = 0, updates = 0, deletes = 0, logins = 0;
+                    const agentActivityToday = {};
+                    
+                    logs.value.forEach(log => {
+                        if (!log.date) return;
+                        const logDateObj = new Date(log.date);
+                        const logDateStr = log.date.split('T')[0];
+                        const user = log.user || 'Système';
+                        const action = (log.action || '').toUpperCase();
+                        const entity = (log.entity || 'inconnu').toLowerCase();
+                        
+                        usersSet.add(user);
+                        
+                        // Today stats
+                        if (logDateStr === todayStr) {
+                            actionsToday++;
+                            if (action === 'CREATE') creates++;
+                            if (action === 'UPDATE') updates++;
+                            if (action === 'DELETE') deletes++;
+                            if (action === 'LOGIN') logins++;
+                            agentActivityToday[user] = (agentActivityToday[user] || 0) + 1;
+                            hourly[logDateObj.getHours()]++;
+                        }
+                        
+                        // Last 7 days stats
+                        if (logDateObj >= sevenDaysAgo) {
+                            if (last7Days[logDateStr] !== undefined) last7Days[logDateStr]++;
+                            
+                            if (!perfAgents[user]) {
+                                perfAgents[user] = { total: 0, creates: 0, updates: 0, deletes: 0, logins: 0, lastAction: log.date };
+                            }
+                            perfAgents[user].total++;
+                            if (action === 'CREATE') perfAgents[user].creates++;
+                            if (action === 'UPDATE') perfAgents[user].updates++;
+                            if (action === 'DELETE') perfAgents[user].deletes++;
+                            if (action === 'LOGIN') perfAgents[user].logins++;
+                            if (log.date > perfAgents[user].lastAction) perfAgents[user].lastAction = log.date;
+                        }
+                        
+                        // Global entities
+                        entities[entity] = (entities[entity] || 0) + 1;
+                    });
+                    
+                    // Top agent today
+                    let topName = '-', topCount = 0;
+                    for (const [agent, count] of Object.entries(agentActivityToday)) {
+                        if (count > topCount && agent !== 'Système') {
+                            topName = agent;
+                            topCount = count;
+                        }
+                    }
+                    
+                    // Update reactive state
+                    kpiTotal.value = actionsToday;
+                    kpiCreates.value = creates;
+                    kpiUpdates.value = updates;
+                    kpiDeletes.value = deletes;
+                    kpiLogins.value = logins;
+                    topAgentName.value = topName;
+                    topAgentCount.value = topCount;
+                    
+                    last7DaysData.value = last7Days;
+                    hourlyData.value = hourly;
+                    
+                    // Top entities
+                    const sortedEntities = Object.entries(entities).sort((a,b) => b[1] - a[1]).slice(0, 10);
+                    topEntities.value = sortedEntities.map(([entity, count]) => ({ entity, count }));
+                    maxEntityCount.value = sortedEntities.length > 0 ? sortedEntities[0][1] : 1;
+                    
+                    // Agent performance
+                    const sortedAgents = Object.entries(perfAgents).sort((a,b) => b[1].total - a[1].total);
+                    agentPerformance.value = sortedAgents.map(([name, stats]) => ({ name, ...stats }));
+                    
+                    usersList.value = Array.from(usersSet).sort();
+                };
+                
+                const applyFilters = () => {
+                    let filtered = [...logs.value];
+                    
+                    if (filters.action) {
+                        filtered = filtered.filter(log => log.action === filters.action);
+                    }
+                    if (filters.user) {
+                        filtered = filtered.filter(log => log.user === filters.user);
+                    }
+                    if (filters.entity) {
+                        filtered = filtered.filter(log => (log.entity || '').toLowerCase() === filters.entity.toLowerCase());
+                    }
+                    if (filters.search) {
+                        const searchLower = filters.search.toLowerCase();
+                        filtered = filtered.filter(log => {
+                            const str = `${log.ip || ''} ${log.refId || ''} ${log.details || ''}`.toLowerCase();
+                            return str.includes(searchLower);
+                        });
+                    }
+                    
+                    filteredLogs.value = filtered;
+                    currentPage.value = 1;
+                    loadingLogs.value = false;
+                };
+                
+                const resetFilters = () => {
+                    filters.search = '';
+                    filters.action = '';
+                    filters.user = '';
+                    filters.entity = '';
+                    applyFilters();
+                };
+                
+                const changePage = (delta) => {
+                    const newPage = currentPage.value + delta;
+                    if (newPage >= 1 && newPage <= totalPages.value) {
+                        currentPage.value = newPage;
+                    }
+                };
+                
+                const loadData = () => {
+                    if (unsub) {
+                        unsub();
+                        unsub = null;
+                    }
+                    
+                    const activeAgency = sessionStorage.getItem('currentActiveAgency') || 'paris';
+                    const q = query(
+                        collection(db, "audit_logs"), 
+                        where("agency", "==", activeAgency),
+                        orderBy("date", "desc"),
+                        limit(2000)
+                    );
+                    
+                    loading.value = true;
+                    loadingLogs.value = true;
+                    
+                    unsub = onSnapshot(q, (snapshot) => {
+                        if (!autoRefresh.value && logs.value.length > 0) return;
+                        
+                        logs.value = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                        processData();
+                        applyFilters();
+                        loading.value = false;
+                    }, (error) => {
+                        console.error("Erreur chargement logs:", error);
+                        loading.value = false;
+                        loadingLogs.value = false;
+                        if(logs.value.length === 0) {
+                            filteredLogs.value = [];
+                        }
+                    });
+                };
+                
+                const toggleAutoRefresh = () => {
+                    if (autoRefresh.value) {
+                        loadData();
+                    } else if (unsub) {
+                        unsub();
+                        unsub = null;
+                    }
+                };
+                
+                onMounted(() => {
+                    loadData();
+                });
+                
+                onUnmounted(() => {
+                    if (unsub) unsub();
+                });
+                
+                return {
+                    logs, filteredLogs, loading, loadingLogs, autoRefresh, currentPage,
+                    filters, usersList,
+                    kpiTotal, kpiCreates, kpiUpdates, kpiDeletes, kpiLogins, topAgentName, topAgentCount,
+                    last7DaysData, hourlyData, topEntities, maxEntityCount, agentPerformance,
+                    totalPages, paginatedLogs,
+                    formatMoney, formatDate, formatDateTime, formatShortDay,
+                    getBarHeight7, getBarHeightHour, getRankClass, getActionStyle, getActionIcon, getStatusClass,
+                    applyFilters, resetFilters, changePage, loadData, toggleAutoRefresh
+                };
             }
-
-            // Stats entités globales (sur l'échantillon chargé)
-            entities30d[entity] = (entities30d[entity] || 0) + 1;
         });
-
-        // Calcul Top Agent Aujourd'hui
-        let topAgentName = '-', topAgentCount = 0;
-        for (const [agent, count] of Object.entries(agentActivityToday)) {
-            if (count > topAgentCount && agent !== 'Système') {
-                topAgentName = agent;
-                topAgentCount = count;
-            }
-        }
-
-        this.renderKPIs(actionsToday, creates, updates, deletes, logins, topAgentName, topAgentCount);
-        this.renderCharts(last7DaysCount, hourlyToday, entities30d);
-        this.renderPerfTable(perfAgents);
-        this.updateUserSelect();
-    },
-
-    renderKPIs(total, c, u, d, l, topName, topCount) {
-        const container = document.getElementById('alKpiContainer');
-        if (!container) return;
-        container.innerHTML = `
-            <div class="al__kpi-row">
-                <div class="al__kpi al__kpi--indigo"><div class="al__kpi-icon">📊</div><div><div class="al__kpi-val">${total}</div><div class="al__kpi-lbl">Actions aujourd'hui</div></div></div>
-                <div class="al__kpi al__kpi--green"><div class="al__kpi-icon">➕</div><div><div class="al__kpi-val">${c}</div><div class="al__kpi-lbl">Créations</div></div></div>
-                <div class="al__kpi al__kpi--blue"><div class="al__kpi-icon">✏️</div><div><div class="al__kpi-val">${u}</div><div class="al__kpi-lbl">Modifications</div></div></div>
-                <div class="al__kpi al__kpi--red"><div class="al__kpi-icon">🗑️</div><div><div class="al__kpi-val">${d}</div><div class="al__kpi-lbl">Suppressions</div></div></div>
-                <div class="al__kpi al__kpi--purple"><div class="al__kpi-icon">🔑</div><div><div class="al__kpi-val">${l}</div><div class="al__kpi-lbl">Connexions</div></div></div>
-                <div class="al__kpi al__kpi--amber"><div class="al__kpi-icon">🏆</div><div><div class="al__kpi-val al__kpi-val--sm" title="${topName}">${topName}</div><div class="al__kpi-lbl">Le + actif (${topCount})</div></div></div>
-            </div>
-        `;
-    },
-
-    renderCharts(last7DaysCount, hourlyToday, entities30d) {
-        const container = document.getElementById('alChartsContainer');
-        if (!container) return;
-
-        // Bar Chart 7 Days
-        const max7 = Math.max(...Object.values(last7DaysCount), 1);
-        let bars7Html = '';
-        for (const [dateStr, count] of Object.entries(last7DaysCount)) {
-            const d = new Date(dateStr);
-            const lbl = d.toLocaleDateString('fr-FR', {weekday: 'short', day: '2-digit', month: '2-digit'}).replace('.', '');
-            const height = (count / max7) * 120; // max height 120px
-            bars7Html += `<div class="al__bar-col"><div class="al__bar-value">${count}</div><div class="al__bar" style="height: ${height}px;"></div><div class="al__bar-label">${lbl}</div></div>`;
-        }
-
-        // Hourly Chart
-        const maxHr = Math.max(...hourlyToday, 1);
-        let hoursHtml = '';
-        hourlyToday.forEach((count, hr) => {
-            const height = (count / maxHr) * 80; // max height 80px
-            const lbl = (hr % 3 === 0) ? `<div class="al__hour-label">${String(hr).padStart(2,'0')}h</div>` : '';
-            hoursHtml += `<div class="al__hour-col"><div class="al__hour-bar" title="${count} actions" style="height: ${height}px;"></div>${lbl}</div>`;
-        });
-
-        // Entities List
-        const sortedEntities = Object.entries(entities30d).sort((a,b) => b[1] - a[1]).slice(0, 10);
-        const maxEnt = sortedEntities.length > 0 ? sortedEntities[0][1] : 1;
-        let entitiesHtml = sortedEntities.map(([ent, count]) => {
-            const pct = (count / maxEnt) * 100;
-            return `<div class="al__entity-row"><span class="al__entity-name">${ent}</span><div class="al__entity-bar-bg"><div class="al__entity-bar-fill" style="width: ${pct}%;"></div></div><span class="al__entity-count">${count}</span></div>`;
-        }).join('');
-
-        container.innerHTML = `
-            <div class="al__charts-row">
-                <div class="al__chart-card">
-                    <h3 class="al__chart-title">📈 Actions 7 derniers jours</h3>
-                    <div class="al__bar-chart">${bars7Html}</div>
-                </div>
-                <div class="al__chart-card">
-                    <h3 class="al__chart-title">⏰ Activité par heure (aujourd'hui)</h3>
-                    <div class="al__hour-chart">${hoursHtml}</div>
-                </div>
-                <div class="al__chart-card">
-                    <h3 class="al__chart-title">🏷️ Entités les plus sollicitées</h3>
-                    <div class="al__entity-list">${entitiesHtml}</div>
-                </div>
-            </div>
-        `;
-    },
-
-    renderPerfTable(perfAgents) {
-        const tbody = document.getElementById('alPerfTableBody');
-        if (!tbody) return;
-
-        const sortedAgents = Object.entries(perfAgents).sort((a, b) => b[1].total - a[1].total);
         
-        if (sortedAgents.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; color: #64748b;">Aucune activité récente.</td></tr>';
-            return;
-        }
-
-        tbody.innerHTML = sortedAgents.map(([agent, stats], idx) => {
-            let rankClass = '';
-            if (idx === 0) rankClass = 'al__rank--gold';
-            else if (idx === 1) rankClass = 'al__rank--silver';
-            else if (idx === 2) rankClass = 'al__rank--bronze';
-            
-            const lastDate = stats.lastAction ? new Date(stats.lastAction).toLocaleString('fr-FR') : '-';
-
-            return `
-                <tr>
-                    <td><span class="al__rank ${rankClass}">${idx + 1}</span></td>
-                    <td class="al__perf-name">${agent}</td>
-                    <td><strong>${stats.total}</strong></td>
-                    <td><span class="al__mini-badge al__mini-badge--green">${stats.creates}</span></td>
-                    <td><span class="al__mini-badge al__mini-badge--blue">${stats.updates}</span></td>
-                    <td><span class="al__mini-badge al__mini-badge--red">${stats.deletes}</span></td>
-                    <td><span class="al__mini-badge al__mini-badge--purple">${stats.logins}</span></td>
-                    <td class="al__td-date">${lastDate}</td>
-                </tr>
-            `;
-        }).join('');
-    },
-
-    updateUserSelect() {
-        const select = document.getElementById('alUserFilter');
-        if (!select) return;
-        const currentVal = select.value;
+        // Add v-cloak style
+        const style = document.createElement('style');
+        style.textContent = '[v-cloak] { display: none; }';
+        document.head.appendChild(style);
         
-        let html = '<option value="">Tous les agents</option>';
-        const sortedUsers = Array.from(this.usersList).sort();
-        sortedUsers.forEach(u => {
-            html += `<option value="${u}" ${u === currentVal ? 'selected' : ''}>${u}</option>`;
-        });
-        select.innerHTML = html;
-    },
-
-    applyFilters() {
-        const search = (document.getElementById('alSearch')?.value || '').toLowerCase().trim();
-        const action = document.getElementById('alActionFilter')?.value || '';
-        const user = document.getElementById('alUserFilter')?.value || '';
-        const entity = (document.getElementById('alEntityFilter')?.value || '').toLowerCase().trim();
-
-        this.filteredLogs = this.logs.filter(log => {
-            if (action && log.action !== action) return false;
-            if (user && log.user !== user) return false;
-            if (entity && (log.entity || '').toLowerCase() !== entity) return false;
-            if (search) {
-                const str = `${log.ip || ''} ${log.refId || ''} ${log.details || ''}`.toLowerCase();
-                if (!str.includes(search)) return false;
-            }
-            return true;
-        });
-
-        this.currentPage = 1;
-        this.renderLogTable();
-    },
-
-    resetFilters() {
-        if (document.getElementById('alSearch')) document.getElementById('alSearch').value = '';
-        if (document.getElementById('alActionFilter')) document.getElementById('alActionFilter').value = '';
-        if (document.getElementById('alUserFilter')) document.getElementById('alUserFilter').value = '';
-        if (document.getElementById('alEntityFilter')) document.getElementById('alEntityFilter').value = '';
-        this.applyFilters();
-    },
-
-    changePage(delta) {
-        const maxPage = Math.ceil(this.filteredLogs.length / this.itemsPerPage) || 1;
-        this.currentPage += delta;
-        if (this.currentPage < 1) this.currentPage = 1;
-        if (this.currentPage > maxPage) this.currentPage = maxPage;
-        this.renderLogTable();
-    },
-
-    renderLogTable() {
-        const tbody = document.getElementById('alLogTableBody');
-        if (!tbody) return;
-
-        const maxPage = Math.ceil(this.filteredLogs.length / this.itemsPerPage) || 1;
-        
-        document.getElementById('alPageInfo').textContent = `Page ${this.currentPage} / ${maxPage} · ${this.filteredLogs.length} résultat(s)`;
-        document.getElementById('alPrevPage').disabled = this.currentPage === 1;
-        document.getElementById('alNextPage').disabled = this.currentPage === maxPage;
-
-        if (this.filteredLogs.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="9" style="text-align: center; padding: 40px; color: #64748b;">Aucun log trouvé pour ces filtres.</td></tr>';
-            return;
-        }
-
-        const start = (this.currentPage - 1) * this.itemsPerPage;
-        const paginated = this.filteredLogs.slice(start, start + this.itemsPerPage);
-
-        const getActionStyle = (action) => {
-            switch(action) {
-                case 'CREATE': return 'background: rgba(22, 163, 74, 0.1); color: rgb(22, 163, 74);';
-                case 'UPDATE': return 'background: rgba(59, 130, 246, 0.1); color: rgb(59, 130, 246);';
-                case 'DELETE': return 'background: rgba(239, 68, 68, 0.1); color: rgb(239, 68, 68);';
-                case 'LOGIN': return 'background: rgba(168, 85, 247, 0.1); color: rgb(168, 85, 247);';
-                case 'SCAN': return 'background: rgba(99, 102, 241, 0.1); color: rgb(99, 102, 241);';
-                default: return 'background: rgba(100, 116, 139, 0.1); color: rgb(100, 116, 139);';
-            }
-        };
-
-        const getActionIcon = (action) => {
-            switch(action) {
-                case 'CREATE': return '➕';
-                case 'UPDATE': return '✏️';
-                case 'DELETE': return '🗑️';
-                case 'LOGIN': return '🔑';
-                case 'SCAN': return '📷';
-                case 'EXPORT': return '📄';
-                default: return '⚡';
-            }
-        };
-
-        const getStatusClass = (code) => {
-            const c = parseInt(code);
-            if (c >= 200 && c < 300) return 'al__status-dot--ok';
-            if (c >= 400) return 'al__status-dot--err';
-            return 'al__status-dot--warn';
-        };
-
-        tbody.innerHTML = paginated.map(log => {
-            const dateStr = log.date ? new Date(log.date).toLocaleString('fr-FR') : '-';
-            const actStr = log.action || 'UNKNOWN';
-            const style = getActionStyle(actStr);
-            const icon = getActionIcon(actStr);
-            
-            return `
-                <tr>
-                    <td class="al__td-date">${dateStr}</td>
-                    <td><span class="al__action-badge" style="${style}">${icon} ${actStr}</span></td>
-                    <td class="al__td-desc" title="${log.details || ''}">${log.details || `${actStr} — ${log.entity || 'inconnu'}`}</td>
-                    <td>
-                        <div class="al__user-cell">
-                            <span class="al__user-name">${log.user || '-'}</span>
-                            ${log.userId ? `<span class="al__user-id">#${log.userId.substring(0,4).toUpperCase()}</span>` : ''}
-                        </div>
-                    </td>
-                    <td><span class="al__entity-tag">${log.entity || '-'}</span></td>
-                    <td class="al__td-id">${log.refId || '—'}</td>
-                    <td class="al__td-ref">${log.docRef || '—'}</td>
-                    <td class="al__td-ip">${log.ip || '—'}</td>
-                    <td><span class="al__status-dot ${getStatusClass(log.status)}">${log.status || '200'}</span></td>
-                </tr>
-            `;
-        }).join('');
+        this.vueApp.mount('#vue-audit-log');
     }
 };

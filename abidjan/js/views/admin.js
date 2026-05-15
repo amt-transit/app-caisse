@@ -1,8 +1,9 @@
-import { db, app as firebaseApp } from '../../../firebase-config.js';
+import { db, app as firebaseApp, functions } from '../../../firebase-config.js';
 import { collection, query, onSnapshot, doc, getDoc, setDoc, updateDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
-import { initializeApp, deleteApp } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js";
-import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, deleteUser, signOut } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-auth.js";
+import { getAuth } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-auth.js";
 import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-storage.js";
+import { httpsCallable } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-functions.js";
+import { AGENCIES } from '../../../agencies-config.js';
 
 export const AdminView = {
     unsub: null,
@@ -15,6 +16,10 @@ export const AdminView = {
         this.app = app;
         window.app.views = window.app.views || {};
         window.app.views.admin = this;
+
+        const agencyOptionsHtml = Object.values(AGENCIES).map(a => 
+            `<option value="${a.id}">${a.name} ${a.flag}</option>`
+        ).join('') + '<option value="all">Global (Accès Total) 🌍</option>';
 
         const html = `
             <style>
@@ -81,6 +86,19 @@ export const AdminView = {
                     .am__card-details { font-size: 13px; color: #475569; margin-bottom: 15px; line-height: 1.6; }
                     .am__card-bottom { display: flex; justify-content: space-between; align-items: center; }
                     .am__online-dot--card { position: absolute; top: 0; right: 0; }
+                    
+                    .compact-mob-card { background: white; border-radius: 12px; padding: 15px; border: 1px solid #e2e8f0; box-shadow: 0 2px 4px rgba(0,0,0,0.02); display: flex; flex-direction: column; gap: 10px; }
+                    .cmc-header { display: flex; justify-content: space-between; align-items: flex-start; }
+                    .cmc-ref-group { display: flex; align-items: center; gap: 10px; }
+                    .cmc-ref { font-weight: 700; color: #0f172a; font-size: 14px; }
+                    .cmc-body { font-size: 13px; color: #475569; }
+                    .cmc-meta { font-size: 11px; color: #64748b; margin-top: 4px; display: flex; align-items: center; gap: 6px; }
+                    .cmc-footer { display: flex; justify-content: space-between; align-items: center; padding-top: 10px; border-top: 1px solid #f1f5f9; }
+                    .cmc-actions { display: flex; gap: 8px; }
+                    .cmc-btn { width: 32px; height: 32px; border-radius: 8px; border: 1px solid #e2e8f0; background: white; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: 0.2s; }
+                    .cmc-btn:hover { background: #f1f5f9; }
+                    .cmc-btn-del { color: #ef4444; border-color: #fecaca; background: #fef2f2; }
+                    .cmc-btn-del:hover { background: #fee2e2; }
                 }
             </style>
 
@@ -93,9 +111,14 @@ export const AdminView = {
                             <p class="am__subtitle">Gérez les comptes, rôles et accès de votre équipe</p>
                         </div>
                     </div>
-                    <button class="btn btn-primary" onclick="window.app.views.admin.openModal()" style="display: flex; align-items: center; gap: 8px;">
-                        <i class="fas fa-plus"></i> Nouvel Agent
-                    </button>
+                    <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                        <button class="btn btn-outline" onclick="window.app.renderPage('settings-roles')" style="display: flex; align-items: center; gap: 8px; background: white; border: 1px solid #cbd5e1; color: #475569; padding: 10px 16px; border-radius: 8px; font-weight: bold; cursor: pointer;">
+                            <i class="fas fa-user-shield"></i> Rôles & Permissions
+                        </button>
+                        <button class="btn btn-primary" onclick="window.app.views.admin.openModal()" style="display: flex; align-items: center; gap: 8px;">
+                            <i class="fas fa-plus"></i> Nouvel Agent
+                        </button>
+                    </div>
                 </div>
 
                 <div class="am__kpi-row" id="kpiContainer">
@@ -198,9 +221,7 @@ export const AdminView = {
                         <div class="form-group">
                             <label style="font-weight: 600; color: #1e293b; margin-bottom: 6px; display: block;">Agence *</label>
                             <select id="agentAgency" style="width: 100%; padding: 12px; border: 1px solid #cbd5e1; border-radius: 8px;">
-                                <option value="abidjan">ABIDJAN (AMT CARGO)</option>
-                                <option value="paris">PARIS (AMT TRANSIT)</option>
-                                <option value="all">Global (Accès Total)</option>
+                            ${agencyOptionsHtml}
                             </select>
                         </div>
                     </div>
@@ -302,7 +323,7 @@ export const AdminView = {
             cards.innerHTML = this.filteredAgents.map(a => {
                 const isActive = a.active !== false;
                 const name = a.displayName || a.email || 'Sans nom';
-                const agency = a.agency === 'abidjan' ? 'ABIDJAN' : (a.agency === 'paris' ? 'PARIS' : (a.agency === 'all' ? 'GLOBAL' : (a.agency || 'N/A')));
+            const agency = AGENCIES[a.agency] ? AGENCIES[a.agency].name : (a.agency === 'all' ? 'GLOBAL' : (a.agency || 'N/A'));
                 const isOnline = isUserOnline(a);
                 
                 // Affichage direct si c'est l'utilisateur connecté (évite le délai serveur)
@@ -346,7 +367,7 @@ export const AdminView = {
             tbody.innerHTML = this.filteredAgents.map(a => {
                 const isActive = a.active !== false; // Actif par défaut
                 const name = a.displayName || a.email || 'Sans nom';
-                const agency = a.agency === 'abidjan' ? 'ABIDJAN (AMT CARGO)' : (a.agency === 'paris' ? 'PARIS AMT TRANSIT' : (a.agency === 'all' ? 'GLOBAL' : (a.agency || 'Non définie')));
+            const agency = AGENCIES[a.agency] ? AGENCIES[a.agency].name : (a.agency === 'all' ? 'GLOBAL' : (a.agency || 'N/A'));
                 
                 // Affichage direct si c'est l'utilisateur connecté
                 const auth = getAuth();
@@ -537,28 +558,14 @@ export const AdminView = {
                 await updateDoc(doc(db, "users", id), payload);
                 this.app.showToast("Agent modifié avec succès.", "success");
             } else {
-                const firebaseConfig = {
-                    apiKey: "AIzaSyA255n3XWDRKaYZ9kwOYkfovf5lRexoCA4",
-                    authDomain: "caisse-amt-perso.firebaseapp.com",
-                    projectId: "caisse-amt-perso",
-                    storageBucket: "caisse-amt-perso.firebasestorage.app",
-                    messagingSenderId: "682789156997",
-                    appId: "1:682789156997:web:9ce3303120851d37be91ec"
-                };
-
-                const secondaryApp = initializeApp(firebaseConfig, `secondary-auth-${Date.now()}`);
-                const secondaryAuth = getAuth(secondaryApp);
-
-                const userCred = await createUserWithEmailAndPassword(secondaryAuth, email, password);
-                const uid = userCred.user.uid;
+                const createAgentFunc = httpsCallable(functions, 'createAgent');
+                const result = await createAgentFunc({ email: email, password: password, displayName: name });
+                const uid = result.data.uid;
 
                 payload.active = true;
                 payload.createdAt = new Date().toISOString();
 
                 await setDoc(doc(db, "users", uid), payload);
-
-                await signOut(secondaryAuth);
-                await deleteApp(secondaryApp);
 
                 this.app.showToast(`Compte créé avec succès pour ${name} !`, "success");
             }
@@ -590,27 +597,11 @@ export const AdminView = {
             if (agentDoc.exists()) {
                 const agentData = agentDoc.data();
                 
-                if (agentData.email && agentData.password) {
-                    const firebaseConfig = {
-                        apiKey: "AIzaSyA255n3XWDRKaYZ9kwOYkfovf5lRexoCA4",
-                        authDomain: "caisse-amt-perso.firebaseapp.com",
-                        projectId: "caisse-amt-perso",
-                        storageBucket: "caisse-amt-perso.firebasestorage.app",
-                        messagingSenderId: "682789156997",
-                        appId: "1:682789156997:web:9ce3303120851d37be91ec"
-                    };
-
-                    const secondaryApp = initializeApp(firebaseConfig, `secondary-auth-del-${Date.now()}`);
-                    const secondaryAuth = getAuth(secondaryApp);
-
-                    try {
-                        const userCred = await signInWithEmailAndPassword(secondaryAuth, agentData.email, agentData.password);
-                        await deleteUser(userCred.user); 
-                    } catch (authErr) {
-                        console.warn("Impossible de supprimer l'Auth (compte déjà supprimé ou MDP changé) :", authErr);
-                    } finally {
-                        await deleteApp(secondaryApp);
-                    }
+                try {
+                    const deleteAgentFunc = httpsCallable(functions, 'deleteAgent');
+                    await deleteAgentFunc({ uid: id });
+                } catch (funcErr) {
+                    console.warn("Impossible de supprimer l'Auth (Cloud Function) :", funcErr);
                 }
             }
 

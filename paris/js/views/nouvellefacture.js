@@ -1,27 +1,20 @@
 import { db } from '../../../firebase-config.js';
 import { collection, doc, writeBatch, getDocs, query, where, limit } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
-import { Autocomplete } from './autocomplete.js';
+import { CONSTANTS } from '../../../constants.js';
+import { createApp, ref, reactive, computed, onMounted } from "https://unpkg.com/vue@3/dist/vue.esm-browser.prod.js";
+import { getCollectionName } from '../../../agencies-config.js';
 
 export const NouvelleFactureView = {
-    items: [{ id: Date.now(), desc: '', qty: 1, pu: 0, total: 0, vol: 0 }],
-    destMap: new Map(),
-    destInfos: new Map(),
-    destExpMap: new Map(),
-    clientsData: new Map(),
-    productsData: new Map(),
+    vueApp: null,
 
     render(app) {
-        this.app = app;
-        this.currentContainer = 'ATT'; // Conteneur par défaut le temps du chargement
-        this.items = [{ id: Date.now(), desc: '', qty: 1, pu: 0, total: 0, vol: 0 }]; // Reset des lignes
-        this.destMap.clear();
-        this.destInfos.clear();
-        this.destExpMap.clear();
-        this.availableDests = [];
-        this.availableCommunes = [];
+        const globalApp = app;
+        window.app.views = window.app.views || {};
+        window.app.views.nouvelleFacture = this;
 
         const html = `
             <style>
+                [v-cloak] { display: none; }
                 .nf-item-grid {
                     display: grid;
                     grid-template-columns: 2fr 0.6fr 1fr 1fr auto;
@@ -195,670 +188,389 @@ export const NouvelleFactureView = {
             </div>
             
         `;
-        // --- Écouteur pour l'auto-remplissage du lieu de livraison ---
-        const destInput = document.getElementById('nfDestinataire');
-        const lieuInput = document.getElementById('nfLieu'); // Assurez-vous que l'ID correspond bien à votre champ "Lieu livraison"
-
-        if (destInput && lieuInput) {
-            destInput.addEventListener('input', (e) => {
-                const selectedDest = e.target.value.trim();
-                
-                // Si le destinataire tapé existe dans notre historique, on remplit l'adresse
-                if (this.destInfos.has(selectedDest)) {
-                    // On ne remplace la valeur que si le champ lieu est actuellement vide 
-                    // (pour éviter d'effacer une adresse que l'agent aurait commencé à taper)
-                    if (lieuInput.value.trim() === '') {
-                        lieuInput.value = this.destInfos.get(selectedDest);
-                        
-                        // Optionnel : Petit effet visuel pour montrer que ça a été auto-rempli
-                        lieuInput.style.backgroundColor = '#e0f2fe'; 
-                        setTimeout(() => lieuInput.style.backgroundColor = '', 1000);
-                    }
-                }
-            });
-        }
 
         document.getElementById('contentContainer').innerHTML = html;
-        
-        // Attacher les événements après le rendu
-        this.renderItems();
-        document.getElementById('nfAddRowBtn').addEventListener('click', () => this.addRow());
-        document.getElementById('nfMontantPaye').addEventListener('input', () => this.calculateTotals());
-        document.getElementById('nfSubmitBtn').addEventListener('click', () => this.submitInvoice());
-        
-        // Auto-complétion instantanée avec léger délai (debounce) pour ne pas surcharger la base de données
-        let expTimeout;
-        document.getElementById('nfExpediteur').addEventListener('input', () => {
-            clearTimeout(expTimeout);
-            expTimeout = setTimeout(() => this.handleExpediteurChange(), 300);
-        });
-        
-        let destTimeout;
-        document.getElementById('nfDestinataire').addEventListener('input', () => {
-            clearTimeout(destTimeout);
-            destTimeout = setTimeout(() => this.handleDestinataireChange(), 300);
-        });
-        
-        this.loadAutocompleteData();
+    this.initVue(globalApp);
+},
 
-        // Setup Autocompletes
-        Autocomplete.initCustom('nfExpediteur', 'nfExpediteurSuggestions',
-            (q) => {
-                const query = q.toLowerCase();
-                return Array.from(this.clientsData.values()).filter(c => (c.nom && c.nom.toLowerCase().includes(query)) || (c.tel && c.tel.includes(query))).slice(0, 8);
-            },
-            (c) => `<div style="font-weight: 600;">${c.nom}</div><div style="font-size: 11px; opacity: 0.7;">📞 ${c.tel || 'N/A'}</div>`,
-            (c, input) => { input.value = c.nom; this.handleExpediteurChange(); },
-            { clearOnMismatch: ['nfDestinataire', 'nfLieu'] } // Nettoyage Automatique
-        );
-        document.getElementById('nfExpediteur').addEventListener('input', (e) => { if(e.target.value.trim().length < 2) this.handleExpediteurChange(); });
+initVue(globalApp) {
+    if (this.vueApp) this.vueApp.unmount();
 
-        Autocomplete.initCustom('nfDestinataire', 'nfDestinataireSuggestions',
-            (q) => {
-                const query = q.toLowerCase();
-                let matches = Array.from(this.destMap.keys()).filter(d => d.toLowerCase().includes(query));
+    this.vueApp = createApp({
+        setup() {
+            const currentContainer = ref('ATT');
+            const saving = ref(false);
+            
+            const clientsData = ref(new Map());
+            const destMap = ref(new Map());
+            const destInfos = ref(new Map());
+            const destExpMap = ref(new Map());
+            const productsData = ref(new Map());
+            const availableDests = ref([]);
+            const availableCommunes = ref([]);
+            
+            const form = reactive({
+                date: new Date().toISOString().split('T')[0],
+                type: 'FACTURE',
+                agence: 'ABIDJAN',
+                expediteur: '',
+                destinataire: '',
+                lieu: '',
+                modePay: 'ESPECES',
+                valeur: '',
+                volume: '',
+                montantPaye: 0,
+                comment: ''
+            });
+            
+            const items = ref([{ id: Date.now(), desc: '', qty: 1, pu: 0, total: 0, vol: 0, showSugg: false }]);
+            
+            // Feedback states
+            const expFeedback = ref('');
+            const destFeedback = ref('');
+            
+            // UI states for suggestions
+            const showExpSugg = ref(false);
+            const showDestSugg = ref(false);
+            const showLieuSugg = ref(false);
+
+            // Loading Data
+            const loadAutocompleteData = async () => {
+                try {
+                    const activeAgency = sessionStorage.getItem('currentActiveAgency') || 'paris';
+                    const clientsSnap = await getDocs(query(collection(db, getCollectionName("clients")), where("agency", "==", activeAgency)));
+                    const cd = new Map();
+                    clientsSnap.forEach(doc => {
+                        const data = doc.data();
+                        if (data.nom) cd.set(data.nom.trim(), data);
+                    });
+                    clientsData.value = cd;
+
+                    const livSnap = await getDocs(query(collection(db, getCollectionName("livraisons")), where("agency", "==", activeAgency)));
+                    const communesSet = new Set(['ABOBO', 'ADJAME', 'ATTECOUBE', 'BINGERVILLE', 'COCODY', 'KOUMASSI', 'MARCORY', 'PLATEAU', 'PORT-BOUET', 'YOPOUGON', 'PAS DE LIVRAISON (Retrait Entrepôt)']);
+                    const destSet = new Set();
+                    const dMap = new Map();
+                    const dInfos = new Map();
+                    const dExpMap = new Map();
+
+                    livSnap.forEach(doc => {
+                        const data = doc.data();
+                        if (data.lieuLivraison && data.lieuLivraison.trim() !== '') {
+                            communesSet.add(data.lieuLivraison.trim());
+                        }
+                        if (data.destinataire && data.destinataire.trim() !== '') {
+                            const destName = data.destinataire.trim();
+                            destSet.add(destName);
+                            if (data.lieuLivraison && !dMap.has(destName)) dMap.set(destName, data.lieuLivraison.trim());
+                            if (data.expediteur && !dExpMap.has(destName)) dExpMap.set(destName, data.expediteur.trim());
+                        }
+                    });
+
+                    availableCommunes.value = Array.from(communesSet).sort();
+                    availableDests.value = Array.from(destSet).sort();
+                    destMap.value = dMap;
+                    destInfos.value = dInfos;
+                    destExpMap.value = dExpMap;
+
+                    const prodSnap = await getDocs(collection(db, getCollectionName("products")));
+                    const pd = new Map();
+                    prodSnap.forEach(doc => {
+                        const data = doc.data();
+                        if (data.desc) pd.set(data.desc.trim(), data);
+                    });
+                    productsData.value = pd;
+                    
+                    const { getDoc, doc: fsDoc } = await import("https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js");
+                    const configSnap = await getDoc(fsDoc(db, "settings", `container_config_${activeAgency}`));
+                    if (configSnap.exists() && configSnap.data().activeContainer) {
+                        currentContainer.value = configSnap.data().activeContainer.trim().toUpperCase();
+                    } else {
+                        currentContainer.value = 'ATT';
+                    }
+                } catch (e) {
+                    console.error("Erreur de chargement :", e);
+                }
+            };
+
+            onMounted(async () => {
+                await loadAutocompleteData();
+                const reuseExp = sessionStorage.getItem('reuseExpediteur');
+                if (reuseExp) {
+                    form.expediteur = reuseExp;
+                    handleExpediteurChange();
+                    sessionStorage.removeItem('reuseExpediteur');
+                }
+            });
+
+            // Computed suggestions
+            const expQuery = computed(() => form.expediteur.toLowerCase().trim());
+            const filteredExpediteurs = computed(() => {
+                if (expQuery.value.length < 2) return [];
+                return Array.from(clientsData.value.values())
+                    .filter(c => (c.nom && c.nom.toLowerCase().includes(expQuery.value)) || (c.tel && c.tel.includes(expQuery.value)))
+                    .slice(0, 8);
+            });
+
+            const destQuery = computed(() => form.destinataire.toLowerCase().trim());
+            const filteredDestinataires = computed(() => {
+                if (destQuery.value.length < 2) return [];
+                let matches = Array.from(destMap.value.keys()).filter(d => d.toLowerCase().includes(destQuery.value));
                 if (matches.length < 5) {
-                    const globalMatches = (this.availableDests || []).filter(d => d.toLowerCase().includes(query));
+                    const globalMatches = availableDests.value.filter(d => d.toLowerCase().includes(destQuery.value));
                     matches = [...new Set([...matches, ...globalMatches])];
                 }
                 return matches.slice(0, 8);
-            },
-            (d) => `<div style="font-weight: 600;">${d}</div>`,
-            (d, input) => { input.value = d; this.handleDestinataireChange(); },
-            { clearOnMismatch: ['nfLieu'] } // Nettoyage Automatique
-        );
-        document.getElementById('nfDestinataire').addEventListener('input', (e) => { if(e.target.value.trim().length < 2) this.handleDestinataireChange(); });
-
-        Autocomplete.initCustom('nfLieu', 'nfLieuSuggestions',
-            (q) => {
-                const query = q.toLowerCase();
-                const matches = (this.availableCommunes || []).filter(c => c.toLowerCase().includes(query));
-                return matches.slice(0, 8);
-            },
-            (c) => `<div style="font-weight: 600;">${c}</div>`,
-            (c, input) => { input.value = c; }
-        );
-
-        // --- RÉCUPÉRATION POUR "RÉUTILISER FACTURE" ---
-        setTimeout(() => {
-            const reuseExp = sessionStorage.getItem('reuseExpediteur');
-            if (reuseExp) {
-                const expInput = document.getElementById('nfExpediteur');
-                if (expInput) {
-                    expInput.value = reuseExp;
-                    this.handleExpediteurChange(); // Déclenche l'auto-complétion (Téléphone, Adresse...)
-                }
-                sessionStorage.removeItem('reuseExpediteur');
-            }
-        }, 500); // Petit délai pour laisser l'auto-complétion charger d'abord
-    },
-
-    async loadAutocompleteData() {
-        try {
-            // Charger tous les clients existants pour garnir la liste des expéditeurs
-            const clientsSnap = await getDocs(collection(db, "clients"));
-            this.clientsData.clear();
-            
-            clientsSnap.forEach(doc => {
-                const data = doc.data();
-                if (data.nom) {
-                    this.clientsData.set(data.nom.trim(), data);
-                }
-            });
-            
-
-            // NOUVEAU: Charger TOUTES les adresses et destinataires pour auto-complétion globale
-            const livSnap = await getDocs(collection(db, "livraisons"));
-            const communesSet = new Set(['ABOBO', 'ADJAME', 'ATTECOUBE', 'BINGERVILLE', 'COCODY', 'KOUMASSI', 'MARCORY', 'PLATEAU', 'PORT-BOUET', 'YOPOUGON', 'PAS DE LIVRAISON (Retrait Entrepôt)']);
-            const destSet = new Set();
-
-            livSnap.forEach(doc => {
-                const data = doc.data();
-                if (data.lieuLivraison && data.lieuLivraison.trim() !== '') {
-                    communesSet.add(data.lieuLivraison.trim());
-                }
-                if (data.destinataire && data.destinataire.trim() !== '') {
-                    const destName = data.destinataire.trim();
-                    destSet.add(destName);
-                    
-                    // NOUVEAU : Sauvegarder le lieu de livraison associé à ce destinataire
-                    if (data.lieuLivraison && !this.destInfos.has(destName)) {
-                        this.destInfos.set(destName, data.lieuLivraison.trim());
-                    }
-                    if (data.expediteur && !this.destExpMap.has(destName)) {
-                        this.destExpMap.set(destName, data.expediteur.trim());
-                    }
-                }
             });
 
-            this.availableCommunes = Array.from(communesSet).sort();
-            this.availableDests = Array.from(destSet).sort();
-        } catch (e) {
-            console.error("Erreur de chargement de l'auto-complétion :", e);
-        }
-    },
-
-    async handleExpediteurChange() {
-        const expediteur = document.getElementById('nfExpediteur').value.trim();
-        const destinataireInput = document.getElementById('nfDestinataire');
-        const feedbackExp = document.getElementById('nfExpediteurFeedback');
-        
-        if (!expediteur) {
-            if(feedbackExp) feedbackExp.innerHTML = '';
-            return;
-        }
-
-        // Affichage des informations de l'expéditeur (Tél & Adresse)
-        if (this.clientsData && this.clientsData.has(expediteur)) {
-            const clientInfo = this.clientsData.get(expediteur);
-            if (feedbackExp) {
-                feedbackExp.innerHTML = `<span style="color:#059669;"><i class="fas fa-check-circle"></i> <b>Tél:</b> ${clientInfo.tel || 'N/A'} | <b>Adresse:</b> ${clientInfo.adresse || 'N/A'}</span>`;
-            }
-        } else {
-            if (feedbackExp) {
-                feedbackExp.innerHTML = `<span style="color:#f59e0b;"><i class="fas fa-exclamation-triangle"></i> Nouveau client expéditeur</span>`;
-            }
-        }
-
-        try {
-            // Recherche des colis précédents envoyés par ce client
-            const qLiv = query(collection(db, "livraisons"), where("expediteur", "==", expediteur));
-            const livSnap = await getDocs(qLiv);
-            
-            this.destMap.clear();
-            this.destInfos.clear();
-            
-            livSnap.forEach(doc => {
-                const data = doc.data();
-                if (data.destinataire && data.destinataire.trim()) {
-                    const destName = data.destinataire.trim();
-                    this.destMap.set(destName, data.lieuLivraison || '');
-                    this.destInfos.set(destName, data.numero || '');
-                }
+            const lieuQuery = computed(() => form.lieu.toLowerCase().trim());
+            const filteredLieux = computed(() => {
+                if (lieuQuery.value.length < 2) return [];
+                return availableCommunes.value.filter(c => c.toLowerCase().includes(lieuQuery.value)).slice(0, 8);
             });
 
-            const uniqueDests = Array.from(this.destMap.keys());
-            
-            if (uniqueDests.length > 0) {
-                if (uniqueDests.length === 1) {
-                    // Pré-remplissage automatique si le champ Destinataire est vide ou différent
-                    if (!destinataireInput.value || destinataireInput.value !== uniqueDests[0]) {
-                        destinataireInput.value = uniqueDests[0];
-                        // Déclencher manuellement le chargement du lieu associé
-                        this.handleDestinataireChange();
-                    }
-                } else {
-                    if (feedbackExp) {
-                        feedbackExp.innerHTML += `<br><span style="color:#3b82f6;"><i class="fas fa-info-circle"></i> ${uniqueDests.length} destinataires trouvés. Utilisez la flèche pour choisir.</span>`;
-                    }
-                }
-            }
-        } catch (error) {
-            console.error("Erreur de recherche des destinataires :", error);
-        }
-    },
+            const getFilteredProducts = (queryText) => {
+                if (!queryText || queryText.length < 2) return [];
+                const q = queryText.toLowerCase();
+                return Array.from(productsData.value.values()).filter(p => p.desc && p.desc.toLowerCase().includes(q)).slice(0, 8);
+            };
 
-    async handleDestinataireChange() {
-        const destinataireInput = document.getElementById('nfDestinataire');
-        const lieuInput = document.getElementById('nfLieu');
-        const feedbackDest = document.getElementById('nfDestinataireFeedback');
-        const expInput = document.getElementById('nfExpediteur');
-        
-        const selectedDest = destinataireInput ? destinataireInput.value.trim() : '';
+            // Selection handlers
+            const selectExp = (c) => { form.expediteur = c.nom; showExpSugg.value = false; handleExpediteurChange(); };
+            const selectDest = (d) => { form.destinataire = d; showDestSugg.value = false; handleDestinataireChange(); };
+            const selectLieu = (l) => { form.lieu = l; showLieuSugg.value = false; };
+            const selectProduct = (item, p) => { item.desc = p.desc; item.showSugg = false; updateItem(item, 'desc'); };
 
-        if (!selectedDest) {
-            if (feedbackDest) feedbackDest.innerHTML = '';
-            if (lieuInput) lieuInput.value = ''; // IMPORTANT : Vider le lieu si on efface le destinataire
-            return;
-        }
+            const hideSugg = (type, item = null) => {
+                setTimeout(() => {
+                    if (type === 'exp') showExpSugg.value = false;
+                    if (type === 'dest') showDestSugg.value = false;
+                    if (type === 'lieu') showLieuSugg.value = false;
+                    if (type === 'prod' && item) item.showSugg = false;
+                }, 200);
+            };
 
-        let lieu = '';
-        let num = '';
-        let exp = '';
-        let isFound = false;
-
-        // 1. Chercher dans l'historique lié à l'expéditeur actuel
-        if (this.destMap && this.destMap.has(selectedDest)) {
-            lieu = this.destMap.get(selectedDest);
-            num = this.destInfos.get(selectedDest);
-            isFound = true;
-        } else {
-            // 2. Sinon, chercher globalement dans la base de données
-            try {
-                const qLiv = query(collection(db, "livraisons"), where("destinataire", "==", selectedDest), limit(1));
-                const snap = await getDocs(qLiv);
-                if (!snap.empty) {
-                    const data = snap.docs[0].data();
-                    lieu = data.lieuLivraison || data.commune || '';
-                    num = data.numero || '';
-                    exp = data.expediteur || '';
-                    isFound = true;
-                }
-            } catch (e) {
-                console.error(e);
-            }
-        }
-        
-        if (!exp && this.destExpMap && this.destExpMap.has(selectedDest)) {
-            exp = this.destExpMap.get(selectedDest);
-        }
-
-        if (expInput && isFound && exp && expInput.value.trim() === '') {
-            expInput.value = exp;
-            expInput.style.backgroundColor = '#e0f2fe';
-            setTimeout(() => expInput.style.backgroundColor = '', 1000);
-            this.handleExpediteurChange();
-        }
-
-        // Appliquer l'adresse complète directement (Même si vide, on l'applique pour écraser)
-        if (lieuInput && isFound) {
-            lieuInput.value = lieu || '';
-        }
-
-        // Afficher le feedback
-        if (isFound) {
-            if (feedbackDest) feedbackDest.innerHTML = `<span style="color:#059669;"><i class="fas fa-check-circle"></i> <b>Tél:</b> ${num || 'N/A'}</span>`;
-        } else {
-            if (feedbackDest) feedbackDest.innerHTML = `<span style="color:#f59e0b;"><i class="fas fa-exclamation-triangle"></i> Nouveau destinataire</span>`;
-        }
-    },
-
-    renderItems() {
-        const container = document.getElementById('nfItemsContainer');
-        container.innerHTML = this.items.map((item, index) => `
-            <div class="nf-item-grid" style="align-items: end; background: #f8fafc; padding: 15px; border-radius: 8px; margin-bottom: 10px; border: 1px solid #e2e8f0;">
-                <div class="form-group nf-desc-col" style="margin: 0;">
-                    <label style="font-size: 11px;">Description *</label>
-                    <div style="position: relative; width: 100%;">
-                        <input type="text" class="item-desc" id="nfProduct_${item.id}" data-id="${item.id}" value="${item.desc}" placeholder="Ex: TV 55 pouces" style="margin: 0; width: 100%;" autocomplete="off">
-                        <ul id="nfProductSuggestions_${item.id}" class="autocomplete-suggestions"></ul>
-                    </div>
-                </div>
-                <div class="form-group" style="margin: 0;">
-                    <label style="font-size: 11px;">Qté *</label>
-                    <input type="number" class="item-qty" data-id="${item.id}" value="${item.qty}" min="1" style="margin: 0; text-align: center; width: 100%;">
-                </div>
-                <div class="form-group" style="margin: 0;">
-                    <label style="font-size: 11px;">P.U (€) *</label>
-                    <input type="number" class="item-pu" data-id="${item.id}" value="${item.pu}" min="0" style="margin: 0; text-align: right; width: 100%;">
-                </div>
-                <div class="form-group nf-total-col" style="margin: 0;">
-                    <label style="font-size: 11px;">Total</label>
-                    <input type="text" value="${item.total} €" readonly style="margin: 0; background: #e2e8f0; font-weight: bold; text-align: right; width: 100%;">
-                </div>
-                <div class="nf-action-col">
-                    <button class="btn btn-danger btn-small" onclick="window.nfRemoveRow(${item.id})" style="height: 36px; display: flex; align-items: center; justify-content: center; width: 100%;" ${this.items.length === 1 ? 'disabled' : ''}><i class="fas fa-trash"></i></button>
-                </div>
-            </div>
-        `).join('');
-
-        // Attacher les écouteurs sur les inputs
-        document.querySelectorAll('.item-desc').forEach(el => el.addEventListener('input', (e) => this.updateItem(e, 'desc')));
-        document.querySelectorAll('.item-qty').forEach(el => el.addEventListener('input', (e) => this.updateItem(e, 'qty')));
-        document.querySelectorAll('.item-pu').forEach(el => el.addEventListener('input', (e) => this.updateItem(e, 'pu')));
-
-        this.items.forEach(item => {
-            Autocomplete.initCustom(`nfProduct_${item.id}`, `nfProductSuggestions_${item.id}`,
-                (q) => {
-                    const query = q.toLowerCase();
-                    return Array.from(this.productsData.values()).filter(p => p.desc && p.desc.toLowerCase().includes(query)).slice(0, 8);
-                },
-                (p) => `<div style="font-weight: 600;">${p.desc}</div><div style="font-size: 11px; opacity: 0.7;">Prix: ${p.price || 0} €</div>`,
-                (p, input) => {
-                    input.value = p.desc;
-                    input.dispatchEvent(new Event('input')); // Déclenche le calcul
-                }
-            );
-        });
-
-        window.nfRemoveRow = (id) => {
-            if (this.items.length > 1) {
-                this.items = this.items.filter(i => i.id !== id);
-                this.renderItems();
-                this.calculateTotals();
-            }
-        };
-    },
-
-    addRow() {
-        this.items.push({ id: Date.now(), desc: '', qty: 1, pu: 0, total: 0, vol: 0 });
-        this.renderItems();
-    },
-
-    updateItem(e, field) {
-        const id = parseInt(e.target.dataset.id);
-        const item = this.items.find(i => i.id === id);
-        if (item) {
-            if (field === 'desc') {
-                item.desc = e.target.value;
+            // Logic handlers
+            const handleExpediteurChange = async () => {
+                const exp = form.expediteur.trim();
+                if (!exp) { expFeedback.value = ''; return; }
                 
-                // NOUVEAU : Auto-remplissage du prix si le produit est reconnu
-                if (this.productsData && this.productsData.has(item.desc)) {
-                    const prod = this.productsData.get(item.desc);
-                    item.pu = parseFloat(prod.price) || 0;
-                    // Auto-remplissage du volume caché pour le calcul total
-                    item.vol = parseFloat(prod.dim) || 0;
-                    // Mise à jour visuelle du champ P.U
-                    const puInput = document.querySelector(`.item-pu[data-id="${id}"]`);
-                    if (puInput) puInput.value = item.pu;
+                if (clientsData.value.has(exp)) {
+                    const info = clientsData.value.get(exp);
+                    expFeedback.value = `<span style="color:#059669;"><i class="fas fa-check-circle"></i> <b>Tél:</b> ${info.tel || 'N/A'} | <b>Adresse:</b> ${info.adresse || 'N/A'}</span>`;
                 } else {
-                    item.vol = 0;
+                    expFeedback.value = `<span style="color:#f59e0b;"><i class="fas fa-exclamation-triangle"></i> Nouveau client expéditeur</span>`;
                 }
-            }
-            if (field === 'qty') item.qty = parseInt(e.target.value) || 0;
-            if (field === 'pu') item.pu = parseFloat(e.target.value) || 0;
-            
-            item.total = item.qty * item.pu;
-            
-            // Mise à jour visuelle du total de cette ligne SANS tout re-rendre (Évite la perte de focus !)
-            const row = e.target.closest('.form-grid');
-            if (row) {
-                const totalInput = row.querySelector('input[readonly]');
-                if (totalInput) totalInput.value = item.total + ' €';
-            }
-            
-            this.calculateTotals();
-            // ATTENTION : Ne PLUS appeler this.renderItems() ici !
-        }
-    },
-    async loadAutocompleteData() {
-        try {
-            // (Gardez votre code existant pour clientsSnap et livSnap ici...)
-            const clientsSnap = await getDocs(collection(db, "clients"));
-            this.clientsData.clear();
-            
-            clientsSnap.forEach(doc => {
-                const data = doc.data();
-                if (data.nom) {
-                    this.clientsData.set(data.nom.trim(), data);
+
+                try {
+                    const qLiv = query(collection(db, getCollectionName("livraisons")), where("expediteur", "==", exp));
+                    const livSnap = await getDocs(qLiv);
+                    
+                    const localDestMap = new Map();
+                    livSnap.forEach(doc => {
+                        const data = doc.data();
+                        if (data.destinataire && data.destinataire.trim()) {
+                            const destName = data.destinataire.trim();
+                            localDestMap.set(destName, data.lieuLivraison || '');
+                            destMap.value.set(destName, data.lieuLivraison || '');
+                            destInfos.value.set(destName, data.numero || '');
+                        }
+                    });
+
+                    const uniqueDests = Array.from(localDestMap.keys());
+                    if (uniqueDests.length > 0) {
+                        if (uniqueDests.length === 1) {
+                            if (!form.destinataire || form.destinataire !== uniqueDests[0]) {
+                                form.destinataire = uniqueDests[0];
+                                handleDestinataireChange();
+                            }
+                        } else {
+                            expFeedback.value += `<br><span style="color:#3b82f6;"><i class="fas fa-info-circle"></i> ${uniqueDests.length} destinataires trouvés. Utilisez la flèche pour choisir.</span>`;
+                        }
+                    }
+                } catch (error) {
+                    console.error("Erreur de recherche des destinataires :", error);
                 }
-            });
-            
-            const datalistExp = document.getElementById('nfExpediteursList');
-            if (datalistExp) {
-                datalistExp.innerHTML = Array.from(this.clientsData.keys()).sort().map(nom => `<option value="${nom}"></option>`).join('');
-            }
+            };
 
-            const livSnap = await getDocs(collection(db, "livraisons"));
-            const communesSet = new Set(['ABOBO', 'ADJAME', 'ATTECOUBE', 'BINGERVILLE', 'COCODY', 'KOUMASSI', 'MARCORY', 'PLATEAU', 'PORT-BOUET', 'YOPOUGON', 'PAS DE LIVRAISON (Retrait Entrepôt)']);
-            const destSet = new Set();
-
-            livSnap.forEach(doc => {
-                const data = doc.data();
-                if (data.lieuLivraison && data.lieuLivraison.trim() !== '') communesSet.add(data.lieuLivraison.trim());
-                if (data.destinataire && data.destinataire.trim() !== '') destSet.add(data.destinataire.trim());
-            });
-
-            const communesList = document.getElementById('nfCommunesList');
-            if (communesList) {
-                communesList.innerHTML = Array.from(communesSet).sort().map(l => `<option value="${l}"></option>`).join('');
-            }
-            
-            const destList = document.getElementById('nfDestinatairesList');
-            if (destList && destList.options.length === 0) {
-                destList.innerHTML = Array.from(destSet).sort().map(d => `<option value="${d}"></option>`).join('');
-            }
-
-            // --- NOUVEAU : CHARGEMENT DES PRODUITS ---
-            const prodSnap = await getDocs(collection(db, "products"));
-            this.productsData.clear();
-            prodSnap.forEach(doc => {
-                const data = doc.data();
-                if (data.desc) {
-                    this.productsData.set(data.desc.trim(), data);
+            const handleDestinataireChange = async () => {
+                const dest = form.destinataire.trim();
+                if (!dest) {
+                    destFeedback.value = '';
+                    form.lieu = '';
+                    return;
                 }
-            });
-            const prodList = document.getElementById('nfProductsList');
-            if (prodList) {
-                prodList.innerHTML = Array.from(this.productsData.keys()).sort().map(desc => `<option value="${desc}"></option>`).join('');
-            }
-            
-            // --- NOUVEAU : CHARGEMENT DU CONTENEUR ACTIF ---
-            const { getDoc, doc } = await import("https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js");
-            const activeAgency = sessionStorage.getItem('currentActiveAgency') || 'paris';
-            const configSnap = await getDoc(doc(db, "settings", `container_config_${activeAgency}`));
-            if (configSnap.exists() && configSnap.data().activeContainer) {
-                this.currentContainer = configSnap.data().activeContainer.trim().toUpperCase();
-            } else {
-                this.currentContainer = 'ATT';
-            }
-            
-            const badge = document.getElementById('nfActiveContainerBadge');
-            if (badge) badge.innerHTML = `<i class="fas fa-box-open"></i> ${this.currentContainer}`;
 
-        } catch (e) {
-            console.error("Erreur de chargement de l'auto-complétion :", e);
-        }
-    },
-
-    calculateTotals() {
-        const totalFret = this.items.reduce((sum, item) => sum + item.total, 0);
-        const paye = parseFloat(document.getElementById('nfMontantPaye').value) || 0;
-        const reste = totalFret - paye;
-
-        document.getElementById('nfTotalFret').textContent = totalFret + ' €';
-        document.getElementById('nfReste').textContent = reste + ' €';
-        
-        // Auto-calcul du volume total (CBM)
-        const totalVol = this.items.reduce((sum, item) => sum + ((item.vol || 0) * item.qty), 0);
-        const volInput = document.getElementById('nfVolume');
-        if (volInput) {
-            if (totalVol > 0) {
-                volInput.value = parseFloat(totalVol.toFixed(2));
-            } else if (this.items.length === 1 && this.items[0].desc === '') {
-                volInput.value = ''; // Reset si le formulaire est vidé
-            }
-        }
-    },
-
-    async submitInvoice() {
-        const expediteur = document.getElementById('nfExpediteur').value.trim();
-        const destinataire = document.getElementById('nfDestinataire').value.trim();
-        const total = this.items.reduce((sum, item) => sum + item.total, 0);
-
-        if (!expediteur || !destinataire || this.items[0].desc === '') {
-            this.app.showToast("Veuillez remplir l'Expéditeur, le Destinataire et au moins une Description d'article.", "error");
-            return;
-        }
-
-        const btn = document.getElementById('nfSubmitBtn');
-        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Enregistrement...';
-        btn.disabled = true;
-
-        // CONVERSION : Euro -> CFA pour sauvegarde uniforme dans la base Abidjan
-        const TAUX = 656;
-        const totalEUR = total;
-        const payeEUR = parseFloat(document.getElementById('nfMontantPaye').value) || 0;
-        const resteEUR = totalEUR - payeEUR;
-        
-        const totalCFA = Math.round(totalEUR * TAUX);
-        const payeCFA = Math.round(payeEUR * TAUX);
-        const resteCFA = Math.round(resteEUR * TAUX);
-
-        const batch = writeBatch(db);
-        const dateIso = document.getElementById('nfDate').value || new Date().toISOString().split('T')[0];
-        const volumeCBM = parseFloat(document.getElementById('nfVolume').value) || 0;
-        
-        // --- EXTRACTION ET RÉCUPÉRATION DES CONTACTS ---
-        let expPhone = '';
-        let expAddr = '';
-        const expMatch = expediteur.match(/(.*?)\s*((?:\+|00)?\d{8,})/);
-        let finalExpName = expediteur;
-        if (expMatch) {
-            finalExpName = expMatch[1].trim();
-            expPhone = expMatch[2].trim();
-        }
-        if (this.clientsData && this.clientsData.has(finalExpName)) {
-            const cData = this.clientsData.get(finalExpName);
-            if (!expPhone) expPhone = cData.tel || '';
-            if (!expAddr) expAddr = cData.adresse || '';
-        }
-
-        let destPhone = '';
-        const destMatch = destinataire.match(/(.*?)\s*((?:\+|00)?\d{8,})/);
-        let finalDestName = destinataire;
-        if (destMatch) {
-            finalDestName = destMatch[1].trim();
-            destPhone = destMatch[2].trim();
-        }
-        if (!destPhone && this.destInfos && this.destInfos.has(finalDestName)) {
-            destPhone = this.destInfos.get(finalDestName) || '';
-        }
-
-        const lieuLivraison = document.getElementById('nfLieu').value.trim();
-
-        // --- GÉNÉRATION DE LA RÉFÉRENCE ET DES ÉTIQUETTES ---
-        const userName = sessionStorage.getItem('userName') || 'Agent Paris';
-        let initials = sessionStorage.getItem('userInitials');
-
-        if (!initials) {
-            try {
-                const { getAuth } = await import('https://www.gstatic.com/firebasejs/9.22.0/firebase-auth.js');
-                const { getDoc, doc: fsDoc } = await import('https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js');
-                const auth = getAuth();
-                if (auth.currentUser) {
-                    const userSnap = await getDoc(fsDoc(db, "users", auth.currentUser.uid));
-                    if (userSnap.exists() && userSnap.data().initials) {
-                        initials = userSnap.data().initials.trim().toUpperCase();
-                        sessionStorage.setItem('userInitials', initials); // Cache pour les prochaines factures de la session
+                let lieu = '', num = '', exp = '', isFound = false;
+                
+                if (destMap.value.has(dest)) {
+                    lieu = destMap.value.get(dest);
+                    num = destInfos.value.get(dest);
+                    isFound = true;
+                } else {
+                    const qLiv = query(collection(db, getCollectionName("livraisons")), where("destinataire", "==", dest), limit(1));
+                    const snap = await getDocs(qLiv);
+                    if (!snap.empty) {
+                        const data = snap.docs[0].data();
+                        lieu = data.lieuLivraison || data.commune || '';
+                        num = data.numero || '';
+                        exp = data.expediteur || '';
+                        isFound = true;
                     }
                 }
-            } catch (err) {
-                console.warn("Erreur de récupération des initiales de l'agent", err);
-            }
+                
+                if (!exp && destExpMap.value.has(dest)) exp = destExpMap.value.get(dest);
+
+                if (isFound && exp && !form.expediteur) {
+                    form.expediteur = exp;
+                    handleExpediteurChange();
+                }
+
+                if (isFound && !form.lieu) form.lieu = lieu;
+
+                if (isFound) destFeedback.value = `<span style="color:#059669;"><i class="fas fa-check-circle"></i> <b>Tél:</b> ${num || 'N/A'}</span>`;
+                else destFeedback.value = `<span style="color:#f59e0b;"><i class="fas fa-exclamation-triangle"></i> Nouveau destinataire</span>`;
+            };
+
+            const addRow = () => items.value.push({ id: Date.now(), desc: '', qty: 1, pu: 0, total: 0, vol: 0, showSugg: false });
+            const removeRow = (id) => { if (items.value.length > 1) items.value = items.value.filter(i => i.id !== id); };
+
+            const updateItem = (item, field) => {
+                if (field === 'desc' && productsData.value.has(item.desc)) {
+                    const prod = productsData.value.get(item.desc);
+                    item.pu = parseFloat(prod.price) || 0;
+                    item.vol = parseFloat(prod.dim) || 0;
+                }
+                item.total = (parseFloat(item.qty) || 0) * (parseFloat(item.pu) || 0);
+                const totalVol = items.value.reduce((sum, i) => sum + ((i.vol || 0) * i.qty), 0);
+                if (totalVol > 0) form.volume = parseFloat(totalVol.toFixed(2));
+            };
+
+            const totalFret = computed(() => items.value.reduce((sum, item) => sum + item.total, 0));
+            const resteAPayer = computed(() => totalFret.value - (parseFloat(form.montantPaye) || 0));
+
+            const submitInvoice = async () => {
+                if (!form.expediteur || !form.destinataire || items.value[0].desc === '') {
+                    globalApp.showToast("Veuillez remplir l'Expéditeur, le Destinataire et au moins une Description d'article.", "error");
+                    return;
+                }
+
+                saving.value = true;
+
+                const TAUX = CONSTANTS.TAUX_CONVERSION;
+                const totalEUR = totalFret.value;
+                const payeEUR = parseFloat(form.montantPaye) || 0;
+                const resteEUR = totalEUR - payeEUR;
+                
+                const totalCFA = Math.round(totalEUR * TAUX);
+                const payeCFA = Math.round(payeEUR * TAUX);
+                const resteCFA = Math.round(resteEUR * TAUX);
+
+                const batch = writeBatch(db);
+                const dateIso = form.date || new Date().toISOString().split('T')[0];
+                const volumeCBM = parseFloat(form.volume) || 0;
+                
+                let expPhone = '', expAddr = '';
+                const expMatch = form.expediteur.match(/(.*?)\s*((?:\+|00)?\d{8,})/);
+                let finalExpName = form.expediteur;
+                if (expMatch) { finalExpName = expMatch[1].trim(); expPhone = expMatch[2].trim(); }
+                if (clientsData.value.has(finalExpName)) {
+                    const cData = clientsData.value.get(finalExpName);
+                    if (!expPhone) expPhone = cData.tel || '';
+                    if (!expAddr) expAddr = cData.adresse || '';
+                }
+
+                let destPhone = '';
+                const destMatch = form.destinataire.match(/(.*?)\s*((?:\+|00)?\d{8,})/);
+                let finalDestName = form.destinataire;
+                if (destMatch) { finalDestName = destMatch[1].trim(); destPhone = destMatch[2].trim(); }
+                if (!destPhone && destInfos.value.has(finalDestName)) destPhone = destInfos.value.get(finalDestName) || '';
+
+                const lieuLivraison = form.lieu.trim();
+                const userName = sessionStorage.getItem('userName') || 'Agent Paris';
+                let initials = sessionStorage.getItem('userInitials');
+
+                if (!initials) {
+                    const initialsMatch = userName.match(/\b\w/g) || ['A', 'P'];
+                    initials = initialsMatch.join('').substring(0, 2).toUpperCase();
+                }
+
+                const conteneurCode = currentContainer.value || 'ATT';
+                const activeAgency = sessionStorage.getItem('currentActiveAgency') || 'paris';
+                const qContainer = query(collection(db, getCollectionName("transactions")), where("conteneur", "==", conteneurCode), where("agency", "==", activeAgency));
+                const containerSnap = await getDocs(qContainer);
+                const orderNum = (containerSnap.size + 1).toString().padStart(3, '0');
+                const ref = `${initials}-${orderNum}-${conteneurCode}`;
+
+                const totalColis = items.value.reduce((sum, item) => sum + item.qty, 0);
+                const generatedLabels = [];
+                const printLabelsData = [];
+                let labelIndex = 1;
+
+                items.value.forEach(item => {
+                    for (let i = 0; i < item.qty; i++) {
+                        const uniqueId = Math.floor(10 + Math.random() * 90);
+                        const sousRef = `${ref}_${labelIndex}_${uniqueId}`;
+                        generatedLabels.push(sousRef);
+                        printLabelsData.push({ sousRef: sousRef, desc: item.desc, index: labelIndex, total: totalColis });
+                        labelIndex++;
+                    }
+                });
+
+                const livRef = doc(collection(db, getCollectionName("livraisons")));
+                batch.set(livRef, {
+                    ref: ref, labels: generatedLabels, conteneur: conteneurCode, volumeCBM: volumeCBM,
+                    expediteur: finalExpName, destinataire: finalDestName, numero: destPhone, lieuLivraison: lieuLivraison,
+                    description: items.value.map(i => `${i.qty}x ${i.desc}`).join(', '),
+                    quantite: totalColis, montant: resteCFA + " CFA", prixOriginal: totalCFA + " CFA",
+                    status: "EN_ATTENTE", containerStatus: "PARIS", agency: activeAgency, dateAjout: new Date(dateIso).toISOString()
+                });
+
+                const transRef = doc(collection(db, getCollectionName("transactions")));
+                batch.set(transRef, {
+                    reference: ref, nom: finalExpName, nomDestinataire: finalDestName, numero: destPhone, tel: expPhone,
+                    adresseDestinataire: lieuLivraison, conteneur: conteneurCode, volumeCBM: volumeCBM, date: dateIso,
+                    prix: totalCFA, montantParis: payeCFA, montantAbidjan: 0, reste: -resteCFA,
+                    modePaiement: form.modePay, description: items.value.map(i => `${i.qty}x ${i.desc}`).join(', '),
+                    items: items.value, quantite: totalColis, agency: activeAgency, isDeleted: false,
+                    saisiPar: userName,
+                    paymentHistory: payeCFA > 0 ? [{ date: dateIso, montantParis: payeCFA, montantAbidjan: 0, modePaiement: form.modePay, saisiPar: userName }] : []
+                });
+
+                if (conteneurCode && conteneurCode !== 'ATT') {
+                    const containerRef = doc(db, getCollectionName("containers"), conteneurCode);
+                    batch.set(containerRef, { number: conteneurCode, status: 'EN_CHARGEMENT', destination: form.agence || 'ABIDJAN', createdAt: new Date(dateIso).toISOString() }, { merge: true });
+                }
+
+                try {
+                    await batch.commit();
+                    globalApp.showToast("Facture créée et synchronisée vers Abidjan !", "success");
+                    
+                    const now = new Date();
+                    const formattedDate = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}:${String(now.getSeconds()).padStart(2,'0')}`;
+                    
+                    globalApp.printLabels({ ref: ref, date: formattedDate, destName: finalDestName, destPhone: destPhone, destAddress: lieuLivraison, expName: finalExpName, expAddress: expAddr, labels: printLabelsData });
+
+                    globalApp.renderPage('dashboard');
+                } catch(e) {
+                    console.error(e);
+                    globalApp.showToast("Erreur lors de l'enregistrement", "error");
+                } finally {
+                    saving.value = false;
+                }
+            };
+
+            return {
+                form, items, currentContainer, saving,
+                expFeedback, destFeedback,
+                showExpSugg, showDestSugg, showLieuSugg,
+                filteredExpediteurs, filteredDestinataires, filteredLieux, getFilteredProducts,
+                handleExpediteurChange, handleDestinataireChange,
+                selectExp, selectDest, selectLieu, selectProduct, hideSugg,
+                addRow, removeRow, updateItem, totalFret, resteAPayer, submitInvoice
+            };
         }
+    });
 
-        if (!initials) {
-            const initialsMatch = userName.match(/\b\w/g) || ['A', 'P'];
-            initials = initialsMatch.join('').substring(0, 2).toUpperCase();
-        }
-
-        const conteneurCode = this.currentContainer || 'ATT';
-
-        // Le numéro s'incrémente par rapport au conteneur, pas par rapport à la journée
-        const qContainer = query(collection(db, "transactions"), where("conteneur", "==", conteneurCode), where("agency", "==", "paris"));
-        const containerSnap = await getDocs(qContainer);
-        const orderNum = (containerSnap.size + 1).toString().padStart(3, '0');
-
-        const ref = `${initials}-${orderNum}-${conteneurCode}`;
-
-        // Génération des sous-étiquettes uniques (ex: KA-018-E10_1_71)
-        const totalColis = this.items.reduce((sum, item) => sum + item.qty, 0);
-        const generatedLabels = [];
-        const printLabelsData = [];
-        let labelIndex = 1;
-
-        this.items.forEach(item => {
-            for (let i = 0; i < item.qty; i++) {
-                const uniqueId = Math.floor(10 + Math.random() * 90);
-                const sousRef = `${ref}_${labelIndex}_${uniqueId}`;
-                generatedLabels.push(sousRef);
-                printLabelsData.push({ sousRef: sousRef, desc: item.desc, index: labelIndex, total: totalColis });
-                labelIndex++;
-            }
-        });
-
-        // 1. Logistique (Livraisons)
-        const livRef = doc(collection(db, "livraisons"));
-        batch.set(livRef, {
-            ref: ref,
-            labels: generatedLabels,
-            conteneur: conteneurCode,
-            volumeCBM: volumeCBM,
-            expediteur: finalExpName,
-            destinataire: finalDestName,
-            numero: destPhone,
-            lieuLivraison: lieuLivraison,
-            description: this.items.map(i => `${i.qty}x ${i.desc}`).join(', '),
-            quantite: this.items.reduce((sum, item) => sum + item.qty, 0),
-            montant: resteCFA + " CFA",
-            prixOriginal: totalCFA + " CFA",
-            status: "EN_ATTENTE",
-            containerStatus: "PARIS",
-            agency: "paris",
-            dateAjout: new Date(dateIso).toISOString()
-        });
-
-        // 2. Finance (Transactions Caisse)
-        const transRef = doc(collection(db, "transactions"));
-        batch.set(transRef, {
-            reference: ref,
-            nom: finalExpName,
-            nomDestinataire: finalDestName,
-            numero: destPhone,
-            tel: expPhone,
-            adresseDestinataire: lieuLivraison,
-            conteneur: conteneurCode,
-            volumeCBM: volumeCBM,
-            date: dateIso,
-            prix: totalCFA,
-            montantParis: payeCFA,
-            montantAbidjan: 0,
-            reste: -resteCFA, // Négatif car c'est une dette
-            modePaiement: document.getElementById('nfModePay').value,
-            description: this.items.map(i => `${i.qty}x ${i.desc}`).join(', '),
-            items: this.items,
-            quantite: totalColis,
-            agency: "paris",
-            isDeleted: false,
-            saisiPar: sessionStorage.getItem('userName') || 'Agent Paris',
-            paymentHistory: payeCFA > 0 ? [{
-                date: dateIso,
-                montantParis: payeCFA,
-                montantAbidjan: 0,
-                modePaiement: document.getElementById('nfModePay').value,
-                saisiPar: sessionStorage.getItem('userName') || 'Agent Paris'
-            }] : []
-        });
-
-        // 3. Création automatique du conteneur s'il n'existe pas déjà
-        if (conteneurCode && conteneurCode !== 'ATT') {
-            const containerRef = doc(db, "containers", conteneurCode);
-            batch.set(containerRef, {
-                number: conteneurCode,
-                status: 'EN_CHARGEMENT',
-                destination: document.getElementById('nfAgence').value || 'ABIDJAN',
-                createdAt: new Date(dateIso).toISOString()
-            }, { merge: true }); // merge: true permet de l'ajouter uniquement s'il n'est pas déjà présent
-        }
-
-        try {
-            await batch.commit();
-            this.app.showToast("Facture créée et synchronisée vers Abidjan !", "success");
-            
-            // --- IMPRESSION AUTOMATIQUE DES ÉTIQUETTES ---
-            const now = new Date();
-            const formattedDate = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}:${String(now.getSeconds()).padStart(2,'0')}`;
-            
-            this.app.printLabels({
-                ref: ref,
-                date: formattedDate,
-                destName: finalDestName,
-                destPhone: destPhone,
-                destAddress: lieuLivraison,
-                expName: finalExpName,
-                expAddress: expAddr,
-                labels: printLabelsData
-            });
-
-            // Réinitialisation du formulaire
-            this.items = [{ id: Date.now(), desc: '', qty: 1, pu: 0, total: 0, vol: 0 }];
-            document.getElementById('nfExpediteur').value = '';
-            document.getElementById('nfDestinataire').value = '';
-            document.getElementById('nfMontantPaye').value = '0';
-            if (document.getElementById('nfVolume')) document.getElementById('nfVolume').value = '';
-            this.renderItems();
-            this.calculateTotals();
-            
-            this.app.renderPage('dashboard');
-        } catch(e) {
-            console.error(e);
-            this.app.showToast("Erreur lors de l'enregistrement", "error");
-        } finally {
-            btn.innerHTML = '<i class="fas fa-check-circle"></i> Enregistrer la facture';
-            btn.disabled = false;
-        }
-    }
-    
-    
+    this.vueApp.mount('#vue-nouvellefacture-app');
+}
 };

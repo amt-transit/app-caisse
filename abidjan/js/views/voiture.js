@@ -42,6 +42,7 @@ export const VoitureView = {
 
     initLogic() {
         const currentUserName = sessionStorage.getItem('userName') || 'Inconnu';
+        const activeAgency = sessionStorage.getItem('currentActiveAgency') || 'abidjan';
         const userRole = sessionStorage.getItem('userRole');
         const isViewer = userRole === 'spectateur';
 
@@ -134,7 +135,7 @@ export const VoitureView = {
         }
 
         // --- 1. GESTION DES VÉHICULES ---
-        const qVehicles = query(collection(db, "fleet_vehicles"), where("isDeleted", "!=", true));
+        const qVehicles = query(collection(db, "fleet_vehicles"), where("agency", "==", activeAgency), where("isDeleted", "!=", true));
         onSnapshot(qVehicles, snap => {
             allVehicles = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
             updateVehicleSelects();
@@ -195,7 +196,8 @@ export const VoitureView = {
                         plate: plate,
                         createdAt: new Date().toISOString(),
                         createdBy: currentUserName,
-                        isDeleted: false
+                        isDeleted: false,
+                        agency: activeAgency
                     });
                     newVehicleName.value = '';
                     newVehiclePlate.value = '';
@@ -268,7 +270,8 @@ export const VoitureView = {
                     description: `${desc} (${currentUserName})`,
                     author: currentUserName,
                     timestamp: new Date().toISOString(),
-                    isDeleted: false
+                    isDeleted: false,
+                    agency: activeAgency
                 };
 
                 try {
@@ -286,14 +289,14 @@ export const VoitureView = {
         }
 
         // --- 3. AFFICHAGE ET ANALYSE ---
-        const qTrans = query(collection(db, "fleet_transactions"), where("isDeleted", "!=", true), orderBy("isDeleted"), orderBy("date", "desc"));
+        const qTrans = query(collection(db, "fleet_transactions"), where("agency", "==", activeAgency), where("isDeleted", "!=", true), orderBy("isDeleted"), orderBy("date", "desc"));
         onSnapshot(qTrans, snap => {
             allTransactions = snap.docs.map(doc => ({ id: doc.id, ...doc.data(), _source: 'fleet' }));
             mergeAndRenderTransactions();
         });
 
         // Écoute des Dépenses générales (Caisse)
-        const qExp = query(collection(db, "expenses"), where("isDeleted", "!=", true));
+        const qExp = query(collection(db, "expenses"), where("agency", "==", activeAgency), where("isDeleted", "!=", true));
         onSnapshot(qExp, snap => {
             allExpenses = [];
             snap.docs.forEach(docSnap => {

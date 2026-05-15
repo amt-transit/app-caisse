@@ -1,0 +1,146 @@
+import { db } from '../../firebase-config.js';
+import { collection, query, where, getDocs } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
+import { CONSTANTS } from '../../constants.js';
+import { getCollectionName } from '../../agencies-config.js';
+
+export const DailyBilanView = {
+    formatMoneyLocal(amount) {
+        const isEur = (sessionStorage.getItem('currentActiveAgency') || 'abidjan') === 'paris';
+        if (isEur) {
+            return new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(amount || 0).replace(/[\u202F\u00A0]/g, ' ').replace(/\s*\/\s*/g, ' ');
+        } else {
+            return new Intl.NumberFormat('fr-CI', { style: 'currency', currency: 'XOF' }).format(amount || 0).replace(/[\u202F\u00A0]/g, ' ').replace(/\s*\/\s*/g, ' ');
+        }
+    },
+
+    render(app, container) {
+        this.app = app;
+        const today = new Date().toISOString().split('T')[0];
+        const isEur = (sessionStorage.getItem('currentActiveAgency') || 'abidjan') === 'paris';
+        const currSymbol = isEur ? '€' : 'CFA';
+
+        const html = `
+            <div style="max-width: 1200px; margin: 0 auto; animation: fadeIn 0.3s ease;">
+                <div style="display: flex; justify-content: space-between; align-items: center; background: white; padding: 20px 25px; border-radius: 16px; margin-bottom: 24px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); border: 1px solid #e2e8f0; flex-wrap: wrap; gap: 15px;">
+                    <div style="display: flex; align-items: center; gap: 15px;">
+                        <div style="background: #eff6ff; color: #3b82f6; width: 50px; height: 50px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 24px;"><i class="fas fa-calendar-day"></i></div>
+                        <div>
+                            <h2 style="margin: 0; color: #0f172a; font-size: 22px;">Bilan du Jour</h2>
+                            <p style="margin: 4px 0 0 0; color: #64748b; font-size: 13px;">Récapitulatif financier et logistique de la journée</p>
+                        </div>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <input type="date" id="bilanDate" value="${today}" style="padding: 10px 15px; border: 1px solid #cbd5e1; border-radius: 8px; font-weight: 600;" onchange="window.app.views.dailyBilan.loadData(this.value)">
+                        <button class="btn btn-primary" onclick="window.app.views.dailyBilan.loadData(document.getElementById('bilanDate').value)"><i class="fas fa-sync"></i> Actualiser</button>
+                    </div>
+                </div>
+
+                <div class="stats-grid" style="margin-bottom: 24px;">
+                    <div class="stat-card" style="border-top: 4px solid #10b981;">
+                        <div class="stat-icon" style="background: #dcfce7; color: #10b981;"><i class="fas fa-arrow-down"></i></div>
+                        <div class="stat-value" id="b-encaisse" style="color: #059669;">0 ${currSymbol}</div>
+                        <div class="stat-label">Total Encaissé</div>
+                    </div>
+                    <div class="stat-card" style="border-top: 4px solid #ef4444;">
+                        <div class="stat-icon" style="background: #fef2f2; color: #ef4444;"><i class="fas fa-arrow-up"></i></div>
+                        <div class="stat-value" id="b-depenses" style="color: #dc2626;">0 ${currSymbol}</div>
+                        <div class="stat-label">Total Dépenses</div>
+                    </div>
+                    <div class="stat-card" style="border-top: 4px solid #3b82f6;">
+                        <div class="stat-icon" style="background: #eff6ff; color: #3b82f6;"><i class="fas fa-wallet"></i></div>
+                        <div class="stat-value" id="b-solde" style="color: #1d4ed8;">0 ${currSymbol}</div>
+                        <div class="stat-label">Solde Net du jour</div>
+                    </div>
+                    <div class="stat-card" style="border-top: 4px solid #8b5cf6;">
+                        <div class="stat-icon" style="background: #f3e8ff; color: #8b5cf6;"><i class="fas fa-box-open"></i></div>
+                        <div class="stat-value" id="b-colis">0</div>
+                        <div class="stat-label">Colis Traités</div>
+                    </div>
+                </div>
+
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 24px;">
+                    <div class="form-card" style="padding: 0; overflow: hidden;">
+                        <h3 style="padding: 20px; margin: 0; border-bottom: 1px solid #e2e8f0; background: #f8fafc; display: flex; align-items: center; gap: 8px;"><i class="fas fa-money-bill-wave" style="color: #10b981;"></i> Encaissements</h3>
+                        <table class="data-table">
+                            <thead><tr><th>Réf</th><th>Client</th><th style="text-align:right;">Montant</th></tr></thead>
+                            <tbody id="b-encaisse-table"><tr><td colspan="3" style="text-align:center;">Chargement...</td></tr></tbody>
+                        </table>
+                    </div>
+                    <div class="form-card" style="padding: 0; overflow: hidden;">
+                        <h3 style="padding: 20px; margin: 0; border-bottom: 1px solid #e2e8f0; background: #f8fafc; display: flex; align-items: center; gap: 8px;"><i class="fas fa-receipt" style="color: #ef4444;"></i> Dépenses</h3>
+                        <table class="data-table">
+                            <thead><tr><th>Catégorie</th><th>Motif</th><th style="text-align:right;">Montant</th></tr></thead>
+                            <tbody id="b-depense-table"><tr><td colspan="3" style="text-align:center;">Chargement...</td></tr></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        `;
+        if (container) container.innerHTML = html;
+        else document.getElementById('contentContainer').innerHTML = html;
+        
+        window.app.views = window.app.views || {};
+        window.app.views.dailyBilan = this;
+        this.loadData(today);
+    },
+
+    async loadData(date) {
+        const activeAgency = sessionStorage.getItem('currentActiveAgency') || 'abidjan';
+        const isEur = activeAgency === 'paris';
+        const TAUX = isEur ? CONSTANTS.TAUX_CONVERSION : 1;
+
+        try {
+            // 1. Transactions (Encaissements)
+            const qTrans = query(collection(db, getCollectionName("transactions")), where("date", "==", date), where("agency", "==", activeAgency), where("isDeleted", "==", false));
+            const snapTrans = await getDocs(qTrans);
+            let encaissements = [];
+            let totalEncaisse = 0;
+            
+            snapTrans.forEach(doc => {
+                const t = doc.data();
+                let mnt = parseFloat(isEur ? t.montantParis : t.montantAbidjan) || 0;
+                mnt = mnt / TAUX;
+                if (mnt > 0) { totalEncaisse += mnt; encaissements.push({ ref: t.reference, nom: t.nom, mnt }); }
+            });
+            
+            // 2. Dépenses
+            const qDep = query(collection(db, getCollectionName("expenses")), where("date", "==", date), where("agency", "==", activeAgency));
+            const snapDep = await getDocs(qDep);
+            let depenses = [];
+            let totalDepense = 0;
+            snapDep.forEach(doc => {
+                const d = doc.data();
+                if (d.isDeleted) return; 
+                let mnt = parseFloat(d.amount || d.montant) || 0;
+                mnt = mnt / TAUX;
+                totalDepense += mnt; depenses.push({ cat: d.category || d.type, desc: d.description, mnt });
+            });
+
+            // 3. Livraisons (Colis livrés/scannés ce jour là)
+            const qLiv = query(collection(db, getCollectionName("livraisons")), where("agency", "==", activeAgency));
+            const qArchive = query(collection(db, getCollectionName("livraisons_archives")), where("agency", "==", activeAgency));
+            
+            const [snapLiv, snapArchive] = await Promise.all([getDocs(qLiv), getDocs(qArchive)]);
+            
+            let totalLivres = 0;
+            if (isEur) {
+                totalLivres = snapLiv.docs.filter(d => (d.data().dateAjout || '').startsWith(date)).length;
+            } else {
+                totalLivres = snapLiv.docs.filter(d => d.data().status === 'LIVRE' && (d.data().dateLivraison || '').startsWith(date)).length;
+                totalLivres += snapArchive.docs.filter(d => d.data().status === 'LIVRE' && (d.data().dateLivraison || '').startsWith(date)).length;
+            }
+
+            const encaisseEl = document.getElementById('b-encaisse');
+            if (!encaisseEl) return; 
+
+            encaisseEl.textContent = this.formatMoneyLocal(totalEncaisse);
+            document.getElementById('b-depenses').textContent = this.formatMoneyLocal(totalDepense);
+            document.getElementById('b-solde').textContent = this.formatMoneyLocal(totalEncaisse - totalDepense);
+            document.getElementById('b-colis').textContent = totalLivres;
+
+            document.getElementById('b-encaisse-table').innerHTML = encaissements.length ? encaissements.map(e => `<tr><td><b>${e.ref}</b></td><td>${e.nom}</td><td style="text-align:right; font-weight:bold; color:#10b981;">${this.formatMoneyLocal(e.mnt)}</td></tr>`).join('') : `<tr><td colspan="3" style="text-align:center;">Aucun encaissement</td></tr>`;
+            document.getElementById('b-depense-table').innerHTML = depenses.length ? depenses.map(e => `<tr><td><span class="badge" style="background:#f1f5f9; color:#475569;">${e.cat || 'Dépense'}</span></td><td>${e.desc}</td><td style="text-align:right; font-weight:bold; color:#ef4444;">${this.formatMoneyLocal(e.mnt)}</td></tr>`).join('') : `<tr><td colspan="3" style="text-align:center;">Aucune dépense</td></tr>`;
+
+        } catch(e) { console.error("Erreur Bilan:", e); this.app.showToast("Erreur de chargement", "error"); }
+    }
+};

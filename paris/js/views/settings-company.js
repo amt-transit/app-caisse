@@ -92,6 +92,33 @@ export const SettingsCompanyView = {
                         </button>
                     </div>
                 </div>
+                <div class="sc-card">
+                    <div class="sc-row" style="margin-bottom: 15px;">
+                        <div style="flex: 1;">
+                            <div class="sc-card-title">🎨 Personnalisation visuelle de l'application</div>
+                            <div class="sc-card-sub">Définissez les couleurs globales (Menus, dégradés, fond de page) pour cette agence. L'effet dégradé se crée automatiquement entre la couleur principale et secondaire.</div>
+                        </div>
+                    </div>
+                    <div class="sc-params-grid">
+                        <div class="sc-param-card sc-param-card--color-1">
+                            <div class="sc-param-header"><div class="sc-param-icon">🎨</div><div class="sc-param-label">Couleur Principale (Bas du dégradé)</div></div>
+                            <input type="color" id="appPrimaryColor" class="sc-input" style="height: 40px; cursor: pointer; padding: 5px;" onchange="document.documentElement.style.setProperty('--primary', this.value)">
+                            <button class="sc-btn sc-btn--save" onclick="window.app.views.settingsCompany.saveField('appPrimaryColor', 'appPrimaryColor', this)">✅ Enregistrer</button>
+                        </div>
+                        
+                        <div class="sc-param-card sc-param-card--color-5">
+                            <div class="sc-param-header"><div class="sc-param-icon">✨</div><div class="sc-param-label">Couleur Secondaire (Haut du dégradé)</div></div>
+                            <input type="color" id="appSecondaryColor" class="sc-input" style="height: 40px; cursor: pointer; padding: 5px;" onchange="document.documentElement.style.setProperty('--secondary', this.value)">
+                            <button class="sc-btn sc-btn--save" onclick="window.app.views.settingsCompany.saveField('appSecondaryColor', 'appSecondaryColor', this)">✅ Enregistrer</button>
+                        </div>
+
+                        <div class="sc-param-card sc-param-card--color-6">
+                            <div class="sc-param-header"><div class="sc-param-icon">🌆</div><div class="sc-param-label">Couleur d'arrière-plan (Page)</div></div>
+                            <input type="color" id="appBgColor" class="sc-input" style="height: 40px; cursor: pointer; padding: 5px;" onchange="document.documentElement.style.setProperty('--bg-body', this.value)">
+                            <button class="sc-btn sc-btn--save" onclick="window.app.views.settingsCompany.saveField('appBgColor', 'appBgColor', this)">✅ Enregistrer</button>
+                        </div>
+                    </div>
+                </div>
 
                 <div class="sc-params-grid">
                     <div class="sc-param-card sc-param-card--color-1">
@@ -209,6 +236,10 @@ export const SettingsCompanyView = {
                 if (document.getElementById('compVat')) document.getElementById('compVat').value = data.vat || '';
                 if (document.getElementById('compCgv')) document.getElementById('compCgv').value = data.cgv || '';
 
+                if (document.getElementById('appPrimaryColor')) document.getElementById('appPrimaryColor').value = data.appPrimaryColor || '#334155';
+                if (document.getElementById('appSecondaryColor')) document.getElementById('appSecondaryColor').value = data.appSecondaryColor || '#1e293b';
+                if (document.getElementById('appBgColor')) document.getElementById('appBgColor').value = data.appBgColor || '#f8fafc';
+
                 // Remplissage du Logo s'il existe
                 if (data.logoBase64) {
                     const imgPreview = document.getElementById('compLogoPreview');
@@ -235,6 +266,10 @@ export const SettingsCompanyView = {
             await setDoc(this.docRef, { [dbKey]: value }, { merge: true });
             this.app.showToast("Modification enregistrée !", "success");
             
+            // Vider le cache de branding pour forcer le rafraîchissement au prochain chargement de page
+            const activeAgency = sessionStorage.getItem('currentActiveAgency') || 'paris';
+            sessionStorage.removeItem('branding_' + activeAgency);
+
             btnElement.innerHTML = '✅ OK';
             btnElement.style.color = '#10b981';
             setTimeout(() => {

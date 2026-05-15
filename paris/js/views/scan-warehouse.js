@@ -1,28 +1,18 @@
 import { db } from '../../../firebase-config.js';
 import { collection, query, where, getDocs, updateDoc, doc, arrayUnion, limit, addDoc } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
+import { createApp, ref, reactive, onMounted, onUnmounted } from "https://unpkg.com/vue@3/dist/vue.esm-browser.prod.js";
 
 export const ScanWarehouseView = {
-    scannerActive: false,
-    nativeVideoStream: null,
-    html5QrCode: null,
-    barcodeDetector: null,
-    scanAnimationFrame: null,
-    isScanningPaused: false,
-    lastScanText: '',
-    lastScanTime: 0,
-    recentScans: [],
-    stats: { total: 0, success: 0, duplicate: 0, error: 0 },
-    isSoundEnabled: true,
+    vueApp: null,
 
     render(app) {
-        this.app = app;
+        const globalApp = app;
         window.app.views = window.app.views || {};
         window.app.views.scanWarehouse = this;
-        this.recentScans = [];
-        this.stats = { total: 0, success: 0, duplicate: 0, error: 0 };
 
         const html = `
             <style>
+                [v-cloak] { display: none; }
                 .sw-page { max-width: 800px; margin: 0 auto; animation: fadeIn 0.3s ease; }
                 
                 /* --- NOUVEAU HEADER & KPIs --- */
@@ -83,7 +73,7 @@ export const ScanWarehouseView = {
                 .status-err { background: #fee2e2; color: #991b1b; }
             </style>
 
-            <div class="sw-page" id="sw-page">
+            <div class="sw-page" id="vue-scan-warehouse-app" v-cloak>
                 <div class="sm__header">
                     <div class="sm__header-inner">
                         <div class="sm__header-info">
@@ -94,27 +84,27 @@ export const ScanWarehouseView = {
                             </div>
                         </div>
                         <div class="sm__header-actions">
-                            <button class="sm__btn-sound" id="btn-sound-wh" type="button" title="Activer/Désactiver le son" onclick="window.app.views.scanWarehouse.toggleSound()">🔊</button>
-                            <button class="sm__btn-clear" type="button" title="Effacer la session" onclick="window.app.views.scanWarehouse.clearSession()">🗑️</button>
+                            <button class="sm__btn-sound" type="button" @click="toggleSound" :title="isSoundEnabled ? 'Désactiver le son' : 'Activer le son'">{{ isSoundEnabled ? '🔊' : '🔇' }}</button>
+                            <button class="sm__btn-clear" type="button" @click="clearSession" title="Effacer la session">🗑️</button>
                         </div>
                     </div>
                 </div>
 
                 <div class="sm__kpi-row">
                     <div class="sm__kpi sm__kpi--blue">
-                        <div class="sm__kpi-val" id="wh-kpi-total">0</div>
+                        <div class="sm__kpi-val">{{ stats.total }}</div>
                         <div class="sm__kpi-lbl">Total</div>
                     </div>
                     <div class="sm__kpi sm__kpi--green">
-                        <div class="sm__kpi-val" id="wh-kpi-success">0</div>
+                        <div class="sm__kpi-val">{{ stats.success }}</div>
                         <div class="sm__kpi-lbl">Succès</div>
                     </div>
                     <div class="sm__kpi sm__kpi--orange">
-                        <div class="sm__kpi-val" id="wh-kpi-duplicate">0</div>
+                        <div class="sm__kpi-val">{{ stats.duplicate }}</div>
                         <div class="sm__kpi-lbl">Déjà traité</div>
                     </div>
                     <div class="sm__kpi sm__kpi--red">
-                        <div class="sm__kpi-val" id="wh-kpi-error">0</div>
+                        <div class="sm__kpi-val">{{ stats.error }}</div>
                         <div class="sm__kpi-lbl">Erreurs</div>
                     </div>
                 </div>
@@ -129,241 +119,244 @@ export const ScanWarehouseView = {
 
                 <div class="scan-status">
                     <div class="scan-dot"></div>
-                    <span id="sw-status-text">Initialisation de la caméra...</span>
+                    <span>{{ statusText }}</span>
                 </div>
 
                 <div class="manual-row">
-                    <input type="text" class="manual-input" id="sw-manual-ref" placeholder="Saisir la référence manuellement..." onkeydown="if(event.key==='Enter') window.app.views.scanWarehouse.processManualScan()">
-                    <button class="btn-search" onclick="window.app.views.scanWarehouse.processManualScan()">Valider</button>
+                    <input type="text" class="manual-input" v-model="manualRef" @keydown.enter="processManualScan" placeholder="Saisir la référence manuellement...">
+                    <button class="btn-search" @click="processManualScan">Valider</button>
                 </div>
 
                 <div class="recent-scans">
                     <div class="recent-scans-header">📋 Derniers scans de la session</div>
-                    <div id="sw-recent-list">
-                        <div style="padding: 30px; text-align: center; color: #94a3b8; font-size: 14px;">Aucun colis scanné pour le moment.</div>
+                    <div>
+                        <div v-if="recentScans.length === 0" style="padding: 30px; text-align: center; color: #94a3b8; font-size: 14px;">Aucun colis scanné pour le moment.</div>
+                        <div v-else v-for="(s, index) in recentScans" :key="index" class="scan-item">
+                            <div class="scan-item-info">
+                                <span class="scan-item-ref">{{ s.ref }}</span>
+                                <span class="scan-item-client">{{ s.client }}</span>
+                            </div>
+                            <span :class="['scan-item-status', 'status-' + s.type]">{{ s.msg }}</span>
+                        </div>
                     </div>
                 </div>
             </div>
         `;
 
         document.getElementById('contentContainer').innerHTML = html;
+        this.initVue(globalApp);
+    },
 
-        // Sécurité : Arrêter la caméra si on change de page dans la SPA
-        const observer = new MutationObserver(() => {
-            if (!document.body.contains(document.getElementById('sw-page'))) {
-                this.stopScanner();
-                observer.disconnect();
+    initVue(globalApp) {
+        if (this.vueApp) this.vueApp.unmount();
+
+        this.vueApp = createApp({
+            setup() {
+                const stats = reactive({ total: 0, success: 0, duplicate: 0, error: 0 });
+                const recentScans = ref([]);
+                const isSoundEnabled = ref(true);
+                const statusText = ref('Initialisation de la caméra...');
+                const manualRef = ref('');
+
+                // Variables internes pour le scanner (Non réactives)
+                let scannerActive = false;
+                let nativeVideoStream = null;
+                let html5QrCode = null;
+                let barcodeDetector = null;
+                let scanAnimationFrame = null;
+                let isScanningPaused = false;
+                let lastScanText = '';
+                let lastScanTime = 0;
+
+                const toggleSound = () => { isSoundEnabled.value = !isSoundEnabled.value; };
+
+                const clearSession = () => {
+                    if (confirm("Voulez-vous vraiment effacer les données de scan de cette session ?")) {
+                        stats.total = 0; stats.success = 0; stats.duplicate = 0; stats.error = 0;
+                        recentScans.value = [];
+                    }
+                };
+
+                const loadScannerScript = () => {
+                    if (window.Html5Qrcode) {
+                        startHybridScanner();
+                        return;
+                    }
+                    const script = document.createElement('script');
+                    script.src = "https://unpkg.com/html5-qrcode";
+                    document.head.appendChild(script);
+                    script.onload = () => startHybridScanner();
+                };
+
+                const startHybridScanner = async () => {
+                    scannerActive = true;
+                    isScanningPaused = false;
+
+                    try {
+                        let useNative = false;
+                        if ('BarcodeDetector' in window) {
+                            const supportedFormats = await BarcodeDetector.getSupportedFormats();
+                            if (supportedFormats.includes('code_128') || supportedFormats.includes('qr_code')) useNative = true;
+                        }
+
+                        if (useNative) {
+                            document.getElementById('sw-video-preview').style.display = 'block';
+                            barcodeDetector = new BarcodeDetector({ formats: ['code_128', 'qr_code', 'ean_13'] });
+                            
+                            nativeVideoStream = await navigator.mediaDevices.getUserMedia({
+                                video: { facingMode: 'environment', width: { ideal: 1280 }, advanced: [{ focusMode: 'continuous' }] }
+                            }).catch(async () => await navigator.mediaDevices.getUserMedia({ video: { width: { ideal: 1280 } } }));
+                            
+                            const videoEl = document.getElementById('sw-video-preview');
+                            videoEl.srcObject = nativeVideoStream;
+                            videoEl.onloadedmetadata = () => { videoEl.play(); detectNativeBarcode(videoEl); };
+                            statusText.value = 'Caméra active (Native ⚡) — prête à scanner';
+                        } else {
+                            startFallbackScanner();
+                        }
+                    } catch (e) {
+                        startFallbackScanner();
+                    }
+                };
+
+                const startFallbackScanner = async () => {
+                    document.getElementById('sw-video-preview').style.display = 'none';
+                    document.getElementById('sw-reader').style.display = 'block';
+                    
+                    if (!html5QrCode) html5QrCode = new Html5Qrcode("sw-reader");
+                    
+                    try {
+                        await html5QrCode.start(
+                            { facingMode: "environment" },
+                            { fps: 10, formatsToSupport: [ window.Html5QrcodeSupportedFormats.CODE_128, window.Html5QrcodeSupportedFormats.QR_CODE ] },
+                            (decodedText) => onScanSuccess(decodedText),
+                            () => {}
+                        );
+                        statusText.value = 'Caméra active (Compatibilité) — prête à scanner';
+                    } catch (e) {
+                        statusText.value = '⚠️ Caméra non disponible — saisie manuelle requise';
+                    }
+                };
+
+                const detectNativeBarcode = async (videoEl) => {
+                    if (!scannerActive || !nativeVideoStream) return;
+                    if (videoEl.readyState >= 2 && !isScanningPaused) {
+                        try {
+                            const barcodes = await barcodeDetector.detect(videoEl);
+                            if (barcodes.length > 0) onScanSuccess(barcodes[0].rawValue);
+                        } catch (e) {}
+                    }
+                    scanAnimationFrame = requestAnimationFrame(() => detectNativeBarcode(videoEl));
+                };
+
+                const stopScanner = async () => {
+                    scannerActive = false;
+                    if (scanAnimationFrame) cancelAnimationFrame(scanAnimationFrame);
+                    if (nativeVideoStream) nativeVideoStream.getTracks().forEach(t => t.stop());
+                    if (html5QrCode && html5QrCode.isScanning) await html5QrCode.stop().catch(e=>console.log(e));
+                };
+
+                const onScanSuccess = (decodedText) => {
+                    if (isScanningPaused) return;
+                    let text = decodedText.trim().toUpperCase();
+                    const refMatch = text.match(/([A-Z]{2})[-_.\s]*(\d{3})[-_.\s]*([A-Z0-9]+(?:_[0-9]+)*)/i);
+                    if (refMatch) text = `${refMatch[1]}-${refMatch[2]}-${refMatch[3]}`.toUpperCase();
+
+                    processScan(text);
+                };
+
+                const processManualScan = () => {
+                    const val = manualRef.value.trim();
+                    if (val.length > 2) {
+                        processScan(val.toUpperCase());
+                        manualRef.value = '';
+                    }
+                };
+
+                const addRecentScan = (ref, client, msg, type) => {
+                    recentScans.value.unshift({ ref, client, msg, type });
+                    if (recentScans.value.length > 50) recentScans.value.pop();
+                };
+
+                const processScan = async (text) => {
+                    if (lastScanText === text && Date.now() - lastScanTime < 3000) return;
+                    lastScanText = text;
+                    lastScanTime = Date.now();
+
+                    isScanningPaused = true;
+                    
+                    const baseRefMatch = text.match(/^([A-Z]{2}[-_\s.]\d{3}[-_\s.][A-Z0-9]+)(?:_.*)?$/i);
+                    const baseRef = baseRefMatch ? baseRefMatch[1] : text;
+                    
+                    const logData = {
+                        scanRef: text,
+                        date: new Date().toISOString(),
+                        type: 'ENTREPOT_PARIS',
+                        agent: sessionStorage.getItem('userName') || 'Agent',
+                        agency: sessionStorage.getItem('currentActiveAgency') || 'paris',
+                        container: '-'
+                    };
+
+                    stats.total++;
+
+                    try {
+                        const q = query(collection(db, 'livraisons'), where('ref', '==', baseRef), where("agency", "==", sessionStorage.getItem('currentActiveAgency') || 'paris'), limit(1));
+                        const snap = await getDocs(q);
+
+                        if (!snap.empty) {
+                            const docId = snap.docs[0].id;
+                            const data = snap.docs[0].data();
+                            
+                            const isAlreadyScanned = data.scanHistory && data.scanHistory.some(s => s.scanRef === text && s.type === 'ENTREPOT_PARIS');
+
+                            if (isAlreadyScanned) {
+                                stats.duplicate++;
+                                logData.status = 'DOUBLON';
+                                addRecentScan(text, data.destinataire || data.expediteur || 'Client inconnu', 'Déjà en entrepôt', 'warn');
+                                if (isSoundEnabled.value && navigator.vibrate) navigator.vibrate([50, 50, 50]);
+                            } else {
+                                await updateDoc(doc(db, 'livraisons', docId), {
+                                    containerStatus: 'PARIS',
+                                    scanHistory: arrayUnion({ scanRef: text, date: new Date().toISOString(), type: 'ENTREPOT_PARIS' })
+                                });
+                                stats.success++;
+                                logData.status = 'SUCCES';
+                                addRecentScan(text, data.destinataire || data.expediteur || 'Client inconnu', 'Mise en entrepôt OK', 'ok');
+                                if (isSoundEnabled.value && navigator.vibrate) navigator.vibrate([30, 20, 30]);
+                            }
+                        } else {
+                            stats.error++;
+                            logData.status = 'ERREUR';
+                            addRecentScan(text, 'Non trouvé en base', 'Colis inconnu', 'err');
+                            if(isSoundEnabled.value && navigator.vibrate) navigator.vibrate([100, 50, 100]);
+                        }
+                    } catch(e) { 
+                        console.error(e); 
+                        stats.error++;
+                        logData.status = 'ERREUR';
+                        globalApp.showToast("Erreur de connexion", "error"); 
+                    }
+                    
+                    addDoc(collection(db, 'scan_logs'), logData).catch(e => console.error("Log error", e));
+
+                    setTimeout(() => { isScanningPaused = false; }, 1500);
+                };
+
+                onMounted(() => {
+                    loadScannerScript();
+                });
+
+                onUnmounted(() => {
+                    stopScanner();
+                });
+
+                return {
+                    stats, recentScans, isSoundEnabled, statusText, manualRef,
+                    toggleSound, clearSession, processManualScan
+                };
             }
         });
-        observer.observe(document.body, { childList: true, subtree: true });
 
-        this.loadScannerScript();
-    },
-
-    toggleSound() {
-        this.isSoundEnabled = !this.isSoundEnabled;
-        const btn = document.getElementById('btn-sound-wh');
-        if (btn) btn.textContent = this.isSoundEnabled ? '🔊' : '🔇';
-    },
-
-    clearSession() {
-        if (confirm("Voulez-vous vraiment effacer les données de scan de cette session ?")) {
-            this.stats = { total: 0, success: 0, duplicate: 0, error: 0 };
-            this.recentScans = [];
-            this.updateKPIs();
-            const list = document.getElementById('sw-recent-list');
-            if (list) list.innerHTML = '<div style="padding: 30px; text-align: center; color: #94a3b8; font-size: 14px;">Aucun colis scanné pour le moment.</div>';
-        }
-    },
-
-    updateKPIs() {
-        document.getElementById('wh-kpi-total').textContent = this.stats.total;
-        document.getElementById('wh-kpi-success').textContent = this.stats.success;
-        document.getElementById('wh-kpi-duplicate').textContent = this.stats.duplicate;
-        document.getElementById('wh-kpi-error').textContent = this.stats.error;
-    },
-
-    loadScannerScript() {
-        if (window.Html5Qrcode) {
-            this.startHybridScanner();
-            return;
-        }
-        const script = document.createElement('script');
-        script.src = "https://unpkg.com/html5-qrcode";
-        document.head.appendChild(script);
-        script.onload = () => this.startHybridScanner();
-    },
-
-    async startHybridScanner() {
-        this.scannerActive = true;
-        this.isScanningPaused = false;
-        const statusText = document.getElementById('sw-status-text');
-        if(!statusText) return; // Sécurité
-
-        try {
-            let useNative = false;
-            if ('BarcodeDetector' in window) {
-                const supportedFormats = await BarcodeDetector.getSupportedFormats();
-                if (supportedFormats.includes('code_128') || supportedFormats.includes('qr_code')) useNative = true;
-            }
-
-            if (useNative) {
-                document.getElementById('sw-video-preview').style.display = 'block';
-                this.barcodeDetector = new BarcodeDetector({ formats: ['code_128', 'qr_code', 'ean_13'] });
-                
-                this.nativeVideoStream = await navigator.mediaDevices.getUserMedia({
-                    video: { facingMode: 'environment', width: { ideal: 1280 }, advanced: [{ focusMode: 'continuous' }] }
-                }).catch(async () => await navigator.mediaDevices.getUserMedia({ video: { width: { ideal: 1280 } } }));
-                
-                const videoEl = document.getElementById('sw-video-preview');
-                videoEl.srcObject = this.nativeVideoStream;
-                videoEl.onloadedmetadata = () => { videoEl.play(); this.detectNativeBarcode(videoEl); };
-                statusText.textContent = 'Caméra active (Native ⚡) — prête à scanner';
-            } else {
-                this.startFallbackScanner();
-            }
-        } catch (e) {
-            this.startFallbackScanner();
-        }
-    },
-
-    async startFallbackScanner() {
-        document.getElementById('sw-video-preview').style.display = 'none';
-        document.getElementById('sw-reader').style.display = 'block';
-        
-        if (!this.html5QrCode) this.html5QrCode = new Html5Qrcode("sw-reader");
-        
-        try {
-            await this.html5QrCode.start(
-                { facingMode: "environment" },
-                { fps: 10, formatsToSupport: [ window.Html5QrcodeSupportedFormats.CODE_128, window.Html5QrcodeSupportedFormats.QR_CODE ] },
-                (decodedText) => this.onScanSuccess(decodedText),
-                () => {}
-            );
-            document.getElementById('sw-status-text').textContent = 'Caméra active (Compatibilité) — prête à scanner';
-        } catch (e) {
-            document.getElementById('sw-status-text').textContent = '⚠️ Caméra non disponible — saisie manuelle requise';
-        }
-    },
-
-    async detectNativeBarcode(videoEl) {
-        if (!this.scannerActive || !this.nativeVideoStream) return;
-        if (videoEl.readyState >= 2 && !this.isScanningPaused) {
-            try {
-                const barcodes = await this.barcodeDetector.detect(videoEl);
-                if (barcodes.length > 0) this.onScanSuccess(barcodes[0].rawValue);
-            } catch (e) {}
-        }
-        this.scanAnimationFrame = requestAnimationFrame(() => this.detectNativeBarcode(videoEl));
-    },
-
-    async stopScanner() {
-        this.scannerActive = false;
-        if (this.scanAnimationFrame) cancelAnimationFrame(this.scanAnimationFrame);
-        if (this.nativeVideoStream) this.nativeVideoStream.getTracks().forEach(t => t.stop());
-        if (this.html5QrCode && this.html5QrCode.isScanning) await this.html5QrCode.stop().catch(e=>console.log(e));
-    },
-
-    onScanSuccess(decodedText) {
-        if (this.isScanningPaused) return;
-        let text = decodedText.trim().toUpperCase();
-        const refMatch = text.match(/([A-Z]{2})[-_.\s]*(\d{3})[-_.\s]*([A-Z0-9]+(?:_[0-9]+)*)/i);
-        if (refMatch) text = `${refMatch[1]}-${refMatch[2]}-${refMatch[3]}`.toUpperCase();
-
-        this.processScan(text);
-    },
-
-    processManualScan() {
-        const input = document.getElementById('sw-manual-ref');
-        if (input.value.trim().length > 2) {
-            this.processScan(input.value.trim().toUpperCase());
-            input.value = '';
-            input.blur();
-        }
-    },
-
-    async processScan(text) {
-        if (this.lastScanText === text && Date.now() - this.lastScanTime < 3000) return;
-        this.lastScanText = text;
-        this.lastScanTime = Date.now();
-
-        this.isScanningPaused = true;
-        
-        const baseRefMatch = text.match(/^([A-Z]{2}[-_\s.]\d{3}[-_\s.][A-Z0-9]+)(?:_.*)?$/i);
-        const baseRef = baseRefMatch ? baseRefMatch[1] : text;
-        
-        const logData = {
-            scanRef: text,
-            date: new Date().toISOString(),
-            type: 'ENTREPOT_PARIS',
-            agent: sessionStorage.getItem('userName') || 'Agent',
-            agency: sessionStorage.getItem('currentActiveAgency') || 'paris',
-            container: '-'
-        };
-
-        this.stats.total++;
-
-        try {
-            const q = query(collection(db, 'livraisons'), where('ref', '==', baseRef), limit(1));
-            const snap = await getDocs(q);
-
-            if (!snap.empty) {
-                const docId = snap.docs[0].id;
-                const data = snap.docs[0].data();
-                
-                // Vérifier si CE sous-colis spécifique a déjà été scanné en entrepôt
-                const isAlreadyScanned = data.scanHistory && data.scanHistory.some(s => s.scanRef === text && s.type === 'ENTREPOT_PARIS');
-
-                if (isAlreadyScanned) {
-                    this.stats.duplicate++;
-                    logData.status = 'DOUBLON';
-                    this.addRecentScan(text, data.destinataire || data.expediteur || 'Client inconnu', 'Déjà en entrepôt', 'warn');
-                    if (this.isSoundEnabled && navigator.vibrate) navigator.vibrate([50, 50, 50]);
-                } else {
-                    await updateDoc(doc(db, 'livraisons', docId), {
-                        containerStatus: 'PARIS',
-                        scanHistory: arrayUnion({ scanRef: text, date: new Date().toISOString(), type: 'ENTREPOT_PARIS' })
-                    });
-                    this.stats.success++;
-                    logData.status = 'SUCCES';
-                    this.addRecentScan(text, data.destinataire || data.expediteur || 'Client inconnu', 'Mise en entrepôt OK', 'ok');
-                    if (this.isSoundEnabled && navigator.vibrate) navigator.vibrate([30, 20, 30]);
-                }
-            } else {
-                this.stats.error++;
-                logData.status = 'ERREUR';
-                this.addRecentScan(text, 'Non trouvé en base', 'Colis inconnu', 'err');
-                if(this.isSoundEnabled && navigator.vibrate) navigator.vibrate([100, 50, 100]);
-            }
-        } catch(e) { 
-            console.error(e); 
-            this.stats.error++;
-            logData.status = 'ERREUR';
-            this.app.showToast("Erreur de connexion", "error"); 
-        }
-        
-        // Sauvegarde silencieuse du log
-        addDoc(collection(db, 'scan_logs'), logData).catch(e => console.error("Log error", e));
-
-        this.updateKPIs();
-
-        setTimeout(() => { this.isScanningPaused = false; }, 1500);
-    },
-
-    addRecentScan(ref, client, msg, type) {
-        this.recentScans.unshift({ ref, client, msg, type });
-        if (this.recentScans.length > 50) this.recentScans.pop();
-        
-        const list = document.getElementById('sw-recent-list');
-        if (!list) return;
-        list.innerHTML = this.recentScans.map(s => `
-            <div class="scan-item">
-                <div class="scan-item-info">
-                    <span class="scan-item-ref">${s.ref}</span>
-                    <span class="scan-item-client">${s.client}</span>
-                </div>
-                <span class="scan-item-status status-${s.type}">${s.msg}</span>
-            </div>
-        `).join('');
+        this.vueApp.mount('#vue-scan-warehouse-app');
     }
 };

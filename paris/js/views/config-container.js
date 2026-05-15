@@ -1,5 +1,6 @@
 import { db } from '../../../firebase-config.js';
 import { doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
+import { AGENCIES } from '../../../agencies-config.js';
 
 export const ConfigContainerView = {
     docRef: null,
@@ -80,8 +81,16 @@ export const ConfigContainerView = {
         btn.disabled = true;
 
         try {
-            const activeContainerVal = document.getElementById('ccActiveContainer').value.trim().toUpperCase();
+            let activeContainerVal = document.getElementById('ccActiveContainer').value.trim().toUpperCase();
             
+            const activeAgency = sessionStorage.getItem('currentActiveAgency') || 'paris';
+            const agencyConfig = AGENCIES[activeAgency];
+            const prefix = agencyConfig && agencyConfig.prefix ? agencyConfig.prefix : '';
+            
+            if (prefix && !activeContainerVal.startsWith(prefix)) {
+                activeContainerVal = prefix + activeContainerVal;
+            }
+
             if (!activeContainerVal) {
                 this.app.showToast("Le nom du conteneur ne peut pas être vide.", "error");
                 return;

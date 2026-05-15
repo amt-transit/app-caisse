@@ -8,6 +8,8 @@ export const SettingsMenusView = {
     // Définition globale de tous les menus disponibles
     allMenus: [
         { key: 'main', label: 'Accueil' },
+        { key: 'special-asie', label: 'Spécial Asie (Chine)' },
+        { key: 'parrainage', label: 'Réseau Partenaires' },
         { key: 'bilan', label: 'Bilan journalier' },
         { key: 'factures', label: 'Factures d\'envoi' },
         { key: 'rdv', label: 'Rendez-vous' },

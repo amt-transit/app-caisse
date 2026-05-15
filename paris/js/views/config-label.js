@@ -2,7 +2,8 @@ export const ConfigLabelView = {
     settings: {
         format: 'A5',
         model: 'classic',
-        colorScheme: 'default'
+        colorScheme: 'default',
+        headerColor: '#000000'
     },
 
     render(app) {
@@ -64,6 +65,14 @@ export const ConfigLabelView = {
                             </div>
                         </div>
 
+                        <!-- Bandeau Couleur -->
+                        <div class="form-group" style="margin-bottom: 20px;">
+                            <label style="font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase; margin-bottom: 8px; display: block;">
+                                🖌️ Couleur du bandeau (En-tête & Logo)
+                            </label>
+                            <input type="color" id="labelHeaderColor" value="${this.settings.headerColor}" style="width: 100%; height: 40px; border: 1px solid #cbd5e1; border-radius: 8px; cursor: pointer; background: white;" onchange="window.app.views.configLabel.settings.headerColor = this.value; window.app.views.configLabel.updatePreview()">
+                        </div>
+
                         <div style="padding-top: 15px; border-top: 1px solid #f1f5f9;">
                             <button class="btn btn-primary" style="width: 100%; justify-content: center; padding: 14px;" onclick="window.app.views.configLabel.saveConfig()">
                                 <i class="fas fa-save"></i> Enregistrer par défaut
@@ -94,10 +103,12 @@ export const ConfigLabelView = {
         const savedFormat = localStorage.getItem('amt_label_format');
         const savedModel = localStorage.getItem('amt_label_model');
         const savedColor = localStorage.getItem('amt_label_color');
+        const savedHeaderColor = localStorage.getItem('amt_label_header_color');
         
         if (savedFormat) this.settings.format = savedFormat;
         if (savedModel) this.settings.model = savedModel;
         if (savedColor) this.settings.colorScheme = savedColor;
+        if (savedHeaderColor) this.settings.headerColor = savedHeaderColor;
     },
 
     setColorScheme(color) {
@@ -185,7 +196,7 @@ export const ConfigLabelView = {
                     <!-- En-tête avec coordonnées AMT -->
                     <div style="display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid ${colors.border}; padding-bottom: 3mm; margin-bottom: 4mm;">
                         <div style="display: flex; align-items: center; gap: 8px;">
-                            <div style="background: black; padding: 2px 4px; border-radius: 6px; display: flex; align-items: center; justify-content: center;">
+                            <div style="background: ${this.settings.headerColor}; padding: 2px 4px; border-radius: 6px; display: flex; align-items: center; justify-content: center;">
                                 <img src="../LOGOAMT.png" style="height: ${isA5 ? '8mm' : '6mm'}; object-fit: contain;" alt="Logo" />
                             </div>
                             <div>
@@ -240,7 +251,7 @@ export const ConfigLabelView = {
                     <!-- En-tête simplifié -->
                     <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid ${colors.border}; padding-bottom: 2mm; margin-bottom: 3mm;">
                         <div style="display: flex; align-items: center; gap: 8px;">
-                            <div style="background: black; padding: 2px 4px; border-radius: 4px; display: flex; align-items: center; justify-content: center;">
+                            <div style="background: ${this.settings.headerColor}; padding: 2px 4px; border-radius: 4px; display: flex; align-items: center; justify-content: center;">
                                 <img src="../LOGOAMT.png" style="height: ${isA5 ? '6mm' : '4mm'}; object-fit: contain;" alt="Logo" />
                             </div>
                             <div style="font-size: ${isA5 ? '9pt' : '7pt'}; font-weight: bold;">AMT TRANSIT CI FRET<br><span style="font-weight: normal; font-size: ${isA5 ? '8pt' : '6pt'};">81 AV. ARISTIDE BRIAND - 0180893370</span></div>
@@ -276,8 +287,8 @@ export const ConfigLabelView = {
                 <div style="height: 100%; display: flex; flex-direction: column;">
                     
                     <!-- Bandeau supérieur -->
-                    <div style="background: ${colors.border}; color: white; padding: 3mm 4mm; display: flex; justify-content: center; align-items: center; gap: 10px;">
-                        <div style="background: black; padding: 2px 4px; border-radius: 6px; display: flex; align-items: center; justify-content: center;">
+                    <div style="background: ${this.settings.headerColor}; color: white; padding: 3mm 4mm; display: flex; justify-content: center; align-items: center; gap: 10px;">
+                        <div style="background: ${this.settings.headerColor}; padding: 2px 4px; border-radius: 6px; display: flex; align-items: center; justify-content: center;">
                             <img src="../LOGOAMT.png" style="height: ${isA5 ? '8mm' : '6mm'}; object-fit: contain;" alt="Logo" />
                         </div>
                         <span style="font-size: ${isA5 ? '12pt' : '10pt'}; font-weight: bold; margin: 0;">AMT TRANSIT CI FRET INTERNATIONAL</span>
@@ -334,6 +345,7 @@ export const ConfigLabelView = {
         localStorage.setItem('amt_label_format', format);
         localStorage.setItem('amt_label_model', model);
         localStorage.setItem('amt_label_color', this.settings.colorScheme);
+        localStorage.setItem('amt_label_header_color', this.settings.headerColor);
         this.app.showToast(`Configuration ${format} - Modèle ${model} enregistrée !`, "success");
     },
 

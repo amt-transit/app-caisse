@@ -1,19 +1,17 @@
 import { db } from '../../../firebase-config.js';
 import { collection, query, where, onSnapshot } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
+import { CONSTANTS } from '../../../constants.js';
+import { createApp, ref, computed, onMounted, onUnmounted } from "https://unpkg.com/vue@3/dist/vue.esm-browser.prod.js";
 
 export const FinanceCaisseView = {
-    unsubTrans: null,
-    unsubExp: null,
-    transactions: [],
-    expenses: [],
+    vueApp: null,
 
     render(app) {
-        this.app = app;
-        window.app.views = window.app.views || {};
-        window.app.views.financeCaisse = this;
+        const globalApp = app;
 
         const html = `
-            <div class="page">
+            <style>[v-cloak] { display: none; }</style>
+            <div id="vue-caisse-app" class="page" v-cloak>
                 <div class="factures-header" style="background: white; border-radius: 16px; margin-bottom: 24px; border: 1px solid #e2e8f0; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);">
                     <div class="factures-header__content" style="display: flex; align-items: center; gap: 20px; padding: 20px 24px; flex-wrap: wrap;">
                         <div class="factures-header__icon" style="font-size: 32px; background: #ecfccb; color: #d97706; width: 56px; height: 56px; display: flex; align-items: center; justify-content: center; border-radius: 14px;">💶</div>
@@ -27,15 +25,15 @@ export const FinanceCaisseView = {
                 <div class="stats-grid" style="grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); margin-bottom: 24px;">
                     <div class="stat-card" style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; border: none;">
                         <div class="stat-label" style="color: rgba(255,255,255,0.8); font-size: 13px;">Total Encaissements</div>
-                        <div class="stat-value" id="fcTotalIn" style="color: white; font-size: 32px;">0 €</div>
+                        <div class="stat-value" style="color: white; font-size: 32px;">{{ formatMoney(totalIn) }}</div>
                     </div>
                     <div class="stat-card" style="background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); color: white; border: none;">
                         <div class="stat-label" style="color: rgba(255,255,255,0.8); font-size: 13px;">Total Dépenses</div>
-                        <div class="stat-value" id="fcTotalOut" style="color: white; font-size: 32px;">0 €</div>
+                        <div class="stat-value" style="color: white; font-size: 32px;">{{ formatMoney(totalOut) }}</div>
                     </div>
                     <div class="stat-card" style="background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); color: white; border: none;">
                         <div class="stat-label" style="color: rgba(255,255,255,0.8); font-size: 13px;">Solde Caisse</div>
-                        <div class="stat-value" id="fcBalance" style="color: white; font-size: 32px;">0 €</div>
+                        <div class="stat-value" style="color: white; font-size: 32px;">{{ formatMoney(balance) }}</div>
                     </div>
                 </div>
 
@@ -53,8 +51,19 @@ export const FinanceCaisseView = {
                                     <th style="padding: 16px 12px; text-align: right; font-size: 12px; color: #475569; text-transform: uppercase;">Montant</th>
                                 </tr>
                             </thead>
-                            <tbody id="fcTableBody">
-                                <tr><td colspan="4" style="text-align: center; padding: 40px;"><i class="fas fa-spinner fa-spin"></i> Chargement...</td></tr>
+                            <tbody>
+                                <tr v-if="loading"><td colspan="4" style="text-align: center; padding: 40px;"><i class="fas fa-spinner fa-spin"></i> Chargement...</td></tr>
+                                <tr v-else-if="operations.length === 0"><td colspan="4" style="text-align: center; padding: 40px; color: #64748b;">Aucune opération trouvée.</td></tr>
+                                <tr v-else v-for="op in operations.slice(0, 100)" :key="op.id">
+                                    <td data-label="Date" style="padding: 14px 12px;">{{ formatDate(op.date) }}</td>
+                                    <td data-label="Libellé" style="padding: 14px 12px; font-weight: 600; color: #0f172a;">{{ op.label }}</td>
+                                    <td data-label="Type" style="padding: 14px 12px; text-align: center;">
+                                        <span class="badge" :style="op.type === 'Entrée' ? 'background:#dcfce7; color:#10b981;' : 'background:#fee2e2; color:#ef4444;'">{{ op.type }}</span>
+                                    </td>
+                                    <td data-label="Montant" style="padding: 14px 12px; text-align: right; font-weight: bold;" :style="op.type === 'Entrée' ? 'color:#10b981;' : 'color:#ef4444;'">
+                                        {{ op.type === 'Entrée' ? '+' : '-' }} {{ formatMoney(op.amount) }}
+                                    </td>
+                                </tr>
                             </tbody>
                         </table>
                     </div>
@@ -62,71 +71,83 @@ export const FinanceCaisseView = {
             </div>
         `;
         document.getElementById('contentContainer').innerHTML = html;
-        this.loadData();
+        this.initVue(globalApp);
     },
 
-    loadData() {
-        const activeAgency = sessionStorage.getItem('currentActiveAgency') || 'paris';
-        
-        if (this.unsubTrans) this.unsubTrans();
-        this.unsubTrans = onSnapshot(query(collection(db, "transactions"), where("agency", "==", activeAgency), where("isDeleted", "==", false)), snap => {
-            this.transactions = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-            this.mergeAndRender();
-        });
+    initVue(globalApp) {
+        if (this.vueApp) this.vueApp.unmount();
 
-        if (this.unsubExp) this.unsubExp();
-        this.unsubExp = onSnapshot(query(collection(db, "expenses"), where("agency", "==", activeAgency), where("isDeleted", "==", false)), snap => {
-            this.expenses = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-            this.mergeAndRender();
-        });
-    },
+        this.vueApp = createApp({
+            setup() {
+                const operations = ref([]);
+                const loading = ref(true);
+                
+                const totalIn = ref(0);
+                const totalOut = ref(0);
+                
+                let unsubTrans = null;
+                let unsubExp = null;
+                
+                const formatMoney = (amount) => globalApp.formatMoney(amount);
+                const formatDate = (dateString) => dateString ? new Date(dateString).toLocaleDateString('fr-FR') : '-';
 
-    mergeAndRender() {
-        const TAUX = 656;
-        let totalIn = 0, totalOut = 0;
-        let operations = [];
+                const balance = computed(() => totalIn.value - totalOut.value);
 
-        // Encaissements (Conversion CFA enregistré -> Euros)
-        this.transactions.forEach(t => {
-            const amountEUR = (parseFloat(t.montantParis) || 0) / TAUX; 
-            if (amountEUR > 0) {
-                totalIn += amountEUR;
-                operations.push({ date: t.date, label: `Encaissement ${t.reference} - ${t.nom || ''}`, type: 'Entrée', amount: amountEUR, ts: new Date(t.date).getTime() });
+                onMounted(() => {
+                    const activeAgency = sessionStorage.getItem('currentActiveAgency') || 'paris';
+                    const TAUX = CONSTANTS.TAUX_CONVERSION;
+                    
+                    let transList = [];
+                    let expList = [];
+                    
+                    const mergeData = () => {
+                        let inSum = 0;
+                        let outSum = 0;
+                        let ops = [];
+                        
+                        transList.forEach(t => {
+                            const amountEUR = (parseFloat(t.montantParis) || 0) / TAUX; 
+                            if (amountEUR > 0) {
+                                inSum += amountEUR;
+                                ops.push({ id: `t_${t.id}`, date: t.date, label: `Encaissement ${t.reference} - ${t.nom || ''}`, type: 'Entrée', amount: amountEUR, ts: new Date(t.date).getTime() });
+                            }
+                        });
+                        
+                        expList.forEach(e => {
+                            const amountEUR = parseFloat(e.montant) || 0;
+                            if (amountEUR > 0) {
+                                outSum += amountEUR;
+                                ops.push({ id: `e_${e.id}`, date: e.date, label: e.description || 'Dépense', type: 'Sortie', amount: amountEUR, ts: new Date(e.date).getTime() });
+                            }
+                        });
+                        
+                        ops.sort((a, b) => b.ts - a.ts);
+                        operations.value = ops;
+                        totalIn.value = inSum;
+                        totalOut.value = outSum;
+                        loading.value = false;
+                    };
+
+                    unsubTrans = onSnapshot(query(collection(db, "transactions"), where("agency", "==", activeAgency), where("isDeleted", "==", false)), snap => {
+                        transList = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+                        if (!loading.value || expList.length > 0) mergeData();
+                    });
+
+                    unsubExp = onSnapshot(query(collection(db, "expenses"), where("agency", "==", activeAgency), where("isDeleted", "==", false)), snap => {
+                        expList = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+                        mergeData(); // Toujours appeler mergeData car on a besoin des deux pour enlever le loading complet
+                    });
+                });
+
+                onUnmounted(() => {
+                    if (unsubTrans) unsubTrans();
+                    if (unsubExp) unsubExp();
+                });
+
+                return { operations, loading, totalIn, totalOut, balance, formatMoney, formatDate };
             }
         });
 
-        // Dépenses (Déjà en Euros si saisies depuis Paris)
-        this.expenses.forEach(e => {
-            const amountEUR = parseFloat(e.montant) || 0;
-            if (amountEUR > 0) {
-                totalOut += amountEUR;
-                operations.push({ date: e.date, label: e.description || 'Dépense', type: 'Sortie', amount: amountEUR, ts: new Date(e.date).getTime() });
-            }
-        });
-
-        operations.sort((a, b) => b.ts - a.ts);
-
-        document.getElementById('fcTotalIn').textContent = this.app.formatMoney(totalIn);
-        document.getElementById('fcTotalOut').textContent = this.app.formatMoney(totalOut);
-        document.getElementById('fcBalance').textContent = this.app.formatMoney(totalIn - totalOut);
-
-        const tbody = document.getElementById('fcTableBody');
-        if (operations.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="4" style="text-align: center; padding: 40px; color: #64748b;">Aucune opération trouvée.</td></tr>';
-            return;
-        }
-
-        tbody.innerHTML = operations.slice(0, 100).map(op => {
-            const color = op.type === 'Entrée' ? '#10b981' : '#ef4444';
-            const sign = op.type === 'Entrée' ? '+' : '-';
-            return `
-                <tr>
-                    <td data-label="Date" style="padding: 14px 12px;">${op.date ? new Date(op.date).toLocaleDateString('fr-FR') : '-'}</td>
-                    <td data-label="Libellé" style="padding: 14px 12px; font-weight: 600; color: #0f172a;">${op.label}</td>
-                    <td data-label="Type" style="padding: 14px 12px; text-align: center;"><span class="badge" style="background: ${op.type==='Entrée'?'#dcfce7':'#fee2e2'}; color: ${color};">${op.type}</span></td>
-                    <td data-label="Montant" style="padding: 14px 12px; text-align: right; font-weight: bold; color: ${color};">${sign} ${this.app.formatMoney(op.amount)}</td>
-                </tr>
-            `;
-        }).join('');
+        this.vueApp.mount('#vue-caisse-app');
     }
 };

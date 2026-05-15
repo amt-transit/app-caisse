@@ -1,5 +1,6 @@
 import { db } from '../../../firebase-config.js';
 import { collection, query, where, onSnapshot, getDoc, doc } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
+import { CONSTANTS } from '../../../constants.js';
 
 export const BilansFinanciersView = {
     unsubTrans: null,
@@ -13,7 +14,7 @@ export const BilansFinanciersView = {
     containers: [],
     selectedPeriod: null,
     charts: {},
-    TAUX_CONVERSION: 656,
+    TAUX_CONVERSION: CONSTANTS.TAUX_CONVERSION,
 
     render(app, subView = 'monthly') {
         this.app = app;
@@ -225,7 +226,7 @@ export const BilansFinanciersView = {
         const activeAgency = sessionStorage.getItem('currentActiveAgency') || 'paris';
         
         if (this.unsubTrans) this.unsubTrans();
-        const qTrans = query(collection(db, "transactions"), where("isDeleted", "==", false), where("agency", "==", activeAgency));
+        const qTrans = query(collection(db, "transactions"), where("agency", "==", activeAgency), where("isDeleted", "==", false));
         this.unsubTrans = onSnapshot(qTrans, snap => {
             this.transactions = snap.docs.map(d => d.data());
             this.checkAndRender();
@@ -246,7 +247,7 @@ export const BilansFinanciersView = {
         });
 
         if (this.unsubCont) this.unsubCont();
-        this.unsubCont = onSnapshot(collection(db, "containers"), snap => {
+        this.unsubCont = onSnapshot(query(collection(db, "containers"), where("agency", "==", activeAgency)), snap => {
             this.containers = snap.docs.map(d => ({id: d.id, ...d.data()}));
             this.checkAndRender();
         });

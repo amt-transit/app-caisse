@@ -1,307 +1,303 @@
+import { createApp, ref, reactive, onMounted, onUnmounted, watch } from "https://unpkg.com/vue@3/dist/vue.esm-browser.prod.js";
+
 export const Autocomplete = {
+    vueApp: null,
+    
     initAddress(inputId, suggestionsId, onSelectCallback = null, options = {}) {
-        const input = document.getElementById(inputId);
-        const suggestionsBox = document.getElementById(suggestionsId);
-        if (!input || !suggestionsBox) return;
-
-        // Isolement total de la mémoire (État local pour CHAQUE champ)
-        let currentSelectedIndex = -1;
-        let currentSuggestionsList = [];
-        let lastSelectedValue = input.value.trim();
-
-        // Ajouter une classe pour le style
-        suggestionsBox.classList.add('autocomplete-suggestions');
-        
-        // Empêche l'input de perdre le focus si on clique sur la barre de scroll ou une suggestion
-        suggestionsBox.addEventListener('mousedown', (e) => {
-            e.preventDefault();
-        });
-
-        // Cache la liste si l'utilisateur clique ailleurs et que l'input perd le focus
-        input.addEventListener('blur', () => {
-            suggestionsBox.style.display = 'none';
-            currentSelectedIndex = -1;
-        });
-
-        let timeout;
-        
-        // Gestion de la saisie
-        input.addEventListener('input', () => {
-            clearTimeout(timeout);
-            const query = input.value.trim();
-            
-            // SÉCURITÉ : Nettoyage intelligent des champs liés si l'utilisateur modifie une sélection validée
-            if (lastSelectedValue && query !== lastSelectedValue) {
-                lastSelectedValue = '';
-                if (options.clearOnMismatch) {
-                    options.clearOnMismatch.forEach(id => {
-                        const el = document.getElementById(id);
-                        if (el) {
-                            el.value = '';
-                            el.dispatchEvent(new Event('input', { bubbles: true }));
-                            el.dispatchEvent(new Event('change', { bubbles: true }));
-                        }
-                    });
-                }
-                if (options.onMismatch) options.onMismatch(input);
-            }
-            
-            if (query.length < 3) {
-                suggestionsBox.style.display = 'none';
-                currentSelectedIndex = -1;
-                return;
-            }
-
-            // Ajouter un état de chargement
-            suggestionsBox.innerHTML = '<li class="loading"><i class="fas fa-spinner fa-spin"></i> Recherche en cours...</li>';
-            suggestionsBox.style.display = 'block';
-
-            timeout = setTimeout(async () => {
-                try {
-                    const response = await fetch(`https://api-adresse.data.gouv.fr/search/?q=${encodeURIComponent(query)}&limit=5`);
-                    const data = await response.json();
-                    
-                    // SÉCURITÉ ANTI-GHOST : on annule l'affichage si l'input a été vidé/modifié 
-                    // OU si l'utilisateur a déjà cliqué ailleurs sur la page (perte de focus)
-                    if (input.value.trim() !== query || document.activeElement !== input) return;
-
-                    if (data.features && data.features.length > 0) {
-                        currentSuggestionsList = data.features;
-                        currentSelectedIndex = -1;
-                        
-                        suggestionsBox.innerHTML = data.features.map((item, index) => `
-                            <li data-index="${index}" class="suggestion-item">
-                                ${item.properties.label}
-                            </li>
-                        `).join('');
-                        suggestionsBox.style.display = 'block';
-                        
-                        // Ajouter les événements localement
-                        const lis = suggestionsBox.querySelectorAll('li');
-                        lis.forEach((li, idx) => {
-                            li.addEventListener('click', (e) => {
-                                e.stopPropagation();
-                                const item = data.features[idx];
-                                input.value = item.properties.label;
-                                lastSelectedValue = input.value.trim();
-                                suggestionsBox.style.display = 'none';
-                                input.dispatchEvent(new Event('change'));
-                                if (onSelectCallback) onSelectCallback(item, input);
-                                currentSelectedIndex = -1;
-                            });
-                            
-                            li.addEventListener('mouseenter', () => {
-                                currentSelectedIndex = idx;
-                                this.updateHighlight(suggestionsBox, idx);
-                            });
-                        });
-                    } else {
-                        suggestionsBox.innerHTML = '<li class="no-results">Aucune adresse trouvée</li>';
-                        suggestionsBox.style.display = 'block';
-                    }
-                } catch (e) {
-                    console.error("Erreur auto-complétion adresse:", e);
-                    suggestionsBox.innerHTML = '<li class="no-results">Erreur de chargement</li>';
-                    suggestionsBox.style.display = 'block';
-                }
-            }, 300);
-        });
-
-        // Gestion du clavier
-        input.addEventListener('keydown', (e) => {
-            if (suggestionsBox.style.display !== 'block') return;
-            
-            const items = suggestionsBox.querySelectorAll('li:not(.no-results):not(.loading)');
-            if (items.length === 0) return;
-            
-            switch(e.key) {
-                case 'ArrowDown':
-                    e.preventDefault();
-                    currentSelectedIndex = (currentSelectedIndex + 1) % items.length;
-                    this.updateHighlight(suggestionsBox, currentSelectedIndex);
-                    this.scrollToSelected(items[currentSelectedIndex]);
-                    break;
-                case 'ArrowUp':
-                    e.preventDefault();
-                    currentSelectedIndex = currentSelectedIndex <= 0 ? items.length - 1 : currentSelectedIndex - 1;
-                    this.updateHighlight(suggestionsBox, currentSelectedIndex);
-                    this.scrollToSelected(items[currentSelectedIndex]);
-                    break;
-                case 'Enter':
-                    e.preventDefault();
-                    if (currentSelectedIndex >= 0 && items[currentSelectedIndex]) {
-                        items[currentSelectedIndex].click();
-                    }
-                    break;
-                case 'Escape':
-                    suggestionsBox.style.display = 'none';
-                    currentSelectedIndex = -1;
-                    break;
-            }
-        });
-
-        // Fermeture au clic extérieur
-        document.addEventListener('click', (e) => {
-            if (e.target !== input && !suggestionsBox.contains(e.target)) {
-                suggestionsBox.style.display = 'none';
-                currentSelectedIndex = -1;
-            }
-        });
-    },
-
-    updateHighlight(container, index) {
-        const items = container.querySelectorAll('li');
-        items.forEach((item, i) => {
-            if (i === index) {
-                item.classList.add('highlighted');
-                item.style.background = 'linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%)';
-                item.style.borderLeftColor = '#3b82f6';
-            } else {
-                item.classList.remove('highlighted');
-                item.style.background = '';
-                item.style.borderLeftColor = 'transparent';
-            }
-        });
-    },
-
-    scrollToSelected(element) {
-        if (element) {
-            element.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+        // Version Vue pour l'autocomplétion d'adresse
+        const container = document.getElementById(inputId)?.closest('[data-vue-autocomplete]');
+        if (container && this.vueApp) {
+            this.vueApp.unmount();
         }
+        
+        const html = `
+            <div id="${inputId}-wrapper" data-vue-autocomplete style="position: relative;">
+                <input type="text" id="${inputId}" v-model="searchQuery" @input="onInput" @keydown="onKeydown" @blur="onBlur" placeholder="${options.placeholder || 'Saisissez une adresse...'}" style="width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 8px;">
+                <div id="${suggestionsId}" v-show="showSuggestions" class="autocomplete-suggestions" style="position: absolute; top: 100%; left: 0; right: 0; background: white; border: 1px solid #e2e8f0; border-radius: 8px; max-height: 200px; overflow-y: auto; z-index: 1000; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);">
+                    <div v-if="loading" class="loading" style="padding: 10px; text-align: center; color: #64748b;"><i class="fas fa-spinner fa-spin"></i> Recherche en cours...</div>
+                    <div v-else-if="suggestions.length === 0" class="no-results" style="padding: 10px; text-align: center; color: #64748b;">Aucune adresse trouvée</div>
+                    <div v-else v-for="(item, idx) in suggestions" :key="idx" class="suggestion-item" :class="{ highlighted: idx === selectedIndex }" @click="selectSuggestion(item)" @mouseenter="selectedIndex = idx" style="padding: 10px; cursor: pointer; border-bottom: 1px solid #f1f5f9;">
+                        {{ item.properties.label }}
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        const wrapper = document.getElementById(inputId)?.parentElement;
+        if (wrapper) {
+            const tempDiv = document.createElement('div');
+            tempDiv.innerHTML = html;
+            const newWrapper = tempDiv.firstElementChild;
+            wrapper.parentNode?.replaceChild(newWrapper, wrapper);
+        }
+        
+        this.initVueAddress(inputId, suggestionsId, onSelectCallback, options);
     },
-
-    initCustom(inputId, suggestionsId, searchCallback, renderItemCallback, onSelectCallback, options = {}) {
-        const input = document.getElementById(inputId);
-        const suggestionsBox = document.getElementById(suggestionsId);
-        if (!input || !suggestionsBox) return;
-
-        // Isolement total de la mémoire
-        let currentSelectedIndex = -1;
-        let currentSuggestionsList = [];
-        let lastSelectedValue = input.value.trim();
-
-        suggestionsBox.classList.add('autocomplete-suggestions', 'custom-suggestions');
+    
+    initVueAddress(inputId, suggestionsId, onSelectCallback, options) {
+        if (this.vueApp) this.vueApp.unmount();
         
-        // Empêche l'input de perdre le focus si on clique sur la barre de scroll ou une suggestion
-        suggestionsBox.addEventListener('mousedown', (e) => {
-            e.preventDefault();
-        });
-
-        // Cache la liste si l'utilisateur clique ailleurs et que l'input perd le focus
-        input.addEventListener('blur', () => {
-            suggestionsBox.style.display = 'none';
-            currentSelectedIndex = -1;
-        });
-
-        let timeout;
+        const element = document.getElementById(`${inputId}-wrapper`);
+        if (!element) return;
         
-        input.addEventListener('input', () => {
-            clearTimeout(timeout);
-            const query = input.value.trim();
-
-            // SÉCURITÉ : Nettoyage intelligent des champs liés si l'utilisateur modifie une sélection validée
-            if (lastSelectedValue && query !== lastSelectedValue) {
-                lastSelectedValue = '';
-                if (options.clearOnMismatch) {
-                    options.clearOnMismatch.forEach(id => {
-                        const el = document.getElementById(id);
-                        if (el) {
-                            el.value = '';
-                            el.dispatchEvent(new Event('input', { bubbles: true }));
-                            el.dispatchEvent(new Event('change', { bubbles: true }));
-                        }
-                    });
-                }
-                if (options.onMismatch) options.onMismatch(input);
-            }
-            
-            if (query.length < 2) {
-                suggestionsBox.style.display = 'none';
-                currentSelectedIndex = -1;
-                return;
-            }
-
-            suggestionsBox.innerHTML = '<li class="loading"><i class="fas fa-spinner fa-spin"></i> Recherche...</li>';
-            suggestionsBox.style.display = 'block';
-
-            timeout = setTimeout(async () => {
-                const matches = await searchCallback(query);
+        this.vueApp = createApp({
+            setup() {
+                const searchQuery = ref('');
+                const suggestions = ref([]);
+                const selectedIndex = ref(-1);
+                const showSuggestions = ref(false);
+                const loading = ref(false);
+                let lastSelectedValue = '';
+                let timeout = null;
+                let currentInput = null;
                 
-                // SÉCURITÉ ANTI-GHOST : focus et texte vérifiés
-                if (input.value.trim() !== query || document.activeElement !== input) return;
-                
-                if (matches && matches.length > 0) {
-                    currentSuggestionsList = matches;
-                    currentSelectedIndex = -1;
+                const onInput = (event) => {
+                    const query = event.target.value.trim();
+                    searchQuery.value = query;
                     
-                    suggestionsBox.innerHTML = matches.map((m, idx) => {
-                        const html = renderItemCallback(m);
-                        return `<li data-index="${idx}" class="suggestion-item">${html}</li>`;
-                    }).join('');
-                    suggestionsBox.style.display = 'block';
-
-                    // Gestion des événements
-                    const lis = suggestionsBox.querySelectorAll('li');
-                    lis.forEach((li, idx) => {
-                        li.addEventListener('click', (e) => {
-                            e.stopPropagation();
-                            const item = matches[idx];
-                            suggestionsBox.style.display = 'none';
-                            lastSelectedValue = input.value.trim();
-                            if (onSelectCallback) onSelectCallback(item, input);
-                            currentSelectedIndex = -1;
-                        });
-                        
-                        li.addEventListener('mouseenter', () => {
-                            currentSelectedIndex = idx;
-                            this.updateHighlight(suggestionsBox, idx);
-                        });
-                    });
-                } else {
-                    suggestionsBox.innerHTML = '<li class="no-results">Aucun résultat trouvé</li>';
-                    suggestionsBox.style.display = 'block';
-                }
-            }, 300);
-        });
-
-        // Gestion du clavier pour custom
-        input.addEventListener('keydown', (e) => {
-            if (suggestionsBox.style.display !== 'block') return;
-            
-            const items = suggestionsBox.querySelectorAll('li:not(.no-results):not(.loading)');
-            if (items.length === 0) return;
-            
-            switch(e.key) {
-                case 'ArrowDown':
-                    e.preventDefault();
-                    currentSelectedIndex = (currentSelectedIndex + 1) % items.length;
-                    this.updateHighlight(suggestionsBox, currentSelectedIndex);
-                    this.scrollToSelected(items[currentSelectedIndex]);
-                    break;
-                case 'ArrowUp':
-                    e.preventDefault();
-                    currentSelectedIndex = currentSelectedIndex <= 0 ? items.length - 1 : currentSelectedIndex - 1;
-                    this.updateHighlight(suggestionsBox, currentSelectedIndex);
-                    this.scrollToSelected(items[currentSelectedIndex]);
-                    break;
-                case 'Enter':
-                    e.preventDefault();
-                    if (currentSelectedIndex >= 0 && items[currentSelectedIndex]) {
-                        items[currentSelectedIndex].click();
+                    if (lastSelectedValue && query !== lastSelectedValue) {
+                        lastSelectedValue = '';
+                        if (options.clearOnMismatch) {
+                            options.clearOnMismatch.forEach(id => {
+                                const el = document.getElementById(id);
+                                if (el) el.value = '';
+                            });
+                        }
+                        if (options.onMismatch) options.onMismatch(event.target);
                     }
-                    break;
-                case 'Escape':
-                    suggestionsBox.style.display = 'none';
-                    currentSelectedIndex = -1;
-                    break;
+                    
+                    if (query.length < 3) {
+                        suggestions.value = [];
+                        showSuggestions.value = false;
+                        selectedIndex.value = -1;
+                        return;
+                    }
+                    
+                    loading.value = true;
+                    showSuggestions.value = true;
+                    
+                    if (timeout) clearTimeout(timeout);
+                    timeout = setTimeout(async () => {
+                        try {
+                            const response = await fetch(`https://api-adresse.data.gouv.fr/search/?q=${encodeURIComponent(query)}&limit=5`);
+                            const data = await response.json();
+                            
+                            if (searchQuery.value !== query) return;
+                            
+                            if (data.features && data.features.length > 0) {
+                                suggestions.value = data.features;
+                                selectedIndex.value = -1;
+                            } else {
+                                suggestions.value = [];
+                            }
+                        } catch (e) {
+                            console.error("Erreur auto-complétion:", e);
+                            suggestions.value = [];
+                        } finally {
+                            loading.value = false;
+                        }
+                    }, 300);
+                };
+                
+                const selectSuggestion = (item) => {
+                    searchQuery.value = item.properties.label;
+                    lastSelectedValue = searchQuery.value;
+                    showSuggestions.value = false;
+                    if (onSelectCallback) onSelectCallback(item, document.getElementById(inputId));
+                    selectedIndex.value = -1;
+                    
+                    const inputEl = document.getElementById(inputId);
+                    if (inputEl) inputEl.dispatchEvent(new Event('change'));
+                };
+                
+                const onKeydown = (event) => {
+                    if (!showSuggestions.value || suggestions.value.length === 0) return;
+                    
+                    switch(event.key) {
+                        case 'ArrowDown':
+                            event.preventDefault();
+                            selectedIndex.value = (selectedIndex.value + 1) % suggestions.value.length;
+                            break;
+                        case 'ArrowUp':
+                            event.preventDefault();
+                            selectedIndex.value = selectedIndex.value <= 0 ? suggestions.value.length - 1 : selectedIndex.value - 1;
+                            break;
+                        case 'Enter':
+                            event.preventDefault();
+                            if (selectedIndex.value >= 0 && suggestions.value[selectedIndex.value]) {
+                                selectSuggestion(suggestions.value[selectedIndex.value]);
+                            }
+                            break;
+                        case 'Escape':
+                            showSuggestions.value = false;
+                            selectedIndex.value = -1;
+                            break;
+                    }
+                };
+                
+                const onBlur = () => {
+                    setTimeout(() => {
+                        showSuggestions.value = false;
+                        selectedIndex.value = -1;
+                    }, 200);
+                };
+                
+                onMounted(() => {
+                    currentInput = document.getElementById(inputId);
+                    if (currentInput) {
+                        currentInput.value = searchQuery.value;
+                    }
+                });
+                
+                return {
+                    searchQuery, suggestions, selectedIndex, showSuggestions, loading,
+                    onInput, onKeydown, onBlur, selectSuggestion
+                };
             }
         });
-
-        document.addEventListener('click', (e) => {
-            if (e.target !== input && !suggestionsBox.contains(e.target)) {
-                suggestionsBox.style.display = 'none';
-                currentSelectedIndex = -1;
+        
+        this.vueApp.mount(element);
+    },
+    
+    initCustom(inputId, suggestionsId, searchCallback, renderItemCallback, onSelectCallback, options = {}) {
+        const container = document.getElementById(inputId)?.closest('[data-vue-autocomplete-custom]');
+        if (container && this.vueApp) {
+            this.vueApp.unmount();
+        }
+        
+        const html = `
+            <div id="${inputId}-custom-wrapper" data-vue-autocomplete-custom style="position: relative;">
+                <input type="text" id="${inputId}" v-model="searchQuery" @input="onInput" @keydown="onKeydown" @blur="onBlur" style="width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 8px;">
+                <div id="${suggestionsId}" v-show="showSuggestions" class="autocomplete-suggestions custom-suggestions" style="position: absolute; top: 100%; left: 0; right: 0; background: white; border: 1px solid #e2e8f0; border-radius: 8px; max-height: 200px; overflow-y: auto; z-index: 1000; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);">
+                    <div v-if="loading" class="loading" style="padding: 10px; text-align: center; color: #64748b;"><i class="fas fa-spinner fa-spin"></i> Recherche en cours...</div>
+                    <div v-else-if="suggestions.length === 0" class="no-results" style="padding: 10px; text-align: center; color: #64748b;">Aucun résultat trouvé</div>
+                    <div v-else v-for="(item, idx) in suggestions" :key="idx" class="suggestion-item" :class="{ highlighted: idx === selectedIndex }" @click="selectSuggestion(item)" @mouseenter="selectedIndex = idx" v-html="renderItem(item)" style="padding: 10px; cursor: pointer; border-bottom: 1px solid #f1f5f9;">
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        const wrapper = document.getElementById(inputId)?.parentElement;
+        if (wrapper) {
+            const tempDiv = document.createElement('div');
+            tempDiv.innerHTML = html;
+            const newWrapper = tempDiv.firstElementChild;
+            wrapper.parentNode?.replaceChild(newWrapper, wrapper);
+        }
+        
+        this.initVueCustom(inputId, suggestionsId, searchCallback, renderItemCallback, onSelectCallback, options);
+    },
+    
+    initVueCustom(inputId, suggestionsId, searchCallback, renderItemCallback, onSelectCallback, options) {
+        if (this.vueApp) this.vueApp.unmount();
+        
+        const element = document.getElementById(`${inputId}-custom-wrapper`);
+        if (!element) return;
+        
+        this.vueApp = createApp({
+            setup() {
+                const searchQuery = ref('');
+                const suggestions = ref([]);
+                const selectedIndex = ref(-1);
+                const showSuggestions = ref(false);
+                const loading = ref(false);
+                let lastSelectedValue = '';
+                let timeout = null;
+                
+                const renderItem = (item) => renderItemCallback(item);
+                
+                const onInput = async (event) => {
+                    const query = event.target.value.trim();
+                    searchQuery.value = query;
+                    
+                    if (lastSelectedValue && query !== lastSelectedValue) {
+                        lastSelectedValue = '';
+                        if (options.clearOnMismatch) {
+                            options.clearOnMismatch.forEach(id => {
+                                const el = document.getElementById(id);
+                                if (el) el.value = '';
+                            });
+                        }
+                        if (options.onMismatch) options.onMismatch(event.target);
+                    }
+                    
+                    if (query.length < 2) {
+                        suggestions.value = [];
+                        showSuggestions.value = false;
+                        selectedIndex.value = -1;
+                        return;
+                    }
+                    
+                    loading.value = true;
+                    showSuggestions.value = true;
+                    
+                    if (timeout) clearTimeout(timeout);
+                    timeout = setTimeout(async () => {
+                        try {
+                            const results = await searchCallback(query);
+                            if (searchQuery.value !== query) return;
+                            
+                            if (results && results.length > 0) {
+                                suggestions.value = results;
+                                selectedIndex.value = -1;
+                            } else {
+                                suggestions.value = [];
+                            }
+                        } catch (e) {
+                            console.error("Erreur recherche custom:", e);
+                            suggestions.value = [];
+                        } finally {
+                            loading.value = false;
+                        }
+                    }, 300);
+                };
+                
+                const selectSuggestion = (item) => {
+                    lastSelectedValue = searchQuery.value;
+                    showSuggestions.value = false;
+                    if (onSelectCallback) onSelectCallback(item, document.getElementById(inputId));
+                    selectedIndex.value = -1;
+                };
+                
+                const onKeydown = (event) => {
+                    if (!showSuggestions.value || suggestions.value.length === 0) return;
+                    
+                    switch(event.key) {
+                        case 'ArrowDown':
+                            event.preventDefault();
+                            selectedIndex.value = (selectedIndex.value + 1) % suggestions.value.length;
+                            break;
+                        case 'ArrowUp':
+                            event.preventDefault();
+                            selectedIndex.value = selectedIndex.value <= 0 ? suggestions.value.length - 1 : selectedIndex.value - 1;
+                            break;
+                        case 'Enter':
+                            event.preventDefault();
+                            if (selectedIndex.value >= 0 && suggestions.value[selectedIndex.value]) {
+                                selectSuggestion(suggestions.value[selectedIndex.value]);
+                            }
+                            break;
+                        case 'Escape':
+                            showSuggestions.value = false;
+                            selectedIndex.value = -1;
+                            break;
+                    }
+                };
+                
+                const onBlur = () => {
+                    setTimeout(() => {
+                        showSuggestions.value = false;
+                        selectedIndex.value = -1;
+                    }, 200);
+                };
+                
+                return {
+                    searchQuery, suggestions, selectedIndex, showSuggestions, loading,
+                    renderItem, onInput, onKeydown, onBlur, selectSuggestion
+                };
             }
         });
+        
+        this.vueApp.mount(element);
     }
 };

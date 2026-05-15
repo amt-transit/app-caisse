@@ -1,4 +1,4 @@
-import { ClientsView } from './views/clients.js';
+import { ClientsView } from '../../shared/views/clients.js';
 import { DashboardView } from './views/dashboard.js';
 import { ExpensesView } from './views/expenses.js';
 import { MagasinageView } from './views/magasinage.js';
@@ -9,6 +9,7 @@ import { AdminView } from './views/admin.js';
 import { HistoryView } from './views/history.js';
 import { BankView } from './views/bank.js';
 import { OtherIncomeView } from './views/other-income.js';
+import { SettingsSoftwareView } from './views/settings-software.js';
 import { VoitureView } from './views/voiture.js';
 import { PointsView } from './views/points.js';
 import { ComptejbView } from './views/comptejb.js';
@@ -19,6 +20,16 @@ import { AuditLogView } from './views/audit-log.js';
 import { ProspectingView } from './views/prospecting.js';
 import { ScanDechargementView } from './views/scan-dechargement.js';
 import { ScanLivraisonView } from './views/scan-livraison.js';
+import { ScanLivrerView } from './views/scan-livrer.js';
+import { ScanHistoryView } from './views/scan-history.js';
+import { SmsView } from './views/sms.js';
+import { ChatView } from './views/chat.js';
+import { DailyBilanView } from '../../shared/views/daily-bilan.js';
+import { DailyUsersView } from '../../shared/views/daily-users.js';
+import { StatistiquesView } from '../../shared/views/statistiques.js';
+import { ToutesLesFacturesView } from '../../shared/views/touteslesfactures.js';
+import { ChineDashboardView } from '../../shared/views/chine-dashboard.js';
+import { ParrainageView } from '../../shared/views/parrainage.js';
 
 const app = {
     currentPage: 'clients',
@@ -26,10 +37,38 @@ const app = {
     init() {
         window.app = this;
         this.initSidebarEvents();
+        this.injectScanLivrerMenu();
         
         // Démarrage sur la dernière page visitée (ou 'clients' par défaut pour nos tests)
         const savedPage = sessionStorage.getItem('abidjanCurrentPage') || 'clients';
         this.renderPage(savedPage);
+    },
+
+    injectScanLivrerMenu() {
+        // Ajoute dynamiquement le lien "Scan Remise Client" sous "Scan Mise en Livraison" dans le menu de gauche
+        const scanLivraisonLink = document.querySelector('.sidebar-item[data-page="scan-livraison"]');
+        
+        if (scanLivraisonLink && !document.querySelector('.sidebar-item[data-page="scan-livrer"]')) {
+            const newLink = document.createElement('a');
+            newLink.href = "#";
+            newLink.className = "sidebar-item";
+            newLink.dataset.page = "scan-livrer";
+            newLink.innerHTML = '<i class="fas fa-handshake" style="width: 25px; text-align: center;"></i> Remise Client';
+            
+            newLink.addEventListener('click', (e) => {
+                e.preventDefault();
+                this.renderPage('scan-livrer');
+                
+                // Fermer le menu sur mobile après le clic
+                if (window.innerWidth <= 1024) {
+                    document.getElementById('sidebar')?.classList.remove('open');
+                    document.getElementById('sidebarOverlay')?.classList.remove('show');
+                }
+            });
+            
+            // Insère le nouveau lien juste après le lien "Mise en Livraison"
+            scanLivraisonLink.parentNode.insertBefore(newLink, scanLivraisonLink.nextSibling);
+        }
     },
 
     renderPage(page) {
@@ -54,10 +93,23 @@ const app = {
             'voiture': 'Gestion Flotte & Véhicules',
             'other-income': 'Autres Entrées',
             'settings-profile': 'Mon Profil',
+            'settings-software': 'Paramètres logiciel',
             'prospecting': 'Prospections',
             'audit-log': 'Activités log',
             'scan-dechargement': 'Scan Déchargement',
-            'scan-livraison': 'Scan Mise en Livraison'
+            'scan-livraison': 'Scan Mise en Livraison',
+            'scan-livrer': 'Scan Remise Client',
+            'scan-history': 'Historique des Scans',
+            'sms': 'Communication & SMS',
+            'chat': 'Chat Interne',
+            'daily-bilan': 'Bilan du jour',
+            'daily-users': 'Bilan par utilisateurs',
+            'stats-monthly': 'Statistiques Mensuelles',
+            'stats-yearly': 'Statistiques Annuelles',
+            'stats-boat': 'Stats Conteneur',
+            'touteslesfactures': 'Toutes les factures',
+            'chine-dashboard': 'Tableau de Bord Asie',
+            'parrainage': 'Réseau Partenaires'
         };
         const titleEl = document.getElementById('pageTitle') || document.querySelector('.page-title');
         if (titleEl) titleEl.textContent = titleMap[page] || page;
@@ -105,6 +157,8 @@ const app = {
             ComptejbView.render(this, container);
         } else if (page === 'salaire') {
             SalaireView.render(this, container);
+        } else if (page === 'settings-software') {
+            SettingsSoftwareView.render(this, container);
         } else if (page === 'confirmation') {
             ConfirmationView.render(this, container);
         } else if (page === 'livreurscan') {
@@ -119,6 +173,26 @@ const app = {
             ScanDechargementView.render(this, container);
         } else if (page === 'scan-livraison') {
             ScanLivraisonView.render(this, container);
+        } else if (page === 'scan-livrer') {
+            ScanLivrerView.render(this, container);
+        } else if (page === 'scan-history') {
+            ScanHistoryView.render(this, container);
+        } else if (page === 'sms') {
+            SmsView.render(this, container);
+        } else if (page === 'chat') {
+            ChatView.render(this, container);
+        } else if (page === 'daily-bilan') {
+            DailyBilanView.render(this, container);
+        } else if (page === 'daily-users') {
+            DailyUsersView.render(this, container);
+        } else if (page.startsWith('stats-')) {
+            StatistiquesView.render(this, container, page.replace('stats-', ''));
+        } else if (page === 'touteslesfactures') {
+            ToutesLesFacturesView.render(this, container);
+        } else if (page === 'chine-dashboard') {
+            ChineDashboardView.render(this, container);
+        } else if (page === 'parrainage') {
+            ParrainageView.render(this, container);
         } else {
             // Vue de transition pour les pages non encore migrées
             container.innerHTML = `
@@ -130,6 +204,153 @@ const app = {
                 </div>
             `;
         }
+    },
+    
+    showToast(message, type = 'success') {
+        const toast = document.createElement('div');
+        toast.style.cssText = 'position: fixed; bottom: 20px; right: 20px; background: ' + (type === 'success' ? '#10b981' : '#ef4444') + '; color: white; padding: 12px 20px; border-radius: 8px; z-index: 9999; box-shadow: 0 4px 6px rgba(0,0,0,0.1); transition: opacity 0.3s ease;';
+        toast.textContent = message;
+        document.body.appendChild(toast);
+        setTimeout(() => {
+            toast.style.opacity = '0';
+            setTimeout(() => toast.remove(), 300);
+        }, 3000);
+    },
+
+    formatMoney(amount) {
+        return new Intl.NumberFormat('fr-CI', { style: 'currency', currency: 'XOF' }).format(amount || 0).replace(/[\u202F\u00A0]/g, ' ').replace(/\s*\/\s*/g, ' ');
+    },
+    
+    async printLabels(data) {
+        const format = localStorage.getItem('amt_label_format') || 'A5';
+        const model = localStorage.getItem('amt_label_model') || 'classic';
+        const headerColor = localStorage.getItem('amt_label_header_color') || '#000000';
+        
+        const dimensions = {
+            A5: { width: 210, height: 148 },
+            A6: { width: 148, height: 105 }
+        };
+        const dim = dimensions[format] || dimensions.A5;
+        const widthMm = dim.width;
+        const heightMm = dim.height;
+        const pageSizeCss = `${widthMm}mm ${heightMm}mm`;
+        
+        const theme = { border: '#000', text: '#000' };
+        
+        const loadingToast = document.createElement('div');
+        loadingToast.style.cssText = 'position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: #3b82f6; color: white; padding: 12px 20px; border-radius: 8px; z-index: 9999; box-shadow: 0 4px 6px rgba(0,0,0,0.1); font-weight: bold;';
+        loadingToast.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Génération des étiquettes en cours...';
+        document.body.appendChild(loadingToast);
+
+        const generateQR = (text) => {
+            return new Promise(resolve => {
+                const div = document.createElement('div');
+                new QRCode(div, { text: text, width: 300, height: 300, correctLevel: QRCode.CorrectLevel.H });
+                setTimeout(() => {
+                    const canvas = div.querySelector('canvas');
+                    if (canvas) resolve(canvas.toDataURL('image/png'));
+                    else {
+                        const img = div.querySelector('img');
+                        resolve(img ? img.src : '');
+                    }
+                }, 150);
+            });
+        };
+        
+        let labelsHtml = '';
+        for (const label of data.labels) {
+            const qrDataUrl = await generateQR(label.sousRef);
+            labelsHtml += this.renderClassicLabel(widthMm, heightMm, qrDataUrl, data, label, theme, headerColor);
+        }
+        
+        const iframe = document.createElement('iframe');
+        iframe.style.position = 'fixed';
+        iframe.style.right = '-10000px';
+        iframe.style.bottom = '-10000px';
+        document.body.appendChild(iframe);
+        
+        const doc = iframe.contentWindow.document;
+        doc.open();
+        doc.write(`
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <style>
+                    @page { size: ${pageSizeCss} landscape; margin: 0; }
+                    body { margin: 0; padding: 0; font-family: 'Arial', sans-serif; background: #fff; }
+                    .label { 
+                        box-sizing: border-box; 
+                        page-break-after: always;
+                        display: flex;
+                        flex-direction: column;
+                        overflow: hidden;
+                    }
+                    .label:last-child { page-break-after: auto; }
+                </style>
+            </head>
+            <body>
+                ${labelsHtml}
+            </body>
+            </html>
+        `);
+        doc.close();
+        
+        loadingToast.remove();
+        
+        iframe.onload = () => {
+            setTimeout(() => {
+                iframe.contentWindow.focus();
+                iframe.contentWindow.print();
+                setTimeout(() => document.body.removeChild(iframe), 2000);
+            }, 500);
+        };
+    },
+    
+    renderClassicLabel(widthMm, heightMm, qrDataUrl, data, label, theme, headerColor) {
+        const isA5 = widthMm === 210;
+        const fontSize = isA5 ? '11pt' : '9pt';
+        const titleFont = isA5 ? '14pt' : '11pt';
+        const refFont = isA5 ? '28pt' : '22pt';
+        
+        return `
+            <div class="label" style="width: ${widthMm}mm; height: ${heightMm}mm;">
+                <div style="height: 100%; display: flex; flex-direction: column; padding: 6mm;">
+                    <div style="display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid ${theme.border}; padding-bottom: 3mm; margin-bottom: 4mm;">
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <div style="background: ${headerColor}; padding: 2px 4px; border-radius: 6px; display: flex; align-items: center; justify-content: center;">
+                                <img src="../LOGOAMT.png" style="height: ${isA5 ? '8mm' : '6mm'}; object-fit: contain;" alt="Logo" />
+                            </div>
+                            <div>
+                                <div style="font-size: ${fontSize}; font-weight: bold;">AMT TRANSIT CI FRET</div>
+                                <div style="font-size: ${isA5 ? '9pt' : '7pt'};">81 AV. ARISTIDE BRIAND - 0180893370</div>
+                            </div>
+                        </div>
+                        <div style="text-align: right;">
+                            <div style="font-size: ${fontSize};"><strong>DATE</strong> ${new Date().toLocaleDateString()}</div>
+                            <div style="font-size: ${fontSize};"><strong>HEURE</strong> ${new Date().toLocaleTimeString()}</div>
+                        </div>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5mm;">
+                        <div style="font-size: ${titleFont}; font-weight: bold;">${label.sousRef}</div>
+                        <img src="${qrDataUrl}" style="width: ${isA5 ? '45mm' : '35mm'}; height: ${isA5 ? '45mm' : '35mm'};" />
+                    </div>
+                    <div style="margin-bottom: 5mm;">
+                        <div style="font-size: ${titleFont}; font-weight: bold; margin-bottom: 2mm;">DESTINATAIRE</div>
+                        <div style="font-size: ${titleFont}; font-weight: bold;">${data.destName}</div>
+                        <div style="font-size: ${fontSize};">${data.destPhone || ''}</div>
+                    </div>
+                    <div style="margin-bottom: 5mm;">
+                        <div style="font-size: ${titleFont}; font-weight: bold; margin-bottom: 2mm;">EXPEDITEUR</div>
+                        <div style="font-size: ${titleFont}; font-weight: bold;">${data.expName}</div>
+                        <div style="font-size: ${fontSize};">${data.expAddress?.replace(/\n/g, '<br>') || ''}</div>
+                    </div>
+                    <div style="flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; width: 100%;">
+                        <div style="font-size: ${refFont}; font-weight: 900; letter-spacing: 2px; word-break: break-all;">${data.ref}</div>
+                        <div style="font-size: ${fontSize}; font-weight: bold; margin-top: 2mm; text-transform: uppercase;">${label.desc}</div>
+                    </div>
+                </div>
+            </div>
+        `;
     },
 
     initSidebarEvents() {
@@ -153,4 +374,9 @@ const app = {
     }
 };
 
-document.addEventListener('DOMContentLoaded', () => app.init());
+// Démarrage sécurisé : si le DOM est déjà chargé à cause de l'attente de la base de données (Top-Level Await), on lance directement.
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => app.init());
+} else {
+    app.init();
+}

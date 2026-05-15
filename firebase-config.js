@@ -1,6 +1,7 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js";
 import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, setLogLevel } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 import { getAuth } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-auth.js";
+import { getFunctions } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-functions.js";
 
 const firebaseConfig = {
     apiKey: "AIzaSyA255n3XWDRKaYZ9kwOYkfovf5lRexoCA4",
@@ -16,6 +17,7 @@ export const db = initializeFirestore(app, {
     localCache: persistentLocalCache({tabManager: persistentMultipleTabManager()})
 });
 export const auth = getAuth(app);
+export const functions = getFunctions(app);
 
 // Masque les avertissements bénins de synchronisation multi-onglets dans la console
 setLogLevel('error');

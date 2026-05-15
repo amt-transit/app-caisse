@@ -169,7 +169,7 @@ export const SalaireView = {
 
                 // --- CHARGEMENT DES DONNÉES ---
                 const loadEmployees = () => {
-                     onSnapshot(collection(db, "employees"), (snap) => {
+                     onSnapshot(query(collection(db, "employees"), where("agency", "==", activeAgency)), (snap) => {
                         let list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
                         list.sort((a, b) => a.name.localeCompare(b.name));
                         employeesList.value = list;
@@ -177,13 +177,13 @@ export const SalaireView = {
                 };
 
                 const loadSalaryHistory = () => {
-                     onSnapshot(query(collection(db, "salary_payments"), orderBy('timestamp', 'desc')), (snap) => {
+                     onSnapshot(query(collection(db, "salary_payments"), where("agency", "==", activeAgency), orderBy('timestamp', 'desc')), (snap) => {
                         salaryHistory.value = snap.docs.map(d => ({ id: d.id, ...d.data() }));
                     });
                 };
 
                 const loadSalaryFunds = () => {
-                     onSnapshot(query(collection(db, "salary_funds"), orderBy('timestamp', 'desc')), (snap) => {
+                     onSnapshot(query(collection(db, "salary_funds"), where("agency", "==", activeAgency), orderBy('timestamp', 'desc')), (snap) => {
                         salaryFunds.value = snap.docs.map(d => ({ id: d.id, ...d.data() }));
                     });
                 };
@@ -304,6 +304,7 @@ export const SalaireView = {
                     toast.value = { show: true, message: msg, type };
                     setTimeout(() => toast.value.show = false, 3000);
                 };
+                const activeAgency = sessionStorage.getItem('currentActiveAgency') || 'abidjan';
 
                 const openPayModal = (emp) => {
                     const baseAmount = calculateBase(emp);
@@ -367,7 +368,8 @@ export const SalaireView = {
                                 tontine: payForm.value.tontine, 
                                 absence: payForm.value.absence || 0,
                                 net: payForm.value.net,
-                                timestamp: Timestamp.now()
+                                timestamp: Timestamp.now(),
+                                agency: activeAgency
                             });
 
                             if (payForm.value.loan > 0) {
@@ -396,7 +398,7 @@ export const SalaireView = {
                     try {
                         const newEmpRef = doc(collection(db, "employees"));
                         await setDoc(newEmpRef, { 
-                            name: newEmp.value.name, salary: newEmp.value.salary || 0, loan: newEmp.value.loan || 0, tontineCount: newEmp.value.tontineCount || 0, isTontine: (newEmp.value.tontineCount || 0) > 0
+                            name: newEmp.value.name, salary: newEmp.value.salary || 0, loan: newEmp.value.loan || 0, tontineCount: newEmp.value.tontineCount || 0, isTontine: (newEmp.value.tontineCount || 0) > 0, agency: activeAgency
                         });
                         showAddEmployeeModal.value = false;
                         newEmp.value = { name: '', salary: 0, loan: 0, tontineCount: 0 };
@@ -491,7 +493,7 @@ export const SalaireView = {
                     actionLoading.value = true;
                     try { 
                         const newFundRef = doc(collection(db, "salary_funds"));
-                        await setDoc(newFundRef, { amount: newFund.value.amount, note: newFund.value.note || 'Dotation', targetMonth: newFund.value.targetMonth || selectedBudgetMonth.value, timestamp: Timestamp.now() }); 
+                        await setDoc(newFundRef, { amount: newFund.value.amount, note: newFund.value.note || 'Dotation', targetMonth: newFund.value.targetMonth || selectedBudgetMonth.value, timestamp: Timestamp.now(), agency: activeAgency }); 
                         showFundModal.value = false; newFund.value = { amount: '', note: '', targetMonth: selectedBudgetMonth.value }; showToast("Fonds enregistrés !"); 
                     } catch(e) { showToast(e.message, "error"); }
                     finally { actionLoading.value = false; }
@@ -580,7 +582,8 @@ export const SalaireView = {
                             loan: 0, 
                             tontine: amount,  
                             net: 0,
-                            timestamp: Timestamp.now()
+                            timestamp: Timestamp.now(),
+                            agency: activeAgency
                         });
                         showToast("Cotisation enregistrée !");
                     } catch(e) { showToast("Erreur: " + e.message, "error"); }
@@ -618,7 +621,7 @@ export const SalaireView = {
                         const newGainRef = doc(collection(db, "salary_payments"));
                         await setDoc(newGainRef, {
                             employeeId: emp.id, employeeName: emp.name, month: selectedTontineMonth.value, period: selectedTontinePeriod.value,
-                            type: 'Gain Tontine', base: 0, loan: 0, tontine: 0, tontineGain: amount, net: 0, timestamp: Timestamp.now()
+                            type: 'Gain Tontine', base: 0, loan: 0, tontine: 0, tontineGain: amount, net: 0, timestamp: Timestamp.now(), agency: activeAgency
                         });
                         showToast("Gain enregistré !");
                     } catch(e) { showToast("Erreur: " + e.message, "error"); }

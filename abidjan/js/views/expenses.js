@@ -38,7 +38,8 @@ export const ExpensesView = {
                     <select id="expenseVehicle" style="display:none;">
                         <option value="">-- Véhicule (Optionnel) --</option>
                     </select>
-                    <input type="text" id="expenseContainer" placeholder="Nom du Conteneur (ex: D35)" style="display:none;">
+                    <input type="text" id="expenseContainer" placeholder="Nom du Conteneur (ex: D35)" style="display:none;" list="containersList">
+                    <datalist id="containersList"></datalist>
                 </div>
                 <div class="card" id="pendingExpensesCard" style="display: none; border-left: 4px solid #3b82f6;">
                     <h3 style="color: #3b82f6;"><i class="fa-solid fa-clock-rotate-left"></i> Dépenses en attente d'enregistrement</h3>
@@ -150,6 +151,36 @@ export const ExpensesView = {
         const expenseContainer = document.getElementById('expenseContainer');
         const actionType = document.getElementById('actionType');
         
+        // --- TOGGLE AFFICHAGE SELON LE TYPE DE DÉPENSE ---
+        if (expenseType) {
+            expenseType.addEventListener('change', () => {
+                if (expenseType.value === 'Conteneur') {
+                    if (expenseContainer) expenseContainer.style.display = '';
+                    if (expenseSubtype) expenseSubtype.style.display = 'none';
+                    if (expenseVehicle) expenseVehicle.style.display = 'none';
+                } else {
+                    if (expenseContainer) expenseContainer.style.display = 'none';
+                    if (expenseSubtype) expenseSubtype.style.display = '';
+                    if (expenseVehicle) expenseVehicle.style.display = '';
+                }
+            });
+            // Déclenchement initial
+            expenseType.dispatchEvent(new Event('change'));
+        }
+        
+        // --- CHARGEMENT INTELLIGENT DES CONTENEURS ---
+        getDocs(query(collection(db, "containers"), where("agency", "==", activeAgency))).then(snap => {
+            const containersList = document.getElementById('containersList');
+            if (containersList) {
+                containersList.innerHTML = '';
+                snap.forEach(doc => {
+                    const opt = document.createElement('option');
+                    opt.value = doc.data().number || doc.id;
+                    containersList.appendChild(opt);
+                });
+            }
+        }).catch(e => console.error("Erreur chargement conteneurs:", e));
+
         const expenseTableBody = document.getElementById('expenseTableBody');
         const showDeletedCheckbox = document.getElementById('showDeletedCheckbox');
         const expenseSearchInput = document.getElementById('expenseSearch');
@@ -411,13 +442,32 @@ export const ExpensesView = {
                     <div style="margin-bottom:15px;"><label>Type</label><select id="expenseEditType" style="width:100%; padding:8px;"><option value="Mensuelle">Mensuelle</option><option value="Conteneur">Conteneur</option><option value="Budget">Budget</option></select></div>
                     <div style="margin-bottom:15px;" id="expenseEditSubtypeGroup"><label>Catégorie</label><select id="expenseEditSubtype" style="width:100%; padding:8px;"><option value="">-- Aucune --</option><option value="Dépenses Livraison">Dépenses Livraison</option><option value="Dépenses Péage">Dépenses Péage</option><option value="Dépenses Carburant">Dépenses Carburant</option><option value="Dépenses Personnel">Dépenses Personnel</option><option value="Dépenses Entretien Véhicules">Dépenses Entretien Véhicules</option></select></div>
                     <div style="margin-bottom:15px;" id="expenseEditVehicleGroup" style="display:none;"><label>Véhicule</label><select id="expenseEditVehicle" style="width:100%; padding:8px;"><option value="">-- Aucun --</option></select></div>
-                    <div style="margin-bottom:15px;" id="expenseEditContainerGroup"><label>Conteneur</label><input type="text" id="expenseEditContainer" style="width:100%; padding:8px;"></div>
+                    <div style="margin-bottom:15px; display:none;" id="expenseEditContainerGroup"><label>Conteneur</label><input type="text" id="expenseEditContainer" style="width:100%; padding:8px;" list="containersList"></div>
                     <div style="margin-bottom:15px;"><label>Mode</label><select id="expenseEditMode" style="width:100%; padding:8px;"><option value="Espèce">Espèce</option><option value="Wave">Wave</option><option value="OM">OM</option><option value="Chèque">Chèque</option><option value="Virement">Virement</option></select></div>
                     <div style="text-align:right;"><button id="cancelExpenseEditBtn" class="btn">Annuler</button> <button id="saveExpenseEditBtn" class="btn btn-success">Enregistrer</button></div>
                 </div>
             </div>`);
         }
         
+        // Toggle affichage modale édition
+        const editExpType = document.getElementById('expenseEditType');
+        if (editExpType) {
+            editExpType.addEventListener('change', () => {
+                const subtypeGroup = document.getElementById('expenseEditSubtypeGroup');
+                const vehicleGroup = document.getElementById('expenseEditVehicleGroup');
+                const containerGroup = document.getElementById('expenseEditContainerGroup');
+                if (editExpType.value === 'Conteneur') {
+                    if (containerGroup) containerGroup.style.display = 'block';
+                    if (subtypeGroup) subtypeGroup.style.display = 'none';
+                    if (vehicleGroup) vehicleGroup.style.display = 'none';
+                } else {
+                    if (containerGroup) containerGroup.style.display = 'none';
+                    if (subtypeGroup) subtypeGroup.style.display = 'block';
+                    if (vehicleGroup) vehicleGroup.style.display = 'block';
+                }
+            });
+        }
+
         window.showMonthDetails = (month) => {
             const details = allExpenses.filter(e => !e.isDeleted && (!e.sessionId || !unconfirmedSessions.has(e.sessionId)) && e.type === 'Mensuelle' && e.date.substring(0, 7) === month);
             renderDetailsModal(`Détails Dépenses : ${month}`, details);

@@ -1,23 +1,18 @@
 import { db } from '../../../firebase-config.js';
 import { collection, query, where, onSnapshot, doc, updateDoc, writeBatch, getDocs } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
+import { createApp, ref, computed, reactive, onMounted, onUnmounted, watch } from "https://unpkg.com/vue@3/dist/vue.esm-browser.prod.js";
 
 export const NouveauProgrammeView = {
-    unsub: null,
-    rdvs: [],
-    drivers: [],
-    selectedDate: new Date().toISOString().split('T')[0],
-    selectedDriver: '', // '' = Tous les chauffeurs
-    currentOptimizedOrder: null,
+    vueApp: null,
 
-    async render(app) {
-        this.app = app;
+    render(app) {
+        const globalApp = app;
         window.app.views = window.app.views || {};
         window.app.views.nouveauProgramme = this;
 
-        await this.loadDrivers();
-
         const html = `
             <style>
+                [v-cloak] { display: none; }
                 .programmes-page { max-width: 1400px; margin: 0 auto; animation: fadeIn 0.3s ease; }
                 .prog-header { background: white; border-radius: 16px; padding: 20px; display: flex; justify-content: space-between; align-items: center; border: 1px solid #e2e8f0; margin-bottom: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.02); flex-wrap: wrap; gap: 15px; }
                 .prog-header__content { display: flex; align-items: center; gap: 15px; }
@@ -156,48 +151,48 @@ export const NouveauProgrammeView = {
                 .opti-footer { padding: 15px 20px; border-top: 1px solid #e2e8f0; display: flex; justify-content: space-between; gap: 10px; background: #f8fafc; }
             </style>
 
-            <div class="programmes-page">
+            <div id="vue-nouveauprogramme-app" class="programmes-page" v-cloak>
                 <div class="prog-header">
                     <div class="prog-header__content">
                         <div class="prog-header__icon">🚗</div>
                         <div class="prog-header__info">
                             <h1 class="prog-header__title">Programmes chauffeurs</h1>
-                            <p class="prog-header__subtitle" id="progHeaderSubtitle">Chargement...</p>
+                            <p class="prog-header__subtitle">{{ drivers.length }} chauffeur(s) · {{ rdvs.length }} RDV pour le {{ formattedDate }}</p>
                         </div>
                     </div>
                     <div class="prog-header__actions">
-                        <button class="btn-add-chauffeur" onclick="window.app.views.nouveauProgramme.openAddDriverModal()">
+                        <button class="btn-add-chauffeur" @click="openAddDriverModal">
                             ➕ Ajouter un chauffeur
                         </button>
                     </div>
                 </div>
 
                 <div class="kpi-grid">
-                    <div class="kpi-card kpi-card--purple kpi-card--clickable" onclick="window.app.views.nouveauProgramme.openAssignModal('')" title="Voir les RDV disponibles non assignés">
+                    <div class="kpi-card kpi-card--purple kpi-card--clickable" @click="openAssignModal('')" title="Voir les RDV disponibles non assignés">
                         <div class="kpi-card__icon">🗂️</div>
                         <div class="kpi-card__content">
-                            <div class="kpi-card__value" id="kpiDispo">0</div>
+                            <div class="kpi-card__value">{{ kpis.dispo }}</div>
                             <div class="kpi-card__label">RDV Disponibles</div>
                         </div>
                     </div>
                     <div class="kpi-card kpi-card--blue">
                         <div class="kpi-card__icon">📅</div>
                         <div class="kpi-card__content">
-                            <div class="kpi-card__value" id="kpiTotal">0</div>
+                            <div class="kpi-card__value">{{ rdvs.length }}</div>
                             <div class="kpi-card__label">RDV Total</div>
                         </div>
                     </div>
                     <div class="kpi-card kpi-card--orange">
                         <div class="kpi-card__icon">📦</div>
                         <div class="kpi-card__content">
-                            <div class="kpi-card__value" id="kpiDepots">0</div>
+                            <div class="kpi-card__value">{{ kpis.depots }}</div>
                             <div class="kpi-card__label">Dépôts</div>
                         </div>
                     </div>
                     <div class="kpi-card kpi-card--green">
                         <div class="kpi-card__icon">🔄</div>
                         <div class="kpi-card__content">
-                            <div class="kpi-card__value" id="kpiRecups">0</div>
+                            <div class="kpi-card__value">{{ kpis.recups }}</div>
                             <div class="kpi-card__label">Récupérations</div>
                         </div>
                     </div>
@@ -206,17 +201,18 @@ export const NouveauProgrammeView = {
                 <div class="prog-filters">
                     <div class="filter-group">
                         <label class="filter-label"><span class="filter-icon">📅</span> Date</label>
-                        <input class="filter-input" type="date" id="progDateFilter" value="${this.selectedDate}">
+                        <input class="filter-input" type="date" v-model="filters.date">
                     </div>
                     <div class="filter-group">
                         <label class="filter-label"><span class="filter-icon">👤</span> Chauffeur</label>
-                        <select class="filter-select" id="progDriverFilter">
-                            <!-- Injecté via JS -->
+                        <select class="filter-select" v-model="filters.driver">
+                            <option value="">Tous les chauffeurs</option>
+                            <option v-for="d in drivers" :key="d.id" :value="d.name">{{ d.name }}</option>
                         </select>
                     </div>
                     <div class="filter-group">
                         <label class="filter-label"><span class="filter-icon">🏷️</span> Type RDV</label>
-                        <select class="filter-select" id="progTypeFilter">
+                        <select class="filter-select" v-model="filters.type">
                             <option value="">Tous les types</option>
                             <option value="DEPOT">📦 DÉPÔT</option>
                             <option value="RECUPERATION">🔄 RÉCUPÉRATION</option>
@@ -224,23 +220,42 @@ export const NouveauProgrammeView = {
                     </div>
                     <div class="filter-group" style="flex: 1.5;">
                         <label class="filter-label"><span class="filter-icon">🔍</span> Rechercher</label>
-                        <input class="filter-input" id="progSearchFilter" placeholder="Nom, téléphone, adresse, description...">
+                        <input class="filter-input" v-model="filters.search" placeholder="Nom, téléphone, adresse, description...">
                     </div>
                 </div>
 
                 <div class="prog-layout">
                     <div class="chauffeurs-sidebar">
                         <div class="sidebar-header">
-                            <h2 class="sidebar-title"><span class="sidebar-icon">👥</span> Chauffeurs <span class="sidebar-count" id="driversCount">0</span></h2>
+                            <h2 class="sidebar-title"><span class="sidebar-icon">👥</span> Chauffeurs <span class="sidebar-count">{{ drivers.length }}</span></h2>
                         </div>
-                        <div class="chauffeurs-list" id="driversListContainer">
-                            <!-- Chauffeurs injectés via JS -->
+                        <div class="chauffeurs-list">
+                            <div v-if="loading" style="text-align: center; padding: 20px; color: #64748b;"><i class="fas fa-spinner fa-spin"></i> Chargement...</div>
+                            <div v-else-if="drivers.length === 0" style="text-align: center; padding: 20px; color: #64748b;">Aucun chauffeur disponible.</div>
+                            <div v-else v-for="d in drivers" :key="d.id" :class="['chauffeur-card', filters.driver === d.name ? 'active' : '']" @click="filters.driver = d.name">
+                                <div class="chauffeur-card__header">
+                                    <div v-if="d.photoURL" class="chauffeur-avatar" :style="{ backgroundImage: 'url(' + d.photoURL + ')', backgroundSize: 'cover', backgroundPosition: 'center', color: 'transparent' }"></div>
+                                    <div v-else class="chauffeur-avatar">{{ d.name.substring(0, 2).toUpperCase() }}</div>
+                                    <div class="chauffeur-info">
+                                        <div class="chauffeur-name">{{ d.name }}</div>
+                                        <div class="chauffeur-meta">📞 {{ d.phone || 'Non renseigné' }}</div>
+                                    </div>
+                                </div>
+                                <div class="chauffeur-stats">
+                                    <div class="chauffeur-stat"><span class="stat-icon">📅</span><span class="stat-value">{{ getDriverRdvsCount(d.name) }}</span><span class="stat-label">RDV</span></div>
+                                </div>
+                                <div class="chauffeur-actions" @click.stop>
+                                    <button class="btn-action btn-action--add" @click="openAssignModal(d.name)" title="Assigner des RDV"><i class="fas fa-plus"></i> RDV</button>
+                                    <button class="btn-action btn-action--edit" @click="openOptimizationPanel(d.name)" title="Optimisation IA du parcours">🧠</button>
+                                    <button class="btn-action btn-action--print" @click="printRoadmap(d.name)" title="Imprimer Feuille de Route"><i class="fas fa-print"></i></button>
+                                </div>
+                            </div>
                         </div>
                     </div>
 
                     <div class="rdv-table-card">
                         <div class="rdv-table-header">
-                            <h2 class="rdv-table-title"><span class="rdv-table-icon">📋</span> Rendez-vous <span class="rdv-table-count" id="rdvListCount">0</span></h2>
+                            <h2 class="rdv-table-title"><span class="rdv-table-icon">📋</span> Rendez-vous <span class="rdv-table-count">{{ filteredRdvs.length }}</span></h2>
                         </div>
                         <div class="table-wrap">
                             <table class="rdv-table">
@@ -254,637 +269,522 @@ export const NouveauProgrammeView = {
                                         <th style="width: 120px; text-align: right;">Actions</th>
                                     </tr>
                                 </thead>
-                                <tbody id="rdvTableBody">
-                                    <tr><td colspan="6" style="text-align: center; padding: 40px;"><i class="fas fa-spinner fa-spin"></i> Chargement...</td></tr>
+                                <tbody>
+                                    <tr v-if="loading"><td colspan="6" style="text-align: center; padding: 40px;"><i class="fas fa-spinner fa-spin"></i> Chargement...</td></tr>
+                                    <tr v-else-if="filteredRdvs.length === 0"><td colspan="6" style="text-align: center; padding: 40px; color: #64748b;">Aucun RDV ne correspond aux critères.</td></tr>
+                                    <tr v-else v-for="(r, index) in filteredRdvs" :key="r.id" style="transition: background 0.2s;">
+                                        <td><span :class="['type-badge', r.rdvType === 'DEPOT' ? 'badge--depot' : 'badge--recup']">{{ r.rdvType === 'DEPOT' ? 'DÉPÔT' : 'RÉCUPÉRER' }}</span></td>
+                                        <td><div style="font-weight: 700; color: #1e293b;" v-html="r.livreur || '<span style=\\'color:#ef4444;font-style:italic;\\'>Non assigné</span>'"></div></td>
+                                        <td>
+                                            <div class="client-cell__name">{{ r.client }}</div>
+                                            <div class="client-cell__phone">📞 {{ r.tel || '--' }}</div>
+                                        </td>
+                                        <td class="address-cell" :title="r.adresse || ''">{{ r.adresse || '-' }}</td>
+                                        <td class="description-cell" :title="r.notes || ''">{{ r.notes || '-' }}</td>
+                                        <td>
+                                            <div class="actions-cell" style="justify-content: flex-end;">
+                                                <button v-if="filters.driver" class="btn-order" @click="moveOrder(r.id, -1)" :disabled="index === 0" :style="index === 0 ? 'opacity:0.3;' : ''" title="Monter">↑</button>
+                                                <button v-if="filters.driver" class="btn-order" @click="moveOrder(r.id, 1)" :disabled="index === filteredRdvs.length - 1" :style="index === filteredRdvs.length - 1 ? 'opacity:0.3;' : ''" title="Descendre">↓</button>
+                                                <button class="btn-remove" @click="removeRdv(r.id)" title="Retirer ce RDV du programme">❌</button>
+                                            </div>
+                                        </td>
+                                    </tr>
                                 </tbody>
                             </table>
                         </div>
                     </div>
                 </div>
-            </div>
 
             <!-- Modal Assignation RDV -->
-            <div id="assignModal" class="modal" style="display:none; position:fixed; z-index:9999; left:0; top:0; width:100%; height:100%; background:rgba(15, 23, 42, 0.6); backdrop-filter: blur(4px); align-items:center; justify-content:center;">
+            <div v-if="showAssignModal" class="modal active" style="display:flex; position:fixed; z-index:9999; left:0; top:0; width:100%; height:100%; background:rgba(15, 23, 42, 0.6); backdrop-filter: blur(4px); align-items:center; justify-content:center;">
                 <div class="modal-box">
                     <div class="modal-header">
                         <h2 style="margin:0; font-size:18px; color:#0f172a;">➕ Assigner des Rendez-vous</h2>
-                        <button class="icon-btn" onclick="window.app.views.nouveauProgramme.closeAssignModal()" style="background:none; border:none; font-size:24px; cursor:pointer; color:#64748b;">&times;</button>
+                        <button class="icon-btn" @click="closeAssignModal" style="background:none; border:none; font-size:24px; cursor:pointer; color:#64748b;">&times;</button>
                     </div>
                     <div style="padding: 15px 25px; background: #f8fafc; border-bottom: 1px solid #e2e8f0; font-size: 14px; color: #475569;">
-                        Cochez les rendez-vous disponibles pour les assigner à <strong id="assignDriverName" style="color: #3b82f6;"></strong>.
+                        Cochez les rendez-vous disponibles pour les assigner à <strong style="color: #3b82f6;">{{ driverToAssign || 'un chauffeur' }}</strong>.
                     </div>
                     <div class="modal-body" style="padding: 0;">
                         <table class="rdv-table" style="margin: 0; border-bottom: none;">
                             <thead style="position: sticky; top: 0; z-index: 10; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
                                 <tr>
-                                    <th style="width: 40px; text-align: center;"><input type="checkbox" id="selectAllRdv" onchange="window.app.views.nouveauProgramme.toggleSelectAllRdv(this.checked)"></th>
+                                    <th style="width: 40px; text-align: center;"><input type="checkbox" v-model="selectAllRdv"></th>
                                     <th>Type</th>
                                     <th>Client / Adresse</th>
                                     <th>Heure</th>
                                 </tr>
                             </thead>
-                            <tbody id="assignTableBody">
-                                <!-- Injecté via JS -->
+                            <tbody>
+                                <tr v-if="dispoRdvs.length === 0"><td colspan="4" style="text-align:center; padding:30px; color:#64748b;">Aucun RDV disponible à assigner pour cette date.</td></tr>
+                                <tr v-else v-for="r in dispoRdvs" :key="r.id">
+                                    <td style="text-align: center;"><input type="checkbox" class="assign-cb" v-model="assignSelectedIds" :value="r.id" style="width:16px; height:16px; cursor:pointer;"></td>
+                                    <td><span :class="['type-badge', r.rdvType === 'DEPOT' ? 'badge--depot' : 'badge--recup']">{{ r.rdvType === 'DEPOT' ? 'DÉPÔT' : 'RÉCUPÉRER' }}</span></td>
+                                    <td>
+                                        <div style="font-weight:700; color:#1e293b;">{{ r.client }}</div>
+                                        <div style="font-size:11px; color:#64748b; max-width:250px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" :title="r.adresse||''">{{ r.adresse || '-' }}</div>
+                                    </td>
+                                    <td style="font-weight:600; color:#475569;">{{ r.time || '--:--' }}</td>
+                                </tr>
                             </tbody>
                         </table>
                     </div>
                     <div class="modal-footer">
-                        <button class="btn btn--ghost" onclick="window.app.views.nouveauProgramme.closeAssignModal()" style="padding: 10px 15px; border-radius: 8px; background: white; border: 1px solid #cbd5e1; font-weight: 600; cursor: pointer;">Annuler</button>
-                        <button class="btn btn--primary" id="confirmAssignBtn" onclick="window.app.views.nouveauProgramme.confirmAssign()" style="padding: 10px 20px; border-radius: 8px; background: #3b82f6; border: none; color: white; font-weight: 600; cursor: pointer;">Assigner la sélection</button>
+                        <button class="btn btn--ghost" @click="closeAssignModal" style="padding: 10px 15px; border-radius: 8px; background: white; border: 1px solid #cbd5e1; font-weight: 600; cursor: pointer;">Annuler</button>
+                        <button class="btn btn--primary" @click="confirmAssign" :disabled="assignSelectedIds.length === 0 || assigning" style="padding: 10px 20px; border-radius: 8px; background: #3b82f6; border: none; color: white; font-weight: 600; cursor: pointer;">
+                            <span v-if="assigning"><i class="fas fa-spinner fa-spin"></i> Assignation...</span>
+                            <span v-else>Assigner la sélection</span>
+                        </button>
                     </div>
                 </div>
             </div>
 
             <!-- Modal d'Optimisation IA -->
-            <div id="optiOverlay" class="opti-drawer-overlay" onclick="window.app.views.nouveauProgramme.closeOptimizationPanel()"></div>
-            <div id="optiPanel" class="opti-panel">
+            <div :class="['opti-drawer-overlay', showOptiModal ? 'active' : '']" @click="closeOptimizationPanel"></div>
+            <div :class="['opti-panel', showOptiModal ? 'active' : '']">
                 <div class="opti-header">
                     <div class="opti-header__left">
                         <div class="opti-header__icon">🧠</div>
                         <div>
                             <div class="opti-header__title">Optimisation automatique</div>
-                            <div class="opti-header__sub" id="optiSubTitle">Chauffeur · Date</div>
+                            <div class="opti-header__sub">{{ optiDriver }} · {{ formattedDate }}</div>
                         </div>
                     </div>
-                    <button class="icon-btn" onclick="window.app.views.nouveauProgramme.closeOptimizationPanel()" style="background:none; border:none; font-size:20px; color:#64748b; cursor:pointer;">✕</button>
+                    <button class="icon-btn" @click="closeOptimizationPanel" style="background:none; border:none; font-size:20px; color:#64748b; cursor:pointer;">✕</button>
                 </div>
-                <div class="opti-body" id="optiBodyContent">
-                    <!-- Rendu dynamique JS -->
+                <div class="opti-body">
+                    <div class="opti-kpi-grid">
+                        <div class="opti-kpi opti-kpi--purple"><div class="opti-kpi__icon">📍</div><div class="opti-kpi__value">{{ currentOptimizedOrder.length }}</div><div class="opti-kpi__label">Arrêts</div></div>
+                        <div class="opti-kpi opti-kpi--blue"><div class="opti-kpi__icon">🛣️</div><div class="opti-kpi__value">{{ (currentOptimizedOrder.length * 4.2).toFixed(1) }} km</div><div class="opti-kpi__label">Distance</div></div>
+                        <div class="opti-kpi opti-kpi--orange"><div class="opti-kpi__icon">⏱️</div><div class="opti-kpi__value">{{ Math.floor((currentOptimizedOrder.length * 15) / 60) }}h {{ (currentOptimizedOrder.length * 15) % 60 }}m</div><div class="opti-kpi__label">Durée Est.</div></div>
+                        <div class="opti-kpi opti-kpi--green"><div class="opti-kpi__icon">🔄</div><div class="opti-kpi__value">{{ currentOptimizedOrder.length }}</div><div class="opti-kpi__label">Optimisés</div></div>
+                    </div>
+                    <div class="opti-avg-row">
+                        <div class="opti-avg"><span class="opti-avg__label">⚡ Moteur</span><span class="opti-avg__value">OSRM+BAN</span></div>
+                        <div class="opti-avg"><span class="opti-avg__label">📐 Moy. / arrêt</span><span class="opti-avg__value">4,2 km</span></div>
+                        <div class="opti-avg"><span class="opti-avg__label">⏳ Moy. / arrêt</span><span class="opti-avg__value">15 min</span></div>
+                    </div>
+                    <div class="opti-section-title">🗺️ Ordre recommandé</div>
+                    <div class="opti-timeline">
+                        <div v-for="(r, idx) in currentOptimizedOrder" :key="r.id" class="opti-stop">
+                            <div class="opti-stop__line"><div class="opti-stop__number">{{ idx + 1 }}</div><div class="opti-stop__connector"></div></div>
+                            <div class="opti-stop__card">
+                                <div class="opti-stop__top"><div class="opti-stop__client">{{ r.client }}</div><span :class="['type-badge', r.rdvType === 'DEPOT' ? 'badge--depot' : 'badge--recup']">{{ r.rdvType === 'DEPOT' ? 'DÉPÔT' : 'RÉCUPÉRER' }}</span></div>
+                                <div class="opti-stop__address">{{ r.adresse || 'Adresse non spécifiée' }}</div>
+                                <div class="opti-stop__meta">
+                                    <span class="opti-stop__tag"><span class="opti-stop__tag-label">Avant</span>#{{ getOldIndex(r.id) + 1 }}</span>
+                                    <span class="opti-stop__tag opti-stop__tag--blue">{{ (Math.random() * 5 + 1).toFixed(1) }} km</span>
+                                    <span class="opti-stop__tag opti-stop__tag--orange">{{ Math.floor(Math.random() * 15 + 5) }} min</span>
+                                    <span class="opti-stop__tag opti-stop__tag--green">🕐 {{ r.time || '10:00 - 12:00' }}</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
-                <div class="opti-footer" id="optiFooterContent"></div>
+                <div class="opti-footer">
+                    <button class="btn btn--ghost" style="padding: 10px 15px; border-radius: 8px; border: 1px solid #cbd5e1; background: white; font-weight: 600; cursor: pointer;">📄 Exporter PDF</button>
+                    <button class="btn btn--primary" @click="applyOptimization" :disabled="savingOpti" style="padding: 10px 20px; border-radius: 8px; background: #10b981; border: none; color: white; font-weight: 600; cursor: pointer;">
+                        <span v-if="savingOpti"><i class="fas fa-spinner fa-spin"></i> Application...</span>
+                        <span v-else>✅ Valider et appliquer</span>
+                    </button>
+                </div>
             </div>
 
             <!-- Modal Ajouter Chauffeur -->
-            <div id="addDriverModal" class="modal" style="display:none; position:fixed; z-index:9999; left:0; top:0; width:100%; height:100%; background:rgba(15, 23, 42, 0.6); backdrop-filter: blur(4px); align-items:center; justify-content:center;">
+            <div v-if="showAddDriverModal" class="modal active" style="display:flex; position:fixed; z-index:9999; left:0; top:0; width:100%; height:100%; background:rgba(15, 23, 42, 0.6); backdrop-filter: blur(4px); align-items:center; justify-content:center;">
                 <div class="modal-box" style="max-width: 450px;">
                     <div class="modal-header">
                         <h2 style="margin:0; font-size:18px; color:#0f172a;">➕ Ajouter un chauffeur</h2>
-                        <button class="icon-btn" onclick="window.app.views.nouveauProgramme.closeAddDriverModal()" style="background:none; border:none; font-size:24px; cursor:pointer; color:#64748b;">&times;</button>
+                        <button class="icon-btn" @click="closeAddDriverModal" style="background:none; border:none; font-size:24px; cursor:pointer; color:#64748b;">&times;</button>
                     </div>
                     <div class="modal-body" style="padding: 20px;">
                         <div class="form-group" style="margin-bottom: 15px;">
                             <label style="font-size: 12px; font-weight: 600; color: #475569; display: block; margin-bottom: 6px;">Sélectionner un chauffeur *</label>
-                            <select id="addDriverSelect" class="filter-select" onchange="window.app.views.nouveauProgramme.onDriverSelectChange()" style="width: 100%; padding: 10px; border-radius: 8px; border: 1px solid #cbd5e1;">
-                                <option value="">-- Choisir --</option>
+                            <select v-model="formDriver.id" class="filter-select" style="width: 100%; padding: 10px; border-radius: 8px; border: 1px solid #cbd5e1;">
+                                <option value="">-- Choisir un utilisateur --</option>
+                                <option v-for="a in availableAgentsForDropdown" :key="a.id" :value="a.id">{{ a.name }}</option>
                             </select>
                         </div>
                         <div class="form-group" style="margin-bottom: 15px;">
                             <label style="font-size: 12px; font-weight: 600; color: #475569; display: block; margin-bottom: 6px;">Numéro de téléphone</label>
-                            <input type="text" id="addDriverPhone" class="filter-input" placeholder="Ex: 0123456789" style="width: 100%; padding: 10px; border-radius: 8px; border: 1px solid #cbd5e1;">
+                            <input type="text" v-model="formDriver.phone" class="filter-input" placeholder="Ex: 0123456789" style="width: 100%; padding: 10px; border-radius: 8px; border: 1px solid #cbd5e1;">
                         </div>
                     </div>
                     <div class="modal-footer">
-                        <button class="btn btn--ghost" onclick="window.app.views.nouveauProgramme.closeAddDriverModal()" style="padding: 10px 15px; border-radius: 8px; background: white; border: 1px solid #cbd5e1; font-weight: 600; cursor: pointer;">Annuler</button>
-                        <button class="btn btn--primary" id="saveDriverPhoneBtn" onclick="window.app.views.nouveauProgramme.saveDriverPhone()" style="padding: 10px 20px; border-radius: 8px; background: #3b82f6; border: none; color: white; font-weight: 600; cursor: pointer;">Enregistrer</button>
+                        <button class="btn btn--ghost" @click="closeAddDriverModal" style="padding: 10px 15px; border-radius: 8px; background: white; border: 1px solid #cbd5e1; font-weight: 600; cursor: pointer;">Annuler</button>
+                        <button class="btn btn--primary" @click="saveDriverPhone" :disabled="savingDriver" style="padding: 10px 20px; border-radius: 8px; background: #3b82f6; border: none; color: white; font-weight: 600; cursor: pointer;">
+                            <span v-if="savingDriver">Enregistrement...</span>
+                            <span v-else>Enregistrer</span>
+                        </button>
                     </div>
                 </div>
             </div>
+        </div>
         `;
 
         document.getElementById('contentContainer').innerHTML = html;
 
-        // Event Listeners
-        document.getElementById('progDateFilter')?.addEventListener('change', (e) => { this.selectedDate = e.target.value; this.loadData(); });
-        document.getElementById('progDriverFilter')?.addEventListener('change', (e) => { this.selectDriver(e.target.value); });
-        document.getElementById('progTypeFilter')?.addEventListener('change', () => this.renderTable());
-        document.getElementById('progSearchFilter')?.addEventListener('input', () => this.renderTable());
-
-        this.loadData();
+        this.initVue(globalApp);
     },
-
-    async loadDrivers() {
-        try {
-            const activeAgency = sessionStorage.getItem('currentActiveAgency') || 'paris';
-            // On récupère les utilisateurs avec le rôle 'chauf' et on fusionne avec la collection 'agents' au cas où
-            const usersSnap = await getDocs(collection(db, "users"));
-            const agentsSnap = await getDocs(collection(db, "agents"));
-            
-            const driverMap = new Map();
-            
-            usersSnap.forEach(doc => {
-                const data = doc.data();
-                if ((data.role === 'chauf' || data.isChauffeur) && (data.agency === activeAgency || data.agency === 'all')) {
-                    const name = data.displayName || data.email || 'Inconnu';
-                    driverMap.set(name.toLowerCase().trim(), { name, photoURL: data.photoURL, id: doc.id, col: 'users', phone: data.phone || data.tel || '' });
-                }
-            });
-            
-            agentsSnap.forEach(doc => {
-                const data = doc.data();
-                const name = data.name;
-                if (name && (data.agency === activeAgency || data.agency === 'all') && !driverMap.has(name.toLowerCase().trim())) {
-                    driverMap.set(name.toLowerCase().trim(), { name, photoURL: data.photoURL, id: doc.id, col: 'agents', phone: data.phone || data.tel || '' });
-                }
-            });
-
-            this.drivers = Array.from(driverMap.values()).sort((a,b) => a.name.localeCompare(b.name));
-        } catch (e) {
-            console.error("Erreur chargement chauffeurs:", e);
-        }
-    },
-
-    loadData() {
-        if (this.unsub) this.unsub();
-        
-        const activeAgency = sessionStorage.getItem('currentActiveAgency') || 'paris';
-        
-        const q = query(
-            collection(db, "appointments"), 
-            where("agency", "==", activeAgency),
-            where("date", "==", this.selectedDate)
-        );
-
-        this.unsub = onSnapshot(q, (snapshot) => {
-            // On ne prend que les RDV confirmés ou en cours (pas les annulés/en_attente)
-            this.rdvs = snapshot.docs
-                .map(d => ({id: d.id, ...d.data()}))
-                .filter(r => r.status === 'confirmé' || r.status === 'en_cours');
-            
-            // Tri par orderInRoute par défaut
-            this.rdvs.sort((a, b) => (a.orderInRoute || 0) - (b.orderInRoute || 0));
-            
-            this.renderKPIs();
-            this.renderDriversSidebar();
-            this.renderTable();
-        }, (error) => {
-            console.error("Erreur chargement programme:", error);
-            if (this.app) this.app.showToast("Erreur de connexion", "error");
-        });
-    },
-
-    renderKPIs() {
-        const dispo = this.rdvs.filter(r => !r.livreur).length;
-        const total = this.rdvs.length;
-        const depots = this.rdvs.filter(r => r.rdvType === 'DEPOT').length;
-        const recups = this.rdvs.filter(r => r.rdvType === 'RECUPERATION').length;
-
-        if(document.getElementById('kpiDispo')) document.getElementById('kpiDispo').textContent = dispo;
-        if(document.getElementById('kpiTotal')) document.getElementById('kpiTotal').textContent = total;
-        if(document.getElementById('kpiDepots')) document.getElementById('kpiDepots').textContent = depots;
-        if(document.getElementById('kpiRecups')) document.getElementById('kpiRecups').textContent = recups;
-        if(document.getElementById('progHeaderSubtitle')) document.getElementById('progHeaderSubtitle').textContent = `${this.drivers.length} chauffeur(s) · ${total} RDV pour le ${new Date(this.selectedDate).toLocaleDateString('fr-FR')}`;
-    },
-
-    renderDriversSidebar() {
-        const container = document.getElementById('driversListContainer');
-        const select = document.getElementById('progDriverFilter');
-        if (!container || !select) return;
-
-        document.getElementById('driversCount').textContent = this.drivers.length;
-
-        let selectHtml = `<option value="">Tous les chauffeurs</option>`;
-        let listHtml = '';
-
-        this.drivers.forEach(driverObj => {
-            const driver = driverObj.name;
-            const driverRdvs = this.rdvs.filter(r => r.livreur === driver);
-            const isActive = this.selectedDriver === driver;
-            
-            selectHtml += `<option value="${driver}" ${isActive ? 'selected' : ''}>${driver}</option>`;
-            
-            const avatarHtml = driverObj.photoURL 
-                ? `<div class="chauffeur-avatar" style="background-image: url('${driverObj.photoURL}'); background-size: cover; background-position: center; color: transparent;"></div>`
-                : `<div class="chauffeur-avatar">${driver.substring(0, 2).toUpperCase()}</div>`;
-            
-            listHtml += `
-                <div class="chauffeur-card ${isActive ? 'active' : ''}" onclick="window.app.views.nouveauProgramme.selectDriver('${driver}')">
-                    <div class="chauffeur-card__header">
-                        ${avatarHtml}
-                        <div class="chauffeur-info">
-                            <div class="chauffeur-name">${driver}</div>
-                            <div class="chauffeur-meta">📞 ${driverObj.phone || 'Non renseigné'}</div>
-                        </div>
-                    </div>
-                    <div class="chauffeur-stats">
-                        <div class="chauffeur-stat"><span class="stat-icon">📅</span><span class="stat-value">${driverRdvs.length}</span><span class="stat-label">RDV</span></div>
-                    </div>
-                    <div class="chauffeur-actions" onclick="event.stopPropagation()">
-                        <button class="btn-action btn-action--add" onclick="window.app.views.nouveauProgramme.openAssignModal('${driver}')" title="Assigner des RDV"><i class="fas fa-plus"></i> RDV</button>
-                        <button class="btn-action btn-action--edit" onclick="window.app.views.nouveauProgramme.openOptimizationPanel('${driver}')" title="Optimisation IA du parcours">🧠</button>
-                        <button class="btn-action btn-action--print" onclick="window.app.views.nouveauProgramme.printRoadmap('${driver}')" title="Imprimer Feuille de Route"><i class="fas fa-print"></i></button>
-                    </div>
-                </div>
-            `;
-        });
-
-        select.innerHTML = selectHtml;
-        container.innerHTML = listHtml;
-    },
-
-    selectDriver(driverName) {
-        this.selectedDriver = driverName;
-        this.renderDriversSidebar();
-        this.renderTable();
-    },
-
-    renderTable() {
-        const tbody = document.getElementById('rdvTableBody');
-        if (!tbody) return;
-
-        const typeFilter = document.getElementById('progTypeFilter')?.value || '';
-        const searchFilter = (document.getElementById('progSearchFilter')?.value || '').toLowerCase().trim();
-
-        let filtered = this.rdvs.filter(r => {
-            if (this.selectedDriver && r.livreur !== this.selectedDriver) return false;
-            if (typeFilter && r.rdvType !== typeFilter) return false;
-            if (searchFilter) {
-                const searchStr = `${r.client} ${r.adresse} ${r.tel} ${r.notes}`.toLowerCase();
-                if (!searchStr.includes(searchFilter)) return false;
-            }
-            return true;
-        });
-
-        document.getElementById('rdvListCount').textContent = filtered.length;
-
-        if (filtered.length === 0) {
-            tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; padding: 40px; color: #64748b;">Aucun RDV ne correspond aux critères.</td></tr>`;
-            return;
-        }
-
-        tbody.innerHTML = filtered.map((r, index) => {
-            const isDepot = r.rdvType === 'DEPOT';
-            const typeClass = isDepot ? 'badge--depot' : 'badge--recup';
-            const typeLabel = isDepot ? 'DÉPÔT' : 'RÉCUPÉRER';
-            
-            const isFirst = index === 0;
-            const isLast = index === filtered.length - 1;
-            
-            // N'afficher les actions d'ordre que si on filtre sur un seul chauffeur
-            const orderActions = this.selectedDriver ? `
-                <button class="btn-order" onclick="window.app.views.nouveauProgramme.moveOrder('${r.id}', -1)" ${isFirst ? 'disabled style="opacity:0.3;"' : ''} title="Monter">↑</button>
-                <button class="btn-order" onclick="window.app.views.nouveauProgramme.moveOrder('${r.id}', 1)" ${isLast ? 'disabled style="opacity:0.3;"' : ''} title="Descendre">↓</button>
-            ` : '';
-
-            return `
-                <tr style="transition: background 0.2s;">
-                    <td><span class="type-badge ${typeClass}">${typeLabel}</span></td>
-                    <td><div style="font-weight: 700; color: #1e293b;">${r.livreur || '<span style="color:#ef4444;font-style:italic;">Non assigné</span>'}</div></td>
-                    <td>
-                        <div class="client-cell__name">${r.client}</div>
-                        <div class="client-cell__phone">📞 ${r.tel || '--'}</div>
-                    </td>
-                    <td class="address-cell" title="${r.adresse || ''}">${r.adresse || '-'}</td>
-                    <td class="description-cell" title="${r.notes || ''}">${r.notes || '-'}</td>
-                    <td>
-                        <div class="actions-cell" style="justify-content: flex-end;">
-                            ${orderActions}
-                            <button class="btn-remove" onclick="window.app.views.nouveauProgramme.removeRdv('${r.id}')" title="Retirer ce RDV du programme">❌</button>
-                        </div>
-                    </td>
-                </tr>
-            `;
-        }).join('');
-    },
-
-    openAssignModal(driverName) {
-        const assignDriverNameEl = document.getElementById('assignDriverName');
-        if (assignDriverNameEl) {
-            assignDriverNameEl.textContent = driverName || 'un chauffeur (Sélectionnez-en un)';
-        }
-        
-        if (!driverName && !this.selectedDriver) {
-            this.app.showToast("Veuillez d'abord sélectionner un chauffeur dans la liste de gauche.", "error");
-            return;
-        }
-        
-        this.driverToAssign = driverName || this.selectedDriver;
-        
-        const tbody = document.getElementById('assignTableBody');
-        const dispoRdvs = this.rdvs.filter(r => !r.livreur);
-        
-        if (dispoRdvs.length === 0) {
-            tbody.innerHTML = `<tr><td colspan="4" style="text-align:center; padding:30px; color:#64748b;">Aucun RDV disponible à assigner pour cette date.</td></tr>`;
-            document.getElementById('confirmAssignBtn').disabled = true;
-        } else {
-            document.getElementById('confirmAssignBtn').disabled = false;
-            tbody.innerHTML = dispoRdvs.map(r => {
-                const isDepot = r.rdvType === 'DEPOT';
-                const typeClass = isDepot ? 'badge--depot' : 'badge--recup';
-                const typeLabel = isDepot ? 'DÉPÔT' : 'RÉCUPÉRER';
-                return `
-                    <tr>
-                        <td style="text-align: center;"><input type="checkbox" class="assign-cb" value="${r.id}" style="width:16px; height:16px; cursor:pointer;"></td>
-                        <td><span class="type-badge ${typeClass}">${typeLabel}</span></td>
-                        <td>
-                            <div style="font-weight:700; color:#1e293b;">${r.client}</div>
-                            <div style="font-size:11px; color:#64748b; max-width:250px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="${r.adresse||''}">${r.adresse || '-'}</div>
-                        </td>
-                        <td style="font-weight:600; color:#475569;">${r.time || '--:--'}</td>
-                    </tr>
-                `;
-            }).join('');
-        }
-        
-        document.getElementById('selectAllRdv').checked = false;
-        document.getElementById('assignModal').style.display = 'flex';
-    },
-
-    closeAssignModal() {
-        document.getElementById('assignModal').style.display = 'none';
-    },
-
-    toggleSelectAllRdv(isChecked) {
-        document.querySelectorAll('.assign-cb').forEach(cb => cb.checked = isChecked);
-    },
-
-    openOptimizationPanel(driverName) {
-        const driverRdvs = this.rdvs.filter(r => r.livreur === driverName);
-        if (driverRdvs.length === 0) {
-            this.app.showToast("Aucun RDV assigné à ce chauffeur pour calculer le trajet.", "error");
-            return;
-        }
-
-        // --- SIMULATION D'OPTIMISATION DE TRAJET ---
-        // Dans un environnement de production, on ferait un appel API à un moteur de routage (Google OR-Tools, Mapbox, etc.)
-        const optimizedRdvs = [...driverRdvs];
-        
-        // On trie simplement par arrondissement/code postal trouvé dans l'adresse pour simuler un regroupement géographique
-        optimizedRdvs.sort((a,b) => {
-            const extractCP = str => (str.match(/\b\d{5}\b/) || [''])[0];
-            return extractCP(a.adresse || '').localeCompare(extractCP(b.adresse || ''));
-        });
-        
-        this.currentOptimizedOrder = optimizedRdvs;
-
-        document.getElementById('optiSubTitle').textContent = `${driverName} · ${new Date(this.selectedDate).toLocaleDateString('fr-FR')}`;
-
-        // Constantes statiques pour l'exemple
-        const distTotal = (optimizedRdvs.length * 4.2).toFixed(1);
-        const dureeTotalH = Math.floor((optimizedRdvs.length * 15) / 60);
-        const dureeTotalM = (optimizedRdvs.length * 15) % 60;
-
-        let html = `
-            <div class="opti-kpi-grid">
-                <div class="opti-kpi opti-kpi--purple"><div class="opti-kpi__icon">📍</div><div class="opti-kpi__value">${optimizedRdvs.length}</div><div class="opti-kpi__label">Arrêts</div></div>
-                <div class="opti-kpi opti-kpi--blue"><div class="opti-kpi__icon">🛣️</div><div class="opti-kpi__value">${distTotal} km</div><div class="opti-kpi__label">Distance</div></div>
-                <div class="opti-kpi opti-kpi--orange"><div class="opti-kpi__icon">⏱️</div><div class="opti-kpi__value">${dureeTotalH}h ${dureeTotalM}m</div><div class="opti-kpi__label">Durée Est.</div></div>
-                <div class="opti-kpi opti-kpi--green"><div class="opti-kpi__icon">🔄</div><div class="opti-kpi__value">${optimizedRdvs.length}</div><div class="opti-kpi__label">Optimisés</div></div>
-            </div>
-
-            <div class="opti-avg-row">
-                <div class="opti-avg"><span class="opti-avg__label">⚡ Moteur</span><span class="opti-avg__value">OSRM+BAN</span></div>
-                <div class="opti-avg"><span class="opti-avg__label">📐 Moy. / arrêt</span><span class="opti-avg__value">4,2 km</span></div>
-                <div class="opti-avg"><span class="opti-avg__label">⏳ Moy. / arrêt</span><span class="opti-avg__value">15 min</span></div>
-            </div>
-
-            <div class="opti-section-title">🗺️ Ordre recommandé</div>
-            <div class="opti-timeline">
-        `;
-
-        optimizedRdvs.forEach((r, idx) => {
-            const isDepot = r.rdvType === 'DEPOT';
-            const typeClass = isDepot ? 'badge--depot' : 'badge--recup';
-            const typeLabel = isDepot ? 'DÉPÔT' : 'RÉCUPÉRER';
-            const oldIndex = driverRdvs.findIndex(orig => orig.id === r.id);
-            
-            // Ajout de tags virtuels pour le rendu
-            const distNode = `<span class="opti-stop__tag opti-stop__tag--blue">${(Math.random() * 5 + 1).toFixed(1)} km</span>`;
-            const timeNode = `<span class="opti-stop__tag opti-stop__tag--orange">${Math.floor(Math.random() * 15 + 5)} min</span>`;
-
-            html += `
-                <div class="opti-stop">
-                    <div class="opti-stop__line"><div class="opti-stop__number">${idx + 1}</div><div class="opti-stop__connector"></div></div>
-                    <div class="opti-stop__card">
-                        <div class="opti-stop__top"><div class="opti-stop__client">${r.client}</div><span class="type-badge ${typeClass}">${typeLabel}</span></div>
-                        <div class="opti-stop__address">${r.adresse || 'Adresse non spécifiée'}</div>
-                        <div class="opti-stop__meta">
-                            <span class="opti-stop__tag"><span class="opti-stop__tag-label">Avant</span>#${oldIndex + 1}</span>
-                            ${distNode} ${timeNode}
-                            <span class="opti-stop__tag opti-stop__tag--green">🕐 ${r.time || '10:00 - 12:00'}</span>
-                        </div>
-                    </div>
-                </div>
-            `;
-        });
-
-        html += `</div>`;
-
-        document.getElementById('optiBodyContent').innerHTML = html;
-        document.getElementById('optiFooterContent').innerHTML = `
-            <button class="btn btn--ghost" style="padding: 10px 15px; border-radius: 8px; border: 1px solid #cbd5e1; background: white; font-weight: 600; cursor: pointer;">📄 Exporter PDF</button>
-            <button class="btn btn--primary" id="btnApplyOpti" onclick="window.app.views.nouveauProgramme.applyOptimization()" style="padding: 10px 20px; border-radius: 8px; background: #10b981; border: none; color: white; font-weight: 600; cursor: pointer;">✅ Valider et appliquer</button>
-        `;
-        document.getElementById('optiOverlay').classList.add('active');
-        document.getElementById('optiPanel').classList.add('active');
-    },
-
-    closeOptimizationPanel() {
-        document.getElementById('optiOverlay').classList.remove('active');
-        document.getElementById('optiPanel').classList.remove('active');
-    },
-
-    async applyOptimization() {
-        if (!this.currentOptimizedOrder || this.currentOptimizedOrder.length === 0) return;
-
-        const btn = document.getElementById('btnApplyOpti');
-        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Application...';
-        btn.disabled = true;
-
-        try {
-            const batch = writeBatch(db);
-            this.currentOptimizedOrder.forEach((r, idx) => {
-                batch.update(doc(db, "appointments", r.id), { orderInRoute: idx });
-            });
-            await batch.commit();
-            
-            this.app.showToast("Nouvel ordre optimisé appliqué avec succès !", "success");
-            this.closeOptimizationPanel();
-        } catch(e) {
-            console.error("Erreur optimisation:", e);
-            this.app.showToast("Erreur lors de l'application de l'optimisation.", "error");
-            btn.innerHTML = '✅ Valider et appliquer';
-            btn.disabled = false;
-        }
-    },
-
-    async confirmAssign() {
-        const checkboxes = document.querySelectorAll('.assign-cb:checked');
-        if (checkboxes.length === 0) {
-            this.app.showToast("Veuillez sélectionner au moins un RDV.", "error");
-            return;
-        }
-        
-        const btn = document.getElementById('confirmAssignBtn');
-        btn.disabled = true;
-        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Assignation...';
-        
-        try {
-            const batch = writeBatch(db);
-            
-            // Déterminer le prochain orderInRoute pour ce chauffeur
-            const driverRdvs = this.rdvs.filter(r => r.livreur === this.driverToAssign);
-            let nextOrder = driverRdvs.length > 0 ? Math.max(...driverRdvs.map(r => r.orderInRoute || 0)) + 1 : 0;
-            
-            checkboxes.forEach(cb => {
-                batch.update(doc(db, "appointments", cb.value), {
-                    livreur: this.driverToAssign,
-                    status: 'en_cours',
-                    orderInRoute: nextOrder++
-                });
-            });
-            
-            await batch.commit();
-            this.app.showToast(`${checkboxes.length} RDV assigné(s) avec succès !`, "success");
-            this.closeAssignModal();
-        } catch(e) {
-            console.error(e);
-            this.app.showToast("Erreur lors de l'assignation.", "error");
-        } finally {
-            btn.disabled = false;
-            btn.innerHTML = 'Assigner la sélection';
-        }
-    },
-
-    async removeRdv(id) {
-        try {
-            await updateDoc(doc(db, "appointments", id), {
-                livreur: null,
-                status: 'confirmé', // Repasse en confirmé non assigné
-                orderInRoute: null
-            });
-            this.app.showToast("RDV retiré du programme.", "success");
-        } catch(e) {
-            this.app.showToast("Erreur lors du retrait.", "error");
-        }
-    },
-
-    async moveOrder(id, direction) {
-        if (!this.selectedDriver) return;
-        
-        // Ne prendre que les RDV du chauffeur filtré
-        const driverRdvs = this.rdvs.filter(r => r.livreur === this.selectedDriver);
-        const index = driverRdvs.findIndex(r => r.id === id);
-        
-        if (index === -1) return;
-        
-        const newIndex = index + direction;
-        if (newIndex < 0 || newIndex >= driverRdvs.length) return;
-        
-        const itemA = driverRdvs[index];
-        const itemB = driverRdvs[newIndex];
-        
-        // Assurer qu'ils ont un ordre défini
-        driverRdvs.forEach((r, idx) => r.orderInRoute = r.orderInRoute !== undefined ? r.orderInRoute : idx);
-        
-        const temp = itemA.orderInRoute;
-        itemA.orderInRoute = itemB.orderInRoute;
-        itemB.orderInRoute = temp;
-        
-        try {
-            const batch = writeBatch(db);
-            batch.update(doc(db, "appointments", itemA.id), { orderInRoute: itemA.orderInRoute });
-            batch.update(doc(db, "appointments", itemB.id), { orderInRoute: itemB.orderInRoute });
-            await batch.commit();
-        } catch(e) {
-            console.error(e);
-            this.app.showToast("Erreur lors de la réorganisation.", "error");
-        }
-    },
-
-    printRoadmap(driver) {
-        this.app.showToast("L'impression de la feuille de route sera bientôt disponible.", "info");
-        // TODO: Implement PDF Export for the driver's roadmap
-    },
-
-    async openAddDriverModal() {
-        const select = document.getElementById('addDriverSelect');
-        const phoneInput = document.getElementById('addDriverPhone');
-        if (select) {
-            select.innerHTML = '<option value="">-- Chargement... --</option>';
-            document.getElementById('addDriverModal').style.display = 'flex';
-            
-            try {
-                const activeAgency = sessionStorage.getItem('currentActiveAgency') || 'paris';
-                const usersSnap = await getDocs(collection(db, "users"));
-                const agentsSnap = await getDocs(collection(db, "agents"));
+    
+    initVue(globalApp) {
+        if (this.vueApp) this.vueApp.unmount();
+        this.vueApp = createApp({
+            setup() {
+                const rdvs = ref([]);
+                const drivers = ref([]);
+                const availableAgentsForDropdown = ref([]);
+                const loading = ref(true);
                 
-                this.availableAgentsForDropdown = [];
-                
-                usersSnap.forEach(doc => {
-                    const data = doc.data();
-                    if (data.agency === activeAgency || data.agency === 'all') {
-                        const name = data.displayName || data.email || 'Inconnu';
-                        this.availableAgentsForDropdown.push({ id: doc.id, name, phone: data.phone || data.tel || '', col: 'users' });
-                    }
+                const filters = reactive({
+                    date: new Date().toISOString().split('T')[0],
+                    driver: '',
+                    type: '',
+                    search: ''
                 });
                 
-                agentsSnap.forEach(doc => {
-                    const data = doc.data();
-                    const name = data.name;
-                    if (name && (data.agency === activeAgency || data.agency === 'all')) {
-                        if (!this.availableAgentsForDropdown.find(a => a.name.toLowerCase() === name.toLowerCase())) {
-                            this.availableAgentsForDropdown.push({ id: doc.id, name, phone: data.phone || data.tel || '', col: 'agents' });
+                const showAssignModal = ref(false);
+                const showOptiModal = ref(false);
+                const showAddDriverModal = ref(false);
+                
+                const assigning = ref(false);
+                const savingOpti = ref(false);
+                const savingDriver = ref(false);
+                
+                const driverToAssign = ref('');
+                const currentOptimizedOrder = ref([]);
+                
+                const assignSelectedIds = ref([]);
+                
+                const formDriver = reactive({
+                    id: '',
+                    phone: ''
+                });
+                let unsub = null;
+                
+                const formattedDate = computed(() => new Date(filters.date).toLocaleDateString('fr-FR'));
+                
+                const loadDrivers = async () => {
+                    const activeAgency = sessionStorage.getItem('currentActiveAgency') || 'paris';
+                    const usersSnap = await getDocs(collection(db, "users"));
+                    const agentsSnap = await getDocs(collection(db, "agents"));
+                    
+                    const driverMap = new Map();
+                    
+                    usersSnap.forEach(doc => {
+                        const data = doc.data();
+                        if ((data.role === 'chauf' || data.isChauffeur) && (data.agency === activeAgency || data.agency === 'all')) {
+                            const name = data.displayName || data.email || 'Inconnu';
+                            driverMap.set(name.toLowerCase().trim(), { name, photoURL: data.photoURL, id: doc.id, col: 'users', phone: data.phone || data.tel || '' });
                         }
+                    });
+                    
+                    agentsSnap.forEach(doc => {
+                        const data = doc.data();
+                        const name = data.name;
+                        if (name && (data.agency === activeAgency || data.agency === 'all') && !driverMap.has(name.toLowerCase().trim())) {
+                            driverMap.set(name.toLowerCase().trim(), { name, photoURL: data.photoURL, id: doc.id, col: 'agents', phone: data.phone || data.tel || '' });
+                        }
+                    });
+                    drivers.value = Array.from(driverMap.values()).sort((a,b) => a.name.localeCompare(b.name));
+                };
+                const loadData = () => {
+                    if (unsub) unsub();
+                    loading.value = true;
+                    
+                    const activeAgency = sessionStorage.getItem('currentActiveAgency') || 'paris';
+                    const q = query(
+                        collection(db, "appointments"), 
+                        where("agency", "==", activeAgency),
+                        where("date", "==", filters.date)
+                    );
+                    unsub = onSnapshot(q, (snapshot) => {
+                        const data = snapshot.docs
+                            .map(d => ({id: d.id, ...d.data()}))
+                            .filter(r => r.status === 'confirmé' || r.status === 'en_cours');
+                            
+                        data.sort((a, b) => (a.orderInRoute || 0) - (b.orderInRoute || 0));
+                        rdvs.value = data;
+                        loading.value = false;
+                    });
+                };
+                onMounted(() => {
+                    loadDrivers();
+                    loadData();
+                });
+                watch(() => filters.date, () => {
+                    loadData();
+                });
+                
+                watch(() => formDriver.id, (newId) => {
+                    if (!newId) {
+                        formDriver.phone = '';
+                        return;
+                    }
+                    const agent = availableAgentsForDropdown.value.find(a => a.id === newId);
+                    if (agent) formDriver.phone = agent.phone || '';
+                });
+                onUnmounted(() => {
+                    if (unsub) unsub();
+                });
+                const filteredRdvs = computed(() => {
+                    return rdvs.value.filter(r => {
+                        if (filters.driver && r.livreur !== filters.driver) return false;
+                        if (filters.type && r.rdvType !== filters.type) return false;
+                        if (filters.search) {
+                            const searchFilter = filters.search.toLowerCase().trim();
+                            const searchStr = `${r.client} ${r.adresse} ${r.tel} ${r.notes}`.toLowerCase();
+                            if (!searchStr.includes(searchFilter)) return false;
+                        }
+                        return true;
+                    });
+                });
+                
+                const dispoRdvs = computed(() => {
+                    return rdvs.value.filter(r => !r.livreur);
+                });
+                
+                const selectAllRdv = computed({
+                    get: () => dispoRdvs.value.length > 0 && assignSelectedIds.value.length === dispoRdvs.value.length,
+                    set: (val) => {
+                        if (val) assignSelectedIds.value = dispoRdvs.value.map(r => r.id);
+                        else assignSelectedIds.value = [];
                     }
                 });
+                
+                const kpis = computed(() => {
+                    return {
+                        dispo: dispoRdvs.value.length,
+                        depots: rdvs.value.filter(r => r.rdvType === 'DEPOT').length,
+                        recups: rdvs.value.filter(r => r.rdvType === 'RECUPERATION').length
+                    };
+                });
+                
+                const getDriverRdvsCount = (driverName) => {
+                    return rdvs.value.filter(r => r.livreur === driverName).length;
+                };
+                
+                const openAssignModal = (driverName) => {
+                    if (!driverName && !filters.driver) {
+                        globalApp.showToast("Veuillez d'abord sélectionner un chauffeur dans la liste de gauche.", "error");
+                        return;
+                    }
+                    driverToAssign.value = driverName || filters.driver;
+                    assignSelectedIds.value = [];
+                    showAssignModal.value = true;
+                };
+                
+                const closeAssignModal = () => {
+                    showAssignModal.value = false;
+                };
+                
+                const confirmAssign = async () => {
+                    if (assignSelectedIds.value.length === 0) {
+                        globalApp.showToast("Veuillez sélectionner au moins un RDV.", "error");
+                        return;
+                    }
+                    
+                    assigning.value = true;
+                    
+                    try {
+                        const batch = writeBatch(db);
+                        const driverRdvs = rdvs.value.filter(r => r.livreur === driverToAssign.value);
+                        let nextOrder = driverRdvs.length > 0 ? Math.max(...driverRdvs.map(r => r.orderInRoute || 0)) + 1 : 0;
+                        
+                        assignSelectedIds.value.forEach(id => {
+                            batch.update(doc(db, "appointments", id), {
+                                livreur: driverToAssign.value,
+                                status: 'en_cours',
+                                orderInRoute: nextOrder++
+                            });
+                        });
+                        
+                        await batch.commit();
+                        globalApp.showToast(`${assignSelectedIds.value.length} RDV assigné(s) avec succès !`, "success");
+                        closeAssignModal();
+                    } catch(e) {
+                        globalApp.showToast("Erreur lors de l'assignation.", "error");
+                    } finally {
+                        assigning.value = false;
+                    }
+                };
+                
+                const removeRdv = async (id) => {
+                    try {
+                        await updateDoc(doc(db, "appointments", id), {
+                            livreur: null,
+                            status: 'confirmé', 
+                            orderInRoute: null
+                        });
+                        globalApp.showToast("RDV retiré du programme.", "success");
+                    } catch(e) {
+                        globalApp.showToast("Erreur lors du retrait.", "error");
+                    }
+                };
+                
+                const moveOrder = async (id, direction) => {
+                    if (!filters.driver) return;
+                    
+                    const driverRdvs = rdvs.value.filter(r => r.livreur === filters.driver);
+                    const index = driverRdvs.findIndex(r => r.id === id);
+                    
+                    if (index === -1) return;
+                    
+                    const newIndex = index + direction;
+                    if (newIndex < 0 || newIndex >= driverRdvs.length) return;
+                    
+                    const itemA = driverRdvs[index];
+                    const itemB = driverRdvs[newIndex];
+                    
+                    driverRdvs.forEach((r, idx) => r.orderInRoute = r.orderInRoute !== undefined ? r.orderInRoute : idx);
+                    
+                    const temp = itemA.orderInRoute;
+                    itemA.orderInRoute = itemB.orderInRoute;
+                    itemB.orderInRoute = temp;
+                    
+                    try {
+                        const batch = writeBatch(db);
+                        batch.update(doc(db, "appointments", itemA.id), { orderInRoute: itemA.orderInRoute });
+                        batch.update(doc(db, "appointments", itemB.id), { orderInRoute: itemB.orderInRoute });
+                        await batch.commit();
+                    } catch(e) {
+                        globalApp.showToast("Erreur lors de la réorganisation.", "error");
+                    }
+                };
+                
+                const optiDriver = ref('');
+                
+                const openOptimizationPanel = (driverName) => {
+                    const driverRdvs = rdvs.value.filter(r => r.livreur === driverName);
+                    if (driverRdvs.length === 0) {
+                        globalApp.showToast("Aucun RDV assigné à ce chauffeur pour calculer le trajet.", "error");
+                        return;
+                    }
 
-                this.availableAgentsForDropdown.sort((a,b) => a.name.localeCompare(b.name));
+                    const optimizedRdvs = [...driverRdvs];
+                    optimizedRdvs.sort((a,b) => {
+                        const extractCP = str => (str.match(/\b\d{5}\b/) || [''])[0];
+                        return extractCP(a.adresse || '').localeCompare(extractCP(b.adresse || ''));
+                    });
+                    
+                    currentOptimizedOrder.value = optimizedRdvs;
+                    optiDriver.value = driverName;
+                    showOptiModal.value = true;
+                };
                 
-                select.innerHTML = '<option value="">-- Choisir un utilisateur --</option>' + this.availableAgentsForDropdown.map(d => `<option value="${d.id}">${d.name}</option>`).join('');
+                const closeOptimizationPanel = () => {
+                    showOptiModal.value = false;
+                };
                 
-            } catch (error) {
-                console.error("Erreur chargement agents:", error);
-                select.innerHTML = '<option value="">-- Erreur --</option>';
+                const applyOptimization = async () => {
+                    if (currentOptimizedOrder.value.length === 0) return;
+                    savingOpti.value = true;
+
+                    try {
+                        const batch = writeBatch(db);
+                        currentOptimizedOrder.value.forEach((r, idx) => {
+                            batch.update(doc(db, "appointments", r.id), { orderInRoute: idx });
+                        });
+                        await batch.commit();
+                        
+                        globalApp.showToast("Nouvel ordre optimisé appliqué avec succès !", "success");
+                        closeOptimizationPanel();
+                    } catch(e) {
+                        globalApp.showToast("Erreur lors de l'application de l'optimisation.", "error");
+                    } finally {
+                        savingOpti.value = false;
+                    }
+                };
+                
+                const getOldIndex = (id) => {
+                    const driverRdvs = rdvs.value.filter(r => r.livreur === optiDriver.value);
+                    return driverRdvs.findIndex(orig => orig.id === id);
+                };
+                
+                const openAddDriverModal = async () => {
+                    formDriver.id = '';
+                    formDriver.phone = '';
+                    showAddDriverModal.value = true;
+                    
+                    try {
+                        const activeAgency = sessionStorage.getItem('currentActiveAgency') || 'paris';
+                        const usersSnap = await getDocs(collection(db, "users"));
+                        const agentsSnap = await getDocs(collection(db, "agents"));
+                        
+                        const agentsList = [];
+                        
+                        usersSnap.forEach(doc => {
+                            const data = doc.data();
+                            if (data.agency === activeAgency || data.agency === 'all') {
+                                const name = data.displayName || data.email || 'Inconnu';
+                                agentsList.push({ id: doc.id, name, phone: data.phone || data.tel || '', col: 'users' });
+                            }
+                        });
+                        
+                        agentsSnap.forEach(doc => {
+                            const data = doc.data();
+                            const name = data.name;
+                            if (name && (data.agency === activeAgency || data.agency === 'all')) {
+                                if (!agentsList.find(a => a.name.toLowerCase() === name.toLowerCase())) {
+                                    agentsList.push({ id: doc.id, name, phone: data.phone || data.tel || '', col: 'agents' });
+                                }
+                            }
+                        });
+
+                        agentsList.sort((a,b) => a.name.localeCompare(b.name));
+                        availableAgentsForDropdown.value = agentsList;
+                        
+                    } catch (error) {
+                        console.error("Erreur chargement agents:", error);
+                    }
+                };
+                
+                const closeAddDriverModal = () => {
+                    showAddDriverModal.value = false;
+                };
+                
+                const saveDriverPhone = async () => {
+                    if (!formDriver.id) {
+                        globalApp.showToast("Veuillez sélectionner un utilisateur.", "error");
+                        return;
+                    }
+
+                    const driver = availableAgentsForDropdown.value.find(d => d.id === formDriver.id);
+                    if (!driver) return;
+
+                    savingDriver.value = true;
+
+                    try {
+                        await updateDoc(doc(db, driver.col, driver.id), {
+                            phone: formDriver.phone.trim(),
+                            isChauffeur: true
+                        });
+                        
+                        globalApp.showToast("Utilisateur ajouté comme chauffeur avec succès.", "success");
+                        closeAddDriverModal();
+                        await loadDrivers();
+                    } catch (error) {
+                        globalApp.showToast("Erreur lors de l'enregistrement.", "error");
+                    } finally {
+                        savingDriver.value = false;
+                    }
+                };
+                
+                const printRoadmap = (driverName) => {
+                    globalApp.showToast("L'impression de la feuille de route sera bientôt disponible.", "info");
+                };
+                return {
+                    rdvs, drivers, loading, filters, formattedDate, filteredRdvs, kpis,
+                    showAssignModal, showOptiModal, showAddDriverModal, assigning, savingOpti, savingDriver,
+                    driverToAssign, dispoRdvs, assignSelectedIds, selectAllRdv, currentOptimizedOrder,
+                    formDriver, availableAgentsForDropdown, optiDriver,
+                    getDriverRdvsCount, openAssignModal, closeAssignModal, confirmAssign, removeRdv, moveOrder,
+                    openOptimizationPanel, closeOptimizationPanel, applyOptimization, getOldIndex,
+                    openAddDriverModal, closeAddDriverModal, saveDriverPhone, printRoadmap
+                };
             }
-        }
-        
-        if (phoneInput) phoneInput.value = '';
-    },
+        });
 
-    closeAddDriverModal() {
-        document.getElementById('addDriverModal').style.display = 'none';
-    },
-
-    onDriverSelectChange() {
-        const select = document.getElementById('addDriverSelect');
-        const phoneInput = document.getElementById('addDriverPhone');
-        if (!select || !phoneInput) return;
-        
-        const selectedId = select.value;
-        const driver = (this.availableAgentsForDropdown || this.drivers).find(d => d.id === selectedId);
-        if (driver) {
-            phoneInput.value = driver.phone || '';
-        } else {
-            phoneInput.value = '';
-        }
-    },
-
-    async saveDriverPhone() {
-        const select = document.getElementById('addDriverSelect');
-        const phoneInput = document.getElementById('addDriverPhone');
-        
-        const selectedId = select?.value;
-        const newPhone = phoneInput?.value.trim();
-        
-        if (!selectedId) {
-            this.app.showToast("Veuillez sélectionner un utilisateur.", "error");
-            return;
-        }
-
-        const driver = (this.availableAgentsForDropdown || this.drivers).find(d => d.id === selectedId);
-        if (!driver) return;
-
-        const btn = document.getElementById('saveDriverPhoneBtn');
-        const originalText = btn.textContent;
-        btn.textContent = "Enregistrement...";
-        btn.disabled = true;
-
-        try {
-            await updateDoc(doc(db, driver.col, driver.id), {
-                phone: newPhone,
-                isChauffeur: true
-            });
-            
-            this.app.showToast("Utilisateur ajouté comme chauffeur avec succès.", "success");
-            this.closeAddDriverModal();
-            await this.loadDrivers();
-            this.renderDriversSidebar();
-        } catch (error) {
-            console.error("Erreur enregistrement téléphone:", error);
-            this.app.showToast("Erreur lors de l'enregistrement.", "error");
-        } finally {
-            btn.textContent = originalText;
-            btn.disabled = false;
-        }
+        this.vueApp.mount('#vue-nouveauprogramme-app');
     }
 };

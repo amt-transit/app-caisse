@@ -1,9 +1,10 @@
 import { db } from '../../../firebase-config.js';
 import { collection, query, where, onSnapshot } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
+import { CONSTANTS } from '../../../constants.js';
+import { createApp, ref, onMounted, onUnmounted } from "https://unpkg.com/vue@3/dist/vue.esm-browser.prod.js";
 
 export const FinanceChequesView = {
-    unsub: null,
-    cheques: [],
+    vueApp: null,
 
     render(app) {
         this.app = app;
@@ -11,7 +12,8 @@ export const FinanceChequesView = {
         window.app.views.financeCheques = this;
 
         const html = `
-            <div class="page">
+            <style>[v-cloak] { display: none; }</style>
+            <div id="vue-finance-cheques" class="page" v-cloak>
                 <div class="factures-header" style="background: white; border-radius: 16px; margin-bottom: 24px; border: 1px solid #e2e8f0; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);">
                     <div class="factures-header__content" style="display: flex; align-items: center; gap: 20px; padding: 20px 24px; flex-wrap: wrap;">
                         <div class="factures-header__icon" style="font-size: 32px; background: #f3f4f6; color: #475569; width: 56px; height: 56px; display: flex; align-items: center; justify-content: center; border-radius: 14px;">🧾</div>
@@ -34,8 +36,16 @@ export const FinanceChequesView = {
                                     <th style="padding: 16px 12px; text-align: center; font-size: 12px; color: #475569; text-transform: uppercase;">Statut Enregistrement</th>
                                 </tr>
                             </thead>
-                            <tbody id="chqTableBody">
-                                <tr><td colspan="5" style="text-align: center; padding: 40px;"><i class="fas fa-spinner fa-spin"></i> Chargement...</td></tr>
+                            <tbody>
+                                <tr v-if="loading"><td colspan="5" style="text-align: center; padding: 40px;"><i class="fas fa-spinner fa-spin"></i> Chargement...</td></tr>
+                                <tr v-else-if="cheques.length === 0"><td colspan="5" style="text-align: center; padding: 40px; color: #64748b;">Aucun chèque enregistré.</td></tr>
+                                <tr v-else v-for="c in cheques" :key="c.id">
+                                    <td data-label="Date" style="padding: 14px 12px;">{{ formatDate(c.date) }}</td>
+                                    <td data-label="Facture" style="padding: 14px 12px; font-weight: bold; color: #3b82f6;">{{ c.reference || '-' }}</td>
+                                    <td data-label="Client" style="padding: 14px 12px; font-weight: 600; color: #0f172a;">{{ c.nom || '-' }}</td>
+                                    <td data-label="Montant Chèque" style="padding: 14px 12px; text-align: right; font-weight: bold; color: #0f172a;">{{ formatMoney(c.montantParis / TAUX) }}</td>
+                                    <td data-label="Statut" style="padding: 14px 12px; text-align: center;"><span class="badge" style="background:#d1fae5; color:#065f46;">✔ Validé en Caisse</span></td>
+                                </tr>
                             </tbody>
                         </table>
                     </div>
@@ -43,39 +53,42 @@ export const FinanceChequesView = {
             </div>
         `;
         document.getElementById('contentContainer').innerHTML = html;
-        this.loadData();
+        this.initVue();
     },
 
-    loadData() {
-        if (this.unsub) this.unsub();
-        const activeAgency = sessionStorage.getItem('currentActiveAgency') || 'paris';
-        // Requête ciblée : UNIQUEMENT le mode CHEQUES (tel que défini dans le dropdown de nouvelle facture)
-        const q = query(collection(db, "transactions"), where("agency", "==", activeAgency), where("modePaiement", "==", "CHEQUES"), where("isDeleted", "==", false));
-        
-        this.unsub = onSnapshot(q, snap => {
-            this.cheques = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-            this.cheques.sort((a, b) => new Date(b.date) - new Date(a.date));
-            this.renderTable();
+    initVue() {
+        if (this.vueApp) this.vueApp.unmount();
+        const globalApp = this.app;
+
+        this.vueApp = createApp({
+            setup() {
+                const cheques = ref([]);
+                const loading = ref(true);
+                let unsub = null;
+
+                const formatMoney = (amount) => globalApp.formatMoney(amount);
+                const formatDate = (dateString) => dateString ? new Date(dateString).toLocaleDateString('fr-FR') : '-';
+
+                onMounted(() => {
+                    const activeAgency = sessionStorage.getItem('currentActiveAgency') || 'paris';
+                    const q = query(collection(db, "transactions"), where("agency", "==", activeAgency), where("modePaiement", "==", "CHEQUES"), where("isDeleted", "==", false));
+                    
+                    unsub = onSnapshot(q, snap => {
+                        const data = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+                        data.sort((a, b) => new Date(b.date) - new Date(a.date));
+                        cheques.value = data;
+                        loading.value = false;
+                    });
+                });
+
+                onUnmounted(() => {
+                    if (unsub) unsub();
+                });
+
+                return { cheques, loading, formatMoney, formatDate, TAUX: CONSTANTS.TAUX_CONVERSION };
+            }
         });
-    },
 
-    renderTable() {
-        const tbody = document.getElementById('chqTableBody');
-        if (!tbody) return;
-        if (this.cheques.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 40px; color: #64748b;">Aucun chèque enregistré.</td></tr>';
-            return;
-        }
-        tbody.innerHTML = this.cheques.map(c => {
-            const amountEUR = (parseFloat(c.montantParis) || 0) / 656; // Le montant payé à Paris converti
-            return `
-            <tr>
-                <td data-label="Date" style="padding: 14px 12px;">${c.date ? new Date(c.date).toLocaleDateString('fr-FR') : '-'}</td>
-                <td data-label="Facture" style="padding: 14px 12px; font-weight: bold; color: #3b82f6;">${c.reference || '-'}</td>
-                <td data-label="Client" style="padding: 14px 12px; font-weight: 600; color: #0f172a;">${c.nom || '-'}</td>
-                <td data-label="Montant Chèque" style="padding: 14px 12px; text-align: right; font-weight: bold; color: #0f172a;">${this.app.formatMoney(amountEUR)}</td>
-                <td data-label="Statut" style="padding: 14px 12px; text-align: center;"><span class="badge" style="background:#d1fae5; color:#065f46;">✔ Validé en Caisse</span></td>
-            </tr>
-        `}).join('');
+        this.vueApp.mount('#vue-finance-cheques');
     }
 };

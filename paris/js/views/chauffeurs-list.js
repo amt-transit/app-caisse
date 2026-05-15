@@ -1,5 +1,6 @@
 import { db } from '../../../firebase-config.js';
 import { collection, query, where, onSnapshot, getDocs } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
+import { CONSTANTS } from '../../../constants.js';
 
 export const ChauffeursListView = {
     unsubAppts: null,
@@ -30,17 +31,11 @@ export const ChauffeursListView = {
                 .status-badge span { background: #dcfce7; color: #166534; padding: 6px 12px; border-radius: 20px; font-size: 13px; font-weight: 700; border: 1px solid #bbf7d0; }
 
                 .chauffeurs-filters { display: flex; flex-wrap: wrap; gap: 15px; background: white; padding: 20px; border-radius: 16px; border: 1px solid #e2e8f0; margin-bottom: 24px; box-shadow: 0 2px 4px rgba(0,0,0,0.02); }
-                .filter-group { flex: 1; min-width: 150px; display: flex; flex-direction: column; gap: 6px; }
-                .filter-label { font-size: 11px; font-weight: 600; color: #475569; text-transform: uppercase; }
-                .filter-input, .filter-select { width: 100%; padding: 10px 12px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 14px; outline: none; transition: 0.2s; background: #f8fafc; }
-                .filter-input:focus, .filter-select:focus { border-color: #3b82f6; background: white; box-shadow: 0 0 0 3px rgba(59,130,246,0.1); }
-
                 .chauffeurs-table-card { background: white; border-radius: 16px; border: 1px solid #e2e8f0; overflow: hidden; box-shadow: 0 2px 4px rgba(0,0,0,0.02); }
                 .chauffeurs-table-header { padding: 15px 20px; border-bottom: 1px solid #e2e8f0; background: #f8fafc; display: flex; align-items: center; gap: 10px; }
                 .chauffeurs-table-title { margin: 0; font-size: 16px; font-weight: 700; color: #1e293b; display: flex; align-items: center; gap: 8px; }
                 .chauffeurs-table-count { background: #e2e8f0; color: #475569; padding: 2px 8px; border-radius: 12px; font-size: 12px; }
-                
-                .table-wrap { overflow-x: auto; }
+
                 .chauffeurs-table { width: 100%; border-collapse: collapse; }
                 .chauffeurs-table th { text-align: left; padding: 16px 20px; background: white; font-size: 12px; font-weight: 700; color: #64748b; text-transform: uppercase; border-bottom: 1px solid #e2e8f0; }
                 .chauffeurs-table td { padding: 16px 20px; border-bottom: 1px solid #f1f5f9; vertical-align: middle; }
@@ -66,8 +61,8 @@ export const ChauffeursListView = {
                 .money-cell { display: flex; flex-direction: column; }
                 .money-value { font-weight: 800; font-size: 15px; color: #0f172a; font-family: monospace; }
                 .money-label { font-size: 11px; color: #64748b; font-weight: 600; text-transform: uppercase; }
-                
-                /* --- STYLES MODALE DÉTAIL CHAUFFEUR --- */
+
+                /* --- MODALE DÉTAIL CHAUFFEUR --- */
                 .cd-modal { display: none; position: fixed; inset: 0; z-index: 9999; align-items: center; justify-content: center; }
                 .cd-modal.active { display: flex; animation: fadeIn 0.2s; }
                 .cd-modal__overlay { position: absolute; inset: 0; background: rgba(15,23,42,0.6); backdrop-filter: blur(4px); }
@@ -77,24 +72,22 @@ export const ChauffeursListView = {
                 .modal__sub { font-size: 12px; color: #64748b; margin-top: 4px; }
                 .modal__actions { display: flex; gap: 10px; align-items: center; }
                 .modal__body { padding: 25px; overflow-y: auto; flex: 1; }
-                .modal__foot { padding: 15px 25px; border-top: 1px solid #e2e8f0; background: #f8fafc; display: flex; justify-content: flex-end; }
                 
                 .detailTop { display: flex; gap: 15px; align-items: center; margin-bottom: 25px; }
                 .avatar--lg { width: 56px; height: 56px; border-radius: 50%; font-size: 20px; background: linear-gradient(135deg, #3b82f6, #1d4ed8); color: white; display: flex; align-items: center; justify-content: center; font-weight: 800; }
                 .detailName { font-size: 18px; font-weight: 800; color: #1e293b; margin-bottom: 4px; }
                 .mono { font-family: monospace; }
-                
+
                 .detailGrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-bottom: 25px; }
                 .dcard { background: #f8fafc; border: 1px solid #e2e8f0; padding: 15px; border-radius: 12px; }
                 .dcard__k { font-size: 11px; font-weight: 600; color: #64748b; text-transform: uppercase; margin-bottom: 6px; }
                 .dcard__v { font-size: 20px; font-weight: 800; color: #0f172a; }
-                
+
                 .detailBlocks { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 25px; }
                 @media (max-width: 768px) { .detailBlocks { grid-template-columns: 1fr; } }
                 .dblock { border: 1px solid #e2e8f0; border-radius: 12px; padding: 20px; }
                 .dblock__title { font-weight: 800; color: #1e293b; font-size: 15px; }
-                .muted { color: #64748b; font-size: 12px; }
-                
+
                 .barRow { display: flex; align-items: center; gap: 12px; margin-top: 12px; }
                 .barRow__date { width: 80px; font-size: 12px; color: #475569; }
                 .barRow__bars { flex: 1; height: 10px; background: #f1f5f9; border-radius: 5px; position: relative; overflow: hidden; }
@@ -107,7 +100,6 @@ export const ChauffeursListView = {
                 .pill--amber { background: #fffbeb; color: #d97706; }
                 .pill--green { background: #f0fdf4; color: #16a34a; }
             </style>
-
             <div class="chauffeurs-page">
                 <div class="chauffeurs-header">
                     <div class="chauffeurs-header__content">
@@ -247,7 +239,7 @@ export const ChauffeursListView = {
         const endDate = document.getElementById('cfEndDate').value;
         const selectedDriver = document.getElementById('cfDriverSelect').value;
 
-        const TAUX = 656; // Taux de conversion CFA -> EUR (si nécessaire, selon votre logique)
+        const TAUX = CONSTANTS.TAUX_CONVERSION;
 
         // Filtrer les chauffeurs si un est sélectionné
         let driversToRender = this.driversData;
@@ -358,7 +350,7 @@ export const ChauffeursListView = {
     openDriverDetail(driverName) {
         const startDate = document.getElementById('cfStartDate').value;
         const endDate = document.getElementById('cfEndDate').value;
-        const TAUX = 656;
+        const TAUX = CONSTANTS.TAUX_CONVERSION;
 
         // RDV du chauffeur
         const driverRdvs = this.appointments.filter(a => {

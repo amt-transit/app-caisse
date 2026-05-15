@@ -1,6 +1,7 @@
 import { db, app as firebaseApp } from '../../../firebase-config.js';
 import { doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-storage.js";
+import { CONSTANTS } from '../../../constants.js';
 
 export const ConfigInvoiceView = {
     docRef: null,
@@ -11,6 +12,8 @@ export const ConfigInvoiceView = {
         cgv: "1- Les temps et les délais de transports sont donnés à titre indicatifs par AMT TRANS'IT. Les retards des navires et les delais rallongés de dedouannement et de manutentiuons au port ne sauraient être imputés a AMT TRANS'IT.\n2- Les enlèvements à domicile sont gratuits dans la limite géographique définie par AMT TRANS'IT.\n3- Tous les colis et ou marchandises devront être intégralement payés avant la remise au destinataire.\n4- En cas de litige, une solution amiable est privilégiée avant toute procédure contentieuse.",
         primaryColor: "[59, 130, 246]",
         primaryColorHex: "#3b82f6",
+        secondaryColorHex: "#1e293b",
+        bgColorHex: "#f8fafc",
         logoUrl: null
     },
 
@@ -148,6 +151,20 @@ export const ConfigInvoiceView = {
                             <input type="hidden" id="ciHexColor" value="#3b82f6">
                         </div>
 
+                        <div class="form-group" style="margin-bottom: 25px;">
+                            <label style="font-weight: 600; font-size: 13px; color: #475569; margin-bottom: 10px; display: block;">🎨 Couleurs de l'interface (Menu & Fond)</label>
+                            <div style="display: flex; gap: 15px;">
+                                <div style="flex: 1;">
+                                    <label style="font-size: 11px; color: #64748b; margin-bottom: 4px; display: block;">Menu latéral (Haut)</label>
+                                    <input type="color" id="ciSecondaryColor" style="width: 100%; height: 40px; border: 1px solid #cbd5e1; border-radius: 8px; cursor: pointer; background: white;">
+                                </div>
+                                <div style="flex: 1;">
+                                    <label style="font-size: 11px; color: #64748b; margin-bottom: 4px; display: block;">Fond de page</label>
+                                    <input type="color" id="ciBgColor" style="width: 100%; height: 40px; border: 1px solid #cbd5e1; border-radius: 8px; cursor: pointer; background: white;">
+                                </div>
+                            </div>
+                        </div>
+
                         <div class="form-group" style="margin-bottom: 15px;">
                             <label style="font-weight: 600; font-size: 13px; color: #475569; margin-bottom: 6px; display: block;">Nom de l'entreprise (En-tête)</label>
                             <input type="text" id="ciCompany" style="width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 8px;" oninput="window.app.views.configInvoice.updatePreview()">
@@ -267,6 +284,8 @@ export const ConfigInvoiceView = {
             document.getElementById('ciCompany').value = this.config.companyName || '';
             document.getElementById('ciFooter').value = this.config.footer || '';
             document.getElementById('ciCgv').value = this.config.cgv || '';
+                document.getElementById('ciSecondaryColor').value = this.config.secondaryColorHex || '#1e293b';
+                document.getElementById('ciBgColor').value = this.config.bgColorHex || '#f8fafc';
 
             if (this.config.primaryColor && this.config.primaryColorHex) {
                 this.selectColor(this.config.primaryColorHex, this.config.primaryColor);
@@ -419,6 +438,8 @@ export const ConfigInvoiceView = {
             this.config.cgv = document.getElementById('ciCgv').value.trim();
             this.config.primaryColor = document.getElementById('ciPrimaryColor').value;
             this.config.primaryColorHex = document.getElementById('ciHexColor').value;
+            this.config.secondaryColorHex = document.getElementById('ciSecondaryColor').value;
+            this.config.bgColorHex = document.getElementById('ciBgColor').value;
             
             await setDoc(this.docRef, this.config, { merge: true });
             this.app.showToast("Modèle de facture enregistré avec succès !", "success");

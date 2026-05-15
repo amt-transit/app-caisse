@@ -916,8 +916,9 @@ html, body {
 
 <script type="module" src="auth-guard.js"></script>
 <script type="module">
-import { db } from './abidjan/firebase-config.js';
+import { db } from './firebase-config.js';
 import { collection, doc, addDoc, setDoc, updateDoc, getDocs, query, where, limit, arrayUnion } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
+import { getCollectionName } from './agencies-config.js';
 
 // ── NUMÉRO DU GROUPE WHATSAPP ──
 // ⚠️ Remplace par le numéro du téléphone qui héberge le groupe
@@ -1166,7 +1167,7 @@ async function loadContainersList() {
         if (cached) populateContainerSelect(JSON.parse(cached));
 
         // 2. Requête réseau optimisée
-        const snap = await getDocs(query(collection(db, 'livraisons'), where('containerStatus', '==', 'EN_COURS')));
+        const snap = await getDocs(query(collection(db, getCollectionName('livraisons')), where('containerStatus', '==', 'EN_COURS')));
         const containers = [...new Set(snap.docs.map(d => d.data().conteneur).filter(Boolean))].sort();
         
         localStorage.setItem('containers_cache', JSON.stringify(containers));
@@ -1199,7 +1200,7 @@ async function loadMyRoute() {
         }
 
         // 2. Sync réseau
-        const snap = await getDocs(query(collection(db, 'livraisons'), where('livreur', '==', livreurName), where('dateProgramme', '==', today)));
+        const snap = await getDocs(query(collection(db, getCollectionName('livraisons')), where('livreur', '==', livreurName), where('dateProgramme', '==', today)));
         const route = snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(d => ['EN_ATTENTE', 'EN_COURS', 'PARTIEL', 'LIVRAISON_PARTIELLE'].includes(d.status)).sort((a, b) => (a.orderInRoute ?? 999) - (b.orderInRoute ?? 999));
         
         localStorage.setItem(`route_${today}_${livreurName}`, JSON.stringify(route));
@@ -1254,10 +1255,10 @@ async function searchDelivery(ref) {
         // 2. Recherche Firebase si en ligne
         if (navigator.onLine) {
             try {
-                let snap = await getDocs(query(collection(db, 'livraisons'), where('ref', '==', cleanRef), limit(1)));
+                let snap = await getDocs(query(collection(db, getCollectionName('livraisons')), where('ref', '==', cleanRef), limit(1)));
                 if (snap.empty && cleanRef.includes('_')) {
                      const baseRef = cleanRef.split('_')[0];
-                     snap = await getDocs(query(collection(db, 'livraisons'), where('ref', '==', baseRef), limit(1)));
+                     snap = await getDocs(query(collection(db, getCollectionName('livraisons')), where('ref', '==', baseRef), limit(1)));
                 }
                 if (!snap.empty) {
                     docData = snap.docs[0].data();
@@ -1618,7 +1619,7 @@ async function markIncident() {
 
     showLoading(true);
     try {
-        await updateDoc(doc(db, 'livraisons', currentDelivery.id), {
+        await updateDoc(doc(db, getCollectionName('livraisons'), currentDelivery.id), {
             status: 'INCIDENT',
             incidentNote: reason,
             dateIncident: new Date().toISOString()
@@ -1696,7 +1697,7 @@ async function sendToWhatsAppAndMarkDone() {
                     livreur: livreurName
                 });
             }
-            await updateDoc(doc(db, 'livraisons', currentDelivery.id), updateData);
+        await updateDoc(doc(db, getCollectionName('livraisons'), currentDelivery.id), updateData);
         } else {
             throw new Error("OFFLINE"); // Force le passage dans le catch
         }
@@ -1892,16 +1893,16 @@ async function syncOfflineActions() {
         try {
             if (act.isOfflineGen) {
                 // C'était un colis fantôme, on essaie de le trouver dans la base pour le mettre à jour
-                let snap = await getDocs(query(collection(db, 'livraisons'), where('ref', '==', act.ref), limit(1)));
+            let snap = await getDocs(query(collection(db, getCollectionName('livraisons')), where('ref', '==', act.ref), limit(1)));
                 if (!snap.empty) {
                     const realDoc = snap.docs[0];
                     let updates = act.updateData;
                     if (act.isPartial) updates.historiquePartiel = arrayUnion(...act.updateData.historiquePartiel);
-                    await updateDoc(doc(db, 'livraisons', realDoc.id), updates);
+                await updateDoc(doc(db, getCollectionName('livraisons'), realDoc.id), updates);
                     successCount++;
                 } else {
                     // Colis toujours introuvable -> On le crée pour que le bureau s'en occupe
-                    const newLivRef = doc(collection(db, "livraisons"));
+                const newLivRef = doc(collection(db, getCollectionName("livraisons")));
                     await setDoc(newLivRef, {
                         ref: act.ref,
                         destinataire: 'Client Hors-ligne',
@@ -1920,7 +1921,7 @@ async function syncOfflineActions() {
             } else {
                 let updates = act.updateData;
                 if (act.isPartial) updates.historiquePartiel = arrayUnion(...act.updateData.historiquePartiel);
-                await updateDoc(doc(db, 'livraisons', act.deliveryId), updates);
+            await updateDoc(doc(db, getCollectionName('livraisons'), act.deliveryId), updates);
                 successCount++;
             }
         } catch (e) {
@@ -1986,7 +1987,7 @@ async function captureGPS(id) {
             } catch (e) { console.warn("Erreur reverse geocoding", e); }
             
             try {
-                await updateDoc(doc(db, 'livraisons', id), { lieuLivraison: gpsCoords });
+            await updateDoc(doc(db, getCollectionName('livraisons'), id), { lieuLivraison: gpsCoords });
                 const locEl = document.getElementById('delivery-location');
                 if(locEl) locEl.textContent = gpsCoords;
                 if(currentDelivery) currentDelivery.lieuLivraison = gpsCoords;
@@ -2035,7 +2036,7 @@ async function loadTodayStats() {
     try {
         const today = new Date();
         today.setHours(0,0,0,0);
-        const snap = await getDocs(query(collection(db, 'livraisons'), where('dateLivraison', '>=', today.toISOString())));
+    const snap = await getDocs(query(collection(db, getCollectionName('livraisons')), where('dateLivraison', '>=', today.toISOString())));
 
         let livre = 0, incident = 0, pending = 0;
         snap.forEach(doc => {

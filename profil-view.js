@@ -1,4 +1,5 @@
 import { db, app as firebaseApp } from './firebase-config.js';
+import { AGENCIES } from './agencies-config.js';
 import { getAuth, updateProfile, updatePassword } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-auth.js";
 import { doc, updateDoc } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-storage.js";
@@ -15,8 +16,7 @@ export const ProfilView = {
         const userAgency = sessionStorage.getItem('userAgency') || 'Non définie';
         const userRole = sessionStorage.getItem('userRole') || 'Non défini';
         
-        let agencyDisplay = userAgency === 'paris' ? '🇫🇷 Paris' : (userAgency === 'abidjan' ? '🇨🇮 Abidjan' : '🌍 Global (Abidjan & Paris)');
-        if (userAgency === 'Non définie') agencyDisplay = 'Non définie';
+        let agencyDisplay = AGENCIES[userAgency] ? `${AGENCIES[userAgency].flag} ${AGENCIES[userAgency].name}` : (userAgency === 'all' ? '🌍 Global (Accès Total)' : 'Non définie');
 
         const roleDisplay = userRole.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
 
