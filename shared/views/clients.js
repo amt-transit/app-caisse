@@ -629,21 +629,89 @@ export const ClientsView = {
     },
     
     openNewClientModal() {
-        document.getElementById('newClientNom').value = '';
-        document.getElementById('newClientPrenom').value = '';
-        document.getElementById('newClientTel').value = '';
-        document.getElementById('newClientEmail').value = '';
-        document.getElementById('newClientAdresse').value = '';
-        document.getElementById('newClientModal').style.display = 'flex';
+        let modal = document.getElementById('newClientModal');
+        
+        // Injection du modal à la volée s'il est appelé depuis une autre vue
+        if (!modal) {
+            const modalHtml = `
+                <div id="newClientModal" class="modal" style="display:none; position:fixed; z-index:1000; left:0; top:0; width:100%; height:100%; background-color:rgba(15, 23, 42, 0.6); align-items:center; justify-content:center; backdrop-filter: blur(4px);">
+                    <div class="modal-content" style="background:#fff; padding:0; width:90%; max-width:450px; border-radius:16px; display:flex; flex-direction:column; max-height:90vh; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25);">
+                        <div style="display:flex; justify-content:space-between; align-items:center; padding:20px; border-bottom:1px solid #e2e8f0; background:#f8fafc; flex-shrink:0;">
+                            <h2 style="margin:0; font-size:18px; color:#0f172a;">➕ Nouveau client</h2>
+                            <button onclick="document.getElementById('newClientModal').style.display='none'" style="background:none; border:none; font-size:24px; cursor:pointer; color:#64748b;">✕</button>
+                        </div>
+                        <div style="padding:20px; overflow-y:auto; flex-grow:1;">
+                            <div style="font-size:13px; color:#64748b; margin-bottom:20px;">Créer un nouvel expéditeur dans le système</div>
+                            
+                            <div style="margin-bottom:15px;">
+                                <label style="display:block; margin-bottom:5px; font-weight:600; font-size:13px; color:#1e293b;">👤 Nom *</label>
+                                <input type="text" id="newClientNom" style="width:100%; padding:10px; border:1px solid #cbd5e1; border-radius:8px; box-sizing:border-box; font-size:14px;" placeholder="Nom du client">
+                            </div>
+                            <div style="margin-bottom:15px;">
+                                <label style="display:block; margin-bottom:5px; font-weight:600; font-size:13px; color:#1e293b;">👤 Prénom</label>
+                                <input type="text" id="newClientPrenom" style="width:100%; padding:10px; border:1px solid #cbd5e1; border-radius:8px; box-sizing:border-box; font-size:14px;" placeholder="Prénom du client">
+                            </div>
+                            <div style="margin-bottom:15px;">
+                                <label style="display:block; margin-bottom:5px; font-weight:600; font-size:13px; color:#1e293b;">📞 Téléphone *</label>
+                                <input type="text" id="newClientTel" style="width:100%; padding:10px; border:1px solid #cbd5e1; border-radius:8px; box-sizing:border-box; font-size:14px;" placeholder="Numéro de téléphone">
+                            </div>
+                            <div style="margin-bottom:15px;">
+                                <label style="display:block; margin-bottom:5px; font-weight:600; font-size:13px; color:#1e293b;">📧 Email</label>
+                                <input type="email" id="newClientEmail" style="width:100%; padding:10px; border:1px solid #cbd5e1; border-radius:8px; box-sizing:border-box; font-size:14px;" placeholder="Adresse email">
+                            </div>
+                            <div style="margin-bottom:20px;">
+                                <label style="display:block; margin-bottom:5px; font-weight:600; font-size:13px; color:#1e293b;">📍 Adresse</label>
+                                <div style="position: relative;">
+                                    <input type="text" id="newClientAdresse" autocomplete="off" style="width:100%; padding:10px; border:1px solid #cbd5e1; border-radius:8px; box-sizing:border-box; font-size:14px;" placeholder="Adresse complète">
+                                    <ul id="newClientAdresseSuggestions" class="autocomplete-suggestions autocomplete-up"></ul>
+                                </div>
+                            </div>
+                            <div style="display:flex; justify-content:flex-end; gap:10px; padding-top:15px; border-top:1px solid #e2e8f0;">
+                                <button class="btn btn-outline" onclick="document.getElementById('newClientModal').style.display='none'" style="padding:10px 15px; border-radius:8px; font-weight:600;">Annuler</button>
+                                <button id="saveNewClientBtn" class="btn btn-primary" onclick="window.app.views.clients.saveNewClient()" style="padding:10px 15px; border-radius:8px; font-weight:600; display:flex; align-items:center; gap:6px;">✓ Créer le client</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            document.body.insertAdjacentHTML('beforeend', modalHtml);
+            modal = document.getElementById('newClientModal');
+            
+            if (typeof Autocomplete !== 'undefined' && typeof Autocomplete.initAddress === 'function') {
+                Autocomplete.initAddress('newClientAdresse', 'newClientAdresseSuggestions');
+            }
+        }
+
+        // Sécurisation du nettoyage du formulaire
+        if (document.getElementById('newClientNom')) document.getElementById('newClientNom').value = '';
+        if (document.getElementById('newClientPrenom')) document.getElementById('newClientPrenom').value = '';
+        if (document.getElementById('newClientTel')) document.getElementById('newClientTel').value = '';
+        if (document.getElementById('newClientEmail')) document.getElementById('newClientEmail').value = '';
+        if (document.getElementById('newClientAdresse')) document.getElementById('newClientAdresse').value = '';
+        
+        if (modal) {
+            modal.style.display = 'flex';
+        }
     },
 
     async saveNewClient() {
-        const nom = document.getElementById('newClientNom').value.trim();
-        const prenom = document.getElementById('newClientPrenom').value.trim();
-        const tel = document.getElementById('newClientTel').value.trim();
-        const adresse = document.getElementById('newClientAdresse').value.trim();
+        const nomEl = document.getElementById('newClientNom');
+        const prenomEl = document.getElementById('newClientPrenom');
+        const telEl = document.getElementById('newClientTel');
+        const emailEl = document.getElementById('newClientEmail');
+        const adresseEl = document.getElementById('newClientAdresse');
 
-        if (!nom || !tel) return this.app.showToast("Veuillez remplir le nom et le téléphone.", "error");
+        const nom = nomEl ? nomEl.value.trim() : '';
+        const prenom = prenomEl ? prenomEl.value.trim() : '';
+        const tel = telEl ? telEl.value.trim() : '';
+        const email = emailEl ? emailEl.value.trim() : '';
+        const adresse = adresseEl ? adresseEl.value.trim() : '';
+        
+        const appInstance = this.app || window.app;
+
+        if (!nom || !tel) {
+            return appInstance ? appInstance.showToast("Veuillez remplir le nom et le téléphone.", "error") : alert("Veuillez remplir le nom et le téléphone.");
+        }
         
         const activeAgency = sessionStorage.getItem('currentActiveAgency') || 'paris';
 
@@ -651,17 +719,17 @@ export const ClientsView = {
             await addDoc(collection(db, getCollectionName("clients")), {
                 nom: `${nom} ${prenom}`.trim(),
                 tel: tel,
-                email: document.getElementById('newClientEmail').value.trim(),
+                email: email,
                 adresse: adresse,
                 dateAjout: new Date().toISOString(),
                 agency: activeAgency,
                 risque: 'low', segment: 'nouveau', taille: 'petit', ca: 0, factures: 0
             });
-            this.app.showToast("Client créé avec succès !", "success");
-            document.getElementById('newClientModal').style.display = 'none';
+            if (appInstance) appInstance.showToast("Client créé avec succès !", "success");
+            if (document.getElementById('newClientModal')) document.getElementById('newClientModal').style.display = 'none';
         } catch (e) {
             console.error(e);
-            this.app.showToast("Erreur création", "error");
+            if (appInstance) appInstance.showToast("Erreur création", "error");
         }
     }
 };

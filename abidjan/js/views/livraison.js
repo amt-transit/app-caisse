@@ -1586,7 +1586,8 @@ export const LivraisonView = {
            // 2. Recherche Firestore Active (Pour les items hors limite 500)
            try {
 
-               const targetAgency = window.activeAgency === 'abidjan_chine' ? 'chine' : 'paris';
+                // Récupération dynamique de l'agence de départ (ex: dakar_chine -> chine)
+               const targetAgency = window.activeAgency.includes('_') ? window.activeAgency.split('_')[1] : 'paris';
                const snapActive = await getDocs(query(collection(db, CONSTANTS.COLLECTION), where('destinataire', '==', val), where('agency', '==', targetAgency)));
                
                for (const docSnap of snapActive.docs) {
@@ -2016,7 +2017,8 @@ export const LivraisonView = {
                    // Nettoyage des valeurs undefined (Firestore ne les supporte pas)
                    Object.keys(itemData).forEach(key => itemData[key] === undefined && delete itemData[key]);
        
-                   const targetAgency = window.activeAgency === 'abidjan_chine' ? 'chine' : 'paris';
+                   // Résolution dynamique de l'agence de provenance
+                   const targetAgency = window.activeAgency.includes('_') ? window.activeAgency.split('_')[1] : 'paris';
                    operations.push({ type: 'set', ref: docRef, data: { 
                        ...itemData, 
                        conteneur: conteneur || importItem.conteneur || '', 
