@@ -1,0 +1,25 @@
+{
+  "expo": {
+    "name": "AMT Parrainage",
+    "slug": "amt-parrainage-mobile",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "scheme": "amtparrainage",
+    "splash": {
+      "resizeMode": "contain",
+      "backgroundColor": "#0f172a"
+    },
+    "assetBundlePatterns": ["**/*"],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.amttransit.parrainage"
+    },
+    "android": {
+      "package": "com.amttransit.parrainage"
+    },
+    "extra": {
+      "eas": {}
+    }
+  }
+}
