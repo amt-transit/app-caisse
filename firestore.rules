@@ -33,10 +33,21 @@ service cloud.firestore {
     // 2. RÈGLES PAR RÔLE (Administration & Logs)
     // =====================================================================
 
-    // Users : Seul le super admin peut gérer, l'utilisateur gère son propre profil
+    // Users : le super admin gère tout ; l'utilisateur ne peut modifier QUE sa propre
+    // fiche, SANS pouvoir changer ses champs sensibles role/agency
+    // (protection contre l'élévation de privilèges - auto-promotion en super_admin).
     match /users/{userId} {
       allow read: if isAuthenticated(); // Requis pour que les listes de chauffeurs s'affichent
-      allow write: if isSuperAdmin() || (isAuthenticated() && request.auth.uid == userId);
+
+      // Création / suppression d'un compte : réservé au super admin (panneau Gestion des agents)
+      allow create, delete: if isSuperAdmin();
+
+      // Mise à jour : super admin = tout ; sinon uniquement SA fiche et role/agency inchangés
+      allow update: if isSuperAdmin()
+                    || ( isAuthenticated()
+                         && request.auth.uid == userId
+                         && request.resource.data.get('role', '')   == resource.data.get('role', '')
+                         && request.resource.data.get('agency', '') == resource.data.get('agency', '') );
     }
     
     // Audit Logs : Lecture pour les admins, écriture pour tous
