@@ -28,7 +28,7 @@ import { DailyBilanView } from '../../shared/views/daily-bilan.js';
 import { DailyUsersView } from '../../shared/views/daily-users.js';
 import { StatistiquesView } from '../../shared/views/statistiques.js';
 import { ToutesLesFacturesView } from '../../shared/views/touteslesfactures.js';
-import { ChineDashboardView } from '../../shared/views/chine-dashboard.js';
+
 import { ParrainageView } from '../../shared/views/parrainage.js';
 import { SettingsRolesMenusView } from '../../shared/views/settings-roles-menus.js';
 
