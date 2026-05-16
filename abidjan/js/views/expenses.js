@@ -1,33 +1,46 @@
 import { db } from '../../../firebase-config.js';
 import { collection, doc, updateDoc, setDoc, query, where, orderBy, onSnapshot, writeBatch, limit, getDocs } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
+import { createApp, ref, reactive, computed, onMounted, onUnmounted } from "https://unpkg.com/vue@3/dist/vue.esm-browser.prod.js";
 
 export const ExpensesView = {
+    vueApp: null,
+
     render(app, container) {
         this.app = app;
         container.innerHTML = `
-            <div id="caisseForm">
+            <style>
+                [v-cloak] { display: none; }
+                .stat-box { cursor: pointer; transition: transform 0.2s, border 0.2s; border-radius: 8px; padding: 10px 15px; min-width: 140px; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
+                .stat-box.active { transform: scale(1.05); border: 2px solid #000 !important; }
+                .stat-box:hover { opacity: 0.9; }
+            </style>
+            
+            <div id="vue-expenses-app" v-cloak>
+            <div id="caisseForm" v-show="!isViewer">
                 <div class="form-grid">
-                    <input type="date" id="expenseDate" required>
-                    <select id="actionType" style="font-weight: bold; color: #1565c0;">
+                    <input type="date" v-model="form.date" required>
+                    <select v-model="form.actionType" style="font-weight: bold; color: #1565c0;">
                         <option value="Depense">🔴 Enregistrer une Dépense</option>
                     </select>
-                    <input type="text" id="expenseDesc" placeholder="Description (ex: Facture CIE...)" required>
+                    <input type="text" v-model="form.desc" placeholder="Description (ex: Facture CIE...)" required>
                     <div class="prix-container">
-                        <input type="number" id="expenseAmount" placeholder="Montant">
+                        <input type="number" v-model.number="form.amount" placeholder="Montant">
                         <span class="cfa-label">CFA</span>
                     </div>
-                    <select id="expenseMode">
-                        <option value="Espèce" selected>Espèce</option>
+                    <select v-model="form.mode">
+                        <option value="Espèce">Espèce</option>
                         <option value="Chèque">Chèque</option>
                         <option value="OM">Orange Money</option>
                         <option value="Wave">Wave</option>
                         <option value="Virement">Virement</option>
                     </select>
-                    <select id="expenseType">
+                    <select v-model="form.type">
                         <option value="Mensuelle">Dépense Mensuelle</option>
                         <option value="Conteneur">Dépense de Conteneur</option>
                     </select>
-                    <select id="expenseSubtype" style="display:none;">
+                    
+                    <!-- Champs Conditionnels -->
+                    <select v-model="form.subtype" v-show="form.type === 'Mensuelle'">
                         <option value="">-- Catégorie (Optionnel) --</option>
                         <option value="Dépenses Livraison">Dépenses Livraison</option>
                         <option value="Dépenses Péage">Dépenses Péage</option>
@@ -35,61 +48,111 @@ export const ExpensesView = {
                         <option value="Dépenses Personnel">Dépenses Personnel</option>
                         <option value="Dépenses Entretien Véhicules">Dépenses Entretien Véhicules</option>
                     </select>
-                    <select id="expenseVehicle" style="display:none;">
+                    <select v-model="form.vehicleId" v-show="form.type === 'Mensuelle'">
                         <option value="">-- Véhicule (Optionnel) --</option>
+                        <option v-for="v in dbVehicles" :key="v.id" :value="v.id">{{ v.name }} ({{ v.plate }})</option>
                     </select>
-                    <input type="text" id="expenseContainer" placeholder="Nom du Conteneur (ex: D35)" style="display:none;" list="containersList">
-                    <datalist id="containersList"></datalist>
+                    <input type="text" v-model="form.container" placeholder="Nom du Conteneur (ex: D35)" v-show="form.type === 'Conteneur'" list="containersList">
+                    <datalist id="containersList">
+                        <option v-for="c in dbContainers" :key="c" :value="c"></option>
+                    </datalist>
                 </div>
-                <div class="card" id="pendingExpensesCard" style="display: none; border-left: 4px solid #3b82f6;">
+
+                <div class="card" v-show="pendingExpenses.length > 0" style="border-left: 4px solid #3b82f6; margin-top: 15px;">
                     <h3 style="color: #3b82f6;"><i class="fa-solid fa-clock-rotate-left"></i> Dépenses en attente d'enregistrement</h3>
                     <table class="table">
                         <thead>
                             <tr><th>Date</th><th>Description</th><th>Montant</th><th>Type</th><th>Action</th></tr>
                         </thead>
-                        <tbody id="pendingExpensesBody"></tbody>
+                        <tbody>
+                            <tr v-for="(exp, idx) in pendingExpenses" :key="idx">
+                                <td>{{ exp.date }}</td><td>{{ exp.description }}</td>
+                                <td>{{ formatCFA(exp.montant) }}</td><td>{{ exp.type }}</td>
+                                <td><button class="deleteBtn" @click="removePendingExpense(idx)">X</button></td>
+                            </tr>
+                        </tbody>
                     </table>
-                    <button id="commitExpensesBtn" class="btn btn-success" style="margin-top: 10px; width: 100%; padding: 10px; font-size: 1.1em;">
+                    <button @click="commitPendingExpenses" class="btn btn-success" style="margin-top: 10px; width: 100%; padding: 10px; font-size: 1.1em;" :disabled="saving">
                         <i class="fa-solid fa-save"></i> Tout Enregistrer
                     </button>
                 </div>
+
                 <div class="form-buttons">
-                    <button id="addExpenseBtn" class="primary">Valider</button>
+                    <button @click="addExpense" class="primary">Valider</button>
                 </div>
             </div>
 
             <div class="sub-nav" style="justify-content: center; margin-top: 20px; margin-bottom: 10px;">
-                <a href="#" id="tabMonthly" class="active">Dépenses Mensuelles</a>
-                <a href="#" id="tabContainer">Dépenses Conteneurs</a>
-                <a href="#" id="tabTotals">Totaux & Statistiques</a>
+                <a href="#" :class="{ active: currentTab === 'monthly' }" @click.prevent="currentTab = 'monthly'">Dépenses Mensuelles</a>
+                <a href="#" :class="{ active: currentTab === 'container' }" @click.prevent="currentTab = 'container'">Dépenses Conteneurs</a>
+                <a href="#" :class="{ active: currentTab === 'totals' }" @click.prevent="currentTab = 'totals'">Totaux & Statistiques</a>
             </div>
 
-            <div id="listView">
-                <div class="history-controls">
-                    <div class="search-bar-container">
-                        <input type="text" id="expenseSearch" placeholder="Rechercher dans les dépenses..." style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px;">
-                    </div>
-                    <div class="checkbox-container" style="margin-top: 10px;">
-                        <input type="checkbox" id="showDeletedCheckbox" style="width: auto;">
-                        <label for="showDeletedCheckbox">Afficher les éléments supprimés</label>
+            <div v-show="currentTab !== 'totals'">
+                <div style="margin-bottom: 10px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+                    <div style="display:flex; align-items:center; gap:5px; background:#fff; padding:5px 10px; border:1px solid #e2e8f0; border-radius:8px; box-shadow:0 1px 2px rgba(0,0,0,0.05);">
+                        <span style="font-size:0.9em; font-weight:600; color:#64748b;">📅 Période :</span>
+                        <input type="month" v-model="filters.month" style="border:none; outline:none; font-family:inherit; color:#334155; background:transparent; cursor:pointer;">
+                        <button @click="filters.month = ''" title="Tout voir" style="margin-left:5px; border:none; background:#f1f5f9; color:#64748b; border-radius:4px; padding:2px 6px; cursor:pointer; font-size:0.8em;">✖</button>
                     </div>
                 </div>
-                <h2 id="expensesHistoryTitle">Historique des Opérations</h2>
-                <table id="expenseTable">
+
+                <!-- KPI Statistiques Dynamiques -->
+                <div style="display:flex; gap:15px; margin-bottom:15px; flex-wrap:wrap;">
+                    <div @click="filters.category = null" class="stat-box" :class="{ active: filters.category === null }" style="background:#10b981; color:white; border: 1px solid #10b981;">
+                        <div style="font-size:0.8em; text-transform:uppercase;">Total Mensuel</div>
+                        <div style="font-size:1.4em; font-weight:bold;">{{ formatCFA(expenseStats.total) }}</div>
+                    </div>
+                    <div v-for="(stat, key) in expenseCategories" :key="key" @click="filters.category = key" class="stat-box" :class="{ active: filters.category === key }" :style="stat.style">
+                        <div style="font-size:0.8em; text-transform:uppercase; color: inherit;">{{ key }}</div>
+                        <div style="font-size:1.2em; font-weight:bold; color: inherit;">{{ formatCFA(expenseStats[key]) }}</div>
+                    </div>
+                </div>
+
+                <div class="history-controls">
+                    <div class="search-bar-container">
+                        <input type="text" v-model="filters.search" placeholder="Rechercher dans les dépenses..." style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px;">
+                    </div>
+                    <div class="checkbox-container" style="margin-top: 10px;">
+                        <input type="checkbox" v-model="filters.showDeleted" style="width: auto;">
+                        <label>Afficher les éléments supprimés</label>
+                        
+                        <span style="margin-left: 15px;" v-show="currentTab === 'container'">
+                            <input type="checkbox" v-model="filters.sortContainer" style="width:auto; vertical-align:middle;"> 
+                            <label style="cursor:pointer; font-size:12px;">Tri par Conteneur</label>
+                        </span>
+                    </div>
+                </div>
+                <h2>Historique des Opérations</h2>
+                <table class="table">
                     <thead>
                         <tr><th>Date</th><th>Description</th><th>Montant</th><th>Type</th><th>Mode</th><th>Conteneur</th><th>Action</th></tr>
                     </thead>
-                    <tbody id="expenseTableBody"></tbody>
+                    <tbody>
+                        <tr v-for="exp in filteredExpenses" :key="exp.id" :class="{ 'deleted-row': exp.isDeleted }">
+                            <td>{{ exp.date }}</td><td>{{ exp.description }}</td>
+                            <td class="reste-negatif"><b>- {{ formatCFA(exp.montant) }}</b></td>
+                            <td>{{ exp.type }}</td><td>{{ exp.mode || 'Espèce' }}</td><td>{{ exp.conteneur || '-' }}</td>
+                            <td>
+                                <div v-if="(userRole === 'admin' || userRole === 'super_admin') && !exp.isDeleted && !isViewer">
+                                    <button class="editBtn" @click="openEditModal(exp)">Modif.</button> 
+                                    <button class="deleteBtn" @click="deleteExpense(exp.id)">Suppr.</button>
+                                </div>
+                            </td>
+                        </tr>
+                        <tr v-if="filteredExpenses.length === 0"><td colspan="7">Aucun résultat.</td></tr>
+                        <tr v-if="hasMore"><td colspan="7" style="text-align: center;"><button class="btn" @click="limitExp += 50">⬇️ Charger plus de résultats</button></td></tr>
+                    </tbody>
                 </table>
             </div>
 
-            <div id="totalsView" style="display:none; margin-top: 20px;">
+            <!-- VUE TOTAUX -->
+            <div v-show="currentTab === 'totals'" style="margin-top: 20px;">
                 <div class="filter-container" style="margin-bottom: 20px; background: white; padding: 15px; border-radius: 12px; box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);">
                     <h4 style="margin-top:0; margin-bottom:10px; color:#64748b;">Filtrer les statistiques par période</h4>
                     <div class="filter-fields">
-                        <label>Du :</label> <input type="date" id="totalStartDate">
-                        <label>Au :</label> <input type="date" id="totalEndDate">
-                        <button id="filterTotalsBtn" class="primary" style="padding: 6px 12px; font-size: 12px;">Appliquer</button>
+                        <label>Du :</label> <input type="date" v-model="filters.totalStart">
+                        <label>Au :</label> <input type="date" v-model="filters.totalEnd">
                     </div>
                 </div>
                 <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px;">
@@ -97,444 +160,362 @@ export const ExpensesView = {
                         <h3 style="margin-top:0; border-bottom:1px solid #eee; padding-bottom:10px;">Dépenses par Mois</h3>
                         <table class="table">
                             <thead><tr><th>Mois</th><th style="text-align:right">Total</th></tr></thead>
-                            <tbody id="totalsMonthBody"></tbody>
+                            <tbody>
+                                <tr v-for="(total, m) in totalsData.months" :key="m" style="cursor:pointer;" @click="openMonthDetails(m)">
+                                    <td>{{ m }}</td><td style="text-align:right; font-weight:bold; color:#ef4444;">{{ formatCFA(total) }}</td>
+                                </tr>
+                            </tbody>
                         </table>
                     </div>
                     <div style="background: white; padding: 15px; border-radius: 12px; box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);">
                         <h3 style="margin-top:0; border-bottom:1px solid #eee; padding-bottom:10px;">Dépenses par Conteneur</h3>
                         <table class="table">
                             <thead><tr><th>Conteneur</th><th style="text-align:right">Total</th></tr></thead>
-                            <tbody id="totalsContainerBody"></tbody>
+                            <tbody>
+                                <tr v-for="(total, c) in totalsData.containers" :key="c" style="cursor:pointer;" @click="openContainerDetails(c)">
+                                    <td>{{ c }}</td><td style="text-align:right; font-weight:bold; color:#ef4444;">{{ formatCFA(total) }}</td>
+                                </tr>
+                            </tbody>
                         </table>
                     </div>
                     <div style="background: white; padding: 15px; border-radius: 12px; box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);">
                         <h3 style="margin-top:0; border-bottom:1px solid #eee; padding-bottom:10px;">Par Catégorie Spéciale</h3>
                         <table class="table">
                             <thead><tr><th>Catégorie</th><th style="text-align:right">Total</th></tr></thead>
-                            <tbody id="totalsCategoryBody"></tbody>
+                            <tbody>
+                                <tr v-for="(total, c) in totalsData.categories" :key="c">
+                                    <td>{{ c }}</td><td style="text-align:right; font-weight:bold; color:#ef4444;">{{ formatCFA(total) }}</td>
+                                </tr>
+                            </tbody>
                         </table>
                     </div>
                 </div>
             </div>
 
-            <div id="expenseDetailsModal" class="modal">
+            <!-- MODALS -->
+            <div class="modal" :class="{ active: showDetailsModal }">
                 <div class="modal-content" style="max-width: 800px;">
-                    <span class="close-modal" id="closeExpenseDetailsModal" style="float:right; cursor:pointer; font-size:24px;">&times;</span>
-                    <h2 id="expenseDetailsTitle" style="margin-top:0;">Détails</h2>
+                    <span class="close-modal" @click="showDetailsModal = false" style="float:right; cursor:pointer; font-size:24px;">&times;</span>
+                    <h2 style="margin-top:0;">{{ detailsModalTitle }}</h2>
                     <div style="max-height: 60vh; overflow-y: auto;">
                         <table class="table">
                             <thead><tr><th>Date</th><th>Description</th><th>Type</th><th>Mode</th><th>Montant</th></tr></thead>
-                            <tbody id="expenseDetailsBody"></tbody>
+                            <tbody>
+                                <tr v-for="e in detailsModalData" :key="e.id">
+                                    <td>{{ e.date }}</td><td>{{ e.description }}</td><td>{{ e.type }}</td><td>{{ e.mode || '-' }}</td>
+                                    <td style="font-weight:bold; color:#ef4444;">{{ formatCFA(e.montant) }}</td>
+                                </tr>
+                                <tr v-if="detailsModalData.length === 0"><td colspan="5">Aucune dépense.</td></tr>
+                            </tbody>
                         </table>
                     </div>
                 </div>
+            </div>
+
+            <div class="modal" :class="{ active: showEditModal }">
+                <div class="modal-content" style="background:#fff; padding:20px; width:90%; max-width:500px; border-radius:12px;">
+                    <span class="close-modal" @click="showEditModal = false" style="float:right; cursor:pointer; font-size:24px;">&times;</span>
+                    <h2 style="margin-top:0;">Modifier Dépense</h2>
+                    <div style="margin-bottom:15px;"><label>Date</label><input type="date" v-model="editForm.date" style="width:100%; padding:8px;"></div>
+                    <div style="margin-bottom:15px;"><label>Description</label><input type="text" v-model="editForm.desc" style="width:100%; padding:8px;"></div>
+                    <div style="margin-bottom:15px;"><label>Montant</label><input type="number" v-model.number="editForm.amount" style="width:100%; padding:8px;"></div>
+                    <div style="margin-bottom:15px;"><label>Type</label>
+                        <select v-model="editForm.type" style="width:100%; padding:8px;">
+                            <option value="Mensuelle">Mensuelle</option>
+                            <option value="Conteneur">Conteneur</option>
+                            <option value="Budget">Budget</option>
+                        </select>
+                    </div>
+                    <div style="margin-bottom:15px;" v-show="editForm.type !== 'Conteneur'"><label>Catégorie</label>
+                        <select v-model="editForm.subtype" style="width:100%; padding:8px;">
+                            <option value="">-- Aucune --</option>
+                            <option value="Dépenses Livraison">Dépenses Livraison</option>
+                            <option value="Dépenses Péage">Dépenses Péage</option>
+                            <option value="Dépenses Carburant">Dépenses Carburant</option>
+                            <option value="Dépenses Personnel">Dépenses Personnel</option>
+                            <option value="Dépenses Entretien Véhicules">Dépenses Entretien Véhicules</option>
+                        </select>
+                    </div>
+                    <div style="margin-bottom:15px;" v-show="editForm.type !== 'Conteneur'"><label>Véhicule</label>
+                        <select v-model="editForm.vehicleId" style="width:100%; padding:8px;">
+                            <option value="">-- Aucun --</option>
+                            <option v-for="v in dbVehicles" :key="v.id" :value="v.id">{{ v.name }}</option>
+                        </select>
+                    </div>
+                    <div style="margin-bottom:15px;" v-show="editForm.type === 'Conteneur'"><label>Conteneur</label>
+                        <input type="text" v-model="editForm.container" list="editContainersList" style="width:100%; padding:8px;">
+                        <datalist id="editContainersList">
+                            <option v-for="c in dbContainers" :key="c" :value="c"></option>
+                        </datalist>
+                    </div>
+                    <div style="margin-bottom:15px;"><label>Mode</label>
+                        <select v-model="editForm.mode" style="width:100%; padding:8px;">
+                            <option value="Espèce">Espèce</option><option value="Wave">Wave</option><option value="OM">OM</option><option value="Chèque">Chèque</option><option value="Virement">Virement</option>
+                        </select>
+                    </div>
+                    <div style="text-align:right;">
+                        <button @click="showEditModal = false" class="btn">Annuler</button> 
+                        <button @click="updateExpense" class="btn btn-success" :disabled="saving">Enregistrer</button>
+                    </div>
+                </div>
+            </div>
             </div>
         `;
         this.initLogic();
     },
 
     initLogic() {
-        const activeAgency = sessionStorage.getItem('currentActiveAgency') || 'abidjan';
-        const userRole = sessionStorage.getItem('userRole');
-        const isViewer = userRole === 'spectateur';
+        if (this.vueApp) this.vueApp.unmount();
 
-        function formatCFA(n) { return new Intl.NumberFormat('fr-CI', { style: 'currency', currency: 'XOF' }).format(n || 0).replace(/[\u202F\u00A0]/g, ' ').replace(/\s*\/\s*/g, ' '); }
-        
-        const addExpenseBtn = document.getElementById('addExpenseBtn');
-        const expenseDate = document.getElementById('expenseDate');
-        const expenseDesc = document.getElementById('expenseDesc');
-        const expenseAmount = document.getElementById('expenseAmount');
-        const expenseType = document.getElementById('expenseType');
-        const expenseSubtype = document.getElementById('expenseSubtype');
-        const expenseVehicle = document.getElementById('expenseVehicle');
-        const expenseMode = document.getElementById('expenseMode'); 
-        const expenseContainer = document.getElementById('expenseContainer');
-        const actionType = document.getElementById('actionType');
-        
-        // --- TOGGLE AFFICHAGE SELON LE TYPE DE DÉPENSE ---
-        if (expenseType) {
-            expenseType.addEventListener('change', () => {
-                if (expenseType.value === 'Conteneur') {
-                    if (expenseContainer) expenseContainer.style.display = '';
-                    if (expenseSubtype) expenseSubtype.style.display = 'none';
-                    if (expenseVehicle) expenseVehicle.style.display = 'none';
-                } else {
-                    if (expenseContainer) expenseContainer.style.display = 'none';
-                    if (expenseSubtype) expenseSubtype.style.display = '';
-                    if (expenseVehicle) expenseVehicle.style.display = '';
-                }
-            });
-            // Déclenchement initial
-            expenseType.dispatchEvent(new Event('change'));
-        }
-        
-        // --- CHARGEMENT INTELLIGENT DES CONTENEURS ---
-        getDocs(query(collection(db, "containers"), where("agency", "==", activeAgency))).then(snap => {
-            const containersList = document.getElementById('containersList');
-            if (containersList) {
-                containersList.innerHTML = '';
-                snap.forEach(doc => {
-                    const opt = document.createElement('option');
-                    opt.value = doc.data().number || doc.id;
-                    containersList.appendChild(opt);
-                });
-            }
-        }).catch(e => console.error("Erreur chargement conteneurs:", e));
+        this.vueApp = createApp({
+            setup() {
+                const activeAgency = sessionStorage.getItem('currentActiveAgency') || 'abidjan';
+                const userRole = sessionStorage.getItem('userRole') || 'Utilisateur';
+                const currentUserName = sessionStorage.getItem('userName') || 'Inconnu';
+                const isViewer = ref(userRole === 'spectateur');
+                const canSaveDirectly = ['admin', 'super_admin'].includes(userRole);
 
-        const expenseTableBody = document.getElementById('expenseTableBody');
-        const showDeletedCheckbox = document.getElementById('showDeletedCheckbox');
-        const expenseSearchInput = document.getElementById('expenseSearch');
+                const currentTab = ref('monthly');
+                const expenses = ref([]);
+                const pendingExpenses = ref([]);
+                const dbVehicles = ref([]);
+                const dbContainers = ref([]);
+                const unconfirmedSessions = ref(new Set());
+                
+                const limitExp = ref(50);
+                const saving = ref(false);
+                
+                const showDetailsModal = ref(false);
+                const detailsModalTitle = ref('');
+                const detailsModalData = ref([]);
+                const showEditModal = ref(false);
+                
+                let unsubs = [];
 
-        let sortExpenseContainerCheckbox = document.getElementById('sortExpenseContainerCheckbox');
-        if (!sortExpenseContainerCheckbox && showDeletedCheckbox && showDeletedCheckbox.parentNode) {
-            const span = document.createElement('span');
-            span.style.marginLeft = "15px";
-            span.innerHTML = '<input type="checkbox" id="sortExpenseContainerCheckbox" style="width:auto; vertical-align:middle;"> <label for="sortExpenseContainerCheckbox" style="cursor:pointer; font-size:12px;">Tri par Conteneur</label>';
-            showDeletedCheckbox.parentNode.appendChild(span);
-            sortExpenseContainerCheckbox = document.getElementById('sortExpenseContainerCheckbox');
-            sortExpenseContainerCheckbox.addEventListener('change', () => renderExpensesTable());
-        }
-
-        let expenseStatsContainer = document.getElementById('expenseStatsContainer');
-        const tableContainer = document.querySelector('#listView table');
-        if (tableContainer && tableContainer.parentNode) {
-            let expenseStatsControls = document.getElementById('expenseStatsControls');
-            if (!expenseStatsControls) {
-                expenseStatsControls = document.createElement('div');
-                expenseStatsControls.id = 'expenseStatsControls';
-                expenseStatsControls.style.cssText = "margin-bottom: 10px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap;";
                 const now = new Date();
                 const defaultMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-                expenseStatsControls.innerHTML = `
-                    <div style="display:flex; align-items:center; gap:5px; background:#fff; padding:5px 10px; border:1px solid #e2e8f0; border-radius:8px; box-shadow:0 1px 2px rgba(0,0,0,0.05);">
-                        <span style="font-size:0.9em; font-weight:600; color:#64748b;">📅 Période :</span>
-                        <input type="month" id="expenseStatsMonthFilter" value="${defaultMonth}" style="border:none; outline:none; font-family:inherit; color:#334155; background:transparent; cursor:pointer;">
-                        <button id="clearExpenseStatsFilter" title="Tout voir" style="margin-left:5px; border:none; background:#f1f5f9; color:#64748b; border-radius:4px; padding:2px 6px; cursor:pointer; font-size:0.8em;">✖</button>
-                    </div>
-                `;
-                tableContainer.parentNode.insertBefore(expenseStatsControls, tableContainer);
-                setTimeout(() => {
-                    const monthInput = document.getElementById('expenseStatsMonthFilter');
-                    const clearBtn = document.getElementById('clearExpenseStatsFilter');
-                    if (monthInput) monthInput.addEventListener('change', () => renderExpensesTable());
-                    if (clearBtn) clearBtn.addEventListener('click', () => { if(monthInput) monthInput.value = ''; renderExpensesTable(); });
-                }, 0);
-            }
-            if (!expenseStatsContainer) {
-                expenseStatsContainer = document.createElement('div');
-                expenseStatsContainer.id = 'expenseStatsContainer';
-                expenseStatsContainer.style.cssText = "display:flex; gap:15px; margin-bottom:15px; flex-wrap:wrap;";
-                tableContainer.parentNode.insertBefore(expenseStatsContainer, tableContainer);
-            }
-        }
+                const form = reactive({
+                    date: new Date().toISOString().split('T')[0],
+                    actionType: 'Depense',
+                    desc: '', amount: null, mode: 'Espèce',
+                    type: 'Mensuelle', subtype: '', vehicleId: '', container: ''
+                });
 
-        function getExpenseCategory(desc) {
-            desc = (desc || '').toLowerCase();
-            const kwPeage = ['péage', 'peage'];
-            const kwCarburant = ['carburant', 'essence', 'gasoil'];
-            const kwLivraison = ['livraison', 'police', 'douane', 'gendarmerie', 'gendarme', 'achat', 'lavage', 'aide', 'frais', 'transp', 'founi', 'stock'];
-            const kwPersonnel = ['personnel'];
-            const kwEntretien = ['entretien', 'vidange', 'pneu', 'mecanicien', 'mécano', 'reparation', 'réparation', 'visite technique'];
+                const editForm = reactive({
+                    id: null, date: '', desc: '', amount: null, mode: '', type: '', subtype: '', vehicleId: '', container: ''
+                });
 
-            if (kwPersonnel.some(k => desc.includes(k))) return 'Personnel';
-            if (kwEntretien.some(k => desc.includes(k))) return 'Entretien Véhicules';
-            if (kwPeage.some(k => desc.includes(k))) return 'Péage';
-            if (kwCarburant.some(k => desc.includes(k))) return 'Carburant';
-            if (kwLivraison.some(k => desc.includes(k))) return 'Livraison';
-            return 'Autres';
-        }
+                const filters = reactive({
+                    month: defaultMonth, search: '', showDeleted: false, sortContainer: false, category: null, totalStart: '', totalEnd: ''
+                });
 
-        let currentCategoryFilter = null;
-        window.filterExpensesByCategory = (category) => {
-            currentCategoryFilter = currentCategoryFilter === category ? null : category;
-            renderExpensesTable();
-        };
+                const expenseCategories = {
+                    'Livraison': { style: 'background:#e0f2fe; color:#0369a1;' },
+                    'Péage': { style: 'background:#fef3c7; color:#b45309;' },
+                    'Carburant': { style: 'background:#fee2e2; color:#b91c1c;' },
+                    'Personnel': { style: 'background:#e0e7ff; color:#3730a3;' },
+                    'Entretien Véhicules': { style: 'background:#d1fae5; color:#065f46;' },
+                    'Autres': { style: 'background:#e2e8f0; color:#475569;' }
+                };
 
-        function updateExpenseCategoryStats() {
-            if (!expenseStatsContainer) return;
-            if (currentTab === 'totals' || currentTab === 'container') {
-                expenseStatsContainer.style.display = 'none';
-                return;
-            }
-            expenseStatsContainer.style.display = 'flex';
+                const formatCFA = (n) => new Intl.NumberFormat('fr-CI', { style: 'currency', currency: 'XOF' }).format(n || 0).replace(/[\u202F\u00A0]/g, ' ').replace(/\s*\/\s*/g, ' ');
 
-            const stats = { 'Livraison': 0, 'Péage': 0, 'Carburant': 0, 'Personnel': 0, 'Entretien Véhicules': 0, 'Autres': 0 };
-            let totalView = 0;
-            const monthFilter = document.getElementById('expenseStatsMonthFilter')?.value;
+                const getExpenseCategory = (desc) => {
+                    desc = (desc || '').toLowerCase();
+                    if (['personnel'].some(k => desc.includes(k))) return 'Personnel';
+                    if (['entretien', 'vidange', 'pneu', 'mecanicien', 'mécano', 'reparation', 'réparation', 'visite technique'].some(k => desc.includes(k))) return 'Entretien Véhicules';
+                    if (['péage', 'peage'].some(k => desc.includes(k))) return 'Péage';
+                    if (['carburant', 'essence', 'gasoil'].some(k => desc.includes(k))) return 'Carburant';
+                    if (['livraison', 'police', 'douane', 'gendarmerie', 'gendarme', 'achat', 'lavage', 'aide', 'frais', 'transp', 'founi', 'stock'].some(k => desc.includes(k))) return 'Livraison';
+                    return 'Autres';
+                };
 
-            allExpenses.forEach(e => {
-                if (e.isDeleted) return;
-                if (e.sessionId && unconfirmedSessions.has(e.sessionId)) return;
-                if (monthFilter && !e.date.startsWith(monthFilter)) return;
-                if (currentTab === 'monthly' && (e.type === 'Conteneur' || e.conteneur)) return;
-                if (currentTab === 'container' && !(e.type === 'Conteneur' || e.conteneur)) return;
-                
-                const amount = e.montant || 0;
-                totalView += amount;
-                const cat = getExpenseCategory(e.description);
-                if (stats[cat] !== undefined) stats[cat] += amount;
-            });
+                // Écouteurs de données
+                onMounted(() => {
+                    unsubs.push(onSnapshot(query(collection(db, "fleet_vehicles"), where("isDeleted", "!=", true)), snap => {
+                        dbVehicles.value = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                    }));
 
-            const colors = { 
-                'Livraison': { bg: '#e0f2fe', text: '#0369a1' }, 'Péage': { bg: '#fef3c7', text: '#b45309' }, 
-                'Carburant': { bg: '#fee2e2', text: '#b91c1c' }, 'Personnel': { bg: '#e0e7ff', text: '#3730a3' }, 
-                'Entretien Véhicules': { bg: '#d1fae5', text: '#065f46' }, 'Autres': { bg: '#e2e8f0', text: '#475569' } 
-            };
-            
-            let html = `<div onclick="window.filterExpensesByCategory(null)" style="cursor:pointer; opacity:${currentCategoryFilter ? '0.5' : '1'}; background:#10b981; color:white; border-radius:8px; padding:10px 15px; min-width:140px; box-shadow:0 4px 6px rgba(0,0,0,0.1);"><div style="font-size:0.8em; text-transform:uppercase;">Total Mensuel</div><div style="font-size:1.4em; font-weight:bold;">${formatCFA(totalView)}</div></div>`;
-            html += Object.entries(stats).map(([key, val]) => {
-                const isActive = currentCategoryFilter === key;
-                return `<div onclick="window.filterExpensesByCategory('${key}')" style="cursor:pointer; transform:${isActive ? 'scale(1.05)' : 'scale(1)'}; background:${colors[key].bg}; border:${isActive ? '2px solid #000' : `1px solid ${colors[key].bg}`}; border-radius:8px; padding:10px 15px; min-width:140px; box-shadow:0 1px 2px rgba(0,0,0,0.05);"><div style="font-size:0.8em; color:${colors[key].text}; text-transform:uppercase;">${key}</div><div style="font-size:1.2em; font-weight:bold; color:${colors[key].text};">${formatCFA(val)}</div></div>`;
-            }).join('');
-            expenseStatsContainer.innerHTML = html;
-        }
+                    unsubs.push(getDocs(query(collection(db, "containers"), where("agency", "==", activeAgency))).then(snap => {
+                        dbContainers.value = snap.docs.map(doc => doc.data().number || doc.id);
+                    }));
 
-        let allExpenses = [];
-        let unconfirmedSessions = new Set(); 
-        let pendingExpenses = []; 
-        let currentLimit = 50; 
-        let fleetVehicles = [];
-        let currentTab = 'monthly'; 
+                    unsubs.push(onSnapshot(query(collection(db, "audit_logs"), where("action", "==", "VALIDATION_JOURNEE"), where("agency", "==", activeAgency)), snap => {
+                        unconfirmedSessions.value.clear();
+                        snap.forEach(doc => { if (doc.data().status !== "VALIDATED") unconfirmedSessions.value.add(doc.id); });
+                    }));
 
-        const tabMonthly = document.getElementById('tabMonthly');
-        const tabContainer = document.getElementById('tabContainer');
-        const tabTotals = document.getElementById('tabTotals');
-        const listView = document.getElementById('listView');
-        const totalsView = document.getElementById('totalsView');
+                    fetchExpenses();
+                });
 
-        [tabMonthly, tabContainer, tabTotals].forEach(tab => {
-            if(tab) tab.addEventListener('click', (e) => {
-                e.preventDefault();
-                currentTab = tab.id === 'tabMonthly' ? 'monthly' : (tab.id === 'tabContainer' ? 'container' : 'totals');
-                [tabMonthly, tabContainer, tabTotals].forEach(t => t.classList.remove('active'));
-                tab.classList.add('active');
-                if(listView) listView.style.display = currentTab === 'totals' ? 'none' : 'block';
-                if(totalsView) totalsView.style.display = currentTab === 'totals' ? 'block' : 'none';
-                renderExpensesTable();
-            });
-        });
+                onUnmounted(() => unsubs.forEach(u => typeof u === 'function' ? u() : null));
 
-        // Nettoyage des écouteurs précédents
-        if (window.unsubExpVehicles) window.unsubExpVehicles();
-        if (window.unsubExpAudit) window.unsubExpAudit();
-        if (window.unsubExpMain) window.unsubExpMain();
-
-        window.unsubExpVehicles = onSnapshot(query(collection(db, "fleet_vehicles"), where("isDeleted", "!=", true)), snap => {
-            fleetVehicles = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-            let options = '<option value="">-- Véhicule (Optionnel) --</option>' + fleetVehicles.map(v => `<option value="${v.id}">${v.name} (${v.plate})</option>`).join('');
-            if (expenseVehicle) expenseVehicle.innerHTML = options;
-            const eev = document.getElementById('expenseEditVehicle');
-            if (eev) { const currentVal = eev.value; eev.innerHTML = options; eev.value = currentVal; }
-        });
-
-        window.unsubExpAudit = onSnapshot(query(collection(db, "audit_logs"), where("action", "==", "VALIDATION_JOURNEE"), where("agency", "==", activeAgency)), snapshot => {
-            unconfirmedSessions.clear();
-            snapshot.forEach(doc => { if (doc.data().status !== "VALIDATED") unconfirmedSessions.add(doc.id); });
-            if (allExpenses.length > 0) renderExpensesTable();
-        });
-
-        function fetchExpenses() {
-            let constraints = [];
-            if (showDeletedCheckbox && showDeletedCheckbox.checked) constraints.push(where("isDeleted", "==", true));
-            else constraints.push(where("isDeleted", "!=", true));
-            constraints.push(where("agency", "==", activeAgency), orderBy("isDeleted"), orderBy("date", "desc"), limit(currentLimit));
-            
-            if (window.unsubExpMain) window.unsubExpMain();
-            window.unsubExpMain = onSnapshot(query(collection(db, "expenses"), ...constraints), snapshot => {
-                allExpenses = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                renderExpensesTable();
-            });
-        }
-
-        function renderExpensesTable() {
-            updateExpenseCategoryStats();
-            if (currentTab === 'totals') return renderTotals();
-
-            const term = expenseSearchInput ? expenseSearchInput.value.toLowerCase().trim() : "";
-            const monthFilter = document.getElementById('expenseStatsMonthFilter')?.value;
-            
-            let filtered = allExpenses.filter(e => !e.sessionId || !unconfirmedSessions.has(e.sessionId));
-            filtered = filtered.filter(item => currentTab === 'monthly' ? (item.type !== 'Conteneur' && !item.conteneur) : (item.type === 'Conteneur' || item.conteneur));
-            
-            filtered = filtered.filter(item => {
-                if (monthFilter && !item.date.startsWith(monthFilter)) return false;
-                if (currentCategoryFilter && getExpenseCategory(item.description) !== currentCategoryFilter) return false;
-                if (!term) return true;
-                return (item.description || "").toLowerCase().includes(term) || (item.conteneur || "").toLowerCase().includes(term) || (item.montant || 0).toString().includes(term);
-            });
-
-            filtered.sort((a, b) => {
-                if (currentTab === 'container' && sortExpenseContainerCheckbox && sortExpenseContainerCheckbox.checked) {
-                    const cA = parseInt((a.conteneur || "").match(/\d+/) || 0, 10);
-                    const cB = parseInt((b.conteneur || "").match(/\d+/) || 0, 10);
-                    if (cB !== cA) return cB - cA;
-                }
-                return new Date(b.date) - new Date(a.date);
-            });
-
-            expenseTableBody.innerHTML = filtered.length === 0 ? '<tr><td colspan="7">Aucun résultat.</td></tr>' : filtered.map(expense => `
-                <tr class="${expense.isDeleted ? 'deleted-row' : ''}">
-                    <td>${expense.date}</td><td>${expense.description}</td><td class="reste-negatif"><b>- ${formatCFA(expense.montant)}</b></td>
-                    <td>${expense.type}</td><td>${expense.mode || 'Espèce'}</td><td>${expense.conteneur || '-'}</td>
-                    <td>${(userRole === 'admin' || userRole === 'super_admin') && !expense.isDeleted && !isViewer ? `<button class="editBtn" data-id="${expense.id}">Modif.</button> <button class="deleteBtn" data-id="${expense.id}">Suppr.</button>` : ''}</td>
-                </tr>
-            `).join('');
-            
-            if (filtered.length >= currentLimit) {
-                expenseTableBody.innerHTML += `<tr><td colspan="7" style="text-align: center;"><button id="loadMoreExpBtn" class="btn">⬇️ Charger plus de résultats</button></td></tr>`;
-                document.getElementById('loadMoreExpBtn').addEventListener('click', () => { currentLimit += 50; fetchExpenses(); });
-            }
-        }
-
-        function renderTotals() {
-            // Logique de rendu de la vue "Totaux" identique (condensée pour l'espace)
-            const totalsMonthBody = document.getElementById('totalsMonthBody');
-            const totalsContainerBody = document.getElementById('totalsContainerBody');
-            const totalsCategoryBody = document.getElementById('totalsCategoryBody');
-            const months = {}, containers = {}, categories = { 'Dépenses Livraison': 0, 'Dépenses Péage': 0, 'Dépenses Carburant': 0, 'Dépenses Personnel': 0, 'Dépenses Entretien Véhicules': 0, 'Autres': 0 };
-            const start = document.getElementById('totalStartDate')?.value, end = document.getElementById('totalEndDate')?.value;
-
-            allExpenses.forEach(e => {
-                if (e.isDeleted || (e.sessionId && unconfirmedSessions.has(e.sessionId))) return;
-                if (start && e.date < start) return; if (end && e.date > end) return;
-                
-                if (e.type === 'Mensuelle') { const m = e.date.substring(0, 7); months[m] = (months[m] || 0) + e.montant; }
-                if (e.type === 'Conteneur' || e.conteneur) { const c = (e.conteneur || 'Inconnu').trim().toUpperCase(); containers[c] = (containers[c] || 0) + e.montant; }
-                
-                if (e.type === 'Mensuelle') {
-                    let matched = false; const desc = (e.description || '').toLowerCase();
-                    ['Dépenses Livraison', 'Dépenses Péage', 'Dépenses Carburant', 'Dépenses Personnel', 'Dépenses Entretien Véhicules'].forEach(cat => {
-                        if ((e.description || '').startsWith(cat)) { categories[cat] += e.montant; matched = true; }
+                const fetchExpenses = () => {
+                    let constraints = [where("agency", "==", activeAgency), orderBy("isDeleted"), orderBy("date", "desc"), limit(limitExp.value)];
+                    if (filters.showDeleted) constraints.unshift(where("isDeleted", "==", true));
+                    else constraints.unshift(where("isDeleted", "!=", true));
+                    
+                    onSnapshot(query(collection(db, "expenses"), ...constraints), snap => {
+                        expenses.value = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                     });
-                    if (!matched) {
-                        if (['personnel'].some(k=>desc.includes(k))) { categories['Dépenses Personnel'] += e.montant; matched=true; }
-                        else if (['entretien', 'vidange', 'pneu', 'mecanicien'].some(k=>desc.includes(k))) { categories['Dépenses Entretien Véhicules'] += e.montant; matched=true; }
-                        else if (['péage', 'peage'].some(k=>desc.includes(k))) { categories['Dépenses Péage'] += e.montant; matched=true; }
-                        else if (['carburant', 'essence'].some(k=>desc.includes(k))) { categories['Dépenses Carburant'] += e.montant; matched=true; }
-                        else if (['livraison', 'douane', 'frais'].some(k=>desc.includes(k))) { categories['Dépenses Livraison'] += e.montant; matched=true; }
+                };
+
+                // Computed
+                const validExpenses = computed(() => expenses.value.filter(e => !e.sessionId || !unconfirmedSessions.value.has(e.sessionId)));
+
+                const filteredExpenses = computed(() => {
+                    let filtered = validExpenses.value;
+                    if (currentTab.value === 'monthly') filtered = filtered.filter(e => e.type !== 'Conteneur' && !e.conteneur);
+                    if (currentTab.value === 'container') filtered = filtered.filter(e => e.type === 'Conteneur' || e.conteneur);
+
+                    if (filters.month) filtered = filtered.filter(e => e.date.startsWith(filters.month));
+                    if (filters.category) filtered = filtered.filter(e => getExpenseCategory(e.description) === filters.category);
+                    if (filters.search) {
+                        const q = filters.search.toLowerCase();
+                        filtered = filtered.filter(e => (e.description || '').toLowerCase().includes(q) || (e.conteneur || '').toLowerCase().includes(q) || String(e.montant || 0).includes(q));
                     }
-                    if (!matched) categories['Autres'] += e.montant;
-                }
-            });
 
-            totalsMonthBody.innerHTML = Object.entries(months).sort((a,b)=>b[0].localeCompare(a[0])).map(([m, t])=>`<tr style="cursor:pointer;" onclick="window.showMonthDetails('${m}')"><td>${m}</td><td style="text-align:right; font-weight:bold; color:#ef4444;">${formatCFA(t)}</td></tr>`).join('');
-            totalsContainerBody.innerHTML = Object.entries(containers).sort((a,b)=>a[0].localeCompare(b[0])).map(([c, t])=>`<tr style="cursor:pointer;" onclick="window.showContainerDetails('${c}')"><td>${c}</td><td style="text-align:right; font-weight:bold; color:#ef4444;">${formatCFA(t)}</td></tr>`).join('');
-            if(totalsCategoryBody) totalsCategoryBody.innerHTML = Object.entries(categories).map(([c, t])=>`<tr><td>${c}</td><td style="text-align:right; font-weight:bold; color:#ef4444;">${formatCFA(t)}</td></tr>`).join('');
-        }
+                    return [...filtered].sort((a, b) => {
+                        if (currentTab.value === 'container' && filters.sortContainer) {
+                            const cA = parseInt((a.conteneur || "").match(/\d+/) || 0, 10);
+                            const cB = parseInt((b.conteneur || "").match(/\d+/) || 0, 10);
+                            if (cB !== cA) return cB - cA;
+                        }
+                        return new Date(b.date) - new Date(a.date);
+                    });
+                });
 
-        if (showDeletedCheckbox) showDeletedCheckbox.addEventListener('change', fetchExpenses);
-        if (expenseSearchInput) expenseSearchInput.addEventListener('input', renderExpensesTable);
-        const filterTotalsBtn = document.getElementById('filterTotalsBtn');
-        if (filterTotalsBtn) filterTotalsBtn.addEventListener('click', renderTotals);
-        
-        fetchExpenses();
+                const hasMore = computed(() => filteredExpenses.value.length >= limitExp.value);
 
-        // --- INJECTION DE LA MODALE EDIT ---
-        if (!document.getElementById('expenseEditModal')) {
-            document.body.insertAdjacentHTML('beforeend', `
-            <div id="expenseEditModal" class="modal" style="display:none; position:fixed; z-index:1000; left:0; top:0; width:100%; height:100%; background-color:rgba(0,0,0,0.8); align-items:center; justify-content:center;">
-                <div class="modal-content" style="background:#fff; padding:20px; width:90%; max-width:500px; border-radius:12px;">
-                    <span class="close-modal" id="closeExpenseEditModal" style="float:right; cursor:pointer; font-size:24px;">&times;</span>
-                    <h2 style="margin-top:0;">Modifier Dépense</h2>
-                    <div style="margin-bottom:15px;"><label>Date</label><input type="date" id="expenseEditDate" style="width:100%; padding:8px;"></div>
-                    <div style="margin-bottom:15px;"><label>Description</label><input type="text" id="expenseEditDesc" style="width:100%; padding:8px;"></div>
-                    <div style="margin-bottom:15px;"><label>Montant</label><input type="number" id="expenseEditAmount" style="width:100%; padding:8px;"></div>
-                    <div style="margin-bottom:15px;"><label>Type</label><select id="expenseEditType" style="width:100%; padding:8px;"><option value="Mensuelle">Mensuelle</option><option value="Conteneur">Conteneur</option><option value="Budget">Budget</option></select></div>
-                    <div style="margin-bottom:15px;" id="expenseEditSubtypeGroup"><label>Catégorie</label><select id="expenseEditSubtype" style="width:100%; padding:8px;"><option value="">-- Aucune --</option><option value="Dépenses Livraison">Dépenses Livraison</option><option value="Dépenses Péage">Dépenses Péage</option><option value="Dépenses Carburant">Dépenses Carburant</option><option value="Dépenses Personnel">Dépenses Personnel</option><option value="Dépenses Entretien Véhicules">Dépenses Entretien Véhicules</option></select></div>
-                    <div style="margin-bottom:15px;" id="expenseEditVehicleGroup" style="display:none;"><label>Véhicule</label><select id="expenseEditVehicle" style="width:100%; padding:8px;"><option value="">-- Aucun --</option></select></div>
-                    <div style="margin-bottom:15px; display:none;" id="expenseEditContainerGroup"><label>Conteneur</label><input type="text" id="expenseEditContainer" style="width:100%; padding:8px;" list="containersList"></div>
-                    <div style="margin-bottom:15px;"><label>Mode</label><select id="expenseEditMode" style="width:100%; padding:8px;"><option value="Espèce">Espèce</option><option value="Wave">Wave</option><option value="OM">OM</option><option value="Chèque">Chèque</option><option value="Virement">Virement</option></select></div>
-                    <div style="text-align:right;"><button id="cancelExpenseEditBtn" class="btn">Annuler</button> <button id="saveExpenseEditBtn" class="btn btn-success">Enregistrer</button></div>
-                </div>
-            </div>`);
-        }
-        
-        // Toggle affichage modale édition
-        const editExpType = document.getElementById('expenseEditType');
-        if (editExpType) {
-            editExpType.addEventListener('change', () => {
-                const subtypeGroup = document.getElementById('expenseEditSubtypeGroup');
-                const vehicleGroup = document.getElementById('expenseEditVehicleGroup');
-                const containerGroup = document.getElementById('expenseEditContainerGroup');
-                if (editExpType.value === 'Conteneur') {
-                    if (containerGroup) containerGroup.style.display = 'block';
-                    if (subtypeGroup) subtypeGroup.style.display = 'none';
-                    if (vehicleGroup) vehicleGroup.style.display = 'none';
-                } else {
-                    if (containerGroup) containerGroup.style.display = 'none';
-                    if (subtypeGroup) subtypeGroup.style.display = 'block';
-                    if (vehicleGroup) vehicleGroup.style.display = 'block';
-                }
-            });
-        }
+                const expenseStats = computed(() => {
+                    const stats = { total: 0, 'Livraison': 0, 'Péage': 0, 'Carburant': 0, 'Personnel': 0, 'Entretien Véhicules': 0, 'Autres': 0 };
+                    validExpenses.value.forEach(e => {
+                        if (e.isDeleted) return;
+                        if (filters.month && !e.date.startsWith(filters.month)) return;
+                        if (currentTab.value === 'monthly' && (e.type === 'Conteneur' || e.conteneur)) return;
+                        if (currentTab.value === 'container' && !(e.type === 'Conteneur' || e.conteneur)) return;
+                        
+                        const amt = e.montant || 0;
+                        stats.total += amt;
+                        const cat = getExpenseCategory(e.description);
+                        if (stats[cat] !== undefined) stats[cat] += amt;
+                    });
+                    return stats;
+                });
 
-        window.showMonthDetails = (month) => {
-            const details = allExpenses.filter(e => !e.isDeleted && (!e.sessionId || !unconfirmedSessions.has(e.sessionId)) && e.type === 'Mensuelle' && e.date.substring(0, 7) === month);
-            renderDetailsModal(`Détails Dépenses : ${month}`, details);
-        };
-        window.showContainerDetails = (container) => {
-            const details = allExpenses.filter(e => !e.isDeleted && (!e.sessionId || !unconfirmedSessions.has(e.sessionId)) && (e.type === 'Conteneur' || e.conteneur) && (e.conteneur||'').trim().toUpperCase() === container);
-            renderDetailsModal(`Détails Dépenses : ${container}`, details);
-        };
-        
-        function renderDetailsModal(title, list) {
-            document.getElementById('expenseDetailsTitle').textContent = title;
-            const tbody = document.getElementById('expenseDetailsBody');
-            tbody.innerHTML = list.length === 0 ? '<tr><td colspan="5">Aucune dépense.</td></tr>' : list.sort((a,b)=>new Date(b.date)-new Date(a.date)).map(e => `<tr><td>${e.date}</td><td>${e.description}</td><td>${e.type}</td><td>${e.mode||'-'}</td><td style="font-weight:bold; color:#ef4444;">${formatCFA(e.montant)}</td></tr>`).join('');
-            document.getElementById('expenseDetailsModal').classList.add('active');
-        }
-        
-        const closeDetailsModal = document.getElementById('closeExpenseDetailsModal');
-        if (closeDetailsModal) closeDetailsModal.onclick = () => document.getElementById('expenseDetailsModal').classList.remove('active');
-        
-        // Ajout logique
-        if (addExpenseBtn && !isViewer) {
-            addExpenseBtn.addEventListener('click', () => {
-                const currentUserName = sessionStorage.getItem('userName') || 'Inconnu';
+                const totalsData = computed(() => {
+                    const res = { months: {}, containers: {}, categories: { 'Dépenses Livraison': 0, 'Dépenses Péage': 0, 'Dépenses Carburant': 0, 'Dépenses Personnel': 0, 'Dépenses Entretien Véhicules': 0, 'Autres': 0 } };
+                    validExpenses.value.forEach(e => {
+                        if (e.isDeleted) return;
+                        if (filters.totalStart && e.date < filters.totalStart) return;
+                        if (filters.totalEnd && e.date > filters.totalEnd) return;
+                        
+                        if (e.type === 'Mensuelle') { const m = e.date.substring(0, 7); res.months[m] = (res.months[m] || 0) + e.montant; }
+                        if (e.type === 'Conteneur' || e.conteneur) { const c = (e.conteneur || 'Inconnu').trim().toUpperCase(); res.containers[c] = (res.containers[c] || 0) + e.montant; }
+                        
+                        if (e.type === 'Mensuelle') {
+                            const cat = getExpenseCategory(e.description);
+                            if (cat === 'Livraison') res.categories['Dépenses Livraison'] += e.montant;
+                            else if (cat === 'Péage') res.categories['Dépenses Péage'] += e.montant;
+                            else if (cat === 'Carburant') res.categories['Dépenses Carburant'] += e.montant;
+                            else if (cat === 'Personnel') res.categories['Dépenses Personnel'] += e.montant;
+                            else if (cat === 'Entretien Véhicules') res.categories['Dépenses Entretien Véhicules'] += e.montant;
+                            else res.categories['Autres'] += e.montant;
+                        }
+                    });
+                    // Tri des mois et conteneurs
+                    res.months = Object.fromEntries(Object.entries(res.months).sort((a,b) => b[0].localeCompare(a[0])));
+                    res.containers = Object.fromEntries(Object.entries(res.containers).sort((a,b) => a[0].localeCompare(b[0])));
+                    return res;
+                });
+
+                // Actions
+                const addExpense = async () => {
                 const data = {
-                    date: expenseDate.value,
-                    description: `${expenseType.value === 'Mensuelle' && expenseSubtype?.value ? expenseSubtype.value + ' - ' : ''}${expenseDesc.value} (${currentUserName})`,
-                    montant: parseFloat(expenseAmount.value) || 0,
-                    action: actionType?.value || 'Depense',
-                    type: actionType?.value === 'Depense' ? expenseType.value : 'Budget',
-                    mode: actionType?.value === 'Depense' ? expenseMode.value : 'Virement',
-                    conteneur: expenseType.value === 'Conteneur' && actionType?.value === 'Depense' ? expenseContainer.value.trim().toUpperCase() : '',
-                    vehicleId: expenseVehicle?.style.display !== 'none' ? expenseVehicle.value : '',
+                        date: form.date,
+                        description: `${form.type === 'Mensuelle' && form.subtype ? form.subtype + ' - ' : ''}${form.desc} (${currentUserName})`,
+                        montant: parseFloat(form.amount) || 0,
+                        action: form.actionType,
+                        type: form.actionType === 'Depense' ? form.type : 'Budget',
+                        mode: form.actionType === 'Depense' ? form.mode : 'Virement',
+                        conteneur: form.type === 'Conteneur' && form.actionType === 'Depense' ? form.container.trim().toUpperCase() : '',
+                        vehicleId: form.type === 'Mensuelle' ? form.vehicleId : '',
                     agency: activeAgency, isDeleted: false
                 };
-                if (!data.date || !expenseDesc.value || data.montant <= 0) return alert("Veuillez remplir les champs.");
-                
-                if (currentUserName.toLowerCase() === "aziz") {
-                    setDoc(doc(collection(db, "expenses")), data).then(() => { alert("Dépense enregistrée."); expenseDesc.value=''; expenseAmount.value=''; });
-                } else {
-                    pendingExpenses.push(data);
-                    const c = document.getElementById('pendingExpensesCard');
-                    const b = document.getElementById('pendingExpensesBody');
-                    c.style.display = 'block';
-                    b.innerHTML = pendingExpenses.map((exp, i) => `<tr><td>${exp.date}</td><td>${exp.description}</td><td>${formatCFA(exp.montant)}</td><td>${exp.type}</td><td><button onclick="window.removePendingExpense(${i})">X</button></td></tr>`).join('');
-                    expenseDesc.value=''; expenseAmount.value='';
-                }
-            });
-        }
-        
-        window.removePendingExpense = (i) => {
-            pendingExpenses.splice(i, 1);
-            document.getElementById('pendingExpensesCard').style.display = pendingExpenses.length > 0 ? 'block' : 'none';
-            if(pendingExpenses.length > 0) document.getElementById('pendingExpensesBody').innerHTML = pendingExpenses.map((exp, i) => `<tr><td>${exp.date}</td><td>${exp.description}</td><td>${formatCFA(exp.montant)}</td><td>${exp.type}</td><td><button onclick="window.removePendingExpense(${i})">X</button></td></tr>`).join('');
-        };
-        
-        const commitBtn = document.getElementById('commitExpensesBtn');
-        if (commitBtn) {
-            commitBtn.addEventListener('click', async () => {
-                if (pendingExpenses.length === 0) return;
-                if (!confirm(`Enregistrer ces ${pendingExpenses.length} dépenses ?`)) return;
+                    if (!data.date || !form.desc || data.montant <= 0) {
+                        return window.AppModal ? window.AppModal.error("Veuillez remplir la description et un montant valide.") : alert("Erreur de saisie");
+                    }
+                    
+                    if (canSaveDirectly) {
+                        await setDoc(doc(collection(db, "expenses")), data);
+                        if (window.AppModal) window.AppModal.success("Dépense enregistrée.");
+                        form.desc = ''; form.amount = null; form.subtype = ''; form.vehicleId = ''; form.container = '';
+                    } else {
+                        pendingExpenses.value.push(data);
+                        form.desc = ''; form.amount = null; form.subtype = ''; form.vehicleId = ''; form.container = '';
+                    }
+                };
+
+                const removePendingExpense = (idx) => pendingExpenses.value.splice(idx, 1);
+
+                const commitPendingExpenses = async () => {
+                    if (pendingExpenses.value.length === 0) return;
+                    saving.value = true;
                 const batch = writeBatch(db);
-                pendingExpenses.forEach(exp => batch.set(doc(collection(db, "expenses")), exp));
+                    pendingExpenses.value.forEach(exp => batch.set(doc(collection(db, "expenses")), exp));
                 await batch.commit();
-                pendingExpenses = [];
-                document.getElementById('pendingExpensesCard').style.display = 'none';
-                alert("Enregistré avec succès !");
-            });
-        }
+                    pendingExpenses.value = [];
+                    saving.value = false;
+                    if (window.AppModal) window.AppModal.success("Enregistré avec succès !");
+                };
+
+                const deleteExpense = async (id) => {
+                    if (window.AppModal) { if (!await window.AppModal.confirm("Supprimer cette dépense ?", "Suppression", true)) return; }
+                    else { if (!confirm("Supprimer ?")) return; }
+                    await updateDoc(doc(db, "expenses", id), { isDeleted: true });
+                };
+
+                const openEditModal = (exp) => {
+                    editForm.id = exp.id; editForm.date = exp.date; editForm.desc = exp.description;
+                    editForm.amount = exp.montant; editForm.type = exp.type; editForm.mode = exp.mode || 'Espèce';
+                    editForm.subtype = ''; editForm.vehicleId = ''; editForm.container = '';
+                    if (exp.type === 'Conteneur') editForm.container = exp.conteneur || '';
+                    else editForm.vehicleId = exp.vehicleId || '';
+                    showEditModal.value = true;
+                };
+
+                const updateExpense = async () => {
+                    saving.value = true;
+                    const data = { date: editForm.date, description: editForm.desc, montant: editForm.amount, type: editForm.type, mode: editForm.mode };
+                    if (editForm.type === 'Conteneur') data.conteneur = editForm.container.trim().toUpperCase();
+                    else { data.vehicleId = editForm.vehicleId; data.conteneur = ''; }
+                    
+                    await updateDoc(doc(db, "expenses", editForm.id), data);
+                    showEditModal.value = false; saving.value = false;
+                    if (window.AppModal) window.AppModal.success("Modifié avec succès !");
+                };
+
+                const openMonthDetails = (month) => {
+                    detailsModalTitle.value = `Détails Dépenses : ${month}`;
+                    detailsModalData.value = validExpenses.value.filter(e => !e.isDeleted && e.type === 'Mensuelle' && e.date.startsWith(month)).sort((a,b)=>new Date(b.date)-new Date(a.date));
+                    showDetailsModal.value = true;
+                };
+
+                const openContainerDetails = (container) => {
+                    detailsModalTitle.value = `Détails Dépenses : ${container}`;
+                    detailsModalData.value = validExpenses.value.filter(e => !e.isDeleted && (e.type === 'Conteneur' || e.conteneur) && (e.conteneur||'').trim().toUpperCase() === container).sort((a,b)=>new Date(b.date)-new Date(a.date));
+                    showDetailsModal.value = true;
+                };
+
+                return {
+                    isViewer, canSaveDirectly, currentTab, expenses, pendingExpenses, dbVehicles, dbContainers,
+                    limitExp, saving, form, editForm, filters, expenseCategories,
+                    filteredExpenses, hasMore, expenseStats, totalsData, showDetailsModal, detailsModalTitle, detailsModalData, showEditModal,
+                    formatCFA, getExpenseCategory, addExpense, removePendingExpense, commitPendingExpenses, deleteExpense, openEditModal, updateExpense, openMonthDetails, openContainerDetails
+                };
+            }
+        });
+        
+        this.vueApp.mount('#vue-expenses-app');
     }
 };
