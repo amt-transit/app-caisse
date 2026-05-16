@@ -2,14 +2,332 @@
 <html lang="fr">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Redirection AMT</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes">
+    <title>AMT Trans'it - Espace Global</title>
+    
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Comfortaa:wght@400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/fullcalendar@5.11.3/main.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/choices.js/public/assets/styles/choices.min.css"/>
+    
+    <script src="https://cdn.jsdelivr.net/npm/fullcalendar@5.11.3/main.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/choices.js/public/assets/scripts/choices.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.js"></script>
+    
+    <!-- Ressources à la racine -->
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="responsive.css">
+    <link rel="icon" type="image/png" href="favicon.png">
+    
     <script>
-        // Redirection automatique vers la nouvelle application
-        window.location.replace('./abidjan/index.html');
+        // Anti-FOUC : Application synchrone du branding depuis le cache
+        (function() {
+            try {
+                var agency = sessionStorage.getItem('currentActiveAgency') || 'abidjan';
+                var cached = sessionStorage.getItem('branding_' + agency);
+                if (cached) {
+                    var branding = JSON.parse(cached);
+                    if (branding.color) document.documentElement.style.setProperty('--primary', branding.color);
+                    if (branding.secondary) document.documentElement.style.setProperty('--secondary', branding.secondary);
+                    else if (branding.color) document.documentElement.style.setProperty('--secondary', branding.color);
+                    if (branding.bg) document.documentElement.style.setProperty('--bg-body', branding.bg);
+                }
+            } catch(e) {}
+        })();
     </script>
+    <script>
+        // Sécurité : Attente avant le chargement complet des modules
+        window.app = {
+            renderPage: function(page) {
+                var c = document.getElementById('contentContainer');
+                if(c) c.innerHTML = '<div style="padding:50px;text-align:center;color:#64748b;"><i class="fas fa-spinner fa-spin fa-2x"></i><br><br>Ouverture du module...</div>';
+            }
+        };
+    </script>
+    <style>
+        /* Menu Chine */
+        .menu-chine-only { display: none !important; }
+        body.agency-chine .menu-chine-only, body.agency-abidjan_chine .menu-chine-only { display: block !important; }
+        
+        /* Menu Utilisateur Dropdown */
+        .user-dropdown-container { position: relative; display: inline-block; }
+        .user-avatar { cursor: pointer; transition: transform 0.2s; }
+        .user-avatar:active { transform: scale(0.95); }
+        .user-dropdown-menu {
+            display: none; position: absolute; right: 0; top: calc(100% + 10px);
+            background: white; border: 1px solid #e2e8f0; border-radius: 8px;
+            box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1); padding: 8px; min-width: 170px; z-index: 1000;
+        }
+        .user-dropdown-menu.active { display: block; animation: slideDown 0.2s ease-out; }
+        .user-dropdown-menu a { display: block; padding: 8px 12px; color: #1e293b; text-decoration: none; border-radius: 6px; font-size: 14px; font-weight: 500; transition: background 0.2s; margin-bottom: 2px; }
+        .user-dropdown-menu a i { margin-right: 8px; width: 16px; text-align: center; }
+        .user-dropdown-menu a:hover { background: #f8fafc; }
+        .user-dropdown-menu a.logout { color: #ef4444; }
+        .user-dropdown-menu a.logout:hover { background: #fef2f2; }
+        @keyframes slideDown { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
+
+        /* Jauge Container */
+        .container-gauge-wrapper {
+            display: flex; align-items: center; gap: 10px; margin-right: auto; margin-left: 20px;
+            background: white; padding: 5px 15px; border-radius: 8px; border: 1px solid #e2e8f0;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+        }
+        @media (max-width: 768px) {
+            .container-gauge-wrapper { 
+                position: fixed; bottom: 85px; left: 16px; z-index: 980; margin: 0;
+                padding: 6px 12px; border-radius: 20px; box-shadow: 0 4px 15px rgba(0,0,0,0.15);
+                background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(5px);
+                border: 1px solid #cbd5e1; gap: 8px;
+            }
+        }
+    </style>
 </head>
-<body style="display:flex; justify-content:center; align-items:center; height:100vh; background-color:#f8fafc; margin:0;">
-    <p style="font-family: sans-serif; color:#64748b;">Redirection vers l'application en cours...</p>
+<body style="display:none"> <!-- Masqué en attendant auth-guard.js -->
+
+    <div class="sidebar-overlay" id="sidebarOverlay"></div>
+
+    <aside class="sidebar" id="sidebar">
+        <div class="sidebar-header">
+            <div class="sidebar-logo" style="background: transparent; box-shadow: none;">
+                <img src="LOGOAMT.png" alt="Logo AMT" style="width: 100%; height: 100%; object-fit: contain; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.2));">
+            </div>
+            <div>
+                <h2 id="sidebarAgencyName">AMT Trans'it</h2>
+                <p id="sidebarAgencySlogan">Espace de Gestion</p>
+            </div>
+        </div>
+
+        <!-- MENU UNIFIÉ (Super-Menu) -->
+        <!-- C'est app.js qui se chargera d'afficher/masquer les blocs selon la configuration Firebase -->
+        <nav class="sidebar-nav" id="sidebarNav">
+            <div class="sidebar-category">
+                <div class="sidebar-category-title">Dashboard</div>
+                <div class="sidebar-item active" data-page="dashboard"><i class="fas fa-chart-line"></i><span>Tableau de bord</span></div>
+            </div>
+
+            <div class="sidebar-category menu-chine-only">
+                <div class="sidebar-category-title">Spécial Asie</div>
+                <div class="sidebar-item" data-page="parrainage"><i class="fas fa-handshake"></i><span>Réseau Partenaires</span></div>
+            </div>
+
+            <div class="sidebar-category">
+                <div class="sidebar-category-title">Bilan journalier</div>
+                <div class="sidebar-item" data-page="daily-bilan"><i class="fas fa-calendar-day"></i><span>Bilan du jour</span></div>
+                <div class="sidebar-item" data-page="daily-users"><i class="fas fa-users-cog"></i><span>Bilan par utilisateurs</span></div>
+            </div>
+
+            <div class="sidebar-category">
+                <div class="sidebar-category-title">Factures</div>
+                <div class="sidebar-item departure-only" data-page="invoices-list"><i class="fas fa-file-invoice"></i><span>Toutes les factures</span></div>
+                <div class="sidebar-item departure-only" data-page="invoice-new"><i class="fas fa-plus-circle"></i><span>Nouvelle facture</span></div>
+                <div class="sidebar-item arrival-only" data-page="touteslesfactures"><i class="fas fa-file-invoice"></i><span>Factures (Ancien)</span></div>
+            </div>
+
+            <div class="sidebar-category arrival-only">
+                <div class="sidebar-category-title">Entrées Caisse</div>
+                <div class="sidebar-item" data-page="index"><i class="fas fa-money-bill-wave"></i><span>Saisie</span></div>
+                <div class="sidebar-item" data-page="confirmation"><i class="fas fa-check-double"></i><span>Confirmation</span></div>
+                <div class="sidebar-item" data-page="history"><i class="fas fa-history"></i><span>Historique</span></div>
+                <div class="sidebar-item" data-page="other-income"><i class="fas fa-plus-circle"></i><span>Autres Entrées</span></div>
+            </div>
+
+            <div class="sidebar-category arrival-only">
+                <div class="sidebar-category-title">Logistique</div>
+                <div class="sidebar-item" data-page="livraison"><i class="fas fa-truck"></i><span>LIVRAISON</span></div>
+                <div class="sidebar-item" data-page="livreurscan" style="color:#16a34a; font-weight:bold;"><i class="fas fa-mobile-alt"></i><span>MODE LIVREUR</span></div>
+                <div class="sidebar-item" data-page="voiture"><i class="fas fa-car"></i><span>Gestion Véhicules</span></div>
+                <div class="sidebar-item" data-page="magasinage"><i class="fas fa-warehouse"></i><span>Magasinage</span></div>
+                <div class="sidebar-item" data-page="points"><i class="fas fa-star"></i><span>Points</span></div>
+                <div class="sidebar-item" data-page="clients"><i class="fas fa-users"></i><span>Clients (Logistique)</span></div>
+            </div>
+
+            <div class="sidebar-category departure-only">
+                <div class="sidebar-category-title">Rendez-vous</div>
+                <div class="sidebar-item" data-page="appointment-new"><i class="fas fa-calendar-plus"></i><span>Nouveau RDV</span></div>
+                <div class="sidebar-item" data-page="appointments-list"><i class="fas fa-list-ul"></i><span>Tous les RDV</span></div>
+                <div class="sidebar-item" data-page="appointments-pending"><i class="fas fa-clock"></i><span>À valider <span class="badge" id="pendingAppointmentsBadge">0</span></span></div>
+                <div class="sidebar-item" data-page="appointments-calendar"><i class="fas fa-calendar-alt"></i><span>Calendrier RDV</span></div>
+            </div>
+
+            <div class="sidebar-category departure-only">
+                <div class="sidebar-category-title">Les Programmes</div>
+                <div class="sidebar-item" data-page="program-new"><i class="fas fa-plus"></i><span>Nouveau programme</span></div>
+                <div class="sidebar-item" data-page="program-my"><i class="fas fa-tasks"></i><span>Mon programme</span></div>
+                <div class="sidebar-item" data-page="program-history"><i class="fas fa-history"></i><span>Historique</span></div>
+                <div class="sidebar-item" data-page="drivers"><i class="fas fa-truck"></i><span>Chauffeurs</span></div>
+                <div class="sidebar-item" data-page="departures-calendar"><i class="fas fa-ship"></i><span>Calendrier départs</span></div>
+            </div>
+
+            <div class="sidebar-category departure-only">
+                <div class="sidebar-category-title">Devis</div>
+                <div class="sidebar-item" data-page="quotes-list"><i class="fas fa-file-alt"></i><span>Tous les devis</span></div>
+                <div class="sidebar-item" data-page="quote-new"><i class="fas fa-plus"></i><span>Nouveau devis</span></div>
+                <div class="sidebar-item" data-page="quote-requests"><i class="fas fa-envelope"></i><span>Demandes reçues <span class="badge" id="quoteRequestsBadge">0</span></span></div>
+            </div>
+
+            <div class="sidebar-category departure-only">
+                <div class="sidebar-category-title">Chargement</div>
+                <div class="sidebar-item" data-page="confection-containers"><i class="fas fa-boxes"></i><span>Confection</span></div>
+                <div class="sidebar-item" data-page="loading-boats"><i class="fas fa-ship"></i><span>Bateaux départ</span></div>
+            </div>
+
+            <div class="sidebar-category">
+                <div class="sidebar-category-title">Scan</div>
+                <div class="sidebar-item departure-only" data-page="scan-warehouse"><i class="fas fa-warehouse"></i><span>Mise en entrepôt</span></div>
+                <div class="sidebar-item departure-only" data-page="scan-container"><i class="fas fa-cube"></i><span>Charger conteneur</span></div>
+                <div class="sidebar-item departure-only" data-page="scan-classic"><i class="fas fa-qrcode"></i><span>Scanner (classique)</span></div>
+                <div class="sidebar-item arrival-only" data-page="scan-dechargement"><i class="fas fa-box-open"></i><span>Déchargement</span></div>
+                <div class="sidebar-item arrival-only" data-page="scan-livraison"><i class="fas fa-truck-loading"></i><span>En livraison</span></div>
+                <div class="sidebar-item arrival-only" data-page="scan-livrer"><i class="fas fa-handshake"></i><span>Remise Clients</span></div>
+                <div class="sidebar-item" data-page="scan-history"><i class="fas fa-history"></i><span>Historique scans</span></div>
+            </div>
+
+            <div class="sidebar-category departure-only">
+                <div class="sidebar-category-title">Clients</div>
+                <div class="sidebar-item" data-page="clients-list"><i class="fas fa-users"></i><span>Liste clients</span></div>
+                <div class="sidebar-item" data-page="clients-app"><i class="fas fa-mobile-alt"></i><span>Client application</span></div>
+                <div class="sidebar-item" data-page="clients-analytics"><i class="fas fa-chart-bar"></i><span>Analytics</span></div>
+            </div>
+
+            <div class="sidebar-category">
+                <div class="sidebar-category-title">Communication</div>
+                <div class="sidebar-item" data-page="chat"><i class="fas fa-comments"></i><span>Chat <span class="badge" id="chatBadge">0</span></span></div>
+                <div class="sidebar-item departure-only" data-page="sms-send"><i class="fas fa-sms"></i><span>Envoi SMS</span></div>
+                <div class="sidebar-item departure-only" data-page="sms-history"><i class="fas fa-history"></i><span>Historique SMS</span></div>
+                <div class="sidebar-item arrival-only" data-page="sms"><i class="fas fa-sms"></i><span>Campagnes SMS</span></div>
+                <div class="sidebar-item" data-page="notifications"><i class="fas fa-bell"></i><span>Notifications</span></div>
+                <div class="sidebar-item" data-page="notifications-history"><i class="fas fa-clock"></i><span>Historique Notif</span></div>
+            </div>
+
+            <div class="sidebar-category departure-only">
+                <div class="sidebar-category-title">PRODUITS</div>
+                <div class="sidebar-item" data-page="products-list"><i class="fas fa-boxes"></i><span>Liste produits</span></div>
+            </div>
+
+            <div class="sidebar-category">
+                <div class="sidebar-category-title">Finance & Tréso</div>
+                <div class="sidebar-item departure-only" data-page="finance-cashier"><i class="fas fa-money-bill-wave"></i><span>Caisse globale</span></div>
+                <div class="sidebar-item departure-only" data-page="finance-cheques"><i class="fas fa-receipt"></i><span>Liste des chèques</span></div>
+                <div class="sidebar-item departure-only" data-page="finance-expenses"><i class="fas fa-file-invoice-dollar"></i><span>Dépenses Finance</span></div>
+                <div class="sidebar-item arrival-only" data-page="expenses"><i class="fas fa-file-invoice-dollar"></i><span>Dépenses Tréso</span></div>
+                <div class="sidebar-item arrival-only" data-page="bank"><i class="fas fa-university"></i><span>Banque</span></div>
+                <div class="sidebar-item arrival-only" data-page="audit"><i class="fas fa-clipboard-check"></i><span>Audit</span></div>
+            </div>
+
+            <div class="sidebar-category departure-only">
+                <div class="sidebar-category-title">Stock</div>
+                <div class="sidebar-item" data-page="stock-list"><i class="fas fa-warehouse"></i><span>Liste produit stocké</span></div>
+            </div>
+
+            <div class="sidebar-category">
+                <div class="sidebar-category-title">Bilans & Stats</div>
+                <div class="sidebar-item departure-only" data-page="balance-monthly"><i class="fas fa-chart-line"></i><span>Bilan Comparatif</span></div>
+                <div class="sidebar-item departure-only" data-page="balance-12m"><i class="fas fa-chart-simple"></i><span>Direction 12M</span></div>
+                <div class="sidebar-item" data-page="stats-boat"><i class="fas fa-ship"></i><span>Stats bateau</span></div>
+                <div class="sidebar-item" data-page="stats-monthly"><i class="fas fa-calendar-month"></i><span>Stats par mois</span></div>
+                <div class="sidebar-item" data-page="stats-yearly"><i class="fas fa-calendar-year"></i><span>Stats par année</span></div>
+            </div>
+
+            <div class="sidebar-category">
+                <div class="sidebar-category-title">Administration</div>
+                <div class="sidebar-item" data-page="admin-panel"><i class="fas fa-user-shield"></i><span>Gestion agents & accès</span></div>
+                <div class="sidebar-item arrival-only" data-page="salaire"><i class="fas fa-hand-holding-usd"></i><span>Salaire</span></div>
+                <div class="sidebar-item arrival-only" data-page="comptejb"><i class="fas fa-wallet"></i><span>Compte JB</span></div>
+                <div class="sidebar-item departure-only" data-page="settings-agency"><i class="fas fa-building"></i><span>Agence</span></div>
+                <div class="sidebar-item departure-only" data-page="settings-company"><i class="fas fa-briefcase"></i><span>Entreprise</span></div>
+                <div class="sidebar-item" data-page="settings-software"><i class="fas fa-cog"></i><span>Paramètre logiciel</span></div>
+                <div class="sidebar-item departure-only" data-page="settings-design"><i class="fas fa-palette"></i><span>Apparence & menus</span></div>
+                <div class="sidebar-item departure-only" data-page="settings-agents"><i class="fas fa-user-cog"></i><span>Gestion des agents</span></div>
+                <div class="sidebar-item departure-only" data-page="settings-agencies"><i class="fas fa-globe"></i><span>Gestion des agences</span></div>
+                <div class="sidebar-item" data-page="settings-roles"><i class="fas fa-user-shield"></i><span>Rôles & Menus</span></div>
+                <div class="sidebar-item departure-only" data-page="settings-appointments"><i class="fas fa-calendar-check"></i><span>Paramètres RDV</span></div>
+                <div class="sidebar-item" data-page="settings-profile"><i class="fas fa-user"></i><span>Mon profil</span></div>
+            </div>
+
+            <div class="sidebar-category departure-only">
+                <div class="sidebar-category-title">Configuration</div>
+                <div class="sidebar-item" data-page="config-invoice"><i class="fas fa-file-invoice"></i><span>Choix facture</span></div>
+                <div class="sidebar-item" data-page="config-label"><i class="fas fa-tag"></i><span>Choix étiquette</span></div>
+                <div class="sidebar-item" data-page="config-container"><i class="fas fa-box-open"></i><span>Conteneur Actif</span></div>
+                <div class="sidebar-item" data-page="config-objectives"><i class="fas fa-bullseye"></i><span>Objectifs</span></div>
+                <div class="sidebar-item" data-page="config-charges"><i class="fas fa-charging-station"></i><span>Charges</span></div>
+            </div>
+
+            <div class="sidebar-category">
+                <div class="sidebar-category-title">Prospect</div>
+                <div class="sidebar-item" data-page="prospecting"><i class="fas fa-chart-line"></i><span>Prospections</span></div>
+            </div>
+            <div class="sidebar-category">
+                <div class="sidebar-category-title">Audit Log</div>
+                <div class="sidebar-item" data-page="audit-log"><i class="fas fa-history"></i><span>Activités log</span></div>
+            </div>
+        </nav>
+    </aside>
+
+    <main class="main-content">
+        <div class="top-bar">
+            <button class="mobile-toggle" id="mobileToggle">
+                <i class="fas fa-bars"></i>
+            </button>
+            <h1 class="page-title" id="pageTitle">Chargement...</h1>
+            
+            <!-- JAUGE DE CHARGEMENT GLOBALE -->
+            <div class="container-gauge-wrapper" id="topBarGauge">
+                <div style="font-size: 20px;" title="Conteneur Actif">📦</div>
+                <div style="display: flex; flex-direction: column; width: 150px;">
+                    <div style="display: flex; justify-content: space-between; font-size: 11px; font-weight: 700; color: #475569; margin-bottom: 4px;">
+                        <span id="globalActiveContainerName">ATT</span>
+                        <span id="globalContainerVolume">0 / 68 CBM</span>
+                    </div>
+                    <div style="height: 6px; background: #e2e8f0; border-radius: 3px; overflow: hidden;">
+                        <div id="globalContainerGaugeBar" style="height: 100%; width: 0%; background: #10b981; transition: width 0.3s ease, background-color 0.3s ease;"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Bloc Utilisateur & Sélecteur injecté par auth-guard.js -->
+        </div>
+
+        <!-- CONTENEUR PRINCIPAL SPA -->
+        <div id="contentContainer" class="content-container">
+            <div class="loading" style="padding: 50px; text-align: center; color: #64748b;">
+                <i class="fas fa-spinner fa-spin fa-2x"></i><br><br>Chargement de l'application...
+            </div>
+        </div>
+    </main>
+
+    <!-- Modale globale -->
+    <div class="modal" id="modalOverlay">
+        <div class="modal-content" id="modalContent"></div>
+    </div>
+
+    <!-- BOTTOM NAVIGATION MOBILE -->
+    <nav class="bottom-nav" id="bottomNav" role="navigation" aria-label="Navigation principale">
+        <button class="bottom-nav-item active" data-target="dashboard" onclick="window.app.renderPage('dashboard')">
+            <i class="fas fa-home"></i><span>Accueil</span>
+        </button>
+        <button class="bottom-nav-item" data-target="index" onclick="window.app.renderPage('index')">
+            <i class="fas fa-money-bill-wave"></i><span>Caisse</span>
+        </button>
+        <button class="bottom-nav-item" data-target="livraison" onclick="window.app.renderPage('livraison')">
+            <i class="fas fa-truck"></i><span>Livraison</span>
+        </button>
+        <button class="bottom-nav-item" id="bnav-more">
+            <i class="fas fa-bars"></i><span>Menu</span>
+        </button>
+    </nav>
+
+    <!-- FAB (Nouvelle Opération) -->
+    <button class="fab-btn" id="fabBtn" onclick="window.app.renderPage('index')" title="Saisie Rapide"><i class="fas fa-plus"></i></button>
+
+    <!-- Scripts partagés et Cœur de l'application (Maintenant à la racine) -->
+    <script src="utils.js"></script>
+    <script type="module" src="auth-guard.js"></script>
+    <script type="module" src="app.js"></script>
+    
 </body>
 </html>

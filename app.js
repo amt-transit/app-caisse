@@ -1,0 +1,821 @@
+import { AGENCIES } from './agencies-config.js';
+
+// --- SHARED VIEWS ---
+import { ClientsView } from './shared/views/clients.js';
+import { ToutesLesFacturesView } from './shared/views/touteslesfactures.js';
+import { DailyBilanView } from './shared/views/daily-bilan.js';
+import { DailyUsersView } from './shared/views/daily-users.js';
+import { StatistiquesView } from './shared/views/statistiques.js';
+import { SettingsAgentsView } from './shared/views/settings-agents.js';
+import { SettingsRolesMenusView } from './shared/views/settings-roles-menus.js';
+import { ParrainageView } from './shared/views/parrainage.js';
+import { ProfilView } from './profil-view.js';
+
+// --- PARIS VIEWS (Départ) ---
+import { DashboardView as ParisDashboardView } from './paris/js/views/dashboard.js';
+import { NouvelleFactureView } from './paris/js/views/nouvellefacture.js';
+import { ProductsListView } from './paris/js/views/products-list.js';
+import { NouveauDevisView } from './paris/js/views/nouveaudevis.js';
+import { NouveauRdvView } from './paris/js/views/nouveaurdv.js';
+import { TousLesRdvView } from './paris/js/views/touslesrdv.js';
+import { CalendrierRdvView } from './paris/js/views/calendrierrdv.js';
+import { NouveauProgrammeView } from './paris/js/views/nouveauprogramme.js';
+import { MonProgrammeView } from './paris/js/views/monprogramme.js';
+import { HistoriqueProgrammesView } from './paris/js/views/historique-programmes.js';
+import { ChauffeursListView } from './paris/js/views/chauffeurs-list.js';
+import { DeparturesCalendarView } from './paris/js/views/departures-calendar.js';
+import { TousLesDevisView } from './paris/js/views/touslesdevis.js';
+import { DemandesDevisView } from './paris/js/views/demandesdevis.js';
+import { ConfectionConteneursView } from './paris/js/views/confection-conteneurs.js';
+import { BateauxDepartView } from './paris/js/views/bateaux-depart.js';
+import { ScanHistoryView as ParisScanHistoryView } from './paris/js/views/scan-history.js';
+import { FinanceCaisseView } from './paris/js/views/finance-caisse.js';
+import { FinanceDepensesView } from './paris/js/views/finance-depenses.js';
+import { FinanceChequesView } from './paris/js/views/finance-cheques.js';
+import { SettingsAgencyView } from './paris/js/views/settings-agency.js';
+import { SettingsAgenciesView } from './paris/js/views/settings-agencies.js';
+import { SettingsCompanyView } from './paris/js/views/settings-company.js';
+import { SettingsSoftwareView as ParisSettingsSoftwareView } from './paris/js/views/settings-software.js';
+import { SettingsDesignView } from './paris/js/views/settings-design.js';
+import { SettingsAppointmentsView } from './paris/js/views/settings-appointments.js';
+import { ConfigInvoiceView } from './paris/js/views/config-invoice.js';
+import { ConfigLabelView } from './paris/js/views/config-label.js';
+import { ConfigContainerView } from './paris/js/views/config-container.js';
+import { ScanWarehouseView } from './paris/js/views/scan-warehouse.js';
+import { ScanContainerView } from './paris/js/views/scan-container.js';
+import { BilansFinanciersView } from './paris/js/views/bilans-financiers.js';
+import { ChatView as ParisChatView } from './paris/js/views/chat.js';
+import { AuditLogView as ParisAuditLogView } from './paris/js/views/audit-log.js';
+import { ProspectingView as ParisProspectingView } from './paris/js/views/prospecting.js';
+import { NotificationsView } from './paris/js/views/notifications.js';
+
+// --- ABIDJAN VIEWS (Arrivée) ---
+import { DashboardView as AbidjanDashboardView } from './abidjan/js/views/dashboard.js';
+import { ExpensesView } from './abidjan/js/views/expenses.js';
+import { MagasinageView } from './abidjan/js/views/magasinage.js';
+import { LivraisonView } from './abidjan/js/views/livraison.js';
+import { CaisseView } from './abidjan/js/views/caisse.js';
+import { AuditView } from './abidjan/js/views/audit.js';
+import { HistoryView } from './abidjan/js/views/history.js';
+import { BankView } from './abidjan/js/views/bank.js';
+import { OtherIncomeView } from './abidjan/js/views/other-income.js';
+import { VoitureView } from './abidjan/js/views/voiture.js';
+import { PointsView } from './abidjan/js/views/points.js';
+import { ComptejbView } from './abidjan/js/views/comptejb.js';
+import { SalaireView } from './abidjan/js/views/salaire.js';
+import { ConfirmationView } from './abidjan/js/views/confirmation.js';
+import { ScanDechargementView } from './abidjan/js/views/scan-dechargement.js';
+import { ScanLivraisonView } from './abidjan/js/views/scan-livraison.js';
+import { ScanLivrerView } from './abidjan/js/views/scan-livrer.js';
+import { ScanHistoryView as AbidjanScanHistoryView } from './abidjan/js/views/scan-history.js';
+import { SmsView } from './abidjan/js/views/sms.js';
+import { ChatView as AbidjanChatView } from './abidjan/js/views/chat.js';
+import { AuditLogView as AbidjanAuditLogView } from './abidjan/js/views/audit-log.js';
+import { ProspectingView as AbidjanProspectingView } from './abidjan/js/views/prospecting.js';
+import { SettingsSoftwareView as AbidjanSettingsSoftwareView } from './abidjan/js/views/settings-software.js';
+
+export const app = {
+    currentPage: 'dashboard',
+    allowedMenus: null,
+    
+    pageToMenuMap: {
+        'dashboard': 'main',
+        'daily-bilan': 'bilan', 'daily-users': 'bilan',
+        'invoices-list': 'factures', 'invoice-new': 'factures', 'touteslesfactures': 'factures',
+        'appointment-new': 'rdv', 'appointments-list': 'rdv', 'appointments-pending': 'rdv', 'appointments-calendar': 'rdv',
+        'program-new': 'operations', 'program-my': 'operations', 'program-history': 'operations', 'drivers': 'operations', 'departures-calendar': 'operations',
+        'quotes-list': 'devis', 'quote-new': 'devis', 'quote-requests': 'devis',
+        'confection-containers': 'chargement', 'loading-boats': 'chargement',
+        'scan-warehouse': 'scan', 'scan-container': 'scan', 'scan-classic': 'scan', 'scan-history': 'scan',
+        'scan-dechargement': 'scan', 'scan-livraison': 'scan', 'scan-livrer': 'scan',
+        'clients-list': 'clients', 'clients-app': 'clients', 'clients-analytics': 'clients', 'clients': 'clients',
+        'chat': 'comms', 'sms-send': 'comms', 'sms-history': 'comms', 'notifications': 'comms', 'notifications-history': 'comms', 'sms': 'comms',
+        'products-list': 'produits',
+        'parrainage': 'special-asie', 'chine-dashboard': 'special-asie',
+        'finance-cashier': 'finance', 'finance-cheques': 'finance', 'finance-expenses': 'finance',
+        'index': 'finance', 'confirmation': 'finance', 'history': 'finance', 'other-income': 'finance', 'expenses': 'finance', 'bank': 'finance', 'audit': 'finance',
+        'livraison': 'operations', 'livreurscan': 'operations', 'voiture': 'operations', 'magasinage': 'operations', 'points': 'operations',
+        'admin-panel': 'settings', 'salaire': 'settings', 'comptejb': 'settings', 'settings-agency': 'settings', 'settings-company': 'settings', 'settings-software': 'settings', 'settings-design': 'settings', 'settings-sms': 'settings', 'settings-notifications': 'settings', 'settings-menus': 'settings', 'settings-agents': 'settings', 'settings-agencies': 'settings', 'settings-roles': 'settings', 'settings-appointments': 'settings', 'settings-profile': 'settings',
+        'stock-list': 'stock',
+        'balance-monthly': 'bilans-financiers', 'balance-12m': 'bilans-financiers',
+        'stats-boat': 'statistique', 'stats-monthly': 'statistique', 'stats-yearly': 'statistique',
+        'config-invoice': 'configuration', 'config-label': 'configuration', 'config-container': 'configuration', 'config-objectives': 'configuration', 'config-charges': 'configuration',
+        'prospecting': 'prospecting',
+        'audit-log': 'audit-log'
+    },
+
+    init() {
+        window.app = this;
+        
+        if (window.AppModal && window.AppModal.init) {
+            window.AppModal.init();
+        }
+
+        this.loadMenuConfig();
+        this.initContainerGauge();
+        this.initSidebarEvents();
+        this.initMobileToggle();
+        this.initGlobalEvents();
+        
+        // Récupération de la dernière page visitée, peu importe l'ancien système
+        let savedPage = sessionStorage.getItem('globalCurrentPage') || sessionStorage.getItem('parisCurrentPage') || sessionStorage.getItem('abidjanCurrentPage');
+        if (!savedPage || savedPage === 'null' || savedPage === 'undefined') savedPage = 'dashboard';
+        
+        this.renderPage(savedPage);
+        this.updateBadges();
+    },
+
+    async loadMenuConfig() {
+        try {
+            const { db } = await import('./firebase-config.js');
+            const { doc, getDoc } = await import('https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js');
+            const activeAgency = sessionStorage.getItem('currentActiveAgency') || 'paris';
+            
+            const menusSnap = await getDoc(doc(db, "settings", `menus_${activeAgency}`));
+            let menuConfig = menusSnap.exists() ? menusSnap.data() : null;
+            
+            this.applyMenuConfig(menuConfig);
+        } catch(e) { console.error("Erreur chargement configuration des menus:", e); }
+    },
+
+    applyMenuConfig(config) {
+        const userRole = sessionStorage.getItem('userRole') || 'agent';
+        let baseRole = 'agent';
+        if (userRole.includes('chauf')) baseRole = 'chauf';
+        if (userRole.includes('manager') || userRole.includes('direction')) baseRole = 'manager';
+        
+        const isSuperUser = userRole === 'super_admin' || userRole === 'admin';
+        const defaultOrder = ['main', 'special-asie', 'parrainage', 'bilan', 'factures', 'rdv', 'operations', 'devis', 'chargement', 'scan', 'clients', 'comms', 'produits', 'finance', 'stock', 'bilans-financiers', 'statistique', 'settings', 'configuration', 'prospecting', 'audit-log'];
+        let baseOrder = config && config.order ? config.order : [...defaultOrder];
+        
+        const activeAgency = sessionStorage.getItem('currentActiveAgency') || 'paris';
+        const isArrival = AGENCIES[activeAgency] && AGENCIES[activeAgency].type === 'arrival';
+
+        defaultOrder.forEach(key => { if (!baseOrder.includes(key)) baseOrder.push(key); });
+
+        const defaultRoles = {
+            agent: ['main', 'bilan', 'factures', 'rdv', 'operations', 'devis', 'chargement', 'scan', 'clients', 'comms', 'produits'],
+            chauf: ['main', 'chargement', 'scan', 'operations'],
+            manager: ['main', 'bilan', 'factures', 'finance', 'statistique', 'bilans-financiers', 'clients', 'stock']
+        };
+
+        let allowedMenus = isSuperUser ? baseOrder : (config && config.roles ? config.roles[baseRole] || [] : defaultRoles[baseRole] || []);
+        
+        // Application du filtre des menus physiquement disponibles pour l'agence (défini dans Apparence & Menus)
+        if (config && config.visibleMenus) {
+            baseOrder = baseOrder.filter(k => config.visibleMenus.includes(k));
+            allowedMenus = allowedMenus.filter(k => config.visibleMenus.includes(k));
+        }
+        
+        this.allowedMenus = allowedMenus;
+
+        const navContainer = document.querySelector('.sidebar-nav');
+        if (!navContainer) return;
+        const sections = Array.from(navContainer.querySelectorAll('.sidebar-category'));
+        
+        const titleToKey = {
+            'Dashboard': 'main', 'Bilan journalier': 'bilan', "Factures": 'factures', 'Entrées Caisse': 'finance',
+            'Rendez-vous': 'rdv', 'Les Programmes': 'operations', 'Logistique': 'operations', 'Devis': 'devis',
+            'Chargement': 'chargement', 'Scan': 'scan', 'Clients': 'clients', 'Communication': 'comms',
+            'PRODUITS': 'produits', 'Finance & Tréso': 'finance', 'Stock': 'stock',
+            'Bilans & Stats': 'bilans-financiers', 'Administration': 'settings', 'Configuration': 'configuration',
+            'Prospect': 'prospecting', 'Audit Log': 'audit-log', 'Spécial Asie': 'special-asie'
+        };
+
+        sections.forEach(sec => sec.remove());
+
+        baseOrder.forEach(key => {
+            const section = sections.find(sec => {
+                const titleEl = sec.querySelector('.sidebar-category-title');
+                return titleEl && titleToKey[titleEl.textContent.trim()] === key;
+            });
+            if (section && this.allowedMenus.includes(key)) {
+                const isSectionDepartureOnly = section.classList.contains('departure-only');
+                const isSectionArrivalOnly = section.classList.contains('arrival-only');
+                
+                if ((isArrival && isSectionDepartureOnly) || (!isArrival && isSectionArrivalOnly)) {
+                    // Ne pas afficher la section
+                } else {
+                    section.style.display = '';
+                    // Masquer/Afficher les éléments internes
+                    section.querySelectorAll('.sidebar-item').forEach(item => {
+                        const isItemDepartureOnly = item.classList.contains('departure-only');
+                        const isItemArrivalOnly = item.classList.contains('arrival-only');
+                        
+                        if ((isArrival && isItemDepartureOnly) || (!isArrival && isItemArrivalOnly)) {
+                            item.style.display = 'none';
+                        } else {
+                            item.style.display = '';
+                        }
+                    });
+                    navContainer.appendChild(section);
+                }
+            }
+        });
+
+        if (this.currentPage && !this.checkPageAccess(this.currentPage)) {
+            this.renderPage('dashboard');
+        }
+    },
+
+    checkPageAccess(page) {
+        if (!this.allowedMenus) return true;
+        const requiredMenu = this.pageToMenuMap[page];
+        return !(requiredMenu && !this.allowedMenus.includes(requiredMenu));
+    },
+
+    async initContainerGauge() {
+        try {
+            const { db } = await import('./firebase-config.js');
+            const { doc, onSnapshot, collection, query, where } = await import('https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js');
+            const { getCollectionName } = await import('./agencies-config.js');
+            const activeAgency = sessionStorage.getItem('currentActiveAgency') || 'paris';
+
+            onSnapshot(doc(db, "settings", `container_config_${activeAgency}`), (configSnap) => {
+                let activeContainer = configSnap.exists() && configSnap.data().activeContainer ? configSnap.data().activeContainer.trim().toUpperCase() : 'ATT';
+                const nameEl = document.getElementById('globalActiveContainerName');
+                if (nameEl) nameEl.textContent = activeContainer;
+
+                if (activeContainer === 'ATT') return this.updateGaugeUI(0);
+                
+                if (this.unsubContainerGauge1) this.unsubContainerGauge1();
+                if (this.unsubContainerGauge2) this.unsubContainerGauge2();
+                
+                let snapTransDocs = [], snapLivDocs = [];
+                const updateVolume = () => {
+                    let totalCBM = 0;
+                    snapTransDocs.forEach(d => { totalCBM += parseFloat(d.data().volumeCBM) || 0; });
+                    snapLivDocs.forEach(d => { if (d.data().conteneur !== activeContainer) totalCBM += parseFloat(d.data().volumeCBM) || 0; });
+                    this.updateGaugeUI(totalCBM);
+                };
+
+                this.unsubContainerGauge1 = onSnapshot(query(collection(db, getCollectionName("transactions")), where("conteneur", "==", activeContainer), where("isDeleted", "==", false)), snap => { snapTransDocs = snap.docs; updateVolume(); });
+                this.unsubContainerGauge2 = onSnapshot(query(collection(db, getCollectionName("livraisons")), where("containerStatus", "==", "PARIS")), snap => { snapLivDocs = snap.docs; updateVolume(); });
+            });
+        } catch (e) { console.error("Erreur initContainerGauge:", e); }
+    },
+
+    updateGaugeUI(currentCBM) {
+        const maxCBM = 68;
+        const percentage = Math.min(100, Math.max(0, (currentCBM / maxCBM) * 100));
+        const volEl = document.getElementById('globalContainerVolume');
+        const barEl = document.getElementById('globalContainerGaugeBar');
+        if (volEl) volEl.textContent = `${currentCBM.toFixed(2)} / ${maxCBM} CBM`;
+        if (barEl) { barEl.style.width = `${percentage}%`; barEl.style.backgroundColor = percentage < 50 ? '#10b981' : (percentage < 85 ? '#f59e0b' : '#ef4444'); }
+    },
+
+    initSidebarEvents() {
+        document.querySelectorAll('.sidebar-item').forEach(item => {
+            item.addEventListener('click', (e) => {
+                e.preventDefault();
+                const page = item.dataset.page;
+                if (page) this.renderPage(page);
+            });
+        });
+
+        document.querySelectorAll('.sidebar-category').forEach(category => {
+            if (!category.querySelector('.sidebar-item.active')) category.classList.add('collapsed');
+            // L'événement de clic ('toggle') sur le titre est déjà géré par utils.js (initHamburgerMenu)
+            // pour éviter un conflit qui annulerait l'action instantanément (double toggle).
+        });
+    },
+
+    initMobileToggle() {
+        const toggle  = document.getElementById('mobileToggle');
+        const sidebar = document.getElementById('sidebar');
+        const overlay = document.getElementById('sidebarOverlay');
+        const bnavMore = document.getElementById('bnav-more');
+
+        // --- PRÉPARATION POUR LE MENU RÉDUIT (DESKTOP) ---
+        // Wrappe le texte libre des liens dans un <span> pour que le CSS puisse le masquer (display:none)
+        document.querySelectorAll('.sidebar-item').forEach(item => {
+            let textToTooltip = '';
+            Array.from(item.childNodes).forEach(node => {
+                if (node.nodeType === Node.TEXT_NODE && node.textContent.trim().length > 0) {
+                    textToTooltip = node.textContent.trim();
+                    const span = document.createElement('span');
+                    span.textContent = node.textContent;
+                    item.replaceChild(span, node);
+                }
+            });
+            // Ajoute un tooltip pour identifier l'icône quand le menu est réduit
+            if (textToTooltip && !item.hasAttribute('title')) {
+                item.setAttribute('title', textToTooltip);
+            }
+        });
+
+        const openSidebar = (e) => {
+            if (e) e.stopPropagation();
+            if (window.innerWidth <= 1024) {
+                sidebar?.classList.add('open');
+                overlay?.classList.add('show');
+                document.body.style.overflow = 'hidden';
+            } else {
+                document.body.classList.toggle('sidebar-collapsed');
+            }
+        };
+
+        const closeSidebar = () => {
+            sidebar?.classList.remove('open');
+            overlay?.classList.remove('show');
+            document.body.style.overflow = '';
+        };
+
+        document.querySelectorAll('#mobileToggle, .mobile-toggle, .hamburger-btn').forEach(t => {
+            t.addEventListener('click', openSidebar);
+        });
+        if (bnavMore) bnavMore.addEventListener('click', openSidebar);
+        if (overlay) overlay.addEventListener('click', closeSidebar);
+
+        document.querySelectorAll('.sidebar-item').forEach(item => {
+            item.addEventListener('click', () => { if (window.innerWidth <= 1024) closeSidebar(); });
+        });
+    },
+
+    initGlobalEvents() {
+        // Gestion du menu déroulant utilisateur (injecté dynamiquement)
+        document.addEventListener('click', (e) => {
+            const userAvatar = e.target.closest('.user-avatar');
+            const dropdownMenu = document.querySelector('.user-dropdown-menu');
+            
+            if (userAvatar) {
+                e.stopPropagation();
+                if (dropdownMenu) dropdownMenu.classList.toggle('active');
+            } else if (dropdownMenu && !dropdownMenu.contains(e.target)) {
+                dropdownMenu.classList.remove('active');
+            }
+        });
+    },
+
+    updateBadges() {
+        const activeAgency = sessionStorage.getItem('currentActiveAgency') || 'paris';
+        import('./firebase-config.js').then(async cfg => {
+            const { collection, query, where, getDocs } = await import('https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js');
+            // Devis
+            const qQuotes = query(collection(cfg.db, "quote_requests"), where("agency", "==", activeAgency), where("status", "==", "NOUVEAU"));
+            const snapQuotes = await getDocs(qQuotes);
+            const quoteBadge = document.getElementById('quoteRequestsBadge');
+            if (quoteBadge) quoteBadge.textContent = snapQuotes.size;
+
+            // RDV
+            const qRdv = query(collection(cfg.db, "appointments"), where("agency", "==", activeAgency), where("status", "==", "en_attente"));
+            const snapRdv = await getDocs(qRdv);
+            const pendingBadge = document.getElementById('pendingAppointmentsBadge');
+            if (pendingBadge) pendingBadge.textContent = snapRdv.size;
+        });
+    },
+
+    renderPage(page) {
+        if (!this.checkPageAccess(page)) {
+            this.showToast("Accès refusé. Permissions insuffisantes.", "error");
+            if (page !== 'dashboard') this.renderPage('dashboard');
+            return;
+        }
+
+        this.currentPage = page;
+        sessionStorage.setItem('globalCurrentPage', page);
+        
+        const activeAgency = sessionStorage.getItem('currentActiveAgency') || 'paris';
+        const isArrival = AGENCIES[activeAgency] && AGENCIES[activeAgency].type === 'arrival';
+
+        const titleMap = {
+            'dashboard': 'Tableau de bord', 'daily-bilan': 'Bilan du jour', 'daily-users': 'Bilan par utilisateurs',
+            'invoices-list': 'Toutes les factures', 'invoice-new': 'Nouvelle facture', 'touteslesfactures': 'Factures (Ancien)',
+            'appointment-new': 'Nouveau RDV', 'appointments-list': 'Tous les RDV', 'appointments-pending': 'RDV à valider', 'appointments-calendar': 'Calendrier RDV',
+            'program-new': 'Nouveau programme', 'program-my': 'Mon programme', 'program-history': 'Historique programmes', 'drivers': 'Chauffeurs', 'departures-calendar': 'Calendrier départs',
+            'quotes-list': 'Tous les devis', 'quote-new': 'Nouveau devis', 'quote-requests': 'Demandes reçues',
+            'confection-containers': 'Confection Conteneurs', 'loading-boats': 'Bateaux départ',
+            'scan-warehouse': 'Mise en entrepôt', 'scan-container': 'Charger conteneur', 'scan-classic': 'Scanner classique', 'scan-history': 'Historique scans',
+            'scan-dechargement': 'Scan Déchargement', 'scan-livraison': 'Scan Mise en Livraison', 'scan-livrer': 'Scan Remise Client',
+            'clients-list': 'Liste clients', 'clients-app': 'Client application', 'clients-analytics': 'Analytics clients', 'clients': 'Fichier Clients',
+            'chat': 'Chat Interne', 'sms-send': 'Envoi SMS', 'sms-history': 'Historique SMS', 'notifications': 'Notifications', 'notifications-history': 'Historique notifications', 'sms': 'Campagnes SMS',
+            'products-list': 'Liste produits',
+            'parrainage': 'Réseau Partenaires', 'chine-dashboard': 'Tableau de Bord Asie',
+            'finance-cashier': 'Caisse globale', 'finance-cheques': 'Liste des chèques', 'finance-expenses': 'Dépenses',
+            'index': 'Saisie de Caisse', 'confirmation': 'Confirmation Saisies', 'history': 'Historique Opérations', 'other-income': 'Autres Entrées', 'expenses': 'Dépenses Caisse', 'bank': 'Mouvements Banque', 'audit': 'Audit Saisies',
+            'livraison': 'LIVRAISON', 'livreurscan': 'Mode Livreur', 'voiture': 'Gestion Véhicules', 'magasinage': 'Magasinage', 'points': 'Points Utilisateurs',
+            'admin-panel': 'Gestion des agents', 'salaire': 'Salaire & RH', 'comptejb': 'Livre de Caisse JB', 
+            'settings-agency': 'Paramètres Agence', 'settings-company': 'Paramètres Entreprise', 'settings-software': 'Paramètres logiciel', 'settings-design': 'Apparence & Menus', 'settings-sms': 'Configuration SMS', 'settings-notifications': 'Configuration notifications', 'settings-menus': 'Gestion menus', 'settings-agents': 'Gestion des agents', 'settings-agencies': 'Gestion des agences', 'settings-roles': 'Rôles & Permissions', 'settings-appointments': 'Paramètres RDV', 'settings-profile': 'Mon profil',
+            'stock-list': 'Stock produits',
+            'balance-monthly': 'Bilan Comparatif', 'balance-12m': 'Direction 12 mois',
+            'stats-boat': 'Stats bateau', 'stats-monthly': 'Stats par mois', 'stats-yearly': 'Stats par année',
+            'config-invoice': 'Choix facture', 'config-label': 'Choix étiquette', 'config-container': 'Conteneur Actif', 'config-objectives': 'Objectifs', 'config-charges': 'Charges',
+            'prospecting': 'Prospections', 'audit-log': 'Journal d\'activités'
+        };
+
+        const titleEl = document.getElementById('pageTitle') || document.querySelector('.page-title');
+        if (titleEl) titleEl.textContent = titleMap[page] || page;
+
+        document.querySelectorAll('.sidebar-item').forEach(i => i.classList.remove('active'));
+        const activeSidebar = document.querySelector(`.sidebar-item[data-page="${page}"]`);
+        if (activeSidebar) activeSidebar.classList.add('active');
+        
+        document.querySelectorAll('.bottom-nav-item').forEach(b => b.classList.remove('active'));
+        const activeBnav = document.querySelector(`.bottom-nav-item[data-target="${page}"]`);
+        if (activeBnav) activeBnav.classList.add('active');
+
+        const container = document.getElementById('contentContainer');
+        if (!container) return;
+        container.innerHTML = '<div class="loading" style="padding: 50px; text-align: center;"><i class="fas fa-spinner fa-spin fa-2x"></i><br><br>Chargement de l\'interface...</div>';
+
+        // Table de routage dynamique Unifiée
+        const renderers = {
+            // --- Shared ---
+            'clients': () => ClientsView.render(this),
+            'clients-list': () => ClientsView.render(this),
+            'daily-bilan': () => DailyBilanView.render(this, container),
+            'daily-users': () => DailyUsersView.render(this, container),
+            'invoices-list': () => ToutesLesFacturesView.render(this, container),
+            'touteslesfactures': () => ToutesLesFacturesView.render(this, container),
+            'stats-boat': () => StatistiquesView.render(this, container, 'boat'),
+            'stats-monthly': () => StatistiquesView.render(this, container, 'monthly'),
+            'stats-yearly': () => StatistiquesView.render(this, container, 'yearly'),
+            'settings-agents': () => SettingsAgentsView.render(this, container),
+            'admin-panel': () => SettingsAgentsView.render(this, container),
+            'settings-menus': () => SettingsRolesMenusView.render(this, container),
+            'settings-roles': () => SettingsRolesMenusView.render(this, container),
+            'parrainage': () => ParrainageView.render(this, container),
+            'settings-profile': () => ProfilView.render(this, container),
+            
+            // --- Conditional / Dual (Selon l'agence) ---
+            'dashboard': () => isArrival ? AbidjanDashboardView.render(this, container) : ParisDashboardView.render(this),
+            'settings-software': () => isArrival ? AbidjanSettingsSoftwareView.render(this, container) : ParisSettingsSoftwareView.render(this),
+            'scan-history': () => isArrival ? AbidjanScanHistoryView.render(this, container) : ParisScanHistoryView.render(this),
+            'chat': () => isArrival ? AbidjanChatView.render(this, container) : ParisChatView.render(this),
+            'audit-log': () => isArrival ? AbidjanAuditLogView.render(this, container) : ParisAuditLogView.render(this),
+            'prospecting': () => isArrival ? AbidjanProspectingView.render(this, container) : ParisProspectingView.render(this),
+
+            // --- Paris Spécifiques (Départ) ---
+            'invoice-new': () => NouvelleFactureView.render(this),
+            'products-list': () => ProductsListView.render(this),
+            'quote-new': () => NouveauDevisView.render(this),
+            'appointment-new': () => NouveauRdvView.render(this),
+            'appointments-list': () => TousLesRdvView.render(this, 'all'),
+            'appointments-pending': () => TousLesRdvView.render(this, 'pending'),
+            'appointments-calendar': () => CalendrierRdvView.render(this),
+            'program-new': () => NouveauProgrammeView.render(this),
+            'program-my': () => MonProgrammeView.render(this),
+            'program-history': () => HistoriqueProgrammesView.render(this),
+            'drivers': () => ChauffeursListView.render(this),
+            'departures-calendar': () => DeparturesCalendarView.render(this),
+            'quotes-list': () => TousLesDevisView.render(this),
+            'quote-requests': () => DemandesDevisView.render(this),
+            'confection-containers': () => ConfectionConteneursView.render(this),
+            'loading-boats': () => BateauxDepartView.render(this),
+            'finance-caisse': () => FinanceCaisseView.render(this),
+            'finance-depenses': () => FinanceDepensesView.render(this),
+            'finance-cheques': () => FinanceChequesView.render(this),
+            'settings-agency': () => SettingsAgencyView.render(this),
+            'settings-agencies': () => SettingsAgenciesView.render(this),
+            'settings-company': () => SettingsCompanyView.render(this),
+            'settings-design': () => SettingsDesignView.render(this),
+            'settings-appointments': () => SettingsAppointmentsView.render(this),
+            'config-invoice': () => ConfigInvoiceView.render(this),
+            'config-label': () => ConfigLabelView.render(this),
+            'config-container': () => ConfigContainerView.render(this),
+            'scan-warehouse': () => ScanWarehouseView.render(this),
+            'scan-container': () => ScanContainerView.render(this),
+            'scan-classic': () => ScanWarehouseView.render(this),
+            'bilans-financiers': () => BilansFinanciersView.render(this),
+            'balance-monthly': () => BilansFinanciersView.render(this),
+            'balance-12m': () => BilansFinanciersView.render(this, '12m'),
+            'notifications': () => NotificationsView.render(this),
+            'notifications-history': () => NotificationsView.render(this),
+            
+            // Inline renderers de Paris conservés
+            'clients-app': () => this.renderClientsApp(),
+            'clients-analytics': () => this.renderClientsAnalytics(),
+            'stock-list': () => this.renderStockList(),
+            'config-objectives': () => this.renderConfigObjectives(),
+            'config-charges': () => this.renderConfigCharges(),
+            'settings-sms': () => this.renderSettingsSms(),
+            'settings-notifications': () => this.renderSettingsNotifications(),
+            
+            // --- Abidjan Spécifiques (Arrivée) ---
+            'index': () => CaisseView.render(this, container),
+            'expenses': () => ExpensesView.render(this, container),
+            'magasinage': () => MagasinageView.render(this, container),
+            'livraison': () => LivraisonView.render(this, container),
+            'audit': () => AuditView.render(this, container),
+            'history': () => HistoryView.render(this, container),
+            'bank': () => BankView.render(this, container),
+            'other-income': () => OtherIncomeView.render(this, container),
+            'voiture': () => VoitureView.render(this, container),
+            'points': () => PointsView.render(this, container),
+            'comptejb': () => ComptejbView.render(this, container),
+            'salaire': () => SalaireView.render(this, container),
+            'confirmation': () => ConfirmationView.render(this, container),
+            'scan-dechargement': () => ScanDechargementView.render(this, container),
+            'scan-livraison': () => ScanLivraisonView.render(this, container),
+            'scan-livrer': () => ScanLivrerView.render(this, container),
+            'sms': () => SmsView.render(this, container),
+            'sms-send': () => SmsView.render(this, container), // Map vers le vrai module SMS Abidjan
+            'sms-history': () => SmsView.render(this, container)
+        };
+
+        if (page === 'livreurscan') {
+            window.location.href = 'livreurscan.html';
+            return;
+        }
+
+        const renderer = renderers[page];
+        if (renderer) {
+            try {
+                renderer();
+            } catch (err) {
+                console.error("Erreur d'affichage de la page :", err);
+                container.innerHTML = `<div class="loading" style="color:#ef4444;">Erreur lors du chargement du module: ${err.message}</div>`;
+            }
+        } else {
+            container.innerHTML = `
+                <div style="padding: 50px; text-align: center; color: #64748b; background: white; border-radius: 12px;">
+                    <i class="fas fa-tools fa-3x" style="color: #3b82f6; margin-bottom: 20px;"></i>
+                    <h2>Module en cours d'intégration</h2>
+                    <p>Le module <b>${page}</b> est en cours de développement sur cette architecture.</p>
+                </div>
+            `;
+        }
+    },
+    
+    // --- UTILITAIRES GLOBAUX ---
+    showToast(message, type = 'success') {
+        const toast = document.createElement('div');
+        toast.style.cssText = `position: fixed; bottom: 20px; right: 20px; background: ${type === 'success' ? '#10b981' : (type==='info' ? '#3b82f6' : '#ef4444')}; color: white; padding: 12px 20px; border-radius: 8px; z-index: 9999; box-shadow: 0 4px 6px rgba(0,0,0,0.1); transition: opacity 0.3s ease;`;
+        toast.innerHTML = `<i class="fas fa-${type === 'success' ? 'check-circle' : (type==='info' ? 'info-circle' : 'exclamation-triangle')}"></i> ${message}`;
+        document.body.appendChild(toast);
+        setTimeout(() => { toast.style.opacity = '0'; setTimeout(() => toast.remove(), 300); }, 3000);
+    },
+    
+    formatMoneyLocal(amount, forceCfa = false) {
+        const isEur = (sessionStorage.getItem('currentActiveAgency') || 'abidjan') === 'paris';
+        if (isEur && !forceCfa) return new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(amount || 0).replace(/[\u202F\u00A0]/g, ' ').replace(/\s*\/\s*/g, ' ');
+        return new Intl.NumberFormat('fr-CI', { style: 'currency', currency: 'XOF' }).format(amount || 0).replace(/[\u202F\u00A0]/g, ' ').replace(/\s*\/\s*/g, ' ');
+    },
+
+    // Rétrocompatibilité : alias pour les modules utilisant encore l'ancienne nomenclature
+    formatMoney(amount, forceCfa = false) {
+        return this.formatMoneyLocal(amount, forceCfa);
+    },
+
+    // --- INLINE RENDERERS (Provenant de Paris) ---
+    renderClientsApp() {
+        document.getElementById('contentContainer').innerHTML = `
+            <div class="form-card">
+                <h3>Statistiques application client</h3>
+                <div class="stats-grid">
+                    <div class="stat-card"><div class="stat-value">156</div><div class="stat-label">Utilisateurs actifs</div></div>
+                    <div class="stat-card"><div class="stat-value">42</div><div class="stat-label">Nouveaux ce mois</div></div>
+                    <div class="stat-card"><div class="stat-value">89%</div><div class="stat-label">Taux satisfaction</div></div>
+                </div>
+            </div>
+        `;
+    },
+    renderClientsAnalytics() {
+        document.getElementById('contentContainer').innerHTML = `
+            <div class="form-card">
+                <h3>Analytique clients</h3>
+                <div class="stats-grid">
+                    <div class="stat-card"><div class="stat-value">25K</div><div class="stat-label">CA total clients</div></div>
+                    <div class="stat-card"><div class="stat-value">45</div><div class="stat-label">Clients actifs</div></div>
+                    <div class="stat-card"><div class="stat-value">1250</div><div class="stat-label">Colis expédiés</div></div>
+                </div>
+            </div>
+        `;
+    },
+    renderStockList() {
+        document.getElementById('contentContainer').innerHTML = `
+            <div class="form-card">
+                <h3>État du stock</h3>
+                <table class="data-table">
+                    <thead><tr><th>Produit</th><th>Catégorie</th><th>Stock actuel</th><th>Prix unitaire</th></tr></thead>
+                    <tbody>
+                        <tr><td>Carton standard</td><td>Emballage</td><td>150</td><td>15.00</td></tr>
+                        <tr><td>Malle</td><td>Contenant</td><td>25</td><td>45.00</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        `;
+    },
+    renderSettingsSms() { this.renderSettingsForm('Configuration SMS', { provider: 'API SMS', apiKey: '••••••••', sender: 'AMT' }); },
+    renderSettingsNotifications() { this.renderSettingsForm('Notifications', { emailAlerts: true, smsAlerts: true, pushEnabled: true }); },
+    renderConfigObjectives() { this.renderSettingsForm('Objectifs', { monthlyTarget: 50000, quarterlyTarget: 150000, yearlyTarget: 600000 }); },
+    renderConfigCharges() { this.renderSettingsForm('Charges', { rent: 1500, utilities: 250, salaries: 8000, other: 500 }); },
+    renderSettingsForm(title, fields) {
+        document.getElementById('contentContainer').innerHTML = `
+            <div class="form-card">
+                <h3>${title}</h3>
+                <div class="form-grid">
+                    ${Object.entries(fields).map(([key, val]) => `<div class="form-group"><label>${key}</label><input type="text" value="${val}"></div>`).join('')}
+                </div>
+                <div style="margin-top: 20px;"><button class="btn btn-primary" onclick="window.app.showToast('Enregistré')">Enregistrer</button></div>
+            </div>
+        `;
+    },
+
+    // --- IMPRESSION D'ÉTIQUETTES GLOBAUX ---
+    async printLabels(data) {
+        const format = localStorage.getItem('amt_label_format') || 'A5';
+        const model = localStorage.getItem('amt_label_model') || 'classic';
+        const colorScheme = localStorage.getItem('amt_label_color') || 'default';
+        const headerColor = localStorage.getItem('amt_label_header_color') || '#000000';
+        
+        const dimensions = { A5: { width: 210, height: 148 }, A6: { width: 148, height: 105 } };
+        const dim = dimensions[format] || dimensions.A5;
+        const widthMm = dim.width;
+        const heightMm = dim.height;
+        const pageSizeCss = `${widthMm}mm ${heightMm}mm`;
+        
+        const colors = {
+            default: { border: '#000', text: '#000' },
+            blue: { border: '#1e40af', text: '#1e3a8a' },
+            green: { border: '#065f46', text: '#064e3b' }
+        };
+        const theme = colors[colorScheme] || colors.default;
+        
+        const loadingToast = document.createElement('div');
+        loadingToast.style.cssText = 'position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: #3b82f6; color: white; padding: 12px 20px; border-radius: 8px; z-index: 9999; box-shadow: 0 4px 6px rgba(0,0,0,0.1); font-weight: bold;';
+        loadingToast.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Génération des étiquettes en cours...';
+        document.body.appendChild(loadingToast);
+
+        const generateQR = (text) => {
+            return new Promise(resolve => {
+                const div = document.createElement('div');
+                new QRCode(div, { text: text, width: 300, height: 300, correctLevel: QRCode.CorrectLevel.H });
+                setTimeout(() => {
+                    const canvas = div.querySelector('canvas');
+                    if (canvas) resolve(canvas.toDataURL('image/png'));
+                    else {
+                        const img = div.querySelector('img');
+                        resolve(img ? img.src : '');
+                    }
+                }, 150);
+            });
+        };
+        
+        let labelsHtml = '';
+        for (const label of data.labels) {
+            const qrDataUrl = await generateQR(label.sousRef);
+            if (model === 'compact') labelsHtml += this.renderCompactLabel(widthMm, heightMm, qrDataUrl, data, label, theme, headerColor);
+            else if (model === 'premium') labelsHtml += this.renderPremiumLabel(widthMm, heightMm, qrDataUrl, data, label, theme, headerColor);
+            else labelsHtml += this.renderClassicLabel(widthMm, heightMm, qrDataUrl, data, label, theme, headerColor);
+        }
+        
+        const iframe = document.createElement('iframe');
+        iframe.style.position = 'fixed';
+        iframe.style.right = '-10000px';
+        iframe.style.bottom = '-10000px';
+        document.body.appendChild(iframe);
+        
+        const doc = iframe.contentWindow.document;
+        doc.open();
+        doc.write(`
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <style>
+                    @page { size: ${pageSizeCss} landscape; margin: 0; }
+                    body { margin: 0; padding: 0; font-family: 'Arial', sans-serif; background: #fff; }
+                    .label { box-sizing: border-box; page-break-after: always; display: flex; flex-direction: column; overflow: hidden; }
+                    .label:last-child { page-break-after: auto; }
+                </style>
+            </head>
+            <body>${labelsHtml}</body>
+            </html>
+        `);
+        doc.close();
+        
+        loadingToast.remove();
+        iframe.onload = () => { setTimeout(() => { iframe.contentWindow.focus(); iframe.contentWindow.print(); setTimeout(() => document.body.removeChild(iframe), 2000); }, 500); };
+    },
+    
+    renderClassicLabel(widthMm, heightMm, qrDataUrl, data, label, theme, headerColor) {
+        const isA5 = widthMm === 210;
+        const fontSize = isA5 ? '11pt' : '9pt';
+        const titleFont = isA5 ? '14pt' : '11pt';
+        const refFont = isA5 ? '28pt' : '22pt';
+        
+        return `
+            <div class="label" style="width: ${widthMm}mm; height: ${heightMm}mm;">
+                <div style="height: 100%; display: flex; flex-direction: column; padding: 6mm;">
+                    <div style="display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid ${theme.border}; padding-bottom: 3mm; margin-bottom: 4mm;">
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <div style="background: ${headerColor}; padding: 2px 4px; border-radius: 6px; display: flex; align-items: center; justify-content: center;">
+                                <img src="LOGOAMT.png" style="height: ${isA5 ? '8mm' : '6mm'}; object-fit: contain;" alt="Logo" onerror="this.style.display='none'"/>
+                            </div>
+                            <div>
+                                <div style="font-size: ${fontSize}; font-weight: bold;">AMT TRANSIT CI FRET</div>
+                                <div style="font-size: ${isA5 ? '9pt' : '7pt'};">81 AV. ARISTIDE BRIAND - 0180893370</div>
+                            </div>
+                        </div>
+                        <div style="text-align: right;">
+                            <div style="font-size: ${fontSize};"><strong>DATE</strong> ${new Date().toLocaleDateString()}</div>
+                            <div style="font-size: ${fontSize};"><strong>HEURE</strong> ${new Date().toLocaleTimeString()}</div>
+                        </div>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5mm;">
+                        <div style="font-size: ${titleFont}; font-weight: bold;">${label.sousRef}</div>
+                        <img src="${qrDataUrl}" style="width: ${isA5 ? '45mm' : '35mm'}; height: ${isA5 ? '45mm' : '35mm'};" />
+                    </div>
+                    <div style="margin-bottom: 5mm;">
+                        <div style="font-size: ${titleFont}; font-weight: bold; margin-bottom: 2mm;">DESTINATAIRE</div>
+                        <div style="font-size: ${titleFont}; font-weight: bold;">${data.destName}</div>
+                        <div style="font-size: ${fontSize};">${data.destPhone || ''}</div>
+                    </div>
+                    <div style="margin-bottom: 5mm;">
+                        <div style="font-size: ${titleFont}; font-weight: bold; margin-bottom: 2mm;">EXPEDITEUR</div>
+                        <div style="font-size: ${titleFont}; font-weight: bold;">${data.expName}</div>
+                        <div style="font-size: ${fontSize};">${data.expAddress?.replace(/\n/g, '<br>') || ''}</div>
+                    </div>
+                    <div style="flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; width: 100%;">
+                        <div style="font-size: ${refFont}; font-weight: 900; letter-spacing: 2px; word-break: break-all;">${data.ref}</div>
+                        <div style="font-size: ${fontSize}; font-weight: bold; margin-top: 2mm; text-transform: uppercase;">${label.desc}</div>
+                    </div>
+                </div>
+            </div>
+        `;
+    },
+    
+    renderCompactLabel(widthMm, heightMm, qrDataUrl, data, label, theme, headerColor) {
+        const isA5 = widthMm === 210;
+        return `
+            <div class="label" style="width: ${widthMm}mm; height: ${heightMm}mm;">
+                <div style="height: 100%; display: flex; flex-direction: column; padding: 5mm;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid ${theme.border}; padding-bottom: 2mm; margin-bottom: 3mm;">
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <div style="background: ${headerColor}; padding: 2px 4px; border-radius: 4px; display: flex; align-items: center; justify-content: center;">
+                                <img src="LOGOAMT.png" style="height: ${isA5 ? '6mm' : '4mm'}; object-fit: contain;" alt="Logo" onerror="this.style.display='none'"/>
+                            </div>
+                            <div style="font-size: ${isA5 ? '9pt' : '7pt'}; font-weight: bold;">AMT TRANSIT CI FRET<br><span style="font-weight: normal; font-size: ${isA5 ? '8pt' : '6pt'};">81 AV. ARISTIDE BRIAND - 0180893370</span></div>
+                        </div>
+                        <div style="font-size: ${isA5 ? '8pt' : '7pt'}; text-align: right;">${new Date().toLocaleDateString()}<br>${new Date().toLocaleTimeString()}</div>
+                    </div>
+                    <div style="flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;">
+                        <div style="font-size: ${isA5 ? '12pt' : '10pt'}; font-weight: bold; margin-bottom: 3mm;">${label.sousRef}</div>
+                        <img src="${qrDataUrl}" style="width: ${isA5 ? '65mm' : '50mm'}; height: ${isA5 ? '65mm' : '50mm'};" />
+                        <div style="margin-top: 4mm; font-size: ${isA5 ? '16pt' : '14pt'}; font-weight: 900; text-align: center; word-break: break-all; width: 100%;">${data.ref}</div>
+                        <div style="font-size: ${isA5 ? '10pt' : '8pt'}; font-weight: bold; margin-top: 1.5mm; text-transform: uppercase; color: #475569;">${label.desc}</div>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; border-top: 2px solid ${theme.border}; padding-top: 2mm; margin-top: 3mm; font-size: ${isA5 ? '9pt' : '7pt'};">
+                        <div><strong>Exp:</strong> ${data.expName?.split(' ')[0] || ''}</div>
+                        <div><strong>Dest:</strong> ${data.destName?.split(' ')[0] || ''}</div>
+                    </div>
+                </div>
+            </div>
+        `;
+    },
+    
+    renderPremiumLabel(widthMm, heightMm, qrDataUrl, data, label, theme, headerColor) {
+        const isA5 = widthMm === 210;
+        return `
+            <div class="label" style="width: ${widthMm}mm; height: ${heightMm}mm;">
+                <div style="height: 100%; display: flex; flex-direction: column;">
+                    <div style="background: ${headerColor}; color: white; padding: 3mm 4mm; display: flex; justify-content: center; align-items: center; gap: 10px;">
+                        <div style="background: ${headerColor}; padding: 2px 4px; border-radius: 6px; display: flex; align-items: center; justify-content: center;">
+                            <img src="LOGOAMT.png" style="height: ${isA5 ? '8mm' : '6mm'}; object-fit: contain;" alt="Logo" onerror="this.style.display='none'"/>
+                        </div>
+                        <span style="font-size: ${isA5 ? '12pt' : '10pt'}; font-weight: bold; margin: 0;">AMT TRANSIT CI FRET INTERNATIONAL</span>
+                    </div>
+                    <div style="padding: 5mm; flex: 1; display: flex; flex-direction: column;">
+                        <div style="display: flex; justify-content: space-between; margin-bottom: 5mm;">
+                            <div>
+                                <div style="font-size: ${isA5 ? '9pt' : '8pt'};">81 AVENUE ARISTIDE BRIAND, 93240 STAINS</div>
+                                <div style="font-size: ${isA5 ? '9pt' : '8pt'};">TEL: 01 80 89 33 70</div>
+                            </div>
+                            <div style="text-align: right; font-size: ${isA5 ? '8pt' : '7pt'};">${new Date().toLocaleDateString()} ${new Date().toLocaleTimeString()}</div>
+                        </div>
+                        <div style="display: flex; gap: 5mm; flex: 1;">
+                            <div style="flex: 1; display: flex; flex-direction: column; justify-content: center;">
+                                <div style="margin-bottom: 3mm;">
+                                    <div style="font-size: ${isA5 ? '10pt' : '9pt'}; font-weight: bold;">📤 EXPÉDITEUR</div>
+                                    <div style="font-size: ${isA5 ? '12pt' : '10pt'}; font-weight: bold;">${data.expName}</div>
+                                    <div style="font-size: ${isA5 ? '9pt' : '8pt'};">${data.expAddress?.replace(/\n/g, '<br>') || ''}</div>
+                                </div>
+                                <div>
+                                    <div style="font-size: ${isA5 ? '10pt' : '9pt'}; font-weight: bold;">📥 DESTINATAIRE</div>
+                                    <div style="font-size: ${isA5 ? '12pt' : '10pt'}; font-weight: bold;">${data.destName}</div>
+                                    <div style="font-size: ${isA5 ? '9pt' : '8pt'};">TEL: ${data.destPhone || ''}</div>
+                                    <div style="font-size: ${isA5 ? '9pt' : '8pt'};">${data.destAddress || ''}</div>
+                                </div>
+                            </div>
+                            <div style="display: flex; flex-direction: column; align-items: center; justify-content: center;">
+                                <img src="${qrDataUrl}" style="width: ${isA5 ? '50mm' : '40mm'}; height: ${isA5 ? '50mm' : '40mm'};" />
+                                <span style="font-size: ${isA5 ? '8pt' : '7pt'}; font-weight: bold; margin-top: 2mm;">${label.sousRef}</span>
+                            </div>
+                        </div>
+                        <div style="text-align: center; margin-top: 4mm; padding-top: 3mm; border-top: 2px solid ${theme.border}; width: 100%;">
+                            <div style="font-size: ${isA5 ? '24pt' : '16pt'}; font-weight: 900; letter-spacing: 1px; word-break: break-all;">${data.ref}</div>
+                            <div style="font-size: ${isA5 ? '10pt' : '8pt'}; font-weight: bold; margin-top: 1.5mm; text-transform: uppercase; color: #475569;">${label.desc}</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+};
+
+// Démarrage sécurisé : si le DOM est déjà chargé
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => app.init());
+} else {
+    app.init();
+}

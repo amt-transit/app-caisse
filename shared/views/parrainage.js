@@ -121,7 +121,7 @@ export const ParrainageView = {
 
                         <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(350px,1fr)); gap:20px; margin-bottom:20px;">
                             <div class="chart-container">
-                                <h3 style="margin-top:0; font-size:16px; color:#1e293b;"><i class="fas fa-trophy text-orange-500"></i> Top 5 Partenaires</h3>
+                                <h3 style="margin-top:0; font-size:16px; color:#1e293b;"><i class="fas fa-trophy text-orange-500"></i> Top 5 du Réseau</h3>
                                 <div class="ranking-list">
                                     <div v-if="topPartners.length === 0" style="text-align:center; padding: 20px; color:#94a3b8;">Aucun partenaire actif.</div>
                                     <div v-for="(p, idx) in topPartners" :key="p.id" class="ranking-item" @click="openDetails(p)">
@@ -171,9 +171,9 @@ export const ParrainageView = {
                                 <option value="inactif">Inactifs</option>
                             </select>
                             <select v-model="filters.networkSponsor">
-                                <option value="all">Tous (Avec ou Sans parrain)</option>
-                                <option value="avec_parrain">Avec parrain</option>
-                                <option value="sans_parrain">Tête de réseau (Sans parrain)</option>
+                                <option value="all">Tous (Leaders & Filleuls)</option>
+                                <option value="avec_parrain">Filleuls (Avec Leader parent)</option>
+                                <option value="sans_parrain">Leaders Directs (Sans parent)</option>
                             </select>
                         </div>
 
@@ -187,7 +187,10 @@ export const ParrainageView = {
                                             {{ (p.prenom?.[0] || p.nom?.[0] || '?').toUpperCase() }}
                                         </div>
                                         <div>
-                                            <div style="font-weight:700; font-size:15px; color:#0f172a;">{{ p.prenom }} {{ p.nom }}</div>
+                                            <div style="font-weight:700; font-size:15px; color:#0f172a; display:flex; align-items:center;">
+                                                {{ p.prenom }} {{ p.nom }}
+                                                <span v-html="getRoleBadge(p)" style="margin-left: 8px;"></span>
+                                            </div>
                                             <div style="font-size:12px; color:#64748b; margin-top:2px;">
                                                 <span v-if="p.level > 0 && p.parentName" style="color:#d97706;"><i class="fas fa-level-up-alt"></i> Filleul de {{ p.parentName }} | </span>
                                                 <span><i class="fas fa-phone"></i> {{ p.telephone || '-' }}</span>
@@ -395,7 +398,7 @@ export const ParrainageView = {
                 <div v-if="showPartnerModal" class="pm-overlay" @click.self="showPartnerModal = false">
                     <div class="pm-box">
                         <div class="pm-header">
-                            <h3 style="margin:0; font-size:18px; color:#0f172a;">{{ partnerForm.id ? 'Modifier le partenaire' : 'Nouveau partenaire' }}</h3>
+                            <h3 style="margin:0; font-size:18px; color:#0f172a;">{{ partnerForm.id ? 'Modifier le membre' : 'Nouveau membre (Leader/Filleul)' }}</h3>
                             <button style="background:none; border:none; font-size:24px; color:#64748b; cursor:pointer;" @click="showPartnerModal = false">✕</button>
                         </div>
                         <div class="pm-body">
@@ -406,15 +409,15 @@ export const ParrainageView = {
                                 <div><label style="font-size:12px; font-weight:700; color:#475569; margin-bottom:4px; display:block;">Email</label><input type="email" v-model="partnerForm.email" style="width:100%; padding:10px; border:1px solid #cbd5e1; border-radius:8px; box-sizing:border-box; outline:none;" placeholder="Optionnel"></div>
                                 
                                 <div>
-                                    <label style="font-size:12px; font-weight:700; color:#475569; margin-bottom:4px; display:block;">Parrainé par</label>
+                                    <label style="font-size:12px; font-weight:700; color:#475569; margin-bottom:4px; display:block;">Leader parent (Optionnel)</label>
                                     <select v-model="partnerForm.parrainId" style="width:100%; padding:10px; border:1px solid #cbd5e1; border-radius:8px; box-sizing:border-box; outline:none; background:white;">
-                                        <option value="">— Aucun parrain (Tête de réseau) —</option>
+                                        <option value="">— Aucun (Venu directement - Leader Direct) —</option>
                                         <option v-for="p in availableSponsors" :key="p.id" :value="p.id">{{ p.prenom }} {{ p.nom }}</option>
                                     </select>
                                 </div>
 
                                 <div v-if="partnerForm.parrainId" style="background:#fffbeb; padding:10px; border-radius:8px; border:1px solid #fde68a;">
-                                    <label style="font-size:12px; font-weight:700; color:#92400e; margin-bottom:4px; display:block;">Règle d'exception (Qui cède la part au parrain ?)</label>
+                                    <label style="font-size:12px; font-weight:700; color:#92400e; margin-bottom:4px; display:block;">Règle d'exception (Qui cède la part au Leader parent ?)</label>
                                     <select v-model="partnerForm.quiPaieParrain" style="width:100%; padding:8px; border:1px solid #fcd34d; border-radius:6px; outline:none; background:white;">
                                         <option value="">Utiliser la règle globale ({{ settings.quiPaieParrainDefaut === 'amt' ? 'Agence' : 'Partenaire' }})</option>
                                         <option value="demarcheur">Le partenaire lui-même</option>
@@ -478,7 +481,10 @@ export const ParrainageView = {
                 <div v-if="showDetailModal" class="pm-overlay" @click.self="showDetailModal = false">
                     <div class="pm-box">
                         <div class="pm-header">
-                            <h3 style="margin:0; font-size:18px; color:#0f172a;">Détails : {{ partnerDetail.prenom }} {{ partnerDetail.nom }}</h3>
+                            <h3 style="margin:0; font-size:18px; color:#0f172a; display:flex; align-items:center;">
+                                Détails : {{ partnerDetail.prenom }} {{ partnerDetail.nom }}
+                                <span v-html="getRoleBadge(partnerDetail)" style="margin-left: 10px;"></span>
+                            </h3>
                             <button style="background:none; border:none; font-size:24px; color:#64748b; cursor:pointer;" @click="showDetailModal = false">✕</button>
                         </div>
                         <div class="pm-body" style="font-size:13px; line-height:1.6; color:#334155;">
@@ -488,9 +494,9 @@ export const ParrainageView = {
                             
                             <h4 style="margin:0 0 10px 0; color:#1e293b;">Structure du réseau</h4>
                             <div v-if="partnerDetail.parrainId" style="margin-bottom:10px; color:#d97706;">
-                                <i class="fas fa-level-up-alt"></i> Parrain : <strong>{{ getPartnerName(partnerDetail.parrainId) }}</strong>
+                                <i class="fas fa-level-up-alt"></i> Filleul du Leader : <strong>{{ getPartnerName(partnerDetail.parrainId) }}</strong>
                             </div>
-                            <div v-else style="margin-bottom:10px; color:#64748b; font-style:italic;">Aucun parrain (Tête de réseau)</div>
+                            <div v-else style="margin-bottom:10px; color:#64748b; font-style:italic;">👑 Leader Direct (Aucun parent)</div>
 
                             <div style="background:#f8fafc; padding:12px; border-radius:8px; border:1px solid #e2e8f0;">
                                 <strong>{{ getPartnerFilleuls(partnerDetail.id).length }} filleul(s) direct(s) :</strong>
@@ -611,6 +617,22 @@ export const ParrainageView = {
                 });
 
                 // --- COMPUTED PROPERTIES ---
+                
+                const getRoleBadge = (p) => {
+                    if (!p) return '';
+                    const hasParent = !!p.parrainId;
+                    const hasChildren = p.filleulsCount > 0;
+
+                    if (!hasParent && hasChildren) {
+                        return '<span class="badge" style="background:#fef3c7; color:#d97706;" title="Leader ayant des filleuls">👑 Leader</span>';
+                    } else if (!hasParent && !hasChildren) {
+                        return '<span class="badge" style="background:#fef3c7; color:#d97706;" title="Venu directement à nous">👑 Leader Direct</span>';
+                    } else if (hasParent && hasChildren) {
+                        return '<span class="badge" style="background:#e0f2fe; color:#0369a1;" title="Filleul devenu Leader">👑/👥 Leader & Filleul</span>';
+                    } else {
+                        return '<span class="badge" style="background:#f1f5f9; color:#475569;" title="Apporté par un Leader">👥 Filleul</span>';
+                    }
+                };
                 
                 // Dashboard KPIs
                 const kpis = computed(() => {
@@ -945,7 +967,7 @@ export const ParrainageView = {
                     showPartnerModal, partnerForm, availableSponsors, openPartnerModal, savePartner,
                     showDetailModal, partnerDetail, openDetails,
                     showWithdrawalModal, openWithdrawalModal, processWithdrawal, saving,
-                    exportCommissions, exportWithdrawals
+                    exportCommissions, exportWithdrawals, getRoleBadge
                 };
             }
         });

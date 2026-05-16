@@ -169,7 +169,7 @@ h2 { text-align: center; color: var(--text-main); margin: 15px 0 10px 0; font-si
 #nav-admin { display: none; }
 
 /* --- HAMBURGER MENU (Desktop) --- */
-.hamburger-btn { display: none; }
+.hamburger-btn, #mobileToggle, .mobile-toggle { display: inline-flex; align-items: center; justify-content: center; background: none; border: none; font-size: 24px; cursor: pointer; color: inherit; margin-right: 15px; }
 .mobile-overlay { display: none; }
 
 /* --- SOUS-ONGLETS --- */
@@ -779,8 +779,8 @@ body.login-page {
     .mob-nav-item.active { color: #4f46e5; border-top: 3px solid #4f46e5; background: #f8fafc; }
 
         /* --- HAMBURGER MENU (OFF-CANVAS) MOBILE --- */
-        .hamburger-btn {
-            display: flex; align-items: center; justify-content: center;
+        .hamburger-btn, #mobileToggle, .mobile-toggle {
+            display: flex !important; align-items: center; justify-content: center;
             background: transparent; border: none; color: white;
             font-size: 30px; cursor: pointer;
             position: absolute; left: 15px; top: 15px;
@@ -1270,11 +1270,47 @@ input[type="checkbox"] {
 .sidebar-item i { width: 20px; font-size: 14px; text-align: center; }
 .sidebar-item:hover { background: rgba(255,255,255,0.1); color: white; }
 .sidebar-item.active { 
-    background: #ffffff; 
-    color: var(--secondary); 
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1); 
-    border-left: 4px solid var(--primary); 
-    border-radius: 0 10px 10px 0; 
+    background: rgba(255, 255, 255, 0.15); 
+    color: #ffffff; 
+    font-weight: 700;
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border-left: 5px solid var(--primary);
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
+    border-radius: 4px 20px 20px 4px;
+}
+
+/* ============================================
+    SIDEBAR RETRACTABLE (DESKTOP)
+============================================ */
+body.sidebar-collapsed .sidebar {
+    width: 80px;
+}
+body.sidebar-collapsed .sidebar-header h2,
+body.sidebar-collapsed .sidebar-header p,
+body.sidebar-collapsed .sidebar-category-title,
+body.sidebar-collapsed .sidebar-item span,
+body.sidebar-collapsed .sidebar-item .badge {
+    display: none !important;
+}
+body.sidebar-collapsed .sidebar-header {
+    padding: 24px 10px;
+    justify-content: center;
+}
+body.sidebar-collapsed .sidebar-logo {
+    margin: 0;
+}
+body.sidebar-collapsed .sidebar-item {
+    justify-content: center;
+    padding: 15px 0;
+}
+body.sidebar-collapsed .sidebar-item i {
+    width: auto;
+    font-size: 20px;
+}
+body.sidebar-collapsed .main-content {
+    margin-left: 80px;
+    width: calc(100% - 80px);
 }
 
 /* --- MODALE PROGRAMME (Largeur étendue) --- */
@@ -1417,11 +1453,9 @@ td.status { text-align: center; }
 .sidebar-item i { width: 20px; font-size: 14px; text-align: center; }
 .sidebar-item:hover { background: rgba(255,255,255,0.1); color: white; }
 .sidebar-item.active { 
-    background: #ffffff; 
-    color: var(--secondary); 
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1); 
-    border-left: 4px solid var(--primary); 
-    border-radius: 0 10px 10px 0; 
+    background: rgba(255, 255, 255, 0.15); 
+    color: #ffffff; 
+    font-weight: 700;
 }
 
 /* ============================================

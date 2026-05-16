@@ -17,13 +17,13 @@ export const DeparturesCalendarView = {
                 .departures-header { background: white; border-radius: 16px; padding: 20px 25px; margin-bottom: 24px; border: 1px solid #e2e8f0; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); }
                 .departures-header__content { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 15px; }
                 .departures-header__left { display: flex; align-items: center; gap: 15px; }
-                .departures-header__icon { background: #f0fdf4; color: #16a34a; width: 56px; height: 56px; display: flex; align-items: center; justify-content: center; border-radius: 14px; font-size: 28px; }
+                .departures-header__icon { background: linear-gradient(135deg, #10b981, #059669); color: white; width: 56px; height: 56px; display: flex; align-items: center; justify-content: center; border-radius: 14px; font-size: 28px; box-shadow: 0 4px 10px rgba(16, 185, 129, 0.3); }
                 .departures-header__title { margin: 0; font-size: 22px; font-weight: 800; color: #0f172a; }
                 .departures-header__subtitle { margin: 4px 0 0 0; font-size: 13px; color: #64748b; }
                 .departures-header__actions { display: flex; gap: 10px; }
                 
-                .btn-new { background: #3b82f6; color: white; border: none; padding: 10px 16px; border-radius: 8px; font-weight: 600; cursor: pointer; transition: 0.2s; display: flex; align-items: center; gap: 8px; }
-                .btn-new:hover { background: #2563eb; }
+                .btn-new { background: linear-gradient(135deg, #3b82f6, #1d4ed8); color: white; border: none; padding: 10px 16px; border-radius: 8px; font-weight: 600; cursor: pointer; transition: 0.2s; display: flex; align-items: center; gap: 8px; box-shadow: 0 2px 4px rgba(59, 130, 246, 0.3); }
+                .btn-new:hover { transform: translateY(-1px); box-shadow: 0 4px 8px rgba(59, 130, 246, 0.4); }
                 .btn-refresh { background: white; border: 1px solid #cbd5e1; color: #475569; padding: 10px 16px; border-radius: 8px; font-weight: 600; cursor: pointer; transition: 0.2s; display: flex; align-items: center; gap: 8px; }
                 .btn-refresh:hover { background: #f1f5f9; color: #0f172a; }
 
@@ -43,8 +43,8 @@ export const DeparturesCalendarView = {
                 .empty-icon { font-size: 48px; margin-bottom: 15px; opacity: 0.5; }
 
                 .departures-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 20px; }
-                .departure-card { background: white; border-radius: 16px; border: 1px solid #e2e8f0; box-shadow: 0 2px 4px rgba(0,0,0,0.02); overflow: hidden; display: flex; flex-direction: column; transition: transform 0.2s, box-shadow 0.2s; }
-                .departure-card:hover { transform: translateY(-3px); box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1); }
+                .departure-card { background: white; border-radius: 16px; border: 1px solid #e2e8f0; box-shadow: 0 2px 4px rgba(0,0,0,0.02); overflow: hidden; display: flex; flex-direction: column; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
+                .departure-card:hover { transform: translateY(-5px); box-shadow: 0 15px 25px -5px rgba(0,0,0,0.1); border-color: var(--primary); }
                 .dc-header { padding: 15px 20px; border-bottom: 1px solid #f1f5f9; display: flex; justify-content: space-between; align-items: center; background: #f8fafc; }
                 .dc-date { font-size: 16px; font-weight: 800; color: #0f172a; }
                 .dc-badge { font-size: 11px; padding: 4px 8px; border-radius: 6px; font-weight: 700; text-transform: uppercase; }

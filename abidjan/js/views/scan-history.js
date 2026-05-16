@@ -1,5 +1,5 @@
 import { db } from '../../../firebase-config.js';
-import { collection, query, orderBy, onSnapshot, limit } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
+import { collection, query, where, orderBy, onSnapshot, limit } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 
 export const ScanHistoryView = {
     unsub: null,
@@ -94,8 +94,8 @@ export const ScanHistoryView = {
     loadData() {
         if (this.unsub) this.unsub();
         
-        // Pas de filtre "agency" ici afin d'avoir un historique global
-        const q = query(collection(db, "scan_logs"), orderBy("date", "desc"), limit(1000));
+        const activeAgency = sessionStorage.getItem('currentActiveAgency') || 'abidjan';
+        const q = query(collection(db, "scan_logs"), where("agency", "==", activeAgency), orderBy("date", "desc"), limit(1000));
 
         this.unsub = onSnapshot(q, (snapshot) => {
             this.logs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));

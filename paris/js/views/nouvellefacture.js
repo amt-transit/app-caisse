@@ -39,7 +39,7 @@ export const NouvelleFactureView = {
                     .nf-item-grid .item-qty { font-size: 18px !important; font-weight: bold; }
                 }
             </style>
-            <div style="max-width: 1000px; margin: 0 auto; animation: fadeIn 0.3s ease-in-out;">
+            <div id="vue-nouvellefacture-app" style="max-width: 1000px; margin: 0 auto; animation: fadeIn 0.3s ease-in-out;" v-cloak>
                 
                 <div style="display: flex; align-items: center; justify-content: space-between; gap: 15px; margin-bottom: 25px; background: white; padding: 20px; border-radius: 16px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); border: 1px solid #e2e8f0; flex-wrap: wrap;">
                     <div style="display: flex; align-items: center; gap: 15px;">
@@ -52,7 +52,8 @@ export const NouvelleFactureView = {
                         </div>
                     </div>
                     <div id="nfActiveContainerBadge" style="padding: 10px 20px; background: #e0f2fe; color: #0369a1; border: 2px solid #bae6fd; border-radius: 12px; font-weight: 900; font-size: 20px; box-shadow: 0 2px 4px rgba(3,105,161,0.1); display: flex; align-items: center; gap: 10px;" title="Conteneur Actif">
-                        <i class="fas fa-spinner fa-spin"></i>
+                        <i v-if="!currentContainer" class="fas fa-spinner fa-spin"></i>
+                        <span v-else>📦 {{ currentContainer }}</span>
                     </div>
                 </div>
 
@@ -198,7 +199,7 @@ initVue(globalApp) {
 
     this.vueApp = createApp({
         setup() {
-            const currentContainer = ref('ATT');
+            const currentContainer = ref('');
             const saving = ref(false);
             
             const clientsData = ref(new Map());

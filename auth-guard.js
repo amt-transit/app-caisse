@@ -214,7 +214,14 @@ onAuthStateChanged(auth, async (user) => {
                     if (branding.bg) document.documentElement.style.setProperty('--bg-body', branding.bg);
                     
                     if (branding.logo) document.querySelectorAll('.app-logo, .sidebar-logo img').forEach(img => img.src = branding.logo);
-                    if (branding.name) document.querySelectorAll('.sidebar-header h2').forEach(h2 => h2.textContent = branding.name);
+                    
+                    if (branding.name) {
+                        document.querySelectorAll('.sidebar-header h2, #sidebarAgencyName').forEach(h2 => h2.textContent = branding.name);
+                        document.title = `${branding.name} - Espace Global`;
+                    }
+                    if (branding.slogan) {
+                        document.querySelectorAll('.sidebar-header p, #sidebarAgencySlogan').forEach(p => p.textContent = branding.slogan);
+                    }
 
                     if (branding.fontFamily) {
                         const fontName = branding.fontFamily.split(',')[0].replace(/'/g, '').trim();
@@ -263,7 +270,10 @@ onAuthStateChanged(auth, async (user) => {
                     getDoc(doc(db, 'settings', `design_${agencyId}`))
                 ]);
                 
-                let branding = {};
+                let branding = {
+                    name: AGENCIES[agencyId] ? AGENCIES[agencyId].name : "AMT Trans'it",
+                    slogan: "Espace de Gestion"
+                };
                 if (cfgSnap.exists()) { branding.color = cfgSnap.data().primaryColorHex; branding.logo = cfgSnap.data().logoUrl; }
                 
                 if (cfgSnap.exists() && cfgSnap.data().secondaryColorHex) branding.secondary = cfgSnap.data().secondaryColorHex;
@@ -271,8 +281,8 @@ onAuthStateChanged(auth, async (user) => {
                 
                 if (compSnap.exists()) {
                     const compData = compSnap.data();
-                    if (!branding.logo && compSnap.data().logoBase64) branding.logo = compSnap.data().logoBase64;
-                    if (compSnap.data().name) branding.name = compSnap.data().name;
+                    if (!branding.logo && compData.logoBase64) branding.logo = compData.logoBase64;
+                    // On NE DOIT PAS écraser le nom de l'agence (UI) par le nom de l'entreprise (Facturation)
                     
                     // Priorité aux couleurs définies globalement dans "Paramètres Entreprise"
                     if (compData.appPrimaryColor) branding.color = compData.appPrimaryColor;
@@ -286,7 +296,22 @@ onAuthStateChanged(auth, async (user) => {
                     if (d.secondaryColor) branding.secondary = d.secondaryColor;
                     if (d.bgColor) branding.bg = d.bgColor;
                     if (d.logoBase64) branding.logo = d.logoBase64;
-                    if (d.agencyName) branding.name = d.agencyName;
+                    
+                    // Sécurité : Éviter que le nom par défaut 'AMT Paris' ne fuite sur les autres agences
+                    if (d.agencyName) {
+                        if (d.agencyName === 'AMT Paris' && agencyId !== 'paris') {
+                            branding.name = AGENCIES[agencyId] ? AGENCIES[agencyId].name : "AMT Trans'it";
+                        } else {
+                            branding.name = d.agencyName;
+                        }
+                    }
+                    if (d.agencySlogan) {
+                        if (d.agencySlogan === 'Agent Dashboard' && agencyId !== 'paris') {
+                            branding.slogan = "Espace de Gestion";
+                        } else {
+                            branding.slogan = d.agencySlogan;
+                        }
+                    }
                     if (d.fontFamily) branding.fontFamily = d.fontFamily;
                     if (d.baseFontSize) branding.baseFontSize = d.baseFontSize;
                 }
@@ -303,18 +328,26 @@ onAuthStateChanged(auth, async (user) => {
         const inAbidjanFolder = pathUrl.includes('/abidjan/');
         const isLogin = pathUrl.includes('login.html');
 
+        // Vérifie si l'utilisateur est sur la nouvelle architecture unifiée (à la racine)
+        const isUnifiedRoot = pathUrl.endsWith('/index.html') && !inParisFolder && !inAbidjanFolder;
+
         // Séparation logique : Les agences de "Départ" vont dans le dossier /paris/, les agences "d'Arrivée" vont dans /abidjan/
         const departureAgencies = getDepartureAgencies();
         const arrivalAgencies = getArrivalAgencies();
 
-        if (departureAgencies.includes(currentActiveAgency) && !inParisFolder) {
-            window.location.href = inAbidjanFolder ? '../paris/index.html' : 'paris/index.html';
-            return;
-        } else if (arrivalAgencies.includes(currentActiveAgency) && inParisFolder) {
-            window.location.href = '../abidjan/index.html';
-            return;
-        } else if (isLogin) {
-            window.location.href = 'index.html';
+        // Ancienne logique de redirection (désactivée si on est à la racine)
+        if (!isUnifiedRoot) {
+            if (departureAgencies.includes(currentActiveAgency) && !inParisFolder) {
+                window.location.href = inAbidjanFolder ? '../paris/index.html' : 'paris/index.html';
+                return;
+            } else if (arrivalAgencies.includes(currentActiveAgency) && inParisFolder) {
+                window.location.href = '../abidjan/index.html';
+                return;
+            }
+        }
+        
+        if (isLogin) {
+            window.location.href = (inParisFolder || inAbidjanFolder) ? '../index.html' : 'index.html';
             return;
         }
 
@@ -330,8 +363,11 @@ onAuthStateChanged(auth, async (user) => {
             window.switchAgency = (targetAgency) => {
                 sessionStorage.setItem('currentActiveAgency', targetAgency);
                 const needsDepartureApp = departureAgencies.includes(targetAgency);
+                const isCurrentUnifiedRoot = window.location.pathname.endsWith('/index.html') && !window.location.pathname.includes('/paris/') && !window.location.pathname.includes('/abidjan/');
 
-                if (needsDepartureApp && !inParisFolder) {
+                if (isCurrentUnifiedRoot) {
+                    window.location.reload();
+                } else if (needsDepartureApp && !inParisFolder) {
                     window.location.href = inAbidjanFolder ? '../paris/index.html' : 'paris/index.html';
                 } else if (!needsDepartureApp && inParisFolder) {
                     window.location.href = '../abidjan/index.html';

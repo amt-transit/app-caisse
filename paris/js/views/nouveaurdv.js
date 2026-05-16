@@ -378,11 +378,11 @@ export const NouveauRdvView = {
         if (formWrapper) formWrapper.style.display = show ? 'block' : 'none';
         
         if (!show) {
-            document.getElementById('newClientNom').value = '';
-            document.getElementById('newClientPrenom').value = '';
-            document.getElementById('newClientTel').value = '';
-            document.getElementById('newClientEmail').value = '';
-            document.getElementById('newClientAdresse').value = '';
+            if (document.getElementById('newClientNom')) document.getElementById('newClientNom').value = '';
+            if (document.getElementById('newClientPrenom')) document.getElementById('newClientPrenom').value = '';
+            if (document.getElementById('newClientTel')) document.getElementById('newClientTel').value = '';
+            if (document.getElementById('newClientEmail')) document.getElementById('newClientEmail').value = '';
+            if (document.getElementById('newClientAdresse')) document.getElementById('newClientAdresse').value = '';
         }
     },
 
@@ -523,12 +523,12 @@ export const NouveauRdvView = {
         let clientAdresse = "";
 
         if (this.isNewClient) {
-            const nom = document.getElementById('newClientNom').value.trim();
-            const prenom = document.getElementById('newClientPrenom').value.trim();
+            const nom = document.getElementById('newClientNom') ? document.getElementById('newClientNom').value.trim() : '';
+            const prenom = document.getElementById('newClientPrenom') ? document.getElementById('newClientPrenom').value.trim() : '';
             clientName = `${nom} ${prenom}`.trim();
-            clientTel = document.getElementById('newClientTel').value.trim();
-            clientAdresse = document.getElementById('newClientAdresse').value.trim();
-            const email = document.getElementById('newClientEmail').value.trim();
+            clientTel = document.getElementById('newClientTel') ? document.getElementById('newClientTel').value.trim() : '';
+            clientAdresse = document.getElementById('newClientAdresse') ? document.getElementById('newClientAdresse').value.trim() : '';
+            const email = document.getElementById('newClientEmail') ? document.getElementById('newClientEmail').value.trim() : '';
 
             if (!nom || !clientTel || !date) {
                 this.app.showToast("Veuillez remplir le nom, le téléphone et la date.", "error");

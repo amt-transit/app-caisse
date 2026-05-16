@@ -1,5 +1,5 @@
 import { db } from '../../../firebase-config.js';
-import { collection, doc, updateDoc, setDoc, query, where, orderBy, onSnapshot, writeBatch, limit } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
+import { collection, doc, updateDoc, setDoc, query, where, orderBy, onSnapshot, writeBatch, limit, getDocs } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 
 export const ExpensesView = {
     render(app, container) {

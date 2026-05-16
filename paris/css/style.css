@@ -101,7 +101,16 @@ body {
 
 .sidebar-item i { width: 20px; font-size: 14px; text-align: center; }
 .sidebar-item:hover { background: rgba(255,255,255,0.08); color: white; }
-.sidebar-item.active { background: linear-gradient(135deg, #2563eb, #1e3a8a); color: white; box-shadow: 0 4px 8px rgba(30, 58, 138, 0.3); border-left: 4px solid #dc2626; border-radius: 0 10px 10px 0; }
+.sidebar-item.active { 
+    background: rgba(255, 255, 255, 0.15); 
+    color: #ffffff; 
+    font-weight: 700;
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border-left: 5px solid var(--primary);
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
+    border-radius: 4px 20px 20px 4px;
+}
 
 .sidebar-item .badge {
     margin-left: auto; background: #ef4444; color: white; font-size: 10px; padding: 2px 6px; border-radius: 10px;
@@ -123,7 +132,7 @@ body {
     border-bottom: 1px solid #e2e8f0; border-top: 4px solid var(--primary, #b91c1c); position: sticky; top: 0; z-index: 90; box-shadow: 0 1px 3px rgba(0,0,0,0.05);
 }
 
-.mobile-toggle { display: none; background: none; border: none; font-size: 22px; cursor: pointer; color: #1e293b; }
+#mobileToggle, .mobile-toggle { display: inline-flex; align-items: center; justify-content: center; background: none; border: none; font-size: 24px; cursor: pointer; color: #1e293b; margin-right: 15px; }
 .page-title { font-size: 22px; font-weight: 700; color: #0f172a; letter-spacing: -0.3px; }
 .user-info { display: flex; align-items: center; gap: 15px; }
 
@@ -219,6 +228,39 @@ body {
 .fc-event { cursor: pointer; }
 .progress-bar { width: 100%; background: #e2e8f0; border-radius: 10px; height: 8px; overflow: hidden; }
 .progress-bar > div { transition: width 0.3s; }
+
+/* ============================================
+    SIDEBAR RETRACTABLE (DESKTOP)
+============================================ */
+body.sidebar-collapsed .sidebar {
+    width: 80px;
+}
+body.sidebar-collapsed .sidebar-header h2,
+body.sidebar-collapsed .sidebar-header p,
+body.sidebar-collapsed .sidebar-category-title,
+body.sidebar-collapsed .sidebar-item span,
+body.sidebar-collapsed .sidebar-item .badge {
+    display: none !important;
+}
+body.sidebar-collapsed .sidebar-header {
+    padding: 24px 10px;
+    justify-content: center;
+}
+body.sidebar-collapsed .sidebar-logo {
+    margin: 0;
+}
+body.sidebar-collapsed .sidebar-item {
+    justify-content: center;
+    padding: 15px 0;
+}
+body.sidebar-collapsed .sidebar-item i {
+    width: auto;
+    font-size: 20px;
+}
+body.sidebar-collapsed .main-content {
+    margin-left: 80px;
+    width: calc(100% - 80px);
+}
 
 /* ============================================
     ANIMATIONS

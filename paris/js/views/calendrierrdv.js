@@ -22,30 +22,31 @@ export const CalendrierRdvView = {
                 .rdvc-page { max-width: 1200px; margin: 0 auto; animation: fadeIn 0.3s ease; }
                 .rdvc-hero { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; background: white; padding: 20px 25px; border-radius: 16px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); border: 1px solid #e2e8f0; flex-wrap: wrap; gap: 15px; }
                 .rdvc-hero__left { display: flex; align-items: center; gap: 15px; }
-                .rdvc-hero__icon { background: #f0fdf4; color: #16a34a; width: 50px; height: 50px; display: flex; align-items: center; justify-content: center; border-radius: 12px; font-size: 24px; }
+                .rdvc-hero__icon { background: linear-gradient(135deg, #3b82f6, #1d4ed8); color: white; width: 56px; height: 56px; display: flex; align-items: center; justify-content: center; border-radius: 14px; font-size: 24px; box-shadow: 0 4px 10px rgba(59, 130, 246, 0.3); }
                 .rdvc-hero__title { margin: 0; color: #0f172a; font-size: 22px; font-weight: 800; }
                 .rdvc-hero__sub { margin: 4px 0 0 0; color: #64748b; font-size: 13px; }
                 .rdvc-hero__right { display: flex; gap: 10px; }
                 
                 .rdvc-hero-btn { padding: 10px 16px; border-radius: 8px; font-weight: 600; font-size: 13px; cursor: pointer; display: flex; align-items: center; gap: 8px; border: none; transition: 0.2s; }
-                .rdvc-hero-btn--primary { background: #3b82f6; color: white; }
-                .rdvc-hero-btn--primary:hover { background: #2563eb; }
+                .rdvc-hero-btn--primary { background: linear-gradient(135deg, #3b82f6, #1d4ed8); color: white; box-shadow: 0 2px 4px rgba(59, 130, 246, 0.3); }
+                .rdvc-hero-btn--primary:hover { transform: translateY(-1px); box-shadow: 0 4px 8px rgba(59, 130, 246, 0.4); }
                 .rdvc-hero-btn--ghost { background: white; border: 1px solid #cbd5e1; color: #475569; }
                 .rdvc-hero-btn--ghost:hover { background: #f1f5f9; color: #0f172a; }
 
                 /* KPIs */
                 .rdvc-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 24px; }
-                .kpi { display: flex; align-items: center; gap: 15px; padding: 20px; border-radius: 16px; background: white; border: 1px solid #e2e8f0; box-shadow: 0 2px 4px rgba(0,0,0,0.02); }
+                .kpi { display: flex; align-items: center; gap: 15px; padding: 20px; border-radius: 16px; background: white; border: 1px solid #e2e8f0; box-shadow: 0 2px 4px rgba(0,0,0,0.02); transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.3s; }
+                .kpi:hover { transform: translateY(-3px); box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1); }
                 .kpi__icon { width: 48px; height: 48px; display: flex; align-items: center; justify-content: center; border-radius: 12px; font-size: 20px; }
-                .kpi--blue .kpi__icon { background: #eff6ff; color: #3b82f6; }
-                .kpi--green .kpi__icon { background: #dcfce7; color: #10b981; }
-                .kpi--orange .kpi__icon { background: #fff7ed; color: #ea580c; }
-                .kpi--red .kpi__icon { background: #fef2f2; color: #ef4444; }
+                .kpi--blue .kpi__icon { background: linear-gradient(135deg, #3b82f6, #1d4ed8); color: white; box-shadow: 0 4px 10px rgba(59, 130, 246, 0.3); }
+                .kpi--green .kpi__icon { background: linear-gradient(135deg, #10b981, #059669); color: white; box-shadow: 0 4px 10px rgba(16, 185, 129, 0.3); }
+                .kpi--orange .kpi__icon { background: linear-gradient(135deg, #f59e0b, #d97706); color: white; box-shadow: 0 4px 10px rgba(245, 158, 11, 0.3); }
+                .kpi--red .kpi__icon { background: linear-gradient(135deg, #ef4444, #dc2626); color: white; box-shadow: 0 4px 10px rgba(239, 68, 68, 0.3); }
                 .kpi__value { font-size: 24px; font-weight: 800; color: #0f172a; line-height: 1; margin-bottom: 4px; }
                 .kpi__label { font-size: 12px; color: #64748b; font-weight: 600; text-transform: uppercase; }
 
                 /* Calendrier */
-                .rdvc-card { background: white; border-radius: 16px; border: 1px solid #e2e8f0; box-shadow: 0 2px 4px rgba(0,0,0,0.02); padding: 20px; }
+                .rdvc-card { background: white; border-radius: 16px; border: 1px solid #e2e8f0; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); padding: 25px; }
                 .rdvc-nav { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
                 .rdvc-nav__center { text-align: center; }
                 .rdvc-nav__month { font-size: 18px; font-weight: 800; color: #0f172a; text-transform: capitalize; }
@@ -65,16 +66,16 @@ export const CalendrierRdvView = {
                 .rdvc-weekdays { display: grid; grid-template-columns: repeat(7, 1fr); text-align: center; font-size: 12px; font-weight: 700; color: #64748b; text-transform: uppercase; margin-bottom: 10px; }
                 .rdvc-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 8px; }
                 
-                .rdvc-day { border: 1px solid #e2e8f0; border-radius: 12px; min-height: 100px; display: flex; flex-direction: column; background: white; transition: 0.2s; overflow: hidden; }
-                .rdvc-day:not(.rdvc-day--empty):not(.rdvc-day--off):hover { border-color: #3b82f6; box-shadow: 0 4px 6px -1px rgba(59,130,246,0.1); cursor: pointer; transform: translateY(-2px); }
+                .rdvc-day { border: 1px solid #e2e8f0; border-radius: 12px; min-height: 110px; display: flex; flex-direction: column; background: white; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); overflow: hidden; }
+                .rdvc-day:not(.rdvc-day--empty):not(.rdvc-day--off):hover { border-color: var(--primary); box-shadow: 0 10px 20px -5px rgba(0,0,0,0.1); cursor: pointer; transform: scale(1.02); z-index: 10; position: relative; }
                 .rdvc-day--empty { background: transparent; border: none; }
                 .rdvc-day--off { background: #f8fafc; opacity: 0.7; }
                 .rdvc-day--past { background: #fcfcfc; opacity: 0.8; }
-                .rdvc-day--today { border: 2px solid #3b82f6; }
+                .rdvc-day--today { border: 2px solid var(--primary); background: #f0f9ff; }
 
                 .rdvc-day__top { padding: 8px 10px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid transparent; }
                 .rdvc-day__num { font-size: 14px; font-weight: 700; color: #1e293b; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; border-radius: 50%; }
-                .rdvc-day__num--today { background: #3b82f6; color: white; }
+                .rdvc-day__num--today { background: var(--primary); color: white; box-shadow: 0 2px 4px rgba(0,0,0,0.2); }
                 
                 .rdvc-day__body { padding: 10px; flex: 1; display: flex; flex-direction: column; justify-content: flex-end; }
                 .rdvc-day__off-label { text-align: center; color: #94a3b8; font-weight: 800; font-size: 12px; letter-spacing: 1px; margin: auto; }
