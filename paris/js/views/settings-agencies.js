@@ -1,6 +1,17 @@
 import { db } from '../../../firebase-config.js';
-import { collection, doc, setDoc, deleteDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
-import { createApp, ref, reactive, onMounted, onUnmounted } from "https://unpkg.com/vue@3/dist/vue.esm-browser.prod.js";
+import { collection, doc, setDoc, deleteDoc, onSnapshot, writeBatch } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
+import { createApp, ref, reactive, computed, onMounted, onUnmounted } from "https://unpkg.com/vue@3/dist/vue.esm-browser.prod.js";
+
+// ============================================================================
+//  GESTION DES AGENCES — UX "Route d'envoi" (modèle agencies_config inchangé)
+// ----------------------------------------------------------------------------
+//  Métier : une "route" = 1 agence de DÉPART + ≥1 agence d'ARRIVÉE.
+//  Le technique (id système, interface, préfixe, routage des collections) est
+//  AUTO-GÉNÉRÉ selon la convention de getCollectionName (agencies-config.js) :
+//    - départ  : id = slug(nom)          -> collections "transactions_<id>"
+//    - arrivée : id = slug(nom)_<départ> -> lit "transactions_<départ>"
+//    - historique paris/abidjan : tables de base (intouchables)
+// ============================================================================
 
 export const SettingsAgenciesView = {
     vueApp: null,
@@ -13,123 +24,178 @@ export const SettingsAgenciesView = {
         const html = `
             <style>
                 [v-cloak] { display: none; }
-                .agencies-page { max-width: 1200px; margin: 0 auto; animation: fadeIn 0.3s ease; }
-                .ag-header { background: white; border-radius: 16px; padding: 20px 25px; margin-bottom: 24px; border: 1px solid #e2e8f0; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px; }
-                .ag-header__left { display: flex; align-items: center; gap: 15px; }
-                .ag-header__icon { background: #f5f3ff; color: #8b5cf6; width: 56px; height: 56px; display: flex; align-items: center; justify-content: center; border-radius: 14px; font-size: 28px; }
-                .ag-header__title { margin: 0; font-size: 22px; font-weight: 800; color: #0f172a; }
-                .ag-header__subtitle { margin: 4px 0 0 0; font-size: 13px; color: #64748b; }
-                
-                .ag-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 20px; margin-bottom: 30px; }
-                .ag-card { background: white; border-radius: 16px; border: 1px solid #e2e8f0; padding: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.02); display: flex; flex-direction: column; gap: 15px; transition: transform 0.2s; }
-                .ag-card:hover { transform: translateY(-3px); box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1); border-color: #cbd5e1; }
-                .ag-card__head { display: flex; justify-content: space-between; align-items: flex-start; }
-                .ag-card__flag { font-size: 32px; line-height: 1; }
-                .ag-card__title { font-size: 18px; font-weight: 800; color: #0f172a; margin-bottom: 4px; }
-                .ag-card__id { font-family: monospace; font-size: 11px; background: #f1f5f9; padding: 2px 6px; border-radius: 4px; color: #64748b; }
-                .ag-card__body { display: flex; flex-direction: column; gap: 8px; flex: 1; }
-                .ag-card__info { display: flex; justify-content: space-between; font-size: 13px; border-bottom: 1px dashed #e2e8f0; padding-bottom: 6px; }
-                .ag-card__label { color: #64748b; font-weight: 600; }
-                .ag-card__val { color: #1e293b; font-weight: 800; }
-                
-                .ag-form-card { background: white; border-radius: 16px; border: 1px solid #e2e8f0; padding: 25px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); }
-                .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
-                @media (max-width: 768px) { .form-grid { grid-template-columns: 1fr; } }
-                .form-group { display: flex; flex-direction: column; gap: 6px; }
-                .form-group--full { grid-column: 1 / -1; }
-                .form-label { font-size: 12px; font-weight: 700; color: #475569; }
-                .form-input { padding: 10px 12px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 14px; outline: none; transition: 0.2s; background: #f8fafc; font-weight: 600; }
-                .form-input:focus { border-color: #8b5cf6; background: white; box-shadow: 0 0 0 3px rgba(139,92,246,0.1); }
+                .agx-page { max-width: 1100px; margin: 0 auto; animation: fadeIn 0.3s ease; }
+                .agx-header { background: white; border-radius: 16px; padding: 20px 25px; margin-bottom: 24px; border: 1px solid #e2e8f0; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px; }
+                .agx-title { margin: 0; font-size: 22px; font-weight: 800; color: #0f172a; }
+                .agx-sub { margin: 4px 0 0 0; font-size: 13px; color: #64748b; }
+                .agx-btn { padding: 10px 18px; border-radius: 10px; font-weight: 700; border: none; cursor: pointer; font-size: 14px; }
+                .agx-btn--primary { background: #8b5cf6; color: white; }
+                .agx-btn--ghost { background: #f1f5f9; color: #475569; }
+                .agx-btn--danger { background: #fef2f2; color: #dc2626; border: 1px solid #fecaca; }
+                .agx-btn--mini { padding: 6px 12px; font-size: 12px; border-radius: 8px; }
+
+                .agx-route { background: white; border-radius: 16px; border: 1px solid #e2e8f0; box-shadow: 0 2px 4px rgba(0,0,0,0.02); margin-bottom: 18px; overflow: hidden; }
+                .agx-route__dep { display: flex; align-items: center; gap: 14px; padding: 18px 22px; background: #f5f3ff; border-bottom: 1px solid #ede9fe; }
+                .agx-flag { font-size: 28px; line-height: 1; }
+                .agx-name { font-size: 17px; font-weight: 800; color: #0f172a; }
+                .agx-id { font-family: monospace; font-size: 11px; background: #ffffff; border: 1px solid #e2e8f0; padding: 2px 6px; border-radius: 4px; color: #64748b; }
+                .agx-badge { font-size: 11px; font-weight: 800; padding: 3px 9px; border-radius: 999px; }
+                .agx-badge--dep { background: #e0f2fe; color: #0369a1; }
+                .agx-badge--arr { background: #fce7f3; color: #be185d; }
+                .agx-arr-list { padding: 8px 22px 16px 22px; }
+                .agx-arr { display: flex; align-items: center; gap: 12px; padding: 12px 0; border-bottom: 1px dashed #eef2f7; }
+                .agx-arr:last-child { border-bottom: none; }
+                .agx-arrow { color: #94a3b8; font-weight: 800; }
+                .agx-spacer { flex: 1; }
+                .agx-warn { color: #b45309; font-size: 13px; background: #fffbeb; border: 1px solid #fde68a; padding: 8px 12px; border-radius: 8px; margin: 10px 22px 16px; }
+
+                .agx-overlay { position: fixed; inset: 0; background: rgba(15,23,42,0.6); backdrop-filter: blur(4px); z-index: 2000; display: flex; align-items: center; justify-content: center; padding: 16px; }
+                .agx-modal { background: white; border-radius: 16px; width: 100%; max-width: 560px; max-height: 92vh; overflow-y: auto; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25); }
+                .agx-modal__h { padding: 20px 24px; border-bottom: 1px solid #e2e8f0; }
+                .agx-modal__b { padding: 22px 24px; }
+                .agx-modal__f { padding: 16px 24px; border-top: 1px solid #e2e8f0; display: flex; justify-content: flex-end; gap: 10px; }
+                .agx-field { margin-bottom: 16px; }
+                .agx-lab { display: block; font-size: 13px; font-weight: 700; color: #334155; margin-bottom: 6px; }
+                .agx-inp { width: 100%; padding: 11px 13px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 14px; box-sizing: border-box; outline: none; }
+                .agx-inp:focus { border-color: #8b5cf6; box-shadow: 0 0 0 3px rgba(139,92,246,0.12); }
+                .agx-dest-row { display: flex; gap: 10px; align-items: flex-start; margin-bottom: 10px; }
+                .agx-adv { font-size: 12px; color: #64748b; background: #f8fafc; border: 1px dashed #cbd5e1; border-radius: 8px; padding: 10px 12px; margin-top: 6px; }
+                .agx-adv code { background: #eef2f7; padding: 1px 5px; border-radius: 4px; }
             </style>
 
-            <div id="vue-agencies-app" class="agencies-page" v-cloak>
-                <div class="ag-header">
-                    <div class="ag-header__left">
-                        <div class="ag-header__icon">🌍</div>
+            <div id="vue-agencies-app" class="agx-page" v-cloak>
+                <div class="agx-header">
+                    <div>
+                        <h1 class="agx-title">🌍 Agences & Routes d'envoi</h1>
+                        <p class="agx-sub">Une route = une agence de <b>départ</b> et au moins une agence d'<b>arrivée</b>.</p>
+                    </div>
+                    <button class="agx-btn agx-btn--primary" @click="openWizard()">➕ Nouvelle route d'envoi</button>
+                </div>
+
+                <div v-if="loading" style="text-align:center; padding:40px; color:#64748b;"><i class="fas fa-spinner fa-spin"></i> Chargement…</div>
+                <div v-else-if="routes.length === 0" style="text-align:center; padding:40px; color:#64748b;">Aucune route. Cliquez « Nouvelle route d'envoi ».</div>
+
+                <div v-for="r in routes" :key="r.departure.id" class="agx-route">
+                    <div class="agx-route__dep">
+                        <span class="agx-flag">{{ r.departure.flag || '🏳️' }}</span>
                         <div>
-                            <h1 class="ag-header__title">Gestion des Agences & Routes</h1>
-                            <p class="ag-header__subtitle">Créez et gérez les agences pour cloisonner les flux de données (SaaS)</p>
+                            <div class="agx-name">{{ r.departure.name }} <span class="agx-badge agx-badge--dep">DÉPART</span></div>
+                            <span class="agx-id">{{ r.departure.id }}</span>
                         </div>
+                        <span class="agx-spacer"></span>
+                        <button class="agx-btn agx-btn--ghost agx-btn--mini" @click="openEdit(r.departure)">✏️ Renommer</button>
+                        <button class="agx-btn agx-btn--primary agx-btn--mini" @click="openAddDest(r.departure)">➕ Destination</button>
+                        <button class="agx-btn agx-btn--danger agx-btn--mini" @click="removeDeparture(r)">🗑️</button>
                     </div>
-                    <button class="btn btn-primary" @click="resetForm(); showForm = true" style="background: #8b5cf6; border: none; padding: 10px 20px; border-radius: 10px; font-weight: bold; color: white;">
-                        ➕ Nouvelle Agence
-                    </button>
-                </div>
 
-                <!-- Liste des agences existantes -->
-                <div class="ag-grid" v-if="!showForm">
-                    <div v-if="loading" style="grid-column: 1/-1; text-align: center; padding: 40px; color: #64748b;"><i class="fas fa-spinner fa-spin"></i> Chargement...</div>
-                    <div v-else-if="agencies.length === 0" style="grid-column: 1/-1; text-align: center; padding: 40px; color: #64748b;">Aucune agence configurée.</div>
-                    
-                    <div v-for="agency in agencies" :key="agency.id" class="ag-card">
-                        <div class="ag-card__head">
+                    <div v-if="r.arrivals.length === 0" class="agx-warn">
+                        ⚠️ Aucune destination d'arrivée. Cette route est incomplète — ajoutez-en une.
+                    </div>
+                    <div v-else class="agx-arr-list">
+                        <div v-for="a in r.arrivals" :key="a.id" class="agx-arr">
+                            <span class="agx-arrow">↳</span>
+                            <span class="agx-flag" style="font-size:22px;">{{ a.flag || '🏳️' }}</span>
                             <div>
-                                <div class="ag-card__title">{{ agency.name }}</div>
-                                <span class="ag-card__id">{{ agency.id }}</span>
+                                <div class="agx-name" style="font-size:15px;">{{ a.name }} <span class="agx-badge agx-badge--arr">ARRIVÉE</span></div>
+                                <span class="agx-id">{{ a.id }}</span>
                             </div>
-                            <div class="ag-card__flag">{{ agency.flag || '🏳️' }}</div>
-                        </div>
-                        <div class="ag-card__body">
-                            <div class="ag-card__info"><span class="ag-card__label">Type :</span> <span class="ag-card__val"><span class="badge" :style="agency.type === 'departure' ? 'background:#e0f2fe; color:#0369a1;' : 'background:#fce7f3; color:#be185d;'">{{ agency.type === 'departure' ? '🛫 DÉPART (Export)' : '🛬 ARRIVÉE (Réception)' }}</span></span></div>
-                            <div class="ag-card__info"><span class="ag-card__label">Interface (Dossier) :</span> <span class="ag-card__val">{{ agency.appFolder }}</span></div>
-                            <div class="ag-card__info"><span class="ag-card__label">Préfixe Conteneur :</span> <span class="ag-card__val" style="color: #ea580c;">{{ agency.prefix || 'PAR-' }}</span></div>
-                        </div>
-                        <div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 10px;">
-                            <button class="btn btn-outline btn-small" @click="editAgency(agency)">✏️ Modifier</button>
-                            <button class="btn btn-danger btn-small" @click="deleteAgency(agency.id)">🗑️</button>
+                            <span class="agx-spacer"></span>
+                            <button class="agx-btn agx-btn--ghost agx-btn--mini" @click="openEdit(a)">✏️</button>
+                            <button class="agx-btn agx-btn--danger agx-btn--mini" @click="removeAgency(a)">🗑️</button>
                         </div>
                     </div>
                 </div>
 
-                <!-- Formulaire de création / modification -->
-                <div class="ag-form-card" v-if="showForm">
-                    <h3 style="margin-top: 0; color: #1e293b; border-bottom: 1px solid #e2e8f0; padding-bottom: 15px; margin-bottom: 20px;">
-                        {{ isEditing ? "Modifier l'agence" : "Créer une nouvelle agence" }}
-                    </h3>
-                    
-                    <div class="form-grid">
-                        <div class="form-group">
-                            <label class="form-label">Nom d'affichage *</label>
-                            <input type="text" v-model="form.name" class="form-input" placeholder="Ex: CHINE (Arrivage)">
+                <!-- WIZARD : nouvelle route -->
+                <div class="agx-overlay" v-if="showWizard">
+                    <div class="agx-modal">
+                        <div class="agx-modal__h">
+                            <h3 style="margin:0; color:#0f172a;">Nouvelle route d'envoi</h3>
+                            <p style="margin:4px 0 0; font-size:13px; color:#64748b;">D'où partent les colis, et vers quelles destinations.</p>
                         </div>
-                        <div class="form-group">
-                            <label class="form-label">Identifiant système (Unique) *</label>
-                            <input type="text" v-model="form.id" class="form-input" :disabled="isEditing" placeholder="Ex: chine_abidjan" style="font-family: monospace; text-transform: lowercase;">
-                            <small style="color: #ef4444; font-size: 11px;">⚠️ Cet ID créera le tiroir de données (ex: transactions_chine_abidjan).</small>
-                        </div>
-                        
-                        <div class="form-group">
-                            <label class="form-label">Rôle de l'agence *</label>
-                            <select v-model="form.type" class="form-input">
-                                <option value="departure">🛫 Agence de DÉPART (Crée les factures)</option>
-                                <option value="arrival">🛬 Agence d'ARRIVÉE (Reçoit et encaisse)</option>
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <label class="form-label">Interface Logicielle (Dossier) *</label>
-                            <select v-model="form.appFolder" class="form-input">
-                                <option value="paris">Interface PARIS (Création / Logistique)</option>
-                                <option value="abidjan">Interface ABIDJAN (Caisse / Livraison)</option>
-                            </select>
-                        </div>
+                        <div class="agx-modal__b">
+                            <div class="agx-field">
+                                <label class="agx-lab">🛫 D'où partent les colis ? (pays/ville de départ)</label>
+                                <input class="agx-inp" v-model="wiz.depName" placeholder="Ex : Chine">
+                            </div>
+                            <div class="agx-field" style="margin-bottom:20px;">
+                                <label class="agx-lab">Drapeau du départ</label>
+                                <input class="agx-inp" v-model="wiz.depFlag" placeholder="Ex : 🇨🇳" style="max-width:120px;">
+                            </div>
 
-                        <div class="form-group">
-                            <label class="form-label">Drapeau (Emoji) *</label>
-                            <input type="text" v-model="form.flag" class="form-input" placeholder="Ex: 🇨🇳">
+                            <label class="agx-lab">🛬 Vers quelles destinations ? (au moins une)</label>
+                            <div v-for="(d, i) in wiz.arrivals" :key="i" class="agx-dest-row">
+                                <input class="agx-inp" v-model="d.name" placeholder="Ex : Abidjan">
+                                <input class="agx-inp" v-model="d.flag" placeholder="🇨🇮" style="max-width:90px;">
+                                <button class="agx-btn agx-btn--danger agx-btn--mini" v-if="wiz.arrivals.length > 1" @click="wiz.arrivals.splice(i,1)" style="white-space:nowrap;">✕</button>
+                            </div>
+                            <button class="agx-btn agx-btn--ghost agx-btn--mini" @click="wiz.arrivals.push({name:'',flag:''})">➕ Ajouter une destination</button>
+
+                            <div class="agx-adv" v-if="wizPreview.dep">
+                                <b>Aperçu technique</b> (généré automatiquement) :<br>
+                                Départ <code>{{ wizPreview.dep }}</code>
+                                <span v-for="p in wizPreview.arr" :key="p"> · Arrivée <code>{{ p }}</code></span>
+                            </div>
                         </div>
-                        <div class="form-group">
-                            <label class="form-label">Préfixe des conteneurs</label>
-                            <input type="text" v-model="form.prefix" class="form-input" placeholder="Ex: CHN (Laissez vide pour Paris)">
-                            <small style="color: #64748b; font-size: 11px;">Empêche le mélange des scans entre agences.</small>
+                        <div class="agx-modal__f">
+                            <button class="agx-btn agx-btn--ghost" @click="showWizard=false">Annuler</button>
+                            <button class="agx-btn agx-btn--primary" @click="saveRoute" :disabled="saving">
+                                <span v-if="saving"><i class="fas fa-spinner fa-spin"></i> …</span>
+                                <span v-else>💾 Créer la route</span>
+                            </button>
                         </div>
                     </div>
-                    
-                    <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 25px; padding-top: 20px; border-top: 1px solid #e2e8f0;">
-                        <button class="btn btn-outline" @click="showForm = false">Annuler</button>
-                        <button class="btn btn-primary" @click="saveAgency" :disabled="saving" style="background: #8b5cf6; border: none;">
-                            <span v-if="saving"><i class="fas fa-spinner fa-spin"></i> Enregistrement...</span>
-                            <span v-else>💾 Enregistrer l'agence</span>
-                        </button>
+                </div>
+
+                <!-- AJOUT DESTINATION à un départ existant -->
+                <div class="agx-overlay" v-if="showAddDest">
+                    <div class="agx-modal">
+                        <div class="agx-modal__h">
+                            <h3 style="margin:0; color:#0f172a;">Ajouter une destination</h3>
+                            <p style="margin:4px 0 0; font-size:13px; color:#64748b;">Départ : <b>{{ addDest.depName }}</b></p>
+                        </div>
+                        <div class="agx-modal__b">
+                            <div class="agx-field">
+                                <label class="agx-lab">🛬 Nouvelle destination d'arrivée</label>
+                                <input class="agx-inp" v-model="addDest.name" placeholder="Ex : Dakar">
+                            </div>
+                            <div class="agx-field">
+                                <label class="agx-lab">Drapeau</label>
+                                <input class="agx-inp" v-model="addDest.flag" placeholder="🇸🇳" style="max-width:120px;">
+                            </div>
+                            <div class="agx-adv" v-if="addDest.name.trim()">
+                                Identifiant généré : <code>{{ slug(addDest.name) }}_{{ addDest.depId }}</code>
+                            </div>
+                        </div>
+                        <div class="agx-modal__f">
+                            <button class="agx-btn agx-btn--ghost" @click="showAddDest=false">Annuler</button>
+                            <button class="agx-btn agx-btn--primary" @click="saveAddDest" :disabled="saving">
+                                <span v-if="saving"><i class="fas fa-spinner fa-spin"></i> …</span>
+                                <span v-else>💾 Ajouter</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- RENOMMER (nom + drapeau) -->
+                <div class="agx-overlay" v-if="showEdit">
+                    <div class="agx-modal">
+                        <div class="agx-modal__h"><h3 style="margin:0; color:#0f172a;">Renommer l'agence</h3></div>
+                        <div class="agx-modal__b">
+                            <div class="agx-field">
+                                <label class="agx-lab">Nom affiché</label>
+                                <input class="agx-inp" v-model="edit.name">
+                            </div>
+                            <div class="agx-field">
+                                <label class="agx-lab">Drapeau</label>
+                                <input class="agx-inp" v-model="edit.flag" style="max-width:120px;">
+                            </div>
+                            <div class="agx-adv">Identifiant <code>{{ edit.id }}</code> et type non modifiables (ils pilotent le routage des données).</div>
+                        </div>
+                        <div class="agx-modal__f">
+                            <button class="agx-btn agx-btn--ghost" @click="showEdit=false">Annuler</button>
+                            <button class="agx-btn agx-btn--primary" @click="saveEdit" :disabled="saving">💾 Enregistrer</button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -146,82 +212,145 @@ export const SettingsAgenciesView = {
             setup() {
                 const agencies = ref([]);
                 const loading = ref(true);
-                const showForm = ref(false);
-                const isEditing = ref(false);
                 const saving = ref(false);
+                const showWizard = ref(false);
+                const showAddDest = ref(false);
+                const showEdit = ref(false);
                 let unsub = null;
 
-                const form = reactive({
-                    id: '',
-                    name: '',
-                    type: 'departure',
-                    appFolder: 'paris',
-                    flag: '',
-                    prefix: ''
+                const slug = (s) => (s || '')
+                    .toString().normalize('NFD').replace(/[̀-ͯ]/g, '')
+                    .toLowerCase().replace(/[^a-z0-9]/g, '');
+
+                const wiz = reactive({ depName: '', depFlag: '', arrivals: [{ name: '', flag: '' }] });
+                const addDest = reactive({ depId: '', depName: '', name: '', flag: '' });
+                const edit = reactive({ id: '', name: '', flag: '' });
+
+                const wizPreview = computed(() => {
+                    const dep = slug(wiz.depName);
+                    return {
+                        dep,
+                        arr: dep ? wiz.arrivals.map(a => a.name.trim() ? `${slug(a.name)}_${dep}` : '').filter(Boolean) : []
+                    };
+                });
+
+                // Regroupe les agences en routes (départ -> ses arrivées).
+                const routes = computed(() => {
+                    const list = agencies.value;
+                    const deps = list.filter(a => a.type === 'departure');
+                    return deps.map(d => ({
+                        departure: d,
+                        arrivals: list.filter(a => a.type === 'arrival' &&
+                            ((a.id.split('_')[1] === d.id) || (d.id === 'paris' && a.id === 'abidjan')))
+                    }));
                 });
 
                 onMounted(() => {
-                    unsub = onSnapshot(collection(db, "agencies_config"), (snapshot) => {
-                        agencies.value = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+                    unsub = onSnapshot(collection(db, "agencies_config"), (snap) => {
+                        agencies.value = snap.docs.map(d => ({ id: d.id, ...d.data() }));
                         loading.value = false;
                     });
                 });
-
                 onUnmounted(() => { if (unsub) unsub(); });
 
-                const resetForm = () => {
-                    form.id = ''; form.name = ''; form.type = 'departure'; form.appFolder = 'paris'; form.flag = '🏳️'; form.prefix = '';
-                    isEditing.value = false;
+                const exists = (id) => agencies.value.some(a => a.id === id);
+
+                const openWizard = () => {
+                    wiz.depName = ''; wiz.depFlag = ''; wiz.arrivals = [{ name: '', flag: '' }];
+                    showWizard.value = true;
                 };
 
-                const editAgency = (agency) => {
-                    Object.assign(form, agency);
-                    isEditing.value = true;
-                    showForm.value = true;
-                };
+                const saveRoute = async () => {
+                    const depName = wiz.depName.trim();
+                    const depId = slug(depName);
+                    const valmidArr = wiz.arrivals.filter(a => a.name.trim());
+                    if (!depName || !depId) return globalApp.showToast("Indiquez le départ.", "error");
+                    if (valmidArr.length === 0) return globalApp.showToast("Ajoutez au moins une destination.", "error");
+                    if (exists(depId)) return globalApp.showToast(`Le départ « ${depName} » existe déjà. Utilisez « ➕ Destination » sur sa route.`, "error");
 
-                const saveAgency = async () => {
-                    if (!form.id || !form.name) {
-                        globalApp.showToast("L'ID et le nom sont obligatoires.", "error");
-                        return;
-                    }
+                    const prefix = depId.slice(0, 3).toUpperCase() + '-';
                     saving.value = true;
-                    const cleanId = form.id.toLowerCase().trim().replace(/[^a-z0-9_]/g, '_');
-
                     try {
-                        await setDoc(doc(db, "agencies_config", cleanId), {
-                            name: form.name,
-                            type: form.type,
-                            appFolder: form.appFolder,
-                            flag: form.flag,
-                            prefix: form.prefix,
-                            updatedAt: new Date().toISOString()
+                        const batch = writeBatch(db);
+                        batch.set(doc(db, "agencies_config", depId), {
+                            name: depName, type: 'departure', appFolder: 'paris',
+                            flag: wiz.depFlag || '🏳️', prefix, updatedAt: new Date().toISOString()
                         });
-                        globalApp.showToast("Agence enregistrée avec succès !", "success");
-                        showForm.value = false;
-                    } catch(e) {
-                        console.error(e);
-                        globalApp.showToast("Erreur lors de l'enregistrement", "error");
-                    } finally {
-                        saving.value = false;
-                    }
+                        for (const a of valmidArr) {
+                            const aid = `${slug(a.name)}_${depId}`;
+                            batch.set(doc(db, "agencies_config", aid), {
+                                name: a.name.trim(), type: 'arrival', appFolder: 'abidjan',
+                                flag: a.flag || '🏳️', prefix: '', updatedAt: new Date().toISOString()
+                            });
+                        }
+                        await batch.commit();
+                        globalApp.showToast("Route créée avec succès !", "success");
+                        showWizard.value = false;
+                    } catch (e) {
+                        console.error(e); globalApp.showToast("Erreur lors de la création.", "error");
+                    } finally { saving.value = false; }
                 };
 
-                const deleteAgency = async (id) => {
-                    if (id === 'paris' || id === 'abidjan') {
-                        globalApp.showToast("Les agences par défaut ne peuvent pas être supprimées.", "error");
-                        return;
-                    }
-                    if (!confirm(`Voulez-vous vraiment supprimer l'agence ${id} ?`)) return;
+                const openAddDest = (dep) => {
+                    addDest.depId = dep.id; addDest.depName = dep.name; addDest.name = ''; addDest.flag = '';
+                    showAddDest.value = true;
+                };
+
+                const saveAddDest = async () => {
+                    const name = addDest.name.trim();
+                    if (!name) return globalApp.showToast("Indiquez la destination.", "error");
+                    const aid = `${slug(name)}_${addDest.depId}`;
+                    if (exists(aid)) return globalApp.showToast("Cette destination existe déjà pour ce départ.", "error");
+                    saving.value = true;
                     try {
-                        await deleteDoc(doc(db, "agencies_config", id));
-                        globalApp.showToast("Agence supprimée.", "success");
-                    } catch(e) { globalApp.showToast("Erreur de suppression", "error"); }
+                        await setDoc(doc(db, "agencies_config", aid), {
+                            name, type: 'arrival', appFolder: 'abidjan',
+                            flag: addDest.flag || '🏳️', prefix: '', updatedAt: new Date().toISOString()
+                        });
+                        globalApp.showToast("Destination ajoutée !", "success");
+                        showAddDest.value = false;
+                    } catch (e) {
+                        console.error(e); globalApp.showToast("Erreur.", "error");
+                    } finally { saving.value = false; }
+                };
+
+                const openEdit = (a) => {
+                    edit.id = a.id; edit.name = a.name; edit.flag = a.flag || '🏳️';
+                    showEdit.value = true;
+                };
+
+                const saveEdit = async () => {
+                    if (!edit.name.trim()) return globalApp.showToast("Le nom est requis.", "error");
+                    saving.value = true;
+                    try {
+                        await setDoc(doc(db, "agencies_config", edit.id),
+                            { name: edit.name.trim(), flag: edit.flag || '🏳️', updatedAt: new Date().toISOString() },
+                            { merge: true });
+                        globalApp.showToast("Enregistré.", "success");
+                        showEdit.value = false;
+                    } catch (e) { globalApp.showToast("Erreur.", "error"); }
+                    finally { saving.value = false; }
+                };
+
+                const removeAgency = async (a) => {
+                    if (a.id === 'paris' || a.id === 'abidjan') return globalApp.showToast("Agence par défaut : suppression interdite.", "error");
+                    if (!confirm(`Supprimer « ${a.name} » ? (les données déjà enregistrées ne sont pas effacées)`)) return;
+                    try { await deleteDoc(doc(db, "agencies_config", a.id)); globalApp.showToast("Supprimé.", "success"); }
+                    catch (e) { globalApp.showToast("Erreur de suppression.", "error"); }
+                };
+
+                const removeDeparture = async (r) => {
+                    if (r.departure.id === 'paris') return globalApp.showToast("Agence par défaut : suppression interdite.", "error");
+                    if (r.arrivals.length > 0) return globalApp.showToast("Supprimez d'abord les destinations de cette route.", "error");
+                    await removeAgency(r.departure);
                 };
 
                 return {
-                    agencies, loading, showForm, isEditing, saving, form,
-                    resetForm, editAgency, saveAgency, deleteAgency
+                    agencies, loading, saving, routes, slug, wizPreview,
+                    showWizard, wiz, openWizard, saveRoute,
+                    showAddDest, addDest, openAddDest, saveAddDest,
+                    showEdit, edit, openEdit, saveEdit,
+                    removeAgency, removeDeparture
                 };
             }
         });
