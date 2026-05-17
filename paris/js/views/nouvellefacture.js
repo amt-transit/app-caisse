@@ -2,7 +2,7 @@ import { db } from '../../../firebase-config.js';
 import { collection, doc, writeBatch, getDocs, query, where, limit } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 import { CONSTANTS } from '../../../constants.js';
 import { createApp, ref, reactive, computed, onMounted } from "https://unpkg.com/vue@3/dist/vue.esm-browser.prod.js";
-import { getCollectionName } from '../../../agencies-config.js';
+import { getCollectionName, AGENCIES } from '../../../agencies-config.js';
 
 export const NouvelleFactureView = {
     vueApp: null,
@@ -74,13 +74,13 @@ export const NouvelleFactureView = {
                         </div>
                         <div class="form-group">
                             <label>Agence destination *</label>
-                            <select id="nfAgence" required>
-                                <option value="ABIDJAN">ABIDJAN</option>
-                                <option value="BAMAKO">BAMAKO</option>
-                                <option value="CONAKRY">CONAKRY</option>
-                                <option value="DAKAR">DAKAR</option>
-                                <option value="LIBREVILLE">LIBREVILLE</option>
+                            <select id="nfAgence" v-model="form.agence" required>
+                                <option value="">— Choisir une destination —</option>
+                                <option v-for="a in destinationAgencies" :key="a.id" :value="a.id">{{ a.flag }} {{ a.name }}</option>
                             </select>
+                            <small v-if="destinationAgencies.length === 0" style="color:#ef4444; font-size:11px;">
+                                Aucune destination configurée pour cette agence. Ajoutez-en une dans « Gestion des agences ».
+                            </small>
                         </div>
                     </div>
                 </div>
@@ -213,7 +213,7 @@ initVue(globalApp) {
             const form = reactive({
                 date: new Date().toISOString().split('T')[0],
                 type: 'FACTURE',
-                agence: 'ABIDJAN',
+                agence: '',
                 expediteur: '',
                 destinataire: '',
                 lieu: '',
@@ -222,6 +222,17 @@ initVue(globalApp) {
                 volume: '',
                 montantPaye: 0,
                 comment: ''
+            });
+
+            // Destinations = agences d'ARRIVÉE de la route de l'agence de départ
+            // courante (SOURCE UNIQUE : agencies_config / modèle "routes" géré
+            // dans « Gestion des agences »). Remplace la liste de villes en dur.
+            const destinationAgencies = computed(() => {
+                const depId = sessionStorage.getItem('currentActiveAgency') || 'paris';
+                return Object.values(AGENCIES || {})
+                    .filter(a => a && a.type === 'arrival' &&
+                        ((String(a.id).split('_')[1] === depId) || (depId === 'paris' && a.id === 'abidjan')))
+                    .map(a => ({ id: a.id, name: a.name || a.id, flag: a.flag || '' }));
             });
             
             const items = ref([{ id: Date.now(), desc: '', qty: 1, pu: 0, total: 0, vol: 0, showSugg: false }]);
@@ -538,8 +549,10 @@ initVue(globalApp) {
                 });
 
                 if (conteneurCode && conteneurCode !== 'ATT') {
+                    const _destAg = destinationAgencies.value.find(a => a.id === form.agence);
+                    const destinationName = _destAg ? _destAg.name : (form.agence || 'ABIDJAN');
                     const containerRef = doc(db, getCollectionName("containers"), conteneurCode);
-                    batch.set(containerRef, { number: conteneurCode, status: 'EN_CHARGEMENT', destination: form.agence || 'ABIDJAN', createdAt: new Date(dateIso).toISOString() }, { merge: true });
+                    batch.set(containerRef, { number: conteneurCode, status: 'EN_CHARGEMENT', destination: destinationName, destinationAgency: form.agence || '', createdAt: new Date(dateIso).toISOString() }, { merge: true });
                 }
 
                 try {
@@ -567,7 +580,8 @@ initVue(globalApp) {
                 filteredExpediteurs, filteredDestinataires, filteredLieux, getFilteredProducts,
                 handleExpediteurChange, handleDestinataireChange,
                 selectExp, selectDest, selectLieu, selectProduct, hideSugg,
-                addRow, removeRow, updateItem, totalFret, resteAPayer, submitInvoice
+                addRow, removeRow, updateItem, totalFret, resteAPayer, submitInvoice,
+                destinationAgencies
             };
         }
     });
