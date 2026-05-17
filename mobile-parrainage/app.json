@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "AMT Transit Cargo",
-    "slug": "amt-parrainage-mobile",
+    "slug": "amt-transit-cargo",
     "version": "0.1.0",
     "orientation": "portrait",
     "userInterfaceStyle": "dark",
@@ -31,11 +31,14 @@
       "favicon": "./assets/logo.png"
     },
     "extra": {
-      "eas": {}
+      "eas": {
+        "projectId": "bd2edc24-fb3d-4d60-a7ba-da413040ebe7"
+      }
     },
     "plugins": [
       "expo-asset",
       "expo-font"
-    ]
+    ],
+    "owner": "jeanaffas-organization"
   }
 }
