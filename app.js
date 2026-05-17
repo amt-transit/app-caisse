@@ -480,7 +480,9 @@ export const app = {
             'confection-containers': () => ConfectionConteneursView.render(this),
             'loading-boats': () => BateauxDepartView.render(this),
             'finance-caisse': () => FinanceCaisseView.render(this),
+            'finance-cashier': () => FinanceCaisseView.render(this), // alias menu "Caisse globale"
             'finance-depenses': () => FinanceDepensesView.render(this),
+            'finance-expenses': () => FinanceDepensesView.render(this), // alias menu "Dépenses Finance"
             'finance-cheques': () => FinanceChequesView.render(this),
             'settings-agency': () => SettingsAgencyView.render(this),
             'settings-agencies': () => SettingsAgenciesView.render(this),
@@ -502,7 +504,7 @@ export const app = {
             // Inline renderers de Paris conservés
             'clients-app': () => this.renderClientsApp(),
             'clients-analytics': () => this.renderClientsAnalytics(),
-            'stock-list': () => this.renderStockList(),
+            'stock-list': () => ProductsListView.render(this), // vrai catalogue produits (base)
             'config-objectives': () => this.renderConfigObjectives(),
             'config-charges': () => this.renderConfigCharges(),
             'settings-sms': () => this.renderSettingsSms(),
@@ -587,17 +589,47 @@ export const app = {
             </div>
         `;
     },
-    renderClientsAnalytics() {
-        document.getElementById('contentContainer').innerHTML = `
+    async renderClientsAnalytics() {
+        const c = document.getElementById('contentContainer');
+        c.innerHTML = `<div class="loading"><i class="fas fa-spinner fa-spin"></i> Calcul des analyses clients…</div>`;
+        try {
+            const { db } = await import('./firebase-config.js');
+            const { collection, query, where, getDocs } = await import('https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js');
+            const { getCollectionName } = await import('./agencies-config.js');
+            const agency = sessionStorage.getItem('currentActiveAgency') || 'abidjan';
+
+            // Mêmes collections / filtrage que le module Clients (source unique).
+            const [csnap, lsnap] = await Promise.all([
+                getDocs(query(collection(db, getCollectionName('clients')), where('agency', '==', agency))),
+                getDocs(query(collection(db, getCollectionName('livraisons')), where('agency', '==', agency))),
+            ]);
+
+            const nbClients = csnap.size;
+            const livs = lsnap.docs.map(d => d.data()).filter(l => l && l.isDeleted !== true);
+            const nbColis = livs.length;
+            const caTotal = livs.reduce((s, liv) =>
+                s + (parseFloat(String(liv.prixOriginal || liv.montant || '0').replace(/[^\d]/g, '')) || 0), 0);
+
+            c.innerHTML = `
             <div class="form-card">
-                <h3>Analytique clients</h3>
-                <div class="stats-grid">
-                    <div class="stat-card"><div class="stat-value">25K</div><div class="stat-label">CA total clients</div></div>
-                    <div class="stat-card"><div class="stat-value">45</div><div class="stat-label">Clients actifs</div></div>
-                    <div class="stat-card"><div class="stat-value">1250</div><div class="stat-label">Colis expédiés</div></div>
+                <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+                    <h3 style="margin:0;">Analytique clients <span style="font-size:12px;color:#64748b;font-weight:600;">· agence ${agency}</span></h3>
+                    <button class="btn btn-secondary" id="btnReloadAnalytics"><i class="fas fa-sync"></i> Actualiser</button>
                 </div>
-            </div>
-        `;
+                <div class="stats-grid" style="margin-top:18px;">
+                    <div class="stat-card"><div class="stat-value">${this.formatMoneyLocal(caTotal)}</div><div class="stat-label">Chiffre d'affaires (colis)</div></div>
+                    <div class="stat-card"><div class="stat-value">${nbClients.toLocaleString('fr-FR')}</div><div class="stat-label">Clients enregistrés</div></div>
+                    <div class="stat-card"><div class="stat-value">${nbColis.toLocaleString('fr-FR')}</div><div class="stat-label">Colis traités</div></div>
+                </div>
+                <p style="margin-top:14px;color:#94a3b8;font-size:12px;">Chiffres calculés en direct depuis la base (collections clients & livraisons).</p>
+            </div>`;
+            const btn = document.getElementById('btnReloadAnalytics');
+            if (btn) btn.onclick = () => this.renderClientsAnalytics();
+        } catch (e) {
+            c.innerHTML = `<div style="padding:40px;text-align:center;color:#ef4444;background:white;border-radius:12px;">
+                <i class="fas fa-exclamation-triangle fa-2x" style="margin-bottom:12px;"></i>
+                <p>Impossible de charger les analyses : ${e.message}</p></div>`;
+        }
     },
     renderStockList() {
         document.getElementById('contentContainer').innerHTML = `
