@@ -3,6 +3,8 @@ import { collection, doc, writeBatch, getDocs, query, where, limit } from "https
 import { CONSTANTS } from '../../../constants.js';
 import { createApp, ref, reactive, computed, onMounted } from "https://unpkg.com/vue@3/dist/vue.esm-browser.prod.js";
 import { getCollectionName, AGENCIES } from '../../../agencies-config.js';
+import { isAffiliationActive } from '../../../affiliation-config.js';
+import { getAffiliation, ensureAffiliation } from '../../../affiliations.js';
 
 export const NouvelleFactureView = {
     vueApp: null,
@@ -107,6 +109,14 @@ export const NouvelleFactureView = {
                             </div>
                         </div>
                         <div id="nfDestinataireFeedback" style="font-size: 12px; color: #64748b; margin-top: 5px;"></div>
+                        <div class="form-group" v-if="affiliationActive" style="margin-top: 15px;">
+                            <label><i class="fas fa-user-friends" style="color:#d97706;"></i> Parrain (parrainage)</label>
+                            <select v-model="form.parrainId" style="width:100%; padding:10px; border:1px solid #cbd5e1; border-radius:8px; box-sizing:border-box; outline:none; background:white;">
+                                <option value="">— Aucun parrain —</option>
+                                <option v-for="d in demarcheurs" :key="d.id" :value="d.id">{{ d.prenom }} {{ d.nom }}</option>
+                            </select>
+                            <div style="font-size:11px; color:#94a3b8; margin-top:4px;">Si ce destinataire est déjà affilié, son parrain d'origine est conservé (rattachement permanent).</div>
+                        </div>
                         <div class="form-group" style="margin-top: 15px;">
                             <label>Lieu livraison / Adresse complète</label>
                             <div style="position: relative;">
@@ -221,7 +231,8 @@ initVue(globalApp) {
                 valeur: '',
                 volume: '',
                 montantPaye: 0,
-                comment: ''
+                comment: '',
+                parrainId: ''
             });
 
             // Destinations = agences d'ARRIVÉE de la route de l'agence de départ
@@ -234,6 +245,15 @@ initVue(globalApp) {
                         ((String(a.id).split('_')[1] === depId) || (depId === 'paris' && a.id === 'abidjan')))
                     .map(a => ({ id: a.id, name: a.name || a.id, flag: a.flag || '' }));
             });
+
+            // Parrainage : actif selon le flag agence (source unique affiliation-config).
+            const affiliationActive = isAffiliationActive(sessionStorage.getItem('currentActiveAgency') || 'paris');
+            const demarcheurs = ref([]);
+            if (affiliationActive) {
+                getDocs(collection(db, 'demarcheurs')).then(s => {
+                    demarcheurs.value = s.docs.map(d => ({ id: d.id, ...d.data() }));
+                }).catch(e => console.warn('Chargement démarcheurs:', e));
+            }
             
             const items = ref([{ id: Date.now(), desc: '', qty: 1, pu: 0, total: 0, vol: 0, showSugg: false }]);
             
@@ -513,6 +533,29 @@ initVue(globalApp) {
                 const orderNum = (containerSnap.size + 1).toString().padStart(3, '0');
                 const ref = `${initials}-${orderNum}-${conteneurCode}`;
 
+                // --- AFFILIATION (parrainage) : lien persistant destinataire ↔ démarcheur ---
+                // Non bloquant : toute erreur ici ne doit pas empêcher la facture.
+                let affiliationDemarcheurId = null;
+                if (affiliationActive && destPhone) {
+                    try {
+                        const existing = await getAffiliation(destPhone);
+                        if (existing && existing.demarcheurId) {
+                            affiliationDemarcheurId = existing.demarcheurId; // rattachement permanent : 1er gagnant
+                        } else if (form.parrainId) {
+                            const dem = demarcheurs.value.find(d => d.id === form.parrainId);
+                            await ensureAffiliation({
+                                phone: destPhone,
+                                clientName: finalDestName,
+                                demarcheurId: form.parrainId,
+                                demarcheurName: dem ? `${dem.prenom || ''} ${dem.nom || ''}`.trim() : '',
+                                agency: activeAgency,
+                                createdBy: userName
+                            });
+                            affiliationDemarcheurId = form.parrainId;
+                        }
+                    } catch (e) { console.warn('Affiliation (non bloquant):', e); }
+                }
+
                 const totalColis = items.value.reduce((sum, item) => sum + item.qty, 0);
                 const generatedLabels = [];
                 const printLabelsData = [];
@@ -530,6 +573,7 @@ initVue(globalApp) {
 
                 const livRef = doc(collection(db, getCollectionName("livraisons")));
                 batch.set(livRef, {
+                    demarcheurId: affiliationDemarcheurId,
                     ref: ref, labels: generatedLabels, conteneur: conteneurCode, volumeCBM: volumeCBM,
                     expediteur: finalExpName, destinataire: finalDestName, numero: destPhone, lieuLivraison: lieuLivraison,
                     description: items.value.map(i => `${i.qty}x ${i.desc}`).join(', '),
@@ -539,6 +583,7 @@ initVue(globalApp) {
 
                 const transRef = doc(collection(db, getCollectionName("transactions")));
                 batch.set(transRef, {
+                    demarcheurId: affiliationDemarcheurId,
                     reference: ref, nom: finalExpName, nomDestinataire: finalDestName, numero: destPhone, tel: expPhone,
                     adresseDestinataire: lieuLivraison, conteneur: conteneurCode, volumeCBM: volumeCBM, date: dateIso,
                     prix: totalCFA, montantParis: payeCFA, montantAbidjan: 0, reste: -resteCFA,
@@ -581,7 +626,7 @@ initVue(globalApp) {
                 handleExpediteurChange, handleDestinataireChange,
                 selectExp, selectDest, selectLieu, selectProduct, hideSugg,
                 addRow, removeRow, updateItem, totalFret, resteAPayer, submitInvoice,
-                destinationAgencies
+                destinationAgencies, affiliationActive, demarcheurs
             };
         }
     });

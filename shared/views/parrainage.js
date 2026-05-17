@@ -1,6 +1,7 @@
 import { db } from '../../firebase-config.js';
 import { collection, doc, getDoc, getDocs, setDoc, addDoc, updateDoc, query, where, orderBy, onSnapshot, serverTimestamp, increment, writeBatch } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 import { createApp, ref, reactive, computed, onMounted, onUnmounted, nextTick, watch } from "https://unpkg.com/vue@3/dist/vue.esm-browser.prod.js";
+import { isAffiliationActive } from '../../affiliation-config.js';
 
 export const ParrainageView = {
     vueApp: null,
@@ -525,7 +526,9 @@ export const ParrainageView = {
         this.vueApp = createApp({
             setup() {
                 const activeAgency = ref(sessionStorage.getItem('currentActiveAgency') || 'abidjan');
-                const isAsieAgency = computed(() => ['chine', 'abidjan_chine'].includes(activeAgency.value));
+                // Activation pilotée par flag (settings/menus_<agency>.features.affiliation),
+                // défaut sûr = comportement historique Asie. Source unique : affiliation-config.js
+                const isAsieAgency = computed(() => isAffiliationActive(activeAgency.value));
                 const userRole = sessionStorage.getItem('userRole');
                 const isSuperAdmin = computed(() => userRole === 'super_admin' || userRole === 'admin');
 
