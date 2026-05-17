@@ -1,4 +1,4 @@
-import { db, functions, auth } from '../../firebase-config.js';
+import { db, functions, auth, app } from '../../firebase-config.js';
 import { collection, doc, getDoc, getDocs, setDoc, addDoc, updateDoc, query, where, orderBy, onSnapshot, serverTimestamp, increment, writeBatch } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 import { httpsCallable } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-functions.js";
 import { createApp, ref, reactive, computed, onMounted, onUnmounted, nextTick, watch } from "https://unpkg.com/vue@3/dist/vue.esm-browser.prod.js";
@@ -890,12 +890,29 @@ export const ParrainageView = {
                         }
                         // Jeton FRAIS + diagnostic : c'est exactement ce jeton qui part
                         // vers la fonction. On note qui on est pour comprendre un refus.
-                        const tr = await auth.currentUser.getIdTokenResult(true);
-                        const diag = `uid=${(tr.claims && tr.claims.user_id) || auth.currentUser.uid} | email=${auth.currentUser.email || '?'} | role(token)=${(tr.claims && tr.claims.role) || 'aucun'}`;
-                        console.log('[accès mobile] appel provisionDemarcheurAuth —', diag, '| jeton émis le', tr.issuedAtTime);
-                        const fn = httpsCallable(functions, 'provisionDemarcheurAuth');
-                        const res = await fn({ demarcheurId: p.id });
-                        const d = (res && res.data) || {};
+                        const idToken = await auth.currentUser.getIdToken(true);
+                        console.log('[accès mobile] appel provisionDemarcheurAuth — uid=' + auth.currentUser.uid + ' | email=' + (auth.currentUser.email || '?'));
+                        // Appel DIRECT du protocole "callable" v1 en attachant nous-mêmes
+                        // le jeton (Authorization: Bearer). L'ancien SDK (9.22.0) ne le
+                        // joignait pas => le serveur croyait l'appel anonyme (401).
+                        const projectId = (app && app.options && app.options.projectId) || 'caisse-amt-perso';
+                        const url = `https://us-central1-${projectId}.cloudfunctions.net/provisionDemarcheurAuth`;
+                        const resp = await fetch(url, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'Authorization': `Bearer ${idToken}`,
+                            },
+                            body: JSON.stringify({ data: { demarcheurId: p.id } }),
+                        });
+                        const json = await resp.json().catch(() => ({}));
+                        if (!resp.ok || (json && json.error)) {
+                            const err = (json && json.error) || {};
+                            const e2 = new Error(err.message || `Échec serveur (HTTP ${resp.status}).`);
+                            e2.code = `functions/${(err.status || resp.status || 'unknown')}`.toLowerCase();
+                            throw e2;
+                        }
+                        const d = (json && json.result) || {};
                         mobileAccessInfo.value = { email: d.email, password: d.password, generated: d.generated };
                         globalApp.showToast("Accès mobile créé ✔", "success");
                     } catch (e) {
