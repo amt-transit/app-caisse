@@ -110,6 +110,29 @@ export const SettingsRolesMenusView = {
                                 </div>
                             </div>
                         </div>
+
+                        <div class="rm-card" style="margin-top: 16px;">
+                            <div class="rm-card-header">
+                                <h3>👁️ Menus visibles (cette agence)</h3>
+                                <button class="btn btn-outline btn-small" @click="saveVisibleMenus" :disabled="savingVisible" style="padding: 6px 12px;">
+                                    <span v-if="savingVisible"><i class="fas fa-spinner fa-spin"></i></span>
+                                    <span v-else>💾 Enregistrer</span>
+                                </button>
+                            </div>
+                            <div style="font-size:12px; color:#64748b; padding:10px 4px; line-height:1.5;">
+                                Cochez les menus que <b>cette agence</b> doit afficher. Si la liste fait foi, le découpage départ/arrivée codé en dur est <b>ignoré</b>.
+                                <br><b>Liste vide</b> = mode historique (filtrage départ/arrivée automatique).
+                            </div>
+                            <div style="display:flex; gap:8px; margin-bottom:8px;">
+                                <button class="btn btn-outline btn-small" @click="clearVisibleMenus" style="padding:5px 10px; font-size:12px;">↩️ Vider (mode historique)</button>
+                            </div>
+                            <div class="rm-order-list">
+                                <label v-for="m in ALL_MENUS" :key="m.key" class="rm-check-item" style="display:flex; align-items:center; gap:8px; padding:7px 6px; cursor:pointer; border-bottom:1px solid #f1f5f9;">
+                                    <input type="checkbox" :checked="isMenuVisible(m.key)" @change="toggleVisibleMenu(m.key)">
+                                    <span>{{ m.label }}</span>
+                                </label>
+                            </div>
+                        </div>
                     </div>
 
                     <!-- COLONNE DROITE : ROLES GRID -->
@@ -266,9 +289,10 @@ export const SettingsRolesMenusView = {
                 const menuDocRef = doc(db, "settings", `menus_${activeAgency}`);
                 
                 const roles = ref([]);
-                const menuConfig = reactive({ order: [], roles: {} });
+                const menuConfig = reactive({ order: [], roles: {}, visibleMenus: [] });
                 const loadingRoles = ref(true);
                 const loadingMenus = ref(true);
+                const savingVisible = ref(false);
                 
                 const showRoleForm = ref(false);
                 const isEditing = ref(false);
@@ -298,6 +322,7 @@ export const SettingsRolesMenusView = {
                             const data = docSnap.data();
                             menuConfig.order = data.order || [];
                             menuConfig.roles = data.roles || {};
+                            menuConfig.visibleMenus = data.visibleMenus || [];
                         }
                         
                         // Vérifier que tous les menus existent dans l'ordre (au cas où on ajoute de nouveaux menus dans le code)
@@ -349,6 +374,31 @@ export const SettingsRolesMenusView = {
                         if (globalApp.applyMenuConfig) globalApp.applyMenuConfig(menuConfig);
                     } catch(e) { globalApp.showToast("Erreur", "error"); }
                     savingOrder.value = false;
+                };
+
+                const isMenuVisible = (key) => menuConfig.visibleMenus.includes(key);
+
+                const toggleVisibleMenu = (key) => {
+                    const i = menuConfig.visibleMenus.indexOf(key);
+                    if (i > -1) menuConfig.visibleMenus.splice(i, 1);
+                    else menuConfig.visibleMenus.push(key);
+                };
+
+                const clearVisibleMenus = () => { menuConfig.visibleMenus.splice(0); };
+
+                const saveVisibleMenus = async () => {
+                    savingVisible.value = true;
+                    try {
+                        await setDoc(menuDocRef, { visibleMenus: Array.from(menuConfig.visibleMenus) }, { merge: true });
+                        globalApp.showToast(
+                            menuConfig.visibleMenus.length
+                                ? "Menus de l'agence enregistrés (la config fait foi)."
+                                : "Liste vidée : retour au mode historique (départ/arrivée).",
+                            "success"
+                        );
+                        if (globalApp.applyMenuConfig) globalApp.applyMenuConfig(menuConfig);
+                    } catch(e) { globalApp.showToast("Erreur", "error"); }
+                    savingVisible.value = false;
                 };
 
                 const autoFillId = () => {
@@ -420,6 +470,7 @@ export const SettingsRolesMenusView = {
                     roles, menuConfig, loadingRoles, loadingMenus, ALL_MENUS, groupedPermissions,
                     showRoleForm, isEditing, savingRole, savingOrder, activeTab, roleForm, draggedIndex,
                     getMenuLabel, isProtectedRole, onDragStart, onDrop, onDragEnd, saveMenuOrder,
+                    savingVisible, isMenuVisible, toggleVisibleMenu, clearVisibleMenus, saveVisibleMenus,
                     autoFillId, openRoleForm, editRole, saveRole, deleteRole
                 };
             }

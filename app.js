@@ -184,33 +184,44 @@ export const app = {
 
         sections.forEach(sec => sec.remove());
 
+        // "La config agence fait foi" : si l'agence a un visibleMenus explicitement
+        // configuré (via Rôles & Menus), c'est LUI qui décide quels menus s'affichent
+        // et le découpage départ/arrivée codé en dur (classes arrival-only/
+        // departure-only) est IGNORÉ. Sinon : comportement historique conservé
+        // (aucune régression pour les agences non encore configurées).
+        const configAuthoritative = !!(config && Array.isArray(config.visibleMenus) && config.visibleMenus.length > 0);
+
         baseOrder.forEach(key => {
-            const section = sections.find(sec => {
+            if (!this.allowedMenus.includes(key)) return;
+            // Toutes les catégories partageant cette clé (corrige le bug du doublon :
+            // ex. 'Entrées Caisse' ET 'Finance & Tréso' -> clé 'finance'. L'ancien
+            // sections.find() n'en gardait qu'une et la 2e disparaissait).
+            const matching = sections.filter(sec => {
                 const titleEl = sec.querySelector('.sidebar-category-title');
                 return titleEl && titleToKey[titleEl.textContent.trim()] === key;
             });
-            if (section && this.allowedMenus.includes(key)) {
-                const isSectionDepartureOnly = section.classList.contains('departure-only');
-                const isSectionArrivalOnly = section.classList.contains('arrival-only');
-                
-                if ((isArrival && isSectionDepartureOnly) || (!isArrival && isSectionArrivalOnly)) {
-                    // Ne pas afficher la section
-                } else {
-                    section.style.display = '';
-                    // Masquer/Afficher les éléments internes
-                    section.querySelectorAll('.sidebar-item').forEach(item => {
-                        const isItemDepartureOnly = item.classList.contains('departure-only');
-                        const isItemArrivalOnly = item.classList.contains('arrival-only');
-                        
-                        if ((isArrival && isItemDepartureOnly) || (!isArrival && isItemArrivalOnly)) {
-                            item.style.display = 'none';
-                        } else {
-                            item.style.display = '';
-                        }
-                    });
-                    navContainer.appendChild(section);
+
+            matching.forEach(section => {
+                if (!configAuthoritative) {
+                    // Mode historique : filtrage départ/arrivée au niveau section.
+                    const isSecDep = section.classList.contains('departure-only');
+                    const isSecArr = section.classList.contains('arrival-only');
+                    if ((isArrival && isSecDep) || (!isArrival && isSecArr)) return; // section masquée
                 }
-            }
+
+                section.style.display = '';
+                section.querySelectorAll('.sidebar-item').forEach(item => {
+                    if (configAuthoritative) {
+                        // La config fait foi : on affiche tous les items de la catégorie.
+                        item.style.display = '';
+                        return;
+                    }
+                    const isItemDep = item.classList.contains('departure-only');
+                    const isItemArr = item.classList.contains('arrival-only');
+                    item.style.display = ((isArrival && isItemDep) || (!isArrival && isItemArr)) ? 'none' : '';
+                });
+                navContainer.appendChild(section);
+            });
         });
 
         if (this.currentPage && !this.checkPageAccess(this.currentPage)) {
