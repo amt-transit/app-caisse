@@ -1,25 +1,41 @@
 {
   "expo": {
-    "name": "AMT Parrainage",
+    "name": "AMT Transit Cargo",
     "slug": "amt-parrainage-mobile",
     "version": "0.1.0",
     "orientation": "portrait",
-    "userInterfaceStyle": "light",
+    "userInterfaceStyle": "dark",
+    "primaryColor": "#F2A312",
     "scheme": "amtparrainage",
+    "icon": "./assets/logo.png",
     "splash": {
+      "image": "./assets/logo.png",
       "resizeMode": "contain",
-      "backgroundColor": "#0f172a"
+      "backgroundColor": "#0A1124"
     },
-    "assetBundlePatterns": ["**/*"],
+    "assetBundlePatterns": [
+      "**/*"
+    ],
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.amttransit.parrainage"
     },
     "android": {
-      "package": "com.amttransit.parrainage"
+      "package": "com.amttransit.parrainage",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/logo.png",
+        "backgroundColor": "#F2A312"
+      }
+    },
+    "web": {
+      "favicon": "./assets/logo.png"
     },
     "extra": {
       "eas": {}
-    }
+    },
+    "plugins": [
+      "expo-asset",
+      "expo-font"
+    ]
   }
 }
