@@ -59,7 +59,7 @@ const PROJECT_ID = 'caisse-amt-perso';
 
 // Par collection : { agency, mode: 'fill'|'force', fixIsDeleted?: true }
 const TARGETS = {
-  transactions: { agency: 'paris', mode: 'fill' },
+  transactions: { agency: 'paris', mode: 'fill', fixIsDeleted: true },
   livraisons: { agency: 'paris', mode: 'fill', fixIsDeleted: true },
   expenses: { agency: 'abidjan', mode: 'force', fixIsDeleted: true },
   bank_movements: { agency: 'abidjan', mode: 'force', fixIsDeleted: true },
