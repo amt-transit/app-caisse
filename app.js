@@ -190,6 +190,10 @@ export const app = {
         // departure-only) est IGNORÉ. Sinon : comportement historique conservé
         // (aucune régression pour les agences non encore configurées).
         const configAuthoritative = !!(config && Array.isArray(config.visibleMenus) && config.visibleMenus.length > 0);
+        // Modules (sous-éléments) explicitement masqués pour cette agence
+        // (liste noire par data-page, gérée dans Rôles & Menus). S'applique
+        // dans les 2 modes ; défaut = visible (non régressif).
+        const hiddenItems = new Set(config && Array.isArray(config.hiddenItems) ? config.hiddenItems : []);
 
         baseOrder.forEach(key => {
             if (!this.allowedMenus.includes(key)) return;
@@ -211,6 +215,8 @@ export const app = {
 
                 section.style.display = '';
                 section.querySelectorAll('.sidebar-item').forEach(item => {
+                    // 1) Module explicitement masqué pour cette agence (prioritaire).
+                    if (hiddenItems.has(item.dataset.page)) { item.style.display = 'none'; return; }
                     if (configAuthoritative) {
                         // La config fait foi : on affiche tous les items de la catégorie.
                         item.style.display = '';

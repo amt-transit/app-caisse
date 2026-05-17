@@ -29,6 +29,56 @@ const MENU_META = [
     { key: 'audit-log', label: "Journal d'activité", icon: '🕓' },
 ];
 
+// Modules (sous-éléments) de chaque section. La clé = clé de section (cf. MENU_META) ;
+// page = data-page réel (utilisé par app.js pour masquer via hiddenItems).
+const MENU_ITEMS = {
+    main: [{ page: 'dashboard', label: 'Tableau de bord' }],
+    'special-asie': [{ page: 'parrainage', label: 'Réseau Partenaires' }],
+    parrainage: [{ page: 'parrainage', label: 'Réseau Partenaires' }],
+    bilan: [{ page: 'daily-bilan', label: 'Bilan du jour' }, { page: 'daily-users', label: 'Bilan par utilisateurs' }],
+    factures: [{ page: 'invoices-list', label: 'Toutes les factures' }, { page: 'invoice-new', label: 'Nouvelle facture' }, { page: 'touteslesfactures', label: 'Factures (Ancien)' }],
+    finance: [
+        { page: 'index', label: 'Saisie (caisse)' }, { page: 'confirmation', label: 'Confirmation' },
+        { page: 'history', label: 'Historique' }, { page: 'other-income', label: 'Autres Entrées' },
+        { page: 'finance-cashier', label: 'Caisse globale' }, { page: 'finance-cheques', label: 'Liste des chèques' },
+        { page: 'finance-expenses', label: 'Dépenses Finance' }, { page: 'expenses', label: 'Dépenses Tréso' },
+        { page: 'bank', label: 'Banque' }, { page: 'audit', label: 'Audit' },
+    ],
+    operations: [
+        { page: 'livraison', label: 'LIVRAISON' }, { page: 'livreurscan', label: 'MODE LIVREUR' },
+        { page: 'voiture', label: 'Gestion Véhicules' }, { page: 'magasinage', label: 'Magasinage' },
+        { page: 'points', label: 'Points' }, { page: 'clients', label: 'Clients (Logistique)' },
+        { page: 'program-new', label: 'Nouveau programme' }, { page: 'program-my', label: 'Mon programme' },
+        { page: 'program-history', label: 'Historique programmes' }, { page: 'drivers', label: 'Chauffeurs' },
+        { page: 'departures-calendar', label: 'Calendrier départs' },
+    ],
+    rdv: [{ page: 'appointment-new', label: 'Nouveau RDV' }, { page: 'appointments-list', label: 'Tous les RDV' }, { page: 'appointments-pending', label: 'À valider' }, { page: 'appointments-calendar', label: 'Calendrier RDV' }],
+    devis: [{ page: 'quotes-list', label: 'Tous les devis' }, { page: 'quote-new', label: 'Nouveau devis' }, { page: 'quote-requests', label: 'Demandes reçues' }],
+    chargement: [{ page: 'confection-containers', label: 'Confection' }, { page: 'loading-boats', label: 'Bateaux départ' }],
+    scan: [
+        { page: 'scan-warehouse', label: 'Mise en entrepôt' }, { page: 'scan-container', label: 'Charger conteneur' },
+        { page: 'scan-classic', label: 'Scanner (classique)' }, { page: 'scan-dechargement', label: 'Déchargement' },
+        { page: 'scan-livraison', label: 'En livraison' }, { page: 'scan-livrer', label: 'Remise Clients' },
+        { page: 'scan-history', label: 'Historique scans' },
+    ],
+    clients: [{ page: 'clients-list', label: 'Liste clients' }, { page: 'clients-app', label: 'Client application' }, { page: 'clients-analytics', label: 'Analytics' }],
+    comms: [{ page: 'chat', label: 'Chat' }, { page: 'sms-send', label: 'Envoi SMS' }, { page: 'sms-history', label: 'Historique SMS' }, { page: 'sms', label: 'Campagnes SMS' }, { page: 'notifications', label: 'Notifications' }, { page: 'notifications-history', label: 'Historique Notif' }],
+    produits: [{ page: 'products-list', label: 'Liste produits' }],
+    stock: [{ page: 'stock-list', label: 'Liste produit stocké' }],
+    'bilans-financiers': [{ page: 'balance-monthly', label: 'Bilan Comparatif' }, { page: 'balance-12m', label: 'Direction 12M' }, { page: 'stats-boat', label: 'Stats bateau' }, { page: 'stats-monthly', label: 'Stats par mois' }, { page: 'stats-yearly', label: 'Stats par année' }],
+    settings: [
+        { page: 'admin-panel', label: 'Gestion agents & accès' }, { page: 'salaire', label: 'Salaire' },
+        { page: 'comptejb', label: 'Compte JB' }, { page: 'settings-agency', label: 'Agence' },
+        { page: 'settings-company', label: 'Entreprise' }, { page: 'settings-software', label: 'Paramètre logiciel' },
+        { page: 'settings-design', label: 'Apparence & menus' }, { page: 'settings-agents', label: 'Gestion des agents' },
+        { page: 'settings-agencies', label: 'Gestion des agences' }, { page: 'settings-roles', label: 'Rôles & Menus' },
+        { page: 'settings-appointments', label: 'Paramètres RDV' }, { page: 'settings-profile', label: 'Mon profil' },
+    ],
+    configuration: [{ page: 'config-invoice', label: 'Choix facture' }, { page: 'config-label', label: 'Choix étiquette' }, { page: 'config-container', label: 'Conteneur Actif' }, { page: 'config-objectives', label: 'Objectifs' }, { page: 'config-charges', label: 'Charges' }],
+    prospecting: [{ page: 'prospecting', label: 'Prospections' }],
+    'audit-log': [{ page: 'audit-log', label: "Activités log" }],
+};
+
 const ACTION_PERMS = [
     { id: 'view_bank', label: 'Voir la Caisse et la Banque', category: 'Finance' },
     { id: 'manage_expenses', label: 'Créer / Gérer les dépenses', category: 'Finance' },
@@ -70,6 +120,14 @@ export const SettingsRolesMenusView = {
                 .mn-btn:disabled { opacity:.55; cursor:not-allowed; }
 
                 .mn-list { display:flex; flex-direction:column; gap:10px; }
+                .mn-group { display:flex; flex-direction:column; }
+                .mn-exp { margin-left:10px; border:1px solid #c7d2fe; background:#eef2ff; color:#4f46e5; font-size:11px; font-weight:700; padding:2px 9px; border-radius:999px; cursor:pointer; }
+                .mn-subs { display:grid; grid-template-columns:repeat(auto-fill,minmax(230px,1fr)); gap:8px; margin:6px 0 4px 46px; padding:12px; background:#f8fafc; border:1px dashed #cbd5e1; border-radius:12px; }
+                .mn-sub { display:flex; align-items:center; gap:9px; padding:8px 12px; background:white; border:1px solid #e2e8f0; border-radius:10px; cursor:pointer; font-size:13px; }
+                .mn-sub.soff { opacity:.6; }
+                .mn-sub input { width:15px; height:15px; accent-color:#4f46e5; }
+                .mn-sub-n { flex:1; font-weight:600; color:#0f172a; }
+                .mn-sub-s { font-size:10px; font-weight:800; color:#94a3b8; text-transform:uppercase; }
                 .mn-row { display:flex; align-items:center; gap:14px; background:white; border:1px solid #e2e8f0; border-radius:14px; padding:14px 16px; transition:.18s; }
                 .mn-row.on { border-color:#c7d2fe; box-shadow:0 2px 8px -3px rgba(79,70,229,.25); }
                 .mn-row.off { opacity:.62; background:#f8fafc; }
@@ -141,20 +199,33 @@ export const SettingsRolesMenusView = {
 
                 <div v-if="loadingMenus" style="text-align:center;padding:40px;color:#64748b;">⏳ Chargement…</div>
                 <div v-else class="mn-list">
-                    <div v-for="(key, index) in menuConfig.order" :key="key"
-                         class="mn-row" :class="[ isMenuVisible(key) ? 'on' : 'off', draggedIndex === index ? 'drag' : '' ]"
-                         draggable="true"
-                         @dragstart="onDragStart(index, $event)" @dragover.prevent @dragenter.prevent
-                         @drop="onDrop(index)" @dragend="onDragEnd">
-                        <span class="mn-grab" title="Glisser pour réordonner">⠿</span>
-                        <span class="mn-rank">{{ index + 1 }}</span>
-                        <span class="mn-ic">{{ metaOf(key).icon }}</span>
-                        <span class="mn-name">{{ metaOf(key).label }}</span>
-                        <span class="mn-state" :class="isMenuVisible(key) ? 's-on' : 's-off'">{{ isMenuVisible(key) ? 'AFFICHÉ' : 'MASQUÉ' }}</span>
-                        <label class="mn-switch" @click.stop>
-                            <input type="checkbox" :checked="isMenuVisible(key)" @change="toggleVisibleMenu(key)">
-                            <span class="mn-slider"></span>
-                        </label>
+                    <div v-for="(key, index) in menuConfig.order" :key="key" class="mn-group">
+                        <div class="mn-row" :class="[ isMenuVisible(key) ? 'on' : 'off', draggedIndex === index ? 'drag' : '' ]"
+                             draggable="true"
+                             @dragstart="onDragStart(index, $event)" @dragover.prevent @dragenter.prevent
+                             @drop="onDrop(index)" @dragend="onDragEnd">
+                            <span class="mn-grab" title="Glisser pour réordonner">⠿</span>
+                            <span class="mn-rank">{{ index + 1 }}</span>
+                            <span class="mn-ic">{{ metaOf(key).icon }}</span>
+                            <span class="mn-name">
+                                {{ metaOf(key).label }}
+                                <button v-if="itemsOf(key).length" class="mn-exp" @click.stop="toggleExpand(key)">
+                                    {{ expanded[key] ? '▾' : '▸' }} {{ itemsOf(key).length }} module(s)
+                                </button>
+                            </span>
+                            <span class="mn-state" :class="isMenuVisible(key) ? 's-on' : 's-off'">{{ isMenuVisible(key) ? 'AFFICHÉ' : 'MASQUÉ' }}</span>
+                            <label class="mn-switch" @click.stop>
+                                <input type="checkbox" :checked="isMenuVisible(key)" @change="toggleVisibleMenu(key)">
+                                <span class="mn-slider"></span>
+                            </label>
+                        </div>
+                        <div v-if="expanded[key] && itemsOf(key).length" class="mn-subs">
+                            <label v-for="it in itemsOf(key)" :key="it.page" class="mn-sub" :class="isItemVisible(it.page) ? '' : 'soff'">
+                                <input type="checkbox" :checked="isItemVisible(it.page)" @change="toggleItem(it.page)">
+                                <span class="mn-sub-n">{{ it.label }}</span>
+                                <span class="mn-sub-s">{{ isItemVisible(it.page) ? 'affiché' : 'masqué' }}</span>
+                            </label>
+                        </div>
                     </div>
                 </div>
 
@@ -254,7 +325,8 @@ export const SettingsRolesMenusView = {
                 const agencyName = (AGENCIES[activeAgency] && AGENCIES[activeAgency].name) || activeAgency;
 
                 const roles = ref([]);
-                const menuConfig = reactive({ order: [], roles: {}, visibleMenus: [] });
+                const menuConfig = reactive({ order: [], roles: {}, visibleMenus: [], hiddenItems: [] });
+                const expanded = reactive({});
                 const loadingRoles = ref(true);
                 const loadingMenus = ref(true);
                 const savingMenus = ref(false);
@@ -281,6 +353,7 @@ export const SettingsRolesMenusView = {
                             menuConfig.order = data.order || [];
                             menuConfig.roles = data.roles || {};
                             menuConfig.visibleMenus = data.visibleMenus || [];
+                            menuConfig.hiddenItems = data.hiddenItems || [];
                         }
                         // Garantir que tous les menus connus sont présents dans l'ordre.
                         const seen = new Set(menuConfig.order);
@@ -295,6 +368,17 @@ export const SettingsRolesMenusView = {
                 }, {}));
 
                 const isProtectedRole = (id) => ['super_admin', 'admin', 'agent', 'chauf', 'manager', 'spectateur'].includes(id);
+                // --- Modules (sous-éléments) par section ---
+                const itemsOf = (key) => MENU_ITEMS[key] || [];
+                const toggleExpand = (key) => { expanded[key] = !expanded[key]; };
+                // Un module est visible s'il N'EST PAS dans la liste noire hiddenItems.
+                const isItemVisible = (page) => !menuConfig.hiddenItems.includes(page);
+                const toggleItem = (page) => {
+                    const i = menuConfig.hiddenItems.indexOf(page);
+                    if (i > -1) menuConfig.hiddenItems.splice(i, 1); // ré-affiche
+                    else menuConfig.hiddenItems.push(page);          // masque
+                };
+
                 const isMenuVisible = (key) => menuConfig.visibleMenus.includes(key);
                 const toggleVisibleMenu = (key) => {
                     const i = menuConfig.visibleMenus.indexOf(key);
@@ -322,6 +406,7 @@ export const SettingsRolesMenusView = {
                         await setDoc(menuDocRef, {
                             order: Array.from(menuConfig.order),
                             visibleMenus: Array.from(menuConfig.visibleMenus),
+                            hiddenItems: Array.from(menuConfig.hiddenItems),
                         }, { merge: true });
                         globalApp.showToast(
                             menuConfig.visibleMenus.length
@@ -384,6 +469,7 @@ export const SettingsRolesMenusView = {
 
                 return {
                     MENU_META, agencyName, roles, menuConfig, loadingRoles, loadingMenus,
+                    expanded, itemsOf, toggleExpand, isItemVisible, toggleItem,
                     savingMenus, showRoleForm, isEditing, savingRole, activeTab, roleForm, draggedIndex,
                     groupedPermissions, metaOf, isProtectedRole, isMenuVisible, toggleVisibleMenu,
                     showAll, resetAuto, onDragStart, onDrop, onDragEnd, saveMenus,
