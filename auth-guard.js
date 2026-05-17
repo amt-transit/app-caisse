@@ -335,15 +335,13 @@ onAuthStateChanged(auth, async (user) => {
         const departureAgencies = getDepartureAgencies();
         const arrivalAgencies = getArrivalAgencies();
 
-        // Ancienne logique de redirection (désactivée si on est à la racine)
-        if (!isUnifiedRoot) {
-            if (departureAgencies.includes(currentActiveAgency) && !inParisFolder) {
-                window.location.href = inAbidjanFolder ? '../paris/index.html' : 'paris/index.html';
-                return;
-            } else if (arrivalAgencies.includes(currentActiveAgency) && inParisFolder) {
-                window.location.href = '../abidjan/index.html';
-                return;
-            }
+        // Architecture unifiée : l'application vit à la racine. On rapatrie
+        // tout utilisateur encore sur un ancien dossier /paris/ ou /abidjan/
+        // vers l'app unique à la racine. Les pages racine légitimes (ex.
+        // livreurscan.html, login.html) ne sont PAS touchées.
+        if ((inParisFolder || inAbidjanFolder) && !isLogin) {
+            window.location.href = '../index.html';
+            return;
         }
         
         if (isLogin) {
@@ -362,17 +360,12 @@ onAuthStateChanged(auth, async (user) => {
             
             window.switchAgency = (targetAgency) => {
                 sessionStorage.setItem('currentActiveAgency', targetAgency);
-                const needsDepartureApp = departureAgencies.includes(targetAgency);
                 const isCurrentUnifiedRoot = window.location.pathname.endsWith('/index.html') && !window.location.pathname.includes('/paris/') && !window.location.pathname.includes('/abidjan/');
 
                 if (isCurrentUnifiedRoot) {
                     window.location.reload();
-                } else if (needsDepartureApp && !inParisFolder) {
-                    window.location.href = inAbidjanFolder ? '../paris/index.html' : 'paris/index.html';
-                } else if (!needsDepartureApp && inParisFolder) {
-                    window.location.href = '../abidjan/index.html';
                 } else {
-                    window.location.reload();
+                    window.location.href = (inParisFolder || inAbidjanFolder) ? '../index.html' : 'index.html';
                 }
             };
         }
