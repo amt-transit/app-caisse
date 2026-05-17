@@ -1,17 +1,28 @@
-const functions = require("firebase-functions");
+// API v2 (2e génération) : les fonctions sont déployées sur le runtime
+// Cloud Run de 2e génération. Le handler reçoit UN seul argument `request`
+// ({ data, auth, app, ... }). L'ancienne signature v1 (data, context) ne
+// recevait pas l'identité ici -> "Vous devez être connecté" malgré une
+// session valide. On s'aligne donc sur l'API v2.
+const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const admin = require("firebase-admin");
 admin.initializeApp();
 
-// SÉCURITÉ : vérifie que l'appelant est connecté ET possède un rôle admin/super_admin.
-// On relit sa fiche Firestore avec l'Admin SDK (source de vérité non falsifiable côté client).
-async function assertCallerIsAdmin(context) {
-    if (!context.auth) {
-        throw new functions.https.HttpsError("unauthenticated", "Vous devez être connecté.");
+// Région alignée sur l'URL appelée par l'app web (us-central1) : ne pas
+// changer sans mettre à jour les appels côté client.
+const REGION = "us-central1";
+
+// SÉCURITÉ : vérifie que l'appelant est connecté ET possède un rôle
+// admin/super_admin. On relit sa fiche Firestore avec l'Admin SDK
+// (source de vérité non falsifiable côté client).
+async function assertCallerIsAdmin(auth) {
+    if (!auth) {
+        throw new HttpsError("unauthenticated", "Vous devez être connecté.");
     }
-    const callerSnap = await admin.firestore().collection("users").doc(context.auth.uid).get();
+    const callerSnap = await admin.firestore()
+        .collection("users").doc(auth.uid).get();
     const role = callerSnap.exists ? callerSnap.data().role : null;
     if (role !== "admin" && role !== "super_admin") {
-        throw new functions.https.HttpsError(
+        throw new HttpsError(
             "permission-denied",
             "Action réservée aux administrateurs."
         );
@@ -19,37 +30,37 @@ async function assertCallerIsAdmin(context) {
 }
 
 // Fonction pour Créer un Agent
-exports.createAgent = functions.https.onCall(async (data, context) => {
+exports.createAgent = onCall({ region: REGION }, async (request) => {
     // 1. SÉCURITÉ : seul un admin/super_admin peut créer un compte
-    await assertCallerIsAdmin(context);
+    await assertCallerIsAdmin(request.auth);
+    const data = request.data || {};
 
     try {
-        // 2. Création de l'utilisateur avec l'Admin SDK (Bypass les règles de création standard)
+        // 2. Création de l'utilisateur avec l'Admin SDK
         const userRecord = await admin.auth().createUser({
             email: data.email,
             password: data.password,
             displayName: data.displayName,
         });
-
-        // On retourne uniquement l'ID du nouvel utilisateur à l'application front-end
         return { uid: userRecord.uid };
     } catch (error) {
         console.error("Erreur création utilisateur:", error);
-        throw new functions.https.HttpsError("internal", error.message);
+        throw new HttpsError("internal", error.message);
     }
 });
 
 // Fonction pour Supprimer un Agent
-exports.deleteAgent = functions.https.onCall(async (data, context) => {
+exports.deleteAgent = onCall({ region: REGION }, async (request) => {
     // SÉCURITÉ : seul un admin/super_admin peut supprimer un compte
-    await assertCallerIsAdmin(context);
+    await assertCallerIsAdmin(request.auth);
+    const data = request.data || {};
 
     try {
         await admin.auth().deleteUser(data.uid);
         return { success: true };
     } catch (error) {
         console.error("Erreur suppression utilisateur:", error);
-        throw new functions.https.HttpsError("internal", error.message);
+        throw new HttpsError("internal", error.message);
     }
 });
 
@@ -58,18 +69,19 @@ exports.deleteAgent = functions.https.onCall(async (data, context) => {
 // l'app mobile. Réservé admin/super_admin. Idempotent (réutilise le compte
 // existant). NE donne AUCUN privilège staff (les règles staff lisent le rôle
 // dans la collection users, pas le token).
-exports.provisionDemarcheurAuth = functions.https.onCall(async (data, context) => {
-    await assertCallerIsAdmin(context);
+exports.provisionDemarcheurAuth = onCall({ region: REGION }, async (request) => {
+    await assertCallerIsAdmin(request.auth);
+    const data = request.data || {};
 
     const demarcheurId = ((data && data.demarcheurId) || "").trim();
     if (!demarcheurId) {
-        throw new functions.https.HttpsError("invalid-argument", "demarcheurId requis.");
+        throw new HttpsError("invalid-argument", "demarcheurId requis.");
     }
 
     const demRef = admin.firestore().collection("demarcheurs").doc(demarcheurId);
     const demSnap = await demRef.get();
     if (!demSnap.exists) {
-        throw new functions.https.HttpsError("not-found", "Démarcheur introuvable.");
+        throw new HttpsError("not-found", "Démarcheur introuvable.");
     }
     const dem = demSnap.data();
 
@@ -77,7 +89,7 @@ exports.provisionDemarcheurAuth = functions.https.onCall(async (data, context) =
     // data.email fourni par l'appelant (réduit la surface d'attaque).
     const email = ((dem.email) || "").trim().toLowerCase();
     if (!email) {
-        throw new functions.https.HttpsError(
+        throw new HttpsError(
             "invalid-argument",
             "Email requis sur la fiche démarcheur (renseignez-le d'abord)."
         );
@@ -106,7 +118,7 @@ exports.provisionDemarcheurAuth = functions.https.onCall(async (data, context) =
             const staffSnap = await admin.firestore()
                 .collection("users").doc(userRecord.uid).get();
             if (staffSnap.exists) {
-                throw new functions.https.HttpsError(
+                throw new HttpsError(
                     "permission-denied",
                     "Cet email appartient à un compte du personnel : provisioning démarcheur interdit."
                 );
@@ -115,13 +127,13 @@ exports.provisionDemarcheurAuth = functions.https.onCall(async (data, context) =
             //    d'un AUTRE démarcheur.
             const cc = userRecord.customClaims || {};
             if (cc.role && cc.role !== "demarcheur") {
-                throw new functions.https.HttpsError(
+                throw new HttpsError(
                     "permission-denied",
                     "Cet email est rattaché à un compte privilégié : opération refusée."
                 );
             }
             if (cc.role === "demarcheur" && cc.demarcheurId && cc.demarcheurId !== demarcheurId) {
-                throw new functions.https.HttpsError(
+                throw new HttpsError(
                     "permission-denied",
                     "Cet email est déjà rattaché à un autre démarcheur."
                 );
@@ -150,7 +162,7 @@ exports.provisionDemarcheurAuth = functions.https.onCall(async (data, context) =
                 authUid: uid,
                 authEmail: email,
                 authProvisionedAt: stamp,
-                authProvisionedBy: context.auth.uid,
+                authProvisionedBy: request.auth.uid,
             },
             { merge: true }
         );
@@ -169,8 +181,8 @@ exports.provisionDemarcheurAuth = functions.https.onCall(async (data, context) =
         };
     } catch (error) {
         // Préserve les refus de sécurité (permission-denied, etc.).
-        if (error instanceof functions.https.HttpsError) throw error;
+        if (error instanceof HttpsError) throw error;
         console.error("Erreur provisionDemarcheurAuth:", error);
-        throw new functions.https.HttpsError("internal", error.message);
+        throw new HttpsError("internal", error.message);
     }
 });
