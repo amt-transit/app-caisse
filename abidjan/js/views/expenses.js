@@ -1,6 +1,6 @@
 import { db } from '../../../firebase-config.js';
 import { collection, doc, updateDoc, setDoc, query, where, orderBy, onSnapshot, writeBatch, limit, getDocs } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
-import { createApp, ref, reactive, computed, onMounted, onUnmounted } from "https://unpkg.com/vue@3/dist/vue.esm-browser.prod.js";
+import { createApp, ref, reactive, computed, onMounted, onUnmounted, watch } from "https://unpkg.com/vue@3/dist/vue.esm-browser.prod.js";
 
 export const ExpensesView = {
     vueApp: null,
@@ -348,17 +348,25 @@ export const ExpensesView = {
                     fetchExpenses();
                 });
 
-                onUnmounted(() => unsubs.forEach(u => typeof u === 'function' ? u() : null));
+                onUnmounted(() => {
+                    unsubs.forEach(u => typeof u === 'function' ? u() : null);
+                    if (expUnsub) expUnsub();
+                });
 
+                let expUnsub = null;
                 const fetchExpenses = () => {
                     let constraints = [where("agency", "==", activeAgency), orderBy("isDeleted"), orderBy("date", "desc"), limit(limitExp.value)];
                     if (filters.showDeleted) constraints.unshift(where("isDeleted", "==", true));
                     else constraints.unshift(where("isDeleted", "!=", true));
-                    
-                    onSnapshot(query(collection(db, "expenses"), ...constraints), snap => {
+
+                    if (expUnsub) expUnsub(); // coupe l'écouteur précédent (évite fuite + doublons)
+                    expUnsub = onSnapshot(query(collection(db, "expenses"), ...constraints), snap => {
                         expenses.value = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                     });
                 };
+                // « Charger plus » (limitExp) et bascule Corbeille (showDeleted)
+                // doivent RÉ-INTERROGER Firestore (sinon la limite de 50 reste figée).
+                watch([limitExp, () => filters.showDeleted], fetchExpenses);
 
                 // Computed
                 const validExpenses = computed(() => expenses.value.filter(e => !e.sessionId || !unconfirmedSessions.value.has(e.sessionId)));
