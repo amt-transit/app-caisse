@@ -577,17 +577,119 @@ export const app = {
     },
 
     // --- INLINE RENDERERS (Provenant de Paris) ---
-    renderClientsApp() {
-        document.getElementById('contentContainer').innerHTML = `
+    // Page "Application client" / "Demande client".
+    // CONTRAT pour la future app AMT Client : écrire un document par compte
+    // dans la collection Firestore `client_app_accounts` avec les champs :
+    //   nom, telephone, statut ('Actif'|'Inactif'), derniereConnexion (date),
+    //   clientLieNom (string|null), facturesAgence (number),
+    //   derniereFacture (date|null), agency.
+    // Dès que l'app écrira ici, cette page se remplit AUTOMATIQUEMENT.
+    async renderClientsApp() {
+        const c = document.getElementById('contentContainer');
+        c.innerHTML = `<div class="loading"><i class="fas fa-spinner fa-spin"></i> Chargement des comptes clients…</div>`;
+        try {
+            const { db } = await import('./firebase-config.js');
+            const { collection, getDocs } = await import('https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js');
+
+            let rows = [];
+            try {
+                const snap = await getDocs(collection(db, 'client_app_accounts'));
+                rows = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+            } catch (_) { rows = []; } // collection absente tant que l'app n'existe pas
+
+            this._clientAppRows = rows;
+            const fmtD = (v) => {
+                if (!v) return '—';
+                const d = v && typeof v.toDate === 'function' ? v.toDate() : new Date(v);
+                return isNaN(d) ? String(v) : d.toLocaleString('fr-FR');
+            };
+
+            const total = rows.length;
+            const actifs = rows.filter(r => r.statut === 'Actif').length;
+            const lies = rows.filter(r => r.clientLieNom).length;
+            const avecFactures = rows.filter(r => Number(r.facturesAgence) > 0).length;
+
+            const renderTable = (list) => {
+                if (!list.length) {
+                    return `<tr><td colspan="8" style="text-align:center;color:#94a3b8;padding:34px;">
+                        ${total === 0
+                            ? "📱 L'application client AMT n'est pas encore déployée.<br><span style='font-size:12px;'>Cette page se remplira automatiquement dès que des clients utiliseront l'app.</span>"
+                            : "Aucun résultat pour cette recherche."}
+                    </td></tr>`;
+                }
+                return list.map(r => `
+                    <tr>
+                        <td><b>${r.nom || '—'}</b></td>
+                        <td>${r.telephone || '—'}</td>
+                        <td><span class="badge" style="background:${r.statut === 'Actif' ? '#dcfce7' : '#fee2e2'};color:${r.statut === 'Actif' ? '#166534' : '#991b1b'};padding:3px 9px;border-radius:999px;font-size:11px;font-weight:700;">${r.statut || 'Inconnu'}</span></td>
+                        <td>${fmtD(r.derniereConnexion)}</td>
+                        <td>${r.clientLieNom ? r.clientLieNom : '<span style="color:#94a3b8;">Non lié</span>'}</td>
+                        <td>${Number(r.facturesAgence) || 0}</td>
+                        <td>${fmtD(r.derniereFacture)}</td>
+                        <td><button class="btn btn-secondary btn-sm" data-go-clients style="font-size:12px;">Voir le client</button></td>
+                    </tr>`).join('');
+            };
+
+            c.innerHTML = `
             <div class="form-card">
-                <h3>Statistiques application client</h3>
-                <div class="stats-grid">
-                    <div class="stat-card"><div class="stat-value">156</div><div class="stat-label">Utilisateurs actifs</div></div>
-                    <div class="stat-card"><div class="stat-value">42</div><div class="stat-label">Nouveaux ce mois</div></div>
-                    <div class="stat-card"><div class="stat-value">89%</div><div class="stat-label">Taux satisfaction</div></div>
+                <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;">
+                    <div>
+                        <h3 style="margin:0;">📱 Demande client</h3>
+                        <p style="margin:4px 0 0;color:#64748b;font-size:13px;">Clients ayant téléchargé l'application AMT Client</p>
+                    </div>
+                    <button class="btn btn-secondary" id="caRefresh"><i class="fas fa-sync"></i></button>
                 </div>
-            </div>
-        `;
+
+                <div class="stats-grid" style="margin:18px 0;">
+                    <div class="stat-card"><div class="stat-value">${total}</div><div class="stat-label">Comptes au total</div></div>
+                    <div class="stat-card"><div class="stat-value">${actifs}</div><div class="stat-label">Comptes actifs</div></div>
+                    <div class="stat-card"><div class="stat-value">${lies}</div><div class="stat-label">Liés à un client</div></div>
+                    <div class="stat-card"><div class="stat-value">${avecFactures}</div><div class="stat-label">Avec factures</div></div>
+                </div>
+
+                <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px;">
+                    <input id="caSearch" class="form-input" placeholder="🔍 Nom, téléphone, expéditeur…" style="max-width:340px;flex:1;">
+                    <button class="btn btn-secondary" id="caExport"><i class="fas fa-file-excel"></i> Exporter vers Excel</button>
+                </div>
+
+                <div style="overflow-x:auto;">
+                <table class="data-table">
+                    <thead><tr>
+                        <th>Compte client</th><th>Téléphone</th><th>Statut</th>
+                        <th>Dernière connexion</th><th>Client lié</th><th>Factures agence</th>
+                        <th>Dernière facture</th><th>Action</th>
+                    </tr></thead>
+                    <tbody id="caBody">${renderTable(rows)}</tbody>
+                </table>
+                </div>
+            </div>`;
+
+            document.getElementById('caRefresh').onclick = () => this.renderClientsApp();
+            document.getElementById('caSearch').oninput = (e) => {
+                const q = e.target.value.toLowerCase().trim();
+                const f = !q ? rows : rows.filter(r =>
+                    `${r.nom || ''} ${r.telephone || ''} ${r.clientLieNom || ''}`.toLowerCase().includes(q));
+                document.getElementById('caBody').innerHTML = renderTable(f);
+                c.querySelectorAll('[data-go-clients]').forEach(b => b.onclick = goClients);
+            };
+            const goClients = () => { document.querySelector('[data-page="clients-list"]')?.click(); };
+            c.querySelectorAll('[data-go-clients]').forEach(b => b.onclick = goClients);
+            document.getElementById('caExport').onclick = () => {
+                if (!rows.length) { this.showToast("Aucune donnée à exporter pour l'instant.", "info"); return; }
+                const head = ['Compte', 'Téléphone', 'Statut', 'Dernière connexion', 'Client lié', 'Factures', 'Dernière facture'];
+                const lines = rows.map(r => [r.nom, r.telephone, r.statut, fmtD(r.derniereConnexion), r.clientLieNom || 'Non lié', Number(r.facturesAgence) || 0, fmtD(r.derniereFacture)]
+                    .map(v => `"${String(v ?? '').replace(/"/g, '""')}"`).join(';'));
+                const blob = new Blob(['﻿' + [head.join(';'), ...lines].join('\n')], { type: 'text/csv;charset=utf-8;' });
+                const a = document.createElement('a');
+                a.href = URL.createObjectURL(blob);
+                a.download = `clients-app-${new Date().toISOString().slice(0, 10)}.csv`;
+                a.click();
+            };
+        } catch (e) {
+            c.innerHTML = `<div style="padding:40px;text-align:center;color:#ef4444;background:white;border-radius:12px;">
+                <i class="fas fa-exclamation-triangle fa-2x" style="margin-bottom:12px;"></i>
+                <p>Erreur de chargement : ${e.message}</p></div>`;
+        }
     },
     async renderClientsAnalytics() {
         const c = document.getElementById('contentContainer');
