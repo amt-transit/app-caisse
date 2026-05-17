@@ -29,6 +29,16 @@ service cloud.firestore {
       return isAuthenticated() && (isSuperAdmin() || getUserData().agency == 'all');
     }
 
+    // Démarcheur (parrain/filleul) : identifié par custom claims posés par la
+    // Cloud Function provisionDemarcheurAuth. N'A AUCUN accès staff (les règles
+    // staff lisent le rôle dans /users, pas le token).
+    function isDemarcheur() {
+      return isAuthenticated() && request.auth.token.role == 'demarcheur';
+    }
+    function myDemarcheurId() {
+      return request.auth.token.demarcheurId;
+    }
+
     // =====================================================================
     // 2. RÈGLES PAR RÔLE (Administration & Logs)
     // =====================================================================
@@ -71,6 +81,39 @@ service cloud.firestore {
     }
     match /bank_movements/{document=**} {
       allow read, write: if isAuthenticated() && (hasGlobalAccess() || getUserData().agency in ['paris', 'abidjan']);
+    }
+
+    // =====================================================================
+    // 3bis. ACCÈS DÉMARCHEUR (app mobile parrainage — LECTURE SEULE, strict)
+    // =====================================================================
+    // Additif : ne retire aucun accès staff (allow = OR entre règles).
+    // Un démarcheur ne lit QUE son périmètre. Aucune écriture.
+
+    match /demarcheurs/{id} {
+      // Sa propre fiche + celles de ses filleuls directs (parrainId == lui).
+      allow read: if isDemarcheur() && (
+        id == myDemarcheurId() ||
+        resource.data.parrainId == myDemarcheurId()
+      );
+    }
+
+    match /commissions/{id} {
+      // Commissions directes ET bonus de parrainage : dans les deux cas
+      // demarcheurId == le bénéficiaire (cf. creerCommissionParrainage).
+      allow read: if isDemarcheur() && resource.data.demarcheurId == myDemarcheurId();
+    }
+
+    match /retraits/{id} {
+      allow read: if isDemarcheur() && resource.data.demarcheurId == myDemarcheurId();
+    }
+
+    match /client_affiliations/{phone} {
+      allow read: if isDemarcheur() && resource.data.demarcheurId == myDemarcheurId();
+    }
+
+    match /parametres/commissions {
+      // Lecture seule des taux (affichage), pas d'écriture.
+      allow read: if isDemarcheur();
     }
 
     // =====================================================================
