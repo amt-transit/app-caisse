@@ -1,4 +1,4 @@
-import { db, functions } from '../../firebase-config.js';
+import { db, functions, auth } from '../../firebase-config.js';
 import { collection, doc, getDoc, getDocs, setDoc, addDoc, updateDoc, query, where, orderBy, onSnapshot, serverTimestamp, increment, writeBatch } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 import { httpsCallable } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-functions.js";
 import { createApp, ref, reactive, computed, onMounted, onUnmounted, nextTick, watch } from "https://unpkg.com/vue@3/dist/vue.esm-browser.prod.js";
@@ -880,6 +880,15 @@ export const ParrainageView = {
                     mobileAccessSaving.value = true;
                     mobileAccessInfo.value = null;
                     try {
+                        // S'assure que la session Firebase est bien chargée, puis force un
+                        // jeton FRAIS avant d'appeler la fonction. Sans ça, on obtient un 401
+                        // "Vous devez être connecté" alors que l'écran semble connecté
+                        // (jeton expiré / non rafraîchi = appel envoyé sans authentification).
+                        if (auth && typeof auth.authStateReady === 'function') { await auth.authStateReady(); }
+                        if (!auth || !auth.currentUser) {
+                            throw new Error("Votre session a expiré. Déconnectez-vous, reconnectez-vous, puis réessayez.");
+                        }
+                        await auth.currentUser.getIdToken(true);
                         const fn = httpsCallable(functions, 'provisionDemarcheurAuth');
                         const res = await fn({ demarcheurId: p.id });
                         const d = (res && res.data) || {};
