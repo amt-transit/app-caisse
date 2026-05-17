@@ -240,10 +240,15 @@ initVue(globalApp) {
             // dans « Gestion des agences »). Remplace la liste de villes en dur.
             const destinationAgencies = computed(() => {
                 const depId = sessionStorage.getItem('currentActiveAgency') || 'paris';
-                return Object.values(AGENCIES || {})
-                    .filter(a => a && a.type === 'arrival' &&
-                        ((String(a.id).split('_')[1] === depId) || (depId === 'paris' && a.id === 'abidjan')))
-                    .map(a => ({ id: a.id, name: a.name || a.id, flag: a.flag || '' }));
+                const arrivals = Object.values(AGENCIES || {}).filter(a => a && a.type === 'arrival');
+                // 1) Agences d'arrivée de la route du départ courant (si identifiables).
+                let list = arrivals.filter(a =>
+                    (String(a.id).split('_')[1] === depId) || (depId === 'paris' && a.id === 'abidjan'));
+                // 2) Repli : si la route ne désigne rien (ex. compte global dont
+                //    l'agence active est une arrivée), proposer TOUTES les agences
+                //    d'arrivée pour que le champ ne soit jamais vide.
+                if (list.length === 0) list = arrivals;
+                return list.map(a => ({ id: a.id, name: a.name || a.id, flag: a.flag || '' }));
             });
 
             // Parrainage : actif selon le flag agence (source unique affiliation-config).

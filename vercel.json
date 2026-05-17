@@ -1,0 +1,8 @@
+{
+  "redirects": [
+    { "source": "/paris", "destination": "/index.html", "permanent": false },
+    { "source": "/paris/:path*", "destination": "/index.html", "permanent": false },
+    { "source": "/abidjan", "destination": "/index.html", "permanent": false },
+    { "source": "/abidjan/:path*", "destination": "/index.html", "permanent": false }
+  ]
+}
