@@ -73,11 +73,13 @@ exports.provisionDemarcheurAuth = functions.https.onCall(async (data, context) =
     }
     const dem = demSnap.data();
 
-    const email = (((data && data.email) || dem.email) || "").trim().toLowerCase();
+    // SÉCURITÉ : on n'utilise QUE l'email de la fiche démarcheur — JAMAIS
+    // data.email fourni par l'appelant (réduit la surface d'attaque).
+    const email = ((dem.email) || "").trim().toLowerCase();
     if (!email) {
         throw new functions.https.HttpsError(
             "invalid-argument",
-            "Email requis (absent de la fiche démarcheur)."
+            "Email requis sur la fiche démarcheur (renseignez-le d'abord)."
         );
     }
 
@@ -90,11 +92,44 @@ exports.provisionDemarcheurAuth = functions.https.onCall(async (data, context) =
     }
 
     try {
-        let userRecord;
+        let userRecord = null;
         try {
             userRecord = await admin.auth().getUserByEmail(email);
-            await admin.auth().updateUser(userRecord.uid, { password });
         } catch (e) {
+            userRecord = null; // aucun compte existant -> on en créera un
+        }
+
+        if (userRecord) {
+            // Un compte existe déjà pour cet email. On NE le réutilise QUE si
+            // c'est sans risque, sinon = prise de contrôle de compte.
+            // a) Refus si c'est un compte du PERSONNEL (doc users/{uid}).
+            const staffSnap = await admin.firestore()
+                .collection("users").doc(userRecord.uid).get();
+            if (staffSnap.exists) {
+                throw new functions.https.HttpsError(
+                    "permission-denied",
+                    "Cet email appartient à un compte du personnel : provisioning démarcheur interdit."
+                );
+            }
+            // b) Refus si le compte porte un rôle non-démarcheur ou les claims
+            //    d'un AUTRE démarcheur.
+            const cc = userRecord.customClaims || {};
+            if (cc.role && cc.role !== "demarcheur") {
+                throw new functions.https.HttpsError(
+                    "permission-denied",
+                    "Cet email est rattaché à un compte privilégié : opération refusée."
+                );
+            }
+            if (cc.role === "demarcheur" && cc.demarcheurId && cc.demarcheurId !== demarcheurId) {
+                throw new functions.https.HttpsError(
+                    "permission-denied",
+                    "Cet email est déjà rattaché à un autre démarcheur."
+                );
+            }
+            // Sûr : pas de doc staff, et (aucun claim) ou déjà CE démarcheur
+            // -> re-provisioning idempotent (reset du mot de passe autorisé).
+            await admin.auth().updateUser(userRecord.uid, { password });
+        } else {
             userRecord = await admin.auth().createUser({
                 email,
                 password,
@@ -103,7 +138,7 @@ exports.provisionDemarcheurAuth = functions.https.onCall(async (data, context) =
         }
         const uid = userRecord.uid;
 
-        // Claims utilisés par firestore.rules (accès démarcheur lecture seule).
+        // Claims posés UNIQUEMENT sur un compte vérifié sûr ou nouvellement créé.
         await admin.auth().setCustomUserClaims(uid, {
             role: "demarcheur",
             demarcheurId,
@@ -133,6 +168,8 @@ exports.provisionDemarcheurAuth = functions.https.onCall(async (data, context) =
             password: generated ? password : undefined,
         };
     } catch (error) {
+        // Préserve les refus de sécurité (permission-denied, etc.).
+        if (error instanceof functions.https.HttpsError) throw error;
         console.error("Erreur provisionDemarcheurAuth:", error);
         throw new functions.https.HttpsError("internal", error.message);
     }
