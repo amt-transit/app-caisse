@@ -1,5 +1,6 @@
-import { db } from '../../firebase-config.js';
+import { db, functions } from '../../firebase-config.js';
 import { collection, doc, getDoc, getDocs, setDoc, addDoc, updateDoc, query, where, orderBy, onSnapshot, serverTimestamp, increment, writeBatch } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
+import { httpsCallable } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-functions.js";
 import { createApp, ref, reactive, computed, onMounted, onUnmounted, nextTick, watch } from "https://unpkg.com/vue@3/dist/vue.esm-browser.prod.js";
 import { isAffiliationActive } from '../../affiliation-config.js';
 
@@ -507,7 +508,21 @@ export const ParrainageView = {
                                 </ul>
                             </div>
                         </div>
+                        <div v-if="mobileAccessInfo" style="margin:0 20px 14px; padding:14px; border-radius:10px; font-size:13px;"
+                             :style="mobileAccessInfo.error ? 'background:#fef2f2;border:1px solid #fecaca;color:#991b1b;' : 'background:#ecfdf5;border:1px solid #a7f3d0;color:#065f46;'">
+                            <template v-if="mobileAccessInfo.error">⚠️ {{ mobileAccessInfo.error }}</template>
+                            <template v-else>
+                                ✅ <b>Accès mobile prêt.</b> À transmettre au partenaire (affiché une seule fois) :<br>
+                                📧 Email : <b>{{ mobileAccessInfo.email }}</b><br>
+                                <span v-if="mobileAccessInfo.password">🔑 Mot de passe : <b style="font-family:monospace;">{{ mobileAccessInfo.password }}</b></span>
+                                <span v-else>🔑 Mot de passe : (inchangé / déjà défini)</span>
+                            </template>
+                        </div>
                         <div class="pm-footer">
+                            <button v-if="isSuperAdmin" class="btn btn-primary" @click="createMobileAccess" :disabled="mobileAccessSaving" style="padding:8px 16px; border-radius:8px; margin-right:auto;">
+                                <span v-if="mobileAccessSaving"><i class="fas fa-spinner fa-spin"></i> Création…</span>
+                                <span v-else>📱 Créer / réinitialiser l'accès mobile</span>
+                            </button>
                             <button class="btn btn-outline" @click="showDetailModal = false" style="padding:8px 16px; border-radius:8px; background:white; border:1px solid #cbd5e1;">Fermer</button>
                         </div>
                     </div>
@@ -846,7 +861,40 @@ export const ParrainageView = {
                     saving.value = false;
                 };
 
-                const openDetails = (p) => { partnerDetail.value = p; showDetailModal.value = true; };
+                // --- A2.5 : accès mobile du démarcheur (Cloud Function sécurisée) ---
+                const mobileAccessSaving = ref(false);
+                const mobileAccessInfo = ref(null); // { email, password, generated } | { error }
+
+                const createMobileAccess = async () => {
+                    const p = partnerDetail.value;
+                    if (!p || !p.id) return;
+                    if (!p.email || !String(p.email).trim()) {
+                        globalApp.showToast("Ajoutez d'abord un email à ce partenaire (bouton Modifier).", "error");
+                        return;
+                    }
+                    const label = `${p.prenom || ''} ${p.nom || ''}`.trim();
+                    const ok = window.AppModal
+                        ? await window.AppModal.confirm(`Créer / réinitialiser l'accès mobile de ${label} ?\nUn mot de passe sera généré et affiché une seule fois.`, "Accès mobile", false)
+                        : confirm(`Créer / réinitialiser l'accès mobile de ${label} ?`);
+                    if (!ok) return;
+                    mobileAccessSaving.value = true;
+                    mobileAccessInfo.value = null;
+                    try {
+                        const fn = httpsCallable(functions, 'provisionDemarcheurAuth');
+                        const res = await fn({ demarcheurId: p.id });
+                        const d = (res && res.data) || {};
+                        mobileAccessInfo.value = { email: d.email, password: d.password, generated: d.generated };
+                        globalApp.showToast("Accès mobile créé ✔", "success");
+                    } catch (e) {
+                        const msg = (e && e.message) ? e.message : "Erreur lors de la création de l'accès.";
+                        mobileAccessInfo.value = { error: msg };
+                        globalApp.showToast(msg, "error");
+                    } finally {
+                        mobileAccessSaving.value = false;
+                    }
+                };
+
+                const openDetails = (p) => { partnerDetail.value = p; mobileAccessInfo.value = null; showDetailModal.value = true; };
 
                 const openWithdrawalModal = () => {
                     withdrawalForm.montant = ''; withdrawalForm.periode = ''; withdrawalForm.moyenPaiement = 'Espèces';
@@ -969,6 +1017,7 @@ export const ParrainageView = {
                     analytics, simulation, syncRates, saveSettings,
                     showPartnerModal, partnerForm, availableSponsors, openPartnerModal, savePartner,
                     showDetailModal, partnerDetail, openDetails,
+                    mobileAccessSaving, mobileAccessInfo, createMobileAccess,
                     showWithdrawalModal, openWithdrawalModal, processWithdrawal, saving,
                     exportCommissions, exportWithdrawals, getRoleBadge
                 };
