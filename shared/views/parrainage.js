@@ -888,14 +888,26 @@ export const ParrainageView = {
                         if (!auth || !auth.currentUser) {
                             throw new Error("Votre session a expiré. Déconnectez-vous, reconnectez-vous, puis réessayez.");
                         }
-                        await auth.currentUser.getIdToken(true);
+                        // Jeton FRAIS + diagnostic : c'est exactement ce jeton qui part
+                        // vers la fonction. On note qui on est pour comprendre un refus.
+                        const tr = await auth.currentUser.getIdTokenResult(true);
+                        const diag = `uid=${(tr.claims && tr.claims.user_id) || auth.currentUser.uid} | email=${auth.currentUser.email || '?'} | role(token)=${(tr.claims && tr.claims.role) || 'aucun'}`;
+                        console.log('[accès mobile] appel provisionDemarcheurAuth —', diag, '| jeton émis le', tr.issuedAtTime);
                         const fn = httpsCallable(functions, 'provisionDemarcheurAuth');
                         const res = await fn({ demarcheurId: p.id });
                         const d = (res && res.data) || {};
                         mobileAccessInfo.value = { email: d.email, password: d.password, generated: d.generated };
                         globalApp.showToast("Accès mobile créé ✔", "success");
                     } catch (e) {
-                        const msg = (e && e.message) ? e.message : "Erreur lors de la création de l'accès.";
+                        const code = (e && e.code) ? e.code : 'inconnu';
+                        const base = (e && e.message) ? e.message : "Erreur lors de la création de l'accès.";
+                        let who = '';
+                        try {
+                            const u = auth && auth.currentUser;
+                            who = u ? ` | connecté: ${u.email || u.uid}` : ' | connecté: NON';
+                        } catch (_) { /* ignore */ }
+                        const msg = `${base}  (code=${code}${who})`;
+                        console.error('[accès mobile] ÉCHEC —', code, e);
                         mobileAccessInfo.value = { error: msg };
                         globalApp.showToast(msg, "error");
                     } finally {
