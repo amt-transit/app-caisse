@@ -14,7 +14,7 @@
 // ============================================================================
 
 import { db } from './firebase-config.js';
-import { doc, getDoc, setDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
+import { doc, getDoc, setDoc, serverTimestamp, collection, query, where, getDocs, writeBatch, increment } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 
 // Normalise un numéro en clé stable. Gère les formats courants CI / international.
 // Retourne null si le numéro est inexploitable (trop court) -> pas d'affiliation.
@@ -67,5 +67,85 @@ export async function ensureAffiliation({ phone, clientName, demarcheurId, demar
   } catch (e) {
     console.warn('affiliations.ensureAffiliation:', e);
     return null; // non bloquant : la facture continue
+  }
+}
+
+// ============================================================================
+//  GÉNÉRATION DE COMMISSION (autonome — ne dépend PAS de la page Parrainage).
+//  Lit les taux dans parametres/commissions et la fiche démarcheur, crée la
+//  ou les commissions (directe + bonus parrain) et crédite le solde.
+//  Idempotent : si une commission existe déjà pour (expeditionId,
+//  demarcheurId), on ne recrée rien. Non bloquant pour la facture.
+//  beneficeBrut attendu en CFA (cohérent avec demarcheurs.soldeDisponible).
+// ============================================================================
+export async function creerCommissionParrainage({ expeditionId, beneficeBrut, demarcheurId, agency }) {
+  try {
+    if (!demarcheurId || !expeditionId || !(beneficeBrut > 0)) return false;
+
+    // Anti-doublon : une seule commission directe par expédition/démarcheur.
+    // (where unique sur expeditionId -> pas d'index composite requis)
+    const dup = await getDocs(query(collection(db, 'commissions'), where('expeditionId', '==', expeditionId)));
+    if (dup.docs.some(d => (d.data() || {}).demarcheurId === demarcheurId && (d.data() || {}).type === 'direct')) {
+      return false; // déjà généré
+    }
+
+    // Taux (mêmes clés que la page Parrainage : fractions, ex. 0.5).
+    let tAMT = 0.5, tDem = 0.5, tPar = 0.1, quiDefaut = 'demarcheur';
+    try {
+      const pSnap = await getDoc(doc(db, 'parametres', 'commissions'));
+      if (pSnap.exists()) {
+        const s = pSnap.data();
+        if (typeof s.tauxAMT === 'number') tAMT = s.tauxAMT;
+        if (typeof s.tauxDemarcheur === 'number') tDem = s.tauxDemarcheur;
+        if (typeof s.tauxBonusParrainage === 'number') tPar = s.tauxBonusParrainage;
+        if (s.quiPaieParrainDefaut) quiDefaut = s.quiPaieParrainDefaut;
+      }
+    } catch (e) { /* défauts conservés */ }
+
+    // Fiche démarcheur (pour le parrain éventuel + qui paie le bonus).
+    const demSnap = await getDoc(doc(db, 'demarcheurs', demarcheurId));
+    if (!demSnap.exists()) return false;
+    const dem = demSnap.data() || {};
+
+    const pDemBrut = beneficeBrut * tDem;
+    const pAMTBrut = beneficeBrut * tAMT;
+    const bonus = dem.parrainId ? pDemBrut * tPar : 0;
+    let pDemNet = pDemBrut, pAMTNet = pAMTBrut;
+    const qui = dem.quiPaieParrain || quiDefaut;
+    if (dem.parrainId && bonus > 0) {
+      if (qui === 'amt') pAMTNet -= bonus; else pDemNet -= bonus;
+    }
+
+    const batch = writeBatch(db);
+    batch.set(doc(collection(db, 'commissions')), {
+      expeditionId, demarcheurId, type: 'direct',
+      montantBrut: beneficeBrut, tauxDemarcheur: tDem, montantDemarcheur: pDemBrut,
+      tauxAMT: tAMT, montantAMT: pAMTNet, bonusParrainage: bonus,
+      quiPaieParrain: qui, montantNet: pDemNet,
+      agency: agency || (sessionStorage.getItem('currentActiveAgency') || ''),
+      dateCreation: serverTimestamp(), statut: 'en_attente',
+    });
+    batch.update(doc(db, 'demarcheurs', demarcheurId), {
+      totalGagne: increment(pDemNet), soldeDisponible: increment(pDemNet),
+    });
+
+    if (dem.parrainId && bonus > 0) {
+      batch.set(doc(collection(db, 'commissions')), {
+        expeditionId, demarcheurId: dem.parrainId, type: 'parrainage',
+        filleulId: demarcheurId, montantBrut: beneficeBrut, bonusParrainage: bonus,
+        montantNet: bonus,
+        agency: agency || (sessionStorage.getItem('currentActiveAgency') || ''),
+        dateCreation: serverTimestamp(), statut: 'en_attente',
+      });
+      batch.update(doc(db, 'demarcheurs', dem.parrainId), {
+        totalGagne: increment(bonus), soldeDisponible: increment(bonus),
+      });
+    }
+
+    await batch.commit();
+    return true;
+  } catch (e) {
+    console.warn('affiliations.creerCommissionParrainage:', e);
+    return false; // non bloquant : la facture reste valide
   }
 }

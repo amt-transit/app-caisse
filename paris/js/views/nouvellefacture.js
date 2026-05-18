@@ -4,7 +4,7 @@ import { CONSTANTS } from '../../../constants.js';
 import { createApp, ref, reactive, computed, onMounted, watch } from "https://unpkg.com/vue@3/dist/vue.esm-browser.prod.js";
 import { getCollectionName, AGENCIES } from '../../../agencies-config.js';
 import { isAffiliationActive } from '../../../affiliation-config.js';
-import { getAffiliation, ensureAffiliation } from '../../../affiliations.js';
+import { getAffiliation, ensureAffiliation, creerCommissionParrainage } from '../../../affiliations.js';
 
 export const NouvelleFactureView = {
     vueApp: null,
@@ -488,7 +488,7 @@ initVue(globalApp) {
                 }).catch(e => console.warn('Chargement démarcheurs:', e));
             }
             
-            const items = ref([{ id: Date.now(), desc: '', qty: 1, pu: 0, total: 0, vol: 0, poids: 0, showSugg: false }]);
+            const items = ref([{ id: Date.now(), desc: '', qty: 1, pu: '', total: 0, vol: '', poids: '', showSugg: false }]);
             
             // Feedback states
             const expFeedback = ref('');
@@ -810,7 +810,7 @@ initVue(globalApp) {
                 }
             };
 
-            const addRow = () => items.value.push({ id: Date.now(), desc: '', qty: 1, pu: 0, total: 0, vol: 0, poids: 0, showSugg: false });
+            const addRow = () => items.value.push({ id: Date.now(), desc: '', qty: 1, pu: '', total: 0, vol: '', poids: '', showSugg: false });
             const removeRow = (id) => { if (items.value.length > 1) items.value = items.value.filter(i => i.id !== id); };
 
             const updateItem = (item, field) => {
@@ -820,8 +820,15 @@ initVue(globalApp) {
                     item.vol = parseFloat(prod.dim) || 0;
                 }
                 item.total = (parseFloat(item.qty) || 0) * (parseFloat(item.pu) || 0);
-                const totalVol = items.value.reduce((sum, i) => sum + ((i.vol || 0) * i.qty), 0);
-                if (totalVol > 0) form.volume = parseFloat(totalVol.toFixed(2));
+                const totalVol = items.value.reduce((sum, i) => sum + ((parseFloat(i.vol) || 0) * (parseFloat(i.qty) || 0)), 0);
+                if (autoPricingActive.value && shippingMode === 'maritime') {
+                    // Chine maritime : la somme des CBM par ligne FAIT FOI et
+                    // doit pouvoir redescendre à 0 (sinon montant figé/fantôme).
+                    form.volume = parseFloat((totalVol || 0).toFixed(2));
+                } else if (totalVol > 0) {
+                    // Autres modèles : ne pas écraser une saisie manuelle par 0.
+                    form.volume = parseFloat(totalVol.toFixed(2));
+                }
                 // Aérien : poids total = somme (poids par ligne × qté).
                 form.poids = items.value.reduce((sum, i) => sum + ((parseFloat(i.poids) || 0) * (parseFloat(i.qty) || 0)), 0);
             };
@@ -895,21 +902,28 @@ initVue(globalApp) {
                 // --- AFFILIATION (parrainage) : lien persistant destinataire ↔ démarcheur ---
                 // Non bloquant : toute erreur ici ne doit pas empêcher la facture.
                 let affiliationDemarcheurId = null;
-                if (affiliationActive && destPhone) {
+                if (affiliationActive) {
                     try {
-                        const existing = await getAffiliation(destPhone);
-                        if (existing && existing.demarcheurId) {
-                            affiliationDemarcheurId = existing.demarcheurId; // rattachement permanent : 1er gagnant
+                        if (destPhone) {
+                            const existing = await getAffiliation(destPhone);
+                            if (existing && existing.demarcheurId) {
+                                affiliationDemarcheurId = existing.demarcheurId; // rattachement permanent : 1er gagnant
+                            } else if (form.parrainId) {
+                                const dem = demarcheurs.value.find(d => d.id === form.parrainId);
+                                await ensureAffiliation({
+                                    phone: destPhone,
+                                    clientName: finalDestName,
+                                    demarcheurId: form.parrainId,
+                                    demarcheurName: dem ? `${dem.prenom || ''} ${dem.nom || ''}`.trim() : '',
+                                    agency: activeAgency,
+                                    createdBy: userName
+                                });
+                                affiliationDemarcheurId = form.parrainId;
+                            }
                         } else if (form.parrainId) {
-                            const dem = demarcheurs.value.find(d => d.id === form.parrainId);
-                            await ensureAffiliation({
-                                phone: destPhone,
-                                clientName: finalDestName,
-                                demarcheurId: form.parrainId,
-                                demarcheurName: dem ? `${dem.prenom || ''} ${dem.nom || ''}`.trim() : '',
-                                agency: activeAgency,
-                                createdBy: userName
-                            });
+                            // Pas de téléphone destinataire : on rattache quand
+                            // même la commission au parrain choisi (sans lien
+                            // permanent client_affiliations, qui nécessite un tél).
                             affiliationDemarcheurId = form.parrainId;
                         }
                     } catch (e) { console.warn('Affiliation (non bloquant):', e); }
@@ -988,7 +1002,25 @@ initVue(globalApp) {
 
                 try {
                     await batch.commit();
-                    globalApp.showToast("Facture créée et synchronisée vers Abidjan !", "success");
+
+                    // Génère la commission du parrain (autonome, idempotent,
+                    // non bloquant). beneficeBrut = total facturé en CFA.
+                    if (affiliationDemarcheurId) {
+                        try {
+                            await creerCommissionParrainage({
+                                expeditionId: ref,
+                                beneficeBrut: totalCFA,
+                                demarcheurId: affiliationDemarcheurId,
+                                agency: activeAgency,
+                            });
+                        } catch (e) { console.warn('Commission (non bloquant):', e); }
+                    }
+
+                    globalApp.showToast(
+                        affiliationDemarcheurId
+                            ? "Facture créée + commission partenaire générée ✔"
+                            : "Facture créée et synchronisée vers Abidjan !",
+                        "success");
                     
                     const now = new Date();
                     const formattedDate = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}:${String(now.getSeconds()).padStart(2,'0')}`;
@@ -1002,7 +1034,7 @@ initVue(globalApp) {
                     form.montantPaye = 0; form.comment = ''; form.valeur = '';
                     form.poids = ''; form.totalCfa = 0; form.parrainId = '';
                     form.date = new Date().toISOString().split('T')[0];
-                    items.value = [{ id: Date.now(), desc: '', qty: 1, pu: 0, total: 0, vol: 0, poids: 0, showSugg: false }];
+                    items.value = [{ id: Date.now(), desc: '', qty: 1, pu: '', total: 0, vol: '', poids: '', showSugg: false }];
                     expFeedback.value = ''; destFeedback.value = '';
                     userTouchedTotal.value = false;
                     showExpSugg.value = false; showDestSugg.value = false; showLieuSugg.value = false;
