@@ -1,5 +1,5 @@
 import { db } from '../../../firebase-config.js';
-import { collection, doc, writeBatch, getDocs, query, where, limit } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
+import { collection, doc, writeBatch, getDocs, query, where, limit, addDoc } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 import { CONSTANTS } from '../../../constants.js';
 import { createApp, ref, reactive, computed, onMounted } from "https://unpkg.com/vue@3/dist/vue.esm-browser.prod.js";
 import { getCollectionName, AGENCIES } from '../../../agencies-config.js';
@@ -92,17 +92,21 @@ export const NouvelleFactureView = {
                     <div class="form-card" style="box-shadow: 0 2px 4px rgba(0,0,0,0.02);">
                         <h3 style="border-bottom: 1px solid #e2e8f0; padding-bottom: 10px; margin-bottom: 15px; display: flex; align-items: center; gap: 10px;"><i class="fas fa-upload text-orange-500"></i> Expéditeur</h3>
                         <div class="form-group">
-                            <div style="position: relative;">
-                                <input type="text" id="nfExpediteur" placeholder="Nom, Prénom et Téléphone..." required autocomplete="off"
-                                       v-model="form.expediteur"
-                                       @input="showExpSugg = true; handleExpediteurChange()"
-                                       @focus="showExpSugg = true"
-                                       @blur="hideSugg('exp')">
-                                <ul class="autocomplete-suggestions" v-if="showExpSugg && filteredExpediteurs.length" style="display:block;">
-                                    <li v-for="c in filteredExpediteurs" :key="c.nom" @mousedown="selectExp(c)">
-                                        <b>{{ c.nom }}</b> <span style="color:#64748b;">— {{ c.tel || 'N/A' }}</span>
-                                    </li>
-                                </ul>
+                            <div style="display:flex; gap:8px; align-items:flex-start;">
+                                <div style="position: relative; flex:1;">
+                                    <input type="text" id="nfExpediteur" placeholder="Nom, Prénom et Téléphone..." required autocomplete="off"
+                                           v-model="form.expediteur"
+                                           @input="showExpSugg = true; handleExpediteurChange()"
+                                           @focus="showExpSugg = true"
+                                           @blur="hideSugg('exp')"
+                                           style="width:100%; box-sizing:border-box;">
+                                    <ul class="autocomplete-suggestions" v-if="showExpSugg && filteredExpediteurs.length" style="display:block;">
+                                        <li v-for="c in filteredExpediteurs" :key="c.nom" @mousedown="selectExp(c)">
+                                            <b>{{ c.nom }}</b> <span style="color:#64748b;">— {{ c.tel || 'N/A' }}</span>
+                                        </li>
+                                    </ul>
+                                </div>
+                                <button type="button" class="btn btn-outline" @click="openClientModal('exp')" title="Créer un expéditeur" style="padding:10px 14px; white-space:nowrap;"><i class="fas fa-user-plus"></i> Créer</button>
                             </div>
                         </div>
                         <div id="nfExpediteurFeedback" style="font-size: 12px; color: #64748b; margin-top: 5px;" v-html="expFeedback"></div>
@@ -111,15 +115,19 @@ export const NouvelleFactureView = {
                     <div class="form-card" style="box-shadow: 0 2px 4px rgba(0,0,0,0.02);">
                         <h3 style="border-bottom: 1px solid #e2e8f0; padding-bottom: 10px; margin-bottom: 15px; display: flex; align-items: center; gap: 10px;"><i class="fas fa-download text-emerald-500"></i> Destinataire</h3>
                         <div class="form-group">
-                            <div style="position: relative;">
-                                <input type="text" id="nfDestinataire" placeholder="Nom, Prénom et Téléphone..." required autocomplete="off"
-                                       v-model="form.destinataire"
-                                       @input="showDestSugg = true; handleDestinataireChange()"
-                                       @focus="showDestSugg = true"
-                                       @blur="hideSugg('dest')">
-                                <ul class="autocomplete-suggestions" v-if="showDestSugg && filteredDestinataires.length" style="display:block;">
-                                    <li v-for="d in filteredDestinataires" :key="d" @mousedown="selectDest(d)">{{ d }}</li>
-                                </ul>
+                            <div style="display:flex; gap:8px; align-items:flex-start;">
+                                <div style="position: relative; flex:1;">
+                                    <input type="text" id="nfDestinataire" placeholder="Nom, Prénom et Téléphone..." required autocomplete="off"
+                                           v-model="form.destinataire"
+                                           @input="showDestSugg = true; handleDestinataireChange()"
+                                           @focus="showDestSugg = true"
+                                           @blur="hideSugg('dest')"
+                                           style="width:100%; box-sizing:border-box;">
+                                    <ul class="autocomplete-suggestions" v-if="showDestSugg && filteredDestinataires.length" style="display:block;">
+                                        <li v-for="d in filteredDestinataires" :key="d" @mousedown="selectDest(d)">{{ d }}</li>
+                                    </ul>
+                                </div>
+                                <button type="button" class="btn btn-outline" @click="openClientModal('dest')" title="Créer un destinataire" style="padding:10px 14px; white-space:nowrap;"><i class="fas fa-user-plus"></i> Créer</button>
                             </div>
                         </div>
                         <div id="nfDestinataireFeedback" style="font-size: 12px; color: #64748b; margin-top: 5px;" v-html="destFeedback"></div>
@@ -257,8 +265,50 @@ export const NouvelleFactureView = {
                     </div>
 
                 </div>
+
+                <!-- MODALE : Créer un expéditeur / destinataire -->
+                <div v-if="clientModal.show" @click.self="closeClientModal()" style="position:fixed; inset:0; background:rgba(15,23,42,0.6); backdrop-filter:blur(4px); display:flex; align-items:center; justify-content:center; z-index:1000;">
+                    <div style="background:#fff; width:90%; max-width:460px; border-radius:16px; display:flex; flex-direction:column; max-height:90vh; box-shadow:0 25px 50px -12px rgba(0,0,0,0.25);">
+                        <div style="display:flex; justify-content:space-between; align-items:center; padding:18px 20px; border-bottom:1px solid #e2e8f0; background:#f8fafc; border-radius:16px 16px 0 0;">
+                            <div>
+                                <div style="font-size:11px; font-weight:800; color:#94a3b8; text-transform:uppercase; letter-spacing:0.5px;">{{ clientModal.target === 'exp' ? 'Expéditeur' : 'Destinataire' }}</div>
+                                <div style="font-size:17px; font-weight:800; color:#0f172a;">{{ clientModal.target === 'exp' ? 'Créer un expéditeur' : 'Créer un destinataire' }}</div>
+                            </div>
+                            <button type="button" @click="closeClientModal()" aria-label="Fermer" style="background:none; border:none; font-size:22px; cursor:pointer; color:#64748b;">✕</button>
+                        </div>
+                        <div style="padding:20px; overflow-y:auto; flex:1; min-height:0;">
+                            <div class="form-group" style="margin-bottom:14px;">
+                                <label style="display:block; margin-bottom:5px; font-weight:600; font-size:13px; color:#1e293b;">Nom *</label>
+                                <input type="text" v-model="clientModal.nom" placeholder="Nom" style="width:100%; padding:10px; border:1px solid #cbd5e1; border-radius:8px; box-sizing:border-box; font-size:14px;">
+                            </div>
+                            <div class="form-group" style="margin-bottom:14px;">
+                                <label style="display:block; margin-bottom:5px; font-weight:600; font-size:13px; color:#1e293b;">Prénom</label>
+                                <input type="text" v-model="clientModal.prenom" placeholder="Prénom" style="width:100%; padding:10px; border:1px solid #cbd5e1; border-radius:8px; box-sizing:border-box; font-size:14px;">
+                            </div>
+                            <div class="form-group" style="margin-bottom:14px;">
+                                <label style="display:block; margin-bottom:5px; font-weight:600; font-size:13px; color:#1e293b;">Téléphone *</label>
+                                <input type="text" v-model="clientModal.telephone" placeholder="Numéro de téléphone" style="width:100%; padding:10px; border:1px solid #cbd5e1; border-radius:8px; box-sizing:border-box; font-size:14px;">
+                            </div>
+                            <div class="form-group" style="margin-bottom:14px;">
+                                <label style="display:block; margin-bottom:5px; font-weight:600; font-size:13px; color:#1e293b;">Email</label>
+                                <input type="email" v-model="clientModal.email" placeholder="Adresse email" style="width:100%; padding:10px; border:1px solid #cbd5e1; border-radius:8px; box-sizing:border-box; font-size:14px;">
+                            </div>
+                            <div class="form-group">
+                                <label style="display:block; margin-bottom:5px; font-weight:600; font-size:13px; color:#1e293b;">Adresse</label>
+                                <input type="text" v-model="clientModal.adresse" placeholder="Adresse complète" style="width:100%; padding:10px; border:1px solid #cbd5e1; border-radius:8px; box-sizing:border-box; font-size:14px;">
+                            </div>
+                        </div>
+                        <div style="display:flex; justify-content:flex-end; gap:10px; padding:15px 20px; border-top:1px solid #e2e8f0;">
+                            <button type="button" class="btn btn-outline" @click="closeClientModal()" style="padding:10px 16px; border-radius:8px;">Annuler</button>
+                            <button type="button" class="btn btn-primary" @click="saveClientFromModal()" :disabled="clientModal.saving || !clientModal.nom.trim() || !clientModal.telephone.trim()" style="padding:10px 18px; border-radius:8px;">
+                                <span v-if="clientModal.saving"><i class="fas fa-spinner fa-spin"></i> Création…</span>
+                                <span v-else>Créer</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
             </div>
-            
+
         `;
 
         document.getElementById('contentContainer').innerHTML = html;
@@ -529,6 +579,55 @@ initVue(globalApp) {
                 else destFeedback.value = `<span style="color:#f59e0b;"><i class="fas fa-exclamation-triangle"></i> Nouveau destinataire</span>`;
             };
 
+            // --- Modale "Créer un expéditeur / destinataire" ---
+            const clientModal = reactive({
+                show: false, target: 'exp',
+                nom: '', prenom: '', telephone: '', email: '', adresse: '', saving: false
+            });
+            const openClientModal = (target) => {
+                clientModal.target = target;
+                clientModal.nom = ''; clientModal.prenom = ''; clientModal.telephone = '';
+                clientModal.email = ''; clientModal.adresse = '';
+                clientModal.saving = false; clientModal.show = true;
+            };
+            const closeClientModal = () => { clientModal.show = false; };
+            const saveClientFromModal = async () => {
+                const nom = clientModal.nom.trim();
+                const tel = clientModal.telephone.trim();
+                if (!nom || !tel) { globalApp.showToast("Renseignez le nom et le téléphone.", "error"); return; }
+                clientModal.saving = true;
+                try {
+                    const activeAgency = sessionStorage.getItem('currentActiveAgency') || 'paris';
+                    const fullName = `${nom} ${clientModal.prenom.trim()}`.trim();
+                    const adresse = clientModal.adresse.trim();
+                    // Même structure que la page Clients (sinon n'apparaît pas
+                    // dans les listes / l'autocomplétion).
+                    await addDoc(collection(db, getCollectionName("clients")), {
+                        nom: fullName, tel, email: clientModal.email.trim(), adresse,
+                        dateAjout: new Date().toISOString(), agency: activeAgency,
+                        risque: 'low', segment: 'nouveau', taille: 'petit', ca: 0, factures: 0
+                    });
+                    // Intègre immédiatement dans l'autocomplétion (sans recharger).
+                    clientsData.value.set(fullName, { nom: fullName, tel, adresse, email: clientModal.email.trim() });
+                    if (clientModal.target === 'exp') {
+                        form.expediteur = fullName;
+                        handleExpediteurChange();
+                    } else {
+                        form.destinataire = fullName;
+                        destMap.value.set(fullName, adresse);
+                        destInfos.value.set(fullName, tel);
+                        handleDestinataireChange();
+                    }
+                    globalApp.showToast("Client créé ✔", "success");
+                    clientModal.show = false;
+                } catch (e) {
+                    console.error("Création client (Nouvelle Facture) :", e);
+                    globalApp.showToast("Erreur lors de la création du client.", "error");
+                } finally {
+                    clientModal.saving = false;
+                }
+            };
+
             const addRow = () => items.value.push({ id: Date.now(), desc: '', qty: 1, pu: 0, total: 0, vol: 0, showSugg: false });
             const removeRow = (id) => { if (items.value.length > 1) items.value = items.value.filter(i => i.id !== id); };
 
@@ -692,7 +791,8 @@ initVue(globalApp) {
                 handleExpediteurChange, handleDestinataireChange,
                 selectExp, selectDest, selectLieu, selectProduct, hideSugg,
                 addRow, removeRow, updateItem, totalFret, resteAPayer, submitInvoice,
-                destinationAgencies, affiliationActive, demarcheurs
+                destinationAgencies, affiliationActive, demarcheurs,
+                clientModal, openClientModal, closeClientModal, saveClientFromModal
             };
         }
     });
