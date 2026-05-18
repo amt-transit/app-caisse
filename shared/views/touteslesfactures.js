@@ -4,6 +4,7 @@ import { Autocomplete } from '../../paris/js/views/autocomplete.js';
 import { CONSTANTS } from '../../constants.js';
 import { createApp, ref, computed, reactive, onMounted, onUnmounted } from "https://unpkg.com/vue@3/dist/vue.esm-browser.prod.js";
 import { getCollectionName, AGENCIES } from '../../agencies-config.js';
+import { filterByShippingMode } from '../../shipping-mode.js';
 
 export const ToutesLesFacturesView = {
     unsub: null,
@@ -325,6 +326,10 @@ export const ToutesLesFacturesView = {
         const dateTo = document.getElementById('dateTo')?.value;
 
         let filtered = [...this.invoices];
+
+        // Filtre MODE D'EXPÉDITION (source unique : shipping-mode.js).
+        // La liste suit le bouton 🚢/✈️ actif ; ancien sans champ = maritime.
+        filtered = filterByShippingMode(filtered);
 
         if (searchTerm) {
             filtered = filtered.filter(inv => 

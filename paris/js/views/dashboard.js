@@ -2,6 +2,8 @@ import { CONSTANTS } from '../../../constants.js';
 import { db } from '../../../firebase-config.js';
 import { collection, query, where, onSnapshot } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 import { getCollectionName } from '../../../agencies-config.js';
+import { matchesShippingMode } from '../../../shipping-mode.js';
+import { isEurAgency } from '../../../agency-money.js';
 import { createApp, ref, computed, onMounted, onUnmounted, nextTick } from "https://unpkg.com/vue@3/dist/vue.esm-browser.prod.js";
 
 export const DashboardView = {
@@ -127,7 +129,9 @@ export const DashboardView = {
 
         this.vueApp = createApp({
             setup() {
-                const TAUX = CONSTANTS.TAUX_CONVERSION;
+                // €/CFA route-aware : on ne divise par le taux QUE pour Paris
+                // (seule zone €). Chine/Dakar... sont en CFA -> diviseur = 1.
+                const TAUX = isEurAgency() ? CONSTANTS.TAUX_CONVERSION : 1;
                 const now = new Date();
                 const currentMonth = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
                 const currentMonthLabel = now.toLocaleDateString('fr-FR', {month:'long'});
@@ -190,6 +194,7 @@ export const DashboardView = {
 
                         snapTrans.forEach(doc => {
                             const t = doc.data();
+                            if (!matchesShippingMode(t)) return; // dissocie maritime / aérien
                             const valCFA = t.prix || 0;
                             const valEUR = valCFA / TAUX;
 

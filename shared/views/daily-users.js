@@ -1,7 +1,9 @@
 import { db } from '../../firebase-config.js';
 import { collection, query, where, getDocs } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 import { CONSTANTS } from '../../constants.js';
-import { getCollectionName } from '../../agencies-config.js';
+import { getCollectionName, AGENCIES } from '../../agencies-config.js';
+import { matchesShippingMode } from '../../shipping-mode.js';
+import { paidAmount } from '../../agency-money.js';
 
 export const DailyUsersView = {
     formatMoneyLocal(amount) {
@@ -64,6 +66,9 @@ export const DailyUsersView = {
     async loadData(date) {
         const activeAgency = sessionStorage.getItem('currentActiveAgency') || 'abidjan';
         const isEur = activeAgency === 'paris';
+        // Route-aware (cohérent avec « Toutes les factures »).
+        const isArrival = activeAgency === 'all'
+            || (AGENCIES[activeAgency] && AGENCIES[activeAgency].type === 'arrival');
         const TAUX = isEur ? CONSTANTS.TAUX_CONVERSION : 1;
 
         try {
@@ -75,12 +80,15 @@ export const DailyUsersView = {
             };
 
             // Transactions
-            const qTrans = query(collection(db, getCollectionName("transactions")), where("date", "==", date), where("agency", "==", activeAgency), where("isDeleted", "==", false));
+            const qTrans = isArrival
+                ? query(collection(db, getCollectionName("transactions")), where("date", "==", date), where("isDeleted", "==", false))
+                : query(collection(db, getCollectionName("transactions")), where("date", "==", date), where("agency", "==", activeAgency), where("isDeleted", "==", false));
             const snapTrans = await getDocs(qTrans);
             snapTrans.forEach(doc => {
                 const t = doc.data();
+                if (!matchesShippingMode(t)) return; // dissocie maritime / aérien
                 const agent = t.saisiPar || 'Inconnu';
-                let mnt = parseFloat(isEur ? t.montantParis : t.montantAbidjan) || 0;
+                let mnt = paidAmount(t); // route-aware (départ=montantParis, arrivée=montantAbidjan)
                 mnt = mnt / TAUX;
 
                 if (mnt > 0 || t.reste !== undefined) {
@@ -91,14 +99,19 @@ export const DailyUsersView = {
             });
 
             // Livraisons
-            const qLiv = query(collection(db, getCollectionName("livraisons")), where("agency", "==", activeAgency));
-            const qArchive = query(collection(db, getCollectionName("livraisons_archives")), where("agency", "==", activeAgency));
+            const qLiv = isArrival
+                ? query(collection(db, getCollectionName("livraisons")))
+                : query(collection(db, getCollectionName("livraisons")), where("agency", "==", activeAgency));
+            const qArchive = isArrival
+                ? query(collection(db, getCollectionName("livraisons_archives")))
+                : query(collection(db, getCollectionName("livraisons_archives")), where("agency", "==", activeAgency));
             
             const [snapLiv, snapArchive] = await Promise.all([getDocs(qLiv), getDocs(qArchive)]);
             
             const processDeliveries = (snap) => {
                 snap.forEach(doc => {
                     const l = doc.data();
+                    if (!matchesShippingMode(l)) return; // dissocie maritime / aérien
                     if (isEur) {
                         if ((l.dateAjout || '').startsWith(date)) {
                             const livreur = l.saisiPar || l.agent || 'Inconnu';

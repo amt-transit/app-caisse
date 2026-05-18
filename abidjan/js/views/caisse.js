@@ -1,6 +1,7 @@
 import { db } from '../../../firebase-config.js';
 import { collection, doc, addDoc, updateDoc, getDocs, query, where, orderBy, limit, onSnapshot, writeBatch, arrayUnion } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 import { getCollectionName } from '../../../agencies-config.js';
+import { matchesShippingMode, isAerienMode } from '../../../shipping-mode.js';
 import { createApp, ref, reactive, computed, onMounted, onUnmounted, watch } from "https://unpkg.com/vue@3/dist/vue.esm-browser.prod.js";
 
 export const CaisseView = {
@@ -445,7 +446,7 @@ export const CaisseView = {
                     // Unique references for datalist
                     unsubs.push(onSnapshot(query(collection(db, "transactions"), where("isDeleted", "!=", true), orderBy("isDeleted"), orderBy("date", "desc")), snap => {
                         const refs = new Set();
-                        snap.forEach(d => { if (d.data().reference) refs.add(d.data().reference); });
+                        snap.forEach(d => { const dd = d.data(); if (dd.reference && matchesShippingMode(dd)) refs.add(dd.reference); });
                         uniqueReferences.value = Array.from(refs);
                     }));
                     
@@ -501,6 +502,11 @@ export const CaisseView = {
                     if (!qT.empty) {
                         if (qT.size > 1) { if(window.AppModal) window.AppModal.error("Plusieurs résultats."); return; }
                         const data = qT.docs[0].data();
+                        if (!matchesShippingMode(data)) {
+                            if (window.AppModal) window.AppModal.error(isAerienMode() ? "Ce colis est MARITIME — basculez en mode 🚢 pour l'encaisser." : "Ce colis est AÉRIEN — basculez en mode ✈️ pour l'encaisser.");
+                            dForm.reference = '';
+                            return;
+                        }
                         let effectivePrix = data.prix || 0;
                         if (data.adjustmentType === 'reduction') effectivePrix -= (data.adjustmentVal || 0);
                         const reste = ((data.montantParis || 0) + (data.montantAbidjan || 0)) - effectivePrix;
@@ -522,6 +528,11 @@ export const CaisseView = {
                         const livQ = await getDocs(query(collection(db, "livraisons"), where("ref", "==", ref), limit(1)));
                         if (!livQ.empty) {
                             const lData = livQ.docs[0].data();
+                            if (!matchesShippingMode(lData)) {
+                                if (window.AppModal) window.AppModal.error(isAerienMode() ? "Ce colis est MARITIME — basculez en mode 🚢." : "Ce colis est AÉRIEN — basculez en mode ✈️.");
+                                dForm.reference = '';
+                                return;
+                            }
                             dForm.nom = lData.destinataire || lData.expediteur || '';
                             dForm.conteneur = lData.conteneur || '';
                             dForm.prix = parseFloat(String(lData.prixOriginal || lData.montant || '0').replace(/[^\d]/g, '')) || 0;
@@ -599,6 +610,11 @@ export const CaisseView = {
                     let qT = await getDocs(query(collection(db, "transactions"), where("reference", "==", ref)));
                     if (!qT.empty) {
                         const data = qT.docs[0].data();
+                        if (!matchesShippingMode(data)) {
+                            if (window.AppModal) window.AppModal.error(isAerienMode() ? "Ce colis est MARITIME — basculez en mode 🚢 pour l'encaisser." : "Ce colis est AÉRIEN — basculez en mode ✈️ pour l'encaisser.");
+                            mForm.reference = '';
+                            return;
+                        }
                         let effectivePrix = data.prix || 0;
                         if (data.adjustmentType === 'reduction') effectivePrix -= (data.adjustmentVal || 0);
                         let reste = ((data.montantParis || 0) + (data.montantAbidjan || 0)) - effectivePrix;
@@ -620,6 +636,11 @@ export const CaisseView = {
                         const livQ = await getDocs(query(collection(db, "livraisons"), where("ref", "==", ref), limit(1)));
                         if (!livQ.empty) {
                             const lData = livQ.docs[0].data();
+                            if (!matchesShippingMode(lData)) {
+                                if (window.AppModal) window.AppModal.error(isAerienMode() ? "Ce colis est MARITIME — basculez en mode 🚢." : "Ce colis est AÉRIEN — basculez en mode ✈️.");
+                                mForm.reference = '';
+                                return;
+                            }
                             mForm.nom = lData.destinataire || lData.expediteur || ''; mForm.conteneur = lData.conteneur || '';
                             let price = parseFloat(String(lData.prixOriginal || lData.montant || '0').replace(/[^\d]/g, '')) || 0;
                             mForm.prix = price; mForm.baseReste = -price; mForm.montant = price;

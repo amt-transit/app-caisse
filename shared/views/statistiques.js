@@ -1,7 +1,9 @@
 import { db } from '../../firebase-config.js';
 import { collection, query, where, getDocs } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 import { CONSTANTS } from '../../constants.js';
-import { getCollectionName } from '../../agencies-config.js';
+import { getCollectionName, AGENCIES } from '../../agencies-config.js';
+import { matchesShippingMode } from '../../shipping-mode.js';
+import { paidAmount } from '../../agency-money.js';
 
 export const StatistiquesView = {
     chartInstance: null,
@@ -65,7 +67,14 @@ export const StatistiquesView = {
         const isEur = activeAgency === 'paris';
         const TAUX = isEur ? CONSTANTS.TAUX_CONVERSION : 1;
         
-        const qTrans = query(collection(db, getCollectionName("transactions")), where("agency", "==", activeAgency), where("isDeleted", "==", false));
+        // Route-aware (cohérent avec « Toutes les factures ») : une agence
+        // d'arrivée voit TOUTES les transactions de la collection de sa route ;
+        // une agence de départ ne voit que les siennes.
+        const isArrival = activeAgency === 'all'
+            || (AGENCIES[activeAgency] && AGENCIES[activeAgency].type === 'arrival');
+        const qTrans = isArrival
+            ? query(collection(db, getCollectionName("transactions")), where("isDeleted", "==", false))
+            : query(collection(db, getCollectionName("transactions")), where("agency", "==", activeAgency), where("isDeleted", "==", false));
         
         try {
             const snap = await getDocs(qTrans);
@@ -73,7 +82,8 @@ export const StatistiquesView = {
 
             snap.forEach(doc => {
                 const t = doc.data();
-                let mnt = parseFloat(isEur ? t.montantParis : t.montantAbidjan) || 0;
+                if (!matchesShippingMode(t)) return; // dissocie maritime / aérien
+                let mnt = paidAmount(t); // route-aware (départ=montantParis, arrivée=montantAbidjan)
                 mnt = mnt / TAUX;
                 
                 let key = 'Inconnu';

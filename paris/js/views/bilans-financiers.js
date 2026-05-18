@@ -1,6 +1,8 @@
 import { db } from '../../../firebase-config.js';
 import { collection, query, where, onSnapshot, getDoc, doc } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 import { CONSTANTS } from '../../../constants.js';
+import { getCollectionName } from '../../../agencies-config.js';
+import { isEurAgency } from '../../../agency-money.js';
 
 export const BilansFinanciersView = {
     unsubTrans: null,
@@ -14,7 +16,10 @@ export const BilansFinanciersView = {
     containers: [],
     selectedPeriod: null,
     charts: {},
-    TAUX_CONVERSION: CONSTANTS.TAUX_CONVERSION,
+    // Diviseur €/CFA route-aware : on ne convertit (÷ taux) QUE pour Paris
+    // (seule zone €). Chine/Dakar/Abidjan sont en CFA -> diviseur = 1.
+    // Getter : évalué au moment de l'usage (après que l'agence soit connue).
+    get TAUX_CONVERSION() { return isEurAgency() ? CONSTANTS.TAUX_CONVERSION : 1; },
 
     render(app, subView = 'monthly') {
         this.app = app;
@@ -226,28 +231,28 @@ export const BilansFinanciersView = {
         const activeAgency = sessionStorage.getItem('currentActiveAgency') || 'paris';
         
         if (this.unsubTrans) this.unsubTrans();
-        const qTrans = query(collection(db, "transactions"), where("agency", "==", activeAgency), where("isDeleted", "==", false));
+        const qTrans = query(collection(db, getCollectionName("transactions")), where("agency", "==", activeAgency), where("isDeleted", "==", false));
         this.unsubTrans = onSnapshot(qTrans, snap => {
             this.transactions = snap.docs.map(d => d.data());
             this.checkAndRender();
         });
 
         if (this.unsubLiv) this.unsubLiv();
-        const qLiv = query(collection(db, "livraisons"), where("agency", "==", activeAgency));
+        const qLiv = query(collection(db, getCollectionName("livraisons")), where("agency", "==", activeAgency));
         this.unsubLiv = onSnapshot(qLiv, snap => {
             this.livraisons = snap.docs.map(d => d.data());
             this.checkAndRender();
         });
 
         if (this.unsubExp) this.unsubExp();
-        const qExp = query(collection(db, "expenses"), where("isDeleted", "==", false), where("agency", "==", activeAgency));
+        const qExp = query(collection(db, getCollectionName("expenses")), where("isDeleted", "==", false), where("agency", "==", activeAgency));
         this.unsubExp = onSnapshot(qExp, snap => {
             this.expenses = snap.docs.map(d => d.data());
             this.checkAndRender();
         });
 
         if (this.unsubCont) this.unsubCont();
-        this.unsubCont = onSnapshot(query(collection(db, "containers"), where("agency", "==", activeAgency)), snap => {
+        this.unsubCont = onSnapshot(query(collection(db, getCollectionName("containers")), where("agency", "==", activeAgency)), snap => {
             this.containers = snap.docs.map(d => ({id: d.id, ...d.data()}));
             this.checkAndRender();
         });

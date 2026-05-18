@@ -5,7 +5,8 @@ import { AGENCIES } from '../../../agencies-config.js';
 export const ConfigContainerView = {
     docRef: null,
     config: {
-        activeContainer: "E15" // Valeur par défaut
+        activeContainer: "E15",     // Conteneur maritime actif (défaut)
+        activeAerienLot: "AERIEN-01" // Lot aérien actif (défaut)
     },
 
     render(app) {
@@ -22,8 +23,8 @@ export const ConfigContainerView = {
                     <div style="display: flex; align-items: center; gap: 15px;">
                         <div style="background: #e0f2fe; color: #0284c7; width: 50px; height: 50px; display: flex; align-items: center; justify-content: center; border-radius: 12px; font-size: 24px;"><i class="fas fa-box-open"></i></div>
                         <div>
-                            <h2 style="margin: 0; color: #0f172a; font-size: 22px; font-weight: 800;">Conteneur Actif</h2>
-                            <p style="margin: 4px 0 0 0; color: #64748b; font-size: 13px;">Définissez le nom du conteneur en cours de remplissage.</p>
+                            <h2 style="margin: 0; color: #0f172a; font-size: 22px; font-weight: 800;">Conteneur / Lot Actif</h2>
+                            <p style="margin: 4px 0 0 0; color: #64748b; font-size: 13px;">Conteneur maritime ET lot aérien en cours de remplissage.</p>
                         </div>
                     </div>
                 </div>
@@ -39,7 +40,17 @@ export const ConfigContainerView = {
                         </label>
                         <input type="text" id="ccActiveContainer" style="width: 100%; padding: 12px 15px; border: 2px solid #cbd5e1; border-radius: 8px; font-size: 18px; font-weight: bold; color: #0f172a; text-transform: uppercase;" placeholder="Ex: E15, D01...">
                         <div style="margin-top: 8px; font-size: 12px; color: #64748b;">
-                            💡 <strong style="color: #3b82f6;">Astuce :</strong> Le 31/12/2026, vous pourrez revenir ici pour changer <b>"E15"</b> en <b>"D01"</b> par exemple. Toutes les nouvelles factures utiliseront ce nouveau nom automatiquement.
+                            💡 <strong style="color: #3b82f6;">Astuce :</strong> Le 31/12/2026, vous pourrez revenir ici pour changer <b>"E15"</b> en <b>"D01"</b> par exemple. Toutes les nouvelles factures <b>maritimes</b> utiliseront ce nouveau nom automatiquement.
+                        </div>
+                    </div>
+
+                    <div class="form-group" style="margin-bottom: 20px;">
+                        <label style="font-weight: 600; font-size: 13px; color: #475569; display: block; margin-bottom: 8px;">
+                            ✈️ Nom du Lot Aérien Actif
+                        </label>
+                        <input type="text" id="ccActiveAerien" style="width: 100%; padding: 12px 15px; border: 2px solid #cbd5e1; border-radius: 8px; font-size: 18px; font-weight: bold; color: #7c3aed; text-transform: uppercase;" placeholder="Ex: AERIEN-01, VOL-05...">
+                        <div style="margin-top: 8px; font-size: 12px; color: #64748b;">
+                            💡 Les factures créées en <b>mode Aérien</b> (bouton ✈️ en haut) sont regroupées sous ce lot, <b>séparément</b> du conteneur maritime. Changez-le quand un lot/vol part.
                         </div>
                     </div>
 
@@ -69,6 +80,7 @@ export const ConfigContainerView = {
                 this.config = { ...this.config, ...docSnap.data() };
             }
             document.getElementById('ccActiveContainer').value = this.config.activeContainer || 'E15';
+            { const a = document.getElementById('ccActiveAerien'); if (a) a.value = this.config.activeAerienLot || 'AERIEN-01'; }
         } catch (error) {
             console.error("Erreur chargement config conteneur:", error);
         }
@@ -97,6 +109,11 @@ export const ConfigContainerView = {
             }
 
             this.config.activeContainer = activeContainerVal;
+
+            const aerienEl = document.getElementById('ccActiveAerien');
+            let aerienVal = aerienEl ? aerienEl.value.trim().toUpperCase() : '';
+            this.config.activeAerienLot = aerienVal || 'AERIEN-01';
+
             await setDoc(this.docRef, this.config, { merge: true });
             
             this.app.showToast("Le conteneur actif a été mis à jour avec succès !", "success");

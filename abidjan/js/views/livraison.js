@@ -1,6 +1,7 @@
 import { db } from '../../../firebase-config.js';
 import { collection, doc, getDoc, getDocs, addDoc, setDoc, updateDoc, deleteDoc, query, where, orderBy, limit, onSnapshot, writeBatch, deleteField, arrayUnion } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 import { getCollectionName } from '../../../agencies-config.js';
+import { matchesShippingMode } from '../../../shipping-mode.js';
 
 export const LivraisonView = {
     async render(app, container) {
@@ -781,7 +782,11 @@ export const LivraisonView = {
             if (window.unsubLivraisons) window.unsubLivraisons();
             window.unsubLivraisons = onSnapshot(qLivraisons, (snapshot) => {
                     deliveries = [];
-                    snapshot.forEach((doc) => { deliveries.push({ id: doc.id, ...doc.data() }); });
+                    snapshot.forEach((doc) => {
+                        const dd = doc.data();
+                        if (!matchesShippingMode(dd)) return; // dissocie maritime / aérien
+                        deliveries.push({ id: doc.id, ...dd });
+                    });
                     window.deliveries = deliveries;
                     filterDeliveries(); updateStats(); updateAutocomplete(); updateLocationFilterOptions(); updateAvailableContainersList();
                 }, (error) => { console.error("Erreur sync livraisons:", error); showToast("Erreur de synchronisation !", "error"); });

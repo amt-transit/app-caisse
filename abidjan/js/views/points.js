@@ -1,6 +1,7 @@
 import { db } from '../../../firebase-config.js';
 import { collection, getDocs, query, where, orderBy } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
-import { getCollectionName } from '../../../agencies-config.js';
+import { getCollectionName, AGENCIES } from '../../../agencies-config.js';
+import { matchesShippingMode } from '../../../shipping-mode.js';
 
 export const PointsView = {
     render(app, container) {
@@ -32,6 +33,9 @@ export const PointsView = {
 
     async initLogic() {
         const activeAgency = sessionStorage.getItem('currentActiveAgency') || 'abidjan';
+        // Route-aware (cohérent avec « Toutes les factures »).
+        const isArrival = activeAgency === 'all'
+            || (AGENCIES[activeAgency] && AGENCIES[activeAgency].type === 'arrival');
 
         // --- SÉCURITÉ : VÉRIFICATION RÔLE (Admin OU Super Admin) ---
         const userRole = sessionStorage.getItem('userRole');
@@ -94,7 +98,9 @@ export const PointsView = {
                 });
 
                 // 2. Récupérer les Transactions (Encaissements)
-                const transSnap = await getDocs(query(collection(db, getCollectionName("transactions")), where("agency", "==", activeAgency), where("date", ">=", start), where("date", "<=", end)));
+                const transSnap = await getDocs(isArrival
+                    ? query(collection(db, getCollectionName("transactions")), where("date", ">=", start), where("date", "<=", end))
+                    : query(collection(db, getCollectionName("transactions")), where("agency", "==", activeAgency), where("date", ">=", start), where("date", "<=", end)));
 
                 // 3. Récupérer les Dépenses
                 const expSnap = await getDocs(query(collection(db, getCollectionName("expenses")), where("agency", "==", activeAgency), where("date", ">=", start), where("date", "<=", end)));
@@ -106,6 +112,7 @@ export const PointsView = {
                 transSnap.forEach(doc => {
                     const t = doc.data();
                     if (t.isDeleted === true) return;
+                    if (!matchesShippingMode(t)) return; // dissocie maritime / aérien
 
                     // SÉCURITÉ : Si le paiement est lié à une session non validée, on l'ignore
                     if (t.paymentHistory) {

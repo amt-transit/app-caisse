@@ -1,7 +1,9 @@
 import { db } from '../../firebase-config.js';
 import { collection, query, where, getDocs } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 import { CONSTANTS } from '../../constants.js';
-import { getCollectionName } from '../../agencies-config.js';
+import { getCollectionName, AGENCIES } from '../../agencies-config.js';
+import { matchesShippingMode } from '../../shipping-mode.js';
+import { paidAmount } from '../../agency-money.js';
 
 export const DailyBilanView = {
     formatMoneyLocal(amount) {
@@ -88,17 +90,24 @@ export const DailyBilanView = {
         const activeAgency = sessionStorage.getItem('currentActiveAgency') || 'abidjan';
         const isEur = activeAgency === 'paris';
         const TAUX = isEur ? CONSTANTS.TAUX_CONVERSION : 1;
+        // Route-aware (cohérent avec « Toutes les factures ») : agence
+        // d'arrivée -> toute la collection de la route ; départ -> les siennes.
+        const isArrival = activeAgency === 'all'
+            || (AGENCIES[activeAgency] && AGENCIES[activeAgency].type === 'arrival');
 
         try {
             // 1. Transactions (Encaissements)
-            const qTrans = query(collection(db, getCollectionName("transactions")), where("date", "==", date), where("agency", "==", activeAgency), where("isDeleted", "==", false));
+            const qTrans = isArrival
+                ? query(collection(db, getCollectionName("transactions")), where("date", "==", date), where("isDeleted", "==", false))
+                : query(collection(db, getCollectionName("transactions")), where("date", "==", date), where("agency", "==", activeAgency), where("isDeleted", "==", false));
             const snapTrans = await getDocs(qTrans);
             let encaissements = [];
             let totalEncaisse = 0;
             
             snapTrans.forEach(doc => {
                 const t = doc.data();
-                let mnt = parseFloat(isEur ? t.montantParis : t.montantAbidjan) || 0;
+                if (!matchesShippingMode(t)) return; // dissocie maritime / aérien
+                let mnt = paidAmount(t); // route-aware (départ=montantParis, arrivée=montantAbidjan)
                 mnt = mnt / TAUX;
                 if (mnt > 0) { totalEncaisse += mnt; encaissements.push({ ref: t.reference, nom: t.nom, mnt }); }
             });
@@ -117,17 +126,21 @@ export const DailyBilanView = {
             });
 
             // 3. Livraisons (Colis livrés/scannés ce jour là)
-            const qLiv = query(collection(db, getCollectionName("livraisons")), where("agency", "==", activeAgency));
-            const qArchive = query(collection(db, getCollectionName("livraisons_archives")), where("agency", "==", activeAgency));
+            const qLiv = isArrival
+                ? query(collection(db, getCollectionName("livraisons")))
+                : query(collection(db, getCollectionName("livraisons")), where("agency", "==", activeAgency));
+            const qArchive = isArrival
+                ? query(collection(db, getCollectionName("livraisons_archives")))
+                : query(collection(db, getCollectionName("livraisons_archives")), where("agency", "==", activeAgency));
             
             const [snapLiv, snapArchive] = await Promise.all([getDocs(qLiv), getDocs(qArchive)]);
             
             let totalLivres = 0;
             if (isEur) {
-                totalLivres = snapLiv.docs.filter(d => (d.data().dateAjout || '').startsWith(date)).length;
+                totalLivres = snapLiv.docs.filter(d => matchesShippingMode(d.data()) && (d.data().dateAjout || '').startsWith(date)).length;
             } else {
-                totalLivres = snapLiv.docs.filter(d => d.data().status === 'LIVRE' && (d.data().dateLivraison || '').startsWith(date)).length;
-                totalLivres += snapArchive.docs.filter(d => d.data().status === 'LIVRE' && (d.data().dateLivraison || '').startsWith(date)).length;
+                totalLivres = snapLiv.docs.filter(d => matchesShippingMode(d.data()) && d.data().status === 'LIVRE' && (d.data().dateLivraison || '').startsWith(date)).length;
+                totalLivres += snapArchive.docs.filter(d => matchesShippingMode(d.data()) && d.data().status === 'LIVRE' && (d.data().dateLivraison || '').startsWith(date)).length;
             }
 
             const encaisseEl = document.getElementById('b-encaisse');

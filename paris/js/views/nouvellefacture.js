@@ -54,8 +54,8 @@ export const NouvelleFactureView = {
                         </div>
                     </div>
                     <div id="nfActiveContainerBadge" style="padding: 10px 20px; background: #e0f2fe; color: #0369a1; border: 2px solid #bae6fd; border-radius: 12px; font-weight: 900; font-size: 20px; box-shadow: 0 2px 4px rgba(3,105,161,0.1); display: flex; align-items: center; gap: 10px;" title="Conteneur Actif">
-                        <i v-if="!currentContainer" class="fas fa-spinner fa-spin"></i>
-                        <span v-else>📦 {{ currentContainer }}</span>
+                        <i v-if="!currentContainer && !currentAerienLot" class="fas fa-spinner fa-spin"></i>
+                        <span v-else>{{ shippingMode === 'aerien' ? '✈️' : '📦' }} {{ groupingCode }}</span>
                     </div>
                 </div>
 
@@ -193,7 +193,7 @@ export const NouvelleFactureView = {
                                 <div>
                                     <!-- AÉRIEN : poids (kg) par ligne -->
                                     <template v-if="shippingMode === 'aerien'">
-                                        <label v-if="idx === 0" style="font-size:11px; color:#64748b;">Poids (kg) *</label>
+                                        <label v-if="idx === 0" style="font-size:11px; color:#64748b;">Poids (kg) U *</label>
                                         <input type="number" min="0" step="0.1"
                                                v-model.number="item.poids"
                                                @input="updateItem(item, 'poids')"
@@ -406,6 +406,13 @@ initVue(globalApp) {
     this.vueApp = createApp({
         setup() {
             const currentContainer = ref('');
+            const currentAerienLot = ref(''); // "lot aérien actif" (équivalent conteneur, mode aérien)
+            // Code de regroupement effectif : lot aérien si mode aérien,
+            // sinon conteneur maritime. Sépare aérien/maritime partout.
+            const groupingCode = computed(() =>
+                shippingMode === 'aerien'
+                    ? (currentAerienLot.value || 'AERIEN')
+                    : (currentContainer.value || 'ATT'));
             const saving = ref(false);
             
             const clientsData = ref(new Map());
@@ -549,11 +556,9 @@ initVue(globalApp) {
                     
                     const { getDoc, doc: fsDoc } = await import("https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js");
                     const configSnap = await getDoc(fsDoc(db, "settings", `container_config_${activeAgency}`));
-                    if (configSnap.exists() && configSnap.data().activeContainer) {
-                        currentContainer.value = configSnap.data().activeContainer.trim().toUpperCase();
-                    } else {
-                        currentContainer.value = 'ATT';
-                    }
+                    const cfg = configSnap.exists() ? (configSnap.data() || {}) : {};
+                    currentContainer.value = (cfg.activeContainer ? String(cfg.activeContainer).trim().toUpperCase() : 'ATT');
+                    currentAerienLot.value = (cfg.activeAerienLot ? String(cfg.activeAerienLot).trim().toUpperCase() : 'AERIEN');
                 } catch (e) {
                     console.error("Erreur de chargement :", e);
                 }
@@ -892,7 +897,9 @@ initVue(globalApp) {
                     initials = initialsMatch.join('').substring(0, 2).toUpperCase();
                 }
 
-                const conteneurCode = currentContainer.value || 'ATT';
+                // Mode aérien -> regroupe sous le LOT AÉRIEN actif (séparé du
+                // conteneur maritime) ; sinon conteneur maritime classique.
+                const conteneurCode = groupingCode.value;
                 const activeAgency = sessionStorage.getItem('currentActiveAgency') || 'paris';
                 const qContainer = query(collection(db, getCollectionName("transactions")), where("conteneur", "==", conteneurCode), where("agency", "==", activeAgency));
                 const containerSnap = await getDocs(qContainer);
@@ -976,7 +983,7 @@ initVue(globalApp) {
                     const _destAg = destinationAgencies.value.find(a => a.id === form.agence);
                     const destinationName = _destAg ? _destAg.name : (form.agence || 'ABIDJAN');
                     const containerRef = doc(db, getCollectionName("containers"), conteneurCode);
-                    batch.set(containerRef, { number: conteneurCode, status: 'EN_CHARGEMENT', destination: destinationName, destinationAgency: form.agence || '', createdAt: new Date(dateIso).toISOString() }, { merge: true });
+                    batch.set(containerRef, { number: conteneurCode, status: 'EN_CHARGEMENT', destination: destinationName, destinationAgency: form.agence || '', modeExpedition: shippingMode, createdAt: new Date(dateIso).toISOString() }, { merge: true });
                 }
 
                 // MODÈLE CHINE : on enrichit la « Liste des Produits » avec les
@@ -1057,7 +1064,8 @@ initVue(globalApp) {
                 addRow, removeRow, updateItem, totalFret, resteAPayer, submitInvoice,
                 destinationAgencies, affiliationActive, demarcheurs,
                 clientModal, openClientModal, closeClientModal, saveClientFromModal,
-                shippingMode, autoPricingActive, autoTotalCFA, userTouchedTotal, resetAutoTotal, tarifs
+                shippingMode, autoPricingActive, autoTotalCFA, userTouchedTotal, resetAutoTotal, tarifs,
+                currentAerienLot, groupingCode
             };
         }
     });

@@ -1,6 +1,7 @@
 import { db } from '../../../firebase-config.js';
 import { collection, doc, updateDoc, getDocs, query, where, orderBy, onSnapshot, limit, startAfter, writeBatch } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 import { getCollectionName } from '../../../agencies-config.js';
+import { matchesShippingMode } from '../../../shipping-mode.js';
 
 export const HistoryView = {
     render(app, container) {
@@ -322,6 +323,7 @@ export const HistoryView = {
             const endDate = endDateInput.value;
             
             const filteredTransactions = allTransactions.filter(data => {
+                if (!matchesShippingMode(data)) return false; // dissocie maritime / aérien
                 // 1. Vérification Date (Inclusivité : Création OU Paiement dans la plage)
                 let inDateRange = false;
                 
