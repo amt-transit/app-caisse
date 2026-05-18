@@ -1431,6 +1431,44 @@ td.status { text-align: center; }
     transform: rotate(-90deg);
 }
 
+/* ====== Badge "sessions non confirmées" (Confirmation + titre Entrées Caisse) ====== */
+/* Pastille sur l'élément de menu « Confirmation » (span statique géré par app.js) */
+#pendingSessionsBadge {
+    background: #ef4444;
+    color: #fff;
+    font-size: 10px;
+    font-weight: 700;
+    min-width: 18px;
+    height: 18px;
+    line-height: 18px;
+    text-align: center;
+    border-radius: 9px;
+    padding: 0 5px;
+    margin-left: auto;
+    box-shadow: 0 0 0 2px rgba(239,68,68,0.25);
+}
+#pendingSessionsBadge[data-count="0"] { display: none; }
+/* Alerte sur le titre de section « Entrées Caisse » : ::before (libre — ::after = flèche accordéon),
+   un pseudo-élément n'altère PAS title.textContent, donc app.js mappe toujours la catégorie. */
+.sidebar-category-title[data-pending] { position: relative; }
+.sidebar-category-title[data-pending]::before {
+    content: attr(data-pending);
+    position: absolute;
+    right: 26px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: #ef4444;
+    color: #fff;
+    font-size: 10px;
+    font-weight: 700;
+    min-width: 16px;
+    height: 16px;
+    line-height: 16px;
+    text-align: center;
+    border-radius: 8px;
+    padding: 0 4px;
+}
+
 .sidebar-category.collapsed .sidebar-item {
     display: none !important;
 }

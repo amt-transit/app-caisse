@@ -1,5 +1,6 @@
 import { db } from '../../../firebase-config.js';
 import { collection, doc, updateDoc, setDoc, query, where, orderBy, onSnapshot, writeBatch, limit, getDocs } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
+import { getCollectionName } from '../../../agencies-config.js';
 import { createApp, ref, reactive, computed, onMounted, onUnmounted, watch } from "https://unpkg.com/vue@3/dist/vue.esm-browser.prod.js";
 
 export const ExpensesView = {
@@ -336,7 +337,10 @@ export const ExpensesView = {
                         dbVehicles.value = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                     }));
 
-                    unsubs.push(getDocs(query(collection(db, "containers"), where("agency", "==", activeAgency))).then(snap => {
+                    const contCol = getCollectionName("containers");
+                    const contConstraints = [];
+                    if (contCol === "containers") contConstraints.unshift(where("agency", "==", activeAgency));
+                    unsubs.push(getDocs(query(collection(db, contCol), ...contConstraints)).then(snap => {
                         dbContainers.value = snap.docs.map(doc => doc.data().number || doc.id);
                     }));
 
@@ -355,12 +359,14 @@ export const ExpensesView = {
 
                 let expUnsub = null;
                 const fetchExpenses = () => {
-                    let constraints = [where("agency", "==", activeAgency), orderBy("isDeleted"), orderBy("date", "desc"), limit(limitExp.value)];
+                    const expCol = getCollectionName("expenses");
+                    let constraints = [orderBy("isDeleted"), orderBy("date", "desc"), limit(limitExp.value)];
+                    if (expCol === "expenses") constraints.unshift(where("agency", "==", activeAgency));
                     if (filters.showDeleted) constraints.unshift(where("isDeleted", "==", true));
                     else constraints.unshift(where("isDeleted", "!=", true));
 
                     if (expUnsub) expUnsub(); // coupe l'écouteur précédent (évite fuite + doublons)
-                    expUnsub = onSnapshot(query(collection(db, "expenses"), ...constraints), snap => {
+                    expUnsub = onSnapshot(query(collection(db, expCol), ...constraints), snap => {
                         expenses.value = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                     });
                 };
@@ -455,7 +461,7 @@ export const ExpensesView = {
                     }
                     
                     if (canSaveDirectly) {
-                        await setDoc(doc(collection(db, "expenses")), data);
+                        await setDoc(doc(collection(db, getCollectionName("expenses"))), data);
                         if (window.AppModal) window.AppModal.success("Dépense enregistrée.");
                         form.desc = ''; form.amount = null; form.subtype = ''; form.vehicleId = ''; form.container = '';
                     } else {
@@ -470,7 +476,7 @@ export const ExpensesView = {
                     if (pendingExpenses.value.length === 0) return;
                     saving.value = true;
                 const batch = writeBatch(db);
-                    pendingExpenses.value.forEach(exp => batch.set(doc(collection(db, "expenses")), exp));
+                    pendingExpenses.value.forEach(exp => batch.set(doc(collection(db, getCollectionName("expenses"))), exp));
                 await batch.commit();
                     pendingExpenses.value = [];
                     saving.value = false;
@@ -480,7 +486,7 @@ export const ExpensesView = {
                 const deleteExpense = async (id) => {
                     if (window.AppModal) { if (!await window.AppModal.confirm("Supprimer cette dépense ?", "Suppression", true)) return; }
                     else { if (!confirm("Supprimer ?")) return; }
-                    await updateDoc(doc(db, "expenses", id), { isDeleted: true });
+                    await updateDoc(doc(db, getCollectionName("expenses"), id), { isDeleted: true });
                 };
 
                 const openEditModal = (exp) => {
@@ -498,7 +504,7 @@ export const ExpensesView = {
                     if (editForm.type === 'Conteneur') data.conteneur = editForm.container.trim().toUpperCase();
                     else { data.vehicleId = editForm.vehicleId; data.conteneur = ''; }
                     
-                    await updateDoc(doc(db, "expenses", editForm.id), data);
+                    await updateDoc(doc(db, getCollectionName("expenses"), editForm.id), data);
                     showEditModal.value = false; saving.value = false;
                     if (window.AppModal) window.AppModal.success("Modifié avec succès !");
                 };

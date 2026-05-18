@@ -1,5 +1,6 @@
 import { db } from '../../../firebase-config.js';
 import { collection, doc, updateDoc, deleteDoc, getDoc, getDocs, query, where, orderBy, onSnapshot, writeBatch, arrayRemove, limit } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
+import { getCollectionName } from '../../../agencies-config.js';
 
 export const AuditView = {
     render(app, container) {
@@ -65,8 +66,8 @@ export const AuditView = {
                 const logsSnap = await getDocs(logsQuery);
     
                 const [transSnap, expSnap] = await Promise.all([
-                    getDocs(query(collection(db, "transactions"), where("isDeleted", "!=", true))),
-                    getDocs(query(collection(db, "expenses"), where("isDeleted", "!=", true)))
+                    getDocs(query(collection(db, getCollectionName("transactions")), where("isDeleted", "!=", true))),
+                    getDocs(query(collection(db, getCollectionName("expenses")), where("isDeleted", "!=", true)))
                 ]);
     
                 const transactionsBySession = {};

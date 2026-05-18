@@ -437,14 +437,12 @@ export const CaisseView = {
                         dbVehicles.value = snap.docs.map(d => ({ id: d.id, ...d.data() }));
                     }));
 
-                    // Pending sessions (badge)
-                    unsubs.push(onSnapshot(query(collection(db, "audit_logs"), where("action", "==", "VALIDATION_JOURNEE"), where("agency", "==", activeAgency)), snap => {
-                        pendingCount.value = snap.docs.filter(d => d.data().status !== "VALIDATED" && d.data().status !== "ARCHIVED").length;
-                        updateNavBadge(pendingCount.value);
-                    }));
+                    // (Badge "sessions non confirmées" géré globalement par app.js
+                    //  initPendingSessionsBadge — visible sur « Confirmation » et le
+                    //  titre « Entrées Caisse », quelle que soit la page ouverte.)
 
                     // Unique references for datalist
-                    unsubs.push(onSnapshot(query(collection(db, "transactions"), where("isDeleted", "!=", true), orderBy("isDeleted"), orderBy("date", "desc")), snap => {
+                    unsubs.push(onSnapshot(query(collection(db, getCollectionName("transactions")), where("isDeleted", "!=", true), orderBy("isDeleted"), orderBy("date", "desc")), snap => {
                         const refs = new Set();
                         snap.forEach(d => { const dd = d.data(); if (dd.reference && matchesShippingMode(dd)) refs.add(dd.reference); });
                         uniqueReferences.value = Array.from(refs);
@@ -455,17 +453,6 @@ export const CaisseView = {
                 });
 
                 onUnmounted(() => unsubs.forEach(u => u()));
-
-                const updateNavBadge = (count) => {
-                    const badgeHTML = `<span class="pending-count-badge" style="background-color: rgb(239, 68, 68); color: white; border-radius: 10px; padding: 1px 6px; font-size: 10px; font-weight: bold; margin-left: 5px; vertical-align: super; display: inline-block;">${count}</span>`;
-                    document.querySelectorAll('.nav-menu a, .sidebar-item').forEach(link => {
-                        if (link.textContent.includes('Caisse') || link.textContent.includes('Saisie')) {
-                            const existing = link.querySelector('.pending-count-badge');
-                            if (existing) existing.remove();
-                            if (count > 0) link.insertAdjacentHTML('beforeend', badgeHTML);
-                        }
-                    });
-                };
 
                 // --- LOGIC: DESKTOP ---
                 const goToDesktopStep = (step) => {
@@ -496,8 +483,8 @@ export const CaisseView = {
                         return;
                     }
 
-                    let qT = await getDocs(query(collection(db, "transactions"), where("reference", "==", ref)));
-                    if (qT.empty) qT = await getDocs(query(collection(db, "transactions"), where("nom", "==", ref)));
+                    let qT = await getDocs(query(collection(db, getCollectionName("transactions")), where("reference", "==", ref)));
+                    if (qT.empty) qT = await getDocs(query(collection(db, getCollectionName("transactions")), where("nom", "==", ref)));
                     
                     if (!qT.empty) {
                         if (qT.size > 1) { if(window.AppModal) window.AppModal.error("Plusieurs résultats."); return; }
@@ -525,7 +512,7 @@ export const CaisseView = {
                         dForm.prix = effectivePrix; dForm.modePaiement = data.modePaiement || 'Espèce';
                         if (data.agentMobileMoney && ['Virement', 'Chèque'].includes(dForm.modePaiement)) dForm.banque = data.agentMobileMoney;
                     } else {
-                        const livQ = await getDocs(query(collection(db, "livraisons"), where("ref", "==", ref), limit(1)));
+                        const livQ = await getDocs(query(collection(db, getCollectionName("livraisons")), where("ref", "==", ref), limit(1)));
                         if (!livQ.empty) {
                             const lData = livQ.docs[0].data();
                             if (!matchesShippingMode(lData)) {
@@ -607,7 +594,7 @@ export const CaisseView = {
                         return;
                     }
 
-                    let qT = await getDocs(query(collection(db, "transactions"), where("reference", "==", ref)));
+                    let qT = await getDocs(query(collection(db, getCollectionName("transactions")), where("reference", "==", ref)));
                     if (!qT.empty) {
                         const data = qT.docs[0].data();
                         if (!matchesShippingMode(data)) {
@@ -633,7 +620,7 @@ export const CaisseView = {
                         mForm.nom = data.nomDestinataire || data.nom || ''; mForm.conteneur = data.conteneur || '';
                         mForm.prix = effectivePrix; mForm.baseReste = reste; mForm.montant = Math.abs(reste);
                     } else {
-                        const livQ = await getDocs(query(collection(db, "livraisons"), where("ref", "==", ref), limit(1)));
+                        const livQ = await getDocs(query(collection(db, getCollectionName("livraisons")), where("ref", "==", ref), limit(1)));
                         if (!livQ.empty) {
                             const lData = livQ.docs[0].data();
                             if (!matchesShippingMode(lData)) {
@@ -731,7 +718,7 @@ export const CaisseView = {
                                 agentMobileMoney: isMob ? t.agentRecepteur : t.agentMobileMoney, sessionId: sessionId
                             }));
 
-                            const qT = await getDocs(query(collection(db, "transactions"), where("reference", "==", ref)));
+                            const qT = await getDocs(query(collection(db, getCollectionName("transactions")), where("reference", "==", ref)));
                             if (!qT.empty) {
                                 const docRef = qT.docs[0].ref;
                                 const oldData = qT.docs[0].data();
@@ -767,7 +754,7 @@ export const CaisseView = {
                                 batch.update(docRef, updates);
                                 touchedTransIds.push(docRef.id);
                             } else {
-                                const docRef = doc(collection(db, "transactions"));
+                                const docRef = doc(collection(db, getCollectionName("transactions")));
                                 let effective = baseT.prix;
                                 if (baseT.adjustmentType === 'reduction') effective -= baseT.adjustmentVal;
                                 
@@ -783,7 +770,7 @@ export const CaisseView = {
                             }
 
                             // Sync Livraisons
-                            const livQ = await getDocs(query(collection(db, "livraisons"), where("ref", "==", ref), limit(1)));
+                            const livQ = await getDocs(query(collection(db, getCollectionName("livraisons")), where("ref", "==", ref), limit(1)));
                             if (!livQ.empty) {
                                 const lData = livQ.docs[0].data();
                                 const lUpdates = {};
@@ -791,7 +778,7 @@ export const CaisseView = {
                                 if (baseT.nom && baseT.nom !== lData.destinataire) lUpdates.destinataire = baseT.nom;
                                 if (Object.keys(lUpdates).length > 0) batch.update(livQ.docs[0].ref, lUpdates);
                             } else {
-                                batch.set(doc(collection(db, "livraisons")), {
+                                batch.set(doc(collection(db, getCollectionName("livraisons"))), {
                                     ref, agency: activeAgency, destinataire: baseT.nom || 'Client', expediteur: '', conteneur: baseT.conteneur || '',
                                     containerStatus: 'EN_COURS', status: 'EN_ATTENTE', dateAjout: dateStr, quantite: 1, montant: (baseT.prix||0)+' CFA', numero: baseT.numero||'', description: 'Créé via Caisse'
                                 });
@@ -800,7 +787,7 @@ export const CaisseView = {
                         
                         expList.forEach(e => {
                             totalOut += e.montant;
-                            const docRef = doc(collection(db, "expenses"));
+                            const docRef = doc(collection(db, getCollectionName("expenses")));
                             batch.set(docRef, {
                                 date: dateStr, description: `${isMob ? e.motif : e.description} (${currentUserName})`, montant: e.montant,
                                 agency: activeAgency, type: (!isMob && e.conteneur) ? 'Conteneur' : 'Mensuelle', mode: 'Espèce', isDeleted: false, sessionId,
@@ -858,7 +845,10 @@ export const CaisseView = {
                     if (!confirm("Voulez-vous recalculer tous les montants et restes de la base de données pour corriger les doublons ?")) return;
                     
                     try {
-                        const transSnap = await getDocs(query(collection(db, "transactions"), where("isDeleted", "!=", true), where("agency", "==", activeAgency)));
+                        const _trCol = getCollectionName("transactions");
+                        const _trConstraints = [where("isDeleted", "!=", true)];
+                        if (_trCol === "transactions") _trConstraints.push(where("agency", "==", activeAgency));
+                        const transSnap = await getDocs(query(collection(db, _trCol), ..._trConstraints));
                         let batch = writeBatch(db);
                         let count = 0;
                         

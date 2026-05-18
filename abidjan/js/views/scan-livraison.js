@@ -1,6 +1,7 @@
 
 import { db } from '../../../firebase-config.js';
 import { collection, query, where, getDocs, updateDoc, doc, arrayUnion, limit, addDoc } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
+import { getCollectionName } from '../../../agencies-config.js';
 
 export const ScanLivraisonView = {
     scannerActive: false,
@@ -347,7 +348,7 @@ export const ScanLivraisonView = {
         this.stats.total++;
 
         try {
-            const qLiv = query(collection(db, 'livraisons'), where('ref', '==', baseRef), limit(1));
+            const qLiv = query(collection(db, getCollectionName('livraisons')), where('ref', '==', baseRef), limit(1));
             const snapLiv = await getDocs(qLiv);
 
             if (!snapLiv.empty) {
@@ -364,7 +365,7 @@ export const ScanLivraisonView = {
                 } else {
                     const today = new Date().toISOString().split('T')[0];
                     // Mettre à jour avec le livreur et statut EN_COURS
-                    await updateDoc(doc(db, 'livraisons', docId), {
+                    await updateDoc(doc(db, getCollectionName('livraisons'), docId), {
                         status: 'EN_COURS',
                         livreur: targetDriver,
                         dateProgramme: today,

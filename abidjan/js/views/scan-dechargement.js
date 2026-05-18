@@ -1,5 +1,6 @@
 import { db } from '../../../firebase-config.js';
 import { collection, query, where, getDocs, updateDoc, doc, arrayUnion, limit, addDoc } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
+import { getCollectionName } from '../../../agencies-config.js';
 
 export const ScanDechargementView = {
     scannerActive: false,
@@ -186,7 +187,7 @@ export const ScanDechargementView = {
 
     async loadContainers() {
         try {
-            const snap = await getDocs(collection(db, 'containers'));
+            const snap = await getDocs(collection(db, getCollectionName('containers')));
             const select = document.getElementById('sd-target-container');
             if (!select) return;
             snap.forEach(doc => {
@@ -330,7 +331,7 @@ export const ScanDechargementView = {
         this.stats.total++;
 
         try {
-            const qLiv = query(collection(db, 'livraisons'), where('ref', '==', baseRef), limit(1));
+            const qLiv = query(collection(db, getCollectionName('livraisons')), where('ref', '==', baseRef), limit(1));
             const snapLiv = await getDocs(qLiv);
 
             if (!snapLiv.empty) {
@@ -346,7 +347,7 @@ export const ScanDechargementView = {
                     if (this.isSoundEnabled && navigator.vibrate) navigator.vibrate([50, 50, 50]);
                 } else {
                     // Mettre à jour avec le conteneur cible, statut EN_COURS et déclenchement dateAjout pour le magasinage
-                    await updateDoc(doc(db, 'livraisons', docId), {
+                    await updateDoc(doc(db, getCollectionName('livraisons'),docId), {
                         conteneur: targetCont,
                         containerStatus: 'EN_COURS',
                         status: data.status === 'EN_ATTENTE' ? 'EN_ATTENTE' : data.status, // Garde le statut si déjà livré/partiel

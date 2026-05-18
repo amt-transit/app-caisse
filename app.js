@@ -123,6 +123,7 @@ export const app = {
         
         this.renderPage(savedPage);
         this.updateBadges();
+        this.initPendingSessionsBadge();
     },
 
     async loadMenuConfig() {
@@ -232,6 +233,11 @@ export const app = {
 
         if (this.currentPage && !this.checkPageAccess(this.currentPage)) {
             this.renderPage('dashboard');
+        }
+
+        // Le menu vient d'être reconstruit : on repose le badge "sessions non confirmées"
+        if (typeof this._pendingSessionsCount === 'number') {
+            this.applyPendingSessionsBadge(this._pendingSessionsCount);
         }
     },
 
@@ -379,6 +385,42 @@ export const app = {
             const snapRdv = await getDocs(qRdv);
             const pendingBadge = document.getElementById('pendingAppointmentsBadge');
             if (pendingBadge) pendingBadge.textContent = snapRdv.size;
+        });
+    },
+
+    // Badge GLOBAL "sessions non confirmées" : écouteur temps réel indépendant de
+    // la page ouverte (le module Saisie/caisse.js n'est pas toujours monté).
+    // S'affiche sur l'élément de menu « Confirmation » + le titre « Entrées Caisse ».
+    initPendingSessionsBadge() {
+        const activeAgency = sessionStorage.getItem('currentActiveAgency') || 'paris';
+        import('./firebase-config.js').then(async cfg => {
+            const { collection, query, where, onSnapshot } = await import('https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js');
+            if (this.unsubPendingSessions) { try { this.unsubPendingSessions(); } catch (e) {} }
+            // audit_logs reste une collection globale (confirmation.js l'écrit en brut, sans suffixe de route)
+            const qSess = query(collection(cfg.db, "audit_logs"), where("action", "==", "VALIDATION_JOURNEE"), where("agency", "==", activeAgency));
+            this.unsubPendingSessions = onSnapshot(qSess, snap => {
+                const count = snap.docs.filter(d => {
+                    const s = d.data().status;
+                    return s !== "VALIDATED" && s !== "ARCHIVED";
+                }).length;
+                this.applyPendingSessionsBadge(count);
+            }, err => console.error("Badge sessions non confirmées:", err));
+        }).catch(e => console.error("initPendingSessionsBadge:", e));
+    },
+
+    applyPendingSessionsBadge(count) {
+        this._pendingSessionsCount = count;
+        // 1. Pastille sur l'élément de menu « Confirmation » (span statique de index.html)
+        const b = document.getElementById('pendingSessionsBadge');
+        if (b) { b.textContent = count; b.setAttribute('data-count', count); }
+        // 2. Alerte sur le titre de section « Entrées Caisse » : attribut data-pending
+        //    rendu via ::before (CSS). Un pseudo-élément n'altère PAS title.textContent,
+        //    donc applyMenuConfig continue de mapper correctement la catégorie.
+        document.querySelectorAll('.sidebar-category-title').forEach(title => {
+            if (title.textContent.includes('Entrées Caisse')) {
+                if (count > 0) title.setAttribute('data-pending', count);
+                else title.removeAttribute('data-pending');
+            }
         });
     },
 

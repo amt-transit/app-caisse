@@ -1,5 +1,6 @@
 import { db } from '../../../firebase-config.js';
 import { collection, doc, setDoc, updateDoc, getDocs, query, where, orderBy, onSnapshot, writeBatch } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
+import { getCollectionName } from '../../../agencies-config.js';
 
 export const BankView = {
     render(app, container) {
@@ -87,7 +88,7 @@ export const BankView = {
                 }, []);
             },
             async calculateAvailableBalance(db, unconfirmedSessions) {
-                const transSnap = await getDocs(query(collection(db, "transactions"), where("isDeleted", "!=", true)));
+                const transSnap = await getDocs(query(collection(db, getCollectionName("transactions")), where("isDeleted", "!=", true)));
                 let totalVentes = 0;
                 transSnap.forEach(doc => {
                     const d = doc.data();
@@ -112,7 +113,10 @@ export const BankView = {
                         totalAutres += (d.montant || 0);
                     }
                 });
-                const expSnap = await getDocs(query(collection(db, "expenses"), where("isDeleted", "!=", true), where("agency", "==", activeAgency)));
+                const expBalCol = getCollectionName("expenses");
+                const expBalConstraints = [where("isDeleted", "!=", true)];
+                if (expBalCol === "expenses") expBalConstraints.push(where("agency", "==", activeAgency));
+                const expSnap = await getDocs(query(collection(db, expBalCol), ...expBalConstraints));
                 let totalDepenses = 0;
                 expSnap.forEach(doc => {
                     const d = doc.data();
@@ -277,7 +281,7 @@ export const BankView = {
             setDoc(newDocRef, data).then(() => {
                 // AUTOMATISATION : Si c'est un Paiement lié à un Conteneur, on crée la dépense automatiquement
                 if (type === 'Paiement' && conteneur) {
-                    const newExpRef = doc(collection(db, "expenses"));
+                    const newExpRef = doc(collection(db, getCollectionName("expenses")));
                     setDoc(newExpRef, {
                         date: data.date,
                         description: `${data.description} (Virement Bancaire)`,
@@ -376,15 +380,19 @@ export const BankView = {
             }, error => console.error(error));
 
             // B. Virements depuis Transactions
+            const transCol = getCollectionName("transactions");
             let transConstraints = [];
             if (showDeletedCheckbox.checked) {
-                 transConstraints.push(where("isDeleted", "==", true), where("agency", "==", activeAgency));
+                 transConstraints.push(where("isDeleted", "==", true));
+                 if (transCol === "transactions") transConstraints.push(where("agency", "==", activeAgency));
             } else {
-                 transConstraints.push(where("isDeleted", "!=", true), where("agency", "==", activeAgency), orderBy("isDeleted"));
+                 transConstraints.push(where("isDeleted", "!=", true));
+                 if (transCol === "transactions") transConstraints.push(where("agency", "==", activeAgency));
+                 transConstraints.push(orderBy("isDeleted"));
             }
             transConstraints.push(orderBy("date", "desc"));
 
-            const qTrans = query(collection(db, "transactions"), ...transConstraints);
+            const qTrans = query(collection(db, transCol), ...transConstraints);
 
             unsubscribeVirements = onSnapshot(qTrans, snapshot => {
                 const extracted = [];
@@ -576,7 +584,7 @@ export const BankView = {
                 if (!await AppModal.confirm("Confirmer la suppression ? Elle sera archivée.", "Suppression", true)) return;
 
                 // SUPPRESSION EN CASCADE : Si une dépense est liée à ce mouvement, on la supprime aussi
-                const expensesQ = query(collection(db, "expenses"), where("linkedBankMovementId", "==", docId));
+                const expensesQ = query(collection(db, getCollectionName("expenses")), where("linkedBankMovementId", "==", docId));
                 getDocs(expensesQ).then(snap => {
                     snap.forEach(d => updateDoc(d.ref, { isDeleted: true }));
                 });

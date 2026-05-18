@@ -1,5 +1,6 @@
 import { db } from '../../../firebase-config.js';
 import { collection, query, where, getDocs, updateDoc, doc, arrayUnion, limit, addDoc } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
+import { getCollectionName } from '../../../agencies-config.js';
 
 export const ScanLivrerView = {
     scannerActive: false,
@@ -325,7 +326,7 @@ export const ScanLivrerView = {
         this.stats.total++;
 
         try {
-            const qLiv = query(collection(db, 'livraisons'), where('ref', '==', baseRef), limit(1));
+            const qLiv = query(collection(db, getCollectionName('livraisons')), where('ref', '==', baseRef), limit(1));
             const snapLiv = await getDocs(qLiv);
 
             if (!snapLiv.empty) {
@@ -339,7 +340,7 @@ export const ScanLivrerView = {
                     if (this.isSoundEnabled && navigator.vibrate) navigator.vibrate([50, 50, 50]);
                 } else {
                     const qteTotal = data.quantite || 1;
-                    await updateDoc(doc(db, 'livraisons', docId), {
+                    await updateDoc(doc(db, getCollectionName('livraisons'), docId), {
                         status: 'LIVRE',
                         dateLivraison: new Date().toISOString(),
                         quantiteLivree: qteTotal,

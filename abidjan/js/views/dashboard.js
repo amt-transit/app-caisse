@@ -417,7 +417,11 @@ export const DashboardView = {
                 }, []);
             },
             async calculateAvailableBalance(db, unconfirmedSessions) {
-                const transSnap = await getDocs(query(collection(db, "transactions"), where("isDeleted", "!=", true), where("agency", "==", activeAgency)));
+                const transBalCol = getCollectionName("transactions");
+                const transBalConstraints = [where("isDeleted", "!=", true)];
+                if (transBalCol === "transactions") transBalConstraints.unshift(where("agency", "==", activeAgency));
+                const transBalQuery = query(collection(db, transBalCol), ...transBalConstraints);
+                const transSnap = await getDocs(transBalQuery);
                 let totalVentes = 0;
                 transSnap.forEach(doc => {
                     const d = doc.data();
@@ -442,7 +446,11 @@ export const DashboardView = {
                         totalAutres += (d.montant || 0);
                     }
                 });
-                const expSnap = await getDocs(query(collection(db, "expenses"), where("isDeleted", "!=", true), where("agency", "==", activeAgency)));
+                const expBalCol = getCollectionName("expenses");
+                const expBalConstraints = [where("isDeleted", "!=", true)];
+                if (expBalCol === "expenses") expBalConstraints.unshift(where("agency", "==", activeAgency));
+                const expBalQuery = query(collection(db, expBalCol), ...expBalConstraints);
+                const expSnap = await getDocs(expBalQuery);
                 let totalDepenses = 0;
                 expSnap.forEach(doc => {
                     const d = doc.data();
@@ -1316,11 +1324,19 @@ export const DashboardView = {
             if (allTransactions.length > 0) updateDashboard();
         });
 
-        onSnapshot(query(collection(db, "transactions"), where("isDeleted", "!=", true), where("agency", "==", activeAgency)), snap => {
+        const transListCol = getCollectionName("transactions");
+        const transListConstraints = [where("isDeleted", "!=", true)];
+        if (transListCol === "transactions") transListConstraints.unshift(where("agency", "==", activeAgency));
+        const transListQuery = query(collection(db, transListCol), ...transListConstraints);
+        onSnapshot(transListQuery, snap => {
             allTransactions = snap.docs.map(d => ({ id: d.id, ...d.data() }));
             updateDashboard();
         });
-        onSnapshot(query(collection(db, "expenses"), where("isDeleted", "!=", true), where("agency", "==", activeAgency)), snap => {
+        const expListCol = getCollectionName("expenses");
+        const expListConstraints = [where("isDeleted", "!=", true)];
+        if (expListCol === "expenses") expListConstraints.unshift(where("agency", "==", activeAgency));
+        const expListQuery = query(collection(db, expListCol), ...expListConstraints);
+        onSnapshot(expListQuery, snap => {
             allExpenses = snap.docs.map(d => ({ id: d.id, ...d.data() }));
             updateDashboard();
         });

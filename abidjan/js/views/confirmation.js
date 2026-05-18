@@ -1,5 +1,6 @@
 import { db } from '../../../firebase-config.js';
 import { collection, doc, updateDoc, deleteDoc, getDoc, getDocs, query, where, orderBy, onSnapshot, writeBatch, arrayRemove, limit } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
+import { getCollectionName } from '../../../agencies-config.js';
 
 export const ConfirmationView = {
     render(app, container) {
@@ -390,21 +391,21 @@ export const ConfirmationView = {
     
             let transactionsDocs = []; let expensesDocs = [];
             if (logData.transactionIds && Array.isArray(logData.transactionIds)) {
-                const tPromises = logData.transactionIds.map(id => getDoc(doc(db, "transactions", id)));
+                const tPromises = logData.transactionIds.map(id => getDoc(doc(db, getCollectionName("transactions"), id)));
                 const tSnapshots = await Promise.all(tPromises);
                 transactionsDocs = tSnapshots.filter(doc => doc.exists());
             } else {
-                const qTransFallback = query(collection(db, "transactions"), where("saisiPar", "==", logData.user), where("lastPaymentDate", "==", dateOnly));
+                const qTransFallback = query(collection(db, getCollectionName("transactions")), where("saisiPar", "==", logData.user), where("lastPaymentDate", "==", dateOnly));
                 const transSnap = await getDocs(qTransFallback);
                 transactionsDocs = transSnap.docs;
             }
     
             if (logData.expenseIds && Array.isArray(logData.expenseIds)) {
-                const ePromises = logData.expenseIds.map(id => getDoc(doc(db, "expenses", id)));
+                const ePromises = logData.expenseIds.map(id => getDoc(doc(db, getCollectionName("expenses"), id)));
                 const eSnapshots = await Promise.all(ePromises);
                 expensesDocs = eSnapshots.filter(doc => doc.exists()).map(d => ({ id: d.id, ...d.data() }));
             } else {
-                const qExpFallback = query(collection(db, "expenses"), where("description", ">=", ""), orderBy("description"));
+                const qExpFallback = query(collection(db, getCollectionName("expenses")), where("description", ">=", ""), orderBy("description"));
                 const expSnap = await getDocs(qExpFallback);
                 expensesDocs = expSnap.docs.map(d => ({ id: d.id, ...d.data() })).filter(e => e.date === dateOnly && e.description.includes(logData.user));
             }
@@ -542,15 +543,15 @@ export const ConfirmationView = {
                 sessionsListValidatedEl.innerHTML = '';
     
                 let matchingDocs = [];
-                let tSnaps = await getDocs(query(collection(db, "transactions"), where("reference", "==", term)));
+                let tSnaps = await getDocs(query(collection(db, getCollectionName("transactions")), where("reference", "==", term)));
                 if (!tSnaps.empty) matchingDocs = tSnaps.docs;
                 if (matchingDocs.length === 0) {
-                    tSnaps = await getDocs(query(collection(db, "transactions"), where("nom", "==", term)));
+                    tSnaps = await getDocs(query(collection(db, getCollectionName("transactions")), where("nom", "==", term)));
                     if (!tSnaps.empty) matchingDocs = tSnaps.docs;
                 }
                 if (matchingDocs.length === 0) {
                     sessionsListPendingEl.innerHTML = '<p style="padding:10px; color:#666;">Recherche approfondie...</p>';
-                    const snapshot = await getDocs(query(collection(db, "transactions"), orderBy("date", "desc")));
+                    const snapshot = await getDocs(query(collection(db, getCollectionName("transactions")), orderBy("date", "desc")));
                     matchingDocs = snapshot.docs.filter(doc => {
                         const d = doc.data(); return (d.reference || '').toUpperCase().includes(term) || (d.nom || '').toUpperCase().includes(term);
                     });
@@ -625,7 +626,7 @@ export const ConfirmationView = {
         async function handleDelete(docId) {
             if (!await AppModal.confirm("Voulez-vous vraiment supprimer cet encaissement de la journée ?", "Suppression", true)) return;
             try {
-                const docRef = doc(db, "transactions", docId);
+                const docRef = doc(db, getCollectionName("transactions"), docId);
                 const docSnap = await getDoc(docRef);
                 if (!docSnap.exists()) return;
                 const data = docSnap.data();
@@ -665,7 +666,7 @@ export const ConfirmationView = {
         async function handleDeleteExpense(docId) {
             if (!await AppModal.confirm("Supprimer cette dépense ?", "Suppression", true)) return;
             try {
-                await updateDoc(doc(db, "expenses", docId), { isDeleted: true });
+                await updateDoc(doc(db, getCollectionName("expenses"), docId), { isDeleted: true });
                 if (currentSessionData.expenseIds) {
                     const auditRef = doc(db, "audit_logs", currentSessionId);
                     await updateDoc(auditRef, { expenseIds: arrayRemove(docId) });
@@ -676,7 +677,7 @@ export const ConfirmationView = {
     
         async function handleEditExpense(docId) {
             try {
-                const docSnap = await getDoc(doc(db, "expenses", docId));
+                const docSnap = await getDoc(doc(db, getCollectionName("expenses"), docId));
                 if (!docSnap.exists()) return;
                 const data = docSnap.data();
                 currentEditingExpenseId = docId;
@@ -689,14 +690,14 @@ export const ConfirmationView = {
         saveExpenseBtn.onclick = async () => {
             if (!currentEditingExpenseId) return;
             try {
-                await updateDoc(doc(db, "expenses", currentEditingExpenseId), { date: editExpDate.value, description: editExpDesc.value, montant: parseFloat(editExpAmount.value) || 0, type: editExpType.value });
+                await updateDoc(doc(db, getCollectionName("expenses"), currentEditingExpenseId), { date: editExpDate.value, description: editExpDesc.value, montant: parseFloat(editExpAmount.value) || 0, type: editExpType.value });
                 closeExpenseModalFunc(); loadSessionDetails(currentSessionId, currentSessionData);
             } catch (e) { AppModal.error("Erreur lors de l'enregistrement de la dépense."); }
         };
     
         async function handleEdit(docId) {
             try {
-                const docRef = doc(db, "transactions", docId);
+                const docRef = doc(db, getCollectionName("transactions"), docId);
                 const docSnap = await getDoc(docRef);
                 if (!docSnap.exists()) return;
                 const data = docSnap.data();
@@ -768,9 +769,9 @@ export const ConfirmationView = {
                 const uniqueAgents = new Set();
                 if (updates.paymentHistory) { updates.paymentHistory.forEach(p => { if (p.agent) { p.agent.split(',').forEach(a => { const trimmed = a.trim(); if (trimmed) uniqueAgents.add(trimmed); }); } }); }
                 updates.agent = Array.from(uniqueAgents).join(', ');
-                await updateDoc(doc(db, "transactions", currentEditingTransaction.id), updates);
+                await updateDoc(doc(db, getCollectionName("transactions"), currentEditingTransaction.id), updates);
                 try {
-                    const livQuery = await getDocs(query(collection(db, "livraisons"), where("ref", "==", currentEditingTransaction.reference), limit(1)));
+                    const livQuery = await getDocs(query(collection(db, getCollectionName("livraisons")), where("ref", "==", currentEditingTransaction.reference), limit(1)));
                     if (!livQuery.empty) await updateDoc(livQuery.docs[0].ref, { conteneur: updates.conteneur, destinataire: updates.nom });
                 } catch (e) { console.error("Erreur sync livraison:", e); }
                 closeEditModalFunc(); loadSessionDetails(currentSessionId, currentSessionData);
@@ -784,7 +785,7 @@ export const ConfirmationView = {
                 else { const rows = Array.from(detailsEncaissementsBody.querySelectorAll('tr')); transactionIds = rows.map(r => r.dataset.id).filter(id => id); }
     
                 for (const docId of transactionIds) {
-                    const docRef = doc(db, "transactions", docId);
+                    const docRef = doc(db, getCollectionName("transactions"), docId);
                     const docSnap = await getDoc(docRef);
                     if (docSnap.exists()) {
                         const data = docSnap.data();
@@ -801,7 +802,7 @@ export const ConfirmationView = {
                 }
     
                 if (sessionData.expenseIds && Array.isArray(sessionData.expenseIds)) {
-                    for (const expId of sessionData.expenseIds) { await updateDoc(doc(db, "expenses", expId), { isDeleted: true }); }
+                    for (const expId of sessionData.expenseIds) { await updateDoc(doc(db, getCollectionName("expenses"), expId), { isDeleted: true }); }
                 }
                 await deleteDoc(doc(db, "audit_logs", sessionId));
                 sessionDetailsEl.style.display = 'none'; noSelectionMsg.style.display = 'block';

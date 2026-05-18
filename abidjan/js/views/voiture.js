@@ -1,5 +1,6 @@
 import { db } from '../../../firebase-config.js';
 import { collection, doc, addDoc, setDoc, updateDoc, query, where, orderBy, onSnapshot } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
+import { getCollectionName } from '../../../agencies-config.js';
 
 export const VoitureView = {
     render(app, container) {
@@ -121,7 +122,7 @@ export const VoitureView = {
                 } else if (pendingDeleteType === 'transaction') {
                     await updateDoc(doc(db, "fleet_transactions", pendingDeleteId), { isDeleted: true });
                 } else if (pendingDeleteType === 'expense') {
-                    await updateDoc(doc(db, "expenses", pendingDeleteId), { isDeleted: true });
+                    await updateDoc(doc(db, getCollectionName("expenses"), pendingDeleteId), { isDeleted: true });
                 }
             } catch (error) {
                 AppModal.error("Erreur lors de la suppression : " + error.message);
@@ -300,7 +301,7 @@ export const VoitureView = {
         });
 
         // Écoute des Dépenses générales (Caisse)
-        const qExp = query(collection(db, "expenses"), where("isDeleted", "!=", true));
+        const qExp = query(collection(db, getCollectionName("expenses")), where("isDeleted", "!=", true));
         onSnapshot(qExp, snap => {
             allExpenses = [];
             snap.docs.forEach(docSnap => {

@@ -1,5 +1,6 @@
 import { db } from '../../../firebase-config.js'; 
 import { collection, addDoc, getDocs, serverTimestamp, query, orderBy, onSnapshot, where, doc, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
+import { getCollectionName } from '../../../agencies-config.js';
 
 export const ComptejbView = {
     render(app, container) {
@@ -227,7 +228,10 @@ export const ComptejbView = {
 
         function populateDatalists() {
             // Liste des Crédits (Transactions Caisse)
-            const qTrans = query(collection(db, "transactions"), where("isDeleted", "!=", true), where("agency", "==", activeAgency));
+            const qTransCol = getCollectionName("transactions");
+            const qTransConstraints = [where("isDeleted", "!=", true)];
+            if (qTransCol === "transactions") qTransConstraints.unshift(where("agency", "==", activeAgency));
+            const qTrans = query(collection(db, qTransCol), ...qTransConstraints);
             onSnapshot(qTrans, (snap) => {
                 const creditList = document.getElementById('jb-credit-list');
                 transactionsCache = [];
@@ -245,7 +249,10 @@ export const ComptejbView = {
             });
 
             // Liste des Débits (Dépenses Caisse)
-            const qExp = query(collection(db, "expenses"), where("isDeleted", "!=", true), where("agency", "==", activeAgency));
+            const qExpCol = getCollectionName("expenses");
+            const qExpConstraints = [where("isDeleted", "!=", true)];
+            if (qExpCol === "expenses") qExpConstraints.unshift(where("agency", "==", activeAgency));
+            const qExp = query(collection(db, qExpCol), ...qExpConstraints);
             onSnapshot(qExp, (snap) => {
                 const debitList = document.getElementById('jb-debit-list');
                 expensesCache = [];

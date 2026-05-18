@@ -1,5 +1,6 @@
 import { db } from '../../../firebase-config.js';
 import { collection, getDocs, query, where, orderBy, onSnapshot } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
+import { getCollectionName } from '../../../agencies-config.js';
 
 export const MagasinageView = {
     render(app, container) {
@@ -94,13 +95,20 @@ export const MagasinageView = {
         if (window.unsubMagTrans) window.unsubMagTrans();
         if (window.unsubMagLiv) window.unsubMagLiv();
 
-        const qTrans = query(collection(db, "transactions"), where("agency", "==", activeAgency), where("isDeleted", "!=", true), orderBy("isDeleted"), orderBy("date", "desc"));
+        const transCol = getCollectionName("transactions");
+        const isRouteTrans = transCol !== "transactions";
+        const transConstraints = [where("isDeleted", "!=", true), orderBy("isDeleted"), orderBy("date", "desc")];
+        if (!isRouteTrans) transConstraints.unshift(where("agency", "==", activeAgency));
+        const qTrans = query(collection(db, transCol), ...transConstraints);
         window.unsubMagTrans = onSnapshot(qTrans, snapshot => {
             allTransactions = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
             renderTable();
         }, error => console.error(error));
 
-        window.unsubMagLiv = onSnapshot(query(collection(db, "livraisons"), where("agency", "==", activeAgency)), snapshot => {
+        const livCol = getCollectionName("livraisons");
+        const isRouteLiv = livCol !== "livraisons";
+        const qMagLiv = isRouteLiv ? query(collection(db, livCol)) : query(collection(db, livCol), where("agency", "==", activeAgency));
+        window.unsubMagLiv = onSnapshot(qMagLiv, snapshot => {
             snapshot.forEach(doc => {
                 const d = doc.data();
                 if (d.ref) deliveryStatusMap.set(d.ref.toUpperCase().trim(), {
@@ -113,7 +121,9 @@ export const MagasinageView = {
             renderTable();
         }, error => console.error("Erreur chargement livraisons:", error));
 
-        getDocs(query(collection(db, "livraisons_archives"), where("agency", "==", activeAgency))).then(snapshot => {
+        const arcCol = getCollectionName("livraisons_archives");
+        const qMagArc = arcCol === "livraisons_archives" ? query(collection(db, arcCol), where("agency", "==", activeAgency)) : query(collection(db, arcCol));
+        getDocs(qMagArc).then(snapshot => {
             snapshot.forEach(doc => {
                 const d = doc.data();
                 if (d.ref) deliveryStatusMap.set(d.ref.toUpperCase().trim(), { status: 'ARCHIVE' });

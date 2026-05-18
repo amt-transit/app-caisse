@@ -1,5 +1,6 @@
 import { db } from '../../../firebase-config.js';
 import { collection, query, where, getDocs, addDoc, onSnapshot, orderBy } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
+import { getCollectionName } from '../../../agencies-config.js';
 
 export const SmsView = {
     unsub: null,
@@ -170,9 +171,13 @@ export const SmsView = {
         
         try {
             // Récupérer Clients et Livraisons pour estimer les cibles
+            const smsLivCol = getCollectionName("livraisons");
+            const smsLivConstraints = [];
+            if (smsLivCol === "livraisons") smsLivConstraints.unshift(where("agency", "==", activeAgency));
+            const smsLivQuery = query(collection(db, smsLivCol), ...smsLivConstraints);
             const [clientsSnap, livSnap] = await Promise.all([
                 getDocs(query(collection(db, "clients"), where("agency", "==", activeAgency))),
-                getDocs(query(collection(db, "livraisons"), where("agency", "==", activeAgency)))
+                getDocs(smsLivQuery)
             ]);
 
             this.clientsList = clientsSnap.docs.map(d => d.data());

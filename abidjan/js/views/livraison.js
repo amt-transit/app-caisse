@@ -2086,7 +2086,7 @@ export const LivraisonView = {
                            });
                        }
        
-                       const transRef = doc(collection(db, 'transactions'));
+                       const transRef = doc(collection(db, getCollectionName('transactions')));
                        
                        operations.push({ type: 'set', ref: transRef, data: {
                            date: importDateStr,
