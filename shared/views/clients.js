@@ -324,6 +324,15 @@ export const ClientsView = {
 
         // Initialiser les clients existants
         this.rawClients.forEach(data => {
+            // Séparation expéditeur / destinataire : on ignore un client dont
+            // le rôle EXPLICITE ne correspond pas au contexte (agence de
+            // départ = expéditeurs ; agence d'arrivée = destinataires).
+            // Les anciens clients SANS champ `type` ne sont PAS filtrés
+            // (aucune perte de l'existant — repli sur l'ancien comportement).
+            if (data.type) {
+                const expected = isArrival ? 'destinataire' : 'expediteur';
+                if (data.type !== expected) return;
+            }
             const nom = this.fixEncoding(data.nom || 'Inconnu');
             clientProfiles.set(nom.toUpperCase(), {
                 id: data.id, nom: nom, tel: data.tel || '-', adresse: this.fixEncoding(data.adresse || '-'),
@@ -594,7 +603,9 @@ export const ClientsView = {
 
             if (id.startsWith('dyn_')) {
                 await addDoc(collection(db, getCollectionName("clients")), {
-                    nom: newNom, tel: newTel, adresse: newAdresse, dateAjout: new Date().toISOString(), agency: activeAgency, risque: 'low', segment: 'nouveau', taille: 'petit', ca: 0, factures: 0
+                    nom: newNom, tel: newTel, adresse: newAdresse,
+                    type: isArrival ? 'destinataire' : 'expediteur',
+                    dateAjout: new Date().toISOString(), agency: activeAgency, risque: 'low', segment: 'nouveau', taille: 'petit', ca: 0, factures: 0
                 });
             } else {
                 await updateDoc(doc(db, getCollectionName("clients"), id), { nom: newNom, tel: newTel, adresse: newAdresse });
@@ -714,6 +725,7 @@ export const ClientsView = {
         }
         
         const activeAgency = sessionStorage.getItem('currentActiveAgency') || 'paris';
+        const isArrival = AGENCIES[activeAgency] && AGENCIES[activeAgency].type === 'arrival';
 
         try {
             await addDoc(collection(db, getCollectionName("clients")), {
@@ -721,6 +733,8 @@ export const ClientsView = {
                 tel: tel,
                 email: email,
                 adresse: adresse,
+                // Agence d'arrivée -> destinataire ; agence de départ -> expéditeur.
+                type: isArrival ? 'destinataire' : 'expediteur',
                 dateAjout: new Date().toISOString(),
                 agency: activeAgency,
                 risque: 'low', segment: 'nouveau', taille: 'petit', ca: 0, factures: 0

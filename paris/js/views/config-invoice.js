@@ -14,7 +14,8 @@ export const ConfigInvoiceView = {
         primaryColorHex: "#3b82f6",
         secondaryColorHex: "#1e293b",
         bgColorHex: "#f8fafc",
-        logoUrl: null
+        logoUrl: null,
+        factureModel: "paris" // 'paris' (€ historique) | 'chine' (CBM maritime)
     },
 
     render(app) {
@@ -126,6 +127,15 @@ export const ConfigInvoiceView = {
                                 <option value="facture" selected>Facture Standard (Bleu - ${locName})</option>
                                 <option value="bl">Bon de Livraison (Vert - ${locName})</option>
                             </select>
+                        </div>
+
+                        <div class="form-group" style="margin-bottom: 15px;">
+                            <label style="font-weight: 600; font-size: 13px; color: #475569; margin-bottom: 6px; display: block;">🧾 Modèle de facturation (mode de calcul)</label>
+                            <select id="ciFactureModel" style="width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 8px;">
+                                <option value="paris">Modèle Paris — prix saisi en € (historique)</option>
+                                <option value="chine">Modèle Chine — Maritime = Volume (CBM) × tarif</option>
+                            </select>
+                            <div style="font-size: 11px; color: #94a3b8; margin-top: 4px;">L'Aérien (Poids × tarif) reste identique pour tous les modèles. À enregistrer avec le bouton « Enregistrer le modèle ».</div>
                         </div>
 
                         <div class="form-group" style="margin-bottom: 25px;">
@@ -306,6 +316,7 @@ export const ConfigInvoiceView = {
             document.getElementById('ciCompany').value = this.config.companyName || '';
             document.getElementById('ciFooter').value = this.config.footer || '';
             document.getElementById('ciCgv').value = this.config.cgv || '';
+            { const fmEl = document.getElementById('ciFactureModel'); if (fmEl) fmEl.value = this.config.factureModel || 'paris'; }
                 document.getElementById('ciSecondaryColor').value = this.config.secondaryColorHex || '#1e293b';
                 document.getElementById('ciBgColor').value = this.config.bgColorHex || '#f8fafc';
 
@@ -467,6 +478,7 @@ export const ConfigInvoiceView = {
             this.config.companyName = document.getElementById('ciCompany').value.trim();
             this.config.footer = document.getElementById('ciFooter').value.trim();
             this.config.cgv = document.getElementById('ciCgv').value.trim();
+            this.config.factureModel = (document.getElementById('ciFactureModel') || {}).value || 'paris';
             this.config.primaryColor = document.getElementById('ciPrimaryColor').value;
             this.config.primaryColorHex = document.getElementById('ciHexColor').value;
             this.config.secondaryColorHex = document.getElementById('ciSecondaryColor').value;

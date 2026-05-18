@@ -1,7 +1,7 @@
 import { db } from '../../../firebase-config.js';
 import { collection, doc, writeBatch, getDocs, query, where, limit, addDoc } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 import { CONSTANTS } from '../../../constants.js';
-import { createApp, ref, reactive, computed, onMounted } from "https://unpkg.com/vue@3/dist/vue.esm-browser.prod.js";
+import { createApp, ref, reactive, computed, onMounted, watch } from "https://unpkg.com/vue@3/dist/vue.esm-browser.prod.js";
 import { getCollectionName, AGENCIES } from '../../../agencies-config.js';
 import { isAffiliationActive } from '../../../affiliation-config.js';
 import { getAffiliation, ensureAffiliation } from '../../../affiliations.js';
@@ -83,6 +83,13 @@ export const NouvelleFactureView = {
                             <small v-if="destinationAgencies.length === 0" style="color:#ef4444; font-size:11px;">
                                 Aucune destination configurée pour cette agence. Ajoutez-en une dans « Gestion des agences ».
                             </small>
+                        </div>
+                        <div class="form-group" v-if="shippingMode === 'aerien'">
+                            <label>Mode d'envoi (aérien) *</label>
+                            <select v-model="form.aerienType">
+                                <option value="normal">Normal</option>
+                                <option value="express">Express</option>
+                            </select>
                         </div>
                     </div>
                 </div>
@@ -184,16 +191,49 @@ export const NouvelleFactureView = {
                                            style="width:100%; padding:10px; border:1px solid #cbd5e1; border-radius:8px; box-sizing:border-box; text-align:center;">
                                 </div>
                                 <div>
-                                    <label v-if="idx === 0" style="font-size:11px; color:#64748b;">P.U (€)</label>
-                                    <input type="number" min="0" step="0.01"
-                                           v-model.number="item.pu"
-                                           @input="updateItem(item, 'pu')"
-                                           style="width:100%; padding:10px; border:1px solid #cbd5e1; border-radius:8px; box-sizing:border-box; text-align:right;">
+                                    <!-- AÉRIEN : poids (kg) par ligne -->
+                                    <template v-if="shippingMode === 'aerien'">
+                                        <label v-if="idx === 0" style="font-size:11px; color:#64748b;">Poids (kg) *</label>
+                                        <input type="number" min="0" step="0.1"
+                                               v-model.number="item.poids"
+                                               @input="updateItem(item, 'poids')"
+                                               placeholder="kg"
+                                               style="width:100%; padding:10px; border:1px solid #cbd5e1; border-radius:8px; box-sizing:border-box; text-align:right;">
+                                    </template>
+                                    <!-- CHINE MARITIME : P.U remplacé par CBM (calcul auto) -->
+                                    <template v-else-if="autoPricingActive">
+                                        <label v-if="idx === 0" style="font-size:11px; color:#64748b;">CBM *</label>
+                                        <input type="number" min="0" step="0.001"
+                                               v-model.number="item.vol"
+                                               @input="updateItem(item, 'vol')"
+                                               placeholder="m³"
+                                               style="width:100%; padding:10px; border:1px solid #cbd5e1; border-radius:8px; box-sizing:border-box; text-align:right;">
+                                    </template>
+                                    <!-- MODÈLE PARIS : P.U (€) historique -->
+                                    <template v-else>
+                                        <label v-if="idx === 0" style="font-size:11px; color:#64748b;">P.U (€)</label>
+                                        <input type="number" min="0" step="0.01"
+                                               v-model.number="item.pu"
+                                               @input="updateItem(item, 'pu')"
+                                               style="width:100%; padding:10px; border:1px solid #cbd5e1; border-radius:8px; box-sizing:border-box; text-align:right;">
+                                    </template>
                                 </div>
                                 <div class="nf-total-col">
-                                    <label v-if="idx === 0" style="font-size:11px; color:#64748b;">Total (€)</label>
-                                    <input type="text" readonly :value="(item.total || 0).toFixed(2)"
-                                           style="width:100%; padding:10px; border:1px solid #e2e8f0; border-radius:8px; box-sizing:border-box; text-align:right; font-weight:bold; background:#f8fafc;">
+                                    <template v-if="shippingMode === 'aerien'">
+                                        <label v-if="idx === 0" style="font-size:11px; color:#64748b;">Total (CFA)</label>
+                                        <input type="text" readonly :value="Math.round((parseFloat(item.poids)||0) * (parseFloat(item.qty)||0) * (form.aerienType==='express' ? tarifs.kgAerienExpress : tarifs.kgAerienNormal)).toLocaleString('fr-FR')"
+                                               style="width:100%; padding:10px; border:1px solid #e2e8f0; border-radius:8px; box-sizing:border-box; text-align:right; font-weight:bold; background:#f8fafc;">
+                                    </template>
+                                    <template v-else-if="autoPricingActive">
+                                        <label v-if="idx === 0" style="font-size:11px; color:#64748b;">Total (CFA)</label>
+                                        <input type="text" readonly :value="Math.round((parseFloat(item.vol)||0) * (parseFloat(item.qty)||0) * tarifs.cbmChine).toLocaleString('fr-FR')"
+                                               style="width:100%; padding:10px; border:1px solid #e2e8f0; border-radius:8px; box-sizing:border-box; text-align:right; font-weight:bold; background:#f8fafc;">
+                                    </template>
+                                    <template v-else>
+                                        <label v-if="idx === 0" style="font-size:11px; color:#64748b;">Total (€)</label>
+                                        <input type="text" readonly :value="(item.total || 0).toFixed(2)"
+                                               style="width:100%; padding:10px; border:1px solid #e2e8f0; border-radius:8px; box-sizing:border-box; text-align:right; font-weight:bold; background:#f8fafc;">
+                                    </template>
                                 </div>
                                 <div class="nf-action-col">
                                     <label v-if="idx === 0" style="display:block; height:14px;">&nbsp;</label>
@@ -236,7 +276,52 @@ export const NouvelleFactureView = {
                             </div>
                         </div>
 
-                        <div style="background: #f8fafc; padding: 15px; border-radius: 8px; border: 1px solid #e2e8f0; margin-top: 15px;">
+                        <!-- CHINE MARITIME / AÉRIEN : calcul automatique, modifiable -->
+                        <div v-if="autoPricingActive" style="background:#eff6ff; padding:15px; border-radius:8px; border:1px solid #bfdbfe; margin-top:15px;">
+                            <div style="font-weight:800; color:#1e40af; font-size:13px; margin-bottom:12px;">
+                                <i class="fas" :class="shippingMode === 'aerien' ? 'fa-plane' : 'fa-ship'"></i>
+                                {{ shippingMode === 'aerien' ? 'Expédition AÉRIENNE' : 'Expédition MARITIME — Chine' }}
+                            </div>
+
+                            <div v-if="shippingMode === 'aerien'" style="display:flex; gap:12px; flex-wrap:wrap; margin-bottom:12px;">
+                                <div style="flex:1; min-width:140px;">
+                                    <label style="font-size:12px; color:#475569; font-weight:600;">Poids total (kg)</label>
+                                    <div style="padding:10px; border:1px dashed #cbd5e1; border-radius:8px; background:#fff; font-weight:700; color:#1e40af;">{{ (parseFloat(form.poids)||0) }} kg</div>
+                                    <div style="font-size:11px; color:#94a3b8; margin-top:3px;">Saisi par ligne dans « Description colis ».</div>
+                                </div>
+                                <div style="flex:1; min-width:160px;">
+                                    <label style="font-size:12px; color:#475569; font-weight:600;">Mode d'envoi</label>
+                                    <div style="padding:10px; border:1px dashed #cbd5e1; border-radius:8px; background:#fff; font-weight:700; color:#1e40af;">{{ form.aerienType === 'express' ? 'Express' : 'Normal' }}</div>
+                                    <div style="font-size:11px; color:#94a3b8; margin-top:3px;">Se choisit dans « Informations générales ».</div>
+                                </div>
+                            </div>
+
+                            <div style="font-size:12px; color:#475569; margin-bottom:6px;">
+                                Calcul :
+                                <template v-if="shippingMode === 'aerien'">
+                                    {{ (parseFloat(form.poids)||0) }} kg × {{ (form.aerienType==='express' ? tarifs.kgAerienExpress : tarifs.kgAerienNormal).toLocaleString('fr-FR') }} CFA
+                                </template>
+                                <template v-else>
+                                    {{ (parseFloat(form.volume)||0) }} CBM × {{ tarifs.cbmChine.toLocaleString('fr-FR') }} CFA
+                                </template>
+                                = <strong>{{ autoTotalCFA.toLocaleString('fr-FR') }} CFA</strong>
+                                <a href="#" v-if="userTouchedTotal" @click.prevent="resetAutoTotal()" style="margin-left:8px; color:#2563eb;">↻ recalculer</a>
+                            </div>
+
+                            <label style="font-size:12px; color:#475569; font-weight:600;">Total à facturer (CFA) — modifiable</label>
+                            <input type="number" min="0" v-model.number="form.totalCfa" @input="userTouchedTotal = true" style="width:100%; padding:12px; border:1px solid #93c5fd; border-radius:8px; box-sizing:border-box; font-size:18px; font-weight:800; color:#1e40af;">
+
+                            <div style="display:flex; justify-content:space-between; align-items:center; margin-top:12px; flex-wrap:wrap; gap:10px;">
+                                <span>Montant Payé (CFA) :</span>
+                                <input type="number" min="0" v-model.number="form.montantPaye" style="width:140px; max-width:100%; text-align:right; font-weight:bold; color:#10b981; padding:8px; border:1px solid #cbd5e1; border-radius:8px;">
+                            </div>
+                            <div style="display:flex; justify-content:space-between; align-items:center; font-size:18px; border-top:1px dashed #93c5fd; padding-top:10px; margin-top:10px; flex-wrap:wrap; gap:10px;">
+                                <span>Reste à Payer :</span>
+                                <strong style="color:#ef4444;">{{ ((parseFloat(form.totalCfa)||0) - (parseFloat(form.montantPaye)||0)).toLocaleString('fr-FR') }} CFA</strong>
+                            </div>
+                        </div>
+
+                        <div v-if="!autoPricingActive" style="background: #f8fafc; padding: 15px; border-radius: 8px; border: 1px solid #e2e8f0; margin-top: 15px;">
                             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; font-size: 16px; flex-wrap: wrap; gap: 10px;">
                                 <span>Total Fret :</span>
                                 <strong id="nfTotalFret">{{ totalFret.toFixed(2) }} €</strong>
@@ -343,7 +428,10 @@ initVue(globalApp) {
                 volume: '',
                 montantPaye: 0,
                 comment: '',
-                parrainId: ''
+                parrainId: '',
+                poids: '',            // Aérien : poids en kg
+                aerienType: 'normal', // 'normal' | 'express'
+                totalCfa: 0           // Total facturé (CFA) en mode auto, modifiable
             });
 
             // Destinations = agences d'ARRIVÉE de la route de l'agence de départ
@@ -364,6 +452,35 @@ initVue(globalApp) {
 
             // Parrainage : actif selon le flag agence (source unique affiliation-config).
             const affiliationActive = isAffiliationActive(sessionStorage.getItem('currentActiveAgency') || 'paris');
+
+            // --- Mode d'expédition (Maritime/Aérien) + tarifs Chine/Aérien ---
+            // Maritime+Chine = Volume(CBM) × coût CBM. Aérien (toutes agences)
+            // = Poids(kg) × tarif Normal/Express. Sinon : facturation EUR
+            // historique inchangée. Le total auto reste MODIFIABLE.
+            const shippingMode = sessionStorage.getItem('shippingMode') || 'maritime';
+            const tarifs = reactive({ cbmChine: 250000, kgAerienNormal: 12000, kgAerienExpress: 14000 });
+            // Modèle de facturation de l'AGENCE (réglé dans Config Facture).
+            // 'paris' = facturation EUR historique ; 'chine' = CBM maritime.
+            // Défaut 'paris' (aucun changement pour l'existant). Chargé en
+            // onMounted depuis settings/invoice_config_<agence>.
+            const factureModel = ref('paris');
+            const autoPricingActive = computed(() =>
+                shippingMode === 'aerien' || (shippingMode === 'maritime' && factureModel.value === 'chine'));
+            const autoTotalCFA = computed(() => {
+                if (shippingMode === 'aerien') {
+                    const kg = parseFloat(form.poids) || 0;
+                    const rate = form.aerienType === 'express' ? tarifs.kgAerienExpress : tarifs.kgAerienNormal;
+                    return Math.round(kg * (rate || 0));
+                }
+                if (shippingMode === 'maritime' && factureModel.value === 'chine') {
+                    const cbm = parseFloat(form.volume) || 0;
+                    return Math.round(cbm * (tarifs.cbmChine || 0));
+                }
+                return 0;
+            });
+            const userTouchedTotal = ref(false);
+            const resetAutoTotal = () => { userTouchedTotal.value = false; form.totalCfa = autoTotalCFA.value; };
+            watch(autoTotalCFA, (v) => { if (!userTouchedTotal.value) form.totalCfa = v; }, { immediate: true });
             const demarcheurs = ref([]);
             if (affiliationActive) {
                 getDocs(collection(db, 'demarcheurs')).then(s => {
@@ -371,7 +488,7 @@ initVue(globalApp) {
                 }).catch(e => console.warn('Chargement démarcheurs:', e));
             }
             
-            const items = ref([{ id: Date.now(), desc: '', qty: 1, pu: 0, total: 0, vol: 0, showSugg: false }]);
+            const items = ref([{ id: Date.now(), desc: '', qty: 1, pu: 0, total: 0, vol: 0, poids: 0, showSugg: false }]);
             
             // Feedback states
             const expFeedback = ref('');
@@ -390,7 +507,9 @@ initVue(globalApp) {
                     const cd = new Map();
                     clientsSnap.forEach(doc => {
                         const data = doc.data();
-                        if (data.nom) cd.set(data.nom.trim(), data);
+                        // L'autocomplétion EXPÉDITEUR ne doit proposer QUE des
+                        // expéditeurs : on exclut les clients type='destinataire'.
+                        if (data.nom && data.type !== 'destinataire') cd.set(data.nom.trim(), data);
                     });
                     clientsData.value = cd;
 
@@ -442,6 +561,27 @@ initVue(globalApp) {
 
             onMounted(async () => {
                 await loadAutocompleteData();
+
+                // Tarifs Chine/Aérien (parametres/tarifs). Tolérant : si la
+                // règle n'est pas déployée ou doc absent, on garde les défauts.
+                try {
+                    const { getDoc, doc: fsDoc } = await import("https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js");
+                    const tSnap = await getDoc(fsDoc(db, 'parametres', 'tarifs'));
+                    if (tSnap.exists()) {
+                        const t = tSnap.data();
+                        if (t.cbmChine != null) tarifs.cbmChine = Number(t.cbmChine) || tarifs.cbmChine;
+                        if (t.kgAerienNormal != null) tarifs.kgAerienNormal = Number(t.kgAerienNormal) || tarifs.kgAerienNormal;
+                        if (t.kgAerienExpress != null) tarifs.kgAerienExpress = Number(t.kgAerienExpress) || tarifs.kgAerienExpress;
+                    }
+                    // Modèle de facturation de l'agence (Paris par défaut).
+                    const _ag = sessionStorage.getItem('currentActiveAgency') || 'paris';
+                    const icSnap = await getDoc(fsDoc(db, 'settings', `invoice_config_${_ag}`));
+                    if (icSnap.exists() && icSnap.data().factureModel) {
+                        factureModel.value = icSnap.data().factureModel;
+                    }
+                    if (!userTouchedTotal.value) form.totalCfa = autoTotalCFA.value;
+                } catch (e) { console.warn('Tarifs/modèle (lecture):', e && e.message); }
+
                 const reuseExp = sessionStorage.getItem('reuseExpediteur');
                 if (reuseExp) {
                     form.expediteur = reuseExp;
@@ -483,7 +623,7 @@ initVue(globalApp) {
             };
 
             // Selection handlers
-            const selectExp = (c) => { form.expediteur = c.nom; showExpSugg.value = false; handleExpediteurChange(); };
+            const selectExp = (c) => { form.expediteur = c.nom; showExpSugg.value = false; handleExpediteurChange(true); };
             const selectDest = (d) => { form.destinataire = d; showDestSugg.value = false; handleDestinataireChange(); };
             const selectLieu = (l) => { form.lieu = l; showLieuSugg.value = false; };
             const selectProduct = (item, p) => { item.desc = p.desc; item.showSugg = false; updateItem(item, 'desc'); };
@@ -498,21 +638,15 @@ initVue(globalApp) {
             };
 
             // Logic handlers
-            const handleExpediteurChange = async () => {
-                const exp = form.expediteur.trim();
-                if (!exp) { expFeedback.value = ''; return; }
-                
-                if (clientsData.value.has(exp)) {
-                    const info = clientsData.value.get(exp);
-                    expFeedback.value = `<span style="color:#059669;"><i class="fas fa-check-circle"></i> <b>Tél:</b> ${info.tel || 'N/A'} | <b>Adresse:</b> ${info.adresse || 'N/A'}</span>`;
-                } else {
-                    expFeedback.value = `<span style="color:#f59e0b;"><i class="fas fa-exclamation-triangle"></i> Nouveau client expéditeur</span>`;
-                }
-
+            // Recherche RÉSEAU des destinataires d'un expéditeur (livraisons
+            // passées + carnet lié). Coûteuse : on la débounce (voir plus bas)
+            // pour ne PAS la lancer à chaque frappe clavier.
+            let _expLookupTimer = null;
+            const lookupDestinatairesForExp = async (exp) => {
                 try {
                     const qLiv = query(collection(db, getCollectionName("livraisons")), where("expediteur", "==", exp));
                     const livSnap = await getDocs(qLiv);
-                    
+
                     const localDestMap = new Map();
                     livSnap.forEach(doc => {
                         const data = doc.data();
@@ -524,6 +658,24 @@ initVue(globalApp) {
                         }
                     });
 
+                    // Destinataires du CARNET liés à cet expéditeur (créés via
+                    // la modale, AVANT toute livraison). array-contains seul =
+                    // pas d'index composite requis.
+                    try {
+                        const qDestLies = query(collection(db, getCollectionName("clients")),
+                            where("expediteurs", "array-contains", exp));
+                        const destLiesSnap = await getDocs(qDestLies);
+                        destLiesSnap.forEach(d => {
+                            const data = d.data();
+                            const destName = (data.nom || '').trim();
+                            if (destName) {
+                                if (!localDestMap.has(destName)) localDestMap.set(destName, data.adresse || '');
+                                if (!destMap.value.has(destName)) destMap.value.set(destName, data.adresse || '');
+                                destInfos.value.set(destName, data.tel || '');
+                            }
+                        });
+                    } catch (e) { console.warn('Destinataires liés (carnet) :', e && e.message); }
+
                     const uniqueDests = Array.from(localDestMap.keys());
                     if (uniqueDests.length > 0) {
                         if (uniqueDests.length === 1) {
@@ -531,13 +683,31 @@ initVue(globalApp) {
                                 form.destinataire = uniqueDests[0];
                                 handleDestinataireChange();
                             }
-                        } else {
+                        } else if (!/destinataires trouvés/.test(expFeedback.value)) {
                             expFeedback.value += `<br><span style="color:#3b82f6;"><i class="fas fa-info-circle"></i> ${uniqueDests.length} destinataires trouvés. Utilisez la flèche pour choisir.</span>`;
                         }
                     }
                 } catch (error) {
                     console.error("Erreur de recherche des destinataires :", error);
                 }
+            };
+            const handleExpediteurChange = (immediate = false) => {
+                const exp = form.expediteur.trim();
+                if (!exp) { expFeedback.value = ''; return; }
+
+                // Feedback INSTANTANÉ (local, aucune requête réseau).
+                if (clientsData.value.has(exp)) {
+                    const info = clientsData.value.get(exp);
+                    expFeedback.value = `<span style="color:#059669;"><i class="fas fa-check-circle"></i> <b>Tél:</b> ${info.tel || 'N/A'} | <b>Adresse:</b> ${info.adresse || 'N/A'}</span>`;
+                } else {
+                    expFeedback.value = `<span style="color:#f59e0b;"><i class="fas fa-exclamation-triangle"></i> Nouveau client expéditeur</span>`;
+                }
+
+                // Recherche destinataires : immédiate si sélection explicite,
+                // sinon débouncée (450 ms) pour ne pas requêter à chaque touche.
+                if (_expLookupTimer) clearTimeout(_expLookupTimer);
+                if (immediate) { lookupDestinatairesForExp(exp); return; }
+                _expLookupTimer = setTimeout(() => lookupDestinatairesForExp(exp), 450);
             };
 
             const handleDestinataireChange = async () => {
@@ -598,13 +768,25 @@ initVue(globalApp) {
                 clientModal.saving = true;
                 try {
                     const activeAgency = sessionStorage.getItem('currentActiveAgency') || 'paris';
+                    const isDest = clientModal.target === 'dest';
+                    // Expéditeur = client de l'agence de DÉPART (active).
+                    // Destinataire = client de l'agence d'ARRIVÉE (= la
+                    // destination choisie sur la facture ; repli sur l'agence
+                    // active si non encore sélectionnée).
+                    const clientType = isDest ? 'destinataire' : 'expediteur';
+                    const clientAgency = isDest ? (form.agence || activeAgency) : activeAgency;
                     const fullName = `${nom} ${clientModal.prenom.trim()}`.trim();
                     const adresse = clientModal.adresse.trim();
                     // Même structure que la page Clients (sinon n'apparaît pas
                     // dans les listes / l'autocomplétion).
+                    // Lien destinataire -> expéditeur(s) (un destinataire peut
+                    // être lié à plusieurs expéditeurs : tableau cumulable).
+                    const expLink = (isDest && form.expediteur && form.expediteur.trim())
+                        ? [form.expediteur.trim()] : [];
                     await addDoc(collection(db, getCollectionName("clients")), {
                         nom: fullName, tel, email: clientModal.email.trim(), adresse,
-                        dateAjout: new Date().toISOString(), agency: activeAgency,
+                        type: clientType, expediteurs: expLink,
+                        dateAjout: new Date().toISOString(), agency: clientAgency,
                         risque: 'low', segment: 'nouveau', taille: 'petit', ca: 0, factures: 0
                     });
                     // Intègre immédiatement dans l'autocomplétion (sans recharger).
@@ -628,7 +810,7 @@ initVue(globalApp) {
                 }
             };
 
-            const addRow = () => items.value.push({ id: Date.now(), desc: '', qty: 1, pu: 0, total: 0, vol: 0, showSugg: false });
+            const addRow = () => items.value.push({ id: Date.now(), desc: '', qty: 1, pu: 0, total: 0, vol: 0, poids: 0, showSugg: false });
             const removeRow = (id) => { if (items.value.length > 1) items.value = items.value.filter(i => i.id !== id); };
 
             const updateItem = (item, field) => {
@@ -640,6 +822,8 @@ initVue(globalApp) {
                 item.total = (parseFloat(item.qty) || 0) * (parseFloat(item.pu) || 0);
                 const totalVol = items.value.reduce((sum, i) => sum + ((i.vol || 0) * i.qty), 0);
                 if (totalVol > 0) form.volume = parseFloat(totalVol.toFixed(2));
+                // Aérien : poids total = somme (poids par ligne × qté).
+                form.poids = items.value.reduce((sum, i) => sum + ((parseFloat(i.poids) || 0) * (parseFloat(i.qty) || 0)), 0);
             };
 
             const totalFret = computed(() => items.value.reduce((sum, item) => sum + item.total, 0));
@@ -657,10 +841,20 @@ initVue(globalApp) {
                 const totalEUR = totalFret.value;
                 const payeEUR = parseFloat(form.montantPaye) || 0;
                 const resteEUR = totalEUR - payeEUR;
-                
-                const totalCFA = Math.round(totalEUR * TAUX);
-                const payeCFA = Math.round(payeEUR * TAUX);
-                const resteCFA = Math.round(resteEUR * TAUX);
+
+                let totalCFA, payeCFA, resteCFA;
+                if (autoPricingActive.value) {
+                    // Chine maritime / Aérien : montants déjà saisis en CFA
+                    // (total modifiable par l'agent). Pas de conversion ×TAUX.
+                    totalCFA = Math.round(parseFloat(form.totalCfa) || 0);
+                    payeCFA = Math.round(parseFloat(form.montantPaye) || 0);
+                    resteCFA = totalCFA - payeCFA;
+                } else {
+                    // Facturation EUR historique — INCHANGÉE.
+                    totalCFA = Math.round(totalEUR * TAUX);
+                    payeCFA = Math.round(payeEUR * TAUX);
+                    resteCFA = Math.round(resteEUR * TAUX);
+                }
 
                 const batch = writeBatch(db);
                 const dateIso = form.date || new Date().toISOString().split('T')[0];
@@ -743,7 +937,10 @@ initVue(globalApp) {
                     expediteur: finalExpName, destinataire: finalDestName, numero: destPhone, lieuLivraison: lieuLivraison,
                     description: items.value.map(i => `${i.qty}x ${i.desc}`).join(', '),
                     quantite: totalColis, montant: resteCFA + " CFA", prixOriginal: totalCFA + " CFA",
-                    status: "EN_ATTENTE", containerStatus: "PARIS", agency: activeAgency, dateAjout: new Date(dateIso).toISOString()
+                    status: "EN_ATTENTE", containerStatus: "PARIS", agency: activeAgency, dateAjout: new Date(dateIso).toISOString(),
+                    modeExpedition: shippingMode,
+                    poids: shippingMode === 'aerien' ? (parseFloat(form.poids) || 0) : null,
+                    aerienType: shippingMode === 'aerien' ? form.aerienType : null
                 });
 
                 const transRef = doc(collection(db, getCollectionName("transactions")));
@@ -755,6 +952,9 @@ initVue(globalApp) {
                     modePaiement: form.modePay, description: items.value.map(i => `${i.qty}x ${i.desc}`).join(', '),
                     items: items.value, quantite: totalColis, agency: activeAgency, isDeleted: false,
                     saisiPar: userName,
+                    modeExpedition: shippingMode,
+                    poids: shippingMode === 'aerien' ? (parseFloat(form.poids) || 0) : null,
+                    aerienType: shippingMode === 'aerien' ? form.aerienType : null,
                     paymentHistory: payeCFA > 0 ? [{ date: dateIso, montantParis: payeCFA, montantAbidjan: 0, modePaiement: form.modePay, saisiPar: userName }] : []
                 });
 
@@ -763,6 +963,27 @@ initVue(globalApp) {
                     const destinationName = _destAg ? _destAg.name : (form.agence || 'ABIDJAN');
                     const containerRef = doc(db, getCollectionName("containers"), conteneurCode);
                     batch.set(containerRef, { number: conteneurCode, status: 'EN_CHARGEMENT', destination: destinationName, destinationAgency: form.agence || '', createdAt: new Date(dateIso).toISOString() }, { merge: true });
+                }
+
+                // MODÈLE CHINE : on enrichit la « Liste des Produits » avec les
+                // descriptifs saisis (auto-complétion future) MAIS SANS le CBM
+                // (dim vide), car le volume change à chaque envoi pour un même
+                // produit. On ne touche jamais un produit déjà existant.
+                if (factureModel.value === 'chine') {
+                    const seenDesc = new Set();
+                    items.value.forEach(it => {
+                        const d = (it.desc || '').trim();
+                        if (!d) return;
+                        const key = d.toLowerCase();
+                        if (seenDesc.has(key)) return;
+                        seenDesc.add(key);
+                        if (productsData.value.has(d)) return; // déjà au catalogue
+                        const pRef = doc(collection(db, getCollectionName("products")));
+                        batch.set(pRef, {
+                            category: 'COLIS', desc: d, price: 0, dim: '',
+                            agency: activeAgency, createdAt: new Date().toISOString(), auto: true
+                        });
+                    });
                 }
 
                 try {
@@ -774,7 +995,18 @@ initVue(globalApp) {
                     
                     globalApp.printLabels({ ref: ref, date: formattedDate, destName: finalDestName, destPhone: destPhone, destAddress: lieuLivraison, expName: finalExpName, expAddress: expAddr, labels: printLabelsData });
 
-                    globalApp.renderPage('dashboard');
+                    // On RESTE sur Nouvelle Facture (plus pratique pour
+                    // enchaîner). Réinitialisation rapide du formulaire sans
+                    // recharger la page : données déjà chargées conservées.
+                    form.expediteur = ''; form.destinataire = ''; form.lieu = '';
+                    form.montantPaye = 0; form.comment = ''; form.valeur = '';
+                    form.poids = ''; form.totalCfa = 0; form.parrainId = '';
+                    form.date = new Date().toISOString().split('T')[0];
+                    items.value = [{ id: Date.now(), desc: '', qty: 1, pu: 0, total: 0, vol: 0, poids: 0, showSugg: false }];
+                    expFeedback.value = ''; destFeedback.value = '';
+                    userTouchedTotal.value = false;
+                    showExpSugg.value = false; showDestSugg.value = false; showLieuSugg.value = false;
+                    if (typeof window !== 'undefined' && window.scrollTo) window.scrollTo({ top: 0, behavior: 'smooth' });
                 } catch(e) {
                     console.error(e);
                     globalApp.showToast("Erreur lors de l'enregistrement", "error");
@@ -792,7 +1024,8 @@ initVue(globalApp) {
                 selectExp, selectDest, selectLieu, selectProduct, hideSugg,
                 addRow, removeRow, updateItem, totalFret, resteAPayer, submitInvoice,
                 destinationAgencies, affiliationActive, demarcheurs,
-                clientModal, openClientModal, closeClientModal, saveClientFromModal
+                clientModal, openClientModal, closeClientModal, saveClientFromModal,
+                shippingMode, autoPricingActive, autoTotalCFA, userTouchedTotal, resetAutoTotal, tarifs
             };
         }
     });
