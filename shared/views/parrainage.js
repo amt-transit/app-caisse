@@ -90,6 +90,7 @@ export const ParrainageView = {
                         <button :class="['sub-nav-link', {active: currentTab === 'reseau'}]" @click="currentTab = 'reseau'"><i class="fas fa-sitemap"></i> Réseau</button>
                         <button :class="['sub-nav-link', {active: currentTab === 'commissions'}]" @click="currentTab = 'commissions'"><i class="fas fa-coins"></i> Commissions</button>
                         <button :class="['sub-nav-link', {active: currentTab === 'retraits'}]" @click="currentTab = 'retraits'"><i class="fas fa-money-bill-wave"></i> Paiements</button>
+                        <button :class="['sub-nav-link', {active: currentTab === 'demandes'}]" @click="currentTab = 'demandes'"><i class="fas fa-inbox"></i> Demandes <span v-if="pendingDemandesCount > 0" style="background:#ef4444;color:#fff;border-radius:999px;padding:1px 7px;font-size:11px;font-weight:800;margin-left:4px;">{{ pendingDemandesCount }}</span></button>
                         <button :class="['sub-nav-link', {active: currentTab === 'analytique'}]" @click="currentTab = 'analytique'"><i class="fas fa-chart-pie"></i> Analytique</button>
                         <button v-if="isSuperAdmin" :class="['sub-nav-link', {active: currentTab === 'parametres'}]" @click="currentTab = 'parametres'"><i class="fas fa-sliders-h"></i> Paramètres</button>
                     </div>
@@ -269,6 +270,48 @@ export const ParrainageView = {
                     </div>
 
                     <!-- ============================================== -->
+                    <!-- ONGLET: DEMANDES DE RETRAIT (app mobile) -->
+                    <!-- ============================================== -->
+                    <div v-if="currentTab === 'demandes'">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 20px;">
+                            <h2 style="margin:0; font-size:18px;"><i class="fas fa-inbox" style="color:#f59e0b;"></i> Demandes de retrait (app mobile)</h2>
+                            <span style="font-size:13px; color:#64748b;">{{ pendingDemandesCount }} en attente</span>
+                        </div>
+                        <div style="background:#fffbeb; border:1px solid #fde68a; color:#92400e; padding:12px 16px; border-radius:10px; margin-bottom:18px; font-size:13px;">
+                            <i class="fas fa-info-circle"></i> « Payer » crée le paiement réel (déduit du solde du partenaire) ET marque la demande comme traitée. Le partenaire voit alors « Transféré » dans son app.
+                        </div>
+                        <div class="table-card table-wrap">
+                            <table class="data-table">
+                                <thead>
+                                    <tr><th>Date</th><th>Partenaire</th><th style="text-align:right;">Montant</th><th>Type</th><th>Moyen</th><th>Numéro</th><th>Statut</th><th>Action</th></tr>
+                                </thead>
+                                <tbody>
+                                    <tr v-if="demandesRetrait.length === 0"><td colspan="8" style="text-align:center; color:#94a3b8; padding:24px;">Aucune demande de retrait pour le moment.</td></tr>
+                                    <tr v-for="d in demandesRetrait" :key="d.id">
+                                        <td>{{ formatDate(d.dateDemande) }}</td>
+                                        <td><strong>{{ getPartnerName(d.demarcheurId) }}</strong></td>
+                                        <td style="text-align:right; font-weight:800; color:#0f172a;">{{ formatMoney(d.montant) }}</td>
+                                        <td>{{ d.type === 'total' ? 'Totalité' : 'Partiel' }}</td>
+                                        <td><span style="background:#f1f5f9; padding:4px 8px; border-radius:6px; font-size:11px; font-weight:700;">{{ d.moyenPaiement || '-' }}</span></td>
+                                        <td style="font-size:12px;">{{ d.numero || '-' }}</td>
+                                        <td>
+                                            <span v-if="(d.statut||'en_attente')==='en_attente'" class="badge badge-warning">⏳ En attente</span>
+                                            <span v-else-if="d.statut==='paye' || d.statut==='traite'" class="badge badge-success">✓ Payé</span>
+                                            <span v-else style="background:#fee2e2;color:#991b1b;padding:3px 9px;border-radius:999px;font-size:11px;font-weight:800;">✕ Refusée</span>
+                                        </td>
+                                        <td>
+                                            <div v-if="(d.statut||'en_attente')==='en_attente'" style="display:flex; gap:6px;">
+                                                <button class="btn btn-sm" :disabled="saving" @click="payerDemande(d)" style="background:#10b981; color:#fff; border:none; padding:6px 12px; border-radius:6px; font-size:12px; font-weight:700; cursor:pointer;">Payer</button>
+                                                <button class="btn btn-sm" :disabled="saving" @click="refuserDemande(d)" style="background:#fff; color:#ef4444; border:1px solid #ef4444; padding:6px 12px; border-radius:6px; font-size:12px; font-weight:700; cursor:pointer;">Refuser</button>
+                                            </div>
+                                            <span v-else style="font-size:12px; color:#94a3b8;">{{ d.traitePar ? ('par ' + d.traitePar) : '—' }}</span>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
                     <!-- ONGLET: RETRAITS -->
                     <!-- ============================================== -->
                     <div v-if="currentTab === 'retraits'">
@@ -553,6 +596,7 @@ export const ParrainageView = {
                 const partners = ref([]);
                 const commissions = ref([]);
                 const withdrawals = ref([]);
+                const demandesRetrait = ref([]); // demandes de retrait créées par l'app mobile
                 const settings = reactive({
                     tauxAMT: 50,
                     tauxDemarcheur: 50,
@@ -624,6 +668,11 @@ export const ParrainageView = {
                     unsubs.push(onSnapshot(query(collection(db, "retraits"), orderBy("dateRetrait", "desc")), (snap) => {
                         withdrawals.value = snap.docs.map(d => ({ id: d.id, ...d.data() }));
                     }));
+
+                    // Demandes de retrait (créées par l'app mobile partenaire)
+                    unsubs.push(onSnapshot(query(collection(db, "retrait_demandes"), orderBy("dateDemande", "desc")), (snap) => {
+                        demandesRetrait.value = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+                    }, (err) => { console.warn("retrait_demandes:", err && err.message); }));
                 });
 
                 onUnmounted(() => { unsubs.forEach(u => u()); });
@@ -963,6 +1012,69 @@ export const ParrainageView = {
                     saving.value = false;
                 };
 
+                const pendingDemandesCount = computed(() =>
+                    demandesRetrait.value.filter(d => (d.statut || 'en_attente') === 'en_attente').length);
+
+                const _whoTreated = () => sessionStorage.getItem('userName') || 'Admin';
+
+                // Payer une demande mobile = créer le paiement réel (déduit du
+                // solde, comme processWithdrawal) ET marquer la demande traitée.
+                const payerDemande = async (d) => {
+                    const p = partners.value.find(x => x.id === d.demarcheurId);
+                    if (!p) { globalApp.showToast("Partenaire introuvable.", "error"); return; }
+                    const amt = Number(d.montant) || 0;
+                    if (amt <= 0) { globalApp.showToast("Montant invalide.", "error"); return; }
+                    const solde = Number(p.soldeDisponible) || 0;
+                    if (amt > solde) {
+                        globalApp.showToast(`Solde insuffisant (${formatMoney(solde)}). Utilisez « Valider un paiement » pour ajuster.`, "error");
+                        return;
+                    }
+                    const label = `${p.prenom || ''} ${p.nom || ''}`.trim();
+                    const ok = window.AppModal
+                        ? await window.AppModal.confirm(`Confirmer le paiement de ${formatMoney(amt)} à ${label} via ${d.moyenPaiement || '-'} (${d.numero || '-'}) ?`, "Payer la demande", false)
+                        : confirm(`Payer ${formatMoney(amt)} à ${label} ?`);
+                    if (!ok) return;
+                    saving.value = true;
+                    try {
+                        const batch = writeBatch(db);
+                        batch.set(doc(collection(db, "retraits")), {
+                            demarcheurId: d.demarcheurId, montant: amt,
+                            periode: d.type === 'total' ? 'Solde total (demande mobile)' : 'Demande mobile',
+                            moyenPaiement: d.moyenPaiement || '-', numero: d.numero || '',
+                            dateRetrait: serverTimestamp(), validePar: _whoTreated(),
+                            statut: 'paye', origine: 'demande_mobile', demandeId: d.id
+                        });
+                        batch.update(doc(db, "demarcheurs", d.demarcheurId), {
+                            totalRetire: increment(amt), soldeDisponible: increment(-amt)
+                        });
+                        batch.update(doc(db, "retrait_demandes", d.id), {
+                            statut: 'paye', traitePar: _whoTreated(), dateTraitement: serverTimestamp()
+                        });
+                        await batch.commit();
+                        globalApp.showToast("Paiement enregistré et demande traitée ✔", "success");
+                    } catch (e) {
+                        globalApp.showToast("Erreur lors du paiement de la demande.", "error");
+                    }
+                    saving.value = false;
+                };
+
+                const refuserDemande = async (d) => {
+                    const ok = window.AppModal
+                        ? await window.AppModal.confirm("Refuser cette demande ? Le partenaire la verra comme « Refusée » dans son app.", "Refuser la demande", true)
+                        : confirm("Refuser cette demande ?");
+                    if (!ok) return;
+                    saving.value = true;
+                    try {
+                        await updateDoc(doc(db, "retrait_demandes", d.id), {
+                            statut: 'refuse', traitePar: _whoTreated(), dateTraitement: serverTimestamp()
+                        });
+                        globalApp.showToast("Demande refusée.", "info");
+                    } catch (e) {
+                        globalApp.showToast("Erreur lors du refus.", "error");
+                    }
+                    saving.value = false;
+                };
+
                 const exportCommissions = () => globalApp.showToast("Export CSV à implémenter...", "info");
                 const exportWithdrawals = () => globalApp.showToast("Export CSV à implémenter...", "info");
 
@@ -1057,6 +1169,7 @@ export const ParrainageView = {
                     showDetailModal, partnerDetail, openDetails,
                     mobileAccessSaving, mobileAccessInfo, createMobileAccess,
                     showWithdrawalModal, openWithdrawalModal, processWithdrawal, saving,
+                    demandesRetrait, pendingDemandesCount, payerDemande, refuserDemande,
                     exportCommissions, exportWithdrawals, getRoleBadge
                 };
             }
