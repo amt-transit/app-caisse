@@ -231,12 +231,12 @@ export const ClientsView = {
             
             <!-- MODAL NOUVEAU CLIENT -->
             <div id="newClientModal" class="modal" style="display:none; position:fixed; z-index:1000; left:0; top:0; width:100%; height:100%; background-color:rgba(15, 23, 42, 0.6); align-items:center; justify-content:center; backdrop-filter: blur(4px);">
-                <div class="modal-content" style="background:#fff; padding:0; width:90%; max-width:450px; border-radius:16px; overflow:hidden; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25);">
+                <div class="modal-content" style="background:#fff; padding:0; width:90%; max-width:450px; border-radius:16px; overflow:hidden; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25); display:flex; flex-direction:column; max-height:90vh;">
                     <div style="display:flex; justify-content:space-between; align-items:center; padding:20px; border-bottom:1px solid #e2e8f0; background:#f8fafc;">
                         <h2 style="margin:0; font-size:18px; color:#0f172a;">➕ Nouveau client</h2>
                         <button onclick="document.getElementById('newClientModal').style.display='none'" style="background:none; border:none; font-size:24px; cursor:pointer; color:#64748b;">✕</button>
                     </div>
-                    <div style="padding:20px;">
+                    <div style="padding:20px; overflow-y:auto; flex:1; min-height:0;">
                         <div style="font-size:13px; color:#64748b; margin-bottom:20px;">Créer un nouvel expéditeur dans le système</div>
                         
                         <div style="margin-bottom:15px;">
