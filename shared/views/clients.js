@@ -279,9 +279,11 @@ export const ClientsView = {
         document.getElementById('clRiskFilter')?.addEventListener('change', () => this.applyFilters());
         document.getElementById('clSegmentFilter')?.addEventListener('change', () => this.applyFilters());
 
-        // Auto-complétion des adresses
-        Autocomplete.initAddress('newClientAdresse', 'newClientAdresseSuggestions');
-        Autocomplete.initAddress('editClientAdresse', 'editClientAdresseSuggestions');
+        // Auto-complétion des adresses DÉSACTIVÉE ici : initAddress() remplace
+        // la case par un composant Vue à instance UNIQUE (this.vueApp).
+        // L'appeler 2 fois (newClient + editClient) démonte le 1er widget →
+        // la case Adresse de « Nouveau client » disparaissait. On garde des
+        // champs Adresse simples et fiables (saisie clavier).
         
         this.loadData();
     },
@@ -677,9 +679,7 @@ export const ClientsView = {
             document.body.insertAdjacentHTML('beforeend', modalHtml);
             modal = document.getElementById('newClientModal');
             
-            if (typeof Autocomplete !== 'undefined' && typeof Autocomplete.initAddress === 'function') {
-                Autocomplete.initAddress('newClientAdresse', 'newClientAdresseSuggestions');
-            }
+            // Pas d'initAddress() ici (cf. note plus haut) : champ Adresse simple et fiable.
         }
 
         // Sécurisation du nettoyage du formulaire
