@@ -125,6 +125,28 @@ onAuthStateChanged(auth, async (user) => {
         }
 
         // --- INJECTION DYNAMIQUE DU MENU PROFIL (POUR TOUTES LES PAGES ET MOBILES) ---
+        // Mode d'expédition (Maritime par défaut / Aérien). Mémorisé pour la
+        // session ; le changement recharge la page pour que les écrans
+        // (ex. Nouvelle Facture) recalculent selon le mode.
+        if (!window.setShippingMode) {
+            window.setShippingMode = function (mode) {
+                if (mode !== 'maritime' && mode !== 'aerien') return;
+                sessionStorage.setItem('shippingMode', mode);
+                location.reload();
+            };
+        }
+        const shippingMode = sessionStorage.getItem('shippingMode') || 'maritime';
+        const smBtn = (m, label) => {
+            const on = shippingMode === m;
+            const onCss = m === 'maritime' ? 'background:#0369a1;color:#fff;' : 'background:#7c3aed;color:#fff;';
+            return `<button type="button" onclick="window.setShippingMode('${m}')" title="Mode ${label}" style="border:none;cursor:pointer;font-size:12px;font-weight:700;padding:5px 9px;border-radius:6px;${on ? onCss : 'background:transparent;color:#475569;'}">${label}</button>`;
+        };
+        const shippingToggleHtml = `
+            <div class="shipping-mode-toggle" title="Mode d'expédition" style="display:flex;gap:4px;background:#f1f5f9;border:1px solid #e2e8f0;border-radius:8px;padding:3px;">
+                ${smBtn('maritime', '🚢 Maritime')}
+                ${smBtn('aerien', '✈️ Aérien')}
+            </div>`;
+
         const headers = document.querySelectorAll('.app-header, .mob-header, .top-bar');
         headers.forEach((header) => {
             // 1. Nettoyage des anciens boutons
@@ -153,6 +175,7 @@ onAuthStateChanged(auth, async (user) => {
             
                 const userInfoHtml = `
                     <div class="user-info" style="position: absolute; right: 20px; display: flex; align-items: center; gap: 10px;">
+                        ${shippingToggleHtml}
                         <span class="user-name-display" style="font-weight: bold; font-size: 14px; ${hideName}">${userName || 'Utilisateur'}</span>
                         <div class="user-dropdown-container">
                             <div class="user-avatar avatar" title="Menu Utilisateur" style="${avatarStyle}">
@@ -175,6 +198,12 @@ onAuthStateChanged(auth, async (user) => {
                     localStorage.setItem('userProfilePhoto', userData.photoURL);
                 }
             } else {
+                // Rafraîchit / ajoute le sélecteur Maritime/Aérien si déjà injecté.
+                const ui = header.querySelector('.user-info');
+                const existingToggle = ui && ui.querySelector('.shipping-mode-toggle');
+                if (existingToggle) existingToggle.outerHTML = shippingToggleHtml;
+                else if (ui) ui.insertAdjacentHTML('afterbegin', shippingToggleHtml);
+
             const userNameEl = header.querySelector('.user-name-display, #userName');
                 if (userNameEl) userNameEl.textContent = userName || 'Utilisateur';
                 
