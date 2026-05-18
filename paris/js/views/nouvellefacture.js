@@ -202,7 +202,7 @@ export const NouvelleFactureView = {
                                     </template>
                                     <!-- CHINE MARITIME : P.U remplacé par CBM (calcul auto) -->
                                     <template v-else-if="autoPricingActive">
-                                        <label v-if="idx === 0" style="font-size:11px; color:#64748b;">CBM *</label>
+                                        <label v-if="idx === 0" style="font-size:11px; color:#64748b;">CBM U *</label>
                                         <input type="number" min="0" step="0.001"
                                                v-model.number="item.vol"
                                                @input="updateItem(item, 'vol')"
@@ -837,8 +837,8 @@ initVue(globalApp) {
             const resteAPayer = computed(() => totalFret.value - (parseFloat(form.montantPaye) || 0));
 
             const submitInvoice = async () => {
-                if (!form.expediteur || !form.destinataire || items.value[0].desc === '') {
-                    globalApp.showToast("Veuillez remplir l'Expéditeur, le Destinataire et au moins une Description d'article.", "error");
+                if (!form.expediteur || !form.destinataire || !form.agence || items.value[0].desc === '') {
+                    globalApp.showToast("Veuillez remplir l'Expéditeur, le Destinataire, l'Agence destination et au moins une Description d'article.", "error");
                     return;
                 }
 

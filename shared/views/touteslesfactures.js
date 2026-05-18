@@ -3,7 +3,7 @@ import { collection, query, where, onSnapshot, doc, writeBatch, getDocs, orderBy
 import { Autocomplete } from '../../paris/js/views/autocomplete.js';
 import { CONSTANTS } from '../../constants.js';
 import { createApp, ref, computed, reactive, onMounted, onUnmounted } from "https://unpkg.com/vue@3/dist/vue.esm-browser.prod.js";
-import { getCollectionName } from '../../agencies-config.js';
+import { getCollectionName, AGENCIES } from '../../agencies-config.js';
 
 export const ToutesLesFacturesView = {
     unsub: null,
@@ -285,7 +285,13 @@ export const ToutesLesFacturesView = {
         if (this.unsub) this.unsub();
         
         const activeAgency = sessionStorage.getItem('currentActiveAgency') || 'paris';
-        const isArrival = activeAgency === 'abidjan' || activeAgency === 'all';
+        // Détection ARRIVÉE pilotée par la config (source unique), pas en dur :
+        // toute agence d'arrivée (abidjan, abidjan_chine, abidjan_dakar...)
+        // voit TOUTES les factures de la collection de sa route (même
+        // collection que le départ via getCollectionName). Sans ça, les
+        // routes SaaS (Chine...) n'affichaient rien côté destination.
+        const isArrival = activeAgency === 'all'
+            || (AGENCIES[activeAgency] && AGENCIES[activeAgency].type === 'arrival');
         
         let q;
         if (isArrival) {
