@@ -30,6 +30,7 @@ function useCountUp(target, duration = 1100) {
 export default function DashboardScreen({ data }) {
   const { me, commissions, clients, filleuls, refreshing, refresh } = data;
   const solde = Number(me?.soldeDisponible || 0);
+  const potentiel = Number(me?.soldePotentiel || 0);
   const totalRetire = Number(me?.totalRetire || 0);
   const animated = useCountUp(solde);
 
@@ -77,13 +78,25 @@ export default function DashboardScreen({ data }) {
           <LogoMark size={42} glow={false} />
         </View>
 
-        <Text style={styles.heroLabel}>SOLDE À PERCEVOIR</Text>
+        <Text style={styles.heroLabel}>DISPONIBLE · À PERCEVOIR</Text>
         <Text style={styles.heroValue} numberOfLines={1} adjustsFontSizeToFit>
           {fcfa(animated)}
         </Text>
+
+        {potentiel > 0 && (
+          <View style={styles.potRow}>
+            <Ionicons name="hourglass-outline" size={13} color="#FFE4C2" />
+            <Text style={styles.potT}>
+              + {fcfa(potentiel)} en attente (factures non soldées)
+            </Text>
+          </View>
+        )}
+
         <View style={styles.heroFootRow}>
-          <Ionicons name="trending-up" size={14} color={colors.goldLight} />
-          <Text style={styles.heroFoot}>Vos gains montent — encaissez via Wallet</Text>
+          <Ionicons name="information-circle-outline" size={13} color={colors.goldLight} />
+          <Text style={styles.heroFoot}>
+            Vous ne percevez que les commissions des factures payées
+          </Text>
         </View>
       </LinearGradient>
 
@@ -175,8 +188,16 @@ const styles = StyleSheet.create({
     color: colors.goldLight, fontSize: 38, fontFamily: font.display,
     marginTop: spacing.sm, letterSpacing: 0.3,
   },
+  potRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: spacing.md,
+    alignSelf: 'flex-start',
+    backgroundColor: 'rgba(0,0,0,0.22)',
+    borderWidth: 1, borderColor: 'rgba(255,210,170,0.22)',
+    borderRadius: radius.pill, paddingHorizontal: 11, paddingVertical: 6,
+  },
+  potT: { color: '#FFE4C2', fontSize: 12, fontFamily: font.bodyMed },
   heroFootRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: spacing.md },
-  heroFoot: { color: '#FFCDB0', fontSize: 12.5, fontFamily: font.bodyMed },
+  heroFoot: { color: '#FFCDB0', fontSize: 12.5, fontFamily: font.bodyMed, flex: 1 },
 
   statRow: { flexDirection: 'row', gap: spacing.md, marginBottom: spacing.md },
   stat: {

@@ -53,8 +53,10 @@ export default function ClientsScreen({ data }) {
             sub={`${c.phone || '—'} · ${c.nbEnvois} envoi${c.nbEnvois > 1 ? 's' : ''}`}
             right={
               <View style={{ alignItems: 'flex-end' }}>
-                <Text style={styles.amt}>{fcfa(c.totalCommission)}</Text>
-                <Text style={styles.amtL}>votre gain</Text>
+                <Text style={styles.amt}>{fcfa(c.totalDisponible)}</Text>
+                <Text style={styles.amtL}>
+                  {c.totalPotentiel > 0 ? `+ ${fcfa(c.totalPotentiel)} en attente` : 'disponible'}
+                </Text>
               </View>
             }
             onPress={() => setSel(c)}
@@ -85,9 +87,9 @@ export default function ClientsScreen({ data }) {
           sel?.createdAt ? `Affilié depuis le ${fdate(sel.createdAt)}` : null,
         ].filter(Boolean).join(' · ')}
         stats={sel ? [
+          { label: 'Disponible', value: fcfa(sel.totalDisponible), tint: colors.green },
+          { label: 'En attente', value: fcfa(sel.totalPotentiel), tint: colors.amber },
           { label: 'Total facturé', value: fcfa(sel.totalFacture) },
-          { label: 'Vos commissions', value: fcfa(sel.totalCommission), tint: colors.goldLight },
-          { label: 'Envois', value: String(sel.nbEnvois) },
         ] : []}
         envois={sel?.envois || []}
         gainLabel="Votre commission"

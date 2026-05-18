@@ -7,6 +7,7 @@ import {
   getReactNativePersistence,
 } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
+import { getFunctions } from 'firebase/functions';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const firebaseConfig = {
@@ -28,4 +29,8 @@ export const auth = initializeAuth(app, {
 });
 
 export const db = getFirestore(app);
+
+// Région alignée sur les Cloud Functions (us-central1, cf. functions/index.js).
+export const functions = getFunctions(app, 'us-central1');
+
 export default app;

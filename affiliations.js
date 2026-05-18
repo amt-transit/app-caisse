@@ -131,12 +131,17 @@ export async function creerCommissionParrainage({ expeditionId, beneficeBrut, de
       montantBrut: beneficeBrut, tauxDemarcheur: tDem, montantDemarcheur: pDemBrut,
       tauxAMT: tAMT, montantAMT: pAMTNet, bonusParrainage: bonus,
       quiPaieParrain: qui, montantNet: pDemNet,
+      // À la création la facture n'est pas (ou pas entièrement) soldée :
+      // 100 % en POTENTIEL. La Cloud Function reconcile recalcule le prorata
+      // réel dès qu'un paiement est enregistré.
+      montantDisponible: 0, montantPotentiel: pDemNet, partPayee: 0,
+      etatSolde: 'en_attente',
       ...infoClient,
       agency: agency || (sessionStorage.getItem('currentActiveAgency') || ''),
       dateCreation: serverTimestamp(), statut: 'en_attente',
     });
     batch.update(doc(db, 'demarcheurs', demarcheurId), {
-      totalGagne: increment(pDemNet), soldeDisponible: increment(pDemNet),
+      totalGagne: increment(pDemNet), soldePotentiel: increment(pDemNet),
     });
 
     if (dem.parrainId && bonus > 0) {
@@ -144,12 +149,14 @@ export async function creerCommissionParrainage({ expeditionId, beneficeBrut, de
         expeditionId, demarcheurId: dem.parrainId, type: 'parrainage',
         filleulId: demarcheurId, montantBrut: beneficeBrut, bonusParrainage: bonus,
         montantNet: bonus,
+        montantDisponible: 0, montantPotentiel: bonus, partPayee: 0,
+        etatSolde: 'en_attente',
         ...infoClient,
         agency: agency || (sessionStorage.getItem('currentActiveAgency') || ''),
         dateCreation: serverTimestamp(), statut: 'en_attente',
       });
       batch.update(doc(db, 'demarcheurs', dem.parrainId), {
-        totalGagne: increment(bonus), soldeDisponible: increment(bonus),
+        totalGagne: increment(bonus), soldePotentiel: increment(bonus),
       });
     }
 

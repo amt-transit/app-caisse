@@ -12,6 +12,8 @@ export default function FilleulsScreen({ data }) {
   const [sel, setSel] = useState(null);
 
   const totalBonus = filleuls.reduce((t, f) => t + (Number(f.totalBonus) || 0), 0);
+  const totalDispo = filleuls.reduce((t, f) => t + (Number(f.totalBonusDisponible) || 0), 0);
+  const totalPot = filleuls.reduce((t, f) => t + (Number(f.totalBonusPotentiel) || 0), 0);
 
   return (
     <ScreenScroll refreshing={refreshing} onRefresh={refresh}>
@@ -25,8 +27,11 @@ export default function FilleulsScreen({ data }) {
         <View style={styles.banner}>
           <Ionicons name="gift" size={18} color={colors.goldLight} />
           <View style={{ flex: 1, marginLeft: spacing.md }}>
-            <Text style={styles.bannerL}>Bonus de parrainage total reçu</Text>
-            <Text style={styles.bannerV}>{fcfa(totalBonus)}</Text>
+            <Text style={styles.bannerL}>Bonus disponible (retirable)</Text>
+            <Text style={styles.bannerV}>{fcfa(totalDispo)}</Text>
+            {totalPot > 0 && (
+              <Text style={styles.bannerSub}>+ {fcfa(totalPot)} en attente de solde</Text>
+            )}
           </View>
           <View style={styles.count}>
             <Text style={styles.countV}>{filleuls.length}</Text>
@@ -50,8 +55,12 @@ export default function FilleulsScreen({ data }) {
               sub={`${f.telephone || '—'} · ${f.nbEnvois} envoi${f.nbEnvois > 1 ? 's' : ''} avec bonus`}
               right={
                 <View style={{ alignItems: 'flex-end' }}>
-                  <Text style={styles.amt}>{fcfa(f.totalBonus)}</Text>
-                  <Text style={styles.amtL}>votre bonus</Text>
+                  <Text style={styles.amt}>{fcfa(f.totalBonusDisponible)}</Text>
+                  <Text style={styles.amtL}>
+                    {f.totalBonusPotentiel > 0
+                      ? `+ ${fcfa(f.totalBonusPotentiel)} en attente`
+                      : 'disponible'}
+                  </Text>
                 </View>
               }
               onPress={() => setSel(f)}
@@ -70,8 +79,9 @@ export default function FilleulsScreen({ data }) {
           'Filleul que vous avez parrainé',
         ].filter(Boolean).join(' · ')}
         stats={sel ? [
-          { label: 'Bonus total reçu', value: fcfa(sel.totalBonus), tint: colors.goldLight },
-          { label: 'Envois avec bonus', value: String(sel.nbEnvois) },
+          { label: 'Disponible', value: fcfa(sel.totalBonusDisponible), tint: colors.green },
+          { label: 'En attente', value: fcfa(sel.totalBonusPotentiel), tint: colors.amber },
+          { label: 'Envois', value: String(sel.nbEnvois) },
         ] : []}
         envois={sel?.envois || []}
         gainLabel="Votre bonus"
@@ -90,6 +100,7 @@ const styles = StyleSheet.create({
   },
   bannerL: { color: colors.textDim, fontSize: 12, fontFamily: font.body },
   bannerV: { color: colors.goldLight, fontSize: 19, fontFamily: font.num, marginTop: 3 },
+  bannerSub: { color: colors.amber, fontSize: 11.5, fontFamily: font.body, marginTop: 3 },
   count: { alignItems: 'center', paddingLeft: spacing.md },
   countV: { color: colors.text, fontSize: 18, fontFamily: font.display },
   countL: { color: colors.textDim, fontSize: 11, fontFamily: font.body },

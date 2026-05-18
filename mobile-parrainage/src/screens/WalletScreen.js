@@ -24,6 +24,7 @@ function demandeTone(st) {
 export default function WalletScreen({ data }) {
   const { me, commissions, demandes, refreshing, refresh, reload } = data;
   const solde = Number(me?.soldeDisponible || 0);
+  const potentiel = Number(me?.soldePotentiel || 0);
 
   const [decided, setDecided] = useState(null); // null | 'yes' | 'no'
   const [method, setMethod] = useState('Orange Money');
@@ -73,9 +74,13 @@ export default function WalletScreen({ data }) {
 
       {/* Solde */}
       <View style={[styles.hero, shadow.gold]}>
-        <Text style={styles.heroLabel}>SOLDE DISPONIBLE</Text>
+        <Text style={styles.heroLabel}>DISPONIBLE · RETIRABLE MAINTENANT</Text>
         <Text style={styles.heroValue}>{fcfa(solde)}</Text>
         <View style={styles.heroSplit}>
+          <View>
+            <Text style={styles.heroMiniL}>En attente de solde</Text>
+            <Text style={styles.heroMiniV}>{fcfa(potentiel)}</Text>
+          </View>
           <View>
             <Text style={styles.heroMiniL}>Total généré</Text>
             <Text style={styles.heroMiniV}>{fcfa(me?.totalGagne)}</Text>
@@ -86,6 +91,17 @@ export default function WalletScreen({ data }) {
           </View>
         </View>
       </View>
+
+      {potentiel > 0 && (
+        <View style={styles.potBanner}>
+          <Ionicons name="hourglass-outline" size={16} color={colors.gold} />
+          <Text style={styles.potBannerT}>
+            <Text style={{ fontWeight: '800' }}>{fcfa(potentiel)}</Text> proviennent
+            de factures pas encore entièrement payées par vos clients. Ce montant
+            deviendra retirable au fur et à mesure des paiements (au prorata).
+          </Text>
+        </View>
+      )}
 
       {/* Décision / formulaire */}
       {done ? (
@@ -291,8 +307,16 @@ const styles = StyleSheet.create({
     marginTop: spacing.lg, paddingTop: spacing.md,
     borderTopWidth: 1, borderTopColor: 'rgba(26,18,6,0.18)',
   },
-  heroMiniL: { color: '#5A3F05', fontSize: 11, fontWeight: '700' },
-  heroMiniV: { color: '#1A1206', fontSize: 15, fontWeight: '800', marginTop: 2 },
+  heroMiniL: { color: '#5A3F05', fontSize: 10.5, fontWeight: '700' },
+  heroMiniV: { color: '#1A1206', fontSize: 14, fontWeight: '800', marginTop: 2 },
+
+  potBanner: {
+    flexDirection: 'row', gap: spacing.md, alignItems: 'flex-start',
+    backgroundColor: 'rgba(242,163,18,0.10)',
+    borderWidth: 1, borderColor: colors.glassBorderStrong,
+    borderRadius: radius.md, padding: spacing.lg, marginBottom: spacing.lg,
+  },
+  potBannerT: { color: colors.textDim, fontSize: 12.5, lineHeight: 18, flex: 1 },
 
   pad: { padding: spacing.xl },
   qTitle: { color: colors.text, fontSize: 17, fontWeight: '800' },

@@ -186,3 +186,178 @@ exports.provisionDemarcheurAuth = onCall({ region: REGION }, async (request) => 
         throw new HttpsError("internal", error.message);
     }
 });
+
+// ============================================================================
+//  SOLDE PARTENAIRE : « DISPONIBLE » vs « POTENTIEL »  (au prorata du paiement)
+// ----------------------------------------------------------------------------
+//  Règle métier : une commission n'est PERCEVABLE qu'à hauteur de ce que le
+//  client a réellement payé sur sa facture.
+//    part_payée = (montantParis + montantAbidjan) / prix   (borné 0..1)
+//    montantDisponible = round(montantNet * part_payée)   -> retirable
+//    montantPotentiel  = montantNet - montantDisponible    -> en attente
+//  La fiche démarcheur est RECALCULÉE de zéro (idempotent, auto-réparant) :
+//    totalGagne      = Σ montantNet
+//    soldePotentiel  = Σ montantPotentiel
+//    soldeDisponible = max(0, Σ montantDisponible - totalRetire)
+//  Source de vérité unique, côté serveur (Admin SDK = lit les factures même
+//  si les règles l'interdisent à l'app mobile).
+// ============================================================================
+
+// Réplique getCollectionName (agencies-config.js) pour les factures
+// (transactions). Une commission est créée au DÉPART -> agency = agence de
+// départ (paris, chine, dakar...).
+function txCollectionCandidates(agency) {
+    const a = String(agency || "").trim();
+    const list = ["transactions"];
+    if (a && a !== "paris" && a !== "abidjan" && a !== "all") {
+        if (a.includes("_")) list.push(`transactions_${a.split("_")[1]}`);
+        list.push(`transactions_${a}`);
+        list.push(`transactions_${a.split("_").pop()}`);
+    }
+    return [...new Set(list)];
+}
+
+async function findInvoice(db, expeditionId, agency) {
+    if (!expeditionId) return null;
+    for (const coll of txCollectionCandidates(agency)) {
+        try {
+            const snap = await db.collection(coll)
+                .where("reference", "==", expeditionId).limit(1).get();
+            if (!snap.empty) return snap.docs[0].data();
+        } catch (e) { /* collection inexistante : on essaie la suivante */ }
+    }
+    return null;
+}
+
+function paidRatio(tx) {
+    if (!tx) return 0;
+    const total = Number(tx.prix) || 0;
+    if (total <= 0) return 0;
+    const paid = (Number(tx.montantParis) || 0) + (Number(tx.montantAbidjan) || 0);
+    let r = paid / total;
+    if (!isFinite(r) || r < 0) r = 0;
+    if (r > 1) r = 1;
+    return r;
+}
+
+// Recalcule et ÉCRIT la fiche d'UN démarcheur + le détail de chaque commission.
+async function reconcileOne(demId) {
+    const db = admin.firestore();
+    const demRef = db.collection("demarcheurs").doc(demId);
+    const demSnap = await demRef.get();
+    if (!demSnap.exists) {
+        throw new HttpsError("not-found", "Démarcheur introuvable.");
+    }
+    const dem = demSnap.data() || {};
+
+    const commSnap = await db.collection("commissions")
+        .where("demarcheurId", "==", demId).get();
+
+    let sumNet = 0, sumDispo = 0, sumPot = 0;
+    const ratioCache = new Map();
+    const updates = [];
+
+    for (const d of commSnap.docs) {
+        const c = d.data() || {};
+        const net = Number(c.montantNet) || 0;
+        const key = `${c.agency || ""}|${c.expeditionId || ""}`;
+        let ratio = ratioCache.get(key);
+        if (ratio === undefined) {
+            const tx = await findInvoice(db, c.expeditionId, c.agency);
+            ratio = paidRatio(tx);
+            ratioCache.set(key, ratio);
+        }
+        const dispo = Math.round(net * ratio);
+        const pot = net - dispo;
+        sumNet += net; sumDispo += dispo; sumPot += pot;
+        const etat = ratio >= 1 ? "disponible" : (ratio > 0 ? "partiel" : "en_attente");
+        updates.push({
+            ref: d.ref,
+            data: {
+                montantDisponible: dispo,
+                montantPotentiel: pot,
+                partPayee: Math.round(ratio * 100), // % payé de la facture
+                etatSolde: etat,
+            },
+        });
+    }
+
+    // Commits par lots de 400 (limite Firestore = 500 op/lot).
+    for (let i = 0; i < updates.length; i += 400) {
+        const batch = db.batch();
+        updates.slice(i, i + 400).forEach((u) => batch.update(u.ref, u.data));
+        await batch.commit();
+    }
+
+    const totalRetire = Number(dem.totalRetire) || 0;
+    const soldeDisponible = Math.max(0, sumDispo - totalRetire);
+    await demRef.set({
+        totalGagne: sumNet,
+        soldePotentiel: sumPot,
+        soldeDisponible,
+        soldesReconciliesAt: new Date().toISOString(),
+    }, { merge: true });
+
+    return {
+        demarcheurId: demId,
+        totalGagne: sumNet,
+        soldePotentiel: sumPot,
+        soldeDisponible,
+        nbCommissions: commSnap.size,
+    };
+}
+
+// Appelable par LE PARTENAIRE lui-même (claims demarcheur) ou par un admin
+// (en passant demarcheurId). L'app mobile l'appelle au chargement : le
+// partenaire voit toujours des montants justes, et soldeDisponible (utilisé
+// pour les retraits) est à jour.
+exports.reconcilePartnerBalances = onCall({ region: REGION }, async (request) => {
+    if (!request.auth) {
+        throw new HttpsError("unauthenticated", "Vous devez être connecté.");
+    }
+    const claims = request.auth.token || {};
+    const data = request.data || {};
+    let demId = null;
+
+    if (claims.role === "demarcheur" && claims.demarcheurId) {
+        demId = claims.demarcheurId; // un partenaire ne réconcilie que LUI
+    } else {
+        await assertCallerIsAdmin(request.auth); // sinon réservé admin
+        demId = String(data.demarcheurId || "").trim();
+        if (!demId) {
+            throw new HttpsError("invalid-argument", "demarcheurId requis.");
+        }
+    }
+
+    try {
+        return await reconcileOne(demId);
+    } catch (error) {
+        if (error instanceof HttpsError) throw error;
+        console.error("Erreur reconcilePartnerBalances:", error);
+        throw new HttpsError("internal", error.message);
+    }
+});
+
+// MIGRATION / recalcul global — réservé admin/super_admin. À lancer UNE fois
+// après déploiement, puis à volonté (idempotent).
+exports.reconcileAllPartnersBalances = onCall(
+    { region: REGION, timeoutSeconds: 540, memory: "512MiB" },
+    async (request) => {
+        await assertCallerIsAdmin(request.auth);
+        try {
+            const db = admin.firestore();
+            const demsSnap = await db.collection("demarcheurs").get();
+            let ok = 0;
+            const erreurs = [];
+            for (const d of demsSnap.docs) {
+                try { await reconcileOne(d.id); ok++; }
+                catch (e) { erreurs.push({ id: d.id, error: String(e && e.message || e) }); }
+            }
+            return { total: demsSnap.size, reconcilies: ok, erreurs };
+        } catch (error) {
+            if (error instanceof HttpsError) throw error;
+            console.error("Erreur reconcileAllPartnersBalances:", error);
+            throw new HttpsError("internal", error.message);
+        }
+    }
+);

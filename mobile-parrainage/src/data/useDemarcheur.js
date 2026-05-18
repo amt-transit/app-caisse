@@ -12,7 +12,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   doc, getDoc, collection, query, where, getDocs,
 } from 'firebase/firestore';
-import { db, auth } from '../firebase';
+import { httpsCallable } from 'firebase/functions';
+import { db, auth, functions } from '../firebase';
 
 // Même normalisation que côté web (affiliations.js) pour que les téléphones
 // des commissions et des affiliations se correspondent exactement.
@@ -58,6 +59,13 @@ export function useDemarcheur() {
         }));
         return;
       }
+
+      // Recalcule côté serveur le solde disponible (factures payées, au
+      // prorata) vs potentiel, AVANT de relire les données. Non bloquant :
+      // si la fonction n'est pas joignable, on affiche l'existant.
+      try {
+        await httpsCallable(functions, 'reconcilePartnerBalances')();
+      } catch (e) { /* non bloquant : affichage des données existantes */ }
 
       const meSnap = await getDoc(doc(db, 'demarcheurs', demId));
       const me = meSnap.exists() ? { id: meSnap.id, ...meSnap.data() } : null;
@@ -129,6 +137,8 @@ export function useDemarcheur() {
         nbEnvois: envois.length,
         totalFacture: sum(envois, 'montantBrut'),
         totalCommission: sum(envois, 'montantNet'),
+        totalDisponible: sum(envois, 'montantDisponible'),
+        totalPotentiel: sum(envois, 'montantPotentiel'),
       };
     });
 
@@ -139,6 +149,8 @@ export function useDemarcheur() {
         envois,
         nbEnvois: envois.length,
         totalBonus: sum(envois, 'montantNet'),
+        totalBonusDisponible: sum(envois, 'montantDisponible'),
+        totalBonusPotentiel: sum(envois, 'montantPotentiel'),
       };
     });
 

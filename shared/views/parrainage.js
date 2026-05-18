@@ -535,8 +535,14 @@ export const ParrainageView = {
                         <div class="pm-body" style="font-size:13px; line-height:1.6; color:#334155;">
                             <div style="display:flex; justify-content:space-between; margin-bottom:5px;"><span>Total généré (Commissions) :</span> <strong style="color:#10b981;">{{ formatMoney(partnerDetail.totalGagne) }}</strong></div>
                             <div style="display:flex; justify-content:space-between; margin-bottom:5px;"><span>Déjà payé :</span> <strong style="color:#f59e0b;">{{ formatMoney(partnerDetail.totalRetire) }}</strong></div>
-                            <div style="display:flex; justify-content:space-between; margin-bottom:20px; padding-bottom:15px; border-bottom:1px solid #e2e8f0;"><span>Solde à régler :</span> <strong style="font-size:16px; color:#0f172a;">{{ formatMoney(partnerDetail.soldeDisponible) }}</strong></div>
-                            
+                            <div style="display:flex; justify-content:space-between; margin-bottom:5px;"><span>Disponible (factures payées — à régler) :</span> <strong style="font-size:16px; color:#0f172a;">{{ formatMoney(partnerDetail.soldeDisponible) }}</strong></div>
+                            <div style="display:flex; justify-content:space-between; margin-bottom:20px; padding-bottom:15px; border-bottom:1px solid #e2e8f0;"><span>En attente de solde facture (NON percevable) :</span> <strong style="color:#f59e0b;">{{ formatMoney(partnerDetail.soldePotentiel || 0) }}</strong></div>
+
+                            <div v-if="isSuperAdmin" style="display:flex; gap:8px; margin-bottom:20px;">
+                                <button @click="reconcilerSoldes(null, partnerDetail.id)" :disabled="reconcileBusy" style="flex:1; padding:8px; border:1px solid #cbd5e1; background:#fff; border-radius:8px; cursor:pointer; font-size:12px;">🔄 Recalculer ce partenaire</button>
+                                <button @click="reconcilerSoldes('all')" :disabled="reconcileBusy" style="flex:1; padding:8px; border:1px solid #fca5a5; background:#fef2f2; color:#b91c1c; border-radius:8px; cursor:pointer; font-size:12px;">🔄 Recalculer TOUS (migration)</button>
+                            </div>
+
                             <h4 style="margin:0 0 10px 0; color:#1e293b;">Structure du réseau</h4>
                             <div v-if="partnerDetail.parrainId" style="margin-bottom:10px; color:#d97706;">
                                 <i class="fas fa-level-up-alt"></i> Filleul du Leader : <strong>{{ getPartnerName(partnerDetail.parrainId) }}</strong>
@@ -983,6 +989,41 @@ export const ParrainageView = {
 
                 const openDetails = (p) => { partnerDetail.value = p; mobileAccessInfo.value = null; showDetailModal.value = true; };
 
+                // Recalcule (Cloud Function) le « disponible » (factures payées,
+                // au prorata) vs « potentiel ». scope='all' = migration globale ;
+                // sinon recalcule un seul partenaire. Même protocole d'appel
+                // que createMobileAccess (jeton Bearer attaché à la main).
+                const reconcileBusy = ref(false);
+                const reconcilerSoldes = async (scope, demId) => {
+                    reconcileBusy.value = true;
+                    try {
+                        if (auth && typeof auth.authStateReady === 'function') { await auth.authStateReady(); }
+                        if (!auth || !auth.currentUser) {
+                            throw new Error("Session expirée. Reconnectez-vous puis réessayez.");
+                        }
+                        const idToken = await auth.currentUser.getIdToken(true);
+                        const projectId = (app && app.options && app.options.projectId) || 'caisse-amt-perso';
+                        const fn = scope === 'all' ? 'reconcileAllPartnersBalances' : 'reconcilePartnerBalances';
+                        const url = `https://us-central1-${projectId}.cloudfunctions.net/${fn}`;
+                        const payload = scope === 'all' ? { data: {} } : { data: { demarcheurId: demId } };
+                        const resp = await fetch(url, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${idToken}` },
+                            body: JSON.stringify(payload),
+                        });
+                        const json = await resp.json().catch(() => ({}));
+                        if (!resp.ok || (json && json.error)) {
+                            const err = (json && json.error) || {};
+                            throw new Error(err.message || `Échec serveur (HTTP ${resp.status}).`);
+                        }
+                        globalApp.showToast(scope === 'all' ? "Soldes de tous les partenaires recalculés ✔" : "Solde recalculé ✔", "success");
+                    } catch (e) {
+                        globalApp.showToast((e && e.message) || "Échec du recalcul.", "error");
+                    } finally {
+                        reconcileBusy.value = false;
+                    }
+                };
+
                 const openWithdrawalModal = () => {
                     withdrawalForm.montant = ''; withdrawalForm.periode = ''; withdrawalForm.moyenPaiement = 'Espèces';
                     showWithdrawalModal.value = true;
@@ -1167,6 +1208,7 @@ export const ParrainageView = {
                     analytics, simulation, syncRates, saveSettings,
                     showPartnerModal, partnerForm, availableSponsors, openPartnerModal, savePartner,
                     showDetailModal, partnerDetail, openDetails,
+                    reconcileBusy, reconcilerSoldes,
                     mobileAccessSaving, mobileAccessInfo, createMobileAccess,
                     showWithdrawalModal, openWithdrawalModal, processWithdrawal, saving,
                     demandesRetrait, pendingDemandesCount, payerDemande, refuserDemande,

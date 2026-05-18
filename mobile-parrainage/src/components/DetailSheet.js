@@ -10,9 +10,12 @@ import { Ionicons } from '@expo/vector-icons';
 import { Badge } from './ui';
 import { colors, spacing, radius, font, grad, shadow, fcfa, fdate } from '../theme';
 
-function commTone(statut) {
-  if (statut === 'paye' || statut === 'retire') return ['paid', 'Payée'];
-  if (statut === 'annule' || statut === 'rejete') return ['bad', 'Annulée'];
+// État du solde de la commission (calculé serveur, au prorata du paiement).
+function soldeTone(c) {
+  const e = c.etatSolde;
+  if (e === 'disponible') return ['paid', 'Disponible'];
+  if (e === 'partiel') return ['info', 'Partiel'];
+  if (c.statut === 'annule' || c.statut === 'rejete') return ['bad', 'Annulée'];
   return ['wait', 'En attente'];
 }
 
@@ -75,8 +78,15 @@ export default function DetailSheet({
             )}
 
             {envois.map((c) => {
-              const [tone, txt] = commTone(c.statut);
+              const [tone, txt] = soldeTone(c);
               const isBonus = c.type === 'parrainage';
+              const pct = Number(c.partPayee || 0);
+              const dispo = Number(c.montantDisponible || 0);
+              const pot = Number(
+                c.montantPotentiel != null
+                  ? c.montantPotentiel
+                  : (Number(c.montantNet || 0) - dispo)
+              );
               return (
                 <View key={c.id} style={styles.env}>
                   <View style={styles.envTop}>
@@ -98,10 +108,26 @@ export default function DetailSheet({
                     <Text style={styles.lineV}>{fcfa(c.montantBrut)}</Text>
                   </View>
                   <View style={styles.line}>
+                    <Text style={styles.lineL}>Facture payée par le client</Text>
+                    <Text style={styles.lineV}>{pct}%</Text>
+                  </View>
+                  <View style={styles.line}>
                     <Text style={styles.lineL}>
-                      {isBonus ? 'Bonus parrainage' : gainLabel}
+                      {isBonus ? 'Bonus total' : gainLabel}
                     </Text>
-                    <Text style={[styles.lineV, styles.gain]}>{fcfa(c.montantNet)}</Text>
+                    <Text style={styles.lineV}>{fcfa(c.montantNet)}</Text>
+                  </View>
+
+                  <View style={styles.splitBox}>
+                    <View style={styles.splitCol}>
+                      <Text style={styles.splitL}>✅ Disponible</Text>
+                      <Text style={[styles.splitV, { color: colors.green }]}>{fcfa(dispo)}</Text>
+                    </View>
+                    <View style={styles.splitDiv} />
+                    <View style={styles.splitCol}>
+                      <Text style={styles.splitL}>⏳ En attente</Text>
+                      <Text style={[styles.splitV, { color: colors.amber }]}>{fcfa(pot)}</Text>
+                    </View>
                   </View>
                 </View>
               );
@@ -179,4 +205,15 @@ const styles = StyleSheet.create({
   lineL: { color: colors.textDim, fontSize: 13, fontFamily: font.body },
   lineV: { color: colors.text, fontSize: 14, fontFamily: font.bodyBold },
   gain: { color: colors.goldLight },
+
+  splitBox: {
+    flexDirection: 'row', alignItems: 'center',
+    marginTop: spacing.lg, paddingTop: spacing.md,
+    borderTopWidth: 1, borderTopColor: colors.hairline,
+  },
+  splitCol: { flex: 1, alignItems: 'center' },
+  splitDiv: { width: 1, alignSelf: 'stretch', backgroundColor: colors.hairline },
+  splitL: { color: colors.textDim, fontSize: 11.5, fontFamily: font.body },
+  splitV: { fontSize: 15, fontFamily: font.num, marginTop: 4 },
 });
+
