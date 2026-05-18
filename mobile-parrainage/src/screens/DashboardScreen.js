@@ -1,47 +1,118 @@
-import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import { View, Text, StyleSheet, Animated, Easing } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
+import Svg, { Defs, LinearGradient as SvgGrad, Stop, Path, Circle } from 'react-native-svg';
 import { Ionicons } from '@expo/vector-icons';
 import {
   ScreenScroll, Card, SectionTitle, Row, Badge, Empty,
 } from '../components/ui';
-import { colors, spacing, radius, shadow, fcfa, fdate } from '../theme';
+import LogoMark from '../components/LogoMark';
+import { colors, spacing, radius, font, grad, shadow, fcfa, fdate } from '../theme';
+
+// Compteur animé : le montant grimpe (l'« ascension »).
+function useCountUp(target, duration = 1100) {
+  const v = useRef(new Animated.Value(0)).current;
+  const [n, setN] = useState(0);
+  useEffect(() => {
+    const id = v.addListener(({ value }) => setN(Math.round(value)));
+    v.setValue(0);
+    Animated.timing(v, {
+      toValue: Number(target) || 0,
+      duration,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: false,
+    }).start();
+    return () => v.removeListener(id);
+  }, [target]);
+  return n;
+}
 
 export default function DashboardScreen({ data }) {
   const { me, commissions, clients, filleuls, refreshing, refresh } = data;
+  const solde = Number(me?.soldeDisponible || 0);
   const totalRetire = Number(me?.totalRetire || 0);
+  const animated = useCountUp(solde);
 
   return (
     <ScreenScroll refreshing={refreshing} onRefresh={refresh}>
-      <View style={[styles.hero, shadow.gold]}>
-        <Text style={styles.heroLabel}>SOLDE À PERCEVOIR</Text>
-        <Text style={styles.heroValue}>{fcfa(me?.soldeDisponible)}</Text>
-        <Text style={styles.heroFoot}>Partenaire AMT Transit Cargo</Text>
-      </View>
+      {/* ── Carte du solde : laque rouge de Chine + trajectoire d'or ── */}
+      <LinearGradient
+        colors={grad.lacquerRed}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={[styles.hero, shadow.lacquer]}
+      >
+        {/* La courbe d'or qui grimpe en fond de carte */}
+        <Svg
+          width="100%"
+          height="100%"
+          viewBox="0 0 320 150"
+          preserveAspectRatio="none"
+          style={StyleSheet.absoluteFill}
+          pointerEvents="none"
+        >
+          <Defs>
+            <SvgGrad id="traj" x1="0" y1="1" x2="1" y2="0">
+              <Stop offset="0" stopColor={colors.gold} stopOpacity="0.08" />
+              <Stop offset="0.7" stopColor={colors.goldSoft} stopOpacity="0.5" />
+              <Stop offset="1" stopColor={colors.goldLight} stopOpacity="0.9" />
+            </SvgGrad>
+          </Defs>
+          <Path
+            d="M-4 142 C 70 138, 120 120, 175 88 S 270 30, 330 8"
+            stroke="url(#traj)"
+            strokeWidth="3.5"
+            fill="none"
+            strokeLinecap="round"
+          />
+          <Circle cx="305" cy="16" r="11" fill={colors.gold} opacity="0.18" />
+          <Circle cx="305" cy="16" r="4.5" fill={colors.goldLight} />
+        </Svg>
 
+        <View style={styles.heroTop}>
+          <View style={styles.brandTag}>
+            <View style={styles.dot} />
+            <Text style={styles.brandTagT}>AMT · PARTENAIRE</Text>
+          </View>
+          <LogoMark size={42} glow={false} />
+        </View>
+
+        <Text style={styles.heroLabel}>SOLDE À PERCEVOIR</Text>
+        <Text style={styles.heroValue} numberOfLines={1} adjustsFontSizeToFit>
+          {fcfa(animated)}
+        </Text>
+        <View style={styles.heroFootRow}>
+          <Ionicons name="trending-up" size={14} color={colors.goldLight} />
+          <Text style={styles.heroFoot}>Vos gains montent — encaissez via Wallet</Text>
+        </View>
+      </LinearGradient>
+
+      {/* ── Statistiques ── */}
       <View style={styles.statRow}>
-        <Stat icon="trending-up" bg={colors.greenDeep} color={colors.green}
+        <Stat icon="trending-up" tint={colors.green} bg="rgba(63,217,168,0.12)"
           value={fcfa(me?.totalGagne)} label="Total généré" />
-        <Stat icon="cash-outline" bg={colors.amberDeep} color={colors.amber}
+        <Stat icon="cash-outline" tint={colors.amber} bg="rgba(251,191,36,0.12)"
           value={fcfa(totalRetire)} label="Déjà retiré" />
       </View>
       <View style={styles.statRow}>
-        <Stat icon="people-outline" bg="rgba(242,163,18,0.15)" color={colors.gold}
-          value={clients.length} label="Clients affiliés" />
-        <Stat icon="git-network-outline" bg="rgba(242,163,18,0.15)" color={colors.gold}
-          value={filleuls.length} label="Filleuls" />
+        <Stat icon="people" tint={colors.gold} bg="rgba(242,163,18,0.13)"
+          value={String(clients.length)} label="Clients affiliés" />
+        <Stat icon="git-network" tint={colors.redSoft} bg="rgba(229,31,33,0.14)"
+          value={String(filleuls.length)} label="Filleuls" />
       </View>
 
-      <SectionTitle icon="wallet-outline" title="Dernières commissions" count={commissions.length} />
+      {/* ── Dernières commissions ── */}
+      <SectionTitle icon="receipt-outline" title="Dernières commissions" count={commissions.length} />
       <Card>
-        {commissions.length === 0 && <Empty text="Aucune commission enregistrée." />}
+        {commissions.length === 0 && <Empty text="Aucune commission enregistrée pour l'instant." />}
         {commissions.slice(0, 6).map((c, i, arr) => {
           const paid = c.statut === 'paye' || c.statut === 'retire';
           return (
             <Row
               key={c.id}
               last={i === arr.length - 1}
-              icon={c.type === 'parrainage' ? 'gift-outline' : 'cash-outline'}
-              iconBg={paid ? colors.greenDeep : colors.amberDeep}
+              icon={c.type === 'parrainage' ? 'gift' : 'cash'}
+              iconBg={paid ? 'rgba(63,217,168,0.12)' : 'rgba(251,191,36,0.12)'}
               iconColor={paid ? colors.green : colors.amber}
               main={fcfa(c.montantNet)}
               sub={`${c.type === 'parrainage' ? 'Bonus parrainage' : 'Commission directe'} · ${fdate(c.dateCreation)}`}
@@ -51,49 +122,78 @@ export default function DashboardScreen({ data }) {
         })}
       </Card>
 
-      <Text style={styles.tip}>
-        <Ionicons name="information-circle-outline" size={12} color={colors.textFaint} />
-        {'  '}Onglet « Wallet » pour demander un transfert de vos gains.
-      </Text>
+      <View style={styles.tip}>
+        <Ionicons name="information-circle-outline" size={13} color={colors.textFaint} />
+        <Text style={styles.tipT}>Onglet « Wallet » pour demander un transfert de vos gains.</Text>
+      </View>
     </ScreenScroll>
   );
 }
 
-function Stat({ icon, bg, color, value, label }) {
+function Stat({ icon, bg, tint, value, label }) {
   return (
-    <View style={styles.stat}>
+    <LinearGradient
+      colors={grad.lacquer}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 1, y: 1 }}
+      style={styles.stat}
+    >
       <View style={[styles.statIcon, { backgroundColor: bg }]}>
-        <Ionicons name={icon} size={18} color={color} />
+        <Ionicons name={icon} size={17} color={tint} />
       </View>
-      <View style={{ flex: 1 }}>
-        <Text style={styles.statValue} numberOfLines={1}>{value}</Text>
-        <Text style={styles.statLabel}>{label}</Text>
-      </View>
-    </View>
+      <Text style={styles.statValue} numberOfLines={1} adjustsFontSizeToFit>{value}</Text>
+      <Text style={styles.statLabel}>{label}</Text>
+    </LinearGradient>
   );
 }
 
 const styles = StyleSheet.create({
   hero: {
-    backgroundColor: colors.gold, borderRadius: radius.lg,
-    padding: spacing.xl, marginBottom: spacing.md,
+    borderRadius: radius.lg,
+    padding: spacing.xl,
+    marginBottom: spacing.lg,
+    borderWidth: 1,
+    borderColor: 'rgba(255,198,142,0.22)',
+    overflow: 'hidden',
+    minHeight: 188,
   },
-  heroLabel: { color: '#5A3F05', fontSize: 11, fontWeight: '800', letterSpacing: 1.5 },
-  heroValue: { color: '#1A1206', fontSize: 30, fontWeight: '900', marginTop: spacing.sm },
-  heroFoot: { color: '#5A3F05', fontSize: 12.5, fontWeight: '700', marginTop: spacing.md },
+  heroTop: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    marginBottom: spacing.lg,
+  },
+  brandTag: {
+    flexDirection: 'row', alignItems: 'center', gap: 7,
+    backgroundColor: 'rgba(0,0,0,0.22)',
+    borderWidth: 1, borderColor: 'rgba(255,210,170,0.22)',
+    borderRadius: radius.pill, paddingHorizontal: 11, paddingVertical: 6,
+  },
+  dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: colors.goldLight },
+  brandTagT: { color: '#FFE4C2', fontSize: 10.5, fontFamily: font.bodyBold, letterSpacing: 1.5 },
+
+  heroLabel: { color: '#FFD9B8', fontSize: 11, fontFamily: font.bodyBold, letterSpacing: 2 },
+  heroValue: {
+    color: colors.goldLight, fontSize: 38, fontFamily: font.display,
+    marginTop: spacing.sm, letterSpacing: 0.3,
+  },
+  heroFootRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: spacing.md },
+  heroFoot: { color: '#FFCDB0', fontSize: 12.5, fontFamily: font.bodyMed },
 
   statRow: { flexDirection: 'row', gap: spacing.md, marginBottom: spacing.md },
   stat: {
-    flex: 1, flexDirection: 'row', alignItems: 'center', gap: spacing.md,
-    backgroundColor: colors.glass, borderWidth: 1, borderColor: colors.glassBorder,
+    flex: 1,
+    borderWidth: 1, borderColor: colors.glassBorder,
     borderRadius: radius.md, padding: spacing.lg,
   },
   statIcon: {
-    width: 38, height: 38, borderRadius: 19,
-    alignItems: 'center', justifyContent: 'center',
+    width: 36, height: 36, borderRadius: 12,
+    alignItems: 'center', justifyContent: 'center', marginBottom: spacing.md,
   },
-  statValue: { color: colors.text, fontSize: 15, fontWeight: '800' },
-  statLabel: { color: colors.textDim, fontSize: 11.5, marginTop: 2 },
+  statValue: { color: colors.text, fontSize: 17, fontFamily: font.num },
+  statLabel: { color: colors.textDim, fontSize: 11.5, marginTop: 4, fontFamily: font.body },
 
-  tip: { color: colors.textFaint, fontSize: 12, textAlign: 'center', marginTop: spacing.xs },
+  tip: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    gap: 6, marginTop: spacing.xs, paddingHorizontal: spacing.lg,
+  },
+  tipT: { color: colors.textFaint, fontSize: 12, textAlign: 'center', fontFamily: font.body },
 });

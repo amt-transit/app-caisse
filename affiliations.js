@@ -78,7 +78,7 @@ export async function ensureAffiliation({ phone, clientName, demarcheurId, demar
 //  demarcheurId), on ne recrée rien. Non bloquant pour la facture.
 //  beneficeBrut attendu en CFA (cohérent avec demarcheurs.soldeDisponible).
 // ============================================================================
-export async function creerCommissionParrainage({ expeditionId, beneficeBrut, demarcheurId, agency }) {
+export async function creerCommissionParrainage({ expeditionId, beneficeBrut, demarcheurId, agency, clientNom, clientPhone, description }) {
   try {
     if (!demarcheurId || !expeditionId || !(beneficeBrut > 0)) return false;
 
@@ -116,12 +116,22 @@ export async function creerCommissionParrainage({ expeditionId, beneficeBrut, de
       if (qui === 'amt') pAMTNet -= bonus; else pDemNet -= bonus;
     }
 
+    // Infos client/envoi : purement descriptives (n'entrent dans AUCUN
+    // calcul de montant) — permettent au partenaire de voir, dans l'app
+    // mobile, quel client et quel envoi a généré chaque commission.
+    const infoClient = {
+      clientNom: clientNom || '',
+      clientPhone: normalizePhone(clientPhone) || '',
+      description: description || '',
+    };
+
     const batch = writeBatch(db);
     batch.set(doc(collection(db, 'commissions')), {
       expeditionId, demarcheurId, type: 'direct',
       montantBrut: beneficeBrut, tauxDemarcheur: tDem, montantDemarcheur: pDemBrut,
       tauxAMT: tAMT, montantAMT: pAMTNet, bonusParrainage: bonus,
       quiPaieParrain: qui, montantNet: pDemNet,
+      ...infoClient,
       agency: agency || (sessionStorage.getItem('currentActiveAgency') || ''),
       dateCreation: serverTimestamp(), statut: 'en_attente',
     });
@@ -134,6 +144,7 @@ export async function creerCommissionParrainage({ expeditionId, beneficeBrut, de
         expeditionId, demarcheurId: dem.parrainId, type: 'parrainage',
         filleulId: demarcheurId, montantBrut: beneficeBrut, bonusParrainage: bonus,
         montantNet: bonus,
+        ...infoClient,
         agency: agency || (sessionStorage.getItem('currentActiveAgency') || ''),
         dateCreation: serverTimestamp(), statut: 'en_attente',
       });

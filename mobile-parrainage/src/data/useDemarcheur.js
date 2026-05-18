@@ -1,11 +1,29 @@
 // Charge UNE fois toutes les données du partenaire connecté et les
 // partage entre les onglets (Clients, Tableau de bord, Wallet, Filleuls,
 // Profil). Expose reload() et refresh() (pull-to-refresh).
-import { useCallback, useEffect, useState } from 'react';
+//
+// En plus des données brutes, on calcule :
+//  - clients ENRICHIS : chaque client affilié reçoit ses envois (commissions
+//    directes), son total facturé et le total de VOS commissions sur lui ;
+//  - filleuls ENRICHIS : chaque filleul reçoit les envois qui vous ont
+//    rapporté un bonus + le total de ce bonus.
+//  Objectif : zéro quiproquo — le partenaire voit qui, quoi, combien.
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   doc, getDoc, collection, query, where, getDocs,
 } from 'firebase/firestore';
 import { db, auth } from '../firebase';
+
+// Même normalisation que côté web (affiliations.js) pour que les téléphones
+// des commissions et des affiliations se correspondent exactement.
+function normalizePhone(raw) {
+  if (raw == null) return '';
+  let s = String(raw).trim().replace(/\D/g, '');
+  if (s.startsWith('00')) s = s.slice(2);
+  if (s.length > 10 && s.startsWith('225')) s = s.slice(3);
+  if (s.length < 8) return '';
+  return s;
+}
 
 const sortByDateDesc = (arr, field) =>
   arr.sort((a, b) => {
@@ -81,8 +99,66 @@ export function useDemarcheur() {
 
   useEffect(() => { load(false); }, [load]);
 
+  // ── Données enrichies (dérivées, recalculées si les données changent) ──
+  const { clients, filleuls, unmatched } = useMemo(() => {
+    const sum = (arr, f) => arr.reduce((t, x) => t + (Number(x[f]) || 0), 0);
+
+    // Index des commissions : par téléphone client (ventes directes) et par
+    // filleul (bonus de parrainage).
+    const byPhone = {};
+    const byFilleul = {};
+    const matchedIds = new Set();
+    state.commissions.forEach((c) => {
+      if (c.type === 'parrainage' && c.filleulId) {
+        (byFilleul[c.filleulId] = byFilleul[c.filleulId] || []).push(c);
+        matchedIds.add(c.id);
+      }
+      const ph = normalizePhone(c.clientPhone);
+      if (ph) {
+        (byPhone[ph] = byPhone[ph] || []).push(c);
+        matchedIds.add(c.id);
+      }
+    });
+
+    const clientsEnriched = state.clients.map((cl) => {
+      const ph = normalizePhone(cl.phone || cl.id);
+      const envois = sortByDateDesc(byPhone[ph] ? [...byPhone[ph]] : [], 'dateCreation');
+      return {
+        ...cl,
+        envois,
+        nbEnvois: envois.length,
+        totalFacture: sum(envois, 'montantBrut'),
+        totalCommission: sum(envois, 'montantNet'),
+      };
+    });
+
+    const filleulsEnriched = state.filleuls.map((f) => {
+      const envois = sortByDateDesc(byFilleul[f.id] ? [...byFilleul[f.id]] : [], 'dateCreation');
+      return {
+        ...f,
+        envois,
+        nbEnvois: envois.length,
+        totalBonus: sum(envois, 'montantNet'),
+      };
+    });
+
+    // Commissions anciennes (créées avant l'ajout des infos client) qu'on ne
+    // peut rattacher à aucun client/filleul : on les signale pour rester
+    // 100 % transparent.
+    const unmatchedComm = state.commissions.filter((c) => !matchedIds.has(c.id));
+
+    return {
+      clients: clientsEnriched,
+      filleuls: filleulsEnriched,
+      unmatched: unmatchedComm,
+    };
+  }, [state.commissions, state.clients, state.filleuls]);
+
   return {
     ...state,
+    clients,
+    filleuls,
+    unmatched,
     reload: () => load(false),
     refresh: () => load(true),
   };

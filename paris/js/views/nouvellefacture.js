@@ -1019,6 +1019,9 @@ initVue(globalApp) {
                                 beneficeBrut: totalCFA,
                                 demarcheurId: affiliationDemarcheurId,
                                 agency: activeAgency,
+                                clientNom: finalDestName,
+                                clientPhone: destPhone,
+                                description: items.value.map(i => `${i.qty}x ${i.desc}`).join(', '),
                             });
                         } catch (e) { console.warn('Commission (non bloquant):', e); }
                     }
