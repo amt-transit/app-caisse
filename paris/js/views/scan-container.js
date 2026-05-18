@@ -2,6 +2,7 @@
 import { db } from '../../../firebase-config.js';
 import { collection, query, where, getDocs, updateDoc, doc, arrayUnion, limit, addDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 import { createApp, ref, computed, onMounted, onUnmounted, watch } from "https://unpkg.com/vue@3/dist/vue.esm-browser.prod.js";
+import { getCollectionName } from '../../../agencies-config.js';
 
 export const ScanContainerView = {
     vueApp: null,
@@ -247,7 +248,13 @@ export const ScanContainerView = {
                 const loadContainers = () => {
                     if (unsubContainers) unsubContainers();
                     const activeAgency = sessionStorage.getItem('currentActiveAgency') || 'paris';
-                    unsubContainers = onSnapshot(query(collection(db, "containers"), where("agency", "==", activeAgency)), (snapshot) => {
+                    const contCol = getCollectionName("containers");
+                    // Route SaaS : collection déjà isolée -> pas de filtre agency
+                    // (sinon les conteneurs sans ce champ disparaissent).
+                    const qCont = (contCol !== "containers")
+                        ? query(collection(db, contCol))
+                        : query(collection(db, contCol), where("agency", "==", activeAgency));
+                    unsubContainers = onSnapshot(qCont, (snapshot) => {
                         containers.value = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                     });
                 };
@@ -313,7 +320,10 @@ export const ScanContainerView = {
                     stats.value.total++;
 
                     try {
-                        const qLiv = query(collection(db, 'livraisons'), where('ref', '==', baseRef), where("agency", "==", activeAgency), limit(1));
+                        const livCol = getCollectionName("livraisons");
+                        const qLiv = (livCol !== "livraisons")
+                            ? query(collection(db, livCol), where('ref', '==', baseRef), limit(1))
+                            : query(collection(db, livCol), where('ref', '==', baseRef), where("agency", "==", activeAgency), limit(1));
                         const snapLiv = await getDocs(qLiv);
 
                         if (!snapLiv.empty) {
@@ -329,7 +339,7 @@ export const ScanContainerView = {
                                 if (isSoundEnabled.value && navigator.vibrate) navigator.vibrate([50, 50, 50]);
                                 else if (isSoundEnabled.value) playBeep();
                             } else {
-                                await updateDoc(doc(db, 'livraisons', docId), {
+                                await updateDoc(doc(db, getCollectionName("livraisons"), docId), {
                                     conteneur: selectedContainerId.value,
                                     containerStatus: 'A_VENIR',
                                     scanHistory: arrayUnion({ 
@@ -341,10 +351,10 @@ export const ScanContainerView = {
                                 });
 
                                 // Mettre à jour Caisse (Transactions)
-                                const qTrans = query(collection(db, 'transactions'), where('reference', '==', baseRef), limit(1));
+                                const qTrans = query(collection(db, getCollectionName("transactions")), where('reference', '==', baseRef), limit(1));
                                 const snapTrans = await getDocs(qTrans);
                                 if (!snapTrans.empty) {
-                                    await updateDoc(doc(db, 'transactions', snapTrans.docs[0].id), { conteneur: selectedContainerId.value });
+                                    await updateDoc(doc(db, getCollectionName("transactions"), snapTrans.docs[0].id), { conteneur: selectedContainerId.value });
                                 }
                 
                                 stats.value.success++;

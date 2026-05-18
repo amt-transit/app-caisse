@@ -1,6 +1,7 @@
 import { db } from '../../../firebase-config.js';
 import { collection, query, where, onSnapshot, getDocs } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 import { CONSTANTS } from '../../../constants.js';
+import { isEurAgency } from '../../../agency-money.js';
 
 export const ChauffeursListView = {
     unsubAppts: null,
@@ -239,7 +240,7 @@ export const ChauffeursListView = {
         const endDate = document.getElementById('cfEndDate').value;
         const selectedDriver = document.getElementById('cfDriverSelect').value;
 
-        const TAUX = CONSTANTS.TAUX_CONVERSION;
+        const TAUX = isEurAgency() ? CONSTANTS.TAUX_CONVERSION : 1; // route-aware : ÷ taux uniquement pour Paris (€)
 
         // Filtrer les chauffeurs si un est sélectionné
         let driversToRender = this.driversData;
@@ -350,7 +351,7 @@ export const ChauffeursListView = {
     openDriverDetail(driverName) {
         const startDate = document.getElementById('cfStartDate').value;
         const endDate = document.getElementById('cfEndDate').value;
-        const TAUX = CONSTANTS.TAUX_CONVERSION;
+        const TAUX = isEurAgency() ? CONSTANTS.TAUX_CONVERSION : 1; // route-aware : ÷ taux uniquement pour Paris (€)
 
         // RDV du chauffeur
         const driverRdvs = this.appointments.filter(a => {

@@ -3,6 +3,7 @@ import { collection, query, where, onSnapshot, doc, updateDoc, writeBatch, setDo
 import { createApp, ref, computed, onMounted, onUnmounted, watch } from "https://unpkg.com/vue@3/dist/vue.esm-browser.prod.js";
 import { getCollectionName } from '../../../agencies-config.js';
 import { matchesShippingMode } from '../../../shipping-mode.js';
+import { isEurAgency } from '../../../agency-money.js';
 
 export const ConfectionConteneursView = {
     vueApp: null,
@@ -170,7 +171,7 @@ export const ConfectionConteneursView = {
                                     <div class="ctn-stat"><div class="ctn-stat__label">Référence</div><div class="ctn-stat__value mono">{{ currentContainerName }}</div></div>
                                     <div class="ctn-stat"><div class="ctn-stat__label">Dossiers</div><div class="ctn-stat__value">{{ currentContainerItems.length }}</div></div>
                                     <div class="ctn-stat"><div class="ctn-stat__label">Total colis</div><div class="ctn-stat__value">{{ currentContainerTotalColis }}</div></div>
-                                    <div class="ctn-stat"><div class="ctn-stat__label">CA total</div><div class="ctn-stat__value">{{ formatMoney(currentContainerTotalCA / 656) }}</div></div>
+                                    <div class="ctn-stat"><div class="ctn-stat__label">CA total</div><div class="ctn-stat__value">{{ formatMoney(currentContainerCADisplay) }}</div></div>
                                 </div>
                                 <div class="ctn-actions">
                                     <button class="btn-action btn-action--add" type="button" @click="addSelectedToContainer" :disabled="selectedAvailableIds.length === 0">➕ Ajouter ({{ selectedAvailableIds.length }})</button>
@@ -310,15 +311,14 @@ export const ConfectionConteneursView = {
                 });
 
                 const availableLivraisons = computed(() => {
-                    let avail = livraisons.value.filter(l => {
-                        // Non affecté = pas de conteneur OU "ATT" (code "en
-                        // attente d'affectation", posé quand aucun conteneur
-                        // actif n'est configuré -> ex. routes Chine).
-                        const c = (l.conteneur || '').trim().toUpperCase();
-                        const notAssigned = (c === '' || c === 'ATT');
-                        const stillHere = (!l.containerStatus || l.containerStatus === 'PARIS' || l.containerStatus === 'EN_ATTENTE');
-                        return notAssigned && stillHere;
-                    });
+                    let avail = livraisons.value.filter(l =>
+                        // "Disponible" = facture créée mais PAS encore chargée.
+                        // Le chargement se fait par SCAN ("Charger conteneur")
+                        // ou via le bouton "Ajouter" -> ils posent
+                        // containerStatus='A_VENIR'. Le conteneur pré-taggé à la
+                        // création ne compte donc PAS tant qu'on n'a pas scanné.
+                        (!l.containerStatus || l.containerStatus === 'PARIS' || l.containerStatus === 'EN_ATTENTE')
+                    );
                     const search = leftSearch.value.toLowerCase().trim();
                     if (search) {
                         avail = avail.filter(l => 
@@ -335,7 +335,9 @@ export const ConfectionConteneursView = {
                 
                 const currentContainerItems = computed(() => {
                     if (!currentContainerName.value) return [];
-                    return livraisons.value.filter(l => l.conteneur === currentContainerName.value);
+                    // Dans le conteneur = affecté à CE conteneur ET chargé
+                    // (scanné/ajouté => containerStatus 'A_VENIR').
+                    return livraisons.value.filter(l => l.conteneur === currentContainerName.value && l.containerStatus === 'A_VENIR');
                 });
 
                 const currentContainerTotalColis = computed(() => {
@@ -347,14 +349,18 @@ export const ConfectionConteneursView = {
                         return sum + (parseFloat(String(item.prixOriginal || item.montant || '0').replace(/[^\d]/g, '')) || 0);
                     }, 0);
                 });
+                // CA affiché : on ne convertit (÷656) QUE pour Paris (€).
+                // Chine/Abidjan = CFA -> diviseur 1 (sinon montant ÷656 en CFA).
+                const currentContainerCADisplay = computed(() =>
+                    currentContainerTotalCA.value / (isEurAgency() ? 656 : 1));
 
                 const registeredContainers = computed(() => containers.value.filter(c => c.status === 'EN_ATTENTE_BATEAU'));
 
                 const formatMoney = (amount) => globalApp.formatMoney(amount);
                 const formatDate = (dateString) => dateString ? new Date(dateString).toLocaleString('fr-FR') : '-';
 
-                const getContainerItemsCount = (c) => livraisons.value.filter(l => l.conteneur === (c.number || c.id)).length;
-                const getContainerColisCount = (c) => livraisons.value.filter(l => l.conteneur === (c.number || c.id)).reduce((sum, item) => sum + (parseInt(item.quantite) || 1), 0);
+                const getContainerItemsCount = (c) => livraisons.value.filter(l => l.conteneur === (c.number || c.id) && l.containerStatus === 'A_VENIR').length;
+                const getContainerColisCount = (c) => livraisons.value.filter(l => l.conteneur === (c.number || c.id) && l.containerStatus === 'A_VENIR').reduce((sum, item) => sum + (parseInt(item.quantite) || 1), 0);
 
                 const toggleItemSelection = (id) => {
                     const index = selectedAvailableIds.value.indexOf(id);
@@ -375,7 +381,7 @@ export const ConfectionConteneursView = {
                     
                     const batch = writeBatch(db);
                     selectedAvailableIds.value.forEach(id => {
-                        batch.update(doc(db, "livraisons", id), {
+                        batch.update(doc(db, getCollectionName("livraisons"),id), {
                             conteneur: currentContainerName.value,
                             containerStatus: 'A_VENIR'
                         });
@@ -392,7 +398,7 @@ export const ConfectionConteneursView = {
 
                 const removeFromContainer = async (id) => {
                     try {
-                        await updateDoc(doc(db, "livraisons", id), {
+                        await updateDoc(doc(db, getCollectionName("livraisons"),id), {
                             conteneur: '',
                             containerStatus: 'PARIS'
                         });
@@ -410,7 +416,7 @@ export const ConfectionConteneursView = {
 
                     const batch = writeBatch(db);
                     currentContainerItems.value.forEach(l => {
-                        batch.update(doc(db, "livraisons", l.id), { conteneur: '', containerStatus: 'PARIS' });
+                        batch.update(doc(db, getCollectionName("livraisons"),l.id), { conteneur: '', containerStatus: 'PARIS' });
                     });
 
                     await batch.commit();
@@ -432,7 +438,7 @@ export const ConfectionConteneursView = {
                     } else if (!confirm(`Verrouiller et enregistrer le conteneur ${ctnName} avec ses ${currentContainerItems.value.length} dossiers ?`)) return;
 
                     try {
-                        await updateDoc(doc(db, "containers", activeTabId.value), {
+                        await updateDoc(doc(db, getCollectionName("containers"),activeTabId.value), {
                             status: 'EN_ATTENTE_BATEAU',
                             registeredAt: new Date().toISOString()
                         });
@@ -463,7 +469,7 @@ export const ConfectionConteneursView = {
                     livraisons, containers, selectedAvailableIds, activeTabId, leftSearch,
                     loadingLivraisons, loadingContainers, availableLivraisons, activeContainers,
                     currentContainer, currentContainerName, currentContainerItems, currentContainerTotalColis,
-                    currentContainerTotalCA, registeredContainers, currentUserName,
+                    currentContainerTotalCA, currentContainerCADisplay, registeredContainers, currentUserName,
                     formatDate, formatMoney, getContainerItemsCount, getContainerColisCount,
                     toggleItemSelection, selectAllLeft, addSelectedToContainer, removeFromContainer,
                     emptyActiveContainer, registerContainer, loadData, globalApp

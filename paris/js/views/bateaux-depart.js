@@ -1,6 +1,7 @@
 import { db } from '../../../firebase-config.js';
 import { collection, query, onSnapshot, doc, setDoc, updateDoc, deleteDoc, writeBatch, getDocs, where, deleteField } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 import { createApp, ref, reactive, computed, onMounted, onUnmounted } from "https://unpkg.com/vue@3/dist/vue.esm-browser.prod.js";
+import { getCollectionName } from '../../../agencies-config.js';
 
 export const BateauxDepartView = {
     vueApp: null,
@@ -400,12 +401,12 @@ export const BateauxDepartView = {
                     
                     try {
                         if (editingBoatId.value) {
-                            await updateDoc(doc(db, "boats", editingBoatId.value), data);
+                            await updateDoc(doc(db, getCollectionName("boats"),editingBoatId.value), data);
                             globalApp.showToast("Bateau modifié avec succès.", "success");
                         } else {
                             data.status = 'EN_CONFECTION';
                             data.createdAt = new Date().toISOString();
-                            await setDoc(doc(collection(db, "boats")), data);
+                            await setDoc(doc(collection(db, getCollectionName("boats"))), data);
                             globalApp.showToast("Nouveau bateau créé.", "success");
                         }
                         closeBoatModal();
@@ -423,9 +424,9 @@ export const BateauxDepartView = {
                         const batch = writeBatch(db);
                         const ctns = containers.value.filter(c => c.boatId === boatId);
                         ctns.forEach(c => {
-                            batch.update(doc(db, "containers", c.id), { boatId: deleteField() });
+                            batch.update(doc(db, getCollectionName("containers"),c.id), { boatId: deleteField() });
                         });
-                        batch.delete(doc(db, "boats", boatId));
+                        batch.delete(doc(db, getCollectionName("boats"),boatId));
                         await batch.commit();
                         globalApp.showToast("Bateau supprimé.", "success");
                     } catch(e) {
@@ -439,7 +440,7 @@ export const BateauxDepartView = {
                     try {
                         const batch = writeBatch(db);
                         selectedContainerIds.value.forEach(cid => {
-                            batch.update(doc(db, "containers", cid), { boatId: boatId });
+                            batch.update(doc(db, getCollectionName("containers"),cid), { boatId: boatId });
                         });
                         await batch.commit();
                         selectedContainerIds.value = new Set();
@@ -451,7 +452,7 @@ export const BateauxDepartView = {
                 
                 const removeFromBoat = async (containerId) => {
                     try {
-                        await updateDoc(doc(db, "containers", containerId), { boatId: deleteField() });
+                        await updateDoc(doc(db, getCollectionName("containers"),containerId), { boatId: deleteField() });
                         globalApp.showToast("Conteneur retiré du bateau.", "info");
                     } catch(e) {
                         globalApp.showToast("Erreur de retrait.", "error");
@@ -472,13 +473,13 @@ export const BateauxDepartView = {
                     try {
                         const batch = writeBatch(db);
                         
-                        batch.update(doc(db, "boats", boatId), { 
+                        batch.update(doc(db, getCollectionName("boats"),boatId), { 
                             status: 'ENREGISTRE', 
                             registeredAt: new Date().toISOString() 
                         });
                         
                         ctns.forEach(c => {
-                            batch.update(doc(db, "containers", c.id), {
+                            batch.update(doc(db, getCollectionName("containers"),c.id), {
                                 status: 'EN_TRANSIT',
                                 boatName: boat.name || boat.company || boat.reference,
                                 departureDate: boat.departureDate || null,
@@ -499,14 +500,14 @@ export const BateauxDepartView = {
                     try {
                         const batch = writeBatch(db);
                         
-                        batch.update(doc(db, "boats", boatId), { 
+                        batch.update(doc(db, getCollectionName("boats"),boatId), { 
                             status: 'EN_CONFECTION', 
                             registeredAt: deleteField() 
                         });
                         
                         const ctns = containers.value.filter(c => c.boatId === boatId);
                         ctns.forEach(c => {
-                            batch.update(doc(db, "containers", c.id), {
+                            batch.update(doc(db, getCollectionName("containers"),c.id), {
                                 status: 'EN_ATTENTE_BATEAU',
                                 boatName: deleteField(),
                                 departureDate: deleteField(),
@@ -531,19 +532,19 @@ export const BateauxDepartView = {
                         const batch = writeBatch(db);
                         const realArrivalDate = new Date().toISOString();
                         
-                        batch.update(doc(db, "boats", boatId), {
+                        batch.update(doc(db, getCollectionName("boats"),boatId), {
                             status: 'ARRIVE',
                             realArrivalDate: realArrivalDate
                         });
                         
                         const containerNumbers = [];
                         ctns.forEach(c => {
-                            batch.update(doc(db, "containers", c.id), { status: 'ARRIVE' });
+                            batch.update(doc(db, getCollectionName("containers"),c.id), { status: 'ARRIVE' });
                             containerNumbers.push(c.number || c.id);
                         });
                         
                         for (const cNum of containerNumbers) {
-                            const qLiv = query(collection(db, "livraisons"), where("conteneur", "==", cNum));
+                            const qLiv = query(collection(db, getCollectionName("livraisons")), where("conteneur", "==", cNum));
                             const snap = await getDocs(qLiv);
                             snap.forEach(d => {
                                 batch.update(d.ref, {
@@ -571,18 +572,28 @@ export const BateauxDepartView = {
                     
                     loadingContainers.value = true;
                     loadingBoats.value = true;
-                    
-                    unsubContainers = onSnapshot(query(collection(db, "containers"), where("agency", "==", activeAgency)), snap => {
+
+                    // Route SaaS : collections déjà isolées -> pas de filtre
+                    // agency (sinon les docs sans ce champ disparaissent).
+                    // Collection de base (paris/abidjan) : filtre conservé.
+                    const contCol = getCollectionName("containers");
+                    const boatCol = getCollectionName("boats");
+                    const livCol = getCollectionName("livraisons");
+                    const qC = (contCol !== "containers") ? query(collection(db, contCol)) : query(collection(db, contCol), where("agency", "==", activeAgency));
+                    const qB = (boatCol !== "boats") ? query(collection(db, boatCol)) : query(collection(db, boatCol), where("agency", "==", activeAgency));
+                    const qL = (livCol !== "livraisons") ? query(collection(db, livCol)) : query(collection(db, livCol), where("agency", "==", activeAgency));
+
+                    unsubContainers = onSnapshot(qC, snap => {
                         containers.value = snap.docs.map(d => ({ id: d.id, ...d.data() }));
                         loadingContainers.value = false;
                     });
-                    
-                    unsubBoats = onSnapshot(query(collection(db, "boats"), where("agency", "==", activeAgency)), snap => {
+
+                    unsubBoats = onSnapshot(qB, snap => {
                         boats.value = snap.docs.map(d => ({ id: d.id, ...d.data() }));
                         loadingBoats.value = false;
                     });
-                    
-                    unsubLivraisons = onSnapshot(query(collection(db, "livraisons"), where("agency", "==", activeAgency)), snap => {
+
+                    unsubLivraisons = onSnapshot(qL, snap => {
                         livraisons.value = snap.docs.map(d => ({ id: d.id, ...d.data() }));
                     });
                 };

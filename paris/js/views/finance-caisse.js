@@ -1,6 +1,7 @@
 import { db } from '../../../firebase-config.js';
 import { collection, query, where, onSnapshot } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 import { CONSTANTS } from '../../../constants.js';
+import { isEurAgency } from '../../../agency-money.js';
 import { createApp, ref, computed, onMounted, onUnmounted } from "https://unpkg.com/vue@3/dist/vue.esm-browser.prod.js";
 
 export const FinanceCaisseView = {
@@ -95,7 +96,7 @@ export const FinanceCaisseView = {
 
                 onMounted(() => {
                     const activeAgency = sessionStorage.getItem('currentActiveAgency') || 'paris';
-                    const TAUX = CONSTANTS.TAUX_CONVERSION;
+                    const TAUX = isEurAgency() ? CONSTANTS.TAUX_CONVERSION : 1; // route-aware : ÷ taux uniquement pour Paris (€)
                     
                     let transList = [];
                     let expList = [];
