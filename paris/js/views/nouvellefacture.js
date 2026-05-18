@@ -65,11 +65,11 @@ export const NouvelleFactureView = {
                     <div class="form-grid">
                         <div class="form-group">
                             <label>Date</label>
-                            <input type="date" id="nfDate" value="${new Date().toISOString().split('T')[0]}">
+                            <input type="date" id="nfDate" v-model="form.date">
                         </div>
                         <div class="form-group">
                             <label>Type</label>
-                            <select id="nfType">
+                            <select id="nfType" v-model="form.type">
                                 <option value="FACTURE">FACTURE</option>
                                 <option value="DEVIS">DEVIS</option>
                             </select>
@@ -93,22 +93,36 @@ export const NouvelleFactureView = {
                         <h3 style="border-bottom: 1px solid #e2e8f0; padding-bottom: 10px; margin-bottom: 15px; display: flex; align-items: center; gap: 10px;"><i class="fas fa-upload text-orange-500"></i> Expéditeur</h3>
                         <div class="form-group">
                             <div style="position: relative;">
-                                <input type="text" id="nfExpediteur" placeholder="Nom, Prénom et Téléphone..." required autocomplete="off">
-                                <ul id="nfExpediteurSuggestions" class="autocomplete-suggestions"></ul>
+                                <input type="text" id="nfExpediteur" placeholder="Nom, Prénom et Téléphone..." required autocomplete="off"
+                                       v-model="form.expediteur"
+                                       @input="showExpSugg = true; handleExpediteurChange()"
+                                       @focus="showExpSugg = true"
+                                       @blur="hideSugg('exp')">
+                                <ul class="autocomplete-suggestions" v-if="showExpSugg && filteredExpediteurs.length" style="display:block;">
+                                    <li v-for="c in filteredExpediteurs" :key="c.nom" @mousedown="selectExp(c)">
+                                        <b>{{ c.nom }}</b> <span style="color:#64748b;">— {{ c.tel || 'N/A' }}</span>
+                                    </li>
+                                </ul>
                             </div>
                         </div>
-                        <div id="nfExpediteurFeedback" style="font-size: 12px; color: #64748b; margin-top: 5px;"></div>
+                        <div id="nfExpediteurFeedback" style="font-size: 12px; color: #64748b; margin-top: 5px;" v-html="expFeedback"></div>
                     </div>
                     
                     <div class="form-card" style="box-shadow: 0 2px 4px rgba(0,0,0,0.02);">
                         <h3 style="border-bottom: 1px solid #e2e8f0; padding-bottom: 10px; margin-bottom: 15px; display: flex; align-items: center; gap: 10px;"><i class="fas fa-download text-emerald-500"></i> Destinataire</h3>
                         <div class="form-group">
                             <div style="position: relative;">
-                                <input type="text" id="nfDestinataire" placeholder="Nom, Prénom et Téléphone..." required autocomplete="off">
-                                <ul id="nfDestinataireSuggestions" class="autocomplete-suggestions"></ul>
+                                <input type="text" id="nfDestinataire" placeholder="Nom, Prénom et Téléphone..." required autocomplete="off"
+                                       v-model="form.destinataire"
+                                       @input="showDestSugg = true; handleDestinataireChange()"
+                                       @focus="showDestSugg = true"
+                                       @blur="hideSugg('dest')">
+                                <ul class="autocomplete-suggestions" v-if="showDestSugg && filteredDestinataires.length" style="display:block;">
+                                    <li v-for="d in filteredDestinataires" :key="d" @mousedown="selectDest(d)">{{ d }}</li>
+                                </ul>
                             </div>
                         </div>
-                        <div id="nfDestinataireFeedback" style="font-size: 12px; color: #64748b; margin-top: 5px;"></div>
+                        <div id="nfDestinataireFeedback" style="font-size: 12px; color: #64748b; margin-top: 5px;" v-html="destFeedback"></div>
                         <div class="form-group" v-if="affiliationActive" style="margin-top: 15px;">
                             <label><i class="fas fa-user-friends" style="color:#d97706;"></i> Parrain (parrainage)</label>
                             <select v-model="form.parrainId" style="width:100%; padding:10px; border:1px solid #cbd5e1; border-radius:8px; box-sizing:border-box; outline:none; background:white;">
@@ -120,8 +134,13 @@ export const NouvelleFactureView = {
                         <div class="form-group" style="margin-top: 15px;">
                             <label>Lieu livraison / Adresse complète</label>
                             <div style="position: relative;">
-                                <input type="text" id="nfLieu" placeholder="Ex: Cocody Angré 8ème tranche..." autocomplete="off">
-                                <ul id="nfLieuSuggestions" class="autocomplete-suggestions"></ul>
+                                <input type="text" id="nfLieu" placeholder="Ex: Cocody Angré 8ème tranche..." autocomplete="off"
+                                       v-model="form.lieu"
+                                       @focus="showLieuSugg = true"
+                                       @blur="hideSugg('lieu')">
+                                <ul class="autocomplete-suggestions" v-if="showLieuSugg && filteredLieux.length" style="display:block;">
+                                    <li v-for="l in filteredLieux" :key="l" @mousedown="selectLieu(l)">{{ l }}</li>
+                                </ul>
                             </div>
                         </div>
                     </div>
@@ -131,12 +150,52 @@ export const NouvelleFactureView = {
                 <div class="form-card" style="box-shadow: 0 2px 4px rgba(0,0,0,0.02);">
                     <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #e2e8f0; padding-bottom: 10px; margin-bottom: 15px; flex-wrap: wrap; gap: 10px;">
                         <h3 style="margin: 0; display: flex; align-items: center; gap: 10px;"><i class="fas fa-box text-indigo-500"></i> Description colis</h3>
-                        <button class="btn btn-outline btn-small" id="nfAddRowBtn"><i class="fas fa-plus"></i> Ajouter ligne</button>
+                        <button type="button" class="btn btn-outline btn-small" @click="addRow()"><i class="fas fa-plus"></i> Ajouter ligne</button>
                     </div>
-                    
+
                     <div style="width: 100%;">
                         <div id="nfItemsContainer">
-                            <!-- Les lignes seront générées ici par JS -->
+                            <div v-for="(item, idx) in items" :key="item.id" class="nf-item-grid" style="margin-bottom: 12px; align-items: start;">
+                                <div class="nf-desc-col" style="position: relative;">
+                                    <label v-if="idx === 0" style="font-size:11px; color:#64748b;">Description *</label>
+                                    <input type="text" placeholder="Nature du colis / produit..." autocomplete="off"
+                                           v-model="item.desc"
+                                           @input="item.showSugg = true; updateItem(item, 'desc')"
+                                           @focus="item.showSugg = true"
+                                           @blur="hideSugg('prod', item)"
+                                           style="width:100%; padding:10px; border:1px solid #cbd5e1; border-radius:8px; box-sizing:border-box;">
+                                    <ul class="autocomplete-suggestions" v-if="item.showSugg && getFilteredProducts(item.desc).length" style="display:block;">
+                                        <li v-for="p in getFilteredProducts(item.desc)" :key="p.desc" @mousedown="selectProduct(item, p)">{{ p.desc }}</li>
+                                    </ul>
+                                </div>
+                                <div>
+                                    <label v-if="idx === 0" style="font-size:11px; color:#64748b;">Qté</label>
+                                    <input type="number" min="1" class="item-qty"
+                                           v-model.number="item.qty"
+                                           @input="updateItem(item, 'qty')"
+                                           style="width:100%; padding:10px; border:1px solid #cbd5e1; border-radius:8px; box-sizing:border-box; text-align:center;">
+                                </div>
+                                <div>
+                                    <label v-if="idx === 0" style="font-size:11px; color:#64748b;">P.U (€)</label>
+                                    <input type="number" min="0" step="0.01"
+                                           v-model.number="item.pu"
+                                           @input="updateItem(item, 'pu')"
+                                           style="width:100%; padding:10px; border:1px solid #cbd5e1; border-radius:8px; box-sizing:border-box; text-align:right;">
+                                </div>
+                                <div class="nf-total-col">
+                                    <label v-if="idx === 0" style="font-size:11px; color:#64748b;">Total (€)</label>
+                                    <input type="text" readonly :value="(item.total || 0).toFixed(2)"
+                                           style="width:100%; padding:10px; border:1px solid #e2e8f0; border-radius:8px; box-sizing:border-box; text-align:right; font-weight:bold; background:#f8fafc;">
+                                </div>
+                                <div class="nf-action-col">
+                                    <label v-if="idx === 0" style="display:block; height:14px;">&nbsp;</label>
+                                    <button type="button" @click="removeRow(item.id)" :disabled="items.length <= 1"
+                                            title="Supprimer la ligne"
+                                            style="padding:10px 12px; border:1px solid #fecaca; background:#fef2f2; color:#ef4444; border-radius:8px; cursor:pointer;">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -150,7 +209,7 @@ export const NouvelleFactureView = {
                         <div class="form-grid" style="grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));">
                             <div class="form-group">
                                 <label>Mode paiement *</label>
-                                <select id="nfModePay">
+                                <select id="nfModePay" v-model="form.modePay">
                                     <option value="ESPECES">ESPÈCES</option>
                                     <option value="CB">CARTE BANCAIRE (CB)</option>
                                     <option value="VIREMENTS">VIREMENT</option>
@@ -161,26 +220,26 @@ export const NouvelleFactureView = {
                             </div>
                             <div class="form-group">
                                 <label>Valeur déclarée colis (€)</label>
-                                <input type="number" id="nfValeur" placeholder="Optionnel">
+                                <input type="number" id="nfValeur" placeholder="Optionnel" v-model="form.valeur">
                             </div>
                             <div class="form-group">
                                 <label>Volume (CBM) <i class="fas fa-info-circle" style="color:#3b82f6;" title="Alimente la jauge globale de l'agence"></i></label>
-                                <input type="number" step="0.01" id="nfVolume" placeholder="Ex: 0.5">
+                                <input type="number" step="0.01" id="nfVolume" placeholder="Ex: 0.5" v-model.number="form.volume">
                             </div>
                         </div>
 
                         <div style="background: #f8fafc; padding: 15px; border-radius: 8px; border: 1px solid #e2e8f0; margin-top: 15px;">
                             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; font-size: 16px; flex-wrap: wrap; gap: 10px;">
                                 <span>Total Fret :</span>
-                                <strong id="nfTotalFret">0 €</strong>
+                                <strong id="nfTotalFret">{{ totalFret.toFixed(2) }} €</strong>
                             </div>
                             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; flex-wrap: wrap; gap: 10px;">
                                 <span>Montant Payé (€) :</span>
-                                <input type="number" id="nfMontantPaye" value="0" style="width: 120px; max-width: 100%; text-align: right; font-weight: bold; color: #10b981;">
+                                <input type="number" id="nfMontantPaye" v-model.number="form.montantPaye" style="width: 120px; max-width: 100%; text-align: right; font-weight: bold; color: #10b981;">
                             </div>
                             <div style="display: flex; justify-content: space-between; align-items: center; font-size: 18px; border-top: 1px dashed #cbd5e1; padding-top: 10px; flex-wrap: wrap; gap: 10px;">
                                 <span>Reste à Payer :</span>
-                                <strong id="nfReste" style="color: #ef4444;">0 €</strong>
+                                <strong id="nfReste" style="color: #ef4444;">{{ resteAPayer.toFixed(2) }} €</strong>
                             </div>
                         </div>
                     </div>
@@ -188,10 +247,12 @@ export const NouvelleFactureView = {
                     <div class="form-card" style="display: flex; flex-direction: column; justify-content: space-between; box-shadow: 0 2px 4px rgba(0,0,0,0.02);">
                         <div>
                             <h3 style="border-bottom: 1px solid #e2e8f0; padding-bottom: 10px; margin-bottom: 15px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap;"><i class="fas fa-comment-dots text-slate-500"></i> Notes</h3>
-                            <textarea id="nfComment" rows="4" placeholder="Instructions spéciales, contenu exact..." style="width: 100%; border: 1px solid #cbd5e1; border-radius: 8px; padding: 10px; font-family: inherit; resize: none;"></textarea>
+                            <textarea id="nfComment" rows="4" placeholder="Instructions spéciales, contenu exact..." v-model="form.comment" style="width: 100%; border: 1px solid #cbd5e1; border-radius: 8px; padding: 10px; font-family: inherit; resize: none;"></textarea>
                         </div>
-                        <button id="nfSubmitBtn" class="btn btn-primary" style="width: 100%; padding: 16px; font-size: 16px; margin-top: 15px; display: flex; justify-content: center; gap: 10px;">
-                            <i class="fas fa-check-circle"></i> Enregistrer la facture
+                        <button id="nfSubmitBtn" class="btn btn-primary" :disabled="saving" @click="submitInvoice()" style="width: 100%; padding: 16px; font-size: 16px; margin-top: 15px; display: flex; justify-content: center; gap: 10px;">
+                            <i v-if="saving" class="fas fa-spinner fa-spin"></i>
+                            <i v-else class="fas fa-check-circle"></i>
+                            {{ saving ? 'Enregistrement...' : 'Enregistrer la facture' }}
                         </button>
                     </div>
 
