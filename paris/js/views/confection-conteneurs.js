@@ -1,6 +1,8 @@
 import { db } from '../../../firebase-config.js';
 import { collection, query, where, onSnapshot, doc, updateDoc, writeBatch, setDoc } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 import { createApp, ref, computed, onMounted, onUnmounted, watch } from "https://unpkg.com/vue@3/dist/vue.esm-browser.prod.js";
+import { getCollectionName } from '../../../agencies-config.js';
+import { matchesShippingMode } from '../../../shipping-mode.js';
 
 export const ConfectionConteneursView = {
     vueApp: null,
@@ -261,13 +263,29 @@ export const ConfectionConteneursView = {
                     if (unsubLivraisons) unsubLivraisons();
                     if (unsubContainers) unsubContainers();
 
-                    unsubContainers = onSnapshot(query(collection(db, "containers"), where("agency", "==", activeAgency)), snap => {
-                        containers.value = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+                    const contCol = getCollectionName("containers");
+                    const livCol = getCollectionName("livraisons");
+                    // Route SaaS (ex. containers_chine) : la collection est DÉJÀ
+                    // isolée par route -> on NE filtre PAS par agency (certains
+                    // docs n'ont pas ce champ -> sinon ils disparaissent).
+                    // Collection de base partagée (paris/abidjan) : on garde le
+                    // filtre agency pour séparer les 2.
+                    const isRouteCol = contCol !== "containers";
+
+                    const qCont = isRouteCol
+                        ? query(collection(db, contCol))
+                        : query(collection(db, contCol), where("agency", "==", activeAgency));
+                    const qLiv = isRouteCol
+                        ? query(collection(db, livCol))
+                        : query(collection(db, livCol), where("agency", "==", activeAgency));
+
+                    unsubContainers = onSnapshot(qCont, snap => {
+                        containers.value = snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(matchesShippingMode);
                         loadingContainers.value = false;
                     });
 
-                    unsubLivraisons = onSnapshot(query(collection(db, "livraisons"), where("agency", "==", activeAgency)), snap => {
-                        livraisons.value = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+                    unsubLivraisons = onSnapshot(qLiv, snap => {
+                        livraisons.value = snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(matchesShippingMode);
                         loadingLivraisons.value = false;
                     });
                 };
@@ -292,10 +310,15 @@ export const ConfectionConteneursView = {
                 });
 
                 const availableLivraisons = computed(() => {
-                    let avail = livraisons.value.filter(l => 
-                        (!l.conteneur || l.conteneur.trim() === '') && 
-                        (!l.containerStatus || l.containerStatus === 'PARIS' || l.containerStatus === 'EN_ATTENTE')
-                    );
+                    let avail = livraisons.value.filter(l => {
+                        // Non affecté = pas de conteneur OU "ATT" (code "en
+                        // attente d'affectation", posé quand aucun conteneur
+                        // actif n'est configuré -> ex. routes Chine).
+                        const c = (l.conteneur || '').trim().toUpperCase();
+                        const notAssigned = (c === '' || c === 'ATT');
+                        const stillHere = (!l.containerStatus || l.containerStatus === 'PARIS' || l.containerStatus === 'EN_ATTENTE');
+                        return notAssigned && stillHere;
+                    });
                     const search = leftSearch.value.toLowerCase().trim();
                     if (search) {
                         avail = avail.filter(l => 

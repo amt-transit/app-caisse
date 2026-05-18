@@ -983,7 +983,7 @@ initVue(globalApp) {
                     const _destAg = destinationAgencies.value.find(a => a.id === form.agence);
                     const destinationName = _destAg ? _destAg.name : (form.agence || 'ABIDJAN');
                     const containerRef = doc(db, getCollectionName("containers"), conteneurCode);
-                    batch.set(containerRef, { number: conteneurCode, status: 'EN_CHARGEMENT', destination: destinationName, destinationAgency: form.agence || '', modeExpedition: shippingMode, createdAt: new Date(dateIso).toISOString() }, { merge: true });
+                    batch.set(containerRef, { number: conteneurCode, status: 'EN_CHARGEMENT', destination: destinationName, destinationAgency: form.agence || '', agency: activeAgency, modeExpedition: shippingMode, createdAt: new Date(dateIso).toISOString() }, { merge: true });
                 }
 
                 // MODÈLE CHINE : on enrichit la « Liste des Produits » avec les
