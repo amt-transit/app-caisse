@@ -130,6 +130,14 @@ service cloud.firestore {
       allow read: if isDemarcheur();
     }
 
+    // Tarifs d'expédition (CBM Chine, Aérien Normal/Express). Lecture par
+    // TOUT utilisateur connecté (les agents de départ en ont besoin pour
+    // calculer la facture) ; écriture réservée aux admins.
+    match /parametres/tarifs {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+
     // =====================================================================
     // 4. SÉCURITÉ DYNAMIQUE SaaS (Isolation Totale des Pays)
     // =====================================================================

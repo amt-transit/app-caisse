@@ -266,6 +266,28 @@ export const ConfigInvoiceView = {
                         </div>
                     </div>
                 </div>
+
+                <div class="ci-card" style="margin-top: 25px;">
+                    <div class="ci-card-title"><i class="fas fa-ship text-blue-500"></i> Tarifs d'expédition (globaux — toutes agences)</div>
+                    <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:18px;">
+                        <div class="form-group">
+                            <label style="font-weight:600; font-size:13px; color:#475569; margin-bottom:6px; display:block;">🚢 Coût CBM — Chine (CFA / m³)</label>
+                            <input type="number" id="ciTarifCbmChine" min="0" step="1000" style="width:100%; padding:10px; border:1px solid #cbd5e1; border-radius:8px;" placeholder="250000">
+                        </div>
+                        <div class="form-group">
+                            <label style="font-weight:600; font-size:13px; color:#475569; margin-bottom:6px; display:block;">✈️ Aérien Normal (CFA / kg)</label>
+                            <input type="number" id="ciTarifAerienNormal" min="0" step="500" style="width:100%; padding:10px; border:1px solid #cbd5e1; border-radius:8px;" placeholder="12000">
+                        </div>
+                        <div class="form-group">
+                            <label style="font-weight:600; font-size:13px; color:#475569; margin-bottom:6px; display:block;">✈️ Aérien Express (CFA / kg)</label>
+                            <input type="number" id="ciTarifAerienExpress" min="0" step="500" style="width:100%; padding:10px; border:1px solid #cbd5e1; border-radius:8px;" placeholder="14000">
+                        </div>
+                    </div>
+                    <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; margin-top:18px;">
+                        <div style="font-size:12px; color:#64748b;"><i class="fas fa-info-circle"></i> Maritime Chine = Volume (CBM) × Coût CBM. Aérien = Poids (kg) × tarif Normal/Express. Modifiable à tout moment.</div>
+                        <button class="btn btn-primary" onclick="window.app.views.configInvoice.saveTarifs()" style="padding:10px 20px; display:flex; align-items:center; gap:8px;"><i class="fas fa-save"></i> Enregistrer les tarifs</button>
+                    </div>
+                </div>
             </div>
         `;
 
@@ -308,6 +330,15 @@ export const ConfigInvoiceView = {
                 placeholder.style.display = 'none';
             }
             
+            try {
+                const tSnap = await getDoc(doc(db, 'parametres', 'tarifs'));
+                const t = tSnap.exists() ? tSnap.data() : {};
+                const setVal = (id, v) => { const el = document.getElementById(id); if (el) el.value = v; };
+                setVal('ciTarifCbmChine', t.cbmChine != null ? t.cbmChine : 250000);
+                setVal('ciTarifAerienNormal', t.kgAerienNormal != null ? t.kgAerienNormal : 12000);
+                setVal('ciTarifAerienExpress', t.kgAerienExpress != null ? t.kgAerienExpress : 14000);
+            } catch (e) { console.warn('Tarifs (lecture):', e && e.message); }
+
             this.updatePreview();
         } catch (error) {
             console.error("Erreur chargement config facture:", error);
@@ -449,6 +480,25 @@ export const ConfigInvoiceView = {
         } finally {
             btn.innerHTML = originalHTML;
             btn.disabled = false;
+        }
+    },
+
+    async saveTarifs() {
+        try {
+            const num = (id, d) => {
+                const v = parseFloat(document.getElementById(id).value);
+                return isNaN(v) || v < 0 ? d : v;
+            };
+            const payload = {
+                cbmChine: num('ciTarifCbmChine', 250000),
+                kgAerienNormal: num('ciTarifAerienNormal', 12000),
+                kgAerienExpress: num('ciTarifAerienExpress', 14000),
+            };
+            await setDoc(doc(db, 'parametres', 'tarifs'), payload, { merge: true });
+            this.app.showToast("Tarifs d'expédition enregistrés ✔", "success");
+        } catch (error) {
+            console.error("Erreur sauvegarde tarifs:", error);
+            this.app.showToast("Erreur lors de l'enregistrement des tarifs.", "error");
         }
     }
 };
