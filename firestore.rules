@@ -111,6 +111,20 @@ service cloud.firestore {
       allow read: if isDemarcheur() && resource.data.demarcheurId == myDemarcheurId();
     }
 
+    match /retrait_demandes/{id} {
+      // Demande de retrait créée par le démarcheur depuis l'app mobile.
+      // Il crée UNIQUEMENT sa propre demande (montant numérique > 0, statut
+      // figé à 'en_attente') et lit SES demandes. Aucune modification ni
+      // suppression : le traitement/paiement reste côté staff (collection
+      // retraits, inchangée). Le staff global lit/écrit via la règle 4.
+      allow read: if isDemarcheur() && resource.data.demarcheurId == myDemarcheurId();
+      allow create: if isDemarcheur()
+                    && request.resource.data.demarcheurId == myDemarcheurId()
+                    && request.resource.data.statut == 'en_attente'
+                    && request.resource.data.montant is number
+                    && request.resource.data.montant > 0;
+    }
+
     match /parametres/commissions {
       // Lecture seule des taux (affichage), pas d'écriture.
       allow read: if isDemarcheur();

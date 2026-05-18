@@ -3,7 +3,7 @@ import { View, Image, ActivityIndicator, Text, StyleSheet } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { AuthProvider, useAuth } from './src/auth/AuthContext';
 import LoginScreen from './src/screens/LoginScreen';
-import HomeScreen from './src/screens/HomeScreen';
+import MainApp from './src/screens/MainApp';
 import Background from './src/components/Background';
 import { colors } from './src/theme';
 
@@ -23,7 +23,7 @@ function Gate() {
       </Background>
     );
   }
-  return user ? <HomeScreen /> : <LoginScreen />;
+  return user ? <MainApp /> : <LoginScreen />;
 }
 
 export default function App() {
