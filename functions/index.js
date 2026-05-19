@@ -361,3 +361,86 @@ exports.reconcileAllPartnersBalances = onCall(
         }
     }
 );
+
+// ============================================================================
+//  MIGRATION P2b — RDV / DEVIS / DEMANDES vers les collections PAR ROUTE
+// ----------------------------------------------------------------------------
+//  Avant P2a, les RDV (appointments), devis (quotes) et demandes de devis
+//  (quote_requests) des routes SaaS étaient stockés dans les collections
+//  COMMUNES. P2a fait écrire/lire les NOUVEAUX dans les collections par route
+//  (appointments_chine, ...). Cette migration déplace l'EXISTANT des routes
+//  SaaS depuis la collection commune vers la collection de route.
+//
+//  Sûr : Paris/Abidjan/all (= historique) ne bougent JAMAIS. On ne déplace
+//  que les docs dont l'agence est une route SaaS. Copie + suppression dans le
+//  MÊME lot atomique (Firestore : tout ou rien) → aucun doc à moitié migré.
+//  IDs CONSERVÉS (les liens RDV↔facture de P5 reposent dessus). Idempotent :
+//  rejouable sans risque (les docs déjà migrés ne sont plus dans la commune).
+// ============================================================================
+
+// Réplique EXACTE de getCollectionName (agencies-config.js) côté serveur.
+function routeCollectionName(base, agency) {
+    const a = String(agency || "").trim();
+    if (!a || a === "paris" || a === "abidjan" || a === "all") return base;
+    if (a.includes("_")) return `${base}_${a.split("_")[1]}`; // arrivée SaaS
+    return `${base}_${a}`; // départ SaaS
+}
+
+async function migrateBaseCollection(db, base) {
+    const snap = await db.collection(base).get();
+    let migrated = 0;
+    let kept = 0; // historiques (paris/abidjan/all/sans agence) → non touchés
+    const errors = [];
+
+    // 1 doc migré = 1 set (cible) + 1 delete (source) = 2 ops. Lots ≤ 400 ops
+    // donc ≤ 200 docs par lot.
+    let batch = db.batch();
+    let opsInBatch = 0;
+    const commitIfNeeded = async (force) => {
+        if (opsInBatch > 0 && (force || opsInBatch >= 400)) {
+            await batch.commit();
+            batch = db.batch();
+            opsInBatch = 0;
+        }
+    };
+
+    for (const d of snap.docs) {
+        try {
+            const data = d.data() || {};
+            const target = routeCollectionName(base, data.agency);
+            if (target === base) { kept++; continue; } // historique : on ne touche pas
+            // Copie en CONSERVANT l'id, puis suppression de la source, dans le
+            // même lot atomique.
+            batch.set(db.collection(target).doc(d.id), data);
+            batch.delete(db.collection(base).doc(d.id));
+            opsInBatch += 2;
+            migrated++;
+            await commitIfNeeded(false);
+        } catch (e) {
+            errors.push({ id: d.id, error: String((e && e.message) || e) });
+        }
+    }
+    await commitIfNeeded(true);
+    return { collection: base, scanned: snap.size, migrated, kept, errors };
+}
+
+// Réservé admin/super_admin. À lancer UNE fois après déploiement de P2a.
+// Idempotent : rejouable sans risque.
+exports.migrateSaasRdvDevis = onCall(
+    { region: REGION, timeoutSeconds: 540, memory: "512MiB" },
+    async (request) => {
+        await assertCallerIsAdmin(request.auth);
+        try {
+            const db = admin.firestore();
+            const results = [];
+            for (const base of ["appointments", "quotes", "quote_requests"]) {
+                results.push(await migrateBaseCollection(db, base));
+            }
+            return { ok: true, results };
+        } catch (error) {
+            if (error instanceof HttpsError) throw error;
+            console.error("Erreur migrateSaasRdvDevis:", error);
+            throw new HttpsError("internal", error.message);
+        }
+    }
+);

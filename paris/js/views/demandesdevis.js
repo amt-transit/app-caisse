@@ -1,4 +1,5 @@
 import { db } from '../../../firebase-config.js';
+import { getCollectionName } from '../../../agencies-config.js';
 import { collection, query, where, onSnapshot, doc, updateDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 
 export const DemandesDevisView = {
@@ -51,7 +52,7 @@ export const DemandesDevisView = {
     loadData() {
         if (this.unsub) this.unsub();
         const activeAgency = sessionStorage.getItem('currentActiveAgency') || 'paris';
-        const q = query(collection(db, "quote_requests"), where("agency", "==", activeAgency));
+        const q = query(collection(db, getCollectionName("quote_requests")), where("agency", "==", activeAgency));
         this.unsub = onSnapshot(q, (snapshot) => {
             this.requests = snapshot.docs.map(d => ({id: d.id, ...d.data()}));
             this.requests.sort((a, b) => new Date(b.date) - new Date(a.date));
@@ -126,14 +127,14 @@ export const DemandesDevisView = {
     },
     async processRequest(id) {
         try {
-            await updateDoc(doc(db, "quote_requests", id), { status: 'TRAITÉ' });
+            await updateDoc(doc(db, getCollectionName("quote_requests"), id), { status: 'TRAITÉ' });
             this.app.showToast("Demande traitée. Redirection vers Nouveau Devis...", "success");
             setTimeout(() => this.app.renderPage('quote-new'), 1000);
         } catch(e) { this.app.showToast("Erreur", "error"); }
     },
     async deleteRequest(id) {
         if (!await window.AppModal.confirm("Supprimer cette demande ?", "Supprimer", true)) return;
-        try { await deleteDoc(doc(db, "quote_requests", id)); this.app.showToast("Demande supprimée", "success"); } 
+        try { await deleteDoc(doc(db, getCollectionName("quote_requests"), id)); this.app.showToast("Demande supprimée", "success"); } 
         catch(e) { this.app.showToast("Erreur suppression", "error"); }
     }
 };

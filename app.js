@@ -374,14 +374,15 @@ export const app = {
         const activeAgency = sessionStorage.getItem('currentActiveAgency') || 'paris';
         import('./firebase-config.js').then(async cfg => {
             const { collection, query, where, getDocs } = await import('https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js');
+            const { getCollectionName } = await import('./agencies-config.js');
             // Devis
-            const qQuotes = query(collection(cfg.db, "quote_requests"), where("agency", "==", activeAgency), where("status", "==", "NOUVEAU"));
+            const qQuotes = query(collection(cfg.db, getCollectionName("quote_requests")), where("agency", "==", activeAgency), where("status", "==", "NOUVEAU"));
             const snapQuotes = await getDocs(qQuotes);
             const quoteBadge = document.getElementById('quoteRequestsBadge');
             if (quoteBadge) quoteBadge.textContent = snapQuotes.size;
 
             // RDV
-            const qRdv = query(collection(cfg.db, "appointments"), where("agency", "==", activeAgency), where("status", "==", "en_attente"));
+            const qRdv = query(collection(cfg.db, getCollectionName("appointments")), where("agency", "==", activeAgency), where("status", "==", "en_attente"));
             const snapRdv = await getDocs(qRdv);
             const pendingBadge = document.getElementById('pendingAppointmentsBadge');
             if (pendingBadge) pendingBadge.textContent = snapRdv.size;

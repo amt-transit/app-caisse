@@ -1,4 +1,5 @@
 import { db } from '../../../firebase-config.js';
+import { getCollectionName } from '../../../agencies-config.js';
 import { collection, query, where, onSnapshot, getDocs, doc, updateDoc } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 import { createApp, ref, computed, reactive, onMounted, onUnmounted, watch } from "https://unpkg.com/vue@3/dist/vue.esm-browser.prod.js";
 
@@ -204,7 +205,7 @@ export const MonProgrammeView = {
                     loading.value = true;
                     
                     const q = query(
-                        collection(db, "appointments"), 
+                        collection(db, getCollectionName("appointments")), 
                         where("agency", "==", activeAgency),
                         where("date", "==", filters.date)
                     );
@@ -286,7 +287,7 @@ export const MonProgrammeView = {
                     }
 
                     try {
-                        await updateDoc(doc(db, "appointments", id), { status: 'réalisé' });
+                        await updateDoc(doc(db, getCollectionName("appointments"), id), { status: 'réalisé' });
                         globalApp.showToast("Rendez-vous validé !", "success");
                     } catch(e) {
                         globalApp.showToast("Erreur lors de la validation", "error");

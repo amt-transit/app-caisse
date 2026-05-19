@@ -538,9 +538,12 @@ export const ParrainageView = {
                             <div style="display:flex; justify-content:space-between; margin-bottom:5px;"><span>Disponible (factures payées — à régler) :</span> <strong style="font-size:16px; color:#0f172a;">{{ formatMoney(partnerDetail.soldeDisponible) }}</strong></div>
                             <div style="display:flex; justify-content:space-between; margin-bottom:20px; padding-bottom:15px; border-bottom:1px solid #e2e8f0;"><span>En attente de solde facture (NON percevable) :</span> <strong style="color:#f59e0b;">{{ formatMoney(partnerDetail.soldePotentiel || 0) }}</strong></div>
 
-                            <div v-if="isSuperAdmin" style="display:flex; gap:8px; margin-bottom:20px;">
-                                <button @click="reconcilerSoldes(null, partnerDetail.id)" :disabled="reconcileBusy" style="flex:1; padding:8px; border:1px solid #cbd5e1; background:#fff; border-radius:8px; cursor:pointer; font-size:12px;">🔄 Recalculer ce partenaire</button>
-                                <button @click="reconcilerSoldes('all')" :disabled="reconcileBusy" style="flex:1; padding:8px; border:1px solid #fca5a5; background:#fef2f2; color:#b91c1c; border-radius:8px; cursor:pointer; font-size:12px;">🔄 Recalculer TOUS (migration)</button>
+                            <div v-if="isSuperAdmin" style="margin-bottom:20px;">
+                                <div style="display:flex; gap:8px; margin-bottom:8px;">
+                                    <button @click="reconcilerSoldes(null, partnerDetail.id)" :disabled="reconcileBusy" style="flex:1; padding:8px; border:1px solid #cbd5e1; background:#fff; border-radius:8px; cursor:pointer; font-size:12px;">🔄 Recalculer ce partenaire</button>
+                                    <button @click="reconcilerSoldes('all')" :disabled="reconcileBusy" style="flex:1; padding:8px; border:1px solid #fca5a5; background:#fef2f2; color:#b91c1c; border-radius:8px; cursor:pointer; font-size:12px;">🔄 Recalculer TOUS (soldes)</button>
+                                </div>
+                                <button @click="migrerRoutesRdvDevis()" :disabled="reconcileBusy" style="width:100%; padding:8px; border:1px solid #fcd34d; background:#fffbeb; color:#92400e; border-radius:8px; cursor:pointer; font-size:12px;">🚚 Migrer RDV / Devis vers les routes (P2b — à lancer une fois)</button>
                             </div>
 
                             <h4 style="margin:0 0 10px 0; color:#1e293b;">Structure du réseau</h4>
@@ -1024,6 +1027,40 @@ export const ParrainageView = {
                     }
                 };
 
+                // P2b — migration unique : déplace les RDV/devis/demandes des
+                // routes SaaS depuis les collections communes vers les
+                // collections par route (Cloud Function admin migrateSaasRdvDevis).
+                const migrerRoutesRdvDevis = async () => {
+                    if (!confirm("Migrer les RDV / devis / demandes des routes SaaS vers leurs collections par route ?\n\nÀ lancer UNE fois après le déploiement P2a. Sans risque pour Paris/Abidjan. Rejouable sans danger.")) return;
+                    reconcileBusy.value = true;
+                    try {
+                        if (auth && typeof auth.authStateReady === 'function') { await auth.authStateReady(); }
+                        if (!auth || !auth.currentUser) {
+                            throw new Error("Session expirée. Reconnectez-vous puis réessayez.");
+                        }
+                        const idToken = await auth.currentUser.getIdToken(true);
+                        const projectId = (app && app.options && app.options.projectId) || 'caisse-amt-perso';
+                        const url = `https://us-central1-${projectId}.cloudfunctions.net/migrateSaasRdvDevis`;
+                        const resp = await fetch(url, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${idToken}` },
+                            body: JSON.stringify({ data: {} }),
+                        });
+                        const json = await resp.json().catch(() => ({}));
+                        if (!resp.ok || (json && json.error)) {
+                            const err = (json && json.error) || {};
+                            throw new Error(err.message || `Échec serveur (HTTP ${resp.status}).`);
+                        }
+                        const r = (json && json.result) || {};
+                        const summary = (r.results || []).map(x => `${x.collection}: ${x.migrated}/${x.scanned}`).join(' · ');
+                        globalApp.showToast(`Migration RDV/Devis terminée ✔ ${summary}`, "success");
+                    } catch (e) {
+                        globalApp.showToast((e && e.message) || "Échec de la migration.", "error");
+                    } finally {
+                        reconcileBusy.value = false;
+                    }
+                };
+
                 const openWithdrawalModal = () => {
                     withdrawalForm.montant = ''; withdrawalForm.periode = ''; withdrawalForm.moyenPaiement = 'Espèces';
                     showWithdrawalModal.value = true;
@@ -1208,7 +1245,7 @@ export const ParrainageView = {
                     analytics, simulation, syncRates, saveSettings,
                     showPartnerModal, partnerForm, availableSponsors, openPartnerModal, savePartner,
                     showDetailModal, partnerDetail, openDetails,
-                    reconcileBusy, reconcilerSoldes,
+                    reconcileBusy, reconcilerSoldes, migrerRoutesRdvDevis,
                     mobileAccessSaving, mobileAccessInfo, createMobileAccess,
                     showWithdrawalModal, openWithdrawalModal, processWithdrawal, saving,
                     demandesRetrait, pendingDemandesCount, payerDemande, refuserDemande,

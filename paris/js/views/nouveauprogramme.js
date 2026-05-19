@@ -1,4 +1,5 @@
 import { db } from '../../../firebase-config.js';
+import { getCollectionName } from '../../../agencies-config.js';
 import { collection, query, where, onSnapshot, doc, updateDoc, writeBatch, getDocs } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 import { createApp, ref, computed, reactive, onMounted, onUnmounted, watch } from "https://unpkg.com/vue@3/dist/vue.esm-browser.prod.js";
 
@@ -494,7 +495,7 @@ export const NouveauProgrammeView = {
                     
                     const activeAgency = sessionStorage.getItem('currentActiveAgency') || 'paris';
                     const q = query(
-                        collection(db, "appointments"), 
+                        collection(db, getCollectionName("appointments")), 
                         where("agency", "==", activeAgency),
                         where("date", "==", filters.date)
                     );
@@ -592,7 +593,7 @@ export const NouveauProgrammeView = {
                         let nextOrder = driverRdvs.length > 0 ? Math.max(...driverRdvs.map(r => r.orderInRoute || 0)) + 1 : 0;
                         
                         assignSelectedIds.value.forEach(id => {
-                            batch.update(doc(db, "appointments", id), {
+                            batch.update(doc(db, getCollectionName("appointments"), id), {
                                 livreur: driverToAssign.value,
                                 status: 'en_cours',
                                 orderInRoute: nextOrder++
@@ -611,7 +612,7 @@ export const NouveauProgrammeView = {
                 
                 const removeRdv = async (id) => {
                     try {
-                        await updateDoc(doc(db, "appointments", id), {
+                        await updateDoc(doc(db, getCollectionName("appointments"), id), {
                             livreur: null,
                             status: 'confirmé', 
                             orderInRoute: null
@@ -644,8 +645,8 @@ export const NouveauProgrammeView = {
                     
                     try {
                         const batch = writeBatch(db);
-                        batch.update(doc(db, "appointments", itemA.id), { orderInRoute: itemA.orderInRoute });
-                        batch.update(doc(db, "appointments", itemB.id), { orderInRoute: itemB.orderInRoute });
+                        batch.update(doc(db, getCollectionName("appointments"), itemA.id), { orderInRoute: itemA.orderInRoute });
+                        batch.update(doc(db, getCollectionName("appointments"), itemB.id), { orderInRoute: itemB.orderInRoute });
                         await batch.commit();
                     } catch(e) {
                         globalApp.showToast("Erreur lors de la réorganisation.", "error");
@@ -683,7 +684,7 @@ export const NouveauProgrammeView = {
                     try {
                         const batch = writeBatch(db);
                         currentOptimizedOrder.value.forEach((r, idx) => {
-                            batch.update(doc(db, "appointments", r.id), { orderInRoute: idx });
+                            batch.update(doc(db, getCollectionName("appointments"), r.id), { orderInRoute: idx });
                         });
                         await batch.commit();
                         

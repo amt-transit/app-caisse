@@ -1,4 +1,5 @@
 import { db } from '../../../firebase-config.js';
+import { getCollectionName } from '../../../agencies-config.js';
 import { collection, query, where, onSnapshot } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 
 export const HistoriqueProgrammesView = {
@@ -147,7 +148,7 @@ export const HistoriqueProgrammesView = {
         if (this.unsub) this.unsub();
         const activeAgency = sessionStorage.getItem('currentActiveAgency') || 'paris';
 
-        const q = query(collection(db, "appointments"), where("agency", "==", activeAgency));
+        const q = query(collection(db, getCollectionName("appointments")), where("agency", "==", activeAgency));
         
         this.unsub = onSnapshot(q, (snapshot) => {
             this.rdvs = snapshot.docs.map(d => ({id: d.id, ...d.data()}));

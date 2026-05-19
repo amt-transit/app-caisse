@@ -1,4 +1,5 @@
 import { db } from '../../../firebase-config.js';
+import { getCollectionName } from '../../../agencies-config.js';
 import { collection, query, where, onSnapshot, doc, updateDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 import { createApp, ref, computed, reactive, onMounted, onUnmounted } from "https://unpkg.com/vue@3/dist/vue.esm-browser.prod.js";
 
@@ -132,7 +133,7 @@ export const TousLesDevisView = {
                 
                 onMounted(() => {
                     const activeAgency = sessionStorage.getItem('currentActiveAgency') || 'paris';
-                    const q = query(collection(db, "quotes"), where("agency", "==", activeAgency));
+                    const q = query(collection(db, getCollectionName("quotes")), where("agency", "==", activeAgency));
                     unsub = onSnapshot(q, (snapshot) => {
                         const data = snapshot.docs.map(d => ({id: d.id, ...d.data()}));
                         data.sort((a, b) => new Date(b.date) - new Date(a.date));
@@ -165,7 +166,7 @@ export const TousLesDevisView = {
 
                 const changeStatus = async (id, newStatus) => {
                     try {
-                        await updateDoc(doc(db, "quotes", id), { status: newStatus });
+                        await updateDoc(doc(db, getCollectionName("quotes"), id), { status: newStatus });
                         globalApp.showToast(`Devis ${newStatus.toLowerCase()} !`, newStatus === 'ACCEPTÉ' ? 'success' : 'info');
                     } catch(e) { globalApp.showToast("Erreur de mise à jour", "error"); }
                 };
@@ -174,7 +175,7 @@ export const TousLesDevisView = {
                     if (window.AppModal) { if (!await window.AppModal.confirm("Supprimer ce devis de l'historique ?", "Supprimer Devis", true)) return; } 
                     else if (!confirm("Supprimer ce devis ?")) return;
                     try {
-                        await deleteDoc(doc(db, "quotes", id));
+                        await deleteDoc(doc(db, getCollectionName("quotes"), id));
                         globalApp.showToast("Devis supprimé", "success");
                     } catch(e) { globalApp.showToast("Erreur de suppression", "error"); }
                 };

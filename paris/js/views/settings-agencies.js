@@ -1,4 +1,5 @@
 import { db } from '../../../firebase-config.js';
+import { AGENCIES } from '../../../agencies-config.js';
 import { collection, doc, setDoc, deleteDoc, onSnapshot, writeBatch } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 import { createApp, ref, reactive, computed, onMounted, onUnmounted } from "https://unpkg.com/vue@3/dist/vue.esm-browser.prod.js";
 
@@ -235,8 +236,17 @@ export const SettingsAgenciesView = {
                 });
 
                 // Regroupe les agences en routes (départ -> ses arrivées).
+                // IMPORTANT : Paris/Abidjan sont des agences PAR DÉFAUT (config,
+                // créées avant ce système) absentes de la collection Firestore.
+                // On les fusionne ici pour qu'elles apparaissent (sinon pas de
+                // carte Paris -> impossible d'y ajouter une destination).
+                // L'écoute Firestore (agencies.value) reste la source LIVE et
+                // remplace un défaut si un doc de même id existe.
                 const routes = computed(() => {
-                    const list = agencies.value;
+                    const byId = {};
+                    Object.values(AGENCIES || {}).forEach(a => { if (a && a.id) byId[a.id] = a; });
+                    agencies.value.forEach(a => { byId[a.id] = a; });
+                    const list = Object.values(byId);
                     const deps = list.filter(a => a.type === 'departure');
                     return deps.map(d => ({
                         departure: d,

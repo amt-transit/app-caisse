@@ -1,4 +1,5 @@
 import { db } from '../../../firebase-config.js';
+import { getCollectionName } from '../../../agencies-config.js';
 import { collection, query, where, onSnapshot, doc, updateDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 import { createApp, ref, computed, reactive, onMounted, onUnmounted, nextTick } from "https://unpkg.com/vue@3/dist/vue.esm-browser.prod.js";
 
@@ -377,7 +378,7 @@ export const TousLesRdvView = {
                 
                 onMounted(() => {
                     const activeAgency = sessionStorage.getItem('currentActiveAgency') || 'paris';
-                    const q = query(collection(db, "appointments"), where("agency", "==", activeAgency));
+                    const q = query(collection(db, getCollectionName("appointments")), where("agency", "==", activeAgency));
                     unsub = onSnapshot(q, (snapshot) => {
                         const data = snapshot.docs.map(d => ({id: d.id, ...d.data()}));
                         data.sort((a, b) => new Date(b.date) - new Date(a.date));
@@ -444,7 +445,7 @@ export const TousLesRdvView = {
 
                 const changeStatus = async (id, newStatus) => {
                     try {
-                        await updateDoc(doc(db, "appointments", id), { status: newStatus });
+                        await updateDoc(doc(db, getCollectionName("appointments"), id), { status: newStatus });
                         globalApp.showToast(`Rendez-vous ${newStatus} !`, newStatus === 'confirmé' ? 'success' : 'info');
                     } catch(e) { globalApp.showToast("Erreur de mise à jour", "error"); }
                 };
@@ -455,7 +456,7 @@ export const TousLesRdvView = {
                     } else if (!confirm("Supprimer ce rendez-vous ?")) return;
 
                     try {
-                        await deleteDoc(doc(db, "appointments", id));
+                        await deleteDoc(doc(db, getCollectionName("appointments"), id));
                         globalApp.showToast("Rendez-vous supprimé", "success");
                     } catch(e) { globalApp.showToast("Erreur de suppression", "error"); }
                 };
@@ -483,7 +484,7 @@ export const TousLesRdvView = {
                     };
 
                     try {
-                        await updateDoc(doc(db, "appointments", editForm.id), updates);
+                        await updateDoc(doc(db, getCollectionName("appointments"), editForm.id), updates);
                         globalApp.showToast("Rendez-vous mis à jour avec succès !", "success");
                         closeEditModal();
                     } catch(e) {

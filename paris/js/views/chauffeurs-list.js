@@ -1,4 +1,5 @@
 import { db } from '../../../firebase-config.js';
+import { getCollectionName } from '../../../agencies-config.js';
 import { collection, query, where, onSnapshot, getDocs } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 import { CONSTANTS } from '../../../constants.js';
 import { isEurAgency } from '../../../agency-money.js';
@@ -215,7 +216,7 @@ export const ChauffeursListView = {
             // (activeAgency déjà défini plus haut)
 
             if (this.unsubAppts) this.unsubAppts();
-            this.unsubAppts = onSnapshot(query(collection(db, "appointments"), where("agency", "==", activeAgency)), snap => {
+            this.unsubAppts = onSnapshot(query(collection(db, getCollectionName("appointments")), where("agency", "==", activeAgency)), snap => {
                 this.appointments = snap.docs.map(d => ({id: d.id, ...d.data()}));
                 this.renderTable();
             });

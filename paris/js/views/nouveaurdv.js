@@ -472,7 +472,7 @@ export const NouveauRdvView = {
 
         const activeAgency = sessionStorage.getItem('currentActiveAgency') || 'paris';
         const q = query(
-            collection(db, "appointments"), 
+            collection(db, getCollectionName("appointments")), 
             where("agency", "==", activeAgency),
             where("date", "==", selectedDate)
         );
@@ -617,7 +617,7 @@ export const NouveauRdvView = {
         };
 
         try {
-            await addDoc(collection(db, "appointments"), rdvData);
+            await addDoc(collection(db, getCollectionName("appointments")), rdvData);
             this.app.showToast("Rendez-vous enregistré avec succès !", "success");
             this.closeModal();
             
@@ -659,7 +659,7 @@ export const NouveauRdvView = {
 
     async changeStatus(id, newStatus) {
         try {
-            await updateDoc(doc(db, "appointments", id), { status: newStatus });
+            await updateDoc(doc(db, getCollectionName("appointments"), id), { status: newStatus });
             this.app.showToast(`Rendez-vous ${newStatus === 'confirmé' ? 'validé' : newStatus} !`, newStatus === 'confirmé' ? 'success' : 'info');
         } catch(e) {
             this.app.showToast("Erreur de mise à jour", "error");

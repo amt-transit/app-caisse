@@ -903,7 +903,7 @@ initVue(globalApp) {
                             saisiPar: sessionStorage.getItem('userName') || 'Agent',
                             createdAt: new Date().toISOString(),
                         };
-                        await addDoc(collection(db, 'quotes'), quoteData);
+                        await addDoc(collection(db, getCollectionName('quotes')), quoteData);
                         globalApp.showToast(`Devis ${refDevis} généré avec succès !`, "success");
                         globalApp.renderPage('quotes-list');
                     } catch (e) {
@@ -1101,7 +1101,7 @@ initVue(globalApp) {
                     // écrite, traçable des deux côtés). Non bloquant.
                     if (_appointmentId) {
                         try {
-                            await updateDoc(doc(db, 'appointments', _appointmentId), {
+                            await updateDoc(doc(db, getCollectionName('appointments'), _appointmentId), {
                                 status: 'facturé',
                                 factureRef: ref,
                                 facturedAt: new Date().toISOString(),
