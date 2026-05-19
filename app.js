@@ -609,7 +609,17 @@ export const app = {
     },
     
     formatMoneyLocal(amount, forceCfa = false) {
-        const isEur = (sessionStorage.getItem('currentActiveAgency') || 'abidjan') === 'paris';
+        const ag = sessionStorage.getItem('currentActiveAgency') || 'abidjan';
+        // EUR si : agence historique 'paris' OU agence (route SaaS) dont la
+        // devise configur\u00E9e est EUR (lu dans le cache config, synchrone, sans
+        // d\u00E9pendance). Sinon FCFA. Le stockage interne reste FCFA partout.
+        let isEur = (ag === 'paris');
+        if (!isEur) {
+            try {
+                const cfg = JSON.parse(localStorage.getItem('amt_agencies_config') || '{}');
+                if (cfg[ag] && cfg[ag].currency === 'EUR') isEur = true;
+            } catch (e) { /* cache illisible : on reste en FCFA */ }
+        }
         if (isEur && !forceCfa) return new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(amount || 0).replace(/[\u202F\u00A0]/g, ' ').replace(/\s*\/\s*/g, ' ');
         return new Intl.NumberFormat('fr-CI', { style: 'currency', currency: 'XOF' }).format(amount || 0).replace(/[\u202F\u00A0]/g, ' ').replace(/\s*\/\s*/g, ' ');
     },
