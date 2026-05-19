@@ -1,5 +1,5 @@
 import { db } from '../../../firebase-config.js';
-import { collection, doc, writeBatch, getDocs, query, where, limit, addDoc } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
+import { collection, doc, writeBatch, getDocs, query, where, limit, addDoc, updateDoc } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 import { CONSTANTS } from '../../../constants.js';
 import { createApp, ref, reactive, computed, onMounted, watch } from "https://unpkg.com/vue@3/dist/vue.esm-browser.prod.js";
 import { getCollectionName, AGENCIES } from '../../../agencies-config.js';
@@ -434,18 +434,31 @@ initVue(globalApp) {
                 }
             } catch (e) { /* sessionStorage indisponible : on reste sur FACTURE */ }
 
+            // Si on arrive depuis un RDV (bouton « +Récup »), on pré-remplit
+            // le client et on garde le lien vers le RDV (consommé une fois ;
+            // le RDV sera marqué « Facturé » à l'enregistrement).
+            let _prefill = null, _appointmentId = '';
+            try {
+                const raw = sessionStorage.getItem('nf_prefill');
+                if (raw) {
+                    _prefill = JSON.parse(raw);
+                    _appointmentId = (_prefill && _prefill.appointmentId) || '';
+                    sessionStorage.removeItem('nf_prefill');
+                }
+            } catch (e) { _prefill = null; }
+
             const form = reactive({
                 date: new Date().toISOString().split('T')[0],
                 type: _presetType,
                 agence: '',
-                expediteur: '',
+                expediteur: _prefill ? `${_prefill.client || ''}${_prefill.tel ? ' ' + _prefill.tel : ''}`.trim() : '',
                 destinataire: '',
                 lieu: '',
                 modePay: 'ESPECES',
                 valeur: '',
                 volume: '',
                 montantPaye: 0,
-                comment: '',
+                comment: (_prefill && _prefill.adresse) ? `Récupération RDV — ${_prefill.adresse}` : '',
                 parrainId: '',
                 poids: '',            // Aérien : poids en kg
                 aerienType: 'normal', // 'normal' | 'express'
@@ -1010,6 +1023,7 @@ initVue(globalApp) {
                 const livRef = doc(collection(db, getCollectionName("livraisons")));
                 batch.set(livRef, {
                     demarcheurId: affiliationDemarcheurId,
+                    appointmentId: _appointmentId || null,
                     ref: ref, labels: generatedLabels, conteneur: conteneurCode, volumeCBM: volumeCBM,
                     expediteur: finalExpName, destinataire: finalDestName, numero: destPhone, lieuLivraison: lieuLivraison,
                     description: items.value.map(i => `${i.qty}x ${i.desc}`).join(', '),
@@ -1023,6 +1037,7 @@ initVue(globalApp) {
                 const transRef = doc(collection(db, getCollectionName("transactions")));
                 batch.set(transRef, {
                     demarcheurId: affiliationDemarcheurId,
+                    appointmentId: _appointmentId || null,
                     reference: ref, nom: finalExpName, nomDestinataire: finalDestName, numero: destPhone, tel: expPhone,
                     adresseDestinataire: lieuLivraison, conteneur: conteneurCode, volumeCBM: volumeCBM, date: dateIso,
                     prix: totalCFA, montantParis: payeCFA, montantAbidjan: 0, reste: -resteCFA,
@@ -1080,6 +1095,18 @@ initVue(globalApp) {
                                 description: items.value.map(i => `${i.qty}x ${i.desc}`).join(', '),
                             });
                         } catch (e) { console.warn('Commission (non bloquant):', e); }
+                    }
+
+                    // Lien RDV → facture : on marque le RDV « Facturé » (trace
+                    // écrite, traçable des deux côtés). Non bloquant.
+                    if (_appointmentId) {
+                        try {
+                            await updateDoc(doc(db, 'appointments', _appointmentId), {
+                                status: 'facturé',
+                                factureRef: ref,
+                                facturedAt: new Date().toISOString(),
+                            });
+                        } catch (e) { console.warn('Lien RDV (non bloquant):', e); }
                     }
 
                     globalApp.showToast(

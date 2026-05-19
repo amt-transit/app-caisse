@@ -1,6 +1,7 @@
 import { db } from '../../../firebase-config.js';
 import { collection, query, where, getDocs, updateDoc, doc, arrayUnion, limit, addDoc } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 import { createApp, ref, reactive, onMounted, onUnmounted } from "https://unpkg.com/vue@3/dist/vue.esm-browser.prod.js";
+import { getCollectionName } from '../../../agencies-config.js';
 
 export const ScanWarehouseView = {
     vueApp: null,
@@ -300,7 +301,14 @@ export const ScanWarehouseView = {
                     stats.total++;
 
                     try {
-                        const q = query(collection(db, 'livraisons'), where('ref', '==', baseRef), where("agency", "==", sessionStorage.getItem('currentActiveAgency') || 'paris'), limit(1));
+                        // Route-aware (isolation SaaS) : collection de route
+                        // déjà isolée -> pas de filtre agency (les docs route
+                        // ne portent pas toujours ce champ) ; collection
+                        // historique -> filtre agency conservé.
+                        const livCol = getCollectionName('livraisons');
+                        const q = (livCol !== 'livraisons')
+                            ? query(collection(db, livCol), where('ref', '==', baseRef), limit(1))
+                            : query(collection(db, livCol), where('ref', '==', baseRef), where("agency", "==", sessionStorage.getItem('currentActiveAgency') || 'paris'), limit(1));
                         const snap = await getDocs(q);
 
                         if (!snap.empty) {
@@ -315,7 +323,7 @@ export const ScanWarehouseView = {
                                 addRecentScan(text, data.destinataire || data.expediteur || 'Client inconnu', 'Déjà en entrepôt', 'warn');
                                 if (isSoundEnabled.value && navigator.vibrate) navigator.vibrate([50, 50, 50]);
                             } else {
-                                await updateDoc(doc(db, 'livraisons', docId), {
+                                await updateDoc(doc(db, livCol, docId), {
                                     containerStatus: 'PARIS',
                                     scanHistory: arrayUnion({ scanRef: text, date: new Date().toISOString(), type: 'ENTREPOT_PARIS' })
                                 });

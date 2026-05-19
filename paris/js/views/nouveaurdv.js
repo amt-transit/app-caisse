@@ -1,6 +1,7 @@
 import { db } from '../../../firebase-config.js';
 import { collection, addDoc, getDocs, query, where, limit, onSnapshot, orderBy, doc, updateDoc } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 import { Autocomplete } from './autocomplete.js';
+import { getCollectionName } from '../../../agencies-config.js';
 
 export const NouveauRdvView = {
     unsubTodayRdv: null,
@@ -42,7 +43,11 @@ export const NouveauRdvView = {
                 .control { width: 100%; padding: 10px 12px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 14px; box-sizing: border-box; }
                 .control:focus { outline: none; border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59,130,246,0.1); }
                 .label { display: block; font-size: 13px; font-weight: 600; color: #475569; margin-bottom: 6px; }
-                
+                /* Suggestions client : en FLUX normal (pas en superposition
+                   absolue) pour qu'elles ne soient jamais rognées ni cachées
+                   par la fenêtre qui défile — elles poussent le contenu. */
+                #rdvClientSuggestions { position: static !important; box-shadow: none !important; margin-top: 6px; max-height: 220px; overflow-y: auto; }
+
                 .nouveau-rdv-header {
                     background: white;
                     border-radius: 16px;
@@ -166,12 +171,13 @@ export const NouveauRdvView = {
                     <div class="modal-body">
                         <div class="form-section" style="margin-bottom: 25px;">
                             <h3 class="form-section-title">🔍 Rechercher un prospect / client</h3>
-                            <div id="prospectSearchWrapper" class="prospect-search-wrapper" style="display: flex; gap: 10px; align-items: center;">
-                                <div style="position: relative; flex: 1;">
-                                    <input id="rdvClient" class="control control--search" placeholder="Nom, téléphone du prospect..." autocomplete="off">
-                                    <ul id="rdvClientSuggestions" class="autocomplete-suggestions"></ul>
+                            <div id="prospectSearchWrapper" class="prospect-search-wrapper" style="display: flex; flex-direction: column; gap: 12px; position: relative; z-index: 60;">
+                                <div style="position: relative;">
+                                    <span style="position:absolute; left:12px; top:50%; transform:translateY(-50%); color:#94a3b8; pointer-events:none;">🔍</span>
+                                    <input id="rdvClient" class="control" placeholder="Rechercher : nom ou téléphone du prospect / client…" autocomplete="off" style="padding-left:34px;">
+                                    <div id="rdvClientSuggestions" style="display:none; margin-top:6px; border:1px solid #e2e8f0; border-radius:10px; max-height:230px; overflow-y:auto; background:#fff; box-shadow:0 4px 10px rgba(0,0,0,0.06);"></div>
                                 </div>
-                                <button class="btn btn-outline" type="button" onclick="window.app.views.nouveauRdv.toggleNewClientForm(true)" style="white-space: nowrap; padding: 10px 15px; border: 1px solid #cbd5e1; border-radius: 8px; background: white; cursor: pointer;">➕ Nouveau</button>
+                                <button class="btn-create-prospect" type="button" onclick="window.app.views.nouveauRdv.toggleNewClientForm(true)" style="width:100%; padding:11px 15px; border:1px dashed #93c5fd; border-radius:10px; background:#eff6ff; color:#1d4ed8; font-weight:700; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:8px;">➕ Créer un nouveau prospect</button>
                             </div>
                             <div id="rdvClientFeedback" style="font-size: 12px; color: #64748b; margin-top: 5px;"></div>
                             
@@ -316,29 +322,14 @@ export const NouveauRdvView = {
 
         document.getElementById('rdvDateFilter').addEventListener('change', () => this.loadTodayRdv());
 
-        // Initialiser l'auto-complétion personnalisée pour les clients
-        Autocomplete.initCustom('rdvClient', 'rdvClientSuggestions', 
-            (q) => {
-                const query = q.toLowerCase();
-                const matches = [];
-                for (const [nom, data] of this.clientsMap.entries()) {
-                    if (nom.toLowerCase().includes(query) || (data.tel && data.tel.includes(query))) {
-                        matches.push(data);
-                    }
-                    if (matches.length >= 8) break;
-                }
-                return matches;
-            },
-            (c) => `<div style="font-weight: 600;">${c.nom}</div><div style="font-size: 11px; opacity: 0.7;">📞 ${c.tel || 'Non renseigné'}</div>`,
-            (c, input) => {
-                input.value = c.nom;
-                this.handleClientChange();
-            },
-            { clearOnMismatch: ['rdvTel', 'rdvAdresse'] } // Nettoyage Automatique
-        );
-        document.getElementById('rdvClient').addEventListener('input', (e) => {
-            this.handleClientChange();
-        });
+        // Recherche client AUTONOME : liste rendue EN FLUX NORMAL (elle pousse
+        // le contenu vers le bas) — jamais masquée ni rognée, sans dépendre du
+        // composant partagé Autocomplete (fragile dans une modale qui défile).
+        const _rdvClientInput = document.getElementById('rdvClient');
+        if (_rdvClientInput) {
+            _rdvClientInput.addEventListener('input', (e) => this.searchClients(e.target.value));
+            _rdvClientInput.addEventListener('focus', (e) => this.searchClients(e.target.value));
+        }
 
         // Initialiser l'auto-complétion des adresses via l'API Gouvernementale
         Autocomplete.initAddress('newClientAdresse', 'newClientAdresseSuggestions');
@@ -388,7 +379,11 @@ export const NouveauRdvView = {
 
     async loadAutocompleteData() {
         try {
-            const clientsSnap = await getDocs(collection(db, "clients"));
+            // Même source que Nouvelle Facture (route-aware + filtre agence) :
+            // garantit que le nom saisi au RDV correspond EXACTEMENT au client
+            // de la facture → rattachement RDV ↔ facture fiable.
+            const activeAgency = sessionStorage.getItem('currentActiveAgency') || 'paris';
+            const clientsSnap = await getDocs(query(collection(db, getCollectionName("clients")), where("agency", "==", activeAgency)));
             this.clientsMap.clear();
             clientsSnap.forEach(doc => {
                 const data = doc.data();
@@ -419,8 +414,49 @@ export const NouveauRdvView = {
             if (adresseInput) adresseInput.value = clientData.adresse || '';
             if (feedback) feedback.innerHTML = `<span style="color:#059669;"><i class="fas fa-check-circle"></i> Client reconnu</span>`;
         } else {
+            if (telInput) telInput.value = '';
+            if (adresseInput) adresseInput.value = '';
             if (feedback) feedback.innerHTML = `<span style="color:#f59e0b;"><i class="fas fa-info-circle"></i> Nouveau client</span>`;
         }
+    },
+
+    // Recherche client AUTONOME : rend une liste cliquable EN FLUX NORMAL
+    // dans #rdvClientSuggestions (pousse le contenu vers le bas). Aucune
+    // dépendance au composant partagé, aucun positionnement absolu → la liste
+    // est TOUJOURS entièrement visible, jamais masquée ni rognée.
+    searchClients(rawQuery) {
+        const box = document.getElementById('rdvClientSuggestions');
+        this.handleClientChange();
+        if (!box) return;
+        const q = (rawQuery || '').toLowerCase().trim();
+        if (q.length < 2) { box.style.display = 'none'; box.innerHTML = ''; return; }
+        const matches = [];
+        for (const [nom, data] of this.clientsMap.entries()) {
+            if (nom.toLowerCase().includes(q) || (data.tel && String(data.tel).includes(q))) matches.push(data);
+            if (matches.length >= 12) break;
+        }
+        if (matches.length === 0) {
+            box.innerHTML = '<div style="padding:10px 12px; color:#64748b; font-size:13px;">Aucun client trouvé — utilisez « Créer un nouveau prospect ».</div>';
+            box.style.display = 'block';
+            return;
+        }
+        box.innerHTML = matches.map((c) => `
+            <div class="rdv-cli-item" data-nom="${String(c.nom || '').replace(/"/g, '&quot;')}" style="padding:10px 12px; cursor:pointer; border-bottom:1px solid #f1f5f9;">
+                <div style="font-weight:600; color:#1e293b;">${c.nom || ''}</div>
+                <div style="font-size:11px; color:#64748b;">📞 ${c.tel || 'Non renseigné'}</div>
+            </div>`).join('');
+        box.style.display = 'block';
+        box.querySelectorAll('.rdv-cli-item').forEach((el) => {
+            el.addEventListener('click', () => this.selectClientResult(el.getAttribute('data-nom')));
+        });
+    },
+
+    selectClientResult(nom) {
+        const input = document.getElementById('rdvClient');
+        if (input) input.value = nom || '';
+        const box = document.getElementById('rdvClientSuggestions');
+        if (box) { box.style.display = 'none'; box.innerHTML = ''; }
+        this.handleClientChange();
     },
 
     loadTodayRdv() {
@@ -506,8 +542,8 @@ export const NouveauRdvView = {
                         <span class="rdv-status ${statusClass}">${statusText}</span>
                         <div class="rdv-card__actions">
                             ${validateBtn}
-                            <button class="btn-action btn-action--depot" title="Créer un dépôt pour ce prospect" onclick="window.app.renderPage('invoice-new')">+Dépôt</button>
-                            <button class="btn-action btn-action--recup" title="Créer une récupération pour ce prospect" onclick="window.app.renderPage('invoice-new')">+Récup</button>
+                            <button class="btn-action btn-action--depot" title="Dépôt en attente de récupération (pas de facture à ce stade)" onclick="window.app.views.nouveauRdv.depotInfo()">+Dépôt</button>
+                            <button class="btn-action btn-action--recup" title="Créer la facture de récupération (pré-remplie)" onclick="window.app.views.nouveauRdv.toFacture('${rdv.id}')">+Récup</button>
                             <button class="btn-action btn-action--edit" title="Modifier ce RDV" onclick="window.app.renderPage('appointments-list')">✏️</button>
                         </div>
                     </div>
@@ -536,7 +572,7 @@ export const NouveauRdvView = {
             }
 
             try {
-                await addDoc(collection(db, "clients"), {
+                await addDoc(collection(db, getCollectionName("clients")), {
                     nom: clientName,
                     tel: clientTel,
                     email: email,
@@ -596,6 +632,29 @@ export const NouveauRdvView = {
             btn.innerHTML = '✅ Créer le RDV';
             btn.disabled = false;
         }
+    },
+
+    // RÉCUPÉRATION : ouvre Nouvelle Facture pré-remplie avec le client du RDV
+    // et garde le lien RDV↔facture (la facture, à l'enregistrement, marquera
+    // ce RDV « Facturé »). Le chauffeur n'a qu'un geste.
+    toFacture(rdvId) {
+        const rdv = (this.todayRdv || []).find(r => r.id === rdvId);
+        if (!rdv) { this.app.showToast("RDV introuvable.", "error"); return; }
+        try {
+            sessionStorage.setItem('nf_prefill', JSON.stringify({
+                appointmentId: rdv.id,
+                client: rdv.client || '',
+                tel: rdv.tel || '',
+                adresse: rdv.adresse || '',
+            }));
+        } catch (e) { /* sessionStorage indisponible : on ouvre la facture vide */ }
+        window.app.renderPage('invoice-new');
+    },
+
+    // DÉPÔT : pas de facture à ce stade (choix métier validé). Le RDV
+    // lui-même est la trace écrite « en attente de récupération ».
+    depotInfo() {
+        this.app.showToast("Dépôt enregistré — en attente de récupération. La facture sera créée lors de la récupération.", "info");
     },
 
     async changeStatus(id, newStatus) {

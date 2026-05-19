@@ -1076,6 +1076,11 @@ export const LivraisonView = {
             if (badge) badge.textContent = currentContainerName || 'Aucun conteneur';
         }
 
+        // ⚠️ CODE MORT (P6) — cette définition est SURCHARGÉE par celle de la
+        // ligne ~3971 (déclaration de fonction la plus tardive = celle qui
+        // s'applique). Ce corps n'est JAMAIS exécuté. Ne pas le modifier en
+        // pensant agir sur la liste : éditer la version ~3971. Conservé tel
+        // quel volontairement (suppression = tâche dédiée testée).
         function filterDeliveries() {
             filteredDeliveries = deliveries.filter(d => {
                 if (currentTab === 'PARIS' && d.containerStatus !== 'PARIS') return false;
@@ -1096,6 +1101,9 @@ export const LivraisonView = {
             renderTable();
         }
 
+        // ⚠️ CODE MORT (P6) — cette définition est SURCHARGÉE par celle de la
+        // ligne ~2264. Ce corps n'est JAMAIS exécuté. Éditer la version ~2264
+        // pour agir sur le rendu du tableau. Conservé volontairement.
         function renderTable() {
             const tbody = document.getElementById('deliveriesBody');
             if (!tbody) return;

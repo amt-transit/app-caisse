@@ -1,13 +1,16 @@
 import { createApp, ref, reactive, onMounted, onUnmounted, watch } from "https://unpkg.com/vue@3/dist/vue.esm-browser.prod.js";
 
 export const Autocomplete = {
-    vueApp: null,
-    
+    // UNE instance Vue par champ (clé = inputId). Avant : une seule instance
+    // partagée -> initialiser un 2e autocomplete démontait le 1er (champ qui
+    // disparaît). Ici chaque champ ne démonte QUE sa propre instance.
+    vueApps: {},
+
     initAddress(inputId, suggestionsId, onSelectCallback = null, options = {}) {
         // Version Vue pour l'autocomplétion d'adresse
-        const container = document.getElementById(inputId)?.closest('[data-vue-autocomplete]');
-        if (container && this.vueApp) {
-            this.vueApp.unmount();
+        if (this.vueApps[inputId]) {
+            try { this.vueApps[inputId].unmount(); } catch (e) { /* déjà démonté */ }
+            this.vueApps[inputId] = null;
         }
         
         const html = `
@@ -35,12 +38,14 @@ export const Autocomplete = {
     },
     
     initVueAddress(inputId, suggestionsId, onSelectCallback, options) {
-        if (this.vueApp) this.vueApp.unmount();
-        
+        if (this.vueApps[inputId]) {
+            try { this.vueApps[inputId].unmount(); } catch (e) { /* déjà démonté */ }
+        }
+
         const element = document.getElementById(`${inputId}-wrapper`);
         if (!element) return;
-        
-        this.vueApp = createApp({
+
+        const _app = createApp({
             setup() {
                 const searchQuery = ref('');
                 const suggestions = ref([]);
@@ -156,13 +161,14 @@ export const Autocomplete = {
             }
         });
         
-        this.vueApp.mount(element);
+        this.vueApps[inputId] = _app;
+        _app.mount(element);
     },
-    
+
     initCustom(inputId, suggestionsId, searchCallback, renderItemCallback, onSelectCallback, options = {}) {
-        const container = document.getElementById(inputId)?.closest('[data-vue-autocomplete-custom]');
-        if (container && this.vueApp) {
-            this.vueApp.unmount();
+        if (this.vueApps[inputId]) {
+            try { this.vueApps[inputId].unmount(); } catch (e) { /* déjà démonté */ }
+            this.vueApps[inputId] = null;
         }
         
         const html = `
@@ -189,12 +195,14 @@ export const Autocomplete = {
     },
     
     initVueCustom(inputId, suggestionsId, searchCallback, renderItemCallback, onSelectCallback, options) {
-        if (this.vueApp) this.vueApp.unmount();
-        
+        if (this.vueApps[inputId]) {
+            try { this.vueApps[inputId].unmount(); } catch (e) { /* déjà démonté */ }
+        }
+
         const element = document.getElementById(`${inputId}-custom-wrapper`);
         if (!element) return;
-        
-        this.vueApp = createApp({
+
+        const _app = createApp({
             setup() {
                 const searchQuery = ref('');
                 const suggestions = ref([]);
@@ -298,6 +306,7 @@ export const Autocomplete = {
             }
         });
         
-        this.vueApp.mount(element);
+        this.vueApps[inputId] = _app;
+        _app.mount(element);
     }
 };
