@@ -286,8 +286,14 @@ export const ScanWarehouseView = {
 
                     isScanningPaused = true;
                     
-                    const baseRefMatch = text.match(/^([A-Z]{2}[-_\s.]\d{3}[-_\s.][A-Z0-9]+)(?:_.*)?$/i);
-                    const baseRef = baseRefMatch ? baseRefMatch[1] : text;
+                    // L'étiquette colis = `<ref>_<labelIndex>_<uniqueId>`
+                    // (cf. Nouvelle Facture). On retire UNIQUEMENT ce suffixe
+                    // `_n_n` final pour retrouver la référence de base —
+                    // robuste quel que soit le format de la ref (initiales de
+                    // n'importe quelle longueur, conteneur avec tirets, routes
+                    // SaaS…). Si pas de suffixe (ref tapée à la main), on garde.
+                    const baseRefMatch = text.match(/^(.+)_\d+_\d+$/);
+                    const baseRef = (baseRefMatch ? baseRefMatch[1] : text).trim();
                     
                     const logData = {
                         scanRef: text,

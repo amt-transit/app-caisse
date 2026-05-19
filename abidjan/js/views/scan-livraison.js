@@ -333,8 +333,10 @@ export const ScanLivraisonView = {
 
         this.isScanningPaused = true;
         
-        const baseRefMatch = text.match(/^([A-Z]{2}[-_\s.]\d{3}[-_\s.][A-Z0-9]+)(?:_.*)?$/i);
-        const baseRef = baseRefMatch ? baseRefMatch[1] : text;
+        // Étiquette = `<ref>_<labelIndex>_<uniqueId>` : on retire uniquement
+        // ce suffixe `_n_n` (robuste quel que soit le format de la ref).
+        const baseRefMatch = text.match(/^(.+)_\d+_\d+$/);
+        const baseRef = (baseRefMatch ? baseRefMatch[1] : text).trim();
         
         const logData = {
             scanRef: text,
