@@ -502,7 +502,11 @@ export const NouveauProgrammeView = {
                     unsub = onSnapshot(q, (snapshot) => {
                         const data = snapshot.docs
                             .map(d => ({id: d.id, ...d.data()}))
-                            .filter(r => r.status === 'confirmé' || r.status === 'en_cours');
+                            // Tous les RDV ACTIFs du jour sont planifiables par
+                            // le chauffeur (y compris « en_attente », sinon un
+                            // RDV créé n'apparaît jamais ici). On exclut
+                            // seulement les états terminaux.
+                            .filter(r => !['annulé', 'annule', 'réalisé', 'realise', 'facturé', 'facture'].includes(r.status));
                             
                         data.sort((a, b) => (a.orderInRoute || 0) - (b.orderInRoute || 0));
                         rdvs.value = data;
