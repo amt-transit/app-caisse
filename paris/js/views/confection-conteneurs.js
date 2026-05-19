@@ -1,5 +1,5 @@
 import { db } from '../../../firebase-config.js';
-import { collection, query, where, onSnapshot, doc, updateDoc, writeBatch, setDoc } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
+import { collection, query, where, onSnapshot, doc, updateDoc, writeBatch, setDoc, arrayUnion, getDocs, addDoc, limit } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 import { createApp, ref, computed, onMounted, onUnmounted, watch } from "https://unpkg.com/vue@3/dist/vue.esm-browser.prod.js";
 import { getCollectionName } from '../../../agencies-config.js';
 import { matchesShippingMode } from '../../../shipping-mode.js';
@@ -378,18 +378,57 @@ export const ConfectionConteneursView = {
 
                 const addSelectedToContainer = async () => {
                     if (selectedAvailableIds.value.length === 0 || !activeTabId.value || !currentContainerName.value) return;
-                    
+
+                    const cont = currentContainerName.value;
+                    const activeAgency = sessionStorage.getItem('currentActiveAgency') || 'paris';
+                    const agent = sessionStorage.getItem('userName') || 'Agent';
+                    // Dossiers sélectionnés (objets) pour récupérer leur réf.
+                    const selected = availableLivraisons.value.filter(l => selectedAvailableIds.value.includes(l.id));
+                    const nowIso = new Date().toISOString();
+
                     const batch = writeBatch(db);
-                    selectedAvailableIds.value.forEach(id => {
-                        batch.update(doc(db, getCollectionName("livraisons"),id), {
-                            conteneur: currentContainerName.value,
-                            containerStatus: 'A_VENIR'
+                    selected.forEach(l => {
+                        batch.update(doc(db, getCollectionName("livraisons"), l.id), {
+                            conteneur: cont,
+                            containerStatus: 'A_VENIR',
+                            // Ajout manuel = AGIT COMME UN SCAN : on journalise
+                            // dans scanHistory (type identique au scan conteneur).
+                            scanHistory: arrayUnion({
+                                scanRef: l.ref || l.id,
+                                date: nowIso,
+                                type: 'CONTENEUR_CHARGEMENT',
+                                container: cont,
+                                manual: true
+                            })
                         });
                     });
 
                     try {
                         await batch.commit();
-                        globalApp.showToast(`${selectedAvailableIds.value.length} dossier(s) ajouté(s) au conteneur ${currentContainerName.value}.`, "success");
+                        // Comme le scan : maj de la caisse (transaction) +
+                        // entrée dans l'historique des scans (scan_logs), par dossier.
+                        for (const l of selected) {
+                            try {
+                                if (l.ref) {
+                                    const qT = query(collection(db, getCollectionName("transactions")), where('reference', '==', l.ref), limit(1));
+                                    const sT = await getDocs(qT);
+                                    if (!sT.empty) {
+                                        await updateDoc(doc(db, getCollectionName("transactions"), sT.docs[0].id), { conteneur: cont });
+                                    }
+                                }
+                            } catch (e) { /* non bloquant */ }
+                            addDoc(collection(db, 'scan_logs'), {
+                                scanRef: l.ref || l.id,
+                                date: nowIso,
+                                type: 'CONTENEUR_CHARGEMENT',
+                                agent,
+                                agency: activeAgency,
+                                container: cont,
+                                status: 'SUCCES',
+                                manual: true
+                            }).catch(e => console.error("Log scan (ajout manuel):", e));
+                        }
+                        globalApp.showToast(`${selected.length} dossier(s) ajouté(s) au conteneur ${cont}.`, "success");
                         selectedAvailableIds.value = [];
                     } catch(e) {
                         globalApp.showToast("Erreur lors de l'ajout.", "error");
