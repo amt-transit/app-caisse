@@ -4,6 +4,15 @@ import { Autocomplete } from '../../paris/js/views/autocomplete.js';
 import { CONSTANTS } from '../../constants.js';
 import { getCollectionName, AGENCIES } from '../../agencies-config.js';
 
+// EUR si agence historique 'paris' OU route SaaS dont la devise configurée
+// est EUR. (Même règle que app.formatMoneyLocal — cohérence d'affichage.)
+const isEurAgency = () => {
+    const ag = sessionStorage.getItem('currentActiveAgency') || 'abidjan';
+    if (ag === 'paris') return true;
+    const a = AGENCIES && AGENCIES[ag];
+    return !!(a && a.currency === 'EUR');
+};
+
 export const ClientsView = {
     unsubClients: null,
     unsubLivraisons: null,
@@ -26,7 +35,7 @@ export const ClientsView = {
     },
 
     formatMoneyLocal(amount) {
-        const isEur = (sessionStorage.getItem('currentActiveAgency') || 'abidjan') === 'paris';
+        const isEur = isEurAgency();
         if (isEur) {
             return new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(amount || 0).replace(/[\u202F\u00A0]/g, ' ').replace(/\s*\/\s*/g, ' ');
         } else {
@@ -358,7 +367,7 @@ export const ClientsView = {
                 
                 let amountCFA = parseFloat(String(liv.prixOriginal || liv.montant || '0').replace(/[^\d]/g, '')) || 0;
                 // Si l'agence est en EUR (Paris), on convertit le CA de CFA vers EUR en arrière plan pour le calcul interne
-                const isEur = (sessionStorage.getItem('currentActiveAgency') || 'abidjan') === 'paris';
+                const isEur = isEurAgency();
                 if (isEur) amountCFA = amountCFA / CONSTANTS.TAUX_CONVERSION;
                 st.ca += amountCFA; 
 
@@ -546,7 +555,7 @@ export const ClientsView = {
         const carnetAdresses = Array.from(contactsMap.entries()).sort((a, b) => b[1] - a[1]); 
 
         const panierMoyen = client.factures > 0 ? (client.ca / client.factures) : 0;
-        const isEur = activeAgency === 'paris';
+        const isEur = isEurAgency();
         const TAUX = isEur ? CONSTANTS.TAUX_CONVERSION : 1;
 
         const html = `

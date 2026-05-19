@@ -6,6 +6,15 @@ import { createApp, ref, computed, reactive, onMounted, onUnmounted } from "http
 import { getCollectionName, AGENCIES } from '../../agencies-config.js';
 import { filterByShippingMode } from '../../shipping-mode.js';
 
+// EUR si agence historique 'paris' OU route SaaS dont la devise configurée
+// est EUR. (Même règle que app.formatMoneyLocal — cohérence d'affichage.)
+const isEurAgency = () => {
+    const ag = sessionStorage.getItem('currentActiveAgency') || 'abidjan';
+    if (ag === 'paris') return true;
+    const a = AGENCIES && AGENCIES[ag];
+    return !!(a && a.currency === 'EUR');
+};
+
 export const ToutesLesFacturesView = {
     unsub: null,
     invoices: [],
@@ -25,7 +34,7 @@ export const ToutesLesFacturesView = {
 
     // Helper centralisé pour le formatage des devises selon l'agence active
     formatMoneyLocal(amount, forceCfa = false) {
-        const isEur = (sessionStorage.getItem('currentActiveAgency') || 'abidjan') === 'paris';
+        const isEur = isEurAgency();
         if (isEur && !forceCfa) {
             return new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(amount || 0).replace(/[\u202F\u00A0]/g, ' ').replace(/\s*\/\s*/g, ' ');
         } else {
@@ -38,7 +47,7 @@ export const ToutesLesFacturesView = {
         window.app.views = window.app.views || {};
         window.app.views.toutesLesFactures = this;
 
-        const isEur = (sessionStorage.getItem('currentActiveAgency') || 'abidjan') === 'paris';
+        const isEur = isEurAgency();
 
         const html = `
             <style>
@@ -341,7 +350,7 @@ export const ToutesLesFacturesView = {
 
         if (status) {
             filtered = filtered.filter(inv => {
-                const isEur = (sessionStorage.getItem('currentActiveAgency') || 'abidjan') === 'paris';
+                const isEur = isEurAgency();
                 const TAUX = isEur ? CONSTANTS.TAUX_CONVERSION : 1;
                 
                 const reste = Math.abs(parseFloat(inv.reste) || 0) / TAUX;
@@ -388,7 +397,7 @@ export const ToutesLesFacturesView = {
             return;
         }
         
-        const isEur = (sessionStorage.getItem('currentActiveAgency') || 'abidjan') === 'paris';
+        const isEur = isEurAgency();
         const TAUX = isEur ? CONSTANTS.TAUX_CONVERSION : 1;
 
         tbody.innerHTML = this.filteredInvoices.map(inv => {
@@ -464,7 +473,7 @@ export const ToutesLesFacturesView = {
             if (cData.adresse) expAddress = cData.adresse;
         }
 
-        const isEur = (sessionStorage.getItem('currentActiveAgency') || 'abidjan') === 'paris';
+        const isEur = isEurAgency();
         const TAUX = isEur ? CONSTANTS.TAUX_CONVERSION : 1;
 
         const total = (parseFloat(invoice.prix) || 0) / TAUX;
@@ -825,7 +834,7 @@ export const ToutesLesFacturesView = {
         this.currentPaymentInvoice = JSON.parse(JSON.stringify(inv));
         if (!this.currentPaymentInvoice.paymentHistory) this.currentPaymentInvoice.paymentHistory = [];
 
-        const isEur = (sessionStorage.getItem('currentActiveAgency') || 'abidjan') === 'paris';
+        const isEur = isEurAgency();
         const TAUX = isEur ? CONSTANTS.TAUX_CONVERSION : 1;
 
         // Chargement des agents pour la liste déroulante
@@ -934,7 +943,7 @@ export const ToutesLesFacturesView = {
         const tbody = document.getElementById('tlfPaymentsBody');
         if (!tbody) return;
 
-        const isEur = (sessionStorage.getItem('currentActiveAgency') || 'abidjan') === 'paris';
+        const isEur = isEurAgency();
         const TAUX = isEur ? CONSTANTS.TAUX_CONVERSION : 1;
 
         let totalAbidjanCfa = 0;
@@ -1004,7 +1013,7 @@ export const ToutesLesFacturesView = {
         const p = this.currentPaymentInvoice.paymentHistory[index];
         if (!p) return;
         
-        const isEur = (sessionStorage.getItem('currentActiveAgency') || 'abidjan') === 'paris';
+        const isEur = isEurAgency();
         const TAUX = isEur ? CONSTANTS.TAUX_CONVERSION : 1;
         
         document.getElementById('tlfPayIndex').value = index;
@@ -1038,7 +1047,7 @@ export const ToutesLesFacturesView = {
     },
 
     addOrUpdateLocalPayment() {
-        const isEur = (sessionStorage.getItem('currentActiveAgency') || 'abidjan') === 'paris';
+        const isEur = isEurAgency();
         const TAUX = isEur ? CONSTANTS.TAUX_CONVERSION : 1;
         
         const date = document.getElementById('tlfPayDate').value;
@@ -1099,7 +1108,7 @@ export const ToutesLesFacturesView = {
         const inv = this.invoices.find(i => i.id === id);
         if (!inv) return;
 
-        const isEur = (sessionStorage.getItem('currentActiveAgency') || 'abidjan') === 'paris';
+        const isEur = isEurAgency();
         const TAUX = isEur ? CONSTANTS.TAUX_CONVERSION : 1;
 
         try {
@@ -1186,7 +1195,7 @@ export const ToutesLesFacturesView = {
         const inv = this.invoices.find(i => i.id === id);
         if (!inv) return;
         
-        const isEur = (sessionStorage.getItem('currentActiveAgency') || 'abidjan') === 'paris';
+        const isEur = isEurAgency();
         const TAUX = isEur ? CONSTANTS.TAUX_CONVERSION : 1;
         
         const total = (parseFloat(inv.prix) || 0) / TAUX;
@@ -1421,7 +1430,7 @@ export const ToutesLesFacturesView = {
         const container = document.getElementById('tlfEditItemsContainer');
         if (!container) return;
         
-        const isEur = (sessionStorage.getItem('currentActiveAgency') || 'abidjan') === 'paris';
+        const isEur = isEurAgency();
         const deviseStr = isEur ? '€' : 'CFA';
         const stepStr = isEur ? '0.01' : '1';
 
@@ -1516,7 +1525,7 @@ export const ToutesLesFacturesView = {
     },
 
     calculateEditTotals() {
-        const isEur = (sessionStorage.getItem('currentActiveAgency') || 'abidjan') === 'paris';
+        const isEur = isEurAgency();
         const TAUX = isEur ? CONSTANTS.TAUX_CONVERSION : 1;
 
         const totalDisplay = this.editItems.reduce((sum, item) => sum + item.total, 0);
@@ -1549,7 +1558,7 @@ export const ToutesLesFacturesView = {
         const inv = this.invoices.find(i => i.id === id);
         if (!inv) return;
         
-        const isEur = (sessionStorage.getItem('currentActiveAgency') || 'abidjan') === 'paris';
+        const isEur = isEurAgency();
         const TAUX = isEur ? CONSTANTS.TAUX_CONVERSION : 1;
 
         const newPrixCfa = this.editItems.reduce((sum, item) => sum + (isEur ? Math.round(item.total * TAUX) : item.total), 0);
@@ -1905,7 +1914,7 @@ export const ToutesLesFacturesView = {
             : ["Description / Nature du Colis", "Qté", "P.U", "Total"];
         const tableRows = [];
         
-        const isEur = (sessionStorage.getItem('currentActiveAgency') || 'abidjan') === 'paris';
+        const isEur = isEurAgency();
         const TAUX = isEur ? CONSTANTS.TAUX_CONVERSION : 1;
 
         if (invoice.items && Array.isArray(invoice.items)) {
