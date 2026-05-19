@@ -45,7 +45,7 @@ export const ClientsView = {
         
         const importBtnHtml = isAdmin ? `
             <input type="file" id="importClientInput" accept=".csv, .xlsx, .xls" style="display: none;">
-            <button class="btn btn-outline" onclick="document.getElementById('importClientInput').click()" style="display: flex; align-items: center; gap: 8px;"><i class="fas fa-file-import"></i> Importer clients</button>
+            <button class="btn btn-outline" onclick="window.app.views.clients.importClientsSoon()" title="Fonction en préparation" style="display: flex; align-items: center; gap: 8px; opacity: 0.7;"><i class="fas fa-file-import"></i> Importer clients</button>
         ` : '';
         
         const html = `
@@ -165,7 +165,7 @@ export const ClientsView = {
                         </select>
                     </div>
                     <div class="filter-group" style="display: flex; align-items: flex-end;">
-                        <button class="btn btn-outline" style="height: 38px; width: 100%; border-radius: 10px; font-weight: 600; display: flex; align-items: center; justify-content: center; gap: 8px;">
+                        <button class="btn btn-outline" onclick="window.app.views.clients.exportClients()" style="height: 38px; width: 100%; border-radius: 10px; font-weight: 600; display: flex; align-items: center; justify-content: center; gap: 8px;">
                             <i class="fas fa-file-excel"></i> Exporter
                         </button>
                     </div>
@@ -453,6 +453,41 @@ export const ClientsView = {
                 <td style="text-align: center;"><button class="btn-small" style="background: transparent; border: none; font-size: 16px; cursor: pointer;">👉</button></td>
             </tr>
         `).join('');
+    },
+
+    // Export Excel des clients actuellement filtrés (respecte la recherche
+    // et les filtres en cours). XLSX est chargé globalement (comme ailleurs).
+    exportClients() {
+        try {
+            if (typeof XLSX === 'undefined') { alert("Export indisponible (librairie non chargée)."); return; }
+            const src = (this.filteredClients && this.filteredClients.length) ? this.filteredClients : (this.clients || []);
+            const rows = src.map(c => ({
+                Nom: c.nom || '',
+                'Téléphone': c.tel || '',
+                Date: c.date || '',
+                Risque: c.risque || '',
+                Segment: c.segment || '',
+                CA: Number(c.ca) || 0,
+                Factures: c.factures || 0,
+            }));
+            if (rows.length === 0) { alert("Aucun client à exporter."); return; }
+            const ws = XLSX.utils.json_to_sheet(rows);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, 'Clients');
+            XLSX.writeFile(wb, `Clients_${new Date().toLocaleDateString('fr-FR').replace(/\//g, '-')}.xlsx`);
+        } catch (e) {
+            console.error('[clients] export Excel échec —', e);
+            alert("Export impossible.");
+        }
+    },
+
+    // L'import de clients (CSV/Excel) reste à construire proprement
+    // (analyse du fichier + anti-doublon + écriture en base). En attendant,
+    // on est honnête : pas de fausse promesse à l'utilisateur.
+    importClientsSoon() {
+        const msg = "Import de clients : fonction en préparation, bientôt disponible.";
+        if (window.app && typeof window.app.showToast === 'function') window.app.showToast(msg, "info");
+        else alert(msg);
     },
 
     async showDetail(clientId) {

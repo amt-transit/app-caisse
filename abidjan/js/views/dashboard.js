@@ -2,6 +2,7 @@ import { db } from '../../../firebase-config.js';
 import { collection, getDocs, query, where, onSnapshot } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 import { CONSTANTS } from '../../../constants.js';
 import { getCollectionName } from '../../../agencies-config.js';
+import { filterByShippingMode } from '../../../shipping-mode.js';
 
 export const DashboardView = {
     render(app, container) {
@@ -580,7 +581,13 @@ export const DashboardView = {
         }
 
         function updateDashboard() {
-            const cleanTransactions = getCleanTransactions(allTransactions);
+            // Maritime et Aérien sont DISSOCIÉS : on ne garde que les
+            // transactions du mode d'expédition actif (🚢/✈️). Les anciens
+            // documents sans modeExpedition = maritime (règle legacy unique
+            // de shipping-mode.js). Sinon les montants des deux modes se
+            // mélangent dans le tableau de bord.
+            const modeTransactions = filterByShippingMode(allTransactions);
+            const cleanTransactions = getCleanTransactions(modeTransactions);
             const cleanExpenses = allExpenses.filter(e => !e.sessionId || validatedSessions.has(e.sessionId));
 
             const start = startDateInput.value;
@@ -1306,6 +1313,47 @@ export const DashboardView = {
                 btnExcel.onclick = () => {
                     const wb = XLSX.utils.table_to_book(document.getElementById('containerDetailsTable'));
                     XLSX.writeFile(wb, `Details_${containerName}.xlsx`);
+                };
+            }
+
+            const btnPdf = document.getElementById('downloadContainerPdfBtn');
+            if(btnPdf) {
+                btnPdf.onclick = async () => {
+                    try {
+                        // jsPDF n'est PAS chargé globalement : on le charge à la
+                        // demande (comme touteslesfactures.js) sinon window.jspdf
+                        // est undefined sur cette page.
+                        if (typeof window.jspdf === 'undefined') {
+                            await new Promise((resolve, reject) => {
+                                const s1 = document.createElement('script');
+                                s1.src = "https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js";
+                                s1.onload = () => {
+                                    const s2 = document.createElement('script');
+                                    s2.src = "https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js";
+                                    s2.onload = resolve;
+                                    s2.onerror = reject;
+                                    document.head.appendChild(s2);
+                                };
+                                s1.onerror = reject;
+                                document.head.appendChild(s1);
+                            });
+                        }
+                        const { jsPDF } = window.jspdf;
+                        const doc = new jsPDF({ orientation: 'landscape' });
+                        doc.text(`Détails conteneur : ${containerName}`, 14, 16);
+                        doc.autoTable({
+                            html: '#containerDetailsTable',
+                            startY: 22,
+                            theme: 'grid',
+                            styles: { fontSize: 7 },
+                            headStyles: { fillColor: [211, 47, 47] },
+                        });
+                        doc.save(`Details_${containerName}.pdf`);
+                    } catch (e) {
+                        console.error('[dashboard abidjan] export PDF conteneur échec —', e);
+                        if (typeof showToast === 'function') showToast("Export PDF impossible.", "error");
+                        else alert("Export PDF impossible.");
+                    }
                 };
             }
 

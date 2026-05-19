@@ -1,5 +1,5 @@
 import { db } from '../../../firebase-config.js';
-import { collection, query, where, onSnapshot, doc, setDoc, addDoc, updateDoc, arrayUnion, getDocs, writeBatch } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
+import { collection, query, where, onSnapshot, doc, setDoc, addDoc, updateDoc, arrayUnion, getDocs, writeBatch, deleteField } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 
 export const ProspectingView = {
     unsub: null,

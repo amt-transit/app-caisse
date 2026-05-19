@@ -154,7 +154,7 @@ export const BateauxDepartView = {
                                     <div class="form-title">➕ Nouveau Bateau</div>
                                     <div class="form-hint">Cliquez sur Créer pour ouvrir le formulaire</div>
                                 </div>
-                                <button class="btn-create" type="button" @click="openBoatModal">➕ Créer</button>
+                                <button class="btn-create" type="button" @click="openBoatModal()">➕ Créer</button>
                             </div>
                             
                             <div class="bt-cards-grid">
@@ -411,7 +411,11 @@ export const BateauxDepartView = {
                         }
                         closeBoatModal();
                     } catch(e) {
-                        globalApp.showToast("Erreur lors de l'enregistrement.", "error");
+                        // Diagnostic : on remonte la cause réelle (permission,
+                        // doc introuvable, réseau…) au lieu d'un message muet.
+                        console.error('[bateaux-depart] saveBoat échec —', e);
+                        const detail = (e && (e.code || e.message)) ? ` (${e.code || e.message})` : '';
+                        globalApp.showToast(`Erreur lors de l'enregistrement.${detail}`, "error");
                     } finally {
                         saving.value = false;
                     }

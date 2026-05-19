@@ -345,7 +345,7 @@ export const NouvelleFactureView = {
                         <button id="nfSubmitBtn" class="btn btn-primary" :disabled="saving" @click="submitInvoice()" style="width: 100%; padding: 16px; font-size: 16px; margin-top: 15px; display: flex; justify-content: center; gap: 10px;">
                             <i v-if="saving" class="fas fa-spinner fa-spin"></i>
                             <i v-else class="fas fa-check-circle"></i>
-                            {{ saving ? 'Enregistrement...' : 'Enregistrer la facture' }}
+                            {{ saving ? 'Enregistrement...' : (form.type === 'DEVIS' ? 'Enregistrer le devis' : 'Enregistrer la facture') }}
                         </button>
                     </div>
 
@@ -423,9 +423,20 @@ initVue(globalApp) {
             const availableDests = ref([]);
             const availableCommunes = ref([]);
             
+            // Si on arrive depuis le raccourci « Nouveau Devis », la page
+            // s'ouvre pré-réglée sur DEVIS (drapeau posé par NouveauDevisView,
+            // consommé une seule fois).
+            let _presetType = 'FACTURE';
+            try {
+                if (sessionStorage.getItem('nf_preset_type') === 'DEVIS') {
+                    _presetType = 'DEVIS';
+                    sessionStorage.removeItem('nf_preset_type');
+                }
+            } catch (e) { /* sessionStorage indisponible : on reste sur FACTURE */ }
+
             const form = reactive({
                 date: new Date().toISOString().split('T')[0],
-                type: 'FACTURE',
+                type: _presetType,
                 agence: '',
                 expediteur: '',
                 destinataire: '',
@@ -846,6 +857,51 @@ initVue(globalApp) {
                     globalApp.showToast("Veuillez remplir l'Expéditeur, le Destinataire, l'Agence destination et au moins une Description d'article.", "error");
                     return;
                 }
+
+                // ── CHEMIN DEVIS (isolé) ─────────────────────────────────────
+                // Un devis n'est PAS payé : on enregistre uniquement un
+                // document dans `quotes`. AUCUNE transaction, AUCUN encaissement
+                // caisse, AUCUNE commission. Format identique à l'ancienne page
+                // « Nouveau Devis » pour que la liste des devis reste cohérente.
+                if (form.type === 'DEVIS') {
+                    saving.value = true;
+                    try {
+                        const totalDevis = autoPricingActive.value
+                            ? Math.round(parseFloat(form.totalCfa) || 0)
+                            : totalFret.value;
+                        const refDevis = "DEV-" + Date.now().toString().slice(-6);
+                        const quoteData = {
+                            reference: refDevis,
+                            client: form.expediteur,
+                            destinataire: form.destinataire,
+                            date: form.date,
+                            dateValidite: '',
+                            volume: parseFloat(form.volume) || 0,
+                            devise: autoPricingActive.value ? 'XOF' : 'EUR',
+                            agence: form.agence,
+                            lieuLivraison: form.lieu,
+                            conditions: form.comment || '',
+                            items: items.value,
+                            totalHT: totalDevis,
+                            remise: 0,
+                            totalNet: totalDevis,
+                            status: "ENVOYÉ",
+                            agency: sessionStorage.getItem('currentActiveAgency') || 'paris',
+                            saisiPar: sessionStorage.getItem('userName') || 'Agent',
+                            createdAt: new Date().toISOString(),
+                        };
+                        await addDoc(collection(db, 'quotes'), quoteData);
+                        globalApp.showToast(`Devis ${refDevis} généré avec succès !`, "success");
+                        globalApp.renderPage('quotes-list');
+                    } catch (e) {
+                        console.error('[nouvellefacture] enregistrement DEVIS échec —', e);
+                        globalApp.showToast("Erreur lors de l'enregistrement du devis.", "error");
+                    } finally {
+                        saving.value = false;
+                    }
+                    return; // ← stop : on ne touche à RIEN du flux facture
+                }
+                // ─────────────────────────────────────────────────────────────
 
                 saving.value = true;
 

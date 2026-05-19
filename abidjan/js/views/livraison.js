@@ -5980,7 +5980,74 @@ export const LivraisonView = {
             if(b) b.textContent=val||'Aucun conteneur';
         }
 
-        Object.assign(window, { lvTab, lvUpdateBadge });
+        // ── Conteneur actif : nouveau badge + modale rapide ──
+        // Réutilise la mécanique éprouvée (setActiveContainer / filterDeliveries)
+        // au lieu de la réinventer. La modale n'est qu'une UI par-dessus.
+        function lvOpenContModal() {
+            const qm = document.getElementById('lv-qm');
+            const qi = document.getElementById('lv-qm-input');
+            const qcb = document.getElementById('lv-qm-cb');
+            if (!qm) return;
+            const cur = (currentContainerName && currentContainerName !== 'Aucun') ? currentContainerName : '';
+            if (qi) qi.value = cur;
+            const existCb = document.getElementById('filterByContainerCb');
+            if (qcb) qcb.checked = !!(existCb && existCb.checked);
+            qm.classList.add('active');
+            if (qi) setTimeout(() => qi.focus(), 50);
+        }
+
+        function lvCloseContModal() {
+            const qm = document.getElementById('lv-qm');
+            if (qm) qm.classList.remove('active');
+        }
+
+        function lvApplyCont() {
+            const qi = document.getElementById('lv-qm-input');
+            const qcb = document.getElementById('lv-qm-cb');
+            const val = qi ? qi.value.trim() : '';
+            if (!val) {
+                if (typeof showToast === 'function') showToast('Veuillez saisir un numéro de conteneur', 'error');
+                return;
+            }
+            // Pousse la valeur dans l'input historique que setActiveContainer lit.
+            const input = document.getElementById('activeContainerInput');
+            if (input) input.value = val;
+            // Synchronise la case "Filtrer la vue" + persiste l'état actif.
+            const wantFilter = !!(qcb && qcb.checked);
+            const existCb = document.getElementById('filterByContainerCb');
+            if (existCb) existCb.checked = wantFilter;
+            if (currentTab === 'EN_COURS' || currentTab === 'A_VENIR') {
+                localStorage.setItem(`container_filter_${currentTab}_active`, wantFilter);
+            }
+            // Logique éprouvée : persiste le nom, met à jour titre + badge, toast.
+            setActiveContainer();
+            // Applique (ou retire) le filtre quel que soit l'état de la case.
+            if (typeof filterDeliveries === 'function') filterDeliveries();
+            lvCloseContModal();
+        }
+
+        function lvDeselAll() {
+            if (typeof selectedIds !== 'undefined' && selectedIds.clear) selectedIds.clear();
+            const bar = document.getElementById('lv-sel-bar');
+            if (bar) bar.classList.remove('show');
+            const n = document.getElementById('lv-sel-n');
+            if (n) n.textContent = '0';
+            const sc = document.getElementById('selectedCount');
+            if (sc) sc.textContent = '0';
+            const selAll = document.getElementById('selectAllCheckbox');
+            if (selAll) selAll.checked = false;
+            if (typeof renderTable === 'function') renderTable();
+        }
+
+        // "Plus" : affiche 100 lignes de plus (logique existante loadMoreItems).
+        function lvToggleMore() {
+            if (typeof loadMoreItems === 'function') loadMoreItems();
+        }
+
+        Object.assign(window, {
+            lvTab, lvUpdateBadge,
+            lvOpenContModal, lvCloseContModal, lvApplyCont, lvDeselAll, lvToggleMore,
+        });
 
         window.activeAgency = sessionStorage.getItem('currentActiveAgency') || 'abidjan';
 

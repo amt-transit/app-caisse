@@ -1865,6 +1865,12 @@ tr.clickable-row:hover { background: #f1f5f9 !important; }
 .lv-container-badge { display:inline-flex; align-items:center; gap:5px; background:#eff6ff; border:1px solid #bfdbfe; border-radius:6px; padding:4px 9px; font-size:12px; font-weight:700; color:#1565c0; cursor:pointer; transition:background .15s; white-space:nowrap; }
 .lv-container-badge:hover { background:#dbeafe; }
 
+/* Livraison : on masque l'ANCIENNE boîte "conteneur actif" (rectangle bleu
+   pâle + champ + OK) au profit du nouveau badge/popup. !important pour
+   neutraliser le style inline posé par switchTab. L'input #activeContainerInput
+   reste dans le DOM (caché) car la nouvelle modale s'appuie dessus. */
+#activeContainerSection { display:none !important; }
+
 /* ── ONGLETS ── */
 .lv-tabs { display:flex; align-items:center; gap:2px; padding:5px 0 0; overflow-x:auto; }
 .lv-tab { padding:7px 14px; border:none; background:none; font-size:13px; font-weight:600; color:var(--lv-muted); cursor:pointer; border-bottom:2px solid transparent; margin-bottom:-1px; border-radius:6px 6px 0 0; white-space:nowrap; display:inline-flex; align-items:center; gap:5px; transition:color .15s; font-family:inherit; }
