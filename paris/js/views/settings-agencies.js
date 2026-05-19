@@ -124,6 +124,15 @@ export const SettingsAgenciesView = {
                                 <input class="agx-inp" v-model="wiz.depFlag" placeholder="Ex : 🇨🇳" style="max-width:120px;">
                             </div>
 
+                            <div class="agx-field" style="margin-bottom:20px;">
+                                <label class="agx-lab">💱 Devise de facturation au DÉPART</label>
+                                <select class="agx-inp" v-model="wiz.depCurrency" style="max-width:280px;">
+                                    <option value="EUR">€ Euro (saisie en €, converti en FCFA)</option>
+                                    <option value="XOF">FCFA (saisie directe en FCFA)</option>
+                                </select>
+                                <p style="margin:6px 0 0; font-size:12px; color:#64748b;">L'agence d'arrivée reste en FCFA (devise interne du système). Tout est stocké en FCFA.</p>
+                            </div>
+
                             <label class="agx-lab">🛬 Vers quelles destinations ? (au moins une)</label>
                             <div v-for="(d, i) in wiz.arrivals" :key="i" class="agx-dest-row">
                                 <input class="agx-inp" v-model="d.name" placeholder="Ex : Abidjan">
@@ -223,7 +232,7 @@ export const SettingsAgenciesView = {
                     .toString().normalize('NFD').replace(/[̀-ͯ]/g, '')
                     .toLowerCase().replace(/[^a-z0-9]/g, '');
 
-                const wiz = reactive({ depName: '', depFlag: '', arrivals: [{ name: '', flag: '' }] });
+                const wiz = reactive({ depName: '', depFlag: '', depCurrency: 'EUR', arrivals: [{ name: '', flag: '' }] });
                 const addDest = reactive({ depId: '', depName: '', name: '', flag: '' });
                 const edit = reactive({ id: '', name: '', flag: '' });
 
@@ -266,7 +275,7 @@ export const SettingsAgenciesView = {
                 const exists = (id) => agencies.value.some(a => a.id === id);
 
                 const openWizard = () => {
-                    wiz.depName = ''; wiz.depFlag = ''; wiz.arrivals = [{ name: '', flag: '' }];
+                    wiz.depName = ''; wiz.depFlag = ''; wiz.depCurrency = 'EUR'; wiz.arrivals = [{ name: '', flag: '' }];
                     showWizard.value = true;
                 };
 
@@ -284,16 +293,27 @@ export const SettingsAgenciesView = {
                         const batch = writeBatch(db);
                         batch.set(doc(db, "agencies_config", depId), {
                             name: depName, type: 'departure', appFolder: 'paris',
-                            flag: wiz.depFlag || '🏳️', prefix, updatedAt: new Date().toISOString()
+                            flag: wiz.depFlag || '🏳️', prefix, currency: wiz.depCurrency,
+                            updatedAt: new Date().toISOString()
                         });
                         for (const a of valmidArr) {
                             const aid = `${slug(a.name)}_${depId}`;
                             batch.set(doc(db, "agencies_config", aid), {
                                 name: a.name.trim(), type: 'arrival', appFolder: 'abidjan',
-                                flag: a.flag || '🏳️', prefix: '', updatedAt: new Date().toISOString()
+                                flag: a.flag || '🏳️', prefix: '', currency: 'XOF',
+                                updatedAt: new Date().toISOString()
                             });
                         }
                         await batch.commit();
+                        // La devise du départ pilote le modèle de facturation
+                        // déjà lu par Nouvelle Facture (settings/invoice_config_<dep>) :
+                        // € -> modèle 'paris' (saisie €, conversion ×655,957) ;
+                        // FCFA -> modèle 'chine' (saisie directe FCFA).
+                        // Aucun changement du calcul : on règle juste le modèle.
+                        await setDoc(doc(db, "settings", `invoice_config_${depId}`), {
+                            factureModel: wiz.depCurrency === 'EUR' ? 'paris' : 'chine',
+                            updatedAt: new Date().toISOString()
+                        }, { merge: true });
                         globalApp.showToast("Route créée avec succès !", "success");
                         showWizard.value = false;
                     } catch (e) {
