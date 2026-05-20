@@ -413,13 +413,13 @@ export const ParrainageView = {
                             <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:12px; padding:20px; margin-bottom:25px; max-width:600px;">
                                 <div style="font-weight:800; color:#0f172a; margin-bottom:12px;">Simulation sur une base de 100 000 CFA</div>
                                 <div style="font-size:13px; line-height:1.8; color:#334155;">
-                                    <div style="color:#0369a1; font-weight:700; margin-bottom:2px;"><i class="fas fa-user"></i> Démarcheur seul (Parrain direct, sans Filleul) :</div>
-                                    <div style="font-size:11px; color:#94a3b8; padding-left:18px; margin-bottom:6px;">Base = Montant facturé (charges fixes non appliquées)</div>
-                                    <div style="display:flex; justify-content:space-between; padding-left:15px;"><span>Démarcheur :</span> <strong>{{ formatMoney(simulation.demBrut) }}</strong></div>
+                                    <div style="color:#0369a1; font-weight:700; margin-bottom:2px;"><i class="fas fa-user"></i> Parrain seul (pas de Filleul au-dessous) :</div>
+                                    <div style="font-size:11px; color:#94a3b8; padding-left:18px; margin-bottom:6px;">Base = Bénéfice net (= Montant facturé − Charges fixes)</div>
+                                    <div style="display:flex; justify-content:space-between; padding-left:15px;"><span>Parrain :</span> <strong>{{ formatMoney(simulation.demBrut) }}</strong></div>
                                     <div style="display:flex; justify-content:space-between; padding-left:15px; border-bottom:1px dashed #cbd5e1; padding-bottom:8px; margin-bottom:12px;"><span>Agence :</span> <strong>{{ formatMoney(simulation.amtBrut) }}</strong></div>
 
-                                    <div style="color:#d97706; font-weight:700; margin-bottom:2px;"><i class="fas fa-code-branch"></i> Filleul actif (apporté par un Parrain) :</div>
-                                    <div style="font-size:11px; color:#94a3b8; padding-left:18px; margin-bottom:6px;">Base = Bénéfice net (= Montant facturé − Charges fixes par m³/kg)</div>
+                                    <div style="color:#d97706; font-weight:700; margin-bottom:2px;"><i class="fas fa-code-branch"></i> Filleul (apporté par un Parrain) :</div>
+                                    <div style="font-size:11px; color:#94a3b8; padding-left:18px; margin-bottom:6px;">Base = Bénéfice net (= Montant facturé − Charges fixes)</div>
                                     <div style="display:flex; justify-content:space-between; padding-left:15px;"><span>Filleul :</span> <strong>{{ formatMoney(simulation.demNet) }}</strong></div>
                                     <div style="display:flex; justify-content:space-between; padding-left:15px;"><span>Parrain (bonus, payé par l'Agence) :</span> <strong style="color:#d97706;">{{ formatMoney(simulation.bonus) }}</strong></div>
                                     <div style="display:flex; justify-content:space-between; padding-left:15px;"><span>Agence :</span> <strong>{{ formatMoney(simulation.amtNet) }}</strong></div>
@@ -436,18 +436,18 @@ export const ParrainageView = {
                         <!-- CHARGES FIXES PAR ROUTE (M³ maritime / kg aérien) -->
                         <!-- ============================================ -->
                         <div class="stat-box" style="margin-top:25px;">
-                            <h2 style="margin-top:0; font-size:18px;"><i class="fas fa-coins text-amber-500"></i> Charges fixes par route</h2>
+                            <h2 style="margin-top:0; font-size:18px;"><i class="fas fa-coins text-amber-500"></i> Charges fixes de la route active</h2>
                             <p style="color:#64748b; font-size:13px; margin-bottom:8px;">
-                                Quand un <b>Filleul actif</b> (apporté par un Parrain) génère une expédition, AMT verse 10 % de bonus au Parrain.
-                                Pour ne pas verser ce bonus sur des bases trop élevées, on calcule un <b>bénéfice net</b> :
+                                Toute commission est calculée sur le <b>bénéfice net</b> de l'expédition :
                                 <b>Bénéfice = Montant facturé − Charges fixes</b> (par m³ en maritime, par kg en aérien).
+                                On ne partage jamais le chiffre d'affaires brut — uniquement le bénéfice.
                             </p>
-                            <p style="color:#64748b; font-size:12px; margin-bottom:20px; font-style:italic;">
-                                ⓘ Quand un démarcheur travaille <b>sans parrain</b>, la répartition reste 50/50 sur le montant facturé (les charges fixes n'entrent pas en jeu).
+                            <p style="color:#1d4ed8; font-size:12px; margin-bottom:20px; background:#eff6ff; padding:10px 14px; border-radius:8px; border:1px solid #bfdbfe;">
+                                💡 Ces charges sont propres à <b>chaque route</b>. Pour configurer une autre route, basculez-y depuis le menu d'agences en haut.
                             </p>
 
                             <div v-if="affiliatedRoutes.length === 0" style="padding:20px; text-align:center; color:#94a3b8;">
-                                Aucune route avec parrainage actif. Activez le parrainage sur une route dans <b>Rôles &amp; Menus</b> pour configurer ses charges fixes.
+                                La route active n'est pas une route de départ — basculez sur une route de départ pour configurer ses charges.
                             </div>
 
                             <div v-for="r in affiliatedRoutes" :key="r.id" style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:10px; padding:15px 18px; margin-bottom:12px;">
@@ -476,8 +476,9 @@ export const ParrainageView = {
 
                             <div style="background:#eff6ff; border:1px solid #bfdbfe; border-radius:10px; padding:14px 16px; margin:18px 0; font-size:13px; color:#1e3a8a;">
                                 <b>💡 Exemple :</b> charges 150 000 CFA/m³, expédition 0,8 m³ et facturée 250 000 CFA →
-                                charges = 120 000, bénéfice = 130 000.
-                                Si le démarcheur a un parrain : Filleul 65 000 · Parrain 13 000 · AMT 52 000.
+                                charges = 120 000, <b>bénéfice = 130 000</b>.<br>
+                                • Démarcheur <b>Parrain seul</b> : Parrain 65 000 · AMT 65 000<br>
+                                • Démarcheur <b>Filleul</b> (avec parrain) : Filleul 65 000 · Parrain 13 000 · AMT 52 000
                             </div>
 
                             <button class="btn btn-primary" @click="saveCharges" :disabled="savingCharges">
@@ -674,7 +675,10 @@ export const ParrainageView = {
                 // parrainage est ACTIF (sinon : pas de filleul -> pas de bonus
                 // parrain -> pas de bénéfice à calculer, on reste en 50/50 du
                 // montant facturé). Cible naturelle : routes Chine.
-                const affiliatedRoutes = computed(() => depRoutes.value.filter(r => isAffiliationActive(r.id)));
+                // Une seule route à la fois : la route ACTIVE (celle sélectionnée
+                // dans le header). Les charges fixes sont propres à chaque route
+                // (multi-tenant) — on ne mélange pas les configs.
+                const affiliatedRoutes = computed(() => depRoutes.value.filter(r => r.id === activeAgency.value));
                 
                 // UI State
                 const saving = ref(false);

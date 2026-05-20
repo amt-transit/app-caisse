@@ -316,6 +316,41 @@ export const ToutesLesFacturesView = {
             this.invoices.sort((a, b) => new Date(b.date) - new Date(a.date));
             this.applyFilters();
         });
+
+        // Pré-chargement des affiliations clients + démarcheurs pour afficher
+        // un badge « Parrain » sur la ligne du tableau (lookup par téléphone
+        // destinataire). Lecture ponctuelle, route-aware via getCollectionName.
+        this.affByPhone = new Map();
+        this.demById = new Map();
+        getDocs(collection(db, getCollectionName("client_affiliations"))).then(snap => {
+            this.affByPhone.clear();
+            snap.docs.forEach(d => {
+                const a = d.data() || {};
+                const k = String(a.phone || d.id || '').replace(/\D/g, '');
+                if (k.length >= 8) this.affByPhone.set(k, a);
+            });
+            this.applyFilters();
+        }).catch(e => console.warn('affiliations factures:', e));
+        getDocs(collection(db, getCollectionName("demarcheurs"))).then(snap => {
+            this.demById.clear();
+            snap.docs.forEach(d => { this.demById.set(d.id, d.data() || {}); });
+            this.applyFilters();
+        }).catch(e => console.warn('demarcheurs factures:', e));
+    },
+
+    // Cherche un parrain rattaché au téléphone passé. Retourne le nom complet
+    // ou null. Tolérant aux formats (indicatifs, espaces, points, tirets).
+    getParrainNameForPhone(rawPhone) {
+        if (!rawPhone || !this.affByPhone || !this.demById) return null;
+        let k = String(rawPhone).replace(/\D/g, '');
+        if (k.startsWith('00')) k = k.slice(2);
+        if (k.length > 10 && k.startsWith('225')) k = k.slice(3);
+        if (k.length < 8) return null;
+        const aff = this.affByPhone.get(k);
+        if (!aff || !aff.demarcheurId) return null;
+        const d = this.demById.get(aff.demarcheurId);
+        if (d) return `${d.prenom || ''} ${d.nom || ''}`.trim();
+        return aff.demarcheurName || null;
     },
 
     sortBy(field) {
@@ -422,6 +457,18 @@ export const ToutesLesFacturesView = {
                 nbColis = inv.quantite;
             }
 
+            // Téléphone destinataire : utilisé pour lookup de l'affiliation parrain.
+            // Source 1 : champ explicite (numero/tel) ; sinon on tente d'extraire
+            // un numéro de la chaîne nomDestinataire.
+            let destPhone = inv.numero || '';
+            if (!destPhone) {
+                const m = String(inv.nomDestinataire || '').match(/(?:(?:\+|00)225[\s.-]?)?(?:01|05|07|0)\d(?:[\s.-]?\d{2}){4}|(?:(?:\+|00)225[\s.-]?)?(?:01|05|07|0)\d{8,}/);
+                if (m) destPhone = m[0];
+            }
+            const parrainName = this.getParrainNameForPhone(destPhone);
+            const parrainBadge = parrainName
+                ? `<div style="margin-top:4px; display:inline-flex; align-items:center; gap:5px; background:#fff7ed; color:#9a3412; padding:2px 8px; border-radius:10px; font-size:11px; font-weight:600;"><i class="fas fa-handshake" style="font-size:10px;"></i> Parrain : ${parrainName}</div>`
+                : '';
             return `
                 <tr data-invoice-id="${inv.id}">
                     <td data-label="Statut"><span class="status-badge ${statusClass}">${statusText}</span></td>
@@ -433,7 +480,7 @@ export const ToutesLesFacturesView = {
                     <td data-label="Client"><strong>${inv.nom || '-'}</strong></td>
                     <td data-label="Adresse"><span class="tooltip" title="${address.replace(/"/g, '&quot;')}">${shortAddress}</span></td>
                     <td data-label="Téléphone">${inv.tel || '-'}</td>
-                    <td data-label="Destinataire">${inv.nomDestinataire || '-'}</td>
+                    <td data-label="Destinataire">${inv.nomDestinataire || '-'}${parrainBadge}</td>
                     <td data-label="Nb colis" style="text-align: right; font-weight: bold;">${nbColis}</td>
                     <td data-label="Montant" class="cell--amount"><button class="amount-link" onclick="window.app.views.toutesLesFactures.addPayment('${inv.id}')">${this.formatMoneyLocal(totalDisplay)}</button></td>
                     <td data-label="Actions" style="text-align: right;">

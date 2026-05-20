@@ -75,26 +75,23 @@ export async function ensureAffiliation({ phone, clientName, demarcheurId, demar
 //  GÉNÉRATION DE COMMISSION (autonome — ne dépend PAS de la page Parrainage).
 //  Règle métier (mai 2026) :
 //
-//     Cas A — Démarcheur SEUL (Parrain direct, pas de parent au-dessus)
-//         Base = Montant facturé (PAS de charges fixes)
-//         Démarcheur : 50 %
-//         AMT        : 50 %
+//     Bénéfice = Montant facturé − Charges fixes   (TOUJOURS)
+//         où Charges = (chargesFixesCbm × volumeCbm)    en MARITIME
+//                  ou (chargesFixesKgAerien × poidsKg) en AÉRIEN
+//         (les charges fixes sont configurées par ROUTE de départ, sur
+//          la page Réseau Partenaires → Settings)
 //
-//     Cas B — FILLEUL actif (le démarcheur a un parrainId)
-//         Base = Montant facturé − Charges fixes
-//             où Charges = (chargesFixesCbm × volumeCbm)    en MARITIME
-//                     ou  (chargesFixesKgAerien × poidsKg) en AÉRIEN
-//             (les charges fixes sont configurées par ROUTE de départ, sur
-//              la page Réseau Partenaires → Settings)
-//         Filleul : 50 % de la base
-//         Parrain : 10 % de la base (versé par AMT, qui passe de 50 % à 40 %)
-//         AMT     : 40 %
+//     Cas A — Démarcheur PARRAIN seul (pas de filleul au-dessus de lui)
+//         Démarcheur : 50 % du bénéfice
+//         AMT        : 50 % du bénéfice
 //
-//  Pourquoi les charges fixes uniquement en Cas B ? Parce que le calcul 50/50
-//  sans parrain logge AMT et le Démarcheur à la même enseigne — chacun assume
-//  symétriquement les coûts opérationnels. Le besoin de soustraire des charges
-//  fixes n'apparaît QUE quand AMT doit verser un bonus de 10 % au Parrain en
-//  plus, sur quelque chose qui doit être un vrai bénéfice.
+//     Cas B — Démarcheur FILLEUL (a un parrainId au-dessus)
+//         Filleul    : 50 % du bénéfice
+//         Parrain    : 10 % du bénéfice (versé par AMT)
+//         AMT        : 40 % du bénéfice
+//
+//  Principe : on ne partage JAMAIS le chiffre d'affaires brut — on partage
+//  toujours le bénéfice (montant facturé − charges opérationnelles fixes).
 //
 //  Si bénéfice ≤ 0 (charges supérieures au montant) : aucune commission.
 //  Idempotent : une seule commission directe par (expeditionId, demarcheurId).
@@ -141,23 +138,20 @@ export async function creerCommissionParrainage({
     if (!demSnap.exists()) return false;
     const dem = demSnap.data() || {};
 
-    // Charges fixes : appliquées UNIQUEMENT quand le démarcheur a un parrain
-    // (Cas B). Sans parrain, on reste sur le montant facturé brut (Cas A).
-    let charges = 0;
-    if (dem.parrainId) {
-      let chargesParCbm = 0, chargesParKg = 0;
-      try {
-        const aSnap = await getDoc(doc(db, 'agencies_config', agencyId));
-        if (aSnap.exists()) {
-          const a = aSnap.data();
-          chargesParCbm = Number(a.chargesFixesCbm) || 0;
-          chargesParKg = Number(a.chargesFixesKgAerien) || 0;
-        }
-      } catch (e) { /* hors-ligne ou doc absent : charges 0 */ }
-      charges = (mode === 'aerien' || mode === 'aérien')
-        ? chargesParKg * (Number(poidsKg) || 0)
-        : chargesParCbm * (Number(volumeCbm) || 0);
-    }
+    // Charges fixes : TOUJOURS appliquées (Parrain seul OU Filleul). On ne
+    // partage jamais le chiffre d'affaires brut — uniquement le bénéfice.
+    let chargesParCbm = 0, chargesParKg = 0;
+    try {
+      const aSnap = await getDoc(doc(db, 'agencies_config', agencyId));
+      if (aSnap.exists()) {
+        const a = aSnap.data();
+        chargesParCbm = Number(a.chargesFixesCbm) || 0;
+        chargesParKg = Number(a.chargesFixesKgAerien) || 0;
+      }
+    } catch (e) { /* hors-ligne ou doc absent : charges 0 */ }
+    const charges = (mode === 'aerien' || mode === 'aérien')
+      ? chargesParKg * (Number(poidsKg) || 0)
+      : chargesParCbm * (Number(volumeCbm) || 0);
     const benefice = Math.max(0, montant - charges);
     if (benefice <= 0) return false; // pas de marge -> pas de commission
 
