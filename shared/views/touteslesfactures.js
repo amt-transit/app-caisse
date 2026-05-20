@@ -5,6 +5,7 @@ import { CONSTANTS } from '../../constants.js';
 import { createApp, ref, computed, reactive, onMounted, onUnmounted } from "https://unpkg.com/vue@3/dist/vue.esm-browser.prod.js";
 import { getCollectionName, AGENCIES } from '../../agencies-config.js';
 import { filterByShippingMode } from '../../shipping-mode.js';
+import { normalizePhone } from '../../affiliations.js';
 
 // EUR si agence historique 'paris' OU route SaaS dont la devise configurée
 // est EUR. (Même règle que app.formatMoneyLocal — cohérence d'affichage.)
@@ -492,6 +493,29 @@ export const ToutesLesFacturesView = {
             if (destPhone === 'Non renseigné') destPhone = phoneMatch[0];
         }
 
+        // Lookup parrain (démarcheur affilié au téléphone destinataire). Lecture
+        // ponctuelle non bloquante : si la collection est vide ou inaccessible,
+        // on n'affiche simplement pas l'info.
+        let parrainName = '';
+        try {
+            const key = normalizePhone(destPhone);
+            if (key) {
+                const affSnap = await getDocs(query(collection(db, getCollectionName("client_affiliations")), where("phone", "==", key), limit(1)));
+                if (!affSnap.empty) {
+                    const aff = affSnap.docs[0].data() || {};
+                    if (aff.demarcheurId) {
+                        const demSnap = await getDocs(query(collection(db, getCollectionName("demarcheurs")), where("__name__", "==", aff.demarcheurId), limit(1)));
+                        if (!demSnap.empty) {
+                            const d = demSnap.docs[0].data() || {};
+                            parrainName = `${d.prenom || ''} ${d.nom || ''}`.trim() || (aff.demarcheurName || '');
+                        } else if (aff.demarcheurName) {
+                            parrainName = aff.demarcheurName;
+                        }
+                    }
+                }
+            }
+        } catch (e) { /* non bloquant */ }
+
         // Cartographie des descriptions spécifiques par sous-colis
         let descMap = {};
         let currentLabelIdx = 1;
@@ -685,6 +709,7 @@ export const ToutesLesFacturesView = {
                                         <div class="info-row"><span class="info-row__icon"><i class="fas fa-user"></i></span><span class="info-row__value">${destName || '-'}</span></div>
                                         <div class="info-row"><span class="info-row__icon"><i class="fas fa-phone"></i></span><span class="info-row__value">${destPhone}</span></div>
                                         <div class="info-row"><span class="info-row__icon"><i class="fas fa-map-marker-alt"></i></span><span class="info-row__value">${invoice.adresseDestinataire || '-'}</span></div>
+                                        ${parrainName ? `<div class="info-row" style="background:#fff7ed; border-radius:8px; padding:6px 10px; margin-top:6px;"><span class="info-row__icon" style="color:#9a3412;"><i class="fas fa-handshake"></i></span><span class="info-row__value" style="color:#9a3412; font-weight:700;">Parrain : ${parrainName}</span></div>` : ''}
                                     </div>
                                 </div>
                             </div>

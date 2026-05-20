@@ -3,6 +3,7 @@ import { collection, query, where, onSnapshot, doc, writeBatch, getDocs, orderBy
 import { Autocomplete } from '../../paris/js/views/autocomplete.js';
 import { CONSTANTS } from '../../constants.js';
 import { getCollectionName, AGENCIES } from '../../agencies-config.js';
+import { normalizePhone } from '../../affiliations.js';
 
 // EUR si agence historique 'paris' OU route SaaS dont la devise configurée
 // est EUR. (Même règle que app.formatMoneyLocal — cohérence d'affichage.)
@@ -320,6 +321,38 @@ export const ClientsView = {
         }, (error) => {
             console.error("Erreur Livraisons :", error);
         });
+
+        // 3. Affiliations clients (phone -> demarcheurId) + démarcheurs (id -> nom)
+        // pour afficher le badge « Parrain » sous le nom du client. Lookup
+        // léger : on cache les map au niveau de la vue, recalcul à chaque
+        // changement Firestore (non bloquant).
+        this.affByPhone = new Map();
+        this.demById = new Map();
+        getDocs(collection(db, getCollectionName("client_affiliations"))).then(snap => {
+            this.affByPhone.clear();
+            snap.docs.forEach(d => {
+                const a = d.data() || {};
+                const k = normalizePhone(a.phone || d.id);
+                if (k) this.affByPhone.set(k, a);
+            });
+            this.renderTable();
+        }).catch(e => console.warn('affiliations clients:', e));
+        getDocs(collection(db, getCollectionName("demarcheurs"))).then(snap => {
+            this.demById.clear();
+            snap.docs.forEach(d => { this.demById.set(d.id, d.data() || {}); });
+            this.renderTable();
+        }).catch(e => console.warn('demarcheurs:', e));
+    },
+
+    // Retourne { nom, prenom } du parrain rattaché au téléphone passé, ou null.
+    getParrainForPhone(phoneRaw) {
+        const k = normalizePhone(phoneRaw);
+        if (!k || !this.affByPhone) return null;
+        const a = this.affByPhone.get(k);
+        if (!a || !a.demarcheurId) return null;
+        const d = this.demById && this.demById.get(a.demarcheurId);
+        if (!d) return null;
+        return { nom: d.nom || '', prenom: d.prenom || '' };
     },
 
     computeClientStats() {
@@ -450,9 +483,12 @@ export const ClientsView = {
             return;
         }
 
-        tbody.innerHTML = top100.map(c => `
+        tbody.innerHTML = top100.map(c => {
+            const par = this.getParrainForPhone(c.tel);
+            const parrainBadge = par ? `<div style="margin-top:4px; display:inline-flex; align-items:center; gap:5px; background:#fff7ed; color:#9a3412; padding:2px 8px; border-radius:10px; font-size:11px; font-weight:600;"><i class="fas fa-handshake" style="font-size:10px;"></i> Parrain : ${par.prenom} ${par.nom}</div>` : '';
+            return `
             <tr onclick="window.app.views.clients.showDetail('${c.id}')">
-                <td style="padding: 15px; font-weight: 700; color: #0f172a;">${c.nom}</td>
+                <td style="padding: 15px; font-weight: 700; color: #0f172a;">${c.nom}${parrainBadge}</td>
                 <td style="color: #64748b;">${c.tel}</td>
                 <td style="color: #64748b;">${c.date}</td>
                 <td><span class="badge" style="background: #dcfce7; color: #166534; padding: 4px 10px; border-radius: 12px; font-weight: 600;">${c.risque}</span></td>
@@ -461,7 +497,8 @@ export const ClientsView = {
                 <td style="text-align: right; font-weight: 600; color: #475569;">${c.factures}</td>
                 <td style="text-align: center;"><button class="btn-small" style="background: transparent; border: none; font-size: 16px; cursor: pointer;">👉</button></td>
             </tr>
-        `).join('');
+        `;
+        }).join('');
     },
 
     // Export Excel des clients actuellement filtrés (respecte la recherche
