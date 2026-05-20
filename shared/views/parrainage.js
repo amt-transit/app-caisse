@@ -660,6 +660,33 @@ export const ParrainageView = {
                                     <li v-for="f in getPartnerFilleuls(partnerDetail.id)" :key="f.id">{{ f.prenom }} {{ f.nom }}</li>
                                 </ul>
                             </div>
+
+                            <!-- ─── Clients rattachés (avec transfert) ─── -->
+                            <h4 style="margin:22px 0 10px 0; color:#1e293b;">
+                                Clients rattachés
+                                <span style="background:#eff6ff; color:#1e40af; padding:2px 8px; border-radius:10px; font-size:12px; font-weight:700; margin-left:6px;">{{ partnerClients.length }}</span>
+                            </h4>
+                            <div v-if="partnerClientsLoading" style="color:#64748b; font-style:italic; padding:10px; text-align:center;">
+                                <i class="fas fa-spinner fa-spin"></i> Chargement…
+                            </div>
+                            <div v-else-if="partnerClients.length === 0" style="background:#f8fafc; padding:14px; border-radius:8px; border:1px dashed #cbd5e1; color:#64748b; font-style:italic; text-align:center; font-size:13px;">
+                                Aucun client encore rattaché à ce démarcheur.
+                            </div>
+                            <div v-else style="background:#f8fafc; border-radius:8px; border:1px solid #e2e8f0; max-height:240px; overflow-y:auto;">
+                                <div v-for="(c, i) in partnerClients" :key="c.id"
+                                     :style="'display:flex; justify-content:space-between; align-items:center; padding:10px 12px; ' + (i < partnerClients.length - 1 ? 'border-bottom:1px solid #e2e8f0;' : '')">
+                                    <div style="flex:1; min-width:0;">
+                                        <div style="font-weight:700; color:#0f172a; font-size:13px;">{{ c.clientName || '(sans nom)' }}</div>
+                                        <div style="color:#64748b; font-size:12px; margin-top:2px;">
+                                            <i class="fas fa-phone" style="font-size:10px;"></i> {{ c.phone }}
+                                            <span v-if="c.lastTransferAt" style="background:#fffbeb; color:#92400e; padding:1px 6px; border-radius:6px; font-size:10px; font-weight:600; margin-left:6px;" title="Ce client a déjà été transféré au moins une fois">🔁 Réaffecté</span>
+                                        </div>
+                                    </div>
+                                    <button v-if="isSuperAdmin" @click="openTransferModal(c)" style="background:#fff7ed; color:#9a3412; border:1px solid #fed7aa; padding:6px 12px; border-radius:8px; font-size:11px; font-weight:700; cursor:pointer; white-space:nowrap; display:inline-flex; align-items:center; gap:5px;">
+                                        <i class="fas fa-exchange-alt"></i> Transférer
+                                    </button>
+                                </div>
+                            </div>
                         </div>
                         <div v-if="mobileAccessInfo" style="margin:0 20px 14px; padding:14px; border-radius:10px; font-size:13px;"
                              :style="mobileAccessInfo.error ? 'background:#fef2f2;border:1px solid #fecaca;color:#991b1b;' : 'background:#ecfdf5;border:1px solid #a7f3d0;color:#065f46;'">
@@ -677,6 +704,60 @@ export const ParrainageView = {
                                 <span v-else>📱 Créer / réinitialiser l'accès mobile</span>
                             </button>
                             <button class="btn btn-outline" @click="showDetailModal = false" style="padding:8px 16px; border-radius:8px; background:white; border:1px solid #cbd5e1;">Fermer</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ════════════════════════════════════════════════════ -->
+                <!-- Modal Transfert de client vers un autre démarcheur -->
+                <!-- ════════════════════════════════════════════════════ -->
+                <div v-if="showTransferModal" class="pm-overlay" @click.self="showTransferModal = false">
+                    <div class="pm-box" style="max-width:520px;">
+                        <div class="pm-header">
+                            <h3 style="margin:0; font-size:18px; color:#0f172a; display:flex; align-items:center; gap:8px;">
+                                <i class="fas fa-exchange-alt" style="color:#9a3412;"></i> Transférer le client
+                            </h3>
+                            <button @click="showTransferModal = false" style="background:none; border:none; font-size:24px; color:#64748b; cursor:pointer;">✕</button>
+                        </div>
+                        <div class="pm-body" style="font-size:14px;">
+                            <div style="background:#f8fafc; padding:12px 14px; border-radius:10px; border:1px solid #e2e8f0; margin-bottom:18px;">
+                                <div style="font-size:11px; color:#64748b; text-transform:uppercase; letter-spacing:0.5px; font-weight:700;">Client à transférer</div>
+                                <div style="font-weight:700; font-size:15px; color:#0f172a; margin-top:4px;">{{ transferingClient ? transferingClient.clientName || '(sans nom)' : '' }}</div>
+                                <div style="color:#64748b; font-size:12px; margin-top:2px;"><i class="fas fa-phone" style="font-size:10px;"></i> {{ transferingClient ? transferingClient.phone : '' }}</div>
+                            </div>
+
+                            <div style="margin-bottom:15px;">
+                                <label style="font-size:12px; font-weight:700; color:#475569; margin-bottom:6px; display:block;">Démarcheur actuel</label>
+                                <div style="padding:10px; background:#eff6ff; border:1px solid #bfdbfe; border-radius:8px; color:#1e40af; font-weight:700;">
+                                    {{ partnerDetail.prenom }} {{ partnerDetail.nom }}
+                                </div>
+                            </div>
+
+                            <div style="margin-bottom:15px;">
+                                <label style="font-size:12px; font-weight:700; color:#475569; margin-bottom:6px; display:block;">Nouveau démarcheur *</label>
+                                <select v-model="transferTarget" style="width:100%; padding:11px; border:1px solid #cbd5e1; border-radius:8px; box-sizing:border-box; outline:none; background:white; font-size:14px;">
+                                    <option value="">— Sélectionner le démarcheur cible —</option>
+                                    <option v-for="p in availableTransferTargets" :key="p.id" :value="p.id">
+                                        {{ p.prenom }} {{ p.nom }} ({{ p.telephone || 'sans tél.' }})
+                                    </option>
+                                </select>
+                            </div>
+
+                            <div style="margin-bottom:15px;">
+                                <label style="font-size:12px; font-weight:700; color:#475569; margin-bottom:6px; display:block;">Motif (optionnel)</label>
+                                <input type="text" v-model="transferReason" placeholder="Ex: démarcheur parti, réaffectation interne…" style="width:100%; padding:10px; border:1px solid #cbd5e1; border-radius:8px; box-sizing:border-box; outline:none; font-size:13px;">
+                            </div>
+
+                            <div style="background:#fffbeb; border:1px solid #fcd34d; padding:12px 14px; border-radius:10px; font-size:12px; color:#92400e; line-height:1.6;">
+                                <b><i class="fas fa-info-circle"></i> Important :</b> les commissions <b>déjà créées</b> restent attribuées à {{ partnerDetail.prenom }} (historique préservé). Seules les <b>commissions futures</b> sur ce client iront au nouveau démarcheur.
+                            </div>
+                        </div>
+                        <div class="pm-footer">
+                            <button class="btn btn-outline" @click="showTransferModal = false" style="padding:10px 15px; border-radius:8px; background:white; border:1px solid #cbd5e1;">Annuler</button>
+                            <button @click="confirmTransfer" :disabled="!transferTarget || transferBusy" style="padding:10px 20px; border-radius:8px; background:#9a3412; color:white; border:none; cursor:pointer; font-weight:700;" :style="(!transferTarget || transferBusy) ? 'opacity:0.5; cursor:not-allowed;' : ''">
+                                <span v-if="transferBusy"><i class="fas fa-spinner fa-spin"></i> Transfert…</span>
+                                <span v-else><i class="fas fa-exchange-alt"></i> Confirmer le transfert</span>
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -1233,7 +1314,84 @@ export const ParrainageView = {
                     }
                 };
 
-                const openDetails = (p) => { partnerDetail.value = p; mobileAccessInfo.value = null; showDetailModal.value = true; };
+                const openDetails = (p) => {
+                    partnerDetail.value = p;
+                    mobileAccessInfo.value = null;
+                    showDetailModal.value = true;
+                    loadPartnerClients(p.id);
+                };
+
+                // ── TRANSFERT CLIENT ENTRE DÉMARCHEURS ──────────────────
+                // Permet à un super_admin / admin de réaffecter un client
+                // (= une affiliation par téléphone) à un autre démarcheur.
+                // IMPORTANT : seules les commissions FUTURES vont au nouveau
+                // démarcheur. L'historique reste attribué à l'ancien.
+                const partnerClients = ref([]);
+                const partnerClientsLoading = ref(false);
+                const showTransferModal = ref(false);
+                const transferingClient = ref(null);
+                const transferTarget = ref('');
+                const transferReason = ref('');
+                const transferBusy = ref(false);
+
+                const loadPartnerClients = async (demId) => {
+                    if (!demId) { partnerClients.value = []; return; }
+                    partnerClientsLoading.value = true;
+                    try {
+                        const qSnap = await getDocs(query(
+                            collection(db, getCollectionName('client_affiliations')),
+                            where('demarcheurId', '==', demId)
+                        ));
+                        partnerClients.value = qSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+                    } catch (e) {
+                        console.warn('clients du partenaire:', e);
+                        partnerClients.value = [];
+                    } finally { partnerClientsLoading.value = false; }
+                };
+
+                const openTransferModal = (client) => {
+                    transferingClient.value = client;
+                    transferTarget.value = '';
+                    transferReason.value = '';
+                    showTransferModal.value = true;
+                };
+
+                const availableTransferTargets = computed(() => {
+                    if (!transferingClient.value) return partners.value;
+                    return partners.value.filter(p => p.id !== transferingClient.value.demarcheurId);
+                });
+
+                const confirmTransfer = async () => {
+                    if (!transferingClient.value || !transferTarget.value) return;
+                    if (transferTarget.value === transferingClient.value.demarcheurId) {
+                        globalApp.showToast("Le client est déjà rattaché à ce démarcheur.", "error");
+                        return;
+                    }
+                    transferBusy.value = true;
+                    try {
+                        const cli = transferingClient.value;
+                        const newDem = partners.value.find(p => p.id === transferTarget.value);
+                        if (!newDem) throw new Error('Démarcheur cible introuvable.');
+                        await updateDoc(doc(db, getCollectionName('client_affiliations'), cli.id), {
+                            demarcheurId: transferTarget.value,
+                            demarcheurName: `${newDem.prenom || ''} ${newDem.nom || ''}`.trim(),
+                            // Audit : trace de la dernière réaffectation. On enrichit
+                            // au lieu d'écraser pour pouvoir auditer plus tard si besoin.
+                            lastTransferAt: serverTimestamp(),
+                            lastTransferBy: (auth && auth.currentUser) ? auth.currentUser.uid : '',
+                            lastTransferFrom: cli.demarcheurId,
+                            lastTransferTo: transferTarget.value,
+                            lastTransferReason: transferReason.value || '',
+                        });
+                        globalApp.showToast(`Client transféré à ${newDem.prenom} ${newDem.nom} ✔`, "success");
+                        showTransferModal.value = false;
+                        // Recharge la liste du démarcheur courant
+                        await loadPartnerClients(partnerDetail.value.id);
+                    } catch (e) {
+                        console.error(e);
+                        globalApp.showToast("Échec du transfert (vérifiez vos permissions).", "error");
+                    } finally { transferBusy.value = false; }
+                };
 
                 // Recalcule (Cloud Function) le « disponible » (factures payées,
                 // au prorata) vs « potentiel ». scope='all' = migration globale ;
@@ -1490,6 +1648,11 @@ export const ParrainageView = {
                     analytics, simulation, syncRates, saveSettings,
                     depRoutes, affiliatedRoutes, chargesByRoute, savingCharges, saveCharges,
                     showPartnerModal, partnerForm, availableSponsors, openPartnerModal, savePartner,
+                    // Transfert client
+                    partnerClients, partnerClientsLoading,
+                    showTransferModal, transferingClient, transferTarget, transferReason,
+                    transferBusy, availableTransferTargets,
+                    openTransferModal, confirmTransfer,
                     photoPreview, photoUploading, onPhotoSelected,
                     showDetailModal, partnerDetail, openDetails,
                     reconcileBusy, reconcilerSoldes, migrerRoutesRdvDevis,
