@@ -223,9 +223,12 @@ export const ParrainageView = {
                     <!-- ONGLET: COMMISSIONS -->
                     <!-- ============================================== -->
                     <div v-if="currentTab === 'commissions'">
-                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 20px;">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 20px; flex-wrap:wrap; gap:10px;">
                             <h2 style="margin:0; font-size:18px;"><i class="fas fa-coins text-yellow-500"></i> Commissions générées</h2>
-                            <button class="btn btn-outline" @click="exportCommissions" style="color:#059669; border-color:#059669;"><i class="fas fa-file-excel"></i> Exporter CSV</button>
+                            <div style="display:flex; gap:8px;">
+                                <button class="btn btn-outline" @click="exportCommissionsExcel" :disabled="exportBusy" style="color:#059669; border-color:#059669;"><i class="fas fa-file-excel"></i> Excel</button>
+                                <button class="btn btn-outline" @click="exportCommissionsPDF" :disabled="exportBusy" style="color:#b91c1c; border-color:#fecaca;"><i class="fas fa-file-pdf"></i> PDF</button>
+                            </div>
                         </div>
 
                         <div class="filter-bar">
@@ -1556,8 +1559,193 @@ export const ParrainageView = {
                     saving.value = false;
                 };
 
-                const exportCommissions = () => globalApp.showToast("Export CSV à implémenter...", "info");
-                const exportWithdrawals = () => globalApp.showToast("Export CSV à implémenter...", "info");
+                // ── EXPORTS : Excel + PDF du rapport parrainage ────────
+                // Périmètre : commissions actuellement filtrées (filtres
+                // commDate / commPartner / commType respectés) + récap des KPIs.
+                // Excel : XLSX déjà chargé globalement (index.html). PDF : on
+                // lazy-load jspdf + autotable au premier usage.
+                const exportBusy = ref(false);
+
+                const _fmtDate = (ts) => {
+                    if (!ts) return '';
+                    const d = ts && ts.toDate ? ts.toDate() : new Date(ts);
+                    return isNaN(d) ? '' : d.toLocaleDateString('fr-FR');
+                };
+                const _exportFileName = (ext) => {
+                    const d = new Date().toISOString().slice(0,10);
+                    return `Commissions_Parrainage_${d}.${ext}`;
+                };
+                const _filtersSummary = () => {
+                    const parts = [];
+                    if (filters.commDate === 'month') parts.push('Ce mois');
+                    else if (filters.commDate === 'last_month') parts.push('Mois dernier');
+                    else if (filters.commDate === 'year') parts.push('Cette année');
+                    else parts.push('Toutes périodes');
+                    if (filters.commPartner) parts.push('Partenaire : ' + getPartnerName(filters.commPartner));
+                    if (filters.commType && filters.commType !== 'all') parts.push('Type : ' + filters.commType);
+                    return parts.join(' · ');
+                };
+
+                const exportCommissionsExcel = () => {
+                    try {
+                        if (typeof XLSX === 'undefined') { globalApp.showToast("Librairie Excel non chargée.", "error"); return; }
+                        const rows = filteredCommissions.value.map(c => ({
+                            'Date': _fmtDate(c.dateCreation),
+                            'Partenaire': getPartnerName(c.demarcheurId),
+                            'Type': c.type === 'parrainage' ? 'Parrainage' : 'Direct',
+                            'Réf. expédition': c.expeditionId || '',
+                            'Client': c.clientNom || '',
+                            'Téléphone client': c.clientPhone || '',
+                            'Description': c.description || '',
+                            'Montant facturé': Number(c.montantFacture) || Number(c.montantBrut) || 0,
+                            'Charges fixes': Number(c.chargesFixes) || 0,
+                            'Bénéfice net': Number(c.beneficeNet) || Number(c.montantBrut) || 0,
+                            'Part démarcheur': Number(c.montantNet) || 0,
+                            'Bonus parrainage': Number(c.bonusParrainage) || 0,
+                            'Part agence (AMT)': Number(c.montantAMT) || 0,
+                            'Disponible (payé prorata)': Number(c.montantDisponible) || 0,
+                            'En attente (à payer)': Number(c.montantPotentiel) || 0,
+                            '% facture payée': Number(c.partPayee) || 0,
+                            'Statut': c.statut === 'retire' ? 'Retiré' : (c.etatSolde || c.statut || ''),
+                            'Route': c.agency || '',
+                        }));
+                        if (rows.length === 0) { globalApp.showToast("Aucune commission à exporter.", "info"); return; }
+
+                        const wb = XLSX.utils.book_new();
+                        const ws = XLSX.utils.json_to_sheet(rows);
+                        // Largeurs auto pour lisibilité
+                        ws['!cols'] = Object.keys(rows[0]).map(k => ({ wch: Math.max(k.length, 14) }));
+                        XLSX.utils.book_append_sheet(wb, ws, 'Commissions');
+
+                        // Feuille « Récapitulatif » avec les KPIs
+                        const recap = [
+                            ['Rapport Commissions — Parrainage AMT'],
+                            ['Généré le', new Date().toLocaleString('fr-FR')],
+                            ['Filtres', _filtersSummary()],
+                            [],
+                            ['KPI', 'Montant (FCFA)'],
+                            ['Total généré', commKpis.value.totalGenere],
+                            ['Part Agence', commKpis.value.partAMT],
+                            ['Net Partenaires', commKpis.value.netDemarcheurs],
+                            ['Bonus Réseau', commKpis.value.bonusParrainage],
+                            ['Nombre de commissions', rows.length],
+                        ];
+                        const wsR = XLSX.utils.aoa_to_sheet(recap);
+                        wsR['!cols'] = [{ wch: 30 }, { wch: 25 }];
+                        XLSX.utils.book_append_sheet(wb, wsR, 'Récap');
+
+                        XLSX.writeFile(wb, _exportFileName('xlsx'));
+                        globalApp.showToast(`Export Excel : ${rows.length} commission(s) ✔`, "success");
+                    } catch (e) {
+                        console.error(e);
+                        globalApp.showToast("Échec de l'export Excel.", "error");
+                    }
+                };
+
+                // Lazy-load jspdf + autotable (CDN). Idempotent.
+                const _loadJsPdf = () => new Promise((resolve, reject) => {
+                    if (window.jspdf) return resolve();
+                    const s1 = document.createElement('script');
+                    s1.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
+                    s1.onload = () => {
+                        const s2 = document.createElement('script');
+                        s2.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js';
+                        s2.onload = resolve;
+                        s2.onerror = reject;
+                        document.head.appendChild(s2);
+                    };
+                    s1.onerror = reject;
+                    document.head.appendChild(s1);
+                });
+
+                const exportCommissionsPDF = async () => {
+                    exportBusy.value = true;
+                    try {
+                        await _loadJsPdf();
+                        const { jsPDF } = window.jspdf;
+                        const docPdf = new jsPDF('l', 'mm', 'a4'); // paysage : tableau large
+
+                        // En-tête
+                        docPdf.setFontSize(16);
+                        docPdf.setTextColor(15, 23, 42);
+                        docPdf.text('Rapport Commissions — Parrainage AMT', 14, 16);
+                        docPdf.setFontSize(9);
+                        docPdf.setTextColor(100, 116, 139);
+                        docPdf.text(`Généré le ${new Date().toLocaleString('fr-FR')}  ·  ${_filtersSummary()}`, 14, 22);
+
+                        // KPIs (4 colonnes)
+                        const kpi = commKpis.value;
+                        const kpiX = 14, kpiY = 28, kpiW = 65, kpiH = 16;
+                        const kpis = [
+                            { label: 'Total généré',   value: kpi.totalGenere,        color: [16, 185, 129] },
+                            { label: 'Part Agence',     value: kpi.partAMT,            color: [59, 130, 246] },
+                            { label: 'Net Partenaires', value: kpi.netDemarcheurs,     color: [16, 185, 129] },
+                            { label: 'Bonus Réseau',    value: kpi.bonusParrainage,    color: [217, 119, 6] },
+                        ];
+                        kpis.forEach((k, i) => {
+                            const x = kpiX + i * (kpiW + 3);
+                            docPdf.setFillColor(248, 250, 252);
+                            docPdf.setDrawColor(226, 232, 240);
+                            docPdf.roundedRect(x, kpiY, kpiW, kpiH, 2, 2, 'FD');
+                            docPdf.setFontSize(8);
+                            docPdf.setTextColor(100, 116, 139);
+                            docPdf.text(k.label.toUpperCase(), x + 4, kpiY + 5);
+                            docPdf.setFontSize(13);
+                            docPdf.setTextColor(...k.color);
+                            docPdf.text(Number(k.value || 0).toLocaleString('fr-FR') + ' F', x + 4, kpiY + 12);
+                        });
+
+                        // Tableau des commissions
+                        const headers = [['Date', 'Partenaire', 'Type', 'Réf.', 'Client', 'Bénéfice', 'Part démarcheur', 'Bonus', 'Disponible', 'Statut']];
+                        const body = filteredCommissions.value.map(c => [
+                            _fmtDate(c.dateCreation),
+                            getPartnerName(c.demarcheurId),
+                            c.type === 'parrainage' ? 'Parrainage' : 'Direct',
+                            c.expeditionId || '-',
+                            c.clientNom || '-',
+                            Number(c.beneficeNet || c.montantBrut || 0).toLocaleString('fr-FR'),
+                            Number(c.montantNet || 0).toLocaleString('fr-FR'),
+                            Number(c.bonusParrainage || 0).toLocaleString('fr-FR'),
+                            Number(c.montantDisponible || 0).toLocaleString('fr-FR'),
+                            c.statut === 'retire' ? 'Retiré' : (c.etatSolde || c.statut || ''),
+                        ]);
+                        if (body.length === 0) body.push([{ content: 'Aucune commission pour ce filtre.', colSpan: 10, styles: { halign: 'center', textColor: [148, 163, 184] } }]);
+
+                        docPdf.autoTable({
+                            head: headers,
+                            body,
+                            startY: kpiY + kpiH + 6,
+                            theme: 'grid',
+                            styles: { fontSize: 8, cellPadding: 2, overflow: 'linebreak' },
+                            headStyles: { fillColor: [26, 53, 83], textColor: [255, 255, 255], fontStyle: 'bold' },
+                            columnStyles: {
+                                5: { halign: 'right' }, 6: { halign: 'right' }, 7: { halign: 'right' }, 8: { halign: 'right' },
+                            },
+                            alternateRowStyles: { fillColor: [248, 250, 252] },
+                            margin: { left: 14, right: 14 },
+                        });
+
+                        // Footer page numbers
+                        const pages = docPdf.internal.getNumberOfPages();
+                        for (let i = 1; i <= pages; i++) {
+                            docPdf.setPage(i);
+                            docPdf.setFontSize(8);
+                            docPdf.setTextColor(148, 163, 184);
+                            docPdf.text(`AMT Trans'it · Réseau Partenaires · Page ${i}/${pages}`,
+                                docPdf.internal.pageSize.getWidth() / 2,
+                                docPdf.internal.pageSize.getHeight() - 6,
+                                { align: 'center' });
+                        }
+
+                        docPdf.save(_exportFileName('pdf'));
+                        globalApp.showToast(`Export PDF : ${body.length} ligne(s) ✔`, "success");
+                    } catch (e) {
+                        console.error(e);
+                        globalApp.showToast("Échec de l'export PDF.", "error");
+                    } finally { exportBusy.value = false; }
+                };
+
+                const exportWithdrawals = () => globalApp.showToast("Export Paiements à implémenter prochainement…", "info");
 
                 // Charts
                 let cMonthly = null, cDist = null, cEvo = null;
@@ -1659,7 +1847,8 @@ export const ParrainageView = {
                     mobileAccessSaving, mobileAccessInfo, createMobileAccess,
                     showWithdrawalModal, openWithdrawalModal, processWithdrawal, saving,
                     demandesRetrait, pendingDemandesCount, payerDemande, refuserDemande,
-                    exportCommissions, exportWithdrawals, getRoleBadge
+                    exportCommissionsExcel, exportCommissionsPDF, exportBusy,
+                    exportWithdrawals, getRoleBadge
                 };
             }
         });

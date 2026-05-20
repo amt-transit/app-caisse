@@ -136,10 +136,30 @@ exports.provisionDemarcheurAuth = onCall({ region: REGION }, async (request) => 
                 );
             }
             if (cc.role === "demarcheur" && cc.demarcheurId && cc.demarcheurId !== demarcheurId) {
-                throw new HttpsError(
-                    "permission-denied",
-                    "Cet email est déjà rattaché à un autre démarcheur."
-                );
+                // L'ancien démarcheur lié à ce compte est-il encore actif ? On
+                // vérifie sur TOUTES les routes possibles (le compte n'a pas
+                // forcément la même agency aujourd'hui qu'à la création).
+                // Si la fiche n'existe nulle part = ORPHELIN, on autorise le
+                // re-provisioning (cas "Repartir de zéro"). Sinon, on refuse.
+                let orphan = true;
+                const candidates = new Set();
+                candidates.add("demarcheurs");
+                if (cc.agency) candidates.add(routeCollectionName("demarcheurs", cc.agency));
+                if (agency) candidates.add(routeCollectionName("demarcheurs", agency));
+                for (const coll of candidates) {
+                    try {
+                        const snap = await admin.firestore().collection(coll).doc(cc.demarcheurId).get();
+                        if (snap.exists) { orphan = false; break; }
+                    } catch (_) { /* collection absente : on continue */ }
+                }
+                if (!orphan) {
+                    throw new HttpsError(
+                        "permission-denied",
+                        "Cet email est déjà rattaché à un autre démarcheur actif."
+                    );
+                }
+                // Sinon : claim orphelin, on autorise le re-provisioning
+                // (les claims seront réécrits plus bas avec le nouveau ID).
             }
             // Sûr : pas de doc staff, et (aucun claim) ou déjà CE démarcheur
             // -> re-provisioning idempotent (reset du mot de passe autorisé).
