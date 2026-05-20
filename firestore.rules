@@ -143,6 +143,12 @@ service cloud.firestore {
         // Ses commissions (directes + bonus parrainage).
         (collectionName.matches('commissions_.*') &&
           resource.data.demarcheurId == myDemarcheurId()) ||
+        // Ses factures (transactions) sur les routes SaaS.
+        (collectionName.matches('transactions_.*') &&
+          resource.data.demarcheurId == myDemarcheurId()) ||
+        // Ses livraisons (actives et archivées) sur les routes SaaS.
+        (collectionName.matches('livraisons_.*') &&
+          resource.data.demarcheurId == myDemarcheurId()) ||
         // Ses retraits (paiements).
         (collectionName.matches('retraits_.*') &&
           resource.data.demarcheurId == myDemarcheurId()) ||
@@ -165,6 +171,24 @@ service cloud.firestore {
     match /parametres/commissions {
       // Lecture seule des taux (affichage), pas d'écriture.
       allow read: if isDemarcheur();
+    }
+
+    // ----------------------------------------------------------------------
+    // 3-quater. ACCÈS DÉMARCHEUR sur SES factures et livraisons
+    // ----------------------------------------------------------------------
+    // L'app mobile affiche le détail complet de chaque facture (référence,
+    // items, tracking colis, paiements) — uniquement les factures dont le
+    // démarcheur est le parrain rattaché. La création stocke déjà
+    // demarcheurId sur la transaction et la livraison (cf. nouvellefacture.js).
+    // L'écriture reste réservée au staff (règles 3 et 4).
+    match /transactions/{id} {
+      allow read: if isDemarcheur() && resource.data.demarcheurId == myDemarcheurId();
+    }
+    match /livraisons/{id} {
+      allow read: if isDemarcheur() && resource.data.demarcheurId == myDemarcheurId();
+    }
+    match /livraisons_archives/{id} {
+      allow read: if isDemarcheur() && resource.data.demarcheurId == myDemarcheurId();
     }
 
     // Tarifs d'expédition (CBM Chine, Aérien Normal/Express). Lecture par

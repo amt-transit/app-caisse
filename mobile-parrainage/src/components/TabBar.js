@@ -7,7 +7,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing, font, grad } from '../theme';
 
 export const TABS = [
-  { key: 'clients', label: 'Clients', icon: 'people' },
+  { key: 'factures', label: 'Factures', icon: 'receipt' },
   { key: 'dashboard', label: 'Accueil', icon: 'grid' },
   { key: 'wallet', label: 'Wallet', icon: 'wallet' },
   { key: 'filleuls', label: 'Filleuls', icon: 'git-network' },

@@ -12,7 +12,7 @@ import TabBar from '../components/TabBar';
 import { colors, spacing, radius, font, grad, shadow } from '../theme';
 
 import DashboardScreen from './DashboardScreen';
-import ClientsScreen from './ClientsScreen';
+import FacturesScreen from './FacturesScreen';
 import WalletScreen from './WalletScreen';
 import FilleulsScreen from './FilleulsScreen';
 import ProfilScreen from './ProfilScreen';
@@ -22,8 +22,9 @@ const LOGO = require('../../assets/logo.png');
 export default function MainApp() {
   const { user, logout } = useAuth();
   const data = useDemarcheur();
-  // À la connexion : on arrive directement sur « Clients » (demande client).
-  const [tab, setTab] = useState('clients');
+  // À la connexion : on arrive directement sur « Factures » — le démarcheur
+  // voit immédiatement l'état de ses dossiers (paiements + suivi colis).
+  const [tab, setTab] = useState('factures');
 
   if (data.loading) {
     return (
@@ -72,7 +73,7 @@ export default function MainApp() {
   const prenom = me?.prenom || (user?.email ? user.email.split('@')[0] : 'Partenaire');
 
   const screens = {
-    clients: <ClientsScreen data={data} />,
+    factures: <FacturesScreen data={data} />,
     dashboard: <DashboardScreen data={data} />,
     wallet: <WalletScreen data={data} />,
     filleuls: <FilleulsScreen data={data} />,

@@ -48,6 +48,7 @@ const sortByDateDesc = (arr, field) =>
 const EMPTY = {
   loading: true, refreshing: false, error: '',
   me: null, commissions: [], clients: [], filleuls: [], demandes: [],
+  rawFactures: [], rawLivraisons: [],
 };
 
 export function useDemarcheur() {
@@ -85,11 +86,25 @@ export function useDemarcheur() {
       const meSnap = await getDoc(doc(db, collName('demarcheurs', agency), demId));
       const me = meSnap.exists() ? { id: meSnap.id, ...meSnap.data() } : null;
 
-      const [cSnap, fSnap, aSnap] = await Promise.all([
+      const [cSnap, fSnap, aSnap, tSnap, lSnap] = await Promise.all([
         getDocs(query(collection(db, collName('commissions', agency)), where('demarcheurId', '==', demId))),
         getDocs(query(collection(db, collName('demarcheurs', agency)), where('parrainId', '==', demId))),
         getDocs(query(collection(db, collName('client_affiliations', agency)), where('demarcheurId', '==', demId))),
+        // Factures + livraisons dont le démarcheur est le parrain direct
+        // (uniquement, pas celles de ses filleuls : règle métier exigée).
+        getDocs(query(collection(db, collName('transactions', agency)), where('demarcheurId', '==', demId))),
+        getDocs(query(collection(db, collName('livraisons', agency)), where('demarcheurId', '==', demId))),
       ]);
+
+      // Livraisons archivées (colis déjà livrés). Tolérant : si la collection
+      // ou les règles ne sont pas dispo, on continue avec une liste vide.
+      let livArch = [];
+      try {
+        const aaSnap = await getDocs(query(
+          collection(db, collName('livraisons_archives', agency)),
+          where('demarcheurId', '==', demId)));
+        livArch = aaSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
+      } catch (_) { livArch = []; }
 
       // Tolérant : si les règles retrait_demandes ne sont pas encore
       // déployées (ou collection vide), on n'échoue PAS tout l'écran.
@@ -111,6 +126,11 @@ export function useDemarcheur() {
         clients: aSnap.docs.map((d) => ({ id: d.id, ...d.data() })),
         filleuls: fSnap.docs.map((d) => ({ id: d.id, ...d.data() })),
         demandes,
+        rawFactures: tSnap.docs.map((d) => ({ id: d.id, ...d.data() })),
+        rawLivraisons: [
+          ...lSnap.docs.map((d) => ({ id: d.id, ...d.data() })),
+          ...livArch,
+        ],
       });
     } catch (e) {
       setState((s) => ({
@@ -181,11 +201,57 @@ export function useDemarcheur() {
     };
   }, [state.commissions, state.clients, state.filleuls]);
 
+  // ── Factures enrichies (chaque facture + ses livraisons + sa commission) ──
+  const factures = useMemo(() => {
+    const byRef = {};
+    (state.rawLivraisons || []).forEach((l) => {
+      if (!l.ref) return;
+      (byRef[l.ref] = byRef[l.ref] || []).push(l);
+    });
+    const commByRef = {};
+    (state.commissions || []).forEach((c) => {
+      if (c.type === 'direct' && c.expeditionId) {
+        commByRef[c.expeditionId] = c;
+      }
+    });
+    const arr = (state.rawFactures || []).map((f) => {
+      const ref = f.reference;
+      const livraisons = (byRef[ref] || []).slice();
+      const commission = commByRef[ref] || null;
+      const totalPrix = Number(f.prix) || 0;
+      const paye = (Number(f.montantParis) || 0) + (Number(f.montantAbidjan) || 0);
+      const reste = Math.max(0, totalPrix - paye);
+      // Statut paiement
+      let statutPay = 'impayee';
+      if (paye >= totalPrix && totalPrix > 0) statutPay = 'payee';
+      else if (paye > 0) statutPay = 'acompte';
+      // Statut colis le plus avancé (parmi les sous-colis livraisons)
+      // Ordre logique : EN_ATTENTE < PARIS < TRANSIT < ABIDJAN < LIVRE
+      const order = { EN_ATTENTE: 0, PARIS: 1, A_VENIR: 2, EN_COURS: 3, LIVRE: 4 };
+      let topStatus = null;
+      livraisons.forEach((l) => {
+        const s = l.status === 'LIVRE' ? 'LIVRE' : (l.containerStatus || 'EN_ATTENTE');
+        if (topStatus === null || (order[s] || 0) > (order[topStatus] || 0)) topStatus = s;
+      });
+      return {
+        ...f,
+        livraisons,
+        commission,
+        paye,
+        reste,
+        statutPay,
+        statutColis: topStatus || 'EN_ATTENTE',
+      };
+    });
+    return sortByDateDesc(arr, 'date');
+  }, [state.rawFactures, state.rawLivraisons, state.commissions]);
+
   return {
     ...state,
     clients,
     filleuls,
     unmatched,
+    factures,
     reload: () => load(false),
     refresh: () => load(true),
   };
