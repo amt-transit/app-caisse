@@ -1,6 +1,6 @@
 import { db } from '../../../firebase-config.js';
 import { AGENCIES } from '../../../agencies-config.js';
-import { collection, doc, setDoc, deleteDoc, onSnapshot, writeBatch } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
+import { collection, doc, getDoc, setDoc, deleteDoc, onSnapshot, writeBatch } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 import { createApp, ref, reactive, computed, onMounted, onUnmounted } from "https://unpkg.com/vue@3/dist/vue.esm-browser.prod.js";
 
 // ============================================================================
@@ -43,6 +43,10 @@ export const SettingsAgenciesView = {
                 .agx-badge { font-size: 11px; font-weight: 800; padding: 3px 9px; border-radius: 999px; }
                 .agx-badge--dep { background: #e0f2fe; color: #0369a1; }
                 .agx-badge--arr { background: #fce7f3; color: #be185d; }
+                .agx-chip { font-size: 12px; font-weight: 700; padding: 5px 10px; border-radius: 999px; background: #f1f5f9; color: #334155; border: 1px solid #e2e8f0; cursor: pointer; transition: 0.2s; display: inline-flex; align-items: center; gap: 6px; }
+                .agx-chip:hover { background: #ede9fe; border-color: #c4b5fd; color: #6d28d9; }
+                .agx-chip--eur { background: #ecfdf5; color: #047857; border-color: #a7f3d0; }
+                .agx-chip--xof { background: #fef3c7; color: #92400e; border-color: #fde68a; }
                 .agx-arr-list { padding: 8px 22px 16px 22px; }
                 .agx-arr { display: flex; align-items: center; gap: 12px; padding: 12px 0; border-bottom: 1px dashed #eef2f7; }
                 .agx-arr:last-child { border-bottom: none; }
@@ -84,6 +88,11 @@ export const SettingsAgenciesView = {
                             <span class="agx-id">{{ r.departure.id }}</span>
                         </div>
                         <span class="agx-spacer"></span>
+                        <span class="agx-chip" :class="(r.departure.currency === 'EUR') ? 'agx-chip--eur' : 'agx-chip--xof'"
+                              @click="openCurrencyModel(r.departure)"
+                              :title="'Modifier la devise et le modèle de facturation'">
+                            💱 {{ (r.departure.currency === 'EUR') ? '€ EUR' : 'F CFA' }}
+                        </span>
                         <button class="agx-btn agx-btn--ghost agx-btn--mini" @click="openEdit(r.departure)">✏️ Renommer</button>
                         <button class="agx-btn agx-btn--primary agx-btn--mini" @click="openAddDest(r.departure)">➕ Destination</button>
                         <button class="agx-btn agx-btn--danger agx-btn--mini" @click="removeDeparture(r)">🗑️</button>
@@ -187,6 +196,57 @@ export const SettingsAgenciesView = {
                     </div>
                 </div>
 
+                <!-- DEVISE & MODÈLE DE FACTURATION (par route de départ) -->
+                <div class="agx-overlay" v-if="showCurrencyModel">
+                    <div class="agx-modal">
+                        <div class="agx-modal__h">
+                            <h3 style="margin:0; color:#0f172a;">💱 Devise & modèle de facturation</h3>
+                            <p style="margin:4px 0 0; font-size:13px; color:#64748b;">Route de départ : <b>{{ cm.depName }}</b></p>
+                        </div>
+                        <div class="agx-modal__b">
+                            <div v-if="cm.loading" style="text-align:center; padding:30px; color:#64748b;">
+                                <i class="fas fa-spinner fa-spin"></i> Chargement…
+                            </div>
+                            <template v-else>
+                                <div class="agx-field">
+                                    <label class="agx-lab">💱 Devise d'affichage et de saisie au DÉPART</label>
+                                    <select class="agx-inp" v-model="cm.currency">
+                                        <option value="EUR">€ Euro (saisie en €, converti automatiquement en FCFA)</option>
+                                        <option value="XOF">F CFA (saisie directe en FCFA)</option>
+                                    </select>
+                                    <p style="margin:6px 0 0; font-size:12px; color:#64748b;">
+                                        L'agence d'arrivée reste toujours en FCFA. Tout est stocké en FCFA en interne.
+                                    </p>
+                                </div>
+
+                                <div class="agx-field">
+                                    <label class="agx-lab">🧾 Modèle de facturation (mode de calcul)</label>
+                                    <select class="agx-inp" v-model="cm.factureModel">
+                                        <option value="paris">Modèle Paris — prix saisi manuellement</option>
+                                        <option value="chine">Modèle Chine — Maritime calculé automatiquement (Volume × tarif CBM)</option>
+                                    </select>
+                                    <p style="margin:6px 0 0; font-size:12px; color:#64748b;">
+                                        L'Aérien (Poids × tarif) est identique pour les deux modèles.
+                                        Le modèle Chine est recommandé pour les routes en F CFA où l'on facture au volume.
+                                    </p>
+                                </div>
+
+                                <div class="agx-adv">
+                                    💡 Conseil : EUR ↔ « Modèle Paris » et FCFA ↔ « Modèle Chine » sont les combinaisons les plus courantes,
+                                    mais vous pouvez les changer indépendamment selon vos besoins.
+                                </div>
+                            </template>
+                        </div>
+                        <div class="agx-modal__f">
+                            <button class="agx-btn agx-btn--ghost" @click="showCurrencyModel=false">Annuler</button>
+                            <button class="agx-btn agx-btn--primary" @click="saveCurrencyModel" :disabled="saving || cm.loading">
+                                <span v-if="saving"><i class="fas fa-spinner fa-spin"></i> …</span>
+                                <span v-else>💾 Enregistrer</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- RENOMMER (nom + drapeau) -->
                 <div class="agx-overlay" v-if="showEdit">
                     <div class="agx-modal">
@@ -226,6 +286,7 @@ export const SettingsAgenciesView = {
                 const showWizard = ref(false);
                 const showAddDest = ref(false);
                 const showEdit = ref(false);
+                const showCurrencyModel = ref(false);
                 let unsub = null;
 
                 const slug = (s) => (s || '')
@@ -235,6 +296,7 @@ export const SettingsAgenciesView = {
                 const wiz = reactive({ depName: '', depFlag: '', depCurrency: 'EUR', arrivals: [{ name: '', flag: '' }] });
                 const addDest = reactive({ depId: '', depName: '', name: '', flag: '' });
                 const edit = reactive({ id: '', name: '', flag: '' });
+                const cm = reactive({ depId: '', depName: '', currency: 'EUR', factureModel: 'paris', loading: false });
 
                 const wizPreview = computed(() => {
                     const dep = slug(wiz.depName);
@@ -369,6 +431,56 @@ export const SettingsAgenciesView = {
                     catch (e) { globalApp.showToast("Erreur de suppression.", "error"); }
                 };
 
+                // Ouvre la modale Devise & modèle. Charge le factureModel courant
+                // depuis settings/invoice_config_<depId> (la devise vit déjà sur
+                // agencies_config). Si le doc n'existe pas (cas Paris/Abidjan
+                // par défaut, ou route créée avant), on tombe sur des valeurs
+                // suggérées selon la devise.
+                const openCurrencyModel = async (dep) => {
+                    cm.depId = dep.id;
+                    cm.depName = dep.name;
+                    cm.currency = dep.currency || (dep.id === 'paris' ? 'EUR' : 'XOF');
+                    cm.factureModel = cm.currency === 'EUR' ? 'paris' : 'chine';
+                    cm.loading = true;
+                    showCurrencyModel.value = true;
+                    try {
+                        const snap = await getDoc(doc(db, 'settings', `invoice_config_${dep.id}`));
+                        if (snap.exists() && snap.data().factureModel) {
+                            cm.factureModel = snap.data().factureModel;
+                        }
+                    } catch (e) { console.warn('Lecture invoice_config :', e && e.message); }
+                    finally { cm.loading = false; }
+                };
+
+                const saveCurrencyModel = async () => {
+                    if (!cm.depId) return;
+                    saving.value = true;
+                    try {
+                        // 1) Devise -> agencies_config.<depId>.currency
+                        //    Paris/Abidjan sont des agences par défaut hors Firestore :
+                        //    on crée/merge le doc pour porter la devise.
+                        await setDoc(doc(db, 'agencies_config', cm.depId),
+                            { currency: cm.currency, updatedAt: new Date().toISOString() },
+                            { merge: true });
+                        // 2) Modèle de facturation -> settings/invoice_config_<depId>.factureModel
+                        await setDoc(doc(db, 'settings', `invoice_config_${cm.depId}`),
+                            { factureModel: cm.factureModel, updatedAt: new Date().toISOString() },
+                            { merge: true });
+                        // Met à jour le cache local pour que les écrans qui lisent
+                        // AGENCIES (formatMoneyLocal, isEurAgency) voient le bon
+                        // symbole sans recharger.
+                        try {
+                            const cache = JSON.parse(localStorage.getItem('amt_agencies_config') || '{}');
+                            if (cache[cm.depId]) cache[cm.depId].currency = cm.currency;
+                            localStorage.setItem('amt_agencies_config', JSON.stringify(cache));
+                        } catch (e) { /* cache illisible : ok */ }
+                        globalApp.showToast("Devise et modèle de facturation enregistrés ✔", "success");
+                        showCurrencyModel.value = false;
+                    } catch (e) {
+                        console.error(e); globalApp.showToast("Erreur lors de l'enregistrement.", "error");
+                    } finally { saving.value = false; }
+                };
+
                 const removeDeparture = async (r) => {
                     if (r.departure.id === 'paris') return globalApp.showToast("Agence par défaut : suppression interdite.", "error");
                     if (r.arrivals.length > 0) return globalApp.showToast("Supprimez d'abord les destinations de cette route.", "error");
@@ -380,6 +492,7 @@ export const SettingsAgenciesView = {
                     showWizard, wiz, openWizard, saveRoute,
                     showAddDest, addDest, openAddDest, saveAddDest,
                     showEdit, edit, openEdit, saveEdit,
+                    showCurrencyModel, cm, openCurrencyModel, saveCurrencyModel,
                     removeAgency, removeDeparture
                 };
             }

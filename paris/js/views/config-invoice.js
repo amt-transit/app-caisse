@@ -129,15 +129,6 @@ export const ConfigInvoiceView = {
                             </select>
                         </div>
 
-                        <div class="form-group" style="margin-bottom: 15px;">
-                            <label style="font-weight: 600; font-size: 13px; color: #475569; margin-bottom: 6px; display: block;">🧾 Modèle de facturation (mode de calcul)</label>
-                            <select id="ciFactureModel" style="width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 8px;">
-                                <option value="paris">Modèle Paris — prix saisi en € (historique)</option>
-                                <option value="chine">Modèle Chine — Maritime = Volume (CBM) × tarif</option>
-                            </select>
-                            <div style="font-size: 11px; color: #94a3b8; margin-top: 4px;">L'Aérien (Poids × tarif) reste identique pour tous les modèles. À enregistrer avec le bouton « Enregistrer le modèle ».</div>
-                        </div>
-
                         <div class="form-group" style="margin-bottom: 25px;">
                             <label style="font-weight: 600; font-size: 13px; color: #475569; margin-bottom: 10px; display: block;">🖼️ Logo de la facture</label>
                             <div class="logo-upload-area">
@@ -316,7 +307,6 @@ export const ConfigInvoiceView = {
             document.getElementById('ciCompany').value = this.config.companyName || '';
             document.getElementById('ciFooter').value = this.config.footer || '';
             document.getElementById('ciCgv').value = this.config.cgv || '';
-            { const fmEl = document.getElementById('ciFactureModel'); if (fmEl) fmEl.value = this.config.factureModel || 'paris'; }
                 document.getElementById('ciSecondaryColor').value = this.config.secondaryColorHex || '#1e293b';
                 document.getElementById('ciBgColor').value = this.config.bgColorHex || '#f8fafc';
 
@@ -478,7 +468,8 @@ export const ConfigInvoiceView = {
             this.config.companyName = document.getElementById('ciCompany').value.trim();
             this.config.footer = document.getElementById('ciFooter').value.trim();
             this.config.cgv = document.getElementById('ciCgv').value.trim();
-            this.config.factureModel = (document.getElementById('ciFactureModel') || {}).value || 'paris';
+            // Note : le « modèle de facturation » (paris/chine) est désormais
+            // géré dans Gestion des agences → ⚙️ Devise & modèle (par route).
             this.config.primaryColor = document.getElementById('ciPrimaryColor').value;
             this.config.primaryColorHex = document.getElementById('ciHexColor').value;
             this.config.secondaryColorHex = document.getElementById('ciSecondaryColor').value;
