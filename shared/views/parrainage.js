@@ -1,5 +1,6 @@
 import { db, functions, auth, app } from '../../firebase-config.js';
 import { collection, doc, getDoc, getDocs, setDoc, addDoc, updateDoc, query, where, orderBy, onSnapshot, serverTimestamp, increment, writeBatch } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
+import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-storage.js";
 import { httpsCallable } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-functions.js";
 import { createApp, ref, reactive, computed, onMounted, onUnmounted, nextTick, watch } from "https://unpkg.com/vue@3/dist/vue.esm-browser.prod.js";
 import { isAffiliationActive } from '../../affiliation-config.js';
@@ -187,13 +188,17 @@ export const ParrainageView = {
                             <div v-for="p in filteredNetworkTree" :key="p.id" class="stat-box" :style="p.indentStyle" @click="openDetails(p)" style="cursor: pointer;">
                                 <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
                                     <div style="display:flex; align-items:center; gap:15px;">
-                                        <div :style="'width:40px; height:40px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:16px; ' + (p.level > 0 ? 'background:#ecfdf5; color:#059669;' : 'background:#eff6ff; color:#2563eb;')">
+                                        <img v-if="p.photoUrl" :src="p.photoUrl" alt="Photo" style="width:40px; height:40px; border-radius:50%; object-fit:cover; border:1px solid #e2e8f0;">
+                                        <div v-else :style="'width:40px; height:40px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:16px; ' + (p.level > 0 ? 'background:#ecfdf5; color:#059669;' : 'background:#eff6ff; color:#2563eb;')">
                                             {{ (p.prenom?.[0] || p.nom?.[0] || '?').toUpperCase() }}
                                         </div>
                                         <div>
-                                            <div style="font-weight:700; font-size:15px; color:#0f172a; display:flex; align-items:center;">
+                                            <div style="font-weight:700; font-size:15px; color:#0f172a; display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
                                                 {{ p.prenom }} {{ p.nom }}
-                                                <span v-html="getRoleBadge(p)" style="margin-left: 8px;"></span>
+                                                <span v-html="getRoleBadge(p)"></span>
+                                                <span v-if="(p.statut || 'actif') === 'actif'" style="background:#dcfce7; color:#166534; padding:2px 8px; border-radius:10px; font-size:10px; font-weight:700;">🟢 Actif</span>
+                                                <span v-else-if="p.statut === 'en_attente'" style="background:#fef3c7; color:#92400e; padding:2px 8px; border-radius:10px; font-size:10px; font-weight:700;">🟡 En attente</span>
+                                                <span v-else-if="p.statut === 'suspendu'" style="background:#fee2e2; color:#991b1b; padding:2px 8px; border-radius:10px; font-size:10px; font-weight:700;">🔴 Suspendu</span>
                                             </div>
                                             <div style="font-size:12px; color:#64748b; margin-top:2px;">
                                                 <span v-if="p.level > 0 && p.parentName" style="color:#d97706;"><i class="fas fa-level-up-alt"></i> Filleul de {{ p.parentName }} | </span>
@@ -207,7 +212,7 @@ export const ParrainageView = {
                                             <div style="font-size:11px; color:#64748b; text-transform:uppercase; font-weight:700;">Solde dispo</div>
                                             <div :style="'font-weight:800; font-size:16px; ' + ((p.soldeDisponible || 0) > 0 ? 'color:#10b981;' : 'color:#94a3b8;')">{{ formatMoney(p.soldeDisponible) }}</div>
                                         </div>
-                                        <button v-if="isSuperAdmin" class="btn btn-outline btn-small" @click.stop="openPartnerModal(p)"><i class="fas fa-edit"></i></button>
+                                        <button v-if="isSuperAdmin" @click.stop="openPartnerModal(p)" title="Modifier la fiche" style="background:#eff6ff; color:#1e40af; border:1px solid #bfdbfe; padding:7px 14px; border-radius:8px; font-size:12px; font-weight:700; cursor:pointer; display:inline-flex; align-items:center; gap:6px;"><i class="fas fa-edit"></i> Modifier</button>
                                     </div>
                                 </div>
                             </div>
@@ -501,13 +506,36 @@ export const ParrainageView = {
                             <button style="background:none; border:none; font-size:24px; color:#64748b; cursor:pointer;" @click="showPartnerModal = false">✕</button>
                         </div>
                         <div class="pm-body">
-                            <div style="display:grid; grid-template-columns:1fr; gap:15px;">
+                            <!-- Photo de profil : upload Firebase Storage avec preview -->
+                            <div style="display:flex; align-items:center; gap:15px; margin-bottom:18px; padding:12px; background:#f8fafc; border:1px dashed #cbd5e1; border-radius:10px;">
+                                <div style="position:relative; width:72px; height:72px; flex-shrink:0;">
+                                    <img v-if="partnerForm.photoUrl || photoPreview" :src="photoPreview || partnerForm.photoUrl" alt="Photo" style="width:72px; height:72px; border-radius:50%; object-fit:cover; border:2px solid #e2e8f0;">
+                                    <div v-else style="width:72px; height:72px; border-radius:50%; background:#e2e8f0; display:flex; align-items:center; justify-content:center; color:#94a3b8; font-size:28px;"><i class="fas fa-user"></i></div>
+                                </div>
+                                <div style="flex:1;">
+                                    <label style="font-size:12px; font-weight:700; color:#475569; margin-bottom:4px; display:block;">Photo</label>
+                                    <input type="file" accept="image/*" @change="onPhotoSelected" style="font-size:12px; color:#64748b;">
+                                    <div v-if="photoUploading" style="font-size:11px; color:#0369a1; margin-top:4px;"><i class="fas fa-spinner fa-spin"></i> Upload en cours…</div>
+                                </div>
+                            </div>
+
+                            <div style="display:grid; grid-template-columns:1fr 1fr; gap:15px;">
                                 <div><label style="font-size:12px; font-weight:700; color:#475569; margin-bottom:4px; display:block;">Nom *</label><input type="text" v-model="partnerForm.nom" style="width:100%; padding:10px; border:1px solid #cbd5e1; border-radius:8px; box-sizing:border-box; outline:none;" placeholder="Nom de famille"></div>
                                 <div><label style="font-size:12px; font-weight:700; color:#475569; margin-bottom:4px; display:block;">Prénom *</label><input type="text" v-model="partnerForm.prenom" style="width:100%; padding:10px; border:1px solid #cbd5e1; border-radius:8px; box-sizing:border-box; outline:none;" placeholder="Prénom"></div>
                                 <div><label style="font-size:12px; font-weight:700; color:#475569; margin-bottom:4px; display:block;">Téléphone *</label><input type="text" v-model="partnerForm.telephone" style="width:100%; padding:10px; border:1px solid #cbd5e1; border-radius:8px; box-sizing:border-box; outline:none;" placeholder="Ex: 0700000000"></div>
                                 <div><label style="font-size:12px; font-weight:700; color:#475569; margin-bottom:4px; display:block;">Email</label><input type="email" v-model="partnerForm.email" style="width:100%; padding:10px; border:1px solid #cbd5e1; border-radius:8px; box-sizing:border-box; outline:none;" placeholder="Optionnel"></div>
-                                
+                                <div style="grid-column:1 / -1;"><label style="font-size:12px; font-weight:700; color:#475569; margin-bottom:4px; display:block;">Adresse</label><input type="text" v-model="partnerForm.adresse" style="width:100%; padding:10px; border:1px solid #cbd5e1; border-radius:8px; box-sizing:border-box; outline:none;" placeholder="Ex: Cocody, Riviera 3, Abidjan"></div>
+                                <div><label style="font-size:12px; font-weight:700; color:#475569; margin-bottom:4px; display:block;">N° d'identification</label><input type="text" v-model="partnerForm.numId" style="width:100%; padding:10px; border:1px solid #cbd5e1; border-radius:8px; box-sizing:border-box; outline:none;" placeholder="CNI / Passeport / autre"></div>
                                 <div>
+                                    <label style="font-size:12px; font-weight:700; color:#475569; margin-bottom:4px; display:block;">Statut</label>
+                                    <select v-model="partnerForm.statut" style="width:100%; padding:10px; border:1px solid #cbd5e1; border-radius:8px; box-sizing:border-box; outline:none; background:white;">
+                                        <option value="actif">🟢 Actif</option>
+                                        <option value="en_attente">🟡 En attente</option>
+                                        <option value="suspendu">🔴 Suspendu</option>
+                                    </select>
+                                </div>
+
+                                <div style="grid-column:1 / -1;">
                                     <label style="font-size:12px; font-weight:700; color:#475569; margin-bottom:4px; display:block;">Leader parent (Optionnel)</label>
                                     <select v-model="partnerForm.parrainId" style="width:100%; padding:10px; border:1px solid #cbd5e1; border-radius:8px; box-sizing:border-box; outline:none; background:white;">
                                         <option value="">— Aucun (Venu directement - Leader Direct) —</option>
@@ -515,7 +543,7 @@ export const ParrainageView = {
                                     </select>
                                 </div>
 
-                                <div v-if="partnerForm.parrainId" style="background:#fffbeb; padding:10px 12px; border-radius:8px; border:1px solid #fde68a; font-size:12px; color:#92400e;">
+                                <div v-if="partnerForm.parrainId" style="grid-column:1 / -1; background:#fffbeb; padding:10px 12px; border-radius:8px; border:1px solid #fde68a; font-size:12px; color:#92400e;">
                                     <i class="fas fa-info-circle"></i>
                                     Quand ce filleul génère une commission, son <b>Leader parent</b> reçoit automatiquement
                                     un bonus de <b>{{ settings.tauxBonusParrainage }}%</b> du bénéfice (versé par l'Agence).
@@ -577,13 +605,35 @@ export const ParrainageView = {
                 <div v-if="showDetailModal" class="pm-overlay" @click.self="showDetailModal = false">
                     <div class="pm-box">
                         <div class="pm-header">
-                            <h3 style="margin:0; font-size:18px; color:#0f172a; display:flex; align-items:center;">
+                            <h3 style="margin:0; font-size:18px; color:#0f172a; display:flex; align-items:center; flex-wrap:wrap; gap:8px;">
                                 Détails : {{ partnerDetail.prenom }} {{ partnerDetail.nom }}
-                                <span v-html="getRoleBadge(partnerDetail)" style="margin-left: 10px;"></span>
+                                <span v-html="getRoleBadge(partnerDetail)"></span>
                             </h3>
-                            <button style="background:none; border:none; font-size:24px; color:#64748b; cursor:pointer;" @click="showDetailModal = false">✕</button>
+                            <div style="display:flex; align-items:center; gap:10px;">
+                                <button v-if="isSuperAdmin" @click="showDetailModal = false; openPartnerModal(partnerDetail)" style="background:#eff6ff; color:#1e40af; border:1px solid #bfdbfe; padding:8px 14px; border-radius:8px; font-size:13px; font-weight:700; cursor:pointer; display:inline-flex; align-items:center; gap:6px;"><i class="fas fa-edit"></i> Modifier la fiche</button>
+                                <button style="background:none; border:none; font-size:24px; color:#64748b; cursor:pointer;" @click="showDetailModal = false">✕</button>
+                            </div>
                         </div>
                         <div class="pm-body" style="font-size:13px; line-height:1.6; color:#334155;">
+                            <!-- Identité : photo + coordonnées + statut -->
+                            <div style="display:flex; gap:16px; align-items:center; padding:14px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:10px; margin-bottom:18px;">
+                                <div style="flex-shrink:0;">
+                                    <img v-if="partnerDetail.photoUrl" :src="partnerDetail.photoUrl" alt="Photo" style="width:64px; height:64px; border-radius:50%; object-fit:cover; border:2px solid #e2e8f0;">
+                                    <div v-else style="width:64px; height:64px; border-radius:50%; background:#e2e8f0; display:flex; align-items:center; justify-content:center; color:#94a3b8; font-size:24px;"><i class="fas fa-user"></i></div>
+                                </div>
+                                <div style="flex:1; font-size:12px;">
+                                    <div style="margin-bottom:3px;"><i class="fas fa-phone" style="color:#64748b; width:14px;"></i> {{ partnerDetail.telephone || '—' }}</div>
+                                    <div style="margin-bottom:3px;"><i class="fas fa-envelope" style="color:#64748b; width:14px;"></i> {{ partnerDetail.email || '—' }}</div>
+                                    <div style="margin-bottom:3px;"><i class="fas fa-map-marker-alt" style="color:#64748b; width:14px;"></i> {{ partnerDetail.adresse || '—' }}</div>
+                                    <div><i class="fas fa-id-card" style="color:#64748b; width:14px;"></i> {{ partnerDetail.numId || '—' }}</div>
+                                </div>
+                                <div>
+                                    <span v-if="(partnerDetail.statut || 'actif') === 'actif'" style="background:#dcfce7; color:#166534; padding:6px 12px; border-radius:20px; font-size:11px; font-weight:700;">🟢 Actif</span>
+                                    <span v-else-if="partnerDetail.statut === 'en_attente'" style="background:#fef3c7; color:#92400e; padding:6px 12px; border-radius:20px; font-size:11px; font-weight:700;">🟡 En attente</span>
+                                    <span v-else-if="partnerDetail.statut === 'suspendu'" style="background:#fee2e2; color:#991b1b; padding:6px 12px; border-radius:20px; font-size:11px; font-weight:700;">🔴 Suspendu</span>
+                                </div>
+                            </div>
+
                             <div style="display:flex; justify-content:space-between; margin-bottom:5px;"><span>Total généré (Commissions) :</span> <strong style="color:#10b981;">{{ formatMoney(partnerDetail.totalGagne) }}</strong></div>
                             <div style="display:flex; justify-content:space-between; margin-bottom:5px;"><span>Déjà payé :</span> <strong style="color:#f59e0b;">{{ formatMoney(partnerDetail.totalRetire) }}</strong></div>
                             <div style="display:flex; justify-content:space-between; margin-bottom:5px;"><span>Disponible (factures payées — à régler) :</span> <strong style="font-size:16px; color:#0f172a;">{{ formatMoney(partnerDetail.soldeDisponible) }}</strong></div>
@@ -697,8 +747,24 @@ export const ParrainageView = {
                 });
 
                 const partnerForm = reactive({
-                    id: '', nom: '', prenom: '', telephone: '', email: '', parrainId: '', quiPaieParrain: ''
+                    id: '', nom: '', prenom: '', telephone: '', email: '',
+                    adresse: '', numId: '', photoUrl: '',
+                    statut: 'actif', // actif | en_attente | suspendu
+                    parrainId: '', quiPaieParrain: ''
                 });
+                // Photo : preview locale (data URL) avant upload, fichier en attente
+                // d'envoi vers Firebase Storage lors du clic sur Enregistrer.
+                const photoPreview = ref('');
+                const photoUploading = ref(false);
+                let _pendingPhotoFile = null;
+                const onPhotoSelected = (ev) => {
+                    const f = ev.target.files && ev.target.files[0];
+                    if (!f) { _pendingPhotoFile = null; photoPreview.value = ''; return; }
+                    _pendingPhotoFile = f;
+                    const reader = new FileReader();
+                    reader.onload = (e) => { photoPreview.value = e.target.result; };
+                    reader.readAsDataURL(f);
+                };
 
                 const selectedPartnerForWithdrawal = ref('');
                 const withdrawalForm = reactive({
@@ -1024,10 +1090,24 @@ export const ParrainageView = {
                 const availableSponsors = computed(() => partners.value.filter(p => p.id !== partnerForm.id)); // Éviter l'auto-parrainage
 
                 const openPartnerModal = (p = null) => {
+                    _pendingPhotoFile = null;
+                    photoPreview.value = '';
                     if (p) {
-                        Object.assign(partnerForm, { id: p.id, nom: p.nom, prenom: p.prenom, telephone: p.telephone, email: p.email||'', parrainId: p.parrainId||'', quiPaieParrain: p.quiPaieParrain||'' });
+                        Object.assign(partnerForm, {
+                            id: p.id, nom: p.nom || '', prenom: p.prenom || '',
+                            telephone: p.telephone || '', email: p.email || '',
+                            adresse: p.adresse || '', numId: p.numId || '',
+                            photoUrl: p.photoUrl || '',
+                            statut: p.statut || 'actif',
+                            parrainId: p.parrainId || '', quiPaieParrain: p.quiPaieParrain || ''
+                        });
                     } else {
-                        Object.assign(partnerForm, { id: '', nom: '', prenom: '', telephone: '', email: '', parrainId: '', quiPaieParrain: '' });
+                        Object.assign(partnerForm, {
+                            id: '', nom: '', prenom: '', telephone: '', email: '',
+                            adresse: '', numId: '', photoUrl: '',
+                            statut: 'actif',
+                            parrainId: '', quiPaieParrain: ''
+                        });
                     }
                     showPartnerModal.value = true;
                 };
@@ -1036,10 +1116,33 @@ export const ParrainageView = {
                     if (!partnerForm.nom || !partnerForm.prenom || !partnerForm.telephone) return globalApp.showToast("Remplissez les champs obligatoires", "error");
                     saving.value = true;
                     try {
+                        // Upload photo (si une nouvelle a été sélectionnée) AVANT
+                        // l'écriture du doc : on stocke l'URL Storage finale.
+                        let photoUrlFinal = partnerForm.photoUrl || '';
+                        if (_pendingPhotoFile) {
+                            photoUploading.value = true;
+                            try {
+                                const storage = getStorage(app);
+                                const fileName = `demarcheurs/photo_${Date.now()}_${Math.floor(Math.random()*1000)}.jpg`;
+                                const sRef = storageRef(storage, fileName);
+                                await uploadBytes(sRef, _pendingPhotoFile);
+                                photoUrlFinal = await getDownloadURL(sRef);
+                            } catch (e) {
+                                console.error('Upload photo échoué:', e);
+                                globalApp.showToast("Photo non envoyée (continuons sans).", "error");
+                            } finally {
+                                photoUploading.value = false;
+                            }
+                        }
                         const payload = {
-                            nom: partnerForm.nom, prenom: partnerForm.prenom, telephone: partnerForm.telephone, email: partnerForm.email,
-                            parrainId: partnerForm.parrainId || null, quiPaieParrain: partnerForm.quiPaieParrain || null,
-                            statut: 'actif',
+                            nom: partnerForm.nom, prenom: partnerForm.prenom,
+                            telephone: partnerForm.telephone, email: partnerForm.email,
+                            adresse: partnerForm.adresse || '',
+                            numId: partnerForm.numId || '',
+                            photoUrl: photoUrlFinal,
+                            statut: partnerForm.statut || 'actif',
+                            parrainId: partnerForm.parrainId || null,
+                            quiPaieParrain: partnerForm.quiPaieParrain || null,
                             // agency : route propriétaire du démarcheur. Sert au mobile
                             // (custom claim) et à reconcileOne pour retrouver la fiche.
                             agency: activeAgency.value,
@@ -1051,9 +1154,11 @@ export const ParrainageView = {
                             payload.totalGagne = 0; payload.totalRetire = 0; payload.soldeDisponible = 0;
                             await addDoc(collection(db, getCollectionName("demarcheurs")), payload);
                         }
+                        _pendingPhotoFile = null;
+                        photoPreview.value = '';
                         globalApp.showToast("Partenaire enregistré", "success");
                         showPartnerModal.value = false;
-                    } catch(e) { globalApp.showToast("Erreur", "error"); }
+                    } catch(e) { console.error(e); globalApp.showToast("Erreur", "error"); }
                     saving.value = false;
                 };
 
@@ -1385,6 +1490,7 @@ export const ParrainageView = {
                     analytics, simulation, syncRates, saveSettings,
                     depRoutes, affiliatedRoutes, chargesByRoute, savingCharges, saveCharges,
                     showPartnerModal, partnerForm, availableSponsors, openPartnerModal, savePartner,
+                    photoPreview, photoUploading, onPhotoSelected,
                     showDetailModal, partnerDetail, openDetails,
                     reconcileBusy, reconcilerSoldes, migrerRoutesRdvDevis,
                     mobileAccessSaving, mobileAccessInfo, createMobileAccess,
