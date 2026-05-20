@@ -48,16 +48,13 @@ export function ScreenTitle({ icon, title, subtitle }) {
 }
 
 export function Card({ children, style }) {
+  // Card en verre dépoli : translucide + bord blanc + reflet en sommet.
+  // Les halos colorés du <Background /> transparaissent doucement à travers.
   return (
-    <LinearGradient
-      colors={grad.lacquer}
-      start={{ x: 0, y: 0 }}
-      end={{ x: 1, y: 1 }}
-      style={[styles.card, style]}
-    >
+    <View style={[styles.card, shadow.card, style]}>
       <View style={styles.cardSheen} pointerEvents="none" />
       {children}
-    </LinearGradient>
+    </View>
   );
 }
 
@@ -117,12 +114,14 @@ export function Row({ avatar, icon, iconBg, iconColor, main, sub, right, last, o
 }
 
 // Badges = tampons d'expédition encrés (filet coloré, MAJ. espacées).
+// Sur fond clair, les fonds des badges sont plus saturés que sur sombre
+// pour garder la même lisibilité.
 export function Badge({ text, tone = 'wait' }) {
   const map = {
-    paid: { bg: 'rgba(63,217,168,0.12)', fg: colors.green, bd: 'rgba(63,217,168,0.45)' },
-    wait: { bg: 'rgba(251,191,36,0.12)', fg: colors.amber, bd: 'rgba(251,191,36,0.42)' },
-    info: { bg: 'rgba(242,163,18,0.14)', fg: colors.gold, bd: 'rgba(242,163,18,0.45)' },
-    bad: { bg: 'rgba(229,31,33,0.16)', fg: colors.redSoft, bd: 'rgba(229,31,33,0.55)' },
+    paid: { bg: 'rgba(16,185,129,0.15)', fg: colors.green, bd: 'rgba(16,185,129,0.4)' },
+    wait: { bg: 'rgba(245,158,11,0.18)', fg: colors.amber, bd: 'rgba(245,158,11,0.45)' },
+    info: { bg: 'rgba(242,163,18,0.18)', fg: colors.goldDeep, bd: 'rgba(242,163,18,0.5)' },
+    bad: { bg: 'rgba(229,31,33,0.15)', fg: colors.redSoft, bd: 'rgba(229,31,33,0.4)' },
   };
   const c = map[tone] || map.wait;
   return (
@@ -180,6 +179,7 @@ const styles = StyleSheet.create({
   },
 
   card: {
+    backgroundColor: colors.glass, // rgba(255,255,255,0.55) — verre dépoli
     borderWidth: 1,
     borderColor: colors.glassBorder,
     borderRadius: radius.md,
@@ -188,9 +188,10 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   cardSheen: {
+    // Reflet blanc tout en haut → simule la lumière captée par le bord du verre
     position: 'absolute',
     top: 0, left: 0, right: 0, height: 1,
-    backgroundColor: 'rgba(255,255,255,0.10)',
+    backgroundColor: 'rgba(255,255,255,0.9)',
   },
 
   section: {
@@ -206,10 +207,10 @@ const styles = StyleSheet.create({
     letterSpacing: 0.2,
   },
   pill: {
-    backgroundColor: colors.glassStrong, borderWidth: 1, borderColor: colors.glassBorder,
+    backgroundColor: 'rgba(242,163,18,0.14)', borderWidth: 1, borderColor: 'rgba(242,163,18,0.35)',
     borderRadius: radius.pill, paddingHorizontal: 11, paddingVertical: 3,
   },
-  pillT: { color: colors.gold, fontSize: 12, fontFamily: font.bodyBold },
+  pillT: { color: colors.goldDeep, fontSize: 12, fontFamily: font.bodyBold },
 
   row: {
     flexDirection: 'row', alignItems: 'center',
@@ -218,11 +219,12 @@ const styles = StyleSheet.create({
   },
   rowLast: { borderBottomWidth: 0 },
   avatar: {
-    width: 40, height: 40, borderRadius: 20, backgroundColor: colors.bgChip,
-    borderWidth: 1, borderColor: colors.glassBorderStrong,
+    width: 40, height: 40, borderRadius: 20,
+    backgroundColor: 'rgba(242,163,18,0.18)', // or pâle pour les avatars
+    borderWidth: 1, borderColor: 'rgba(242,163,18,0.4)',
     alignItems: 'center', justifyContent: 'center',
   },
-  avatarT: { color: colors.gold, fontFamily: font.bodyBold, fontSize: 14 },
+  avatarT: { color: colors.goldDeep, fontFamily: font.bodyBold, fontSize: 14 },
   rowIcon: {
     width: 40, height: 40, borderRadius: 13,
     alignItems: 'center', justifyContent: 'center',

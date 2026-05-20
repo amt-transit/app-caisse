@@ -61,14 +61,21 @@ export default function TabBar({ active, onChange }) {
 const styles = StyleSheet.create({
   bar: {
     flexDirection: 'row',
-    backgroundColor: 'rgba(22,9,12,0.96)',
+    backgroundColor: 'rgba(255,255,255,0.78)', // verre dépoli clair
+    borderTopWidth: 1,
+    borderColor: 'rgba(255,255,255,0.9)',
     paddingTop: spacing.md,
     paddingBottom: 26,
     paddingHorizontal: spacing.sm,
+    shadowColor: '#0B2540',
+    shadowOpacity: 0.06,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: -4 },
+    elevation: 8,
   },
   hair: {
     position: 'absolute', top: 0, left: 0, right: 0, height: 1,
-    backgroundColor: colors.glassBorder,
+    backgroundColor: 'rgba(255,255,255,0.95)', // reflet sommet (bord de verre)
   },
   item: { flex: 1, alignItems: 'center', gap: 4 },
   dash: { width: 22, height: 3, borderRadius: 2, marginBottom: 3 },

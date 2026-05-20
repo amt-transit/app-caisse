@@ -1,123 +1,129 @@
 // ============================================================================
-//  Thème « ASCENSION »  ·  CHARTE OFFICIELLE AMT
+//  Thème « CIEL D'ORIENT »  ·  CHARTE OFFICIELLE AMT — version CLAIRE + VERRE
 // ----------------------------------------------------------------------------
-//  Triade officielle, hiérarchie 60-30-10 :
-//    • BASE (60%)  Bleu de Prusse #1A3553  → fonds : calme, confiance
-//    • ACCENT (15%) Rouge #E51F21          → carte du solde (point focal),
-//                                            boutons clés, statuts
-//    • VALEUR (15%) Or #F2A312 (du logo)   → montants, courbe ascendante,
-//                                            tout ce qui « rapporte »
-//    • NEUTRE (10%) Ivoire                 → textes
-//  Le rouge n'est JAMAIS un fond général (psychologie : alerte) — uniquement
-//  un point focal. Le bleu domine, l'or marque l'argent.
+//  Triade officielle (conservée) :
+//    • BASE      Bleu de Prusse #1A3553   → accent foncé, textes profonds
+//    • ACCENT    Rouge #E51F21            → point focal (alertes, statuts)
+//    • VALEUR    Or #F2A312 (logo)        → montants, gains, boutons clés
+//
+//  Fond CLAIR : Bleu Ciel #EFF6FB → #DCEBF6, parent direct du Bleu de Prusse.
+//  Cohérence chromatique maximale avec la charte ; l'or se lit en or foncé
+//  (#C9850A) pour rester premium et lisible sur un fond pâle.
+//
+//  Surfaces « verre dépoli » : les cards, chips, filtres et tab bar utilisent
+//  un blanc translucide (rgba 0.55) avec backdrop blur pour donner du matériau
+//  au-dessus des halos colorés diffus du fond (or + rouge, très subtils).
 //
 //  ⚠ Les CLÉS sont conservées (gold, glass, bgChip, greenDeep…) pour ne pas
-//  casser les écrans Clients / Filleuls / Wallet / Profil : seules les VALEURS
-//  changent. Les nouveautés (grad, font, star…) sont additives.
+//  casser les écrans qui les importent — seules les VALEURS sont adaptées
+//  au fond clair (contraste de lisibilité inversé).
 // ============================================================================
 
 export const colors = {
-  // Fonds — Bleu de Prusse (couleur secondaire officielle), assombri pour
-  // la profondeur et le contraste du texte.
-  bg: '#0C1B2C', // bleu de prusse profond (base dominante)
-  bgElevated: '#13263D',
-  bgChip: '#1A3553', // BLEU DE PRUSSE officiel exact (champs / chips)
+  // ── Fonds ────────────────────────────────────────────────────────────
+  // Base claire (Bleu Ciel, parent du bleu de Prusse de la charte).
+  bg: '#EFF6FB',
+  bgElevated: '#FFFFFF',
+  bgChip: 'rgba(255,255,255,0.55)', // glass : champs / chips translucides
 
-  // Surfaces « verre » teintées bleu froid (cohérent avec la base)
-  glass: 'rgba(255,255,255,0.05)',
-  glassStrong: 'rgba(255,255,255,0.09)',
-  glassBorder: 'rgba(120,170,225,0.17)',
-  glassBorderStrong: 'rgba(140,185,235,0.32)',
+  // ── Surfaces « verre dépoli » ────────────────────────────────────────
+  // Translucides sur fond clair : le blur les fait ressortir au-dessus
+  // des halos colorés du Background. Bord blanc subtil = biseau verre.
+  glass: 'rgba(255,255,255,0.55)',
+  glassStrong: 'rgba(255,255,255,0.72)',
+  glassBorder: 'rgba(255,255,255,0.7)',
+  glassBorderStrong: 'rgba(255,255,255,0.85)',
 
-  // Or du logo — la VALEUR (montants, gains, accent chaud)
-  gold: '#F2A312', // or marigold du logo
+  // ── Or du logo — VALEUR (montants, gains, accent chaud) ──────────────
+  // Sur fond clair, on lit l'or en version « foncée » pour rester premium.
+  gold: '#F2A312', // or marigold officiel (boutons / accents)
   goldSoft: '#FFC24A',
-  goldDeep: '#C9850A',
-  goldLight: '#FFD98A', // or clair lisible (gros chiffres)
-  star: '#FFD24A', // jaune-or pour la célébration
-  navyBrand: '#1A3553', // bleu de prusse officiel
+  goldDeep: '#C9850A', // utilisé comme couleur de texte (chiffres / titres)
+  goldLight: '#C9850A', // sur fond clair = goldDeep (lisibilité garantie)
+  star: '#F2A312',
+  navyBrand: '#1A3553',
 
-  // Rouge officiel — ACCENT FOCAL (jamais un fond général)
-  red: '#E51F21', // ROUGE officiel AMT
-  redSoft: '#FF6A5A', // rouge clair (texte d'alerte sur fond sombre)
-  redDeep: '#8E1416', // laque rouge profonde (bas de la carte du solde)
+  // ── Rouge officiel — ACCENT focal ────────────────────────────────────
+  red: '#E51F21',
+  redSoft: '#B91C1C', // texte d'alerte sur fond clair (était #FF6A5A en sombre)
+  redDeep: '#7F1112',
 
-  // Sémantique (calées pour bien ressortir sur le bleu)
-  green: '#34D9A6',
-  greenDeep: '#0E3A2E',
-  amber: '#FBBF24',
-  amberDeep: '#3A2C08',
+  // ── Sémantique calée pour fond clair ─────────────────────────────────
+  green: '#047857',     // texte vert lisible sur clair
+  greenDeep: '#064E3B',
+  amber: '#B45309',     // texte ambre lisible sur clair
+  amberDeep: '#78350F',
 
-  // Texte — ivoire frais sur bleu profond
-  text: '#F3F6FB',
-  textDim: '#9FB3CE',
-  textFaint: '#5F7791',
+  // ── Texte — bleu de Prusse profond sur ciel clair ───────────────────
+  text: '#0B2540',      // titres / valeurs principales
+  textDim: '#41617F',   // textes secondaires
+  textFaint: '#7B97B3', // textes tertiaires / placeholders
 
-  // Texte foncé posé sur l'or (boutons or) : bleu de prusse très sombre
+  // Texte foncé posé sur l'or (boutons or) — inchangé, c'est le contraste
+  // avec le jaune-orangé qui doit rester noir-bleuté pour la lisibilité.
   onGold: '#11243A',
 
-  // Divers
-  hairline: 'rgba(150,190,235,0.10)',
+  // ── Divers ────────────────────────────────────────────────────────────
+  hairline: 'rgba(11,37,64,0.08)', // fines lignes (bleu de Prusse très dilué)
 };
 
-// Dégradés (expo-linear-gradient) — start/end par défaut diagonal.
+// ── Dégradés ──────────────────────────────────────────────────────────
+// `bg` est utilisé par <Background /> : on superposera les halos colorés
+// (or et rouge) en composants au-dessus (cf. Background.js).
 export const grad = {
-  bg: ['#102740', '#0A1626', '#0C1B2C'], // base bleu de prusse (dominante)
-  lacquer: ['#163050', '#0F2338'], // panneau laqué bleu (cartes)
-  lacquerRed: ['#E8332A', '#971517'], // ROUGE officiel glossy (point focal)
-  gold: ['#FFD98A', '#F2A312', '#C9850A'], // or métallisé (montants / boutons)
-  goldSheen: ['rgba(255,255,255,0.35)', 'rgba(255,255,255,0)'], // reflet
-  ink: ['#1A3553', '#0E1E32'], // bleu de prusse → encre (variété ponctuelle)
+  bg: ['#EFF6FB', '#E2EDF6', '#DCEBF6'],
+  lacquer: ['rgba(255,255,255,0.7)', 'rgba(255,255,255,0.45)'], // panneau verre
+  lacquerRed: ['#E8332A', '#971517'], // ROUGE officiel (boutons d'alerte)
+  gold: ['#FFD98A', '#F2A312', '#C9850A'], // or métallisé (boutons or)
+  goldSheen: ['rgba(255,255,255,0.55)', 'rgba(255,255,255,0)'], // reflet
+  ink: ['#1A3553', '#0E1E32'], // pour les rares zones foncées intentionnelles
 };
 
 export const spacing = { xs: 4, sm: 8, md: 12, lg: 16, xl: 22, xxl: 30 };
 
 export const radius = { sm: 12, md: 18, lg: 26, pill: 999 };
 
-// Typographie — CHARTE OFFICIELLE AMT :
-//  Principale : Comfortaa (rondeur exacte du logotype « amt »)
-//  Secondaire : Futura → rendue ici par Jost, l'équivalent libre fidèle
-//  (Futura est une police commerciale non intégrable librement ; remplacer
-//  par les vrais fichiers Futura si une licence est fournie).
+// Typographie — charte officielle AMT (Comfortaa + Jost en proxy de Futura).
 export const font = {
-  display: 'Jost_700Bold', // accents géométriques / gros montants (Futura)
+  display: 'Jost_700Bold',
   displaySemi: 'Jost_600SemiBold',
-  heading: 'Comfortaa_700Bold', // titres (principale)
+  heading: 'Comfortaa_700Bold',
   body: 'Comfortaa_400Regular',
   bodyMed: 'Comfortaa_500Medium',
   bodyBold: 'Comfortaa_700Bold',
-  num: 'Jost_600SemiBold', // chiffres (Futura : net et géométrique)
+  num: 'Jost_600SemiBold',
 };
 
-// Ombres (premium) — iOS + Android.
+// ── Ombres ── adaptées au fond clair : on tinte avec le bleu de Prusse
+// (au lieu du noir pur) pour des ombres « douces, élégantes ».
 export const shadow = {
   card: {
-    shadowColor: '#03101E',
-    shadowOpacity: 0.5,
-    shadowRadius: 22,
-    shadowOffset: { width: 0, height: 14 },
-    elevation: 10,
+    shadowColor: '#0B2540',
+    shadowOpacity: 0.08,
+    shadowRadius: 24,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 6,
   },
   gold: {
-    shadowColor: colors.gold,
-    shadowOpacity: 0.5,
+    shadowColor: '#F2A312',
+    shadowOpacity: 0.35,
     shadowRadius: 20,
-    shadowOffset: { width: 0, height: 10 },
-    elevation: 12,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 10,
   },
   lacquer: {
-    shadowColor: colors.red,
-    shadowOpacity: 0.45,
-    shadowRadius: 26,
-    shadowOffset: { width: 0, height: 16 },
-    elevation: 14,
+    shadowColor: '#E51F21',
+    shadowOpacity: 0.3,
+    shadowRadius: 22,
+    shadowOffset: { width: 0, height: 12 },
+    elevation: 10,
   },
   soft: {
-    shadowColor: '#000',
-    shadowOpacity: 0.3,
+    shadowColor: '#0B2540',
+    shadowOpacity: 0.06,
     shadowRadius: 12,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 5,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 3,
   },
 };
 

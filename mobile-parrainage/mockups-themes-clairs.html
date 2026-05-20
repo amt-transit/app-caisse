@@ -1,0 +1,997 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AMT Parrainage — Études chromatiques</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Comfortaa:wght@400;500;600;700&family=Jost:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  /* ════════════════════════════════════════════════════════════════════════
+     CHARTE AMT — Référence officielle
+     Bleu de Prusse #1A3553 (base)  •  Rouge #E51F21 (focal)  •  Or #F2A312 (valeur)
+     ════════════════════════════════════════════════════════════════════════ */
+  :root {
+    --amt-blue: #1A3553;
+    --amt-blue-2: #0F2238;
+    --amt-blue-3: #2C4E76;
+    --amt-red: #E51F21;
+    --amt-gold: #F2A312;
+    --amt-gold-deep: #C9850A;
+    --ink: #0A1421;
+    --paper: #0E1B2D;
+    --line: rgba(255,255,255,0.08);
+    --line-strong: rgba(255,255,255,0.16);
+    --text: #E8EEF6;
+    --text-dim: #A0AEC4;
+    --text-faint: #6B7C95;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+  body {
+    font-family: 'Jost', sans-serif;
+    background: var(--ink);
+    color: var(--text);
+    min-height: 100vh;
+    overflow-x: hidden;
+    background-image:
+      radial-gradient(ellipse 80% 50% at 50% -20%, rgba(242,163,18,0.08), transparent 60%),
+      radial-gradient(ellipse 60% 40% at 20% 110%, rgba(229,31,33,0.06), transparent 60%),
+      radial-gradient(ellipse 70% 50% at 80% 100%, rgba(26,53,83,0.45), transparent 60%);
+  }
+
+  /* Grain subtil (SVG inline) */
+  body::before {
+    content: '';
+    position: fixed; inset: 0;
+    pointer-events: none;
+    opacity: 0.4;
+    mix-blend-mode: overlay;
+    background-image: url("data:image/svg+xml;utf8,<svg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/><feColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 0.06 0'/></filter><rect width='200' height='200' filter='url(%23n)'/></svg>");
+  }
+
+  /* ── HEADER ─────────────────────────────────────────────────────────── */
+  header {
+    padding: 70px 60px 50px;
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    align-items: end;
+    gap: 40px;
+    max-width: 1600px;
+    margin: 0 auto;
+    position: relative;
+    z-index: 1;
+  }
+
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+  .brand-dot {
+    width: 56px; height: 56px; border-radius: 50%;
+    background: radial-gradient(circle at 35% 30%, var(--amt-gold) 0%, var(--amt-gold-deep) 100%);
+    box-shadow: 0 8px 28px rgba(242,163,18,0.4), inset 0 -8px 12px rgba(0,0,0,0.2);
+    position: relative;
+  }
+  .brand-dot::after {
+    content: 'amt'; position: absolute; inset: 0;
+    display: flex; align-items: center; justify-content: center;
+    color: #1a0c08; font-family: 'Comfortaa', sans-serif; font-weight: 700; font-size: 13px;
+    letter-spacing: -0.5px;
+  }
+  .brand-name { font-family: 'Comfortaa', sans-serif; font-weight: 700; font-size: 22px; letter-spacing: -0.5px; }
+  .brand-sub { font-size: 11px; color: var(--text-faint); margin-top: 2px; letter-spacing: 2px; text-transform: uppercase; }
+
+  .title-block {
+    text-align: center;
+    padding: 0 20px;
+  }
+  .eyebrow {
+    display: inline-flex; align-items: center; gap: 10px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; color: var(--amt-gold);
+    letter-spacing: 3px; text-transform: uppercase;
+    padding-bottom: 16px;
+  }
+  .eyebrow::before, .eyebrow::after {
+    content: ''; width: 30px; height: 1px;
+    background: linear-gradient(to right, transparent, var(--amt-gold), transparent);
+  }
+  h1 {
+    font-family: 'Comfortaa', sans-serif;
+    font-weight: 400; font-size: clamp(34px, 4vw, 54px);
+    letter-spacing: -1.5px;
+    line-height: 1.05;
+  }
+  h1 em {
+    font-style: normal;
+    font-weight: 700;
+    color: var(--amt-gold);
+    position: relative;
+  }
+  h1 em::after {
+    content: ''; position: absolute; left: 0; right: 0; bottom: -6px;
+    height: 3px;
+    background: linear-gradient(to right, transparent, var(--amt-red), var(--amt-gold), transparent);
+    border-radius: 2px;
+  }
+  .lede {
+    margin-top: 22px;
+    color: var(--text-dim);
+    font-size: 15px;
+    max-width: 520px;
+    margin-left: auto; margin-right: auto;
+    line-height: 1.6;
+  }
+
+  /* Palette officielle à droite */
+  .palette-ref {
+    display: flex; gap: 8px;
+    align-items: end;
+  }
+  .swatch {
+    width: 36px; height: 64px;
+    border-radius: 8px;
+    position: relative;
+    transition: transform 0.3s ease;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+  }
+  .swatch:hover { transform: translateY(-4px); }
+  .swatch span {
+    position: absolute; bottom: -22px; left: 50%;
+    transform: translateX(-50%);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    color: var(--text-faint);
+    white-space: nowrap;
+  }
+  .sw-blue { background: var(--amt-blue); }
+  .sw-red { background: var(--amt-red); height: 48px; }
+  .sw-gold { background: var(--amt-gold); height: 40px; }
+
+  /* ── GALERIE ────────────────────────────────────────────────────────── */
+  .gallery {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 40px;
+    padding: 30px 60px 80px;
+    max-width: 1600px;
+    margin: 0 auto;
+    position: relative;
+    z-index: 1;
+  }
+
+  .proposition {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    animation: rise 0.9s cubic-bezier(0.16, 1, 0.3, 1) backwards;
+  }
+  .proposition:nth-child(1) { animation-delay: 0.1s; }
+  .proposition:nth-child(2) { animation-delay: 0.25s; }
+  .proposition:nth-child(3) { animation-delay: 0.4s; }
+
+  @keyframes rise {
+    from { opacity: 0; transform: translateY(40px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .prop-header {
+    text-align: center;
+    margin-bottom: 36px;
+    width: 100%;
+    max-width: 320px;
+  }
+  .prop-letter {
+    font-family: 'Comfortaa', sans-serif;
+    font-weight: 700; font-size: 80px;
+    line-height: 0.9;
+    background: linear-gradient(135deg, var(--amt-gold), var(--amt-gold-deep));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    display: block;
+  }
+  .prop-name {
+    font-family: 'Comfortaa', sans-serif;
+    font-weight: 600; font-size: 22px;
+    letter-spacing: -0.5px;
+    margin-top: 8px;
+  }
+  .prop-hex {
+    display: inline-block;
+    margin-top: 10px;
+    padding: 4px 12px;
+    border-radius: 100px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    background: var(--line);
+    border: 1px solid var(--line-strong);
+    color: var(--text-dim);
+  }
+  .prop-desc {
+    margin-top: 14px;
+    font-size: 13px;
+    color: var(--text-dim);
+    line-height: 1.55;
+    min-height: 60px;
+  }
+
+  /* ── FRAME iPhone ────────────────────────────────────────────────────── */
+  .phone {
+    width: 320px;
+    height: 660px;
+    background: #000;
+    border-radius: 46px;
+    padding: 12px;
+    position: relative;
+    box-shadow:
+      0 0 0 1.5px rgba(255,255,255,0.18),
+      0 0 0 3px #0c0c0c,
+      0 30px 70px rgba(0,0,0,0.7),
+      inset 0 0 0 1px rgba(255,255,255,0.06);
+    transition: transform 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .phone:hover { transform: translateY(-8px) scale(1.02); }
+
+  .phone-screen {
+    width: 100%; height: 100%;
+    border-radius: 34px;
+    overflow: hidden;
+    position: relative;
+  }
+  .notch {
+    position: absolute;
+    top: 8px; left: 50%; transform: translateX(-50%);
+    width: 95px; height: 26px;
+    background: #000;
+    border-radius: 16px;
+    z-index: 10;
+  }
+  .notch::after {
+    content: ''; position: absolute;
+    right: 12px; top: 50%; transform: translateY(-50%);
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: #1a1a1a;
+    box-shadow: inset 0 0 0 2px #0a0a0a;
+  }
+
+  /* ════════════════════════════════════════════════════════════════════════
+     ÉCRAN MOBILE — Structure commune
+     Les couleurs sont injectées par les classes .theme-glacier / -ivoire / -bleu
+     ════════════════════════════════════════════════════════════════════════ */
+  .mobile {
+    width: 100%; height: 100%;
+    padding: 44px 16px 80px;
+    font-family: 'Jost', sans-serif;
+    overflow: hidden;
+    position: relative;
+  }
+
+  /* ── HEADER mobile ──────────────────────────────────────────────────── */
+  .m-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 4px 0 14px;
+  }
+  .m-logo {
+    width: 36px; height: 36px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--amt-gold), var(--amt-gold-deep));
+    display: flex; align-items: center; justify-content: center;
+    font-family: 'Comfortaa', sans-serif; font-weight: 700;
+    color: #1a0c08; font-size: 11px;
+    box-shadow: 0 2px 8px rgba(242,163,18,0.3);
+  }
+  .m-hello { flex: 1; }
+  .m-hello-1 { font-size: 10px; color: var(--m-text-dim); }
+  .m-hello-2 { font-family: 'Comfortaa', sans-serif; font-weight: 600; font-size: 14px; color: var(--m-text); margin-top: -1px; }
+  .m-wallet-chip {
+    background: linear-gradient(135deg, var(--amt-gold), var(--amt-gold-deep));
+    color: #1a0c08;
+    padding: 5px 9px;
+    border-radius: 100px;
+    font-size: 10px;
+    font-weight: 700;
+    display: flex; align-items: center; gap: 4px;
+    box-shadow: 0 4px 12px rgba(242,163,18,0.35);
+  }
+
+  /* ── Titre écran ────────────────────────────────────────────────────── */
+  .m-title-block {
+    margin-top: 8px;
+    margin-bottom: 14px;
+  }
+  .m-title-icon {
+    width: 36px; height: 36px;
+    border-radius: 10px;
+    background: var(--m-icon-bg);
+    color: var(--amt-blue);
+    display: flex; align-items: center; justify-content: center;
+    margin-bottom: 10px;
+    font-size: 16px;
+  }
+  .m-title {
+    font-family: 'Comfortaa', sans-serif;
+    font-weight: 600; font-size: 19px;
+    color: var(--m-text);
+    line-height: 1.1;
+  }
+  .m-subtitle {
+    font-size: 10.5px;
+    color: var(--m-text-dim);
+    margin-top: 4px;
+    line-height: 1.45;
+  }
+
+  /* ── Récap commission ───────────────────────────────────────────────── */
+  .recap {
+    background: var(--m-card-bg);
+    border: 1px solid var(--m-line);
+    border-radius: 14px;
+    padding: 12px 14px;
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    position: relative;
+    overflow: hidden;
+  }
+  .recap::before {
+    content: ''; position: absolute;
+    left: 0; top: 0; bottom: 0; width: 3px;
+    background: linear-gradient(to bottom, var(--amt-gold), var(--amt-gold-deep));
+  }
+  .recap-main { flex: 1; }
+  .recap-label {
+    font-size: 9px;
+    color: var(--m-text-dim);
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+  }
+  .recap-value {
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 700;
+    font-size: 18px;
+    color: var(--amt-gold-deep);
+    margin-top: 2px;
+  }
+  .recap-hint {
+    font-size: 10px;
+    color: var(--m-amber);
+    margin-top: 1px;
+  }
+  .recap-badge {
+    width: 42px; height: 42px;
+    border-radius: 50%;
+    background: rgba(242,163,18,0.12);
+    border: 1px solid rgba(242,163,18,0.3);
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    color: var(--amt-gold-deep);
+  }
+  .recap-badge-n { font-family: 'JetBrains Mono', monospace; font-weight: 700; font-size: 15px; line-height: 1; }
+  .recap-badge-l { font-size: 7px; margin-top: 1px; }
+
+  /* ── Recherche + filtres ────────────────────────────────────────────── */
+  .m-search {
+    background: var(--m-input-bg);
+    border: 1px solid var(--m-line);
+    border-radius: 10px;
+    padding: 8px 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 11px;
+    color: var(--m-text-faint);
+    margin-bottom: 10px;
+  }
+  .m-filters {
+    display: flex;
+    gap: 5px;
+    margin-bottom: 14px;
+  }
+  .m-filter {
+    flex: 1;
+    padding: 5px 0;
+    text-align: center;
+    background: var(--m-input-bg);
+    border: 1px solid var(--m-line);
+    border-radius: 7px;
+    font-size: 10px;
+    color: var(--m-text-dim);
+  }
+  .m-filter.on {
+    background: rgba(242,163,18,0.12);
+    border-color: rgba(242,163,18,0.45);
+    color: var(--amt-gold-deep);
+    font-weight: 600;
+  }
+
+  /* ── Cards factures ─────────────────────────────────────────────────── */
+  .f-card {
+    background: var(--m-card-bg);
+    border: 1px solid var(--m-line);
+    border-radius: 14px;
+    padding: 12px 13px;
+    margin-bottom: 9px;
+    box-shadow: var(--m-shadow);
+  }
+  .f-top { display: flex; gap: 10px; align-items: flex-start; }
+  .f-info { flex: 1; }
+  .f-ref {
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 700;
+    font-size: 12.5px;
+    color: var(--m-text);
+    letter-spacing: 0.3px;
+  }
+  .f-dest {
+    font-size: 11px;
+    color: var(--m-text-dim);
+    margin-top: 2px;
+  }
+  .f-date {
+    font-size: 9.5px;
+    color: var(--m-text-faint);
+    margin-top: 1px;
+  }
+  .f-price {
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 700;
+    font-size: 13px;
+    color: var(--m-text);
+    text-align: right;
+  }
+  .f-comm {
+    font-size: 9.5px;
+    color: var(--amt-gold-deep);
+    margin-top: 2px;
+    text-align: right;
+  }
+  .f-badges {
+    display: flex;
+    gap: 5px;
+    margin-top: 9px;
+    flex-wrap: wrap;
+  }
+  .badge {
+    padding: 2px 7px;
+    border-radius: 8px;
+    font-size: 9px;
+    font-weight: 600;
+    letter-spacing: 0.2px;
+  }
+  .b-paid { background: rgba(16,185,129,0.15); color: #047857; }
+  .b-acompte { background: rgba(245,158,11,0.18); color: #b45309; }
+  .b-impaid { background: rgba(229,31,33,0.15); color: #b91c1c; }
+  .b-warehouse { background: rgba(59,130,246,0.15); color: #1d4ed8; }
+  .b-transit { background: rgba(168,85,247,0.15); color: #6d28d9; }
+  .b-delivered { background: rgba(16,185,129,0.15); color: #047857; }
+
+  /* ── Tab bar ────────────────────────────────────────────────────────── */
+  .m-tabbar {
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    background: var(--m-tabbar-bg);
+    border-top: 1px solid var(--m-line);
+    padding: 8px 4px 14px;
+    display: flex;
+    backdrop-filter: blur(12px);
+  }
+  .m-tab {
+    flex: 1;
+    text-align: center;
+    font-size: 8.5px;
+    color: var(--m-text-faint);
+    padding: 4px 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+  }
+  .m-tab.on { color: var(--amt-gold-deep); font-weight: 700; }
+  .m-tab-icon {
+    width: 18px; height: 18px;
+    border-radius: 5px;
+    background: var(--m-input-bg);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px;
+  }
+  .m-tab.on .m-tab-icon {
+    background: rgba(242,163,18,0.18);
+    color: var(--amt-gold-deep);
+  }
+  .m-tab.on::before {
+    content: '';
+    width: 22px; height: 3px;
+    background: linear-gradient(to right, var(--amt-gold), var(--amt-gold-deep));
+    border-radius: 2px;
+    margin-bottom: 1px;
+  }
+
+  /* ════════════════════════════════════════════════════════════════════════
+     PROPOSITION A — GLACIER (gris bleuté)
+     ════════════════════════════════════════════════════════════════════════ */
+  .theme-glacier {
+    background: linear-gradient(180deg, #F1F5F9 0%, #E5EDF6 100%);
+    --m-text: #0F172A;
+    --m-text-dim: #475569;
+    --m-text-faint: #94A3B8;
+    --m-card-bg: #FFFFFF;
+    --m-input-bg: #FFFFFF;
+    --m-icon-bg: rgba(26,53,83,0.10);
+    --m-line: rgba(26,53,83,0.10);
+    --m-amber: #B45309;
+    --m-shadow: 0 1px 3px rgba(15,23,42,0.05), 0 4px 16px rgba(15,23,42,0.04);
+    --m-tabbar-bg: rgba(255,255,255,0.92);
+  }
+
+  /* ════════════════════════════════════════════════════════════════════════
+     PROPOSITION B — IVOIRE (blanc cassé)
+     ════════════════════════════════════════════════════════════════════════ */
+  .theme-ivoire {
+    background: linear-gradient(180deg, #FAF7F2 0%, #F4EFE7 100%);
+    --m-text: #1A1410;
+    --m-text-dim: #6B5C4D;
+    --m-text-faint: #A0917E;
+    --m-card-bg: #FFFDF9;
+    --m-input-bg: #FFFDF9;
+    --m-icon-bg: rgba(242,163,18,0.16);
+    --m-line: rgba(133,103,69,0.12);
+    --m-amber: #92400E;
+    --m-shadow: 0 1px 3px rgba(74,55,30,0.05), 0 4px 16px rgba(74,55,30,0.04);
+    --m-tabbar-bg: rgba(255,253,249,0.94);
+  }
+
+  /* ════════════════════════════════════════════════════════════════════════
+     PROPOSITION C — BLEU CIEL (#EFF6FB) + GLASSMORPHISM
+     ════════════════════════════════════════════════════════════════════════ */
+  .theme-bleu {
+    /* Fond avec halos colorés diffus pour faire ressortir le blur */
+    background:
+      radial-gradient(ellipse 70% 50% at 100% 0%, rgba(242,163,18,0.10), transparent 60%),
+      radial-gradient(ellipse 60% 40% at 0% 100%, rgba(229,31,33,0.06), transparent 60%),
+      linear-gradient(180deg, #EFF6FB 0%, #DCEBF6 100%);
+    --m-text: #0B2540;
+    --m-text-dim: #41617F;
+    --m-text-faint: #7B97B3;
+    --m-card-bg: rgba(255,255,255,0.55);
+    --m-input-bg: rgba(255,255,255,0.55);
+    --m-icon-bg: rgba(255,255,255,0.55);
+    --m-line: rgba(255,255,255,0.7);
+    --m-amber: #92400E;
+    --m-shadow: 0 1px 3px rgba(11,37,64,0.05), 0 6px 24px rgba(11,37,64,0.07), inset 0 1px 0 rgba(255,255,255,0.8);
+    --m-tabbar-bg: rgba(255,255,255,0.55);
+  }
+  /* Effet « verre dépoli » appliqué aux surfaces interactives de C */
+  .theme-bleu .recap,
+  .theme-bleu .m-search,
+  .theme-bleu .m-filter,
+  .theme-bleu .f-card,
+  .theme-bleu .m-tabbar {
+    backdrop-filter: blur(14px) saturate(180%);
+    -webkit-backdrop-filter: blur(14px) saturate(180%);
+  }
+  /* Filtre actif : laque or translucide */
+  .theme-bleu .m-filter.on {
+    background: linear-gradient(135deg, rgba(242,163,18,0.32), rgba(242,163,18,0.14));
+    border-color: rgba(242,163,18,0.55);
+    box-shadow: 0 4px 12px rgba(242,163,18,0.15), inset 0 1px 0 rgba(255,255,255,0.6);
+  }
+  /* Petite mise en lumière au sommet des cards (effet biseau verre) */
+  .theme-bleu .f-card, .theme-bleu .recap {
+    box-shadow:
+      0 1px 0 rgba(255,255,255,0.9) inset,
+      0 1px 2px rgba(11,37,64,0.04),
+      0 8px 28px rgba(11,37,64,0.07);
+  }
+  .theme-bleu .m-icon, .theme-bleu .m-title-icon {
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    background: rgba(255,255,255,0.55);
+    border: 1px solid rgba(255,255,255,0.7);
+  }
+
+  /* ── Footer ─────────────────────────────────────────────────────────── */
+  .footer-note {
+    max-width: 720px;
+    margin: 0 auto 80px;
+    padding: 30px;
+    text-align: center;
+    color: var(--text-faint);
+    font-size: 12px;
+    line-height: 1.7;
+    border-top: 1px solid var(--line);
+    padding-top: 40px;
+  }
+  .footer-note strong {
+    color: var(--amt-gold);
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 500;
+  }
+
+  @media (max-width: 1100px) {
+    .gallery { grid-template-columns: 1fr; gap: 60px; padding: 30px; }
+    .phone { transform: scale(0.95); }
+    header { grid-template-columns: 1fr; gap: 30px; padding: 40px 20px; }
+    .palette-ref { justify-content: center; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════════ HEADER ═══════════════════════ -->
+<header>
+  <div class="brand">
+    <div class="brand-dot"></div>
+    <div>
+      <div class="brand-name">AMT Trans'it</div>
+      <div class="brand-sub">Étude chromatique</div>
+    </div>
+  </div>
+
+  <div class="title-block">
+    <div class="eyebrow">App mobile · Parrainage</div>
+    <h1>Trois fonds <em>clairs</em>,<br>un même langage AMT.</h1>
+    <p class="lede">
+      Comparaison de trois directions de palette claire pour l'app mobile.
+      La charte officielle (bleu de Prusse, rouge, or) reste l'accent — seul
+      le fond change pour faire respirer l'interface.
+    </p>
+  </div>
+
+  <div class="palette-ref">
+    <div class="swatch sw-blue"><span>#1A3553</span></div>
+    <div class="swatch sw-red"><span>#E51F21</span></div>
+    <div class="swatch sw-gold"><span>#F2A312</span></div>
+  </div>
+</header>
+
+<!-- ═══════════════════════ GALERIE ═══════════════════════ -->
+<section class="gallery">
+
+  <!-- ──────────── A · GLACIER ──────────── -->
+  <article class="proposition">
+    <div class="prop-header">
+      <span class="prop-letter">A</span>
+      <h2 class="prop-name">Glacier</h2>
+      <span class="prop-hex">#F1F5F9</span>
+      <p class="prop-desc">
+        Gris bleuté froid, neutre et institutionnel.
+        Sobriété nordique. L'or et le rouge AMT ressortent
+        sans rivaliser avec un fond chaud.
+      </p>
+    </div>
+
+    <div class="phone">
+      <div class="phone-screen">
+        <div class="notch"></div>
+        <div class="mobile theme-glacier">
+
+          <!-- Header -->
+          <div class="m-header">
+            <div class="m-logo">amt</div>
+            <div class="m-hello">
+              <div class="m-hello-1">Bonjour 👋</div>
+              <div class="m-hello-2">Yves</div>
+            </div>
+            <div class="m-wallet-chip">👛 95 000 F</div>
+          </div>
+
+          <!-- Titre -->
+          <div class="m-title-block">
+            <div class="m-icon" style="display:none"></div>
+            <div style="display:flex; gap:10px; align-items:center;">
+              <div class="m-title-icon">📄</div>
+              <div>
+                <div class="m-title">Mes factures</div>
+                <div class="m-subtitle">Factures de vos clients directs</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Récap -->
+          <div class="recap">
+            <div class="recap-main">
+              <div class="recap-label">Commission disponible</div>
+              <div class="recap-value">95 000 FCFA</div>
+              <div class="recap-hint">+ 38 000 en attente</div>
+            </div>
+            <div class="recap-badge">
+              <span class="recap-badge-n">7</span>
+              <span class="recap-badge-l">factures</span>
+            </div>
+          </div>
+
+          <!-- Recherche -->
+          <div class="m-search">🔍 Rechercher (référence, nom)…</div>
+
+          <!-- Filtres -->
+          <div class="m-filters">
+            <div class="m-filter on">Toutes</div>
+            <div class="m-filter">Impayées</div>
+            <div class="m-filter">Acompte</div>
+            <div class="m-filter">Payées</div>
+          </div>
+
+          <!-- Cards -->
+          <div class="f-card">
+            <div class="f-top">
+              <div class="f-info">
+                <div class="f-ref">J-003-CHN2</div>
+                <div class="f-dest">DOUMBIA ABIDJAN</div>
+                <div class="f-date">20/05/2026</div>
+              </div>
+              <div>
+                <div class="f-price">2 500 000 F</div>
+                <div class="f-comm">+ 950 000 commission</div>
+              </div>
+            </div>
+            <div class="f-badges">
+              <span class="badge b-impaid">Impayée</span>
+              <span class="badge b-warehouse">Mise en entrepôt</span>
+            </div>
+          </div>
+
+          <div class="f-card">
+            <div class="f-top">
+              <div class="f-info">
+                <div class="f-ref">J-001-CHN1</div>
+                <div class="f-dest">KOUAMÉ ARTHUR</div>
+                <div class="f-date">12/05/2026</div>
+              </div>
+              <div>
+                <div class="f-price">820 000 F</div>
+                <div class="f-comm">+ 304 000 commission</div>
+              </div>
+            </div>
+            <div class="f-badges">
+              <span class="badge b-acompte">Acompte</span>
+              <span class="badge b-transit">En transit</span>
+            </div>
+          </div>
+
+          <!-- Tab bar -->
+          <div class="m-tabbar">
+            <div class="m-tab on"><div class="m-tab-icon">📄</div><span>Factures</span></div>
+            <div class="m-tab"><div class="m-tab-icon">📊</div><span>Accueil</span></div>
+            <div class="m-tab"><div class="m-tab-icon">👛</div><span>Wallet</span></div>
+            <div class="m-tab"><div class="m-tab-icon">🤝</div><span>Filleuls</span></div>
+            <div class="m-tab"><div class="m-tab-icon">👤</div><span>Profil</span></div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+  </article>
+
+  <!-- ──────────── B · IVOIRE ──────────── -->
+  <article class="proposition">
+    <div class="prop-header">
+      <span class="prop-letter">B</span>
+      <h2 class="prop-name">Ivoire</h2>
+      <span class="prop-hex">#FAF7F2</span>
+      <p class="prop-desc">
+        Blanc cassé chaud, papier vélin. Évoque le luxe
+        artisanal — l'or AMT s'y fond avec naturel.
+        Idéal pour un ton premium et chaleureux.
+      </p>
+    </div>
+
+    <div class="phone">
+      <div class="phone-screen">
+        <div class="notch"></div>
+        <div class="mobile theme-ivoire">
+
+          <div class="m-header">
+            <div class="m-logo">amt</div>
+            <div class="m-hello">
+              <div class="m-hello-1">Bonjour 👋</div>
+              <div class="m-hello-2">Yves</div>
+            </div>
+            <div class="m-wallet-chip">👛 95 000 F</div>
+          </div>
+
+          <div class="m-title-block">
+            <div style="display:flex; gap:10px; align-items:center;">
+              <div class="m-title-icon">📄</div>
+              <div>
+                <div class="m-title">Mes factures</div>
+                <div class="m-subtitle">Factures de vos clients directs</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="recap">
+            <div class="recap-main">
+              <div class="recap-label">Commission disponible</div>
+              <div class="recap-value">95 000 FCFA</div>
+              <div class="recap-hint">+ 38 000 en attente</div>
+            </div>
+            <div class="recap-badge">
+              <span class="recap-badge-n">7</span>
+              <span class="recap-badge-l">factures</span>
+            </div>
+          </div>
+
+          <div class="m-search">🔍 Rechercher (référence, nom)…</div>
+
+          <div class="m-filters">
+            <div class="m-filter on">Toutes</div>
+            <div class="m-filter">Impayées</div>
+            <div class="m-filter">Acompte</div>
+            <div class="m-filter">Payées</div>
+          </div>
+
+          <div class="f-card">
+            <div class="f-top">
+              <div class="f-info">
+                <div class="f-ref">J-003-CHN2</div>
+                <div class="f-dest">DOUMBIA ABIDJAN</div>
+                <div class="f-date">20/05/2026</div>
+              </div>
+              <div>
+                <div class="f-price">2 500 000 F</div>
+                <div class="f-comm">+ 950 000 commission</div>
+              </div>
+            </div>
+            <div class="f-badges">
+              <span class="badge b-impaid">Impayée</span>
+              <span class="badge b-warehouse">Mise en entrepôt</span>
+            </div>
+          </div>
+
+          <div class="f-card">
+            <div class="f-top">
+              <div class="f-info">
+                <div class="f-ref">J-001-CHN1</div>
+                <div class="f-dest">KOUAMÉ ARTHUR</div>
+                <div class="f-date">12/05/2026</div>
+              </div>
+              <div>
+                <div class="f-price">820 000 F</div>
+                <div class="f-comm">+ 304 000 commission</div>
+              </div>
+            </div>
+            <div class="f-badges">
+              <span class="badge b-acompte">Acompte</span>
+              <span class="badge b-transit">En transit</span>
+            </div>
+          </div>
+
+          <div class="m-tabbar">
+            <div class="m-tab on"><div class="m-tab-icon">📄</div><span>Factures</span></div>
+            <div class="m-tab"><div class="m-tab-icon">📊</div><span>Accueil</span></div>
+            <div class="m-tab"><div class="m-tab-icon">👛</div><span>Wallet</span></div>
+            <div class="m-tab"><div class="m-tab-icon">🤝</div><span>Filleuls</span></div>
+            <div class="m-tab"><div class="m-tab-icon">👤</div><span>Profil</span></div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+  </article>
+
+  <!-- ──────────── C · BLEU CIEL ──────────── -->
+  <article class="proposition">
+    <div class="prop-header">
+      <span class="prop-letter">C</span>
+      <h2 class="prop-name">Bleu Ciel</h2>
+      <span class="prop-hex">#EFF6FB</span>
+      <p class="prop-desc">
+        Bleu pâle lumineux, parent direct du bleu de Prusse
+        officiel. Cohérence absolue avec la charte : l'accent
+        bleu profond s'ancre sur sa propre famille chromatique.
+      </p>
+    </div>
+
+    <div class="phone">
+      <div class="phone-screen">
+        <div class="notch"></div>
+        <div class="mobile theme-bleu">
+
+          <div class="m-header">
+            <div class="m-logo">amt</div>
+            <div class="m-hello">
+              <div class="m-hello-1">Bonjour 👋</div>
+              <div class="m-hello-2">Yves</div>
+            </div>
+            <div class="m-wallet-chip">👛 95 000 F</div>
+          </div>
+
+          <div class="m-title-block">
+            <div style="display:flex; gap:10px; align-items:center;">
+              <div class="m-title-icon">📄</div>
+              <div>
+                <div class="m-title">Mes factures</div>
+                <div class="m-subtitle">Factures de vos clients directs</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="recap">
+            <div class="recap-main">
+              <div class="recap-label">Commission disponible</div>
+              <div class="recap-value">95 000 FCFA</div>
+              <div class="recap-hint">+ 38 000 en attente</div>
+            </div>
+            <div class="recap-badge">
+              <span class="recap-badge-n">7</span>
+              <span class="recap-badge-l">factures</span>
+            </div>
+          </div>
+
+          <div class="m-search">🔍 Rechercher (référence, nom)…</div>
+
+          <div class="m-filters">
+            <div class="m-filter on">Toutes</div>
+            <div class="m-filter">Impayées</div>
+            <div class="m-filter">Acompte</div>
+            <div class="m-filter">Payées</div>
+          </div>
+
+          <div class="f-card">
+            <div class="f-top">
+              <div class="f-info">
+                <div class="f-ref">J-003-CHN2</div>
+                <div class="f-dest">DOUMBIA ABIDJAN</div>
+                <div class="f-date">20/05/2026</div>
+              </div>
+              <div>
+                <div class="f-price">2 500 000 F</div>
+                <div class="f-comm">+ 950 000 commission</div>
+              </div>
+            </div>
+            <div class="f-badges">
+              <span class="badge b-impaid">Impayée</span>
+              <span class="badge b-warehouse">Mise en entrepôt</span>
+            </div>
+          </div>
+
+          <div class="f-card">
+            <div class="f-top">
+              <div class="f-info">
+                <div class="f-ref">J-001-CHN1</div>
+                <div class="f-dest">KOUAMÉ ARTHUR</div>
+                <div class="f-date">12/05/2026</div>
+              </div>
+              <div>
+                <div class="f-price">820 000 F</div>
+                <div class="f-comm">+ 304 000 commission</div>
+              </div>
+            </div>
+            <div class="f-badges">
+              <span class="badge b-acompte">Acompte</span>
+              <span class="badge b-transit">En transit</span>
+            </div>
+          </div>
+
+          <div class="m-tabbar">
+            <div class="m-tab on"><div class="m-tab-icon">📄</div><span>Factures</span></div>
+            <div class="m-tab"><div class="m-tab-icon">📊</div><span>Accueil</span></div>
+            <div class="m-tab"><div class="m-tab-icon">👛</div><span>Wallet</span></div>
+            <div class="m-tab"><div class="m-tab-icon">🤝</div><span>Filleuls</span></div>
+            <div class="m-tab"><div class="m-tab-icon">👤</div><span>Profil</span></div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+  </article>
+
+</section>
+
+<!-- ═══════════════════════ FOOTER ═══════════════════════ -->
+<div class="footer-note">
+  Charte officielle conservée — seul le fond change.<br>
+  <strong>#1A3553</strong> bleu de Prusse · <strong>#E51F21</strong> rouge AMT · <strong>#F2A312</strong> or marigold du logo.
+</div>
+
+</body>
+</html>

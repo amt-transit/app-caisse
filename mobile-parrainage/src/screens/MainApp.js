@@ -145,8 +145,10 @@ const styles = StyleSheet.create({
   },
   logoRing: {
     width: 46, height: 46, borderRadius: 23, padding: 2,
-    borderWidth: 1, borderColor: colors.glassBorderStrong,
-    backgroundColor: colors.bgChip,
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.9)',
+    backgroundColor: 'rgba(255,255,255,0.65)', // verre clair
+    shadowColor: '#0B2540', shadowOpacity: 0.08,
+    shadowRadius: 8, shadowOffset: { width: 0, height: 2 },
   },
   headerLogo: { width: '100%', height: '100%', borderRadius: 21 },
   hello: { color: colors.textDim, fontSize: 12.5, fontFamily: font.body },
