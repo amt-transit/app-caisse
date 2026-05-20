@@ -236,7 +236,7 @@ function FactureDetailModal({ facture, onClose }) {
             </TouchableOpacity>
           </View>
 
-          <ScrollView contentContainerStyle={{ paddingBottom: 30 }} showsVerticalScrollIndicator={false}>
+          <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 30 }} showsVerticalScrollIndicator={false}>
             {/* Bilan financier */}
             <Section title="Bilan financier">
               <View style={ds.bilanRow}>
@@ -417,13 +417,14 @@ const styles = StyleSheet.create({
 });
 
 const ds = StyleSheet.create({
-  backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'flex-end' },
+  backdrop: { flex: 1, backgroundColor: 'rgba(11,37,64,0.45)', justifyContent: 'flex-end' },
   dismiss: { ...StyleSheet.absoluteFillObject },
   sheet: {
     maxHeight: '92%',
+    backgroundColor: colors.bgElevated,
     borderTopLeftRadius: 24, borderTopRightRadius: 24,
     padding: spacing.lg, paddingTop: 14,
-    borderTopWidth: 1, borderColor: colors.glassBorderStrong,
+    borderTopWidth: 1, borderColor: colors.glassBorder,
   },
   grip: { width: 44, height: 4, borderRadius: 2, backgroundColor: colors.glassBorder, alignSelf: 'center', marginBottom: 10 },
   head: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, marginBottom: spacing.lg },

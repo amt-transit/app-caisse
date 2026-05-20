@@ -1,9 +1,11 @@
-import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Image } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, Image, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { httpsCallable } from 'firebase/functions';
+import { functions } from '../firebase';
 import { ScreenScroll, ScreenTitle, Card } from '../components/ui';
 import { RouteSwitcherButton } from '../components/RouteSwitcher';
-import { colors, spacing, radius } from '../theme';
+import { colors, spacing, radius, font } from '../theme';
 
 const LOGO = require('../../assets/logo.png');
 
@@ -12,6 +14,41 @@ export default function ProfilScreen({ data, onLogout, user }) {
   const name = me ? `${me.prenom || ''} ${me.nom || ''}`.trim() : (user?.email || '');
   const initials = (name || '?')
     .split(' ').map((s) => s[0]).filter(Boolean).slice(0, 2).join('').toUpperCase();
+
+  // ── Statut des notifications push ──────────────────────────────────────
+  // `me.pushToken` est posé par registerPushToken (notifications.js) à
+  // chaque ouverture si l'utilisateur a accepté la permission.
+  const hasPush = !!me?.pushToken;
+  const [pushBusy, setPushBusy] = useState(false);
+
+  const onTestPush = async () => {
+    if (pushBusy) return;
+    setPushBusy(true);
+    try {
+      const fn = httpsCallable(functions, 'sendTestPush');
+      const result = await fn({
+        agency: activeLink?.agency || me?.agency,
+        demarcheurId: activeLink?.demarcheurId || me?.id,
+      });
+      const r = result?.data || {};
+      if (r.ok) {
+        Alert.alert(
+          'Notification envoyée ✔',
+          "Vous devriez la recevoir dans quelques secondes. Si rien n'arrive : vérifiez que les notifications sont autorisées dans les réglages de votre téléphone.",
+        );
+      } else {
+        const map = {
+          pas_de_token: "Aucun token n'est enregistré pour ce compte. " + (r.hint || ''),
+          fiche_introuvable: 'Fiche démarcheur introuvable sur cette route.',
+        };
+        Alert.alert('Impossible d\'envoyer la notification', map[r.reason] || (r.reason || 'Erreur inconnue.'));
+      }
+    } catch (e) {
+      Alert.alert('Erreur', (e && e.message) || 'Échec du test de notification.');
+    } finally {
+      setPushBusy(false);
+    }
+  };
 
   const Line = ({ icon, label, value }) => (
     <View style={styles.line}>
@@ -49,6 +86,35 @@ export default function ProfilScreen({ data, onLogout, user }) {
         <Line icon="pricetag-outline" label="Statut" value={me?.statut || 'actif'} />
         <Line icon="business-outline" label="Agence" value={activeLink?.agency || me?.agency} />
       </Card>
+
+      {/* ── État des notifications push ────────────────────────────────── */}
+      <View style={[
+        styles.pushCard,
+        hasPush ? styles.pushCardOn : styles.pushCardOff,
+      ]}>
+        <View style={[styles.pushIcon, hasPush ? styles.pushIconOn : styles.pushIconOff]}>
+          <Ionicons
+            name={hasPush ? 'notifications' : 'notifications-off'}
+            size={20}
+            color={hasPush ? colors.green : colors.amber}
+          />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.pushTitle}>
+            {hasPush ? 'Notifications activées' : 'Notifications inactives'}
+          </Text>
+          <Text style={styles.pushSub}>
+            {hasPush
+              ? 'Vous recevrez les nouvelles commissions et paiements en direct.'
+              : "Ouvrez l'app, acceptez la permission, ou utilisez un build natif (pas Expo Go)."}
+          </Text>
+        </View>
+        {hasPush && (
+          <TouchableOpacity onPress={onTestPush} disabled={pushBusy} style={styles.pushBtn} activeOpacity={0.85}>
+            <Text style={styles.pushBtnT}>{pushBusy ? '…' : 'Tester'}</Text>
+          </TouchableOpacity>
+        )}
+      </View>
 
       <View style={styles.helpCard}>
         <Image source={LOGO} style={styles.helpLogo} />
@@ -89,6 +155,28 @@ const styles = StyleSheet.create({
   },
   lineLabel: { color: colors.textDim, fontSize: 13, marginLeft: spacing.sm, flex: 1 },
   lineValue: { color: colors.text, fontSize: 14, fontWeight: '700', maxWidth: '55%' },
+
+  // ── Carte « état des notifications push »
+  pushCard: {
+    flexDirection: 'row', alignItems: 'center', gap: spacing.md,
+    borderWidth: 1, borderRadius: radius.md,
+    padding: spacing.lg, marginTop: spacing.md,
+  },
+  pushCardOn: { backgroundColor: colors.greenWarm || 'rgba(16,185,129,0.10)', borderColor: 'rgba(4,120,87,0.25)' },
+  pushCardOff: { backgroundColor: colors.amberWarm || 'rgba(245,158,11,0.10)', borderColor: 'rgba(180,83,9,0.30)' },
+  pushIcon: {
+    width: 40, height: 40, borderRadius: 12,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  pushIconOn: { backgroundColor: 'rgba(16,185,129,0.18)' },
+  pushIconOff: { backgroundColor: 'rgba(245,158,11,0.20)' },
+  pushTitle: { color: colors.text, fontSize: 14, fontFamily: font.bodyBold },
+  pushSub: { color: colors.textDim, fontSize: 12, marginTop: 2, lineHeight: 17 },
+  pushBtn: {
+    paddingHorizontal: 14, paddingVertical: 8, borderRadius: radius.pill,
+    backgroundColor: 'rgba(16,185,129,0.18)', borderWidth: 1, borderColor: 'rgba(4,120,87,0.3)',
+  },
+  pushBtnT: { color: colors.green, fontSize: 12, fontFamily: font.bodyBold },
 
   helpCard: {
     flexDirection: 'row', alignItems: 'center', gap: spacing.md,

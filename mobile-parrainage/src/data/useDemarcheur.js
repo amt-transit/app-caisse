@@ -8,9 +8,9 @@
 //  - filleuls ENRICHIS : chaque filleul reçoit les envois qui vous ont
 //    rapporté un bonus + le total de ce bonus.
 //  Objectif : zéro quiproquo — le partenaire voit qui, quoi, combien.
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  doc, getDoc, collection, query, where, getDocs,
+  doc, collection, query, where, onSnapshot, getDocs,
 } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -78,8 +78,17 @@ const EMPTY = {
 
 export function useDemarcheur() {
   const [state, setState] = useState(EMPTY);
+  // Liste des unsubscribes Firestore actifs. On les coupe à chaque reload
+  // (changement de route) et à l'unmount du hook pour éviter les fuites.
+  const unsubsRef = useRef([]);
+  const cleanup = () => {
+    unsubsRef.current.forEach((u) => { try { u(); } catch (_) { /* déjà fermé */ } });
+    unsubsRef.current = [];
+  };
 
   const load = useCallback(async (isRefresh, overrideLink) => {
+    cleanup(); // tue tous les listeners de la session précédente
+
     setState((s) => ({
       ...s, error: '',
       loading: isRefresh ? s.loading : true,
@@ -90,8 +99,6 @@ export function useDemarcheur() {
       const role = tok.claims && tok.claims.role;
 
       // ── Calcul des LIENS disponibles pour ce compte ─────────────────
-      // 1. claims.links (nouveau format multi-route)
-      // 2. fallback : claims.{agency, demarcheurId} (legacy mono-route)
       let availableLinks = Array.isArray(tok.claims && tok.claims.links)
         ? tok.claims.links.filter((l) => l && l.agency && l.demarcheurId)
         : [];
@@ -111,7 +118,6 @@ export function useDemarcheur() {
       }
 
       // ── Détermination du lien ACTIF ─────────────────────────────────
-      // Priorité : override > AsyncStorage > 1er lien disponible.
       let chosen = overrideLink;
       if (!chosen) {
         const saved = await readSavedLink();
@@ -125,69 +131,118 @@ export function useDemarcheur() {
       const agency = chosen.agency;
       const demId = chosen.demarcheurId;
 
-      // Recalcule côté serveur le solde disponible (factures payées, au
-      // prorata) vs potentiel, AVANT de relire les données. Non bloquant :
-      // si la fonction n'est pas joignable, on affiche l'existant.
-      try {
-        await httpsCallable(functions, 'reconcilePartnerBalances')();
-      } catch (e) { /* non bloquant : affichage des données existantes */ }
+      // Recalcule côté serveur le solde disponible. Non bloquant : si la
+      // fonction n'est pas joignable, le onSnapshot affichera l'existant.
+      try { await httpsCallable(functions, 'reconcilePartnerBalances')(); }
+      catch (e) { /* non bloquant */ }
 
-      const meSnap = await getDoc(doc(db, collName('demarcheurs', agency), demId));
-      const me = meSnap.exists() ? { id: meSnap.id, ...meSnap.data() } : null;
-
-      // Enregistre / rafraîchit le token push pour permettre au serveur de
-      // notifier ce démarcheur (nouvelles commissions, retraits validés…).
-      // Non bloquant : si Expo Go ou permission refusée, on continue sans.
+      // Enregistre / rafraîchit le token push (non bloquant).
       registerPushToken({ demarcheurId: demId, agency }).catch(() => null);
 
-      const [cSnap, fSnap, aSnap, tSnap, lSnap] = await Promise.all([
-        getDocs(query(collection(db, collName('commissions', agency)), where('demarcheurId', '==', demId))),
-        getDocs(query(collection(db, collName('demarcheurs', agency)), where('parrainId', '==', demId))),
-        getDocs(query(collection(db, collName('client_affiliations', agency)), where('demarcheurId', '==', demId))),
-        // Factures + livraisons dont le démarcheur est le parrain direct
-        // (uniquement, pas celles de ses filleuls : règle métier exigée).
-        getDocs(query(collection(db, collName('transactions', agency)), where('demarcheurId', '==', demId))),
-        getDocs(query(collection(db, collName('livraisons', agency)), where('demarcheurId', '==', demId))),
-      ]);
+      // ══════════════════════════════════════════════════════════════
+      //  LISTENERS LIVE — chaque collection est suivie via onSnapshot.
+      //  Toute création / modification côté serveur (= côté staff sur le
+      //  web) est répercutée AUTOMATIQUEMENT dans l'app sans pull-to-refresh.
+      //  Le 1er snapshot de `me` clôt l'état `loading` (l'écran principal
+      //  s'affiche), les autres listeners alimentent les onglets au fur
+      //  et à mesure.
+      // ══════════════════════════════════════════════════════════════
 
-      // Livraisons archivées (colis déjà livrés). Tolérant : si la collection
-      // ou les règles ne sont pas dispo, on continue avec une liste vide.
-      let livArch = [];
-      try {
-        const aaSnap = await getDocs(query(
-          collection(db, collName('livraisons_archives', agency)),
-          where('demarcheurId', '==', demId)));
-        livArch = aaSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
-      } catch (_) { livArch = []; }
-
-      // Tolérant : si les règles retrait_demandes ne sont pas encore
-      // déployées (ou collection vide), on n'échoue PAS tout l'écran.
-      let demandes = [];
-      try {
-        const dSnap = await getDocs(
-          query(collection(db, collName('retrait_demandes', agency)), where('demarcheurId', '==', demId)));
-        demandes = sortByDateDesc(
-          dSnap.docs.map((d) => ({ id: d.id, ...d.data() })), 'dateDemande');
-      } catch (_) { demandes = []; }
-
-      const commissions = sortByDateDesc(
-        cSnap.docs.map((d) => ({ id: d.id, ...d.data() })), 'dateCreation');
-
-      setState({
-        loading: false, refreshing: false, error: '',
-        me,
-        commissions,
-        clients: aSnap.docs.map((d) => ({ id: d.id, ...d.data() })),
-        filleuls: fSnap.docs.map((d) => ({ id: d.id, ...d.data() })),
-        demandes,
-        rawFactures: tSnap.docs.map((d) => ({ id: d.id, ...d.data() })),
-        rawLivraisons: [
-          ...lSnap.docs.map((d) => ({ id: d.id, ...d.data() })),
-          ...livArch,
-        ],
+      // Reset partiel du state pour ne pas afficher d'anciennes données
+      // pendant le changement de route.
+      setState((s) => ({
+        ...s,
+        commissions: [], clients: [], filleuls: [], demandes: [],
+        rawFactures: [], rawLivraisons: [],
         links: availableLinks,
         activeLink: chosen,
-      });
+      }));
+
+      const onErr = (label) => (err) => {
+        // En cas de perte des droits / collection absente : non bloquant.
+        // On garde l'app fonctionnelle même si UNE collection échoue.
+        console.warn('[useDemarcheur] listener', label, ':', err && err.message);
+      };
+
+      // 1) Fiche démarcheur (me) — c'est ce listener qui clôt le loading.
+      unsubsRef.current.push(onSnapshot(
+        doc(db, collName('demarcheurs', agency), demId),
+        (snap) => {
+          setState((s) => ({
+            ...s,
+            me: snap.exists() ? { id: snap.id, ...snap.data() } : null,
+            loading: false, refreshing: false,
+          }));
+        },
+        (err) => {
+          setState((s) => ({
+            ...s, loading: false, refreshing: false,
+            error: "Impossible de charger votre profil.",
+          }));
+          onErr('me')(err);
+        },
+      ));
+
+      // 2) Commissions (directes + bonus parrainage)
+      unsubsRef.current.push(onSnapshot(
+        query(collection(db, collName('commissions', agency)), where('demarcheurId', '==', demId)),
+        (snap) => {
+          const arr = sortByDateDesc(snap.docs.map((d) => ({ id: d.id, ...d.data() })), 'dateCreation');
+          setState((s) => ({ ...s, commissions: arr }));
+        },
+        onErr('commissions'),
+      ));
+
+      // 3) Filleuls (démarcheurs ayant parrainId == moi)
+      unsubsRef.current.push(onSnapshot(
+        query(collection(db, collName('demarcheurs', agency)), where('parrainId', '==', demId)),
+        (snap) => setState((s) => ({ ...s, filleuls: snap.docs.map((d) => ({ id: d.id, ...d.data() })) })),
+        onErr('filleuls'),
+      ));
+
+      // 4) Clients affiliés
+      unsubsRef.current.push(onSnapshot(
+        query(collection(db, collName('client_affiliations', agency)), where('demarcheurId', '==', demId)),
+        (snap) => setState((s) => ({ ...s, clients: snap.docs.map((d) => ({ id: d.id, ...d.data() })) })),
+        onErr('clients'),
+      ));
+
+      // 5) Factures (transactions où je suis le parrain rattaché)
+      unsubsRef.current.push(onSnapshot(
+        query(collection(db, collName('transactions', agency)), where('demarcheurId', '==', demId)),
+        (snap) => setState((s) => ({ ...s, rawFactures: snap.docs.map((d) => ({ id: d.id, ...d.data() })) })),
+        onErr('factures'),
+      ));
+
+      // 6) Livraisons actives — pas d'archives en live (lourd, peu utile).
+      // Les archives sont lues UNE fois en plus pour compléter le tracking.
+      unsubsRef.current.push(onSnapshot(
+        query(collection(db, collName('livraisons', agency)), where('demarcheurId', '==', demId)),
+        async (snap) => {
+          const liv = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+          // Archives : lecture ponctuelle après chaque update livraisons.
+          let livArch = [];
+          try {
+            const aaSnap = await getDocs(query(
+              collection(db, collName('livraisons_archives', agency)),
+              where('demarcheurId', '==', demId)));
+            livArch = aaSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
+          } catch (_) { livArch = []; }
+          setState((s) => ({ ...s, rawLivraisons: [...liv, ...livArch] }));
+        },
+        onErr('livraisons'),
+      ));
+
+      // 7) Demandes de retrait (créées depuis l'app)
+      unsubsRef.current.push(onSnapshot(
+        query(collection(db, collName('retrait_demandes', agency)), where('demarcheurId', '==', demId)),
+        (snap) => {
+          const arr = sortByDateDesc(snap.docs.map((d) => ({ id: d.id, ...d.data() })), 'dateDemande');
+          setState((s) => ({ ...s, demandes: arr }));
+        },
+        onErr('demandes'),
+      ));
+
     } catch (e) {
       setState((s) => ({
         ...s, loading: false, refreshing: false,
@@ -197,6 +252,8 @@ export function useDemarcheur() {
   }, []);
 
   useEffect(() => { load(false); }, [load]);
+  // Cleanup à l'unmount : on coupe tous les listeners restants.
+  useEffect(() => () => cleanup(), []);
 
   // ── Données enrichies (dérivées, recalculées si les données changent) ──
   const { clients, filleuls, unmatched } = useMemo(() => {

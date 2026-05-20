@@ -620,3 +620,53 @@ exports.notifyWithdrawalPushChine = onDocumentCreated(
     { region: REGION, document: "retraits_chine/{id}" },
     async (event) => handleWithdrawalCreated(event.data, "chine"),
 );
+
+// ── Test manuel de notification push (callable depuis l'app mobile) ────────
+// Permet au démarcheur connecté de s'envoyer une notif de TEST à lui-même
+// pour vérifier que :
+//   - son token push est bien enregistré
+//   - le pipeline Expo Push -> FCM fonctionne
+//   - les permissions notification sont accordées sur le device
+// Sécurité : doit être appelé par un démarcheur connecté. La fonction lit le
+// token UNIQUEMENT sur sa propre fiche (pas moyen de notifier quelqu'un d'autre).
+exports.sendTestPush = onCall({ region: REGION }, async (request) => {
+    if (!request.auth) {
+        throw new HttpsError("unauthenticated", "Connexion requise.");
+    }
+    const claims = request.auth.token || {};
+    if (claims.role !== "demarcheur") {
+        throw new HttpsError("permission-denied", "Réservé aux comptes démarcheur.");
+    }
+    const data = request.data || {};
+    // L'appelant précise sur QUELLE route il veut tester (utile multi-route).
+    // Sinon fallback sur les claims legacy.
+    const agency = String(data.agency || claims.agency || "chine").trim();
+    const demarcheurId = String(data.demarcheurId || claims.demarcheurId || "").trim();
+    if (!demarcheurId) {
+        throw new HttpsError("invalid-argument", "Identifiant démarcheur manquant.");
+    }
+    // Sécurité : on vérifie que ce demarcheurId est BIEN dans les links du
+    // compte (= que le démarcheur ne tente pas de tester pour quelqu'un d'autre).
+    const myIds = Array.isArray(claims.demarcheurIds)
+        ? claims.demarcheurIds
+        : [claims.demarcheurId].filter(Boolean);
+    if (!myIds.includes(demarcheurId)) {
+        throw new HttpsError("permission-denied", "Ce démarcheur n'est pas rattaché à votre compte.");
+    }
+
+    const dem = await getDemarcheurPush(agency, demarcheurId);
+    if (!dem) {
+        return { ok: false, reason: "fiche_introuvable", agency, demarcheurId };
+    }
+    if (!dem.token) {
+        return { ok: false, reason: "pas_de_token", agency, demarcheurId,
+            hint: "Ouvrez l'app sur un build natif (pas Expo Go) et acceptez la permission notifications.",
+        };
+    }
+    const res = await sendExpoPush(dem.token, {
+        title: "🔔 Notification de test",
+        body: `Bonjour ${dem.prenom || ''} ! Si vous lisez ceci, les notifications fonctionnent ✔`,
+        data: { type: "test" },
+    });
+    return { ok: true, tokenPreview: String(dem.token).slice(0, 20) + "…", expoResponse: res };
+});
