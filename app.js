@@ -1,4 +1,5 @@
 import { AGENCIES } from './agencies-config.js';
+import { isAffiliationActive } from './affiliation-config.js';
 
 // --- SHARED VIEWS ---
 import { ClientsView } from './shared/views/clients.js';
@@ -161,11 +162,25 @@ export const app = {
         };
 
         let allowedMenus = isSuperUser ? baseOrder : (config && config.roles ? config.roles[baseRole] || [] : defaultRoles[baseRole] || []);
-        
+
         // Application du filtre des menus physiquement disponibles pour l'agence (défini dans Apparence & Menus)
         if (config && config.visibleMenus) {
             baseOrder = baseOrder.filter(k => config.visibleMenus.includes(k));
             allowedMenus = allowedMenus.filter(k => config.visibleMenus.includes(k));
+        }
+
+        // Section "Spécial Asie" / "Réseau Partenaires" : compatibilité
+        // descendante. Sur Paris / Abidjan historiques SANS visibleMenus
+        // configuré, on masque ces sections par défaut (comportement
+        // d'avant l'apparition de Rôles & Menus). Pour TOUTES les autres
+        // routes (chine, SaaS, etc.), c'est désormais la config visibleMenus
+        // de Rôles & Menus qui décide — il suffit d'y cocher 'special-asie'
+        // pour la faire apparaître. Remplace l'ancien hard-code
+        // CSS .menu-chine-only.
+        const hasVisibleMenusCfg = !!(config && Array.isArray(config.visibleMenus) && config.visibleMenus.length > 0);
+        if (!hasVisibleMenusCfg && (activeAgency === 'paris' || activeAgency === 'abidjan')) {
+            baseOrder = baseOrder.filter(k => k !== 'special-asie' && k !== 'parrainage');
+            allowedMenus = allowedMenus.filter(k => k !== 'special-asie' && k !== 'parrainage');
         }
         
         this.allowedMenus = allowedMenus;

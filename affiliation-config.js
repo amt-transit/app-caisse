@@ -45,14 +45,23 @@ export function isAffiliationActive(agencyId) {
 }
 
 // Rafraîchit le flag de l'agence depuis Firestore (non bloquant).
+// Signaux d'activation considérés (par ordre de priorité) :
+//   1. features.affiliation explicite (true/false)
+//   2. la section "Spécial Asie" est dans visibleMenus (= l'admin a coché
+//      la section dans Rôles & Menus -> on active automatiquement le module)
+//   3. fallback historique : agences chine / abidjan_chine
 export async function refreshAffiliationFlag(agencyId) {
   const ag = agencyId || activeAgency();
   try {
     const snap = await getDoc(doc(db, 'settings', `menus_${ag}`));
     if (snap.exists()) {
-      const f = snap.data().features;
+      const data = snap.data() || {};
+      const f = data.features;
+      const vm = Array.isArray(data.visibleMenus) ? data.visibleMenus : [];
       if (f && typeof f.affiliation === 'boolean') {
-        FLAGS[ag] = f.affiliation;
+        FLAGS[ag] = f.affiliation; // flag explicite -> il fait foi
+      } else if (vm.includes('special-asie') || vm.includes('parrainage')) {
+        FLAGS[ag] = true; // section cochée dans Rôles & Menus -> on active
       } else {
         delete FLAGS[ag]; // pas configuré -> on laissera le défaut légataire
       }

@@ -3,6 +3,7 @@ import { collection, doc, getDoc, getDocs, setDoc, addDoc, updateDoc, query, whe
 import { httpsCallable } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-functions.js";
 import { createApp, ref, reactive, computed, onMounted, onUnmounted, nextTick, watch } from "https://unpkg.com/vue@3/dist/vue.esm-browser.prod.js";
 import { isAffiliationActive } from '../../affiliation-config.js';
+import { AGENCIES } from '../../agencies-config.js';
 
 export const ParrainageView = {
     vueApp: null,
@@ -401,35 +402,87 @@ export const ParrainageView = {
                                 </div>
                             </div>
 
-                            <div style="max-width:400px; margin-bottom:20px;">
-                                <label style="font-size:12px; font-weight:700; color:#475569;">Bonus parrainage (% de la part du partenaire)</label>
-                                <input type="number" v-model.number="settings.tauxBonusParrainage" min="0" max="30" style="width:100%; padding:12px; border:1px solid #cbd5e1; border-radius:8px; font-size:18px; font-weight:800; margin-top:6px; outline:none;">
-                            </div>
-                            
                             <div style="max-width:400px; margin-bottom:25px;">
-                                <label style="font-size:12px; font-weight:700; color:#475569;">Qui cède la part au parrain par défaut ?</label>
-                                <select v-model="settings.quiPaieParrainDefaut" style="width:100%; padding:12px; border:1px solid #cbd5e1; border-radius:8px; font-size:14px; margin-top:6px; outline:none;">
-                                    <option value="demarcheur">Le partenaire (Déduit de sa part)</option>
-                                    <option value="amt">L'Agence (Déduit de la part Agence)</option>
-                                </select>
+                                <label style="font-size:12px; font-weight:700; color:#475569;">Bonus parrainage (% du bénéfice, versé au Parrain quand un Filleul travaille)</label>
+                                <input type="number" v-model.number="settings.tauxBonusParrainage" min="0" max="30" style="width:100%; padding:12px; border:1px solid #cbd5e1; border-radius:8px; font-size:18px; font-weight:800; margin-top:6px; outline:none;">
+                                <div style="font-size:11px; color:#94a3b8; margin-top:6px;">
+                                    Ce bonus est <b>versé par l'Agence</b> (qui passe de {{ settings.tauxAMT }}% à {{ settings.tauxAMT - settings.tauxBonusParrainage }}% quand un Filleul travaille). Le Filleul garde toujours ses {{ settings.tauxDemarcheur }}%.
+                                </div>
                             </div>
 
                             <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:12px; padding:20px; margin-bottom:25px; max-width:600px;">
-                                <div style="font-weight:800; color:#0f172a; margin-bottom:10px;">Simulation sur 100 000 CFA de bénéfice brut généré :</div>
+                                <div style="font-weight:800; color:#0f172a; margin-bottom:12px;">Simulation sur une base de 100 000 CFA</div>
                                 <div style="font-size:13px; line-height:1.8; color:#334155;">
-                                    <div style="display:flex; justify-content:space-between; border-bottom:1px dashed #cbd5e1; padding-bottom:5px; margin-bottom:5px;"><span>Part Agence (Brut) :</span> <strong>{{ formatMoney(simulation.amtBrut) }}</strong></div>
-                                    <div style="display:flex; justify-content:space-between; border-bottom:1px dashed #cbd5e1; padding-bottom:5px; margin-bottom:15px;"><span>Part Partenaire (Brut) :</span> <strong>{{ formatMoney(simulation.demBrut) }}</strong></div>
-                                    
-                                    <div style="color:#d97706; font-weight:700; margin-bottom:5px;"><i class="fas fa-code-branch"></i> Si le partenaire a un parrain :</div>
-                                    <div style="display:flex; justify-content:space-between; padding-left:15px;"><span>Bonus versé au parrain :</span> <strong style="color:#d97706;">+ {{ formatMoney(simulation.bonus) }}</strong></div>
-                                    <div style="display:flex; justify-content:space-between; padding-left:15px;"><span>Net pour le partenaire :</span> <strong>{{ formatMoney(simulation.demNet) }}</strong></div>
-                                    <div style="display:flex; justify-content:space-between; padding-left:15px;"><span>Net pour l'Agence :</span> <strong>{{ formatMoney(simulation.amtNet) }}</strong></div>
+                                    <div style="color:#0369a1; font-weight:700; margin-bottom:2px;"><i class="fas fa-user"></i> Démarcheur seul (Parrain direct, sans Filleul) :</div>
+                                    <div style="font-size:11px; color:#94a3b8; padding-left:18px; margin-bottom:6px;">Base = Montant facturé (charges fixes non appliquées)</div>
+                                    <div style="display:flex; justify-content:space-between; padding-left:15px;"><span>Démarcheur :</span> <strong>{{ formatMoney(simulation.demBrut) }}</strong></div>
+                                    <div style="display:flex; justify-content:space-between; padding-left:15px; border-bottom:1px dashed #cbd5e1; padding-bottom:8px; margin-bottom:12px;"><span>Agence :</span> <strong>{{ formatMoney(simulation.amtBrut) }}</strong></div>
+
+                                    <div style="color:#d97706; font-weight:700; margin-bottom:2px;"><i class="fas fa-code-branch"></i> Filleul actif (apporté par un Parrain) :</div>
+                                    <div style="font-size:11px; color:#94a3b8; padding-left:18px; margin-bottom:6px;">Base = Bénéfice net (= Montant facturé − Charges fixes par m³/kg)</div>
+                                    <div style="display:flex; justify-content:space-between; padding-left:15px;"><span>Filleul :</span> <strong>{{ formatMoney(simulation.demNet) }}</strong></div>
+                                    <div style="display:flex; justify-content:space-between; padding-left:15px;"><span>Parrain (bonus, payé par l'Agence) :</span> <strong style="color:#d97706;">{{ formatMoney(simulation.bonus) }}</strong></div>
+                                    <div style="display:flex; justify-content:space-between; padding-left:15px;"><span>Agence :</span> <strong>{{ formatMoney(simulation.amtNet) }}</strong></div>
                                 </div>
                             </div>
 
                             <button class="btn btn-primary" @click="saveSettings" :disabled="saving">
                                 <span v-if="saving"><i class="fas fa-spinner fa-spin"></i> Enregistrement...</span>
                                 <span v-else><i class="fas fa-save"></i> Enregistrer la politique</span>
+                            </button>
+                        </div>
+
+                        <!-- ============================================ -->
+                        <!-- CHARGES FIXES PAR ROUTE (M³ maritime / kg aérien) -->
+                        <!-- ============================================ -->
+                        <div class="stat-box" style="margin-top:25px;">
+                            <h2 style="margin-top:0; font-size:18px;"><i class="fas fa-coins text-amber-500"></i> Charges fixes par route</h2>
+                            <p style="color:#64748b; font-size:13px; margin-bottom:8px;">
+                                Quand un <b>Filleul actif</b> (apporté par un Parrain) génère une expédition, AMT verse 10 % de bonus au Parrain.
+                                Pour ne pas verser ce bonus sur des bases trop élevées, on calcule un <b>bénéfice net</b> :
+                                <b>Bénéfice = Montant facturé − Charges fixes</b> (par m³ en maritime, par kg en aérien).
+                            </p>
+                            <p style="color:#64748b; font-size:12px; margin-bottom:20px; font-style:italic;">
+                                ⓘ Quand un démarcheur travaille <b>sans parrain</b>, la répartition reste 50/50 sur le montant facturé (les charges fixes n'entrent pas en jeu).
+                            </p>
+
+                            <div v-if="affiliatedRoutes.length === 0" style="padding:20px; text-align:center; color:#94a3b8;">
+                                Aucune route avec parrainage actif. Activez le parrainage sur une route dans <b>Rôles &amp; Menus</b> pour configurer ses charges fixes.
+                            </div>
+
+                            <div v-for="r in affiliatedRoutes" :key="r.id" style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:10px; padding:15px 18px; margin-bottom:12px;">
+                                <div style="display:flex; align-items:center; gap:10px; margin-bottom:12px;">
+                                    <span style="font-size:22px;">{{ r.flag || '🏳️' }}</span>
+                                    <b style="font-size:15px; color:#0f172a;">{{ r.name }}</b>
+                                    <span style="font-family:monospace; font-size:11px; background:#fff; border:1px solid #e2e8f0; padding:2px 6px; border-radius:4px; color:#64748b;">{{ r.id }}</span>
+                                </div>
+                                <div style="display:grid; grid-template-columns:1fr 1fr; gap:15px;">
+                                    <div>
+                                        <label style="font-size:12px; font-weight:700; color:#475569;">🚢 Maritime — Charges par m³ (CFA)</label>
+                                        <input type="number" min="0" step="1000"
+                                               v-model.number="chargesByRoute[r.id].cbm"
+                                               style="width:100%; padding:10px; border:1px solid #cbd5e1; border-radius:8px; font-size:15px; font-weight:700; margin-top:6px; outline:none;"
+                                               placeholder="Ex: 150000">
+                                    </div>
+                                    <div>
+                                        <label style="font-size:12px; font-weight:700; color:#475569;">✈️ Aérien — Charges par kg (CFA)</label>
+                                        <input type="number" min="0" step="500"
+                                               v-model.number="chargesByRoute[r.id].kg"
+                                               style="width:100%; padding:10px; border:1px solid #cbd5e1; border-radius:8px; font-size:15px; font-weight:700; margin-top:6px; outline:none;"
+                                               placeholder="Ex: 0">
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div style="background:#eff6ff; border:1px solid #bfdbfe; border-radius:10px; padding:14px 16px; margin:18px 0; font-size:13px; color:#1e3a8a;">
+                                <b>💡 Exemple :</b> charges 150 000 CFA/m³, expédition 0,8 m³ et facturée 250 000 CFA →
+                                charges = 120 000, bénéfice = 130 000.
+                                Si le démarcheur a un parrain : Filleul 65 000 · Parrain 13 000 · AMT 52 000.
+                            </div>
+
+                            <button class="btn btn-primary" @click="saveCharges" :disabled="savingCharges">
+                                <span v-if="savingCharges"><i class="fas fa-spinner fa-spin"></i> Enregistrement...</span>
+                                <span v-else><i class="fas fa-save"></i> Enregistrer les charges fixes</span>
                             </button>
                         </div>
                     </div>
@@ -461,13 +514,10 @@ export const ParrainageView = {
                                     </select>
                                 </div>
 
-                                <div v-if="partnerForm.parrainId" style="background:#fffbeb; padding:10px; border-radius:8px; border:1px solid #fde68a;">
-                                    <label style="font-size:12px; font-weight:700; color:#92400e; margin-bottom:4px; display:block;">Règle d'exception (Qui cède la part au Leader parent ?)</label>
-                                    <select v-model="partnerForm.quiPaieParrain" style="width:100%; padding:8px; border:1px solid #fcd34d; border-radius:6px; outline:none; background:white;">
-                                        <option value="">Utiliser la règle globale ({{ settings.quiPaieParrainDefaut === 'amt' ? 'Agence' : 'Partenaire' }})</option>
-                                        <option value="demarcheur">Le partenaire lui-même</option>
-                                        <option value="amt">L'Agence</option>
-                                    </select>
+                                <div v-if="partnerForm.parrainId" style="background:#fffbeb; padding:10px 12px; border-radius:8px; border:1px solid #fde68a; font-size:12px; color:#92400e;">
+                                    <i class="fas fa-info-circle"></i>
+                                    Quand ce filleul génère une commission, son <b>Leader parent</b> reçoit automatiquement
+                                    un bonus de <b>{{ settings.tauxBonusParrainage }}%</b> du bénéfice (versé par l'Agence).
                                 </div>
                             </div>
                         </div>
@@ -612,6 +662,19 @@ export const ParrainageView = {
                     tauxBonusParrainage: 10,
                     quiPaieParrainDefaut: 'demarcheur'
                 });
+
+                // Charges fixes par route. Stockées dans agencies_config/<id>
+                //   - chargesFixesCbm    : CFA / m³ (maritime)
+                //   - chargesFixesKgAerien : CFA / kg (aérien)
+                // chargesByRoute est un map réactif { [routeId]: { cbm, kg } }.
+                const chargesByRoute = reactive({});
+                const savingCharges = ref(false);
+                const depRoutes = ref([]);
+                // Charges fixes pertinentes uniquement pour les routes où le
+                // parrainage est ACTIF (sinon : pas de filleul -> pas de bonus
+                // parrain -> pas de bénéfice à calculer, on reste en 50/50 du
+                // montant facturé). Cible naturelle : routes Chine.
+                const affiliatedRoutes = computed(() => depRoutes.value.filter(r => isAffiliationActive(r.id)));
                 
                 // UI State
                 const saving = ref(false);
@@ -682,6 +745,34 @@ export const ParrainageView = {
                     unsubs.push(onSnapshot(query(collection(db, "retrait_demandes"), orderBy("dateDemande", "desc")), (snap) => {
                         demandesRetrait.value = snap.docs.map(d => ({ id: d.id, ...d.data() }));
                     }, (err) => { console.warn("retrait_demandes:", err && err.message); }));
+
+                    // Charges fixes par route : liste des départs depuis AGENCIES
+                    // (fusion des valeurs par défaut + Firestore), et abonnement
+                    // en temps réel sur agencies_config pour rafraîchir les
+                    // champs si quelqu'un les modifie ailleurs.
+                    const buildDepRoutes = (live) => {
+                        const byId = {};
+                        Object.values(AGENCIES || {}).forEach(a => { if (a && a.id) byId[a.id] = a; });
+                        (live || []).forEach(a => { byId[a.id] = a; });
+                        const deps = Object.values(byId).filter(a => a.type === 'departure');
+                        depRoutes.value = deps;
+                        deps.forEach(d => {
+                            if (!chargesByRoute[d.id]) {
+                                chargesByRoute[d.id] = {
+                                    cbm: Number(d.chargesFixesCbm) || 0,
+                                    kg: Number(d.chargesFixesKgAerien) || 0,
+                                };
+                            } else {
+                                // Met à jour seulement si la valeur Firestore a changé
+                                // et que l'utilisateur n'a rien tapé entre-temps.
+                                if (typeof d.chargesFixesCbm === 'number') chargesByRoute[d.id].cbm = d.chargesFixesCbm;
+                                if (typeof d.chargesFixesKgAerien === 'number') chargesByRoute[d.id].kg = d.chargesFixesKgAerien;
+                            }
+                        });
+                    };
+                    unsubs.push(onSnapshot(collection(db, "agencies_config"), (snap) => {
+                        buildDepRoutes(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+                    }, (err) => { console.warn("agencies_config (charges):", err && err.message); buildDepRoutes([]); }));
                 });
 
                 onUnmounted(() => { unsubs.forEach(u => u()); });
@@ -851,16 +942,20 @@ export const ParrainageView = {
                 });
 
                 // Settings Simulation
+                // Simulation pour 100 000 CFA de bénéfice (= montant facturé
+                // − charges fixes déjà retranchées). Applique la règle officielle :
+                //   - Démarcheur seul   : tDem du bénéfice / AMT = reste
+                //   - Filleul + Parrain : tDem du bénéfice / Parrain = tPar / AMT = reste
+                //   AMT paie toujours le bonus parrain.
                 const simulation = computed(() => {
-                    const brut = 100000;
-                    const demB = brut * (settings.tauxDemarcheur / 100);
-                    const amtB = brut * (settings.tauxAMT / 100);
-                    const bon = demB * (settings.tauxBonusParrainage / 100);
-                    
-                    let demN = demB, amtN = amtB;
-                    if (settings.quiPaieParrainDefaut === 'amt') amtN -= bon;
-                    else demN -= bon;
-                    
+                    const benefice = 100000;
+                    const tDem = settings.tauxDemarcheur / 100;
+                    const tPar = settings.tauxBonusParrainage / 100;
+                    const demB = benefice * tDem;     // démarcheur seul -> reçoit demB ; AMT le complément
+                    const amtB = benefice - demB;     // = part AMT quand pas de parrain
+                    const bon = benefice * tPar;      // bonus parrain (sur le bénéfice, pas sur la commission)
+                    const demN = demB;                // filleul garde 100 % de sa part (AMT paie le bonus)
+                    const amtN = benefice - demN - bon; // AMT prend ce qui reste après filleul + parrain
                     return { amtBrut: amtB, demBrut: demB, bonus: bon, amtNet: amtN, demNet: demN };
                 });
 
@@ -884,6 +979,42 @@ export const ParrainageView = {
                         globalApp.showToast("Politique de parrainage enregistrée", "success");
                     } catch(e) { globalApp.showToast("Erreur", "error"); }
                     saving.value = false;
+                };
+
+                // Enregistre les charges fixes (par m³ et par kg) sur chaque
+                // route de départ. Écrit dans agencies_config/<id>. Met à jour
+                // le cache localStorage pour propagation immédiate aux écrans
+                // qui lisent AGENCIES sans recharger.
+                const saveCharges = async () => {
+                    savingCharges.value = true;
+                    try {
+                        const batch = writeBatch(db);
+                        // Sauvegarde UNIQUEMENT les routes où le parrainage est
+                        // actif (= celles affichées dans le panneau). Ne touche
+                        // pas aux autres routes pour ne pas écraser des configs
+                        // d'agence non concernées par les charges fixes.
+                        affiliatedRoutes.value.forEach(d => {
+                            const c = chargesByRoute[d.id] || { cbm: 0, kg: 0 };
+                            batch.set(doc(db, "agencies_config", d.id), {
+                                chargesFixesCbm: Number(c.cbm) || 0,
+                                chargesFixesKgAerien: Number(c.kg) || 0,
+                                updatedAt: new Date().toISOString()
+                            }, { merge: true });
+                        });
+                        await batch.commit();
+                        try {
+                            const cache = JSON.parse(localStorage.getItem('amt_agencies_config') || '{}');
+                            affiliatedRoutes.value.forEach(d => {
+                                if (!cache[d.id]) cache[d.id] = {};
+                                cache[d.id].chargesFixesCbm = Number((chargesByRoute[d.id] || {}).cbm) || 0;
+                                cache[d.id].chargesFixesKgAerien = Number((chargesByRoute[d.id] || {}).kg) || 0;
+                            });
+                            localStorage.setItem('amt_agencies_config', JSON.stringify(cache));
+                        } catch (e) { /* cache illisible : ok */ }
+                        globalApp.showToast("Charges fixes enregistrées ✔", "success");
+                    } catch (e) {
+                        console.error(e); globalApp.showToast("Erreur lors de l'enregistrement.", "error");
+                    } finally { savingCharges.value = false; }
                 };
 
                 const availableSponsors = computed(() => partners.value.filter(p => p.id !== partnerForm.id)); // Éviter l'auto-parrainage
@@ -1243,6 +1374,7 @@ export const ParrainageView = {
                     commKpis, filteredCommissions, getPartnerName, getPartnerFilleuls,
                     selectedPartnerForWithdrawal, partnerWithdrawalInfo, filteredWithdrawals, withdrawalForm, isWithdrawalValid,
                     analytics, simulation, syncRates, saveSettings,
+                    depRoutes, affiliatedRoutes, chargesByRoute, savingCharges, saveCharges,
                     showPartnerModal, partnerForm, availableSponsors, openPartnerModal, savePartner,
                     showDetailModal, partnerDetail, openDetails,
                     reconcileBusy, reconcilerSoldes, migrerRoutesRdvDevis,

@@ -1081,13 +1081,19 @@ initVue(globalApp) {
                 try {
                     await batch.commit();
 
-                    // Génère la commission du parrain (autonome, idempotent,
-                    // non bloquant). beneficeBrut = total facturé en CFA.
+                    // Génère la commission du démarcheur (autonome, idempotent,
+                    // non bloquant). La formule applique :
+                    //   bénéfice = montantFacture − (chargesParCbm × volume) maritime
+                    //                              ou (chargesParKg × poids) aérien
+                    //   répartition : 50% Démarcheur ; +10% Parrain (si parrainId) ; AMT = reste.
                     if (affiliationDemarcheurId) {
                         try {
                             await creerCommissionParrainage({
                                 expeditionId: ref,
-                                beneficeBrut: totalCFA,
+                                montantFacture: totalCFA,
+                                volumeCbm: parseFloat(form.volume) || 0,
+                                poidsKg: parseFloat(form.poids) || 0,
+                                shippingMode: shippingMode,
                                 demarcheurId: affiliationDemarcheurId,
                                 agency: activeAgency,
                                 clientNom: finalDestName,

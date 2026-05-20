@@ -49,10 +49,13 @@
         };
     </script>
     <style>
-        /* Menu Chine */
-        .menu-chine-only { display: none !important; }
-        body.agency-chine .menu-chine-only, body.agency-abidjan_chine .menu-chine-only { display: block !important; }
-        
+        /* Section « Spécial Asie » : la visibilité est désormais pilotée
+           dynamiquement par app.js (via isAffiliationActive de
+           affiliation-config.js) et par la config Rôles & Menus
+           (settings/menus_<agence>.features.affiliation). Plus de hard-code
+           CSS — activer le flag sur une route SaaS suffit à faire apparaître
+           le menu. */
+
         /* Menu Utilisateur Dropdown */
         .user-dropdown-container { position: relative; display: inline-block; }
         .user-avatar { cursor: pointer; transition: transform 0.2s; }

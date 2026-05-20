@@ -72,53 +72,100 @@ export async function ensureAffiliation({ phone, clientName, demarcheurId, demar
 
 // ============================================================================
 //  GÉNÉRATION DE COMMISSION (autonome — ne dépend PAS de la page Parrainage).
-//  Lit les taux dans parametres/commissions et la fiche démarcheur, crée la
-//  ou les commissions (directe + bonus parrain) et crédite le solde.
-//  Idempotent : si une commission existe déjà pour (expeditionId,
-//  demarcheurId), on ne recrée rien. Non bloquant pour la facture.
-//  beneficeBrut attendu en CFA (cohérent avec demarcheurs.soldeDisponible).
+//  Règle métier (mai 2026) :
+//
+//     Cas A — Démarcheur SEUL (Parrain direct, pas de parent au-dessus)
+//         Base = Montant facturé (PAS de charges fixes)
+//         Démarcheur : 50 %
+//         AMT        : 50 %
+//
+//     Cas B — FILLEUL actif (le démarcheur a un parrainId)
+//         Base = Montant facturé − Charges fixes
+//             où Charges = (chargesFixesCbm × volumeCbm)    en MARITIME
+//                     ou  (chargesFixesKgAerien × poidsKg) en AÉRIEN
+//             (les charges fixes sont configurées par ROUTE de départ, sur
+//              la page Réseau Partenaires → Settings)
+//         Filleul : 50 % de la base
+//         Parrain : 10 % de la base (versé par AMT, qui passe de 50 % à 40 %)
+//         AMT     : 40 %
+//
+//  Pourquoi les charges fixes uniquement en Cas B ? Parce que le calcul 50/50
+//  sans parrain logge AMT et le Démarcheur à la même enseigne — chacun assume
+//  symétriquement les coûts opérationnels. Le besoin de soustraire des charges
+//  fixes n'apparaît QUE quand AMT doit verser un bonus de 10 % au Parrain en
+//  plus, sur quelque chose qui doit être un vrai bénéfice.
+//
+//  Si bénéfice ≤ 0 (charges supérieures au montant) : aucune commission.
+//  Idempotent : une seule commission directe par (expeditionId, demarcheurId).
+//  Non bloquant : la facture reste valide même en cas d'erreur ici.
+//  Tous les montants sont en CFA (cohérent avec demarcheurs.soldeDisponible).
 // ============================================================================
-export async function creerCommissionParrainage({ expeditionId, beneficeBrut, demarcheurId, agency, clientNom, clientPhone, description }) {
+export async function creerCommissionParrainage({
+  expeditionId, demarcheurId, agency,
+  montantFacture, volumeCbm = 0, poidsKg = 0, shippingMode = 'maritime',
+  // beneficeBrut : alias rétrocompatible (ancien appelant). Si fourni et que
+  // montantFacture est absent, on l'utilise comme montant facturé.
+  beneficeBrut,
+  clientNom, clientPhone, description
+}) {
   try {
-    if (!demarcheurId || !expeditionId || !(beneficeBrut > 0)) return false;
+    const montant = Number(montantFacture != null ? montantFacture : beneficeBrut) || 0;
+    if (!demarcheurId || !expeditionId || !(montant > 0)) return false;
 
     // Anti-doublon : une seule commission directe par expédition/démarcheur.
-    // (where unique sur expeditionId -> pas d'index composite requis)
     const dup = await getDocs(query(collection(db, 'commissions'), where('expeditionId', '==', expeditionId)));
     if (dup.docs.some(d => (d.data() || {}).demarcheurId === demarcheurId && (d.data() || {}).type === 'direct')) {
       return false; // déjà généré
     }
 
-    // Taux (mêmes clés que la page Parrainage : fractions, ex. 0.5).
-    let tAMT = 0.5, tDem = 0.5, tPar = 0.1, quiDefaut = 'demarcheur';
+    // Taux (lus dans parametres/commissions, défauts métier officiels).
+    //   tDem = part du démarcheur sur le bénéfice (50 %)
+    //   tPar = bonus parrain sur le bénéfice (10 %)
+    //   AMT  = reste (= 50 % seul, ou 40 % si filleul)
+    let tDem = 0.5, tPar = 0.1;
     try {
       const pSnap = await getDoc(doc(db, 'parametres', 'commissions'));
       if (pSnap.exists()) {
         const s = pSnap.data();
-        if (typeof s.tauxAMT === 'number') tAMT = s.tauxAMT;
         if (typeof s.tauxDemarcheur === 'number') tDem = s.tauxDemarcheur;
         if (typeof s.tauxBonusParrainage === 'number') tPar = s.tauxBonusParrainage;
-        if (s.quiPaieParrainDefaut) quiDefaut = s.quiPaieParrainDefaut;
       }
     } catch (e) { /* défauts conservés */ }
 
-    // Fiche démarcheur (pour le parrain éventuel + qui paie le bonus).
+    const agencyId = agency || (sessionStorage.getItem('currentActiveAgency') || '');
+    const mode = String(shippingMode || 'maritime').toLowerCase();
+
+    // Fiche démarcheur (pour savoir s'il a un parrain au-dessus).
     const demSnap = await getDoc(doc(db, 'demarcheurs', demarcheurId));
     if (!demSnap.exists()) return false;
     const dem = demSnap.data() || {};
 
-    const pDemBrut = beneficeBrut * tDem;
-    const pAMTBrut = beneficeBrut * tAMT;
-    const bonus = dem.parrainId ? pDemBrut * tPar : 0;
-    let pDemNet = pDemBrut, pAMTNet = pAMTBrut;
-    const qui = dem.quiPaieParrain || quiDefaut;
-    if (dem.parrainId && bonus > 0) {
-      if (qui === 'amt') pAMTNet -= bonus; else pDemNet -= bonus;
+    // Charges fixes : appliquées UNIQUEMENT quand le démarcheur a un parrain
+    // (Cas B). Sans parrain, on reste sur le montant facturé brut (Cas A).
+    let charges = 0;
+    if (dem.parrainId) {
+      let chargesParCbm = 0, chargesParKg = 0;
+      try {
+        const aSnap = await getDoc(doc(db, 'agencies_config', agencyId));
+        if (aSnap.exists()) {
+          const a = aSnap.data();
+          chargesParCbm = Number(a.chargesFixesCbm) || 0;
+          chargesParKg = Number(a.chargesFixesKgAerien) || 0;
+        }
+      } catch (e) { /* hors-ligne ou doc absent : charges 0 */ }
+      charges = (mode === 'aerien' || mode === 'aérien')
+        ? chargesParKg * (Number(poidsKg) || 0)
+        : chargesParCbm * (Number(volumeCbm) || 0);
     }
+    const benefice = Math.max(0, montant - charges);
+    if (benefice <= 0) return false; // pas de marge -> pas de commission
 
-    // Infos client/envoi : purement descriptives (n'entrent dans AUCUN
-    // calcul de montant) — permettent au partenaire de voir, dans l'app
-    // mobile, quel client et quel envoi a généré chaque commission.
+    // Répartition (AMT paie toujours le bonus parrain).
+    const pDem = benefice * tDem;
+    const bonus = dem.parrainId ? benefice * tPar : 0;
+    const pAMT = benefice - pDem - bonus; // 50 % (seul) ou 40 % (avec parrain)
+
+    // Infos descriptives (n'entrent dans aucun calcul, visibles dans le mobile).
     const infoClient = {
       clientNom: clientNom || '',
       clientPhone: normalizePhone(clientPhone) || '',
@@ -128,31 +175,44 @@ export async function creerCommissionParrainage({ expeditionId, beneficeBrut, de
     const batch = writeBatch(db);
     batch.set(doc(collection(db, 'commissions')), {
       expeditionId, demarcheurId, type: 'direct',
-      montantBrut: beneficeBrut, tauxDemarcheur: tDem, montantDemarcheur: pDemBrut,
-      tauxAMT: tAMT, montantAMT: pAMTNet, bonusParrainage: bonus,
-      quiPaieParrain: qui, montantNet: pDemNet,
-      // À la création la facture n'est pas (ou pas entièrement) soldée :
-      // 100 % en POTENTIEL. La Cloud Function reconcile recalcule le prorata
-      // réel dès qu'un paiement est enregistré.
-      montantDisponible: 0, montantPotentiel: pDemNet, partPayee: 0,
+      // Économie de l'expédition (traçabilité complète) :
+      montantFacture: montant,
+      chargesFixes: charges,
+      beneficeNet: benefice,
+      volumeCbm: Number(volumeCbm) || 0,
+      poidsKg: Number(poidsKg) || 0,
+      shippingMode: mode,
+      // Répartition :
+      tauxDemarcheur: tDem,
+      montantDemarcheur: pDem,
+      bonusParrainage: bonus,
+      montantAMT: pAMT,
+      montantNet: pDem,
+      // Champs hérités (pour les écrans / Cloud Functions existants) :
+      montantBrut: benefice,
+      // Solde : 100 % en POTENTIEL à la création. reconcile recalcule au prorata
+      // dès qu'un paiement est enregistré sur la facture.
+      montantDisponible: 0, montantPotentiel: pDem, partPayee: 0,
       etatSolde: 'en_attente',
       ...infoClient,
-      agency: agency || (sessionStorage.getItem('currentActiveAgency') || ''),
+      agency: agencyId,
       dateCreation: serverTimestamp(), statut: 'en_attente',
     });
     batch.update(doc(db, 'demarcheurs', demarcheurId), {
-      totalGagne: increment(pDemNet), soldePotentiel: increment(pDemNet),
+      totalGagne: increment(pDem), soldePotentiel: increment(pDem),
     });
 
     if (dem.parrainId && bonus > 0) {
       batch.set(doc(collection(db, 'commissions')), {
         expeditionId, demarcheurId: dem.parrainId, type: 'parrainage',
-        filleulId: demarcheurId, montantBrut: beneficeBrut, bonusParrainage: bonus,
-        montantNet: bonus,
+        filleulId: demarcheurId,
+        montantFacture: montant, chargesFixes: charges, beneficeNet: benefice,
+        bonusParrainage: bonus, montantNet: bonus,
+        montantBrut: benefice,
         montantDisponible: 0, montantPotentiel: bonus, partPayee: 0,
         etatSolde: 'en_attente',
         ...infoClient,
-        agency: agency || (sessionStorage.getItem('currentActiveAgency') || ''),
+        agency: agencyId,
         dateCreation: serverTimestamp(), statut: 'en_attente',
       });
       batch.update(doc(db, 'demarcheurs', dem.parrainId), {
