@@ -2,12 +2,13 @@ import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { ScreenScroll, ScreenTitle, Card } from '../components/ui';
+import { RouteSwitcherButton } from '../components/RouteSwitcher';
 import { colors, spacing, radius } from '../theme';
 
 const LOGO = require('../../assets/logo.png');
 
 export default function ProfilScreen({ data, onLogout, user }) {
-  const { me, refreshing, refresh } = data;
+  const { me, refreshing, refresh, links, activeLink, switchRoute } = data;
   const name = me ? `${me.prenom || ''} ${me.nom || ''}`.trim() : (user?.email || '');
   const initials = (name || '?')
     .split(' ').map((s) => s[0]).filter(Boolean).slice(0, 2).join('').toUpperCase();
@@ -25,18 +26,28 @@ export default function ProfilScreen({ data, onLogout, user }) {
       <ScreenTitle icon="person-circle" title="Mon profil" />
 
       <View style={styles.head}>
-        <View style={styles.avatar}><Text style={styles.avatarT}>{initials || '?'}</Text></View>
+        {me?.photoUrl ? (
+          <Image source={{ uri: me.photoUrl }} style={styles.photo} />
+        ) : (
+          <View style={styles.avatar}><Text style={styles.avatarT}>{initials || '?'}</Text></View>
+        )}
         <Text style={styles.name}>{name || '—'}</Text>
         <Text style={styles.role}>
           {me?.parrainId ? 'Filleul partenaire' : 'Leader partenaire'} · AMT Transit Cargo
         </Text>
       </View>
 
+      <RouteSwitcherButton
+        links={links}
+        activeLink={activeLink}
+        onSwitch={switchRoute}
+      />
+
       <Card style={{ padding: spacing.xs }}>
         <Line icon="call-outline" label="Téléphone" value={me?.telephone} />
         <Line icon="mail-outline" label="Email" value={me?.email || user?.email} />
         <Line icon="pricetag-outline" label="Statut" value={me?.statut || 'actif'} />
-        <Line icon="business-outline" label="Agence" value={me?.agency} />
+        <Line icon="business-outline" label="Agence" value={activeLink?.agency || me?.agency} />
       </Card>
 
       <View style={styles.helpCard}>
@@ -59,10 +70,15 @@ export default function ProfilScreen({ data, onLogout, user }) {
 const styles = StyleSheet.create({
   head: { alignItems: 'center', marginBottom: spacing.xl },
   avatar: {
-    width: 76, height: 76, borderRadius: 38, backgroundColor: colors.gold,
+    width: 96, height: 96, borderRadius: 48, backgroundColor: colors.goldWarm || colors.gold,
+    borderWidth: 2, borderColor: 'rgba(242,163,18,0.4)',
     alignItems: 'center', justifyContent: 'center',
   },
-  avatarT: { color: '#1A1206', fontSize: 26, fontWeight: '900' },
+  avatarT: { color: colors.goldDeep, fontSize: 32, fontWeight: '900' },
+  photo: {
+    width: 96, height: 96, borderRadius: 48,
+    borderWidth: 2, borderColor: 'rgba(242,163,18,0.4)',
+  },
   name: { color: colors.text, fontSize: 19, fontWeight: '800', marginTop: spacing.md },
   role: { color: colors.textDim, fontSize: 12.5, marginTop: 4 },
 

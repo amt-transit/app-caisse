@@ -9,6 +9,7 @@ import { useDemarcheur } from '../data/useDemarcheur';
 import Background from '../components/Background';
 import LogoMark from '../components/LogoMark';
 import TabBar from '../components/TabBar';
+import { RouteChip } from '../components/RouteSwitcher';
 import { colors, spacing, radius, font, grad, shadow } from '../theme';
 
 import DashboardScreen from './DashboardScreen';
@@ -89,6 +90,15 @@ export default function MainApp() {
         <View style={{ flex: 1, marginLeft: spacing.md }}>
           <Text style={styles.hello}>Bonjour 👋</Text>
           <Text style={styles.name} numberOfLines={1}>{prenom}</Text>
+          {/* Sélecteur d'agence — visible UNIQUEMENT si le compte est rattaché
+              à plusieurs routes. Le composant retourne null sinon. */}
+          <View style={{ marginTop: 6 }}>
+            <RouteChip
+              links={data.links}
+              activeLink={data.activeLink}
+              onSwitch={data.switchRoute}
+            />
+          </View>
         </View>
         <TouchableOpacity
           activeOpacity={0.85}

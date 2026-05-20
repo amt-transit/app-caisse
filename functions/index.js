@@ -136,34 +136,14 @@ exports.provisionDemarcheurAuth = onCall({ region: REGION }, async (request) => 
                     "Cet email est rattaché à un compte privilégié : opération refusée."
                 );
             }
-            if (cc.role === "demarcheur" && cc.demarcheurId && cc.demarcheurId !== demarcheurId) {
-                // L'ancien démarcheur lié à ce compte est-il encore actif ? On
-                // vérifie sur TOUTES les routes possibles (le compte n'a pas
-                // forcément la même agency aujourd'hui qu'à la création).
-                // Si la fiche n'existe nulle part = ORPHELIN, on autorise le
-                // re-provisioning (cas "Repartir de zéro"). Sinon, on refuse.
-                let orphan = true;
-                const candidates = new Set();
-                candidates.add("demarcheurs");
-                if (cc.agency) candidates.add(routeCollectionName("demarcheurs", cc.agency));
-                if (agency) candidates.add(routeCollectionName("demarcheurs", agency));
-                for (const coll of candidates) {
-                    try {
-                        const snap = await admin.firestore().collection(coll).doc(cc.demarcheurId).get();
-                        if (snap.exists) { orphan = false; break; }
-                    } catch (_) { /* collection absente : on continue */ }
-                }
-                if (!orphan) {
-                    throw new HttpsError(
-                        "permission-denied",
-                        "Cet email est déjà rattaché à un autre démarcheur actif."
-                    );
-                }
-                // Sinon : claim orphelin, on autorise le re-provisioning
-                // (les claims seront réécrits plus bas avec le nouveau ID).
-            }
-            // Sûr : pas de doc staff, et (aucun claim) ou déjà CE démarcheur
-            // -> re-provisioning idempotent (reset du mot de passe autorisé).
+            // MULTI-ROUTE : on accepte qu'un même compte soit lié à plusieurs
+            // fiches démarcheur, à condition que chacune existe (= fiche active
+            // sur sa route). On filtre les liens orphelins et on AJOUTE le
+            // nouveau lien (route + id) au lieu de refuser.
+            // Pour la rétrocompat, les claims legacy `agency` + `demarcheurId`
+            // continuent d'être posés (= lien le plus récemment activé).
+            // Sûr : pas de doc staff, role démarcheur (ou aucun) — on autorise
+            // le (re)provisioning.
             await admin.auth().updateUser(userRecord.uid, { password });
         } else {
             userRecord = await admin.auth().createUser({
@@ -174,13 +154,44 @@ exports.provisionDemarcheurAuth = onCall({ region: REGION }, async (request) => 
         }
         const uid = userRecord.uid;
 
-        // Claims posés UNIQUEMENT sur un compte vérifié sûr ou nouvellement créé.
-        // agency : utile à l'app mobile pour interroger la bonne collection
-        // (demarcheurs_<route>, commissions_<route>, etc.).
+        // ── Construction des claims MULTI-ROUTE ────────────────────────
+        // On lit les claims existants pour préserver les autres routes
+        // auxquelles ce compte serait déjà lié. Chaque lien {agency, id} est
+        // conservé SI sa fiche existe encore (orphelins purgés).
+        const freshRecord = await admin.auth().getUser(uid).catch(() => userRecord);
+        const oldClaims = (freshRecord && freshRecord.customClaims) || {};
+        const oldLinks = Array.isArray(oldClaims.links) ? oldClaims.links : [];
+        // Si pas de tableau links, fallback sur les claims legacy.
+        if (oldLinks.length === 0 && oldClaims.demarcheurId && oldClaims.agency) {
+            oldLinks.push({ agency: oldClaims.agency, demarcheurId: oldClaims.demarcheurId });
+        }
+
+        // Purge des liens orphelins (fiche disparue) + dédoublonnage par
+        // (agency, demarcheurId). On retire aussi la route demandée si elle
+        // y figure déjà avec un autre id, pour la remplacer proprement.
+        const linksOk = [];
+        for (const l of oldLinks) {
+            if (!l || !l.agency || !l.demarcheurId) continue;
+            if (l.agency === agency) continue; // on remplace l'entrée pour cette route
+            try {
+                const lSnap = await admin.firestore()
+                    .collection(routeCollectionName("demarcheurs", l.agency))
+                    .doc(l.demarcheurId).get();
+                if (lSnap.exists) linksOk.push({ agency: l.agency, demarcheurId: l.demarcheurId });
+            } catch (_) { /* collection absente : on saute */ }
+        }
+        // Ajout de la route demandée en TÊTE (= lien "principal" pour les
+        // claims legacy `agency`/`demarcheurId`).
+        const newLinks = [{ agency: agency || null, demarcheurId }, ...linksOk];
+
         await admin.auth().setCustomUserClaims(uid, {
             role: "demarcheur",
+            // Legacy (rétrocompat avec les comptes / le code existant) :
             demarcheurId,
             agency: agency || null,
+            // Multi-route :
+            links: newLinks,
+            demarcheurIds: newLinks.map((l) => l.demarcheurId), // tableau plat (rules)
         });
 
         const stamp = new Date().toISOString();

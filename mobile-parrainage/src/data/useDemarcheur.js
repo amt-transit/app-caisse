@@ -13,8 +13,29 @@ import {
   doc, getDoc, collection, query, where, getDocs,
 } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { db, auth, functions } from '../firebase';
 import { registerPushToken } from '../notifications';
+
+// Clé AsyncStorage : sauvegarde le lien (route + id) choisi par l'utilisateur
+// lorsqu'il a accès à plusieurs routes. Permet de retomber sur la bonne route
+// au prochain lancement de l'app, sans devoir choisir à chaque fois.
+const ACTIVE_LINK_KEY = 'amt_active_link_v1';
+
+async function readSavedLink() {
+  try {
+    const raw = await AsyncStorage.getItem(ACTIVE_LINK_KEY);
+    if (!raw) return null;
+    const obj = JSON.parse(raw);
+    if (obj && obj.agency && obj.demarcheurId) return obj;
+  } catch (_) { /* corrompu : on l'ignore */ }
+  return null;
+}
+async function writeSavedLink(link) {
+  try {
+    await AsyncStorage.setItem(ACTIVE_LINK_KEY, JSON.stringify(link));
+  } catch (_) { /* quota / non critique */ }
+}
 
 // Même normalisation que côté web (affiliations.js) pour que les téléphones
 // des commissions et des affiliations se correspondent exactement.
@@ -50,12 +71,15 @@ const EMPTY = {
   loading: true, refreshing: false, error: '',
   me: null, commissions: [], clients: [], filleuls: [], demandes: [],
   rawFactures: [], rawLivraisons: [],
+  // Multi-route :
+  links: [],         // [{agency, demarcheurId}, ...]
+  activeLink: null,  // {agency, demarcheurId} actuellement utilisé
 };
 
 export function useDemarcheur() {
   const [state, setState] = useState(EMPTY);
 
-  const load = useCallback(async (isRefresh) => {
+  const load = useCallback(async (isRefresh, overrideLink) => {
     setState((s) => ({
       ...s, error: '',
       loading: isRefresh ? s.loading : true,
@@ -63,19 +87,43 @@ export function useDemarcheur() {
     }));
     try {
       const tok = await auth.currentUser.getIdTokenResult(true);
-      const demId = tok.claims && tok.claims.demarcheurId;
       const role = tok.claims && tok.claims.role;
-      // agency posé au provisioning (functions/index.js / provisionDemarcheurAuth).
-      // Sert à interroger les collections suffixées (demarcheurs_<route>, etc.).
-      const agency = (tok.claims && tok.claims.agency) || 'chine';
 
-      if (role !== 'demarcheur' || !demId) {
+      // ── Calcul des LIENS disponibles pour ce compte ─────────────────
+      // 1. claims.links (nouveau format multi-route)
+      // 2. fallback : claims.{agency, demarcheurId} (legacy mono-route)
+      let availableLinks = Array.isArray(tok.claims && tok.claims.links)
+        ? tok.claims.links.filter((l) => l && l.agency && l.demarcheurId)
+        : [];
+      if (availableLinks.length === 0 && tok.claims && tok.claims.demarcheurId) {
+        availableLinks = [{
+          agency: tok.claims.agency || 'chine',
+          demarcheurId: tok.claims.demarcheurId,
+        }];
+      }
+
+      if (role !== 'demarcheur' || availableLinks.length === 0) {
         setState((s) => ({
           ...s, loading: false, refreshing: false,
           error: "Ce compte n'est pas un compte partenaire. Contactez votre agence.",
         }));
         return;
       }
+
+      // ── Détermination du lien ACTIF ─────────────────────────────────
+      // Priorité : override > AsyncStorage > 1er lien disponible.
+      let chosen = overrideLink;
+      if (!chosen) {
+        const saved = await readSavedLink();
+        if (saved) chosen = availableLinks.find(
+          (l) => l.agency === saved.agency && l.demarcheurId === saved.demarcheurId,
+        );
+      }
+      if (!chosen) chosen = availableLinks[0];
+      await writeSavedLink(chosen);
+
+      const agency = chosen.agency;
+      const demId = chosen.demarcheurId;
 
       // Recalcule côté serveur le solde disponible (factures payées, au
       // prorata) vs potentiel, AVANT de relire les données. Non bloquant :
@@ -137,6 +185,8 @@ export function useDemarcheur() {
           ...lSnap.docs.map((d) => ({ id: d.id, ...d.data() })),
           ...livArch,
         ],
+        links: availableLinks,
+        activeLink: chosen,
       });
     } catch (e) {
       setState((s) => ({
@@ -260,5 +310,8 @@ export function useDemarcheur() {
     factures,
     reload: () => load(false),
     refresh: () => load(true),
+    // Change la route active (= reload des données avec un autre demarcheurId).
+    // Le choix est persisté côté AsyncStorage pour le prochain lancement.
+    switchRoute: (link) => load(false, link),
   };
 }

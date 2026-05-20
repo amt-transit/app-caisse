@@ -38,6 +38,17 @@ service cloud.firestore {
     function myDemarcheurId() {
       return request.auth.token.demarcheurId;
     }
+    // Multi-route : un compte peut être rattaché à plusieurs fiches démarcheur
+    // (une par route SaaS). Le claim `demarcheurIds` est un tableau plat alimenté
+    // par provisionDemarcheurAuth (sinon : fallback sur l'ID legacy).
+    function myDemarcheurIds() {
+      return request.auth.token.demarcheurIds is list
+        ? request.auth.token.demarcheurIds
+        : [request.auth.token.demarcheurId];
+    }
+    function isOneOfMine(id) {
+      return id in myDemarcheurIds();
+    }
 
     // =====================================================================
     // 2. RÈGLES PAR RÔLE (Administration & Logs)
@@ -92,14 +103,14 @@ service cloud.firestore {
     match /demarcheurs/{id} {
       // Sa propre fiche + celles de ses filleuls directs (parrainId == lui).
       allow read: if isDemarcheur() && (
-        id == myDemarcheurId() ||
-        resource.data.parrainId == myDemarcheurId()
+        id in myDemarcheurIds() ||
+        resource.data.parrainId in myDemarcheurIds()
       );
       // Le démarcheur peut écrire UNIQUEMENT le token push sur SA fiche.
       // On verrouille à 3 champs précis pour empêcher toute escalade
       // (impossibilité de modifier solde / nom / parrainId / etc.).
       allow update: if isDemarcheur()
-                    && id == myDemarcheurId()
+                    && id in myDemarcheurIds()
                     && request.resource.data.diff(resource.data).affectedKeys()
                        .hasOnly(['pushToken', 'pushPlatform', 'pushTokenUpdatedAt']);
     }
@@ -107,15 +118,15 @@ service cloud.firestore {
     match /commissions/{id} {
       // Commissions directes ET bonus de parrainage : dans les deux cas
       // demarcheurId == le bénéficiaire (cf. creerCommissionParrainage).
-      allow read: if isDemarcheur() && resource.data.demarcheurId == myDemarcheurId();
+      allow read: if isDemarcheur() && resource.data.demarcheurId in myDemarcheurIds();
     }
 
     match /retraits/{id} {
-      allow read: if isDemarcheur() && resource.data.demarcheurId == myDemarcheurId();
+      allow read: if isDemarcheur() && resource.data.demarcheurId in myDemarcheurIds();
     }
 
     match /client_affiliations/{phone} {
-      allow read: if isDemarcheur() && resource.data.demarcheurId == myDemarcheurId();
+      allow read: if isDemarcheur() && resource.data.demarcheurId in myDemarcheurIds();
     }
 
     match /retrait_demandes/{id} {
@@ -124,9 +135,9 @@ service cloud.firestore {
       // figé à 'en_attente') et lit SES demandes. Aucune modification ni
       // suppression : le traitement/paiement reste côté staff (collection
       // retraits, inchangée). Le staff global lit/écrit via la règle 4.
-      allow read: if isDemarcheur() && resource.data.demarcheurId == myDemarcheurId();
+      allow read: if isDemarcheur() && resource.data.demarcheurId in myDemarcheurIds();
       allow create: if isDemarcheur()
-                    && request.resource.data.demarcheurId == myDemarcheurId()
+                    && request.resource.data.demarcheurId in myDemarcheurIds()
                     && request.resource.data.statut == 'en_attente'
                     && request.resource.data.montant is number
                     && request.resource.data.montant > 0;
@@ -146,30 +157,30 @@ service cloud.firestore {
       allow read: if isDemarcheur() && (
         // Sa propre fiche + celles de ses filleuls directs.
         (collectionName.matches('demarcheurs_.*') &&
-          (id == myDemarcheurId() || resource.data.parrainId == myDemarcheurId())) ||
+          (id in myDemarcheurIds() || resource.data.parrainId in myDemarcheurIds())) ||
         // Ses commissions (directes + bonus parrainage).
         (collectionName.matches('commissions_.*') &&
-          resource.data.demarcheurId == myDemarcheurId()) ||
+          resource.data.demarcheurId in myDemarcheurIds()) ||
         // Ses factures (transactions) sur les routes SaaS.
         (collectionName.matches('transactions_.*') &&
-          resource.data.demarcheurId == myDemarcheurId()) ||
+          resource.data.demarcheurId in myDemarcheurIds()) ||
         // Ses livraisons (actives et archivées) sur les routes SaaS.
         (collectionName.matches('livraisons_.*') &&
-          resource.data.demarcheurId == myDemarcheurId()) ||
+          resource.data.demarcheurId in myDemarcheurIds()) ||
         // Ses retraits (paiements).
         (collectionName.matches('retraits_.*') &&
-          resource.data.demarcheurId == myDemarcheurId()) ||
+          resource.data.demarcheurId in myDemarcheurIds()) ||
         // Ses clients affiliés.
         (collectionName.matches('client_affiliations_.*') &&
-          resource.data.demarcheurId == myDemarcheurId()) ||
+          resource.data.demarcheurId in myDemarcheurIds()) ||
         // Ses demandes de retrait.
         (collectionName.matches('retrait_demandes_.*') &&
-          resource.data.demarcheurId == myDemarcheurId())
+          resource.data.demarcheurId in myDemarcheurIds())
       );
       // Création d'une demande de retrait depuis l'app mobile (uniquement).
       allow create: if isDemarcheur()
                     && collectionName.matches('retrait_demandes_.*')
-                    && request.resource.data.demarcheurId == myDemarcheurId()
+                    && request.resource.data.demarcheurId in myDemarcheurIds()
                     && request.resource.data.statut == 'en_attente'
                     && request.resource.data.montant is number
                     && request.resource.data.montant > 0;
@@ -177,7 +188,7 @@ service cloud.firestore {
       // SaaS). 3 champs strictement autorisés ; tout autre champ refusé.
       allow update: if isDemarcheur()
                     && collectionName.matches('demarcheurs_.*')
-                    && id == myDemarcheurId()
+                    && id in myDemarcheurIds()
                     && request.resource.data.diff(resource.data).affectedKeys()
                        .hasOnly(['pushToken', 'pushPlatform', 'pushTokenUpdatedAt']);
     }
@@ -196,13 +207,13 @@ service cloud.firestore {
     // demarcheurId sur la transaction et la livraison (cf. nouvellefacture.js).
     // L'écriture reste réservée au staff (règles 3 et 4).
     match /transactions/{id} {
-      allow read: if isDemarcheur() && resource.data.demarcheurId == myDemarcheurId();
+      allow read: if isDemarcheur() && resource.data.demarcheurId in myDemarcheurIds();
     }
     match /livraisons/{id} {
-      allow read: if isDemarcheur() && resource.data.demarcheurId == myDemarcheurId();
+      allow read: if isDemarcheur() && resource.data.demarcheurId in myDemarcheurIds();
     }
     match /livraisons_archives/{id} {
-      allow read: if isDemarcheur() && resource.data.demarcheurId == myDemarcheurId();
+      allow read: if isDemarcheur() && resource.data.demarcheurId in myDemarcheurIds();
     }
 
     // Tarifs d'expédition (CBM Chine, Aérien Normal/Express). Lecture par
