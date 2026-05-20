@@ -4,6 +4,7 @@
 // recevait pas l'identité ici -> "Vous devez être connecté" malgré une
 // session valide. On s'aligne donc sur l'API v2.
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
+const { onDocumentCreated } = require("firebase-functions/v2/firestore");
 const admin = require("firebase-admin");
 admin.initializeApp();
 
@@ -483,4 +484,128 @@ exports.migrateSaasRdvDevis = onCall(
             throw new HttpsError("internal", error.message);
         }
     }
+);
+
+// ============================================================================
+//  NOTIFICATIONS PUSH (Expo Push API)
+// ----------------------------------------------------------------------------
+//  Déclencheurs Firestore : à la création d'une commission ou d'un retrait
+//  (= retrait validé/payé côté staff), on envoie une notification push au
+//  démarcheur concerné via son token Expo (stocké sur sa fiche).
+//
+//  Limitation Firestore v2 : pas de wildcard sur le nom de collection dans
+//  le path d'un trigger. On déclare donc UN trigger par collection connue :
+//    - commissions / retraits          (historique paris/abidjan)
+//    - commissions_chine / retraits_chine  (route SaaS Chine, seule active)
+//  Ajouter une nouvelle route SaaS = ajouter 2 triggers ci-dessous.
+//
+//  L'API Expo Push : https://exp.host/--/api/v2/push/send (HTTPS POST). Pas
+//  de credentials côté serveur — c'est Expo qui relaie vers FCM/APNS. Fetch
+//  natif (Node 20).
+// ============================================================================
+
+async function sendExpoPush(tokens, payload) {
+    const list = (Array.isArray(tokens) ? tokens : [tokens]).filter(Boolean);
+    if (list.length === 0) return { sent: 0 };
+    const messages = list.map((t) => ({
+        to: t,
+        sound: "default",
+        priority: "high",
+        title: payload.title,
+        body: payload.body,
+        data: payload.data || {},
+    }));
+    try {
+        const resp = await fetch("https://exp.host/--/api/v2/push/send", {
+            method: "POST",
+            headers: {
+                Accept: "application/json",
+                "Accept-Encoding": "gzip, deflate",
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify(messages.length === 1 ? messages[0] : messages),
+        });
+        const result = await resp.json();
+        console.log("[push] sent", list.length, JSON.stringify(result).slice(0, 250));
+        return { sent: list.length };
+    } catch (e) {
+        console.warn("[push] erreur d'envoi :", e && e.message);
+        return { sent: 0, error: String((e && e.message) || e) };
+    }
+}
+
+// Lit le pushToken (et nom prénom) du démarcheur dans la collection de la route.
+async function getDemarcheurPush(agency, demarcheurId) {
+    if (!demarcheurId) return null;
+    const coll = routeCollectionName("demarcheurs", agency);
+    try {
+        const snap = await admin.firestore().collection(coll).doc(demarcheurId).get();
+        if (!snap.exists) return null;
+        const d = snap.data() || {};
+        return {
+            token: d.pushToken || null,
+            prenom: d.prenom || "",
+            nom: d.nom || "",
+        };
+    } catch (e) {
+        console.warn("[push] lecture démarcheur échouée :", e && e.message);
+        return null;
+    }
+}
+
+const fmtMoney = (n) => (Number(n) || 0).toLocaleString("fr-FR") + " F CFA";
+
+// ── Trigger commission créée ──────────────────────────────────────────────
+async function handleCommissionCreated(snap, agency) {
+    if (!snap) return;
+    const c = snap.data() || {};
+    const dem = await getDemarcheurPush(agency, c.demarcheurId);
+    if (!dem || !dem.token) return;
+    const isParrainage = c.type === "parrainage";
+    const montant = Number(c.montantNet) || 0;
+    const title = isParrainage ? "🤝 Bonus parrainage gagné !" : "💰 Nouvelle commission";
+    const body = isParrainage
+        ? `Un filleul a généré une expédition — vous touchez ${fmtMoney(montant)}.`
+        : `Vous avez gagné ${fmtMoney(montant)} sur la facture ${c.expeditionId || "-"}.`;
+    await sendExpoPush(dem.token, {
+        title, body,
+        data: { type: "commission", commissionId: snap.id, expeditionId: c.expeditionId || "" },
+    });
+}
+
+// Trigger pour la collection HISTORIQUE (paris / abidjan).
+exports.notifyCommissionPushGlobal = onDocumentCreated(
+    { region: REGION, document: "commissions/{id}" },
+    async (event) => handleCommissionCreated(event.data, "paris"),
+);
+// Trigger pour la route SaaS Chine.
+exports.notifyCommissionPushChine = onDocumentCreated(
+    { region: REGION, document: "commissions_chine/{id}" },
+    async (event) => handleCommissionCreated(event.data, "chine"),
+);
+
+// ── Trigger retrait validé ────────────────────────────────────────────────
+// Un retrait est créé par le staff lors de la validation/paiement (côté web).
+// Sa simple existence dans `retraits_<route>` signifie « validé / payé ».
+async function handleWithdrawalCreated(snap, agency) {
+    if (!snap) return;
+    const r = snap.data() || {};
+    const dem = await getDemarcheurPush(agency, r.demarcheurId);
+    if (!dem || !dem.token) return;
+    const montant = Number(r.montant) || 0;
+    const moyen = r.moyenPaiement ? ` (${r.moyenPaiement})` : "";
+    await sendExpoPush(dem.token, {
+        title: "✅ Paiement validé",
+        body: `Vous avez reçu ${fmtMoney(montant)}${moyen}. Merci pour votre confiance !`,
+        data: { type: "retrait", retraitId: snap.id },
+    });
+}
+
+exports.notifyWithdrawalPushGlobal = onDocumentCreated(
+    { region: REGION, document: "retraits/{id}" },
+    async (event) => handleWithdrawalCreated(event.data, "paris"),
+);
+exports.notifyWithdrawalPushChine = onDocumentCreated(
+    { region: REGION, document: "retraits_chine/{id}" },
+    async (event) => handleWithdrawalCreated(event.data, "chine"),
 );

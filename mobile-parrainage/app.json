@@ -37,8 +37,23 @@
     },
     "plugins": [
       "expo-asset",
-      "expo-font"
+      "expo-font",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/logo.png",
+          "color": "#F2A312",
+          "sounds": []
+        }
+      ]
     ],
+    "notification": {
+      "icon": "./assets/logo.png",
+      "color": "#F2A312",
+      "iosDisplayInForeground": true,
+      "androidMode": "default",
+      "androidCollapsedTitle": "AMT Transit Cargo"
+    },
     "owner": "jeanaffas-organization"
   }
 }

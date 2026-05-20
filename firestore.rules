@@ -95,6 +95,13 @@ service cloud.firestore {
         id == myDemarcheurId() ||
         resource.data.parrainId == myDemarcheurId()
       );
+      // Le démarcheur peut écrire UNIQUEMENT le token push sur SA fiche.
+      // On verrouille à 3 champs précis pour empêcher toute escalade
+      // (impossibilité de modifier solde / nom / parrainId / etc.).
+      allow update: if isDemarcheur()
+                    && id == myDemarcheurId()
+                    && request.resource.data.diff(resource.data).affectedKeys()
+                       .hasOnly(['pushToken', 'pushPlatform', 'pushTokenUpdatedAt']);
     }
 
     match /commissions/{id} {
@@ -166,6 +173,13 @@ service cloud.firestore {
                     && request.resource.data.statut == 'en_attente'
                     && request.resource.data.montant is number
                     && request.resource.data.montant > 0;
+      // Mise à jour du token push UNIQUEMENT sur SA fiche démarcheur (route
+      // SaaS). 3 champs strictement autorisés ; tout autre champ refusé.
+      allow update: if isDemarcheur()
+                    && collectionName.matches('demarcheurs_.*')
+                    && id == myDemarcheurId()
+                    && request.resource.data.diff(resource.data).affectedKeys()
+                       .hasOnly(['pushToken', 'pushPlatform', 'pushTokenUpdatedAt']);
     }
 
     match /parametres/commissions {

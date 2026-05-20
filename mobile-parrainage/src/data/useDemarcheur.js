@@ -14,6 +14,7 @@ import {
 } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { db, auth, functions } from '../firebase';
+import { registerPushToken } from '../notifications';
 
 // Même normalisation que côté web (affiliations.js) pour que les téléphones
 // des commissions et des affiliations se correspondent exactement.
@@ -85,6 +86,11 @@ export function useDemarcheur() {
 
       const meSnap = await getDoc(doc(db, collName('demarcheurs', agency), demId));
       const me = meSnap.exists() ? { id: meSnap.id, ...meSnap.data() } : null;
+
+      // Enregistre / rafraîchit le token push pour permettre au serveur de
+      // notifier ce démarcheur (nouvelles commissions, retraits validés…).
+      // Non bloquant : si Expo Go ou permission refusée, on continue sans.
+      registerPushToken({ demarcheurId: demId, agency }).catch(() => null);
 
       const [cSnap, fSnap, aSnap, tSnap, lSnap] = await Promise.all([
         getDocs(query(collection(db, collName('commissions', agency)), where('demarcheurId', '==', demId))),
