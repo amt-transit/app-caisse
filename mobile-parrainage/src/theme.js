@@ -1,87 +1,107 @@
 // ============================================================================
-//  Thème « CIEL D'ORIENT »  ·  CHARTE OFFICIELLE AMT — version CLAIRE + VERRE
+//  Thème « SOLEIL D'ABIDJAN »  ·  CHARTE AMT — version CLAIRE CONTRASTÉE + CHALEUR
 // ----------------------------------------------------------------------------
-//  Triade officielle (conservée) :
-//    • BASE      Bleu de Prusse #1A3553   → accent foncé, textes profonds
+//  Évolution du thème « Ciel d'Orient ». Même triade officielle :
+//    • BASE      Bleu de Prusse #1A3553   → textes profonds, accent foncé
 //    • ACCENT    Rouge #E51F21            → point focal (alertes, statuts)
 //    • VALEUR    Or #F2A312 (logo)        → montants, gains, boutons clés
 //
-//  Fond CLAIR : Bleu Ciel #EFF6FB → #DCEBF6, parent direct du Bleu de Prusse.
-//  Cohérence chromatique maximale avec la charte ; l'or se lit en or foncé
-//  (#C9850A) pour rester premium et lisible sur un fond pâle.
+//  Ce qui change par rapport à « Ciel d'Orient » :
 //
-//  Surfaces « verre dépoli » : les cards, chips, filtres et tab bar utilisent
-//  un blanc translucide (rgba 0.55) avec backdrop blur pour donner du matériau
-//  au-dessus des halos colorés diffus du fond (or + rouge, très subtils).
+//  1. FIN DU VERRE UNIFORME. Avant, 100 % des surfaces étaient translucides
+//     (rgba blanc 0.55) — résultat : aucune hiérarchie, tout se ressemblait.
+//     Désormais les cards sont en BLANC FRANC opaque (#FFFFFF). Le « verre »
+//     n'est gardé que là où il a du sens (la tab bar, qui flotte au-dessus
+//     du contenu). Une surface pleine = une surface qui « gagne » l'œil.
 //
-//  ⚠ Les CLÉS sont conservées (gold, glass, bgChip, greenDeep…) pour ne pas
-//  casser les écrans qui les importent — seules les VALEURS sont adaptées
-//  au fond clair (contraste de lisibilité inversé).
+//  2. PLUS DE CONTRASTE. Bordures plus lisibles (#E1E9F1 au lieu d'un blanc
+//     translucide quasi invisible), ombres un peu plus présentes, fond de
+//     page très légèrement plus typé pour que le blanc des cards ressorte.
+//
+//  3. CHALEUR. L'or devient une couleur AMICALE, pas seulement « premium » :
+//     fonds dorés un peu plus présents (warm), coins plus ronds, l'accueil
+//     est traité comme un message humain. Le rouge reste réservé au focal.
+//
+//  ⚠ Les CLÉS sont conservées (gold, glass, bgChip, greenDeep…) pour ne
+//  casser AUCUN écran qui les importe — seules les VALEURS changent.
 // ============================================================================
 
 export const colors = {
   // ── Fonds ────────────────────────────────────────────────────────────
-  // Base claire (Bleu Ciel, parent du bleu de Prusse de la charte).
-  bg: '#EFF6FB',
+  // Fond de page : bleu ciel très doux. Légèrement plus typé qu'avant pour
+  // que le BLANC FRANC des cards ressorte par contraste (hiérarchie).
+  bg: '#EAF1F8',
   bgElevated: '#FFFFFF',
-  bgChip: 'rgba(255,255,255,0.55)', // glass : champs / chips translucides
+  // bgChip — utilisé pour les champs / petites pastilles. Désormais OPAQUE
+  // (et non plus translucide) : un blanc cassé chaud, lisible et net.
+  bgChip: '#FFFFFF',
 
-  // ── Surfaces « verre dépoli » ────────────────────────────────────────
-  // Translucides sur fond clair : le blur les fait ressortir au-dessus
-  // des halos colorés du Background. Bord blanc subtil = biseau verre.
-  glass: 'rgba(255,255,255,0.55)',
-  glassStrong: 'rgba(255,255,255,0.72)',
-  glassBorder: 'rgba(255,255,255,0.7)',
-  glassBorderStrong: 'rgba(255,255,255,0.85)',
+  // ── Surfaces ─────────────────────────────────────────────────────────
+  // « glass » garde son nom (clé conservée) mais vaut maintenant un BLANC
+  // PLEIN. C'est ce qui crée la hiérarchie : les cards sont solides, pas
+  // diaphanes. glassStrong = blanc pur également (cards mises en avant).
+  glass: '#FFFFFF',
+  glassStrong: '#FFFFFF',
+  // Bordures réellement visibles sur fond clair (l'ancien blanc translucide
+  // était quasi invisible → cards « flottantes » sans contour).
+  glassBorder: '#E1E9F1',
+  glassBorderStrong: '#D2DEEA',
 
-  // ── Or du logo — VALEUR (montants, gains, accent chaud) ──────────────
-  // Sur fond clair, on lit l'or en version « foncée » pour rester premium.
-  gold: '#F2A312', // or marigold officiel (boutons / accents)
+  // ── Or du logo — VALEUR (montants, gains, accent chaud, amical) ──────
+  gold: '#F2A312',      // or marigold officiel (boutons / accents)
   goldSoft: '#FFC24A',
-  goldDeep: '#C9850A', // utilisé comme couleur de texte (chiffres / titres)
-  goldLight: '#C9850A', // sur fond clair = goldDeep (lisibilité garantie)
+  goldDeep: '#B8780A',  // texte or sur fond clair — un poil plus foncé
+                        // qu'avant pour un contraste AA franc sur blanc.
+  goldLight: '#B8780A', // sur fond clair = goldDeep (lisibilité garantie)
+  goldWarm: '#FDF1DA',  // NOUVEAU — fond doré chaud, opaque (chips/halos
+                        // d'icônes). Remplace les rgba(242,163,18,0.1x).
   star: '#F2A312',
   navyBrand: '#1A3553',
 
   // ── Rouge officiel — ACCENT focal ────────────────────────────────────
   red: '#E51F21',
-  redSoft: '#B91C1C', // texte d'alerte sur fond clair (était #FF6A5A en sombre)
+  redSoft: '#C81E1E',   // texte d'alerte sur fond clair (contraste franc)
   redDeep: '#7F1112',
+  redWarm: '#FCEAEA',   // NOUVEAU — fond rouge très pâle opaque (badges bad)
 
   // ── Sémantique calée pour fond clair ─────────────────────────────────
   green: '#047857',     // texte vert lisible sur clair
   greenDeep: '#064E3B',
+  greenWarm: '#E4F4EE', // NOUVEAU — fond vert pâle opaque (badges paid)
   amber: '#B45309',     // texte ambre lisible sur clair
   amberDeep: '#78350F',
+  amberWarm: '#FBF0DC', // NOUVEAU — fond ambre pâle opaque (badges wait)
 
   // ── Texte — bleu de Prusse profond sur ciel clair ───────────────────
   text: '#0B2540',      // titres / valeurs principales
-  textDim: '#41617F',   // textes secondaires
-  textFaint: '#7B97B3', // textes tertiaires / placeholders
+  textDim: '#3D5C78',   // textes secondaires (un cran plus contrasté)
+  textFaint: '#8198B0', // textes tertiaires / placeholders
 
-  // Texte foncé posé sur l'or (boutons or) — inchangé, c'est le contraste
-  // avec le jaune-orangé qui doit rester noir-bleuté pour la lisibilité.
+  // Texte foncé posé sur l'or (boutons or).
   onGold: '#11243A',
 
   // ── Divers ────────────────────────────────────────────────────────────
-  hairline: 'rgba(11,37,64,0.08)', // fines lignes (bleu de Prusse très dilué)
+  hairline: 'rgba(11,37,64,0.07)', // fines lignes intérieures
 };
 
 // ── Dégradés ──────────────────────────────────────────────────────────
-// `bg` est utilisé par <Background /> : on superposera les halos colorés
-// (or et rouge) en composants au-dessus (cf. Background.js).
 export const grad = {
-  bg: ['#EFF6FB', '#E2EDF6', '#DCEBF6'],
-  lacquer: ['rgba(255,255,255,0.7)', 'rgba(255,255,255,0.45)'], // panneau verre
-  lacquerRed: ['#E8332A', '#971517'], // ROUGE officiel (boutons d'alerte)
-  gold: ['#FFD98A', '#F2A312', '#C9850A'], // or métallisé (boutons or)
+  // Fond de page : dégradé doux, parent du Bleu de Prusse.
+  bg: ['#F2F7FB', '#EAF1F8', '#E3EDF6'],
+  // « lacquer » garde son nom mais ne sert plus de fond de card translucide.
+  // Sur le thème clair, une card = blanc plein ; on garde ici un dégradé
+  // blanc subtil pour les rares surfaces qui veulent un léger relief.
+  lacquer: ['#FFFFFF', '#F7FAFD'],
+  lacquerRed: ['#E8332A', '#971517'], // ROUGE officiel — carte solde / alertes
+  gold: ['#FFD98A', '#F2A312', '#D88E0A'], // or métallisé (boutons or)
   goldSheen: ['rgba(255,255,255,0.55)', 'rgba(255,255,255,0)'], // reflet
-  ink: ['#1A3553', '#0E1E32'], // pour les rares zones foncées intentionnelles
+  ink: ['#1A3553', '#0E1E32'], // rares zones foncées intentionnelles
 };
 
 export const spacing = { xs: 4, sm: 8, md: 12, lg: 16, xl: 22, xxl: 30 };
 
-export const radius = { sm: 12, md: 18, lg: 26, pill: 999 };
+// Coins un peu plus ronds → ambiance chaleureuse / accessible.
+export const radius = { sm: 14, md: 20, lg: 28, pill: 999 };
 
 // Typographie — charte officielle AMT (Comfortaa + Jost en proxy de Futura).
 export const font = {
@@ -94,40 +114,41 @@ export const font = {
   num: 'Jost_600SemiBold',
 };
 
-// ── Ombres ── adaptées au fond clair : on tinte avec le bleu de Prusse
-// (au lieu du noir pur) pour des ombres « douces, élégantes ».
+// ── Ombres ── tintées bleu de Prusse (jamais noir pur) pour rester douces.
+// Un cran plus présentes qu'avant : c'est l'ombre qui « décolle » la card
+// blanche du fond et crée la hiérarchie sur un thème clair.
 export const shadow = {
   card: {
-    shadowColor: '#0B2540',
-    shadowOpacity: 0.08,
-    shadowRadius: 24,
-    shadowOffset: { width: 0, height: 10 },
-    elevation: 6,
+    shadowColor: '#1A3553',
+    shadowOpacity: 0.10,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 5,
   },
   gold: {
     shadowColor: '#F2A312',
-    shadowOpacity: 0.35,
-    shadowRadius: 20,
+    shadowOpacity: 0.32,
+    shadowRadius: 18,
     shadowOffset: { width: 0, height: 8 },
-    elevation: 10,
+    elevation: 9,
   },
   lacquer: {
     shadowColor: '#E51F21',
-    shadowOpacity: 0.3,
-    shadowRadius: 22,
+    shadowOpacity: 0.28,
+    shadowRadius: 20,
     shadowOffset: { width: 0, height: 12 },
     elevation: 10,
   },
   soft: {
-    shadowColor: '#0B2540',
-    shadowOpacity: 0.06,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 4 },
+    shadowColor: '#1A3553',
+    shadowOpacity: 0.07,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 3 },
     elevation: 3,
   },
 };
 
-// Formatage FCFA + date (centralisé).
+// Formatage FCFA + date (centralisé) — inchangé.
 export const fcfa = (n) => `${Number(n || 0).toLocaleString('fr-FR')} FCFA`;
 export const fdate = (v) => {
   if (!v) return '—';

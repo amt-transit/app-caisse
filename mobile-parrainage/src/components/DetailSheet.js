@@ -1,14 +1,17 @@
-// Fiche détaillée (modale type « bottom sheet », thème laque & or).
+// Fiche détaillée (modale « bottom sheet ») — thème « Soleil d'Abidjan ».
 // Réutilisée par Clients et Filleuls : montre, sans aucun quiproquo, chaque
 // envoi — date, référence, description, montant facturé, votre part, statut.
+//
+// Correction importante vs l'ancienne version : la feuille gardait des restes
+// du thème SOMBRE (backdrop quasi noir, fonds rgba(0,0,0,0.2x) illisibles sur
+// fond clair). Tout est repassé en surfaces claires opaques + voile bleuté.
 import React from 'react';
 import {
   Modal, View, Text, ScrollView, TouchableOpacity, StyleSheet,
 } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { Badge } from './ui';
-import { colors, spacing, radius, font, grad, shadow, fcfa, fdate } from '../theme';
+import { colors, spacing, radius, font, shadow, fcfa, fdate } from '../theme';
 
 // État du solde de la commission (calculé serveur, au prorata du paiement).
 function soldeTone(c) {
@@ -27,12 +30,7 @@ export default function DetailSheet({
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
       <View style={styles.backdrop}>
         <TouchableOpacity style={styles.dismiss} activeOpacity={1} onPress={onClose} />
-        <LinearGradient
-          colors={grad.bg}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={[styles.sheet, shadow.card]}
-        >
+        <View style={[styles.sheet, shadow.card]}>
           <View style={styles.grip} />
 
           <View style={styles.head}>
@@ -43,8 +41,12 @@ export default function DetailSheet({
               <Text style={styles.title} numberOfLines={1}>{title}</Text>
               {subtitle ? <Text style={styles.subtitle} numberOfLines={1}>{subtitle}</Text> : null}
             </View>
-            <TouchableOpacity onPress={onClose} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
-              <Ionicons name="close" size={22} color={colors.textDim} />
+            <TouchableOpacity
+              onPress={onClose}
+              style={styles.closeBtn}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+            >
+              <Ionicons name="close" size={20} color={colors.textDim} />
             </TouchableOpacity>
           </View>
 
@@ -52,7 +54,11 @@ export default function DetailSheet({
             <View style={styles.statRow}>
               {stats.map((s, i) => (
                 <View key={i} style={[styles.stat, i < stats.length - 1 && styles.statDiv]}>
-                  <Text style={[styles.statV, s.tint && { color: s.tint }]} numberOfLines={1} adjustsFontSizeToFit>
+                  <Text
+                    style={[styles.statV, s.tint && { color: s.tint }]}
+                    numberOfLines={1}
+                    adjustsFontSizeToFit
+                  >
                     {s.value}
                   </Text>
                   <Text style={styles.statL}>{s.label}</Text>
@@ -133,50 +139,62 @@ export default function DetailSheet({
               );
             })}
           </ScrollView>
-        </LinearGradient>
+        </View>
       </View>
     </Modal>
   );
 }
 
 const styles = StyleSheet.create({
-  backdrop: { flex: 1, backgroundColor: 'rgba(4,10,18,0.68)', justifyContent: 'flex-end' },
+  // Voile bleuté (et non plus quasi noir) — cohérent avec un thème clair.
+  backdrop: { flex: 1, backgroundColor: 'rgba(11,37,64,0.45)', justifyContent: 'flex-end' },
   dismiss: { flex: 1 },
   sheet: {
     maxHeight: '86%',
+    backgroundColor: colors.bgElevated, // blanc franc
     borderTopLeftRadius: radius.lg,
     borderTopRightRadius: radius.lg,
     borderWidth: 1,
-    borderColor: colors.glassBorderStrong,
+    borderColor: colors.glassBorder,
     paddingHorizontal: spacing.xl,
     paddingTop: spacing.md,
     paddingBottom: spacing.xxl,
   },
   grip: {
-    alignSelf: 'center', width: 44, height: 4, borderRadius: 2,
+    alignSelf: 'center', width: 44, height: 5, borderRadius: 3,
     backgroundColor: colors.glassBorderStrong, marginBottom: spacing.lg,
   },
 
   head: { flexDirection: 'row', alignItems: 'center', marginBottom: spacing.lg },
   avatar: {
-    width: 46, height: 46, borderRadius: 23, backgroundColor: colors.bgChip,
-    borderWidth: 1, borderColor: colors.glassBorderStrong,
+    width: 46, height: 46, borderRadius: 23,
+    backgroundColor: colors.goldWarm,
+    borderWidth: 1, borderColor: 'rgba(242,163,18,0.3)',
     alignItems: 'center', justifyContent: 'center',
   },
-  avatarT: { color: colors.gold, fontFamily: font.bodyBold, fontSize: 16 },
+  avatarT: { color: colors.goldDeep, fontFamily: font.bodyBold, fontSize: 16 },
   title: { color: colors.text, fontSize: 19, fontFamily: font.displaySemi },
   subtitle: { color: colors.textDim, fontSize: 13, marginTop: 3, fontFamily: font.body },
+  closeBtn: {
+    width: 34, height: 34, borderRadius: 17,
+    backgroundColor: colors.bg,
+    alignItems: 'center', justifyContent: 'center',
+  },
 
+  // Bandeau de stats : surface claire douce (et non plus fond noir).
   statRow: {
     flexDirection: 'row',
-    backgroundColor: 'rgba(0,0,0,0.25)',
+    backgroundColor: colors.bg,
     borderWidth: 1, borderColor: colors.glassBorder,
     borderRadius: radius.md, padding: spacing.lg, marginBottom: spacing.lg,
   },
   stat: { flex: 1, alignItems: 'center' },
-  statDiv: { borderRightWidth: 1, borderRightColor: colors.hairline },
-  statV: { color: colors.goldLight, fontSize: 16, fontFamily: font.num },
-  statL: { color: colors.textDim, fontSize: 11, marginTop: 4, fontFamily: font.body, textAlign: 'center' },
+  statDiv: { borderRightWidth: 1, borderRightColor: colors.glassBorder },
+  statV: { color: colors.goldDeep, fontSize: 16, fontFamily: font.num },
+  statL: {
+    color: colors.textDim, fontSize: 11, marginTop: 4,
+    fontFamily: font.body, textAlign: 'center',
+  },
 
   section: {
     color: colors.text, fontSize: 14, fontFamily: font.heading,
@@ -186,8 +204,9 @@ const styles = StyleSheet.create({
   empty: { alignItems: 'center', paddingVertical: spacing.xxl, gap: spacing.sm },
   emptyT: { color: colors.textFaint, fontSize: 13, fontFamily: font.body, textAlign: 'center' },
 
+  // Carte d'envoi : surface claire douce, bordée — lisible sur fond blanc.
   env: {
-    backgroundColor: 'rgba(0,0,0,0.22)',
+    backgroundColor: colors.bg,
     borderWidth: 1, borderColor: colors.glassBorder,
     borderRadius: radius.md, padding: spacing.lg, marginBottom: spacing.md,
   },
@@ -204,16 +223,14 @@ const styles = StyleSheet.create({
   },
   lineL: { color: colors.textDim, fontSize: 13, fontFamily: font.body },
   lineV: { color: colors.text, fontSize: 14, fontFamily: font.bodyBold },
-  gain: { color: colors.goldLight },
 
   splitBox: {
     flexDirection: 'row', alignItems: 'center',
     marginTop: spacing.lg, paddingTop: spacing.md,
-    borderTopWidth: 1, borderTopColor: colors.hairline,
+    borderTopWidth: 1, borderTopColor: colors.glassBorder,
   },
   splitCol: { flex: 1, alignItems: 'center' },
-  splitDiv: { width: 1, alignSelf: 'stretch', backgroundColor: colors.hairline },
+  splitDiv: { width: 1, alignSelf: 'stretch', backgroundColor: colors.glassBorder },
   splitL: { color: colors.textDim, fontSize: 11.5, fontFamily: font.body },
   splitV: { fontSize: 15, fontFamily: font.num, marginTop: 4 },
 });
-

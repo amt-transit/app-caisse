@@ -3,7 +3,13 @@
     "allow": [
       "Bash(git add *)",
       "Bash(git commit -m ' *)",
-      "Bash(git push *)"
+      "Bash(git push *)",
+      "Bash(node --check index.js)",
+      "Bash(node --check mobile-parrainage/src/theme.js)",
+      "Bash(node --check mobile-parrainage/src/components/Background.js)",
+      "Bash(node --check mobile-parrainage/src/components/ui.js)",
+      "Bash(node --check mobile-parrainage/src/components/TabBar.js)",
+      "Bash(node --check mobile-parrainage/src/screens/MainApp.js)"
     ]
   }
 }

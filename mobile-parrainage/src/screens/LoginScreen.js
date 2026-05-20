@@ -210,7 +210,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.md,
-    backgroundColor: 'rgba(0,0,0,0.28)',
+    backgroundColor: colors.bg,
     borderWidth: 1,
     borderColor: colors.glassBorder,
     borderRadius: radius.md,
@@ -220,7 +220,7 @@ const styles = StyleSheet.create({
   },
   fieldActive: {
     borderColor: colors.gold,
-    backgroundColor: 'rgba(242,163,18,0.08)',
+    backgroundColor: colors.goldWarm,
   },
   input: {
     flex: 1,

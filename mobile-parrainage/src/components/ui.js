@@ -1,7 +1,12 @@
-// Briques d'UI partagées par tous les onglets — style « Ascension : laque &
-// or ». L'API publique est INCHANGÉE (ScreenScroll, ScreenTitle, Card,
-// SectionTitle, Row, Badge, Empty, PrimaryButton) pour que tous les écrans
-// héritent du nouveau look sans modification.
+// Briques d'UI partagées par tous les onglets — thème « Soleil d'Abidjan ».
+// L'API publique est INCHANGÉE (ScreenScroll, ScreenTitle, Card, SectionTitle,
+// Row, Badge, Empty, PrimaryButton) : tous les écrans héritent du nouveau look
+// sans aucune modification de leur côté.
+//
+// Changement clé : les Card sont en BLANC FRANC opaque (et non plus en verre
+// translucide). Une surface pleine + une ombre douce = une vraie hiérarchie
+// visuelle. Le reflet « verre » en sommet de card a été retiré (inutile sur
+// une surface opaque).
 import React from 'react';
 import {
   View, Text, ScrollView, RefreshControl, StyleSheet, TouchableOpacity,
@@ -48,14 +53,8 @@ export function ScreenTitle({ icon, title, subtitle }) {
 }
 
 export function Card({ children, style }) {
-  // Card en verre dépoli : translucide + bord blanc + reflet en sommet.
-  // Les halos colorés du <Background /> transparaissent doucement à travers.
-  return (
-    <View style={[styles.card, shadow.card, style]}>
-      <View style={styles.cardSheen} pointerEvents="none" />
-      {children}
-    </View>
-  );
+  // Card en blanc franc + ombre douce. C'est la surface qui « gagne » l'œil.
+  return <View style={[styles.card, shadow.card, style]}>{children}</View>;
 }
 
 export function SectionTitle({ icon, title, count }) {
@@ -80,7 +79,7 @@ export function Row({ avatar, icon, iconBg, iconColor, main, sub, right, last, o
         </View>
       )}
       {icon && (
-        <View style={[styles.rowIcon, { backgroundColor: iconBg || colors.bgChip }]}>
+        <View style={[styles.rowIcon, { backgroundColor: iconBg || colors.goldWarm }]}>
           <Ionicons name={icon} size={16} color={iconColor || colors.gold} />
         </View>
       )}
@@ -113,15 +112,14 @@ export function Row({ avatar, icon, iconBg, iconColor, main, sub, right, last, o
   return <View style={[styles.row, last && styles.rowLast]}>{inner}</View>;
 }
 
-// Badges = tampons d'expédition encrés (filet coloré, MAJ. espacées).
-// Sur fond clair, les fonds des badges sont plus saturés que sur sombre
-// pour garder la même lisibilité.
+// Badges — fonds chauds OPAQUES (et non plus rgba translucides). Plus francs,
+// plus lisibles, cohérents avec l'ambiance chaleureuse.
 export function Badge({ text, tone = 'wait' }) {
   const map = {
-    paid: { bg: 'rgba(16,185,129,0.15)', fg: colors.green, bd: 'rgba(16,185,129,0.4)' },
-    wait: { bg: 'rgba(245,158,11,0.18)', fg: colors.amber, bd: 'rgba(245,158,11,0.45)' },
-    info: { bg: 'rgba(242,163,18,0.18)', fg: colors.goldDeep, bd: 'rgba(242,163,18,0.5)' },
-    bad: { bg: 'rgba(229,31,33,0.15)', fg: colors.redSoft, bd: 'rgba(229,31,33,0.4)' },
+    paid: { bg: colors.greenWarm, fg: colors.green,   bd: 'rgba(4,120,87,0.25)' },
+    wait: { bg: colors.amberWarm, fg: colors.amber,   bd: 'rgba(180,83,9,0.25)' },
+    info: { bg: colors.goldWarm,  fg: colors.goldDeep, bd: 'rgba(184,120,10,0.28)' },
+    bad:  { bg: colors.redWarm,   fg: colors.redSoft, bd: 'rgba(200,30,30,0.25)' },
   };
   const c = map[tone] || map.wait;
   return (
@@ -134,7 +132,9 @@ export function Badge({ text, tone = 'wait' }) {
 export function Empty({ text }) {
   return (
     <View style={styles.emptyWrap}>
-      <Ionicons name="sparkles-outline" size={18} color={colors.textFaint} />
+      <View style={styles.emptyIcon}>
+        <Ionicons name="sparkles-outline" size={20} color={colors.gold} />
+      </View>
       <Text style={styles.empty}>{text}</Text>
     </View>
   );
@@ -167,9 +167,8 @@ const styles = StyleSheet.create({
 
   titleRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   titleIcon: {
-    width: 28, height: 28, borderRadius: 9,
-    backgroundColor: 'rgba(242,163,18,0.14)',
-    borderWidth: 1, borderColor: colors.glassBorder,
+    width: 30, height: 30, borderRadius: 11,
+    backgroundColor: colors.goldWarm,
     alignItems: 'center', justifyContent: 'center',
   },
   title: { color: colors.text, fontSize: 22, fontFamily: font.display, letterSpacing: 0.2 },
@@ -178,20 +177,15 @@ const styles = StyleSheet.create({
     fontFamily: font.body, lineHeight: 18,
   },
 
+  // Card : blanc franc opaque + bordure visible + ombre douce.
   card: {
-    backgroundColor: colors.glass, // rgba(255,255,255,0.55) — verre dépoli
+    backgroundColor: colors.glass, // = #FFFFFF
     borderWidth: 1,
     borderColor: colors.glassBorder,
     borderRadius: radius.md,
     padding: spacing.xs,
     marginBottom: spacing.lg,
     overflow: 'hidden',
-  },
-  cardSheen: {
-    // Reflet blanc tout en haut → simule la lumière captée par le bord du verre
-    position: 'absolute',
-    top: 0, left: 0, right: 0, height: 1,
-    backgroundColor: 'rgba(255,255,255,0.9)',
   },
 
   section: {
@@ -207,7 +201,8 @@ const styles = StyleSheet.create({
     letterSpacing: 0.2,
   },
   pill: {
-    backgroundColor: 'rgba(242,163,18,0.14)', borderWidth: 1, borderColor: 'rgba(242,163,18,0.35)',
+    backgroundColor: colors.goldWarm,
+    borderWidth: 1, borderColor: 'rgba(184,120,10,0.25)',
     borderRadius: radius.pill, paddingHorizontal: 11, paddingVertical: 3,
   },
   pillT: { color: colors.goldDeep, fontSize: 12, fontFamily: font.bodyBold },
@@ -220,25 +215,30 @@ const styles = StyleSheet.create({
   rowLast: { borderBottomWidth: 0 },
   avatar: {
     width: 40, height: 40, borderRadius: 20,
-    backgroundColor: 'rgba(242,163,18,0.18)', // or pâle pour les avatars
-    borderWidth: 1, borderColor: 'rgba(242,163,18,0.4)',
+    backgroundColor: colors.goldWarm,
+    borderWidth: 1, borderColor: 'rgba(242,163,18,0.3)',
     alignItems: 'center', justifyContent: 'center',
   },
   avatarT: { color: colors.goldDeep, fontFamily: font.bodyBold, fontSize: 14 },
   rowIcon: {
-    width: 40, height: 40, borderRadius: 13,
+    width: 40, height: 40, borderRadius: 14,
     alignItems: 'center', justifyContent: 'center',
   },
   rowMain: { color: colors.text, fontSize: 14.5, fontFamily: font.bodyMed },
   rowSub: { color: colors.textDim, fontSize: 12, marginTop: 3, fontFamily: font.body },
 
   badge: {
-    borderRadius: 8, paddingHorizontal: 9, paddingVertical: 5,
+    borderRadius: 9, paddingHorizontal: 9, paddingVertical: 5,
     borderWidth: 1,
   },
   badgeT: { fontSize: 9.5, fontFamily: font.bodyBold, letterSpacing: 1 },
 
-  emptyWrap: { alignItems: 'center', paddingVertical: spacing.xl, gap: spacing.sm },
+  emptyWrap: { alignItems: 'center', paddingVertical: spacing.xl, gap: spacing.md },
+  emptyIcon: {
+    width: 44, height: 44, borderRadius: 22,
+    backgroundColor: colors.goldWarm,
+    alignItems: 'center', justifyContent: 'center',
+  },
   empty: { color: colors.textFaint, fontSize: 13, textAlign: 'center', fontFamily: font.body },
 
   btnWrap: { borderRadius: radius.md, marginTop: spacing.sm, overflow: 'hidden' },

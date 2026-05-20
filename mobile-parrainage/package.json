@@ -13,22 +13,22 @@
   "dependencies": {
     "@expo-google-fonts/comfortaa": "^0.4.2",
     "@expo-google-fonts/jost": "^0.4.2",
+    "@expo/metro-runtime": "~4.0.1",
     "@react-native-async-storage/async-storage": "1.23.1",
     "expo": "~52.0.0",
     "expo-asset": "~11.0.5",
     "expo-constants": "~17.0.8",
-    "expo-font": "~13.0.4",
     "expo-device": "~7.0.3",
+    "expo-font": "~13.0.4",
     "expo-linear-gradient": "~14.0.2",
     "expo-notifications": "~0.29.14",
     "expo-status-bar": "~2.0.0",
     "firebase": "^11.1.0",
-    "react-native-svg": "15.8.0",
     "react": "18.3.1",
     "react-dom": "18.3.1",
     "react-native": "0.76.9",
-    "react-native-web": "~0.19.13",
-    "@expo/metro-runtime": "~4.0.1"
+    "react-native-svg": "15.8.0",
+    "react-native-web": "~0.19.13"
   },
   "devDependencies": {
     "@babel/core": "^7.25.0"

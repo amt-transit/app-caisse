@@ -1,10 +1,11 @@
-// Barre d'onglets bas — laque sombre, onglet actif en or avec un repère
-// « ascendant » au-dessus de l'icône.
+// Barre d'onglets bas — « Soleil d'Abidjan ».
+// L'onglet actif est posé sur une pastille dorée chaude (ronde, amicale) :
+// l'icône + le libellé passent en or foncé, le repère ascendant disparaît au
+// profit d'une vraie zone tactile mise en valeur. Plus chaleureux, plus clair.
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { colors, spacing, font, grad } from '../theme';
+import { colors, spacing, radius, font } from '../theme';
 
 export const TABS = [
   { key: 'factures', label: 'Factures', icon: 'receipt' },
@@ -17,7 +18,6 @@ export const TABS = [
 export default function TabBar({ active, onChange }) {
   return (
     <View style={styles.bar}>
-      <View style={styles.hair} />
       {TABS.map((t) => {
         const on = active === t.key;
         return (
@@ -27,25 +27,17 @@ export default function TabBar({ active, onChange }) {
             activeOpacity={0.8}
             onPress={() => onChange(t.key)}
           >
-            {on ? (
-              <LinearGradient
-                colors={grad.gold}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={styles.dash}
+            <View style={[styles.iconWrap, on && styles.iconWrapOn]}>
+              <Ionicons
+                name={on ? t.icon : `${t.icon}-outline`}
+                size={21}
+                color={on ? colors.goldDeep : colors.textFaint}
               />
-            ) : (
-              <View style={styles.dashOff} />
-            )}
-            <Ionicons
-              name={on ? t.icon : `${t.icon}-outline`}
-              size={22}
-              color={on ? colors.gold : colors.textFaint}
-            />
+            </View>
             <Text
               style={[
                 styles.label,
-                { color: on ? colors.gold : colors.textFaint,
+                { color: on ? colors.goldDeep : colors.textFaint,
                   fontFamily: on ? font.bodyBold : font.body },
               ]}
             >
@@ -61,24 +53,24 @@ export default function TabBar({ active, onChange }) {
 const styles = StyleSheet.create({
   bar: {
     flexDirection: 'row',
-    backgroundColor: 'rgba(255,255,255,0.78)', // verre dépoli clair
+    backgroundColor: '#FFFFFF', // blanc franc — cohérent avec les cards
     borderTopWidth: 1,
-    borderColor: 'rgba(255,255,255,0.9)',
-    paddingTop: spacing.md,
+    borderColor: colors.glassBorder,
+    paddingTop: spacing.sm,
     paddingBottom: 26,
     paddingHorizontal: spacing.sm,
-    shadowColor: '#0B2540',
-    shadowOpacity: 0.06,
-    shadowRadius: 12,
+    shadowColor: '#1A3553',
+    shadowOpacity: 0.08,
+    shadowRadius: 14,
     shadowOffset: { width: 0, height: -4 },
-    elevation: 8,
-  },
-  hair: {
-    position: 'absolute', top: 0, left: 0, right: 0, height: 1,
-    backgroundColor: 'rgba(255,255,255,0.95)', // reflet sommet (bord de verre)
+    elevation: 10,
   },
   item: { flex: 1, alignItems: 'center', gap: 4 },
-  dash: { width: 22, height: 3, borderRadius: 2, marginBottom: 3 },
-  dashOff: { width: 22, height: 3, borderRadius: 2, marginBottom: 3, backgroundColor: 'transparent' },
+  iconWrap: {
+    width: 46, height: 32, borderRadius: radius.pill,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  // Onglet actif : pastille dorée chaude (ronde = chaleureux / accessible).
+  iconWrapOn: { backgroundColor: colors.goldWarm },
   label: { fontSize: 10.5, letterSpacing: 0.2 },
 });

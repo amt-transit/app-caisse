@@ -56,7 +56,7 @@ export default function DashboardScreen({ data }) {
             <SvgGrad id="traj" x1="0" y1="1" x2="1" y2="0">
               <Stop offset="0" stopColor={colors.gold} stopOpacity="0.08" />
               <Stop offset="0.7" stopColor={colors.goldSoft} stopOpacity="0.5" />
-              <Stop offset="1" stopColor={colors.goldLight} stopOpacity="0.9" />
+              <Stop offset="1" stopColor={colors.goldSoft} stopOpacity="0.9" />
             </SvgGrad>
           </Defs>
           <Path
@@ -67,7 +67,7 @@ export default function DashboardScreen({ data }) {
             strokeLinecap="round"
           />
           <Circle cx="305" cy="16" r="11" fill={colors.gold} opacity="0.18" />
-          <Circle cx="305" cy="16" r="4.5" fill={colors.goldLight} />
+          <Circle cx="305" cy="16" r="4.5" fill={colors.goldSoft} />
         </Svg>
 
         <View style={styles.heroTop}>
@@ -78,7 +78,7 @@ export default function DashboardScreen({ data }) {
           <LogoMark size={42} glow={false} />
         </View>
 
-        <Text style={styles.heroLabel}>DISPONIBLE · À PERCEVOIR</Text>
+        <Text style={styles.heroLabel}>VOTRE SOLDE DISPONIBLE</Text>
         <Text style={styles.heroValue} numberOfLines={1} adjustsFontSizeToFit>
           {fcfa(animated)}
         </Text>
@@ -93,31 +93,31 @@ export default function DashboardScreen({ data }) {
         )}
 
         <View style={styles.heroFootRow}>
-          <Ionicons name="information-circle-outline" size={13} color={colors.goldLight} />
+          <Ionicons name="information-circle-outline" size={13} color={colors.goldSoft} />
           <Text style={styles.heroFoot}>
-            Vous ne percevez que les commissions des factures payées
+            Vous percevez les commissions des factures déjà payées
           </Text>
         </View>
       </LinearGradient>
 
       {/* ── Statistiques ── */}
       <View style={styles.statRow}>
-        <Stat icon="trending-up" tint={colors.green} bg="rgba(63,217,168,0.12)"
+        <Stat icon="trending-up" tint={colors.green} bg={colors.greenWarm}
           value={fcfa(me?.totalGagne)} label="Total généré" />
-        <Stat icon="cash-outline" tint={colors.amber} bg="rgba(251,191,36,0.12)"
+        <Stat icon="cash-outline" tint={colors.amber} bg={colors.amberWarm}
           value={fcfa(totalRetire)} label="Déjà retiré" />
       </View>
       <View style={styles.statRow}>
-        <Stat icon="people" tint={colors.gold} bg="rgba(242,163,18,0.13)"
+        <Stat icon="people" tint={colors.gold} bg={colors.goldWarm}
           value={String(clients.length)} label="Clients affiliés" />
-        <Stat icon="git-network" tint={colors.redSoft} bg="rgba(229,31,33,0.14)"
+        <Stat icon="git-network" tint={colors.redSoft} bg={colors.redWarm}
           value={String(filleuls.length)} label="Filleuls" />
       </View>
 
       {/* ── Dernières commissions ── */}
       <SectionTitle icon="receipt-outline" title="Dernières commissions" count={commissions.length} />
       <Card>
-        {commissions.length === 0 && <Empty text="Aucune commission enregistrée pour l'instant." />}
+        {commissions.length === 0 && <Empty text="Aucune commission pour l'instant — vos premiers gains s'afficheront ici." />}
         {commissions.slice(0, 6).map((c, i, arr) => {
           const paid = c.statut === 'paye' || c.statut === 'retire';
           return (
@@ -125,7 +125,7 @@ export default function DashboardScreen({ data }) {
               key={c.id}
               last={i === arr.length - 1}
               icon={c.type === 'parrainage' ? 'gift' : 'cash'}
-              iconBg={paid ? 'rgba(63,217,168,0.12)' : 'rgba(251,191,36,0.12)'}
+              iconBg={paid ? colors.greenWarm : colors.amberWarm}
               iconColor={paid ? colors.green : colors.amber}
               main={fcfa(c.montantNet)}
               sub={`${c.type === 'parrainage' ? 'Bonus parrainage' : 'Commission directe'} · ${fdate(c.dateCreation)}`}
@@ -145,18 +145,13 @@ export default function DashboardScreen({ data }) {
 
 function Stat({ icon, bg, tint, value, label }) {
   return (
-    <LinearGradient
-      colors={grad.lacquer}
-      start={{ x: 0, y: 0 }}
-      end={{ x: 1, y: 1 }}
-      style={styles.stat}
-    >
+    <View style={[styles.stat, shadow.soft]}>
       <View style={[styles.statIcon, { backgroundColor: bg }]}>
         <Ionicons name={icon} size={17} color={tint} />
       </View>
       <Text style={styles.statValue} numberOfLines={1} adjustsFontSizeToFit>{value}</Text>
       <Text style={styles.statLabel}>{label}</Text>
-    </LinearGradient>
+    </View>
   );
 }
 
@@ -180,12 +175,12 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: 'rgba(255,210,170,0.22)',
     borderRadius: radius.pill, paddingHorizontal: 11, paddingVertical: 6,
   },
-  dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: colors.goldLight },
+  dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: colors.goldSoft },
   brandTagT: { color: '#FFE4C2', fontSize: 10.5, fontFamily: font.bodyBold, letterSpacing: 1.5 },
 
   heroLabel: { color: '#FFD9B8', fontSize: 11, fontFamily: font.bodyBold, letterSpacing: 2 },
   heroValue: {
-    color: colors.goldLight, fontSize: 38, fontFamily: font.display,
+    color: '#FFFFFF', fontSize: 38, fontFamily: font.display,
     marginTop: spacing.sm, letterSpacing: 0.3,
   },
   potRow: {
@@ -200,13 +195,15 @@ const styles = StyleSheet.create({
   heroFoot: { color: '#FFCDB0', fontSize: 12.5, fontFamily: font.bodyMed, flex: 1 },
 
   statRow: { flexDirection: 'row', gap: spacing.md, marginBottom: spacing.md },
+  // Stat : carte BLANC FRANC opaque (et non plus dégradé translucide).
   stat: {
     flex: 1,
+    backgroundColor: colors.bgElevated,
     borderWidth: 1, borderColor: colors.glassBorder,
     borderRadius: radius.md, padding: spacing.lg,
   },
   statIcon: {
-    width: 36, height: 36, borderRadius: 12,
+    width: 38, height: 38, borderRadius: 13,
     alignItems: 'center', justifyContent: 'center', marginBottom: spacing.md,
   },
   statValue: { color: colors.text, fontSize: 17, fontFamily: font.num },
