@@ -26,6 +26,18 @@ function normalizePhone(raw) {
   return s;
 }
 
+// Réplique getCollectionName (agencies-config.js) pour le mobile : les
+// collections du Parrainage sont isolées par route SaaS depuis mai 2026.
+// L'agence du démarcheur est lue dans son custom claim (posé par
+// provisionDemarcheurAuth). Fallback 'chine' pour les anciens comptes
+// (seule route ayant historiquement des partenaires).
+function collName(base, agency) {
+  const a = String(agency || 'chine').trim();
+  if (!a || a === 'paris' || a === 'abidjan' || a === 'all') return base;
+  if (a.includes('_')) return `${base}_${a.split('_')[1]}`;
+  return `${base}_${a}`;
+}
+
 const sortByDateDesc = (arr, field) =>
   arr.sort((a, b) => {
     const da = a[field] && a[field].toDate ? a[field].toDate() : new Date(a[field] || 0);
@@ -51,6 +63,9 @@ export function useDemarcheur() {
       const tok = await auth.currentUser.getIdTokenResult(true);
       const demId = tok.claims && tok.claims.demarcheurId;
       const role = tok.claims && tok.claims.role;
+      // agency posé au provisioning (functions/index.js / provisionDemarcheurAuth).
+      // Sert à interroger les collections suffixées (demarcheurs_<route>, etc.).
+      const agency = (tok.claims && tok.claims.agency) || 'chine';
 
       if (role !== 'demarcheur' || !demId) {
         setState((s) => ({
@@ -67,13 +82,13 @@ export function useDemarcheur() {
         await httpsCallable(functions, 'reconcilePartnerBalances')();
       } catch (e) { /* non bloquant : affichage des données existantes */ }
 
-      const meSnap = await getDoc(doc(db, 'demarcheurs', demId));
+      const meSnap = await getDoc(doc(db, collName('demarcheurs', agency), demId));
       const me = meSnap.exists() ? { id: meSnap.id, ...meSnap.data() } : null;
 
       const [cSnap, fSnap, aSnap] = await Promise.all([
-        getDocs(query(collection(db, 'commissions'), where('demarcheurId', '==', demId))),
-        getDocs(query(collection(db, 'demarcheurs'), where('parrainId', '==', demId))),
-        getDocs(query(collection(db, 'client_affiliations'), where('demarcheurId', '==', demId))),
+        getDocs(query(collection(db, collName('commissions', agency)), where('demarcheurId', '==', demId))),
+        getDocs(query(collection(db, collName('demarcheurs', agency)), where('parrainId', '==', demId))),
+        getDocs(query(collection(db, collName('client_affiliations', agency)), where('demarcheurId', '==', demId))),
       ]);
 
       // Tolérant : si les règles retrait_demandes ne sont pas encore
@@ -81,7 +96,7 @@ export function useDemarcheur() {
       let demandes = [];
       try {
         const dSnap = await getDocs(
-          query(collection(db, 'retrait_demandes'), where('demarcheurId', '==', demId)));
+          query(collection(db, collName('retrait_demandes', agency)), where('demarcheurId', '==', demId)));
         demandes = sortByDateDesc(
           dSnap.docs.map((d) => ({ id: d.id, ...d.data() })), 'dateDemande');
       } catch (_) { demandes = []; }

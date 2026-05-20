@@ -77,8 +77,11 @@ exports.provisionDemarcheurAuth = onCall({ region: REGION }, async (request) => 
     if (!demarcheurId) {
         throw new HttpsError("invalid-argument", "demarcheurId requis.");
     }
-
-    const demRef = admin.firestore().collection("demarcheurs").doc(demarcheurId);
+    // La fiche démarcheur vit dans demarcheurs_<route> (sauf paris/abidjan
+    // historiques). L'appelant (page Réseau Partenaires) passe l'agence active.
+    const agency = ((data && data.agency) || "").trim();
+    const demCollName = routeCollectionName("demarcheurs", agency);
+    const demRef = admin.firestore().collection(demCollName).doc(demarcheurId);
     const demSnap = await demRef.get();
     if (!demSnap.exists) {
         throw new HttpsError("not-found", "Démarcheur introuvable.");
@@ -151,9 +154,12 @@ exports.provisionDemarcheurAuth = onCall({ region: REGION }, async (request) => 
         const uid = userRecord.uid;
 
         // Claims posés UNIQUEMENT sur un compte vérifié sûr ou nouvellement créé.
+        // agency : utile à l'app mobile pour interroger la bonne collection
+        // (demarcheurs_<route>, commissions_<route>, etc.).
         await admin.auth().setCustomUserClaims(uid, {
             role: "demarcheur",
             demarcheurId,
+            agency: agency || null,
         });
 
         const stamp = new Date().toISOString();
@@ -169,6 +175,7 @@ exports.provisionDemarcheurAuth = onCall({ region: REGION }, async (request) => 
         // Index uid -> démarcheur (visibilité admin / secours).
         await admin.firestore().collection("demarcheur_auth").doc(uid).set({
             demarcheurId,
+            agency: agency || null,
             email,
             updatedAt: stamp,
         });
@@ -241,16 +248,19 @@ function paidRatio(tx) {
 }
 
 // Recalcule et ÉCRIT la fiche d'UN démarcheur + le détail de chaque commission.
-async function reconcileOne(demId) {
+// agency : route du démarcheur (sert à router demarcheurs/commissions).
+async function reconcileOne(demId, agency) {
     const db = admin.firestore();
-    const demRef = db.collection("demarcheurs").doc(demId);
+    const demCollName = routeCollectionName("demarcheurs", agency);
+    const commCollName = routeCollectionName("commissions", agency);
+    const demRef = db.collection(demCollName).doc(demId);
     const demSnap = await demRef.get();
     if (!demSnap.exists) {
         throw new HttpsError("not-found", "Démarcheur introuvable.");
     }
     const dem = demSnap.data() || {};
 
-    const commSnap = await db.collection("commissions")
+    const commSnap = await db.collection(commCollName)
         .where("demarcheurId", "==", demId).get();
 
     let sumNet = 0, sumDispo = 0, sumPot = 0;
@@ -318,19 +328,25 @@ exports.reconcilePartnerBalances = onCall({ region: REGION }, async (request) =>
     const claims = request.auth.token || {};
     const data = request.data || {};
     let demId = null;
+    let agency = null;
 
     if (claims.role === "demarcheur" && claims.demarcheurId) {
         demId = claims.demarcheurId; // un partenaire ne réconcilie que LUI
+        // agency vient du custom claim posé au provisioning (Phase mobile).
+        // Pour les comptes pré-existants sans agency dans le claim, on retombe
+        // sur "chine" (seule route ayant historiquement des partenaires).
+        agency = claims.agency || "chine";
     } else {
         await assertCallerIsAdmin(request.auth); // sinon réservé admin
         demId = String(data.demarcheurId || "").trim();
+        agency = String(data.agency || "").trim();
         if (!demId) {
             throw new HttpsError("invalid-argument", "demarcheurId requis.");
         }
     }
 
     try {
-        return await reconcileOne(demId);
+        return await reconcileOne(demId, agency);
     } catch (error) {
         if (error instanceof HttpsError) throw error;
         console.error("Erreur reconcilePartnerBalances:", error);
@@ -346,14 +362,18 @@ exports.reconcileAllPartnersBalances = onCall(
         await assertCallerIsAdmin(request.auth);
         try {
             const db = admin.firestore();
-            const demsSnap = await db.collection("demarcheurs").get();
+            // L'appelant (admin) passe agency = route active (ex: 'chine').
+            // Réconciliation route par route — on traite UNE route par appel.
+            const agency = String((request.data || {}).agency || "").trim();
+            const demCollName = routeCollectionName("demarcheurs", agency);
+            const demsSnap = await db.collection(demCollName).get();
             let ok = 0;
             const erreurs = [];
             for (const d of demsSnap.docs) {
-                try { await reconcileOne(d.id); ok++; }
+                try { await reconcileOne(d.id, agency); ok++; }
                 catch (e) { erreurs.push({ id: d.id, error: String(e && e.message || e) }); }
             }
-            return { total: demsSnap.size, reconcilies: ok, erreurs };
+            return { total: demsSnap.size, reconcilies: ok, erreurs, agency };
         } catch (error) {
             if (error instanceof HttpsError) throw error;
             console.error("Erreur reconcileAllPartnersBalances:", error);

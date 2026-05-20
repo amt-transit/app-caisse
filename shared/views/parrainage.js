@@ -3,7 +3,7 @@ import { collection, doc, getDoc, getDocs, setDoc, addDoc, updateDoc, query, whe
 import { httpsCallable } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-functions.js";
 import { createApp, ref, reactive, computed, onMounted, onUnmounted, nextTick, watch } from "https://unpkg.com/vue@3/dist/vue.esm-browser.prod.js";
 import { isAffiliationActive } from '../../affiliation-config.js';
-import { AGENCIES } from '../../agencies-config.js';
+import { AGENCIES, getCollectionName } from '../../agencies-config.js';
 
 export const ParrainageView = {
     vueApp: null,
@@ -723,7 +723,7 @@ export const ParrainageView = {
                     }));
 
                     // Partners (Démarcheurs)
-                    unsubs.push(onSnapshot(query(collection(db, "demarcheurs"), orderBy("dateInscription", "asc")), (snap) => {
+                    unsubs.push(onSnapshot(query(collection(db, getCollectionName("demarcheurs")), orderBy("dateInscription", "asc")), (snap) => {
                         const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
                         // Calcul filleuls virtuels pour l'UI
                         list.forEach(p => { p.filleulsCount = list.filter(f => f.parrainId === p.id).length; });
@@ -731,18 +731,18 @@ export const ParrainageView = {
                     }));
 
                     // Commissions
-                    unsubs.push(onSnapshot(query(collection(db, "commissions"), orderBy("dateCreation", "desc")), (snap) => {
+                    unsubs.push(onSnapshot(query(collection(db, getCollectionName("commissions")), orderBy("dateCreation", "desc")), (snap) => {
                         commissions.value = snap.docs.map(d => ({ id: d.id, ...d.data() }));
                         if (currentTab.value === 'dashboard') drawCharts();
                     }));
 
                     // Withdrawals
-                    unsubs.push(onSnapshot(query(collection(db, "retraits"), orderBy("dateRetrait", "desc")), (snap) => {
+                    unsubs.push(onSnapshot(query(collection(db, getCollectionName("retraits")), orderBy("dateRetrait", "desc")), (snap) => {
                         withdrawals.value = snap.docs.map(d => ({ id: d.id, ...d.data() }));
                     }));
 
                     // Demandes de retrait (créées par l'app mobile partenaire)
-                    unsubs.push(onSnapshot(query(collection(db, "retrait_demandes"), orderBy("dateDemande", "desc")), (snap) => {
+                    unsubs.push(onSnapshot(query(collection(db, getCollectionName("retrait_demandes")), orderBy("dateDemande", "desc")), (snap) => {
                         demandesRetrait.value = snap.docs.map(d => ({ id: d.id, ...d.data() }));
                     }, (err) => { console.warn("retrait_demandes:", err && err.message); }));
 
@@ -1035,14 +1035,17 @@ export const ParrainageView = {
                         const payload = {
                             nom: partnerForm.nom, prenom: partnerForm.prenom, telephone: partnerForm.telephone, email: partnerForm.email,
                             parrainId: partnerForm.parrainId || null, quiPaieParrain: partnerForm.quiPaieParrain || null,
-                            statut: 'actif'
+                            statut: 'actif',
+                            // agency : route propriétaire du démarcheur. Sert au mobile
+                            // (custom claim) et à reconcileOne pour retrouver la fiche.
+                            agency: activeAgency.value,
                         };
                         if (partnerForm.id) {
-                            await updateDoc(doc(db, "demarcheurs", partnerForm.id), payload);
+                            await updateDoc(doc(db, getCollectionName("demarcheurs"), partnerForm.id), payload);
                         } else {
                             payload.dateInscription = serverTimestamp();
                             payload.totalGagne = 0; payload.totalRetire = 0; payload.soldeDisponible = 0;
-                            await addDoc(collection(db, "demarcheurs"), payload);
+                            await addDoc(collection(db, getCollectionName("demarcheurs")), payload);
                         }
                         globalApp.showToast("Partenaire enregistré", "success");
                         showPartnerModal.value = false;
@@ -1092,7 +1095,7 @@ export const ParrainageView = {
                                 'Content-Type': 'application/json',
                                 'Authorization': `Bearer ${idToken}`,
                             },
-                            body: JSON.stringify({ data: { demarcheurId: p.id } }),
+                            body: JSON.stringify({ data: { demarcheurId: p.id, agency: activeAgency.value } }),
                         });
                         const json = await resp.json().catch(() => ({}));
                         if (!resp.ok || (json && json.error)) {
@@ -1139,7 +1142,9 @@ export const ParrainageView = {
                         const projectId = (app && app.options && app.options.projectId) || 'caisse-amt-perso';
                         const fn = scope === 'all' ? 'reconcileAllPartnersBalances' : 'reconcilePartnerBalances';
                         const url = `https://us-central1-${projectId}.cloudfunctions.net/${fn}`;
-                        const payload = scope === 'all' ? { data: {} } : { data: { demarcheurId: demId } };
+                        const payload = scope === 'all'
+                            ? { data: { agency: activeAgency.value } }
+                            : { data: { demarcheurId: demId, agency: activeAgency.value } };
                         const resp = await fetch(url, {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${idToken}` },
@@ -1204,13 +1209,13 @@ export const ParrainageView = {
                         const amt = parseFloat(withdrawalForm.montant);
                         const batch = writeBatch(db);
                         
-                        const refRetrait = doc(collection(db, "retraits"));
+                        const refRetrait = doc(collection(db, getCollectionName("retraits")));
                         batch.set(refRetrait, {
                             demarcheurId: partnerWithdrawalInfo.value.id, montant: amt, periode: withdrawalForm.periode, moyenPaiement: withdrawalForm.moyenPaiement,
                             dateRetrait: serverTimestamp(), validePar: sessionStorage.getItem('userName') || 'Admin', statut: 'paye'
                         });
                         
-                        batch.update(doc(db, "demarcheurs", partnerWithdrawalInfo.value.id), {
+                        batch.update(doc(db, getCollectionName("demarcheurs"), partnerWithdrawalInfo.value.id), {
                             totalRetire: increment(amt), soldeDisponible: increment(-amt)
                         });
                         
@@ -1246,17 +1251,17 @@ export const ParrainageView = {
                     saving.value = true;
                     try {
                         const batch = writeBatch(db);
-                        batch.set(doc(collection(db, "retraits")), {
+                        batch.set(doc(collection(db, getCollectionName("retraits"))), {
                             demarcheurId: d.demarcheurId, montant: amt,
                             periode: d.type === 'total' ? 'Solde total (demande mobile)' : 'Demande mobile',
                             moyenPaiement: d.moyenPaiement || '-', numero: d.numero || '',
                             dateRetrait: serverTimestamp(), validePar: _whoTreated(),
                             statut: 'paye', origine: 'demande_mobile', demandeId: d.id
                         });
-                        batch.update(doc(db, "demarcheurs", d.demarcheurId), {
+                        batch.update(doc(db, getCollectionName("demarcheurs"), d.demarcheurId), {
                             totalRetire: increment(amt), soldeDisponible: increment(-amt)
                         });
-                        batch.update(doc(db, "retrait_demandes", d.id), {
+                        batch.update(doc(db, getCollectionName("retrait_demandes"), d.id), {
                             statut: 'paye', traitePar: _whoTreated(), dateTraitement: serverTimestamp()
                         });
                         await batch.commit();
@@ -1274,7 +1279,7 @@ export const ParrainageView = {
                     if (!ok) return;
                     saving.value = true;
                     try {
-                        await updateDoc(doc(db, "retrait_demandes", d.id), {
+                        await updateDoc(doc(db, getCollectionName("retrait_demandes"), d.id), {
                             statut: 'refuse', traitePar: _whoTreated(), dateTraitement: serverTimestamp()
                         });
                         globalApp.showToast("Demande refusée.", "info");
@@ -1357,12 +1362,12 @@ export const ParrainageView = {
                     }
 
                     const batch = writeBatch(db);
-                    batch.set(doc(collection(db, "commissions")), { expeditionId, demarcheurId: partnerId, type: 'direct', montantBrut: beneficeBrut, tauxDemarcheur: tDem, montantDemarcheur: pDemBrut, tauxAMT: tAMT, montantAMT: pAMTNet, bonusParrainage: bonus, quiPaieParrain: qui, montantNet: pDemNet, dateCreation: serverTimestamp(), statut: 'en_attente' });
-                    batch.update(doc(db, "demarcheurs", partnerId), { totalGagne: increment(pDemNet), soldeDisponible: increment(pDemNet) });
+                    batch.set(doc(collection(db, getCollectionName("commissions"))), { expeditionId, demarcheurId: partnerId, type: 'direct', montantBrut: beneficeBrut, tauxDemarcheur: tDem, montantDemarcheur: pDemBrut, tauxAMT: tAMT, montantAMT: pAMTNet, bonusParrainage: bonus, quiPaieParrain: qui, montantNet: pDemNet, dateCreation: serverTimestamp(), statut: 'en_attente' });
+                    batch.update(doc(db, getCollectionName("demarcheurs"), partnerId), { totalGagne: increment(pDemNet), soldeDisponible: increment(pDemNet) });
 
                     if (p.parrainId && bonus > 0) {
-                        batch.set(doc(collection(db, "commissions")), { expeditionId, demarcheurId: p.parrainId, type: 'parrainage', filleulId: partnerId, montantBrut: beneficeBrut, bonusParrainage: bonus, montantNet: bonus, dateCreation: serverTimestamp(), statut: 'en_attente' });
-                        batch.update(doc(db, "demarcheurs", p.parrainId), { totalGagne: increment(bonus), soldeDisponible: increment(bonus) });
+                        batch.set(doc(collection(db, getCollectionName("commissions"))), { expeditionId, demarcheurId: p.parrainId, type: 'parrainage', filleulId: partnerId, montantBrut: beneficeBrut, bonusParrainage: bonus, montantNet: bonus, dateCreation: serverTimestamp(), statut: 'en_attente' });
+                        batch.update(doc(db, getCollectionName("demarcheurs"), p.parrainId), { totalGagne: increment(bonus), soldeDisponible: increment(bonus) });
                     }
                     await batch.commit();
                     globalApp.showToast("Commission parrainage générée.", "success");

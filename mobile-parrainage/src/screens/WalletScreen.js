@@ -5,6 +5,16 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { addDoc, collection, serverTimestamp } from 'firebase/firestore';
 import { db } from '../firebase';
+
+// Réplique getCollectionName : la demande de retrait est écrite dans la
+// collection suffixée par la route du démarcheur (retrait_demandes_<route>),
+// pour rester isolée des autres routes SaaS.
+function collName(base, agency) {
+  const a = String(agency || 'chine').trim();
+  if (!a || a === 'paris' || a === 'abidjan' || a === 'all') return base;
+  if (a.includes('_')) return `${base}_${a.split('_')[1]}`;
+  return `${base}_${a}`;
+}
 import {
   ScreenScroll, ScreenTitle, Card, SectionTitle, Row, Badge, Empty, PrimaryButton,
 } from '../components/ui';
@@ -43,7 +53,7 @@ export default function WalletScreen({ data }) {
     setError('');
     setSending(true);
     try {
-      await addDoc(collection(db, 'retrait_demandes'), {
+      await addDoc(collection(db, collName('retrait_demandes', me.agency)), {
         demarcheurId: me.id,
         montant: Number(amount),
         moyenPaiement: method,

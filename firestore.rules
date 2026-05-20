@@ -125,6 +125,43 @@ service cloud.firestore {
                     && request.resource.data.montant > 0;
     }
 
+    // ----------------------------------------------------------------------
+    // 3-ter. ACCÈS DÉMARCHEUR sur les collections SUFFIXÉES par route
+    // ----------------------------------------------------------------------
+    // Depuis mai 2026, les données du module Parrainage sont isolées par
+    // route SaaS : demarcheurs_<route>, commissions_<route>, retraits_<route>,
+    // client_affiliations_<route>, retrait_demandes_<route>. Ces règles
+    // dupliquent la sécurité de la section 3bis pour matcher les noms
+    // suffixés (Firestore Rules ne supporte pas de wildcard sur le nom de
+    // collection dans le `match`, on utilise donc un match générique +
+    // filtrage par regex dans la condition).
+    match /{collectionName}/{id} {
+      allow read: if isDemarcheur() && (
+        // Sa propre fiche + celles de ses filleuls directs.
+        (collectionName.matches('demarcheurs_.*') &&
+          (id == myDemarcheurId() || resource.data.parrainId == myDemarcheurId())) ||
+        // Ses commissions (directes + bonus parrainage).
+        (collectionName.matches('commissions_.*') &&
+          resource.data.demarcheurId == myDemarcheurId()) ||
+        // Ses retraits (paiements).
+        (collectionName.matches('retraits_.*') &&
+          resource.data.demarcheurId == myDemarcheurId()) ||
+        // Ses clients affiliés.
+        (collectionName.matches('client_affiliations_.*') &&
+          resource.data.demarcheurId == myDemarcheurId()) ||
+        // Ses demandes de retrait.
+        (collectionName.matches('retrait_demandes_.*') &&
+          resource.data.demarcheurId == myDemarcheurId())
+      );
+      // Création d'une demande de retrait depuis l'app mobile (uniquement).
+      allow create: if isDemarcheur()
+                    && collectionName.matches('retrait_demandes_.*')
+                    && request.resource.data.demarcheurId == myDemarcheurId()
+                    && request.resource.data.statut == 'en_attente'
+                    && request.resource.data.montant is number
+                    && request.resource.data.montant > 0;
+    }
+
     match /parametres/commissions {
       // Lecture seule des taux (affichage), pas d'écriture.
       allow read: if isDemarcheur();

@@ -514,7 +514,7 @@ initVue(globalApp) {
             watch(autoTotalCFA, (v) => { if (!userTouchedTotal.value) form.totalCfa = v; }, { immediate: true });
             const demarcheurs = ref([]);
             if (affiliationActive) {
-                getDocs(collection(db, 'demarcheurs')).then(s => {
+                getDocs(collection(db, getCollectionName('demarcheurs'))).then(s => {
                     demarcheurs.value = s.docs.map(d => ({ id: d.id, ...d.data() }));
                 }).catch(e => console.warn('Chargement démarcheurs:', e));
             }

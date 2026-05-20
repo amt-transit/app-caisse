@@ -15,6 +15,7 @@
 
 import { db } from './firebase-config.js';
 import { doc, getDoc, setDoc, serverTimestamp, collection, query, where, getDocs, writeBatch, increment } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
+import { getCollectionName } from './agencies-config.js';
 
 // Normalise un numéro en clé stable. Gère les formats courants CI / international.
 // Retourne null si le numéro est inexploitable (trop court) -> pas d'affiliation.
@@ -36,7 +37,7 @@ export async function getAffiliation(phoneRaw) {
   const phone = normalizePhone(phoneRaw);
   if (!phone) return null;
   try {
-    const snap = await getDoc(doc(db, 'client_affiliations', phone));
+    const snap = await getDoc(doc(db, getCollectionName('client_affiliations'), phone));
     return snap.exists() ? { id: snap.id, ...snap.data() } : null;
   } catch (e) {
     console.warn('affiliations.getAffiliation:', e);
@@ -50,7 +51,7 @@ export async function ensureAffiliation({ phone, clientName, demarcheurId, demar
   const key = normalizePhone(phone);
   if (!key || !demarcheurId) return null;
   try {
-    const ref = doc(db, 'client_affiliations', key);
+    const ref = doc(db, getCollectionName('client_affiliations'), key);
     const snap = await getDoc(ref);
     if (snap.exists()) return { id: snap.id, ...snap.data() };
     const data = {
@@ -113,7 +114,7 @@ export async function creerCommissionParrainage({
     if (!demarcheurId || !expeditionId || !(montant > 0)) return false;
 
     // Anti-doublon : une seule commission directe par expédition/démarcheur.
-    const dup = await getDocs(query(collection(db, 'commissions'), where('expeditionId', '==', expeditionId)));
+    const dup = await getDocs(query(collection(db, getCollectionName('commissions')), where('expeditionId', '==', expeditionId)));
     if (dup.docs.some(d => (d.data() || {}).demarcheurId === demarcheurId && (d.data() || {}).type === 'direct')) {
       return false; // déjà généré
     }
@@ -136,7 +137,7 @@ export async function creerCommissionParrainage({
     const mode = String(shippingMode || 'maritime').toLowerCase();
 
     // Fiche démarcheur (pour savoir s'il a un parrain au-dessus).
-    const demSnap = await getDoc(doc(db, 'demarcheurs', demarcheurId));
+    const demSnap = await getDoc(doc(db, getCollectionName('demarcheurs'), demarcheurId));
     if (!demSnap.exists()) return false;
     const dem = demSnap.data() || {};
 
@@ -173,7 +174,7 @@ export async function creerCommissionParrainage({
     };
 
     const batch = writeBatch(db);
-    batch.set(doc(collection(db, 'commissions')), {
+    batch.set(doc(collection(db, getCollectionName('commissions'))), {
       expeditionId, demarcheurId, type: 'direct',
       // Économie de l'expédition (traçabilité complète) :
       montantFacture: montant,
@@ -198,12 +199,12 @@ export async function creerCommissionParrainage({
       agency: agencyId,
       dateCreation: serverTimestamp(), statut: 'en_attente',
     });
-    batch.update(doc(db, 'demarcheurs', demarcheurId), {
+    batch.update(doc(db, getCollectionName('demarcheurs'), demarcheurId), {
       totalGagne: increment(pDem), soldePotentiel: increment(pDem),
     });
 
     if (dem.parrainId && bonus > 0) {
-      batch.set(doc(collection(db, 'commissions')), {
+      batch.set(doc(collection(db, getCollectionName('commissions'))), {
         expeditionId, demarcheurId: dem.parrainId, type: 'parrainage',
         filleulId: demarcheurId,
         montantFacture: montant, chargesFixes: charges, beneficeNet: benefice,
@@ -215,7 +216,7 @@ export async function creerCommissionParrainage({
         agency: agencyId,
         dateCreation: serverTimestamp(), statut: 'en_attente',
       });
-      batch.update(doc(db, 'demarcheurs', dem.parrainId), {
+      batch.update(doc(db, getCollectionName('demarcheurs'), dem.parrainId), {
         totalGagne: increment(bonus), soldePotentiel: increment(bonus),
       });
     }
