@@ -3,6 +3,74 @@ import { AGENCIES, getDepartureAgencies, getArrivalAgencies, getCollectionName }
 import { onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-auth.js";
 import { doc, getDoc, updateDoc, collection, query, where, orderBy, onSnapshot } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 
+// ── TRANSITION D'AGENCE (overlay persistant) ───────────────────────────────
+// Quand l'utilisateur change d'agence, switchAgency() pose un flag dans
+// sessionStorage et lance le reload. Au boot suivant, on RECRÉE immédiatement
+// le même overlay (drapeau + nom) AVANT toute autre lecture, puis on le
+// retire en fade-out une fois l'app prête.
+(function showSwitchOverlayAtBoot() {
+    try {
+        const raw = sessionStorage.getItem('amt_switching_overlay');
+        if (!raw) return;
+        const { flag, name } = JSON.parse(raw);
+        sessionStorage.removeItem('amt_switching_overlay');
+
+        // Construit l'overlay au plus tôt (avant même DOMContentLoaded).
+        const inject = () => {
+            if (document.getElementById('agencySwitchOverlay')) return;
+            const overlay = document.createElement('div');
+            overlay.id = 'agencySwitchOverlay';
+            overlay.innerHTML = `
+                <style>
+                    #agencySwitchOverlay { position:fixed; inset:0; z-index:999999;
+                        background:linear-gradient(135deg,#0B2540 0%,#1A3553 50%,#0F2238 100%);
+                        display:flex; flex-direction:column; align-items:center; justify-content:center;
+                        color:white; transition: opacity 0.4s ease; }
+                    @keyframes agpFlagBounce { 0%,100% { transform:scale(1); } 50% { transform:scale(1.1); } }
+                    @keyframes agpNameSlide { from { opacity:0; transform:translateY(20px); } to { opacity:1; transform:translateY(0); } }
+                    @keyframes agpLoaderSpin { from { transform:rotate(0deg); } to { transform:rotate(360deg); } }
+                    @keyframes agpDotPulse { 0%,100% { opacity:0.3; } 50% { opacity:1; } }
+                    #agencySwitchOverlay .f { font-size:110px; line-height:1; margin-bottom:28px;
+                        filter:drop-shadow(0 10px 30px rgba(242,163,18,0.4));
+                        animation: agpFlagBounce 1.6s ease-in-out infinite; }
+                    #agencySwitchOverlay .k { font-family:'JetBrains Mono',monospace;
+                        font-size:11px; color:#F2A312; letter-spacing:4px; text-transform:uppercase;
+                        margin-bottom:14px; opacity:0.9; }
+                    #agencySwitchOverlay .n { font-family:'Comfortaa','Jost',sans-serif;
+                        font-size:36px; font-weight:700; letter-spacing:-1px; margin-bottom:40px;
+                        animation: agpNameSlide 0.5s cubic-bezier(0.16,1,0.3,1) 0.1s backwards;
+                        text-align:center; padding:0 20px; }
+                    #agencySwitchOverlay .l { width:44px; height:44px;
+                        border:3px solid rgba(242,163,18,0.18); border-top-color:#F2A312;
+                        border-radius:50%; animation: agpLoaderSpin 0.9s linear infinite;
+                        margin-bottom:20px; }
+                    #agencySwitchOverlay .t { color:#A0AEC4; font-size:13px;
+                        font-family:'Jost',sans-serif; letter-spacing:0.5px; }
+                    #agencySwitchOverlay .t::after { content:'...'; display:inline-block;
+                        animation: agpDotPulse 1.4s infinite; }
+                </style>
+                <div class="f">${flag || '🌍'}</div>
+                <div class="k">Connexion en cours</div>
+                <div class="n">${name || ''}</div>
+                <div class="l"></div>
+                <div class="t">Chargement de votre espace</div>
+            `;
+            (document.body || document.documentElement).appendChild(overlay);
+        };
+        if (document.body) inject();
+        else document.addEventListener('DOMContentLoaded', inject, { once: true });
+    } catch (_) { /* sessionStorage cassé : on ignore */ }
+})();
+
+// Fonction globale exposée pour retirer l'overlay (avec fade-out) à la fin
+// du boot une fois que l'app est prête à afficher l'écran principal.
+window.hideAgencySwitchOverlay = () => {
+    const o = document.getElementById('agencySwitchOverlay');
+    if (!o) return;
+    o.style.opacity = '0';
+    setTimeout(() => o.remove(), 420);
+};
+
 // --- MISE À JOUR VISUELLE INSTANTANÉE (Pré-chargement) ---
 const applyCachedProfile = () => {
     const cachedName = sessionStorage.getItem('userName');
@@ -393,13 +461,96 @@ onAuthStateChanged(auth, async (user) => {
             
             window.switchAgency = (targetAgency) => {
                 sessionStorage.setItem('currentActiveAgency', targetAgency);
-                const isCurrentUnifiedRoot = window.location.pathname.endsWith('/index.html') && !window.location.pathname.includes('/paris/') && !window.location.pathname.includes('/abidjan/');
+                // 1) Affiche un overlay « transition » avec le drapeau + nom de la
+                //    nouvelle agence pendant le rechargement.
+                // 2) Stocke ces infos dans sessionStorage pour que le NOUVEAU boot
+                //    recrée immédiatement le même overlay (sinon il disparaîtrait
+                //    avec le reload). Cf. (showSwitchOverlayAtBoot) en haut du fichier.
+                const targetData = (AGENCIES && AGENCIES[targetAgency]) || {};
+                const overlayInfo = { flag: targetData.flag || '🌍', name: targetData.name || targetAgency };
+                try { sessionStorage.setItem('amt_switching_overlay', JSON.stringify(overlayInfo)); } catch (_) {}
+                window.showAgencySwitchOverlay(overlayInfo.flag, overlayInfo.name);
 
-                if (isCurrentUnifiedRoot) {
-                    window.location.reload();
-                } else {
-                    window.location.href = (inParisFolder || inAbidjanFolder) ? '../index.html' : 'index.html';
-                }
+                const isCurrentUnifiedRoot = window.location.pathname.endsWith('/index.html') && !window.location.pathname.includes('/paris/') && !window.location.pathname.includes('/abidjan/');
+                // Petit délai (250ms) pour que l'animation d'entrée de
+                // l'overlay soit visible avant le reload qui gèle le rendu.
+                setTimeout(() => {
+                    if (isCurrentUnifiedRoot) {
+                        window.location.reload();
+                    } else {
+                        window.location.href = (inParisFolder || inAbidjanFolder) ? '../index.html' : 'index.html';
+                    }
+                }, 250);
+            };
+
+            // Overlay de transition : drapeau + nom de l'agence cible + loader.
+            // Réutilisé par switchAgency avant le reload ET par le boot quand
+            // on revient d'un switch (cf. plus bas, le flag amt_switching_label).
+            window.showAgencySwitchOverlay = (flag, name) => {
+                // Évite de superposer plusieurs overlays
+                const existing = document.getElementById('agencySwitchOverlay');
+                if (existing) existing.remove();
+                const overlay = document.createElement('div');
+                overlay.id = 'agencySwitchOverlay';
+                overlay.innerHTML = `
+                    <style>
+                        #agencySwitchOverlay {
+                            position: fixed; inset: 0; z-index: 999999;
+                            background: linear-gradient(135deg, #0B2540 0%, #1A3553 50%, #0F2238 100%);
+                            display: flex; flex-direction: column;
+                            align-items: center; justify-content: center;
+                            color: white;
+                            animation: agpOverlayIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+                        }
+                        @keyframes agpOverlayIn { from { opacity: 0; } to { opacity: 1; } }
+                        @keyframes agpFlagBounce { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.1); } }
+                        @keyframes agpNameSlide { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+                        @keyframes agpLoaderSpin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+                        @keyframes agpDotPulse { 0%, 100% { opacity: 0.3; } 50% { opacity: 1; } }
+                        .agp-overlay-flag {
+                            font-size: 110px; line-height: 1; margin-bottom: 28px;
+                            filter: drop-shadow(0 10px 30px rgba(242,163,18,0.4));
+                            animation: agpFlagBounce 1.6s ease-in-out infinite;
+                        }
+                        .agp-overlay-kicker {
+                            font-family: 'JetBrains Mono', monospace, sans-serif;
+                            font-size: 11px; color: #F2A312; letter-spacing: 4px;
+                            text-transform: uppercase; margin-bottom: 14px;
+                            opacity: 0.9;
+                        }
+                        .agp-overlay-name {
+                            font-family: 'Comfortaa', 'Jost', sans-serif;
+                            font-size: 36px; font-weight: 700;
+                            letter-spacing: -1px; margin-bottom: 40px;
+                            animation: agpNameSlide 0.5s cubic-bezier(0.16, 1, 0.3, 1) 0.1s backwards;
+                            text-align: center; padding: 0 20px;
+                        }
+                        .agp-overlay-loader {
+                            width: 44px; height: 44px;
+                            border: 3px solid rgba(242,163,18,0.18);
+                            border-top-color: #F2A312;
+                            border-radius: 50%;
+                            animation: agpLoaderSpin 0.9s linear infinite;
+                            margin-bottom: 20px;
+                        }
+                        .agp-overlay-text {
+                            color: #A0AEC4; font-size: 13px;
+                            font-family: 'Jost', sans-serif;
+                            letter-spacing: 0.5px;
+                        }
+                        .agp-overlay-text::after {
+                            content: '...';
+                            display: inline-block;
+                            animation: agpDotPulse 1.4s infinite;
+                        }
+                    </style>
+                    <div class="agp-overlay-flag">${flag}</div>
+                    <div class="agp-overlay-kicker">Connexion en cours</div>
+                    <div class="agp-overlay-name">${name}</div>
+                    <div class="agp-overlay-loader"></div>
+                    <div class="agp-overlay-text">Chargement de votre espace</div>
+                `;
+                document.body.appendChild(overlay);
             };
 
             // ── MODALE « Choisir une agence » ────────────────────────────
@@ -628,6 +779,13 @@ onAuthStateChanged(auth, async (user) => {
 
         // Note : Le reste du masquage des menus est désormais géré dynamiquement par app.js via la configuration Firebase (settings-menus.js)
         document.body.style.display = 'block';
+
+        // Si on revient d'un switch d'agence : on retire maintenant l'overlay
+        // (l'écran principal est prêt à s'afficher). Un petit délai garantit
+        // que l'utilisateur perçoit la transition au lieu d'un flash.
+        if (typeof window.hideAgencySwitchOverlay === 'function') {
+            setTimeout(() => window.hideAgencySwitchOverlay(), 400);
+        }
 
     } catch (error) {
         console.error("Erreur auth :", error);
