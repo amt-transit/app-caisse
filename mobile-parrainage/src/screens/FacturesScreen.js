@@ -214,12 +214,7 @@ function FactureDetailModal({ facture, onClose }) {
     <Modal visible transparent animationType="slide" onRequestClose={onClose}>
       <View style={ds.backdrop}>
         <TouchableOpacity style={ds.dismiss} activeOpacity={1} onPress={onClose} />
-        <LinearGradient
-          colors={grad.bg}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={[ds.sheet, shadow.card]}
-        >
+        <View style={[ds.sheet, shadow.card]}>
           <View style={ds.grip} />
           <View style={ds.head}>
             <View style={{ flex: 1 }}>
@@ -323,7 +318,7 @@ function FactureDetailModal({ facture, onClose }) {
               </Section>
             )}
           </ScrollView>
-        </LinearGradient>
+        </View>
       </View>
     </Modal>
   );
