@@ -43,21 +43,16 @@ function Gate() {
 }
 
 export default function App() {
-  // Polices d'icônes : chargées via useFonts depuis assets/fonts/ (chemin
-  // local contrôlé, plus fiable que require('@expo/vector-icons/...')
-  // qui peut être bundlé incorrectement sur certains builds EAS).
-  // Double enregistrement (Ionicons + ionicons) pour couvrir le nom Android
-  // natif (capitalisé) ET le nom interne de createIconSet (minuscule).
+  // STABILITÉ AVANT TOUT : on ne charge QUE les polices texte. Les fonts
+  // d'icônes (Ionicons / FontAwesome) feront l'objet d'une approche dédiée
+  // ULTÉRIEUREMENT. Pour l'instant : carrés à la place des icônes, mais
+  // l'app ne crashe pas — c'est la priorité.
   const [fontsLoaded, fontError] = useFonts({
     Comfortaa_400Regular,
     Comfortaa_500Medium,
     Comfortaa_700Bold,
     Jost_600SemiBold,
     Jost_700Bold,
-    Ionicons: require('./assets/fonts/Ionicons.ttf'),
-    ionicons: require('./assets/fonts/Ionicons.ttf'),
-    FontAwesome: require('./assets/fonts/FontAwesome.ttf'),
-    fontawesome: require('./assets/fonts/FontAwesome.ttf'),
   });
 
   // Filet de sécurité : l'app ne doit JAMAIS rester bloquée sur le splash.

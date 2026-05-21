@@ -50,10 +50,10 @@ export const StatistiquesView = {
                             <p style="margin: 4px 0 0 0; color: #64748b; font-size: 13px;">Analyse globale de l'agence</p>
                         </div>
                     </div>
-                    <div>
-                        <button class="btn btn-outline" onclick="window.app.renderPage('stats-monthly')" ${mode==='monthly'?'style="background:#f1f5f9;"':''}>Mois</button>
-                        <button class="btn btn-outline" onclick="window.app.renderPage('stats-yearly')" ${mode==='yearly'?'style="background:#f1f5f9;"':''}>Année</button>
-                        <button class="btn btn-outline" onclick="window.app.renderPage('stats-boat')" ${mode==='boat'?'style="background:#f1f5f9;"':''}>Conteneurs</button>
+                    <div style="display:flex; gap:8px;">
+                        <button class="amt-btn ${mode==='monthly' ? 'amt-btn-primary' : 'amt-btn-outline'} amt-btn-sm" onclick="window.app.renderPage('stats-monthly')">Mois</button>
+                        <button class="amt-btn ${mode==='yearly' ? 'amt-btn-primary' : 'amt-btn-outline'} amt-btn-sm" onclick="window.app.renderPage('stats-yearly')">Année</button>
+                        <button class="amt-btn ${mode==='boat' ? 'amt-btn-primary' : 'amt-btn-outline'} amt-btn-sm" onclick="window.app.renderPage('stats-boat')">Conteneurs</button>
                     </div>
                 </div>
 

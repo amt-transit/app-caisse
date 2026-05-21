@@ -133,7 +133,7 @@ export const NouveauRdvView = {
                             <h1 class="nouveau-rdv-header__title">Prise de Rendez-vous</h1>
                             <p class="nouveau-rdv-header__subtitle">Gérez et planifiez les collectes et livraisons</p>
                         </div>
-                    <button class="btn btn-primary" onclick="window.app.views.nouveauRdv.openModal()" style="display: flex; align-items: center; gap: 8px; padding: 12px 20px; font-size: 15px;">
+                    <button class="amt-btn amt-btn-primary amt-btn-lg" onclick="window.app.views.nouveauRdv.openModal()">
                         <i class="fas fa-plus"></i> Nouveau Rendez-vous
                     </button>
                         

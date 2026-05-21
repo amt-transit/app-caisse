@@ -155,8 +155,8 @@ export const ToutesLesFacturesView = {
                             <h1 class="factures-header__title">Toutes les factures</h1>
                             <p class="factures-header__subtitle">Gestion des factures et colis envoyés</p>
                         </div>
-                        <button class="btn-create-invoice" onclick="app.renderPage('invoice-new')">
-                            ➕ Nouvelle facture
+                        <button class="amt-btn amt-btn-primary" onclick="app.renderPage('invoice-new')">
+                            <i class="fas fa-plus"></i> Nouvelle facture
                         </button>
                     </div>
                 </div>
@@ -781,9 +781,9 @@ export const ToutesLesFacturesView = {
                             <div class="row detail-card__headerRow" style="align-items: center;">
                                 <div class="detail-card__title">Actions sur facture</div>
                                 <div class="modal-actionsRow">
-                                    <button class="btn btn-outline" style="color: #10b981; border-color: #10b981;" onclick="window.app.views.toutesLesFactures.addPayment('${invoice.id}'); this.closest('.modal').remove();">💰 Ajouter un paiement</button>
-                                    <button class="btn btn-outline" style="color: #f59e0b; border-color: #f59e0b;" onclick="window.app.views.toutesLesFactures.editInvoice('${invoice.id}'); this.closest('.modal').remove();">✏️ Modifier</button>
-                                    <button class="btn btn-outline" style="color: #ef4444; border-color: #ef4444;" onclick="window.app.views.toutesLesFactures.deleteInvoice('${invoice.id}')">🗑️ Supprimer</button>
+                                    <button class="amt-btn amt-btn-primary" onclick="window.app.views.toutesLesFactures.addPayment('${invoice.id}'); this.closest('.modal').remove();"><i class="fas fa-money-bill-wave"></i> Ajouter un paiement</button>
+                                    <button class="amt-btn amt-btn-outline" onclick="window.app.views.toutesLesFactures.editInvoice('${invoice.id}'); this.closest('.modal').remove();"><i class="fas fa-edit"></i> Modifier</button>
+                                    <button class="amt-btn amt-btn-danger" onclick="window.app.views.toutesLesFactures.deleteInvoice('${invoice.id}')"><i class="fas fa-trash"></i> Supprimer</button>
                                 </div>
                             </div>
                         </div>
