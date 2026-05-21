@@ -114,3 +114,95 @@ export function addNotificationReceivedListener(cb) {
 export function addNotificationResponseListener(cb) {
   return Notifications.addNotificationResponseReceivedListener(cb);
 }
+
+// Demande EXPLICITEMENT la permission de notification et tente d'enregistrer
+// le token. À appeler depuis un bouton UI quand l'utilisateur veut activer
+// manuellement les notifications. Retourne un statut explicite (status +
+// reason + hint) que l'écran peut afficher dans une Alert.
+export async function requestPushPermissionManually({ demarcheurId, agency }) {
+  try {
+    if (!Device.isDevice) {
+      return {
+        status: 'not_supported',
+        reason: 'emulator',
+        hint: "Les notifications push ne fonctionnent que sur un téléphone réel (pas sur un émulateur).",
+      };
+    }
+    // 1) Vérifier l'état actuel
+    const current = await Notifications.getPermissionsAsync();
+    let status = current.status;
+    let canAskAgain = current.canAskAgain;
+
+    // 2) Si non accordée, on demande explicitement (peu importe canAskAgain
+    //    pour la 1re tentative ; Android décide d'afficher ou non la popup).
+    if (status !== 'granted') {
+      const req = await Notifications.requestPermissionsAsync();
+      status = req.status;
+      canAskAgain = req.canAskAgain;
+    }
+
+    if (status !== 'granted') {
+      // L'utilisateur a refusé OU Android ne demande plus (déjà refusé).
+      return {
+        status: 'denied',
+        reason: canAskAgain ? 'user_declined' : 'blocked_in_settings',
+        hint: canAskAgain
+          ? "Vous avez refusé la demande. Cliquez à nouveau sur 'Activer' pour réessayer."
+          : "Android refuse de redemander la permission. Allez dans : Paramètres Android > Applications > AMT Transit Cargo > Notifications, et activez le toggle. Puis redémarrez l'app.",
+      };
+    }
+
+    // 3) Permission accordée — on enregistre le token
+    if (Platform.OS === 'android') {
+      await Notifications.setNotificationChannelAsync('default', {
+        name: 'AMT Transit Cargo',
+        importance: Notifications.AndroidImportance.HIGH,
+        vibrationPattern: [0, 250, 250, 250],
+        lightColor: '#F2A312',
+      });
+    }
+    const projectId = (Constants?.expoConfig?.extra?.eas?.projectId)
+      || (Constants?.easConfig?.projectId)
+      || undefined;
+    const tokenData = await Notifications.getExpoPushTokenAsync(
+      projectId ? { projectId } : undefined,
+    );
+    const expoToken = tokenData?.data;
+    if (!expoToken) {
+      return {
+        status: 'token_failed',
+        reason: 'no_token_returned',
+        hint: "Expo n'a pas retourné de token. Vérifiez votre connexion internet et réessayez.",
+      };
+    }
+
+    if (demarcheurId) {
+      try {
+        await updateDoc(doc(db, collName('demarcheurs', agency), demarcheurId), {
+          pushToken: expoToken,
+          pushPlatform: Platform.OS,
+          pushTokenUpdatedAt: serverTimestamp(),
+        });
+      } catch (e) {
+        return {
+          status: 'firestore_failed',
+          reason: 'write_denied',
+          hint: `Token obtenu mais impossible de l'enregistrer côté serveur (${e?.message || 'inconnu'}). Reconnectez-vous puis réessayez.`,
+          tokenPreview: String(expoToken).slice(0, 20) + '…',
+        };
+      }
+    }
+    return {
+      status: 'granted',
+      reason: 'success',
+      tokenPreview: String(expoToken).slice(0, 20) + '…',
+      hint: "Notifications activées avec succès !",
+    };
+  } catch (e) {
+    return {
+      status: 'error',
+      reason: 'exception',
+      hint: e?.message || 'Erreur inconnue.',
+    };
+  }
+}

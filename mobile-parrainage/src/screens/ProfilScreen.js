@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Image, Alert } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Image, Alert, Linking, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { httpsCallable } from 'firebase/functions';
 import { functions } from '../firebase';
 import { ScreenScroll, ScreenTitle, Card } from '../components/ui';
 import { RouteSwitcherButton } from '../components/RouteSwitcher';
+import { requestPushPermissionManually } from '../notifications';
 import { colors, spacing, radius, font } from '../theme';
 
 const LOGO = require('../../assets/logo.png');
@@ -20,6 +21,40 @@ export default function ProfilScreen({ data, onLogout, user }) {
   // chaque ouverture si l'utilisateur a accepté la permission.
   const hasPush = !!me?.pushToken;
   const [pushBusy, setPushBusy] = useState(false);
+
+  // Activation manuelle des notifications. On force la demande de permission
+  // et on affiche un message précis au user selon ce qui se passe.
+  const onActivatePush = async () => {
+    if (pushBusy) return;
+    setPushBusy(true);
+    try {
+      const res = await requestPushPermissionManually({
+        demarcheurId: activeLink?.demarcheurId || me?.id,
+        agency: activeLink?.agency || me?.agency,
+      });
+      if (res.status === 'granted') {
+        Alert.alert('Notifications activées ✔', res.hint);
+        // Le onSnapshot de `me` va voir le pushToken arriver et la carte
+        // passera en vert automatiquement.
+      } else if (res.status === 'denied' && res.reason === 'blocked_in_settings') {
+        // On propose d'ouvrir directement les paramètres Android de l'app.
+        Alert.alert(
+          'Permission bloquée',
+          res.hint,
+          [
+            { text: 'Annuler', style: 'cancel' },
+            { text: 'Ouvrir les paramètres', onPress: () => Linking.openSettings() },
+          ],
+        );
+      } else {
+        Alert.alert("Impossible d'activer", res.hint || 'Erreur inconnue.');
+      }
+    } catch (e) {
+      Alert.alert('Erreur', (e && e.message) || 'Échec.');
+    } finally {
+      setPushBusy(false);
+    }
+  };
 
   const onTestPush = async () => {
     if (pushBusy) return;
@@ -109,9 +144,13 @@ export default function ProfilScreen({ data, onLogout, user }) {
               : "Ouvrez l'app, acceptez la permission, ou utilisez un build natif (pas Expo Go)."}
           </Text>
         </View>
-        {hasPush && (
+        {hasPush ? (
           <TouchableOpacity onPress={onTestPush} disabled={pushBusy} style={styles.pushBtn} activeOpacity={0.85}>
             <Text style={styles.pushBtnT}>{pushBusy ? '…' : 'Tester'}</Text>
+          </TouchableOpacity>
+        ) : (
+          <TouchableOpacity onPress={onActivatePush} disabled={pushBusy} style={styles.pushBtnActivate} activeOpacity={0.85}>
+            <Text style={styles.pushBtnActivateT}>{pushBusy ? '…' : 'Activer'}</Text>
           </TouchableOpacity>
         )}
       </View>
@@ -177,6 +216,12 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(16,185,129,0.18)', borderWidth: 1, borderColor: 'rgba(4,120,87,0.3)',
   },
   pushBtnT: { color: colors.green, fontSize: 12, fontFamily: font.bodyBold },
+  pushBtnActivate: {
+    paddingHorizontal: 16, paddingVertical: 9, borderRadius: radius.pill,
+    backgroundColor: colors.gold,
+    shadowColor: colors.gold, shadowOpacity: 0.4, shadowRadius: 10, shadowOffset: { width: 0, height: 4 }, elevation: 5,
+  },
+  pushBtnActivateT: { color: colors.onGold, fontSize: 12.5, fontFamily: font.bodyBold, letterSpacing: 0.3 },
 
   helpCard: {
     flexDirection: 'row', alignItems: 'center', gap: spacing.md,
