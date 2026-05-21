@@ -1,11 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
-  View, Text, Image, TouchableOpacity, ActivityIndicator, StyleSheet,
+  View, Text, Image, TouchableOpacity, ActivityIndicator, StyleSheet, Alert, Linking,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../auth/AuthContext';
 import { useDemarcheur } from '../data/useDemarcheur';
+import { requestPushPermissionManually } from '../notifications';
 import Background from '../components/Background';
 import LogoMark from '../components/LogoMark';
 import TabBar from '../components/TabBar';
@@ -72,6 +73,53 @@ export default function MainApp() {
 
   const me = data.me;
   const prenom = me?.prenom || (user?.email ? user.email.split('@')[0] : 'Partenaire');
+
+  // ── Onboarding notifications : à la première ouverture, on propose
+  // automatiquement d'activer les notifs. Si la fiche n'a pas de pushToken
+  // ET que l'utilisateur ne l'a pas déjà décliné dans cette session, on
+  // affiche une Alert proactive. Le bouton "Activer" force la demande
+  // Android (ou ouvre les paramètres si la permission est bloquée).
+  const promptShownRef = useRef(false);
+  useEffect(() => {
+    if (!me) return; // attendre que la fiche soit chargée
+    if (promptShownRef.current) return; // un seul prompt par session
+    if (me.pushToken) return; // déjà activé, rien à faire
+    promptShownRef.current = true;
+    // Petit délai pour laisser l'écran d'accueil s'afficher avant l'alerte
+    const t = setTimeout(() => {
+      Alert.alert(
+        '🔔 Activer les notifications',
+        "Pour recevoir vos commissions et paiements en direct, activez les notifications. Vous pourrez le changer à tout moment depuis l'onglet Profil.",
+        [
+          { text: 'Plus tard', style: 'cancel' },
+          {
+            text: 'Activer',
+            onPress: async () => {
+              const res = await requestPushPermissionManually({
+                demarcheurId: data.activeLink?.demarcheurId || me?.id,
+                agency: data.activeLink?.agency || me?.agency,
+              });
+              if (res.status === 'granted') {
+                Alert.alert('Notifications activées ✔', res.hint);
+              } else if (res.status === 'denied' && res.reason === 'blocked_in_settings') {
+                Alert.alert(
+                  'Permission bloquée',
+                  res.hint,
+                  [
+                    { text: 'Annuler', style: 'cancel' },
+                    { text: 'Ouvrir les paramètres', onPress: () => Linking.openSettings() },
+                  ],
+                );
+              } else if (res.status !== 'granted') {
+                Alert.alert('Activation impossible', res.hint || "Vous pouvez réessayer depuis Profil.");
+              }
+            },
+          },
+        ],
+      );
+    }, 1200);
+    return () => clearTimeout(t);
+  }, [me?.id, me?.pushToken]);
 
   const screens = {
     factures: <FacturesScreen data={data} />,

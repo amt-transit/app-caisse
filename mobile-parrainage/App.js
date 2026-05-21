@@ -43,20 +43,15 @@ function Gate() {
 }
 
 export default function App() {
+  // Les polices d'icônes sont chargées NATIVEMENT par le plugin
+  // 'react-native-vector-icons' dans app.json (bundling Android au build).
+  // Plus besoin d'imports / require / loadFont au runtime côté JS.
   const [fontsLoaded, fontError] = useFonts({
     Comfortaa_400Regular,
     Comfortaa_500Medium,
     Comfortaa_700Bold,
     Jost_600SemiBold,
     Jost_700Bold,
-    // Polices d'icônes — chargées sous DEUX noms pour couvrir tous les cas.
-    // Le composant <Ionicons name="..."> cherche 'ionicons' (minuscule, déclaré
-    // dans createIconSet), mais le bundle Android natif enregistre la police
-    // selon le nom du fichier ('Ionicons' capitalisé). On enregistre les deux.
-    Ionicons: require('@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/Ionicons.ttf'),
-    ionicons: require('@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/Ionicons.ttf'),
-    FontAwesome: require('@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/FontAwesome.ttf'),
-    fontawesome: require('@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/FontAwesome.ttf'),
   });
 
   // Filet de sécurité : l'app ne doit JAMAIS rester bloquée sur le splash.
