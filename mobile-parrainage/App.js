@@ -11,6 +11,10 @@ import {
   Jost_600SemiBold,
   Jost_700Bold,
 } from '@expo-google-fonts/jost';
+// IMPORTANT : on précharge la police vectorielle Ionicons en même temps que
+// les polices de texte. Sans ça, les builds EAS affichent des « tofu » (petits
+// carrés arrondis) à la place des icônes — la police n'est pas chargée à temps.
+import { Ionicons } from '@expo/vector-icons';
 import { AuthProvider, useAuth } from './src/auth/AuthContext';
 import LoginScreen from './src/screens/LoginScreen';
 import MainApp from './src/screens/MainApp';
@@ -45,6 +49,8 @@ export default function App() {
     Comfortaa_700Bold,
     Jost_600SemiBold,
     Jost_700Bold,
+    // Police vectorielle Ionicons (sinon icônes = carrés arrondis sur EAS).
+    ...Ionicons.font,
   });
 
   // Filet de sécurité : l'app ne doit JAMAIS rester bloquée sur le splash.
