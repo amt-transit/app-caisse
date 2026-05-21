@@ -128,7 +128,7 @@ export const ClientsView = {
                     </div>
                     <div class="cl-header__actions">
                         ${importBtnHtml}
-                        <button class="btn btn-primary" onclick="window.app.views.clients.openNewClientModal()" style="display: flex; align-items: center; gap: 8px; border-radius: 10px; font-weight: 600; padding: 10px 16px;">
+                        <button class="amt-btn amt-btn-primary" onclick="window.app.views.clients.openNewClientModal()">
                             <i class="fas fa-plus"></i> Nouveau client
                         </button>
                     </div>

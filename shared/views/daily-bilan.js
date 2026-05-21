@@ -46,26 +46,26 @@ export const DailyBilanView = {
                     </div>
                 </div>
 
-                <div class="stats-grid" style="margin-bottom: 24px;">
-                    <div class="stat-card" style="border-top: 4px solid #10b981;">
-                        <div class="stat-icon" style="background: #dcfce7; color: #10b981;"><i class="fas fa-arrow-down"></i></div>
-                        <div class="stat-value" id="b-encaisse" style="color: #059669;">0 ${currSymbol}</div>
-                        <div class="stat-label">Total Encaissé</div>
+                <div class="amt-kpi-grid" style="margin-bottom: 24px;">
+                    <div class="amt-kpi amt-kpi-green">
+                        <div class="amt-kpi-title">Total Encaissé</div>
+                        <div class="amt-kpi-value" id="b-encaisse">0 ${currSymbol}</div>
+                        <div class="amt-kpi-mark">💰</div>
                     </div>
-                    <div class="stat-card" style="border-top: 4px solid #ef4444;">
-                        <div class="stat-icon" style="background: #fef2f2; color: #ef4444;"><i class="fas fa-arrow-up"></i></div>
-                        <div class="stat-value" id="b-depenses" style="color: #dc2626;">0 ${currSymbol}</div>
-                        <div class="stat-label">Total Dépenses</div>
+                    <div class="amt-kpi amt-kpi-red">
+                        <div class="amt-kpi-title">Total Dépenses</div>
+                        <div class="amt-kpi-value" id="b-depenses">0 ${currSymbol}</div>
+                        <div class="amt-kpi-mark">📉</div>
                     </div>
-                    <div class="stat-card" style="border-top: 4px solid #3b82f6;">
-                        <div class="stat-icon" style="background: #eff6ff; color: #3b82f6;"><i class="fas fa-wallet"></i></div>
-                        <div class="stat-value" id="b-solde" style="color: #1d4ed8;">0 ${currSymbol}</div>
-                        <div class="stat-label">Solde Net du jour</div>
+                    <div class="amt-kpi amt-kpi-deep">
+                        <div class="amt-kpi-title">Solde Net du jour</div>
+                        <div class="amt-kpi-value" id="b-solde">0 ${currSymbol}</div>
+                        <div class="amt-kpi-mark">🏆</div>
                     </div>
-                    <div class="stat-card" style="border-top: 4px solid #8b5cf6;">
-                        <div class="stat-icon" style="background: #f3e8ff; color: #8b5cf6;"><i class="fas fa-box-open"></i></div>
-                        <div class="stat-value" id="b-colis">0</div>
-                        <div class="stat-label">Colis Traités</div>
+                    <div class="amt-kpi amt-kpi-purple">
+                        <div class="amt-kpi-title">Colis Traités</div>
+                        <div class="amt-kpi-value" id="b-colis">0</div>
+                        <div class="amt-kpi-mark">📦</div>
                     </div>
                 </div>
 

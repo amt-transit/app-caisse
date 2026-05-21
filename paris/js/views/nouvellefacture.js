@@ -342,7 +342,7 @@ export const NouvelleFactureView = {
                             <h3 style="border-bottom: 1px solid #e2e8f0; padding-bottom: 10px; margin-bottom: 15px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap;"><i class="fas fa-comment-dots text-slate-500"></i> Notes</h3>
                             <textarea id="nfComment" rows="4" placeholder="Instructions spéciales, contenu exact..." v-model="form.comment" style="width: 100%; border: 1px solid #cbd5e1; border-radius: 8px; padding: 10px; font-family: inherit; resize: none;"></textarea>
                         </div>
-                        <button id="nfSubmitBtn" class="btn btn-primary" :disabled="saving" @click="submitInvoice()" style="width: 100%; padding: 16px; font-size: 16px; margin-top: 15px; display: flex; justify-content: center; gap: 10px;">
+                        <button id="nfSubmitBtn" class="amt-btn amt-btn-primary amt-btn-lg amt-btn-full" :disabled="saving" @click="submitInvoice()" style="margin-top: 15px;">
                             <i v-if="saving" class="fas fa-spinner fa-spin"></i>
                             <i v-else class="fas fa-check-circle"></i>
                             {{ saving ? 'Enregistrement...' : (form.type === 'DEVIS' ? 'Enregistrer le devis' : 'Enregistrer la facture') }}

@@ -101,26 +101,30 @@ export const ParrainageView = {
                     <!-- ONGLET: DASHBOARD -->
                     <!-- ============================================== -->
                     <div v-if="currentTab === 'dashboard'">
-                        <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px,1fr)); gap:16px; margin-bottom:20px;">
-                            <div class="stat-box">
-                                <div class="stat-label"><i class="fas fa-users"></i> Partenaires actifs</div>
-                                <div class="stat-value">{{ partners.length }}</div>
-                                <small style="color:#94a3b8;">Total inscrits au réseau</small>
+                        <div class="amt-kpi-grid" style="margin-bottom:20px;">
+                            <div class="amt-kpi amt-kpi-deep">
+                                <div class="amt-kpi-title">Partenaires actifs</div>
+                                <div class="amt-kpi-value">{{ partners.length }}</div>
+                                <div class="amt-kpi-sub">Total inscrits au réseau</div>
+                                <div class="amt-kpi-mark">🤝</div>
                             </div>
-                            <div class="stat-box">
-                                <div class="stat-label"><i class="fas fa-chart-line"></i> Total généré</div>
-                                <div class="stat-value text-green">{{ formatMoney(kpis.totalGenere) }}</div>
-                                <small style="color:#94a3b8;">Commissions brutes créées</small>
+                            <div class="amt-kpi amt-kpi-green">
+                                <div class="amt-kpi-title">Total généré</div>
+                                <div class="amt-kpi-value">{{ formatMoney(kpis.totalGenere) }}</div>
+                                <div class="amt-kpi-sub">Commissions brutes créées</div>
+                                <div class="amt-kpi-mark">📈</div>
                             </div>
-                            <div class="stat-box">
-                                <div class="stat-label"><i class="fas fa-hand-holding-usd"></i> Total versé</div>
-                                <div class="stat-value text-warning">{{ formatMoney(kpis.totalPaye) }}</div>
-                                <small style="color:#94a3b8;">Retraits effectués</small>
+                            <div class="amt-kpi amt-kpi-gold">
+                                <div class="amt-kpi-title">Total versé</div>
+                                <div class="amt-kpi-value">{{ formatMoney(kpis.totalPaye) }}</div>
+                                <div class="amt-kpi-sub">Retraits effectués</div>
+                                <div class="amt-kpi-mark">💵</div>
                             </div>
-                            <div class="stat-box">
-                                <div class="stat-label"><i class="fas fa-clock"></i> Passif (Dues)</div>
-                                <div class="stat-value text-danger">{{ formatMoney(kpis.totalDette) }}</div>
-                                <small style="color:#94a3b8;">Commissions en attente de paiement</small>
+                            <div class="amt-kpi amt-kpi-red">
+                                <div class="amt-kpi-title">Passif (Dues)</div>
+                                <div class="amt-kpi-value">{{ formatMoney(kpis.totalDette) }}</div>
+                                <div class="amt-kpi-sub">Commissions en attente</div>
+                                <div class="amt-kpi-mark">⏳</div>
                             </div>
                         </div>
 
@@ -226,8 +230,8 @@ export const ParrainageView = {
                         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 20px; flex-wrap:wrap; gap:10px;">
                             <h2 style="margin:0; font-size:18px;"><i class="fas fa-coins text-yellow-500"></i> Commissions générées</h2>
                             <div style="display:flex; gap:8px;">
-                                <button class="btn btn-outline" @click="exportCommissionsExcel" :disabled="exportBusy" style="color:#059669; border-color:#059669;"><i class="fas fa-file-excel"></i> Excel</button>
-                                <button class="btn btn-outline" @click="exportCommissionsPDF" :disabled="exportBusy" style="color:#b91c1c; border-color:#fecaca;"><i class="fas fa-file-pdf"></i> PDF</button>
+                                <button class="amt-btn amt-btn-outline" @click="exportCommissionsExcel" :disabled="exportBusy"><i class="fas fa-file-excel"></i> Excel</button>
+                                <button class="amt-btn amt-btn-danger" @click="exportCommissionsPDF" :disabled="exportBusy"><i class="fas fa-file-pdf"></i> PDF</button>
                             </div>
                         </div>
 
