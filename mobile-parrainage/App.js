@@ -11,13 +11,11 @@ import {
   Jost_600SemiBold,
   Jost_700Bold,
 } from '@expo-google-fonts/jost';
-// IMPORTANT : on précharge les polices vectorielles d'icônes en même temps que
-// les polices de texte. Sans ça, les builds EAS affichent des « tofu » (petits
-// carrés arrondis) à la place des icônes.
-// Méthode garantie : chaque module d'icône expose loadFont() qui utilise le
-// BON nom interne (Ionicons.font expose 'ionicons' minuscule, mais RN cherche
-// la famille selon le nom du module — loadFont gère cette subtilité).
-import { Ionicons, FontAwesome, FontAwesome5, MaterialIcons } from '@expo/vector-icons';
+// Note : les polices vectorielles d'icônes (Ionicons, FontAwesome, etc.) sont
+// chargées NATIVEMENT par le plugin expo-font configuré dans app.json — les
+// fichiers .ttf sont bundlés au build dans les assets natifs Android/iOS.
+// On NE LES IMPORTE PAS ici pour éviter le double-chargement qui crashait
+// l'app au boot (incompatibilité entre runtime expo-font et plugin natif).
 import { AuthProvider, useAuth } from './src/auth/AuthContext';
 import LoginScreen from './src/screens/LoginScreen';
 import MainApp from './src/screens/MainApp';
@@ -53,16 +51,6 @@ export default function App() {
     Jost_600SemiBold,
     Jost_700Bold,
   });
-
-  // Chargement EXPLICITE des polices vectorielles d'icônes (au montage de l'App).
-  // .loadFont() garantit le bon nom interne (l'objet .font expose 'ionicons'
-  // minuscule, qui mismatch avec ce que React Native cherche en build natif).
-  useEffect(() => {
-    Ionicons.loadFont().catch((e) => console.warn('[fonts] Ionicons :', e?.message));
-    FontAwesome.loadFont().catch(() => null);
-    FontAwesome5.loadFont().catch(() => null);
-    MaterialIcons.loadFont().catch(() => null);
-  }, []);
 
   // Filet de sécurité : l'app ne doit JAMAIS rester bloquée sur le splash.
   // Si les polices tardent (réseau lent) ou échouent, on démarre quand même
