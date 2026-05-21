@@ -45,7 +45,7 @@ const MENU_ITEMS = {
         { page: 'bank', label: 'Banque' }, { page: 'audit', label: 'Audit' },
     ],
     operations: [
-        { page: 'livraison', label: 'LIVRAISON' }, { page: 'livreurscan', label: 'MODE LIVREUR' },
+        { page: 'livraison', label: 'LIVRAISON' },
         { page: 'voiture', label: 'Gestion Véhicules' }, { page: 'magasinage', label: 'Magasinage' },
         { page: 'points', label: 'Points' }, { page: 'clients', label: 'Clients (Logistique)' },
         { page: 'program-new', label: 'Nouveau programme' }, { page: 'program-my', label: 'Mon programme' },

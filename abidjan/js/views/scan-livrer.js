@@ -14,6 +14,7 @@ export const ScanLivrerView = {
     recentScans: [],
     sessionItemsToShare: [],
     capturedPhotos: [],
+    deliveryGeo: null, // { lat, lng, accuracy } capturé par captureGPS()
     stats: { total: 0, success: 0, duplicate: 0, error: 0 },
     isSoundEnabled: true,
 
@@ -147,6 +148,22 @@ export const ScanLivrerView = {
                     <div class="session-panel-title">
                         <span>📸 Preuves & Partage <span id="liv-session-count" style="background:#8b5cf6;color:white;padding:2px 8px;border-radius:10px;font-size:12px;margin-left:8px;">0 colis prêt(s)</span></span>
                     </div>
+
+                    <!-- ─── Bloc Adresse + GPS de la livraison ─── -->
+                    <div id="liv-addr-block" style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:12px; padding:12px 14px; margin-bottom:14px; display:none;">
+                        <div style="font-size:11px; color:#64748b; font-weight:700; letter-spacing:0.5px; text-transform:uppercase; margin-bottom:6px;">📍 Lieu de livraison</div>
+                        <div id="liv-addr-current" style="font-size:14px; color:#0f172a; font-weight:600; line-height:1.4; margin-bottom:8px;">—</div>
+                        <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                            <button onclick="window.app.views.scanLivrer.captureGPS()" style="flex:1; min-width:120px; padding:8px 12px; background:#eff6ff; color:#1e40af; border:1px solid #bfdbfe; border-radius:8px; font-size:12px; font-weight:700; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:6px;">
+                                <span id="liv-gps-icon">🎯</span> <span id="liv-gps-text">Géolocaliser</span>
+                            </button>
+                            <button onclick="window.app.views.scanLivrer.editAddress()" style="flex:1; min-width:120px; padding:8px 12px; background:#fff7ed; color:#9a3412; border:1px solid #fed7aa; border-radius:8px; font-size:12px; font-weight:700; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:6px;">
+                                ✏️ Modifier adresse
+                            </button>
+                        </div>
+                        <div id="liv-gps-info" style="font-size:11px; color:#047857; margin-top:8px; display:none;">✓ GPS capturé</div>
+                    </div>
+
                     <div class="photos-row" id="liv-photos-row">
                         <div class="photo-add-btn" onclick="document.getElementById('liv-photoInput').click()">
                             <i class="fas fa-camera" style="font-size:20px; margin-bottom:5px;"></i><span style="font-size:11px;font-weight:600;">Ajouter</span>
@@ -334,35 +351,84 @@ export const ScanLivrerView = {
             if (!snapLiv.empty) {
                 const docId = snapLiv.docs[0].id;
                 const data = snapLiv.docs[0].data();
-                
+                const clientName = data.destinataire || data.expediteur || 'Client inconnu';
+
+                // ── MULTI-LABELS : on scanne les sous-colis un par un ─────
+                // labels = liste des labels prévus pour cette livraison.
+                // scannedLabels = ceux DÉJÀ scannés (lus depuis scanHistory).
+                const labelsTotal = Array.isArray(data.labels) && data.labels.length > 0
+                    ? data.labels
+                    : [data.ref];
+                const alreadyScanned = new Set(
+                    (data.scanHistory || [])
+                        .filter((s) => s && s.type === 'REMISE_CLIENT' && s.scanRef)
+                        .map((s) => s.scanRef)
+                );
+
+                // Le scan d'AUJOURD'HUI est-il déjà fait ?
+                const isDuplicate = alreadyScanned.has(text);
+                // Le scan correspond-il à un label connu ? Si oui on peut compter,
+                // sinon on tolère (le user a saisi la baseRef pour valider d'un coup).
+                const isKnownLabel = labelsTotal.includes(text);
+                const scanIsBaseRef = text === baseRef && labelsTotal.length > 1 && !isKnownLabel;
+
                 if (data.status === 'LIVRE') {
+                    // Livraison déjà entièrement livrée → toujours doublon.
                     this.stats.duplicate++;
                     logData.status = 'DOUBLON';
-                    this.addRecentScan(text, data.destinataire || data.expediteur || 'Client inconnu', 'Déjà livré', 'warn');
+                    this.addRecentScan(text, clientName, 'Déjà livré', 'warn');
+                    if (this.isSoundEnabled && navigator.vibrate) navigator.vibrate([50, 50, 50]);
+                } else if (isDuplicate) {
+                    // Ce label précis a déjà été scanné dans une session précédente.
+                    this.stats.duplicate++;
+                    logData.status = 'DOUBLON';
+                    this.addRecentScan(text, clientName, `Déjà scanné · ${alreadyScanned.size}/${labelsTotal.length}`, 'warn');
                     if (this.isSoundEnabled && navigator.vibrate) navigator.vibrate([50, 50, 50]);
                 } else {
-                    const qteTotal = data.quantite || 1;
-                    await updateDoc(doc(db, getCollectionName('livraisons'), docId), {
-                        status: 'LIVRE',
-                        dateLivraison: new Date().toISOString(),
-                        quantiteLivree: qteTotal,
-                        quantiteRestante: 0,
-                        scanHistory: arrayUnion({ scanRef: text, date: new Date().toISOString(), type: 'REMISE_CLIENT' })
-                    });
-    
+                    // Calcul du compteur APRES ce nouveau scan.
+                    // Si l'utilisateur scanne la baseRef d'un colis multi-labels,
+                    // on considère qu'il « valide tout d'un coup ».
+                    const nowCount = scanIsBaseRef
+                        ? labelsTotal.length
+                        : (isKnownLabel ? alreadyScanned.size + 1 : Math.min(alreadyScanned.size + 1, labelsTotal.length));
+                    const allDone = nowCount >= labelsTotal.length;
+
+                    const updates = {
+                        scanHistory: arrayUnion({ scanRef: text, date: new Date().toISOString(), type: 'REMISE_CLIENT' }),
+                    };
+                    if (allDone) {
+                        updates.status = 'LIVRE';
+                        updates.dateLivraison = new Date().toISOString();
+                        updates.quantiteLivree = labelsTotal.length;
+                        updates.quantiteRestante = 0;
+                    } else {
+                        updates.quantiteLivree = nowCount;
+                        updates.quantiteRestante = labelsTotal.length - nowCount;
+                    }
+                    await updateDoc(doc(db, getCollectionName('livraisons'), docId), updates);
+
                     this.stats.success++;
                     logData.status = 'SUCCES';
-                    this.addRecentScan(text, data.destinataire || data.expediteur || 'Client inconnu', 'Remis au client', 'ok');
+                    const msg = allDone
+                        ? `Livré · ${nowCount}/${labelsTotal.length} ✔`
+                        : `Reçu · ${nowCount}/${labelsTotal.length} colis`;
+                    this.addRecentScan(text, clientName, msg, 'ok');
                     if (this.isSoundEnabled && navigator.vibrate) navigator.vibrate([30, 20, 30]);
                 }
-                
-                // Ajouter aux éléments à partager (Évite les doublons stricts)
-                const clientName = data.destinataire || data.expediteur || 'Client inconnu';
+
+                // Ajouter aux éléments à partager (Évite les doublons stricts).
                 if (!this.sessionItemsToShare.some(i => i.scanRef === text)) {
-                    this.sessionItemsToShare.push({ scanRef: text, client: clientName });
+                    this.sessionItemsToShare.push({
+                        scanRef: text,
+                        client: clientName,
+                        baseRef,
+                        livraisonId: docId,
+                        adresse: data.lieuLivraison || data.adresseDestinataire || '',
+                        telephone: data.numero || data.tel || '',
+                    });
                     this.updateSessionUI();
                 }
-                
+
             } else {
                 this.stats.error++;
                 logData.status = 'ERREUR';
@@ -429,7 +495,7 @@ export const ScanLivrerView = {
     async handlePhotoCapture(event) {
         const files = Array.from(event.target.files);
         if (!files.length) return;
-        
+
         this.app.showToast("Compression des photos en cours...", "info");
         for (let file of files) {
             if (!file.type.startsWith('image/')) continue;
@@ -441,7 +507,79 @@ export const ScanLivrerView = {
             } catch (e) { console.error("Erreur compression :", e); }
         }
         this.updateSessionUI();
-        event.target.value = ''; 
+        event.target.value = '';
+    },
+
+    // ── GÉOLOCALISATION ─────────────────────────────────────────────────
+    // Capture la position GPS du livreur AU MOMENT de la remise. La position
+    // est jointe au message WhatsApp final (lien Google Maps) et persistée
+    // sur la livraison côté Firestore (champ gpsLivraison).
+    captureGPS() {
+        if (!navigator.geolocation) {
+            this.app.showToast("Géolocalisation non disponible sur cet appareil.", "error");
+            return;
+        }
+        const iconEl = document.getElementById('liv-gps-icon');
+        const textEl = document.getElementById('liv-gps-text');
+        if (iconEl) iconEl.textContent = '⏳';
+        if (textEl) textEl.textContent = 'Localisation…';
+
+        navigator.geolocation.getCurrentPosition((pos) => {
+            const { latitude, longitude, accuracy } = pos.coords;
+            this.deliveryGeo = { lat: latitude, lng: longitude, accuracy: Math.round(accuracy || 0) };
+            // Persister sur chaque livraison de la session.
+            this.sessionItemsToShare.forEach((item) => {
+                if (item.livraisonId) {
+                    updateDoc(doc(db, getCollectionName('livraisons'), item.livraisonId), {
+                        gpsLivraison: { lat: latitude, lng: longitude, accuracy: this.deliveryGeo.accuracy, capturedAt: new Date().toISOString() },
+                    }).catch((e) => console.warn('GPS update livraison:', e));
+                }
+            });
+            const info = document.getElementById('liv-gps-info');
+            if (info) {
+                info.style.display = 'block';
+                info.textContent = `✓ GPS capturé (précision ${this.deliveryGeo.accuracy} m)`;
+            }
+            if (iconEl) iconEl.textContent = '✓';
+            if (textEl) textEl.textContent = 'Géolocalisé';
+            this.app.showToast("📍 Position GPS enregistrée", "success");
+        }, (err) => {
+            console.warn('GPS error:', err);
+            if (iconEl) iconEl.textContent = '🎯';
+            if (textEl) textEl.textContent = 'Géolocaliser';
+            const msg = err.code === 1
+                ? "Permission refusée. Activez la localisation dans les paramètres du navigateur."
+                : (err.code === 3 ? "Délai dépassé. Réessayez à l'extérieur." : "Impossible de récupérer la position.");
+            this.app.showToast(msg, "error");
+        }, { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 });
+    },
+
+    // ── MODIFICATION D'ADRESSE DESTINATAIRE ─────────────────────────────
+    // Le livreur peut corriger / préciser l'adresse réelle de remise sur
+    // place. La mise à jour est appliquée à toutes les livraisons de la
+    // session (utile car un client peut avoir plusieurs colis groupés).
+    async editAddress() {
+        if (this.sessionItemsToShare.length === 0) {
+            this.app.showToast("Scannez d'abord un colis pour modifier son adresse.", "info");
+            return;
+        }
+        const current = this.sessionItemsToShare[0].adresse || '';
+        const next = window.prompt("Nouvelle adresse de livraison (vide = inchangée) :", current);
+        if (next === null) return; // user a annulé
+        const cleaned = String(next).trim();
+        if (!cleaned || cleaned === current) return;
+
+        // Update toutes les livraisons de la session + update local.
+        const updates = this.sessionItemsToShare.map((item) =>
+            item.livraisonId
+                ? updateDoc(doc(db, getCollectionName('livraisons'), item.livraisonId), { lieuLivraison: cleaned })
+                    .catch((e) => console.warn('Adresse update:', e))
+                : null
+        ).filter(Boolean);
+        await Promise.all(updates);
+        this.sessionItemsToShare.forEach((item) => { item.adresse = cleaned; });
+        this.updateSessionUI();
+        this.app.showToast("✓ Adresse mise à jour", "success");
     },
 
     updateSessionUI() {
@@ -452,6 +590,19 @@ export const ScanLivrerView = {
         // Active le bouton WA s'il y a au moins 1 colis ou 1 photo
         const btnWa = document.getElementById('btn-wa-liv');
         if(btnWa) btnWa.disabled = (this.sessionItemsToShare.length === 0 && this.capturedPhotos.length === 0);
+
+        // Bloc adresse : visible UNIQUEMENT s'il y a au moins un colis scanné.
+        const addrBlock = document.getElementById('liv-addr-block');
+        const addrCurrent = document.getElementById('liv-addr-current');
+        if (addrBlock && addrCurrent) {
+            if (this.sessionItemsToShare.length > 0) {
+                addrBlock.style.display = 'block';
+                const adr = this.sessionItemsToShare[0].adresse || '(adresse non renseignée)';
+                addrCurrent.textContent = adr;
+            } else {
+                addrBlock.style.display = 'none';
+            }
+        }
 
         // Met à jour la liste des photos
         const row = document.getElementById('liv-photos-row');
@@ -476,17 +627,26 @@ export const ScanLivrerView = {
 
     async sendToWhatsApp() {
         if (this.sessionItemsToShare.length === 0 && this.capturedPhotos.length === 0) return;
-        
+
         const clients = [...new Set(this.sessionItemsToShare.map(i => i.client))].join(', ');
         const refs = this.sessionItemsToShare.map(i => `- ${i.scanRef}`).join('\n');
-        
+
+        // ── Adresse + GPS (si capturés) ────────────────────────────────
+        const adresse = this.sessionItemsToShare[0]?.adresse || '';
+        const gps = this.deliveryGeo;
+        const mapsLink = gps
+            ? `https://www.google.com/maps?q=${gps.lat},${gps.lng}`
+            : '';
+
         const richMessage = [
             `✅ *Remise de colis effectuée*`,
             `👤 Client(s) : ${clients || 'Non spécifié'}`,
             `📦 Colis remis : ${this.sessionItemsToShare.length}`,
+            adresse ? `📍 Adresse : ${adresse}` : '',
+            mapsLink ? `🗺️ Position : ${mapsLink}` : '',
             ``,
-            refs
-        ].join('\n');
+            refs,
+        ].filter(Boolean).join('\n');
 
         try {
             const filesToShare = this.capturedPhotos.map(p => p.file);
@@ -500,6 +660,7 @@ export const ScanLivrerView = {
                 // Nettoyage après partage
                 this.sessionItemsToShare = [];
                 this.capturedPhotos = [];
+                this.deliveryGeo = null;
                 this.updateSessionUI();
             } else {
                 // Fallback texte seul si navigateur non compatible avec partage de fichiers
@@ -507,6 +668,7 @@ export const ScanLivrerView = {
                 this.app.showToast('📱 WhatsApp ouvert (Texte seul)', 'success');
                 this.sessionItemsToShare = [];
                 this.capturedPhotos = [];
+                this.deliveryGeo = null;
                 this.updateSessionUI();
             }
         } catch (e) {
