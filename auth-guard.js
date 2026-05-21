@@ -460,7 +460,7 @@ onAuthStateChanged(auth, async (user) => {
                         .agp-card.on .agp-card-tag { color: #B8780A; font-weight: 700; }
                         .agp-empty { grid-column: 1 / -1; text-align: center; padding: 40px 20px; color: #8198B0; font-size: 13px; }
                     </style>
-                    <div class="agp-box" onclick="event.stopPropagation()">
+                    <div class="agp-box">
                         <div class="agp-head">
                             <div class="agp-title"><i class="fas fa-globe-africa" style="color:#F2A312;"></i> Choisir une agence</div>
                             <button class="agp-close" onclick="document.getElementById('agencyPickerModal').remove()">✕</button>
