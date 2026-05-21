@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet, Alert,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons } from '../components/Icon';
 import { addDoc, collection, serverTimestamp } from 'firebase/firestore';
 import { db } from '../firebase';
 

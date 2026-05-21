@@ -8,7 +8,7 @@ import {
   View, Text, TextInput, TouchableOpacity, Modal, ScrollView, StyleSheet, Dimensions,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons } from '../components/Icon';
 import { ScreenScroll, ScreenTitle, Empty } from '../components/ui';
 import { colors, spacing, radius, font, grad, shadow, fcfa, fdate } from '../theme';
 

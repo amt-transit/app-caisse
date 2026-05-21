@@ -3,7 +3,7 @@ import {
   View, Text, Image, TouchableOpacity, ActivityIndicator, StyleSheet, Alert, Linking,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons } from '../components/Icon';
 import { useAuth } from '../auth/AuthContext';
 import { useDemarcheur } from '../data/useDemarcheur';
 import { requestPushPermissionManually } from '../notifications';

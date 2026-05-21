@@ -15,7 +15,7 @@ import {
   View, Text, TouchableOpacity, Modal, StyleSheet, ScrollView,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons } from './Icon';
 import { colors, spacing, radius, font, grad, shadow } from '../theme';
 
 // Convertit l'ID de route en libellé lisible. On essaie de jolir les routes

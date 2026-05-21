@@ -12,7 +12,7 @@ import {
   View, Text, ScrollView, RefreshControl, StyleSheet, TouchableOpacity,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons } from './Icon';
 import { colors, spacing, radius, font, grad, shadow } from '../theme';
 
 export function ScreenScroll({ refreshing, onRefresh, children, contentStyle }) {

@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, StyleSheet, Animated, Easing } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Defs, LinearGradient as SvgGrad, Stop, Path, Circle } from 'react-native-svg';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons } from '../components/Icon';
 import {
   ScreenScroll, Card, SectionTitle, Row, Badge, Empty,
 } from '../components/ui';

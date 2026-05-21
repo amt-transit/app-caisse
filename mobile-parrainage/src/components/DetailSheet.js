@@ -9,7 +9,7 @@ import React from 'react';
 import {
   Modal, View, Text, ScrollView, TouchableOpacity, StyleSheet,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons } from './Icon';
 import { Badge } from './ui';
 import { colors, spacing, radius, font, shadow, fcfa, fdate } from '../theme';
 

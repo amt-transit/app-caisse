@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons } from '../components/Icon';
 import {
   ScreenScroll, ScreenTitle, Card, Row, Empty,
 } from '../components/ui';

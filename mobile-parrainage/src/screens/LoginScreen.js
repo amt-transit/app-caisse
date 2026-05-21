@@ -11,7 +11,7 @@ import {
   ScrollView,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons } from '../components/Icon';
 import { useAuth } from '../auth/AuthContext';
 import Background from '../components/Background';
 import LogoMark from '../components/LogoMark';
