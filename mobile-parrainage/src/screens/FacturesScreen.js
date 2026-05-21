@@ -420,7 +420,10 @@ const ds = StyleSheet.create({
   backdrop: { flex: 1, backgroundColor: 'rgba(11,37,64,0.45)', justifyContent: 'flex-end' },
   dismiss: { ...StyleSheet.absoluteFillObject },
   sheet: {
-    maxHeight: '92%',
+    // height: '92%' (et non maxHeight) : indispensable pour que le
+    // ScrollView intérieur avec flex:1 ait une hauteur calculable. Avec
+    // maxHeight + flex:1 enfant, RN aboutit à hauteur 0 (modale vide).
+    height: '92%',
     backgroundColor: colors.bgElevated,
     borderTopLeftRadius: 24, borderTopRightRadius: 24,
     padding: spacing.lg, paddingTop: 14,
