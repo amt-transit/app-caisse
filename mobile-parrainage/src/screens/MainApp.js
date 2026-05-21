@@ -28,6 +28,15 @@ export default function MainApp() {
   // voit immédiatement l'état de ses dossiers (paiements + suivi colis).
   const [tab, setTab] = useState('factures');
 
+  // Filet de sécurité : si le chargement dépasse 8s (= cold start Cloud
+  // Functions, réseau lent…), on propose de réessayer ou de se reconnecter.
+  const [loadTimedOut, setLoadTimedOut] = useState(false);
+  useEffect(() => {
+    if (!data.loading) { setLoadTimedOut(false); return; }
+    const t = setTimeout(() => setLoadTimedOut(true), 8000);
+    return () => clearTimeout(t);
+  }, [data.loading]);
+
   if (data.loading) {
     return (
       <Background>
@@ -35,6 +44,31 @@ export default function MainApp() {
           <LogoMark size={96} />
           <ActivityIndicator size="large" color={colors.gold} style={{ marginTop: spacing.xxl }} />
           <Text style={styles.muted}>Chargement de votre espace…</Text>
+          {loadTimedOut && (
+            <View style={{ marginTop: spacing.xl, alignItems: 'center', gap: spacing.md }}>
+              <Text style={[styles.muted, { color: colors.amber, textAlign: 'center', paddingHorizontal: 30 }]}>
+                Le chargement est plus long que prévu. Vous pouvez réessayer ou vous reconnecter.
+              </Text>
+              <TouchableOpacity
+                style={[styles.retryWrap, shadow.gold]}
+                onPress={() => { setLoadTimedOut(false); data.reload(); }}
+                activeOpacity={0.85}
+              >
+                <LinearGradient
+                  colors={grad.gold}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={styles.retry}
+                >
+                  <Ionicons name="refresh" size={18} color={colors.onGold} />
+                  <Text style={styles.retryT}>Réessayer</Text>
+                </LinearGradient>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.logoutGhost} onPress={logout}>
+                <Text style={styles.logoutGhostT}>Se déconnecter</Text>
+              </TouchableOpacity>
+            </View>
+          )}
         </View>
       </Background>
     );

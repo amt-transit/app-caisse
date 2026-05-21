@@ -131,10 +131,12 @@ export function useDemarcheur() {
       const agency = chosen.agency;
       const demId = chosen.demarcheurId;
 
-      // Recalcule côté serveur le solde disponible. Non bloquant : si la
-      // fonction n'est pas joignable, le onSnapshot affichera l'existant.
-      try { await httpsCallable(functions, 'reconcilePartnerBalances')(); }
-      catch (e) { /* non bloquant */ }
+      // Recalcule côté serveur le solde disponible. ASYNCHRONE (pas d'await)
+      // pour ne pas bloquer le chargement en cas de cold start Cloud Functions
+      // qui peut prendre 20-30s. Le onSnapshot affiche les données existantes
+      // immédiatement ; quand reconcile finit, le snapshot émet à nouveau et
+      // l'UI se met à jour automatiquement.
+      httpsCallable(functions, 'reconcilePartnerBalances')().catch(() => null);
 
       // Enregistre / rafraîchit le token push (non bloquant).
       registerPushToken({ demarcheurId: demId, agency }).catch(() => null);
@@ -175,9 +177,13 @@ export function useDemarcheur() {
           }));
         },
         (err) => {
+          // Diagnostic : on affiche le code Firebase + le path pour aider à
+          // identifier rapidement un souci de règles ou de claims.
+          const code = (err && err.code) || 'unknown';
+          const msg = (err && err.message) || '';
           setState((s) => ({
             ...s, loading: false, refreshing: false,
-            error: "Impossible de charger votre profil.",
+            error: `Profil indisponible (${code}). Route: ${agency}, ID: ${demId.slice(0, 6)}…\n${msg}`.trim(),
           }));
           onErr('me')(err);
         },
