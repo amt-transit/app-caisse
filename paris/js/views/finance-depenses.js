@@ -14,7 +14,7 @@ export const FinanceDepensesView = {
             <style>[v-cloak] { display: none; }</style>
             <div id="vue-finance-depenses" class="page" v-cloak>
                 <div class="quick-actions" style="margin-bottom: 20px;">
-                    <button class="btn btn-primary" @click="openAddModal" style="display: flex; align-items: center; gap: 8px;">
+                    <button class="amt-btn amt-btn-primary" @click="openAddModal" style="display: flex; align-items: center; gap: 8px;">
                         <i class="fas fa-plus"></i> Nouvelle Dépense
                     </button>
                 </div>
@@ -43,7 +43,7 @@ export const FinanceDepensesView = {
                                     <td data-label="Catégorie" style="padding: 14px 12px;"><span class="badge" style="background:#f1f5f9; color:#475569;">{{ e.category || 'Mensuelle' }}</span></td>
                                     <td data-label="Montant" style="padding: 14px 12px; text-align: right; font-weight: bold; color: #ef4444;">- {{ formatMoney(e.montant) }}</td>
                                     <td data-label="Actions" style="padding: 14px 12px; text-align: right;">
-                                        <button class="btn btn-outline btn-small" @click="deleteExpense(e.id)" style="color: #ef4444; border-color: #ef4444; padding: 6px;" title="Supprimer">
+                                        <button class="amt-btn amt-btn-outline amt-btn-sm" @click="deleteExpense(e.id)" style="color: #ef4444; border-color: #ef4444; padding: 6px;" title="Supprimer">
                                             <i class="fas fa-trash"></i>
                                         </button>
                                     </td>
@@ -83,8 +83,8 @@ export const FinanceDepensesView = {
                         </div>
                         
                         <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:25px;">
-                            <button class="btn btn-outline" @click="closeModal">Annuler</button>
-                            <button class="btn btn-primary" @click="saveExpense" :disabled="saving">
+                            <button class="amt-btn amt-btn-outline" @click="closeModal">Annuler</button>
+                            <button class="amt-btn amt-btn-primary" @click="saveExpense" :disabled="saving">
                                 <span v-if="saving"><i class="fas fa-spinner fa-spin"></i> Enregistrement...</span>
                                 <span v-else>Enregistrer</span>
                             </button>

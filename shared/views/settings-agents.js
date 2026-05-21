@@ -113,10 +113,10 @@ export const SettingsAgentsView = {
                         </div>
                     </div>
                     <div style="display: flex; gap: 10px; flex-wrap: wrap;">
-                        <button class="btn btn-outline" onclick="window.app.renderPage('settings-roles')" style="display: flex; align-items: center; gap: 8px; background: white; border: 1px solid #cbd5e1; color: #475569; padding: 10px 16px; border-radius: 8px; font-weight: bold; cursor: pointer;">
+                        <button class="amt-btn amt-btn-outline" onclick="window.app.renderPage('settings-roles')" style="display: flex; align-items: center; gap: 8px; background: white; border: 1px solid #cbd5e1; color: #475569; padding: 10px 16px; border-radius: 8px; font-weight: bold; cursor: pointer;">
                             <i class="fas fa-user-shield"></i> Rôles & Permissions
                         </button>
-                        <button class="btn btn-primary" onclick="window.app.views.settingsAgents.openModal()" style="display: flex; align-items: center; gap: 8px;">
+                        <button class="amt-btn amt-btn-primary" onclick="window.app.views.settingsAgents.openModal()" style="display: flex; align-items: center; gap: 8px;">
                             <i class="fas fa-plus"></i> Nouvel Agent
                         </button>
                     </div>
@@ -177,8 +177,8 @@ export const SettingsAgentsView = {
                                 <img id="imageToCrop" src="" style="max-width: 100%; display: block;">
                             </div>
                             <div style="display: flex; justify-content: flex-end; gap: 10px;">
-                                <button class="btn btn-outline" onclick="window.app.views.settingsAgents.closeCropModal()">Annuler</button>
-                                <button class="btn btn-primary" onclick="window.app.views.settingsAgents.cropImage()">Recadrer et utiliser</button>
+                                <button class="amt-btn amt-btn-outline" onclick="window.app.views.settingsAgents.closeCropModal()">Annuler</button>
+                                <button class="amt-btn amt-btn-primary" onclick="window.app.views.settingsAgents.cropImage()">Recadrer et utiliser</button>
                             </div>
                         </div>
                     </div>
@@ -221,8 +221,8 @@ export const SettingsAgentsView = {
                     </div>
                     
                     <div style="display: flex; justify-content: flex-end; gap: 10px;">
-                        <button class="btn btn-outline" style="padding: 10px 15px;" onclick="window.app.views.settingsAgents.closeModal()">Annuler</button>
-                        <button class="btn btn-primary" id="saveAgentBtn" style="padding: 10px 20px;" onclick="window.app.views.settingsAgents.saveAgent()"><i class="fas fa-save"></i> Enregistrer</button>
+                        <button class="amt-btn amt-btn-outline" style="padding: 10px 15px;" onclick="window.app.views.settingsAgents.closeModal()">Annuler</button>
+                        <button class="amt-btn amt-btn-primary" id="saveAgentBtn" style="padding: 10px 20px;" onclick="window.app.views.settingsAgents.saveAgent()"><i class="fas fa-save"></i> Enregistrer</button>
                     </div>
                 </div>
             </div>

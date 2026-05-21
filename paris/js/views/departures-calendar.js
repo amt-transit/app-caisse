@@ -180,8 +180,8 @@ export const DeparturesCalendarView = {
                         </div>
                     </div>
                     <div class="dep-modal-footer">
-                        <button class="btn btn-outline" style="padding: 8px 16px; border-radius: 8px;" @click="closeModal">Annuler</button>
-                        <button class="btn btn-primary" style="padding: 8px 16px; border-radius: 8px; background: #3b82f6; color: white; border: none;" :disabled="saving" @click="saveDeparture">
+                        <button class="amt-btn amt-btn-outline" style="padding: 8px 16px; border-radius: 8px;" @click="closeModal">Annuler</button>
+                        <button class="amt-btn amt-btn-primary" style="padding: 8px 16px; border-radius: 8px; background: #3b82f6; color: white; border: none;" :disabled="saving" @click="saveDeparture">
                             <span v-if="saving"><i class="fas fa-spinner fa-spin"></i></span>
                             <span v-else><i class="fas fa-save"></i> Enregistrer</span>
                         </button>

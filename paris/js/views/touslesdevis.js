@@ -101,7 +101,7 @@ export const TousLesDevisView = {
                                         <td data-label="Actions" style="padding: 14px 12px; text-align: right; display: flex; gap: 8px; justify-content: flex-end;">
                                             <button v-if="q.status !== 'ACCEPTÉ' && q.status !== 'REFUSÉ'" class="btn btn-success btn-small" @click="changeStatus(q.id, 'ACCEPTÉ')" title="Marquer comme Accepté" style="padding: 6px;"><i class="fas fa-check"></i></button>
                                             <button v-if="q.status !== 'ACCEPTÉ' && q.status !== 'REFUSÉ'" class="btn btn-danger btn-small" @click="changeStatus(q.id, 'REFUSÉ')" title="Marquer comme Refusé" style="padding: 6px;"><i class="fas fa-times"></i></button>
-                                            <button class="btn btn-outline btn-small" @click="deleteQuote(q.id)" title="Supprimer" style="color: #ef4444; border-color: #ef4444; padding: 6px;"><i class="fas fa-trash"></i></button>
+                                            <button class="amt-btn amt-btn-outline amt-btn-sm" @click="deleteQuote(q.id)" title="Supprimer" style="color: #ef4444; border-color: #ef4444; padding: 6px;"><i class="fas fa-trash"></i></button>
                                         </td>
                                     </tr>
                                 </template>

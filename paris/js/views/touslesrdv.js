@@ -138,7 +138,7 @@ export const TousLesRdvView = {
                                 <p class="rdv-header__subtitle">${subtitle}</p>
                             </div>
                         </div>
-                        <button class="btn btn-primary" @click="globalApp.renderPage('appointment-new')" style="display: flex; align-items: center; gap: 8px; padding: 10px 16px; font-weight: bold; border-radius: 8px;">
+                        <button class="amt-btn amt-btn-primary" @click="globalApp.renderPage('appointment-new')">
                             <i class="fas fa-plus"></i> Nouveau RDV
                         </button>
                     </div>

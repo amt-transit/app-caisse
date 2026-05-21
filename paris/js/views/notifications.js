@@ -23,7 +23,7 @@ export const NotificationsView = {
                                 <p style="margin: 4px 0 0 0; color: #64748b; font-size: 13px;">Alertes et événements importants</p>
                             </div>
                         </div>
-                        <button class="btn btn-outline" onclick="window.app.views.notifications.markAllAsRead()" style="display: flex; align-items: center; gap: 8px;">
+                        <button class="amt-btn amt-btn-outline" onclick="window.app.views.notifications.markAllAsRead()" style="display: flex; align-items: center; gap: 8px;">
                             <i class="fas fa-check-double"></i> Tout marquer comme lu
                         </button>
                     </div>
@@ -76,7 +76,7 @@ export const NotificationsView = {
                             <span style="font-size: 11px; color: #64748b; font-weight: 600;">${time}</span>
                         </div>
                         <div style="color: #475569; font-size: 13px; line-height: 1.5; margin-bottom: 12px;">${n.message || ''}</div>
-                        ${!isRead ? `<button class="btn btn-outline btn-small" onclick="window.app.views.notifications.markAsRead('${n.id}')" style="font-size: 11px; padding: 6px 12px; border-radius: 6px;">Marquer comme lu</button>` : ''}
+                        ${!isRead ? `<button class="amt-btn amt-btn-outline amt-btn-sm" onclick="window.app.views.notifications.markAsRead('${n.id}')" style="font-size: 11px; padding: 6px 12px; border-radius: 6px;">Marquer comme lu</button>` : ''}
                     </div>
                 </div>
             `;

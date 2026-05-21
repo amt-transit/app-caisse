@@ -23,7 +23,7 @@ export const ProductsListView = {
                         </div>
                     </div>
                     <div style="display: flex; gap: 10px;">
-                        <button class="btn btn-primary" @click="openAddModal" style="display: flex; align-items: center; gap: 8px;">
+                        <button class="amt-btn amt-btn-primary" @click="openAddModal" style="display: flex; align-items: center; gap: 8px;">
                             <i class="fas fa-plus"></i> Nouveau produit
                         </button>
                     </div>

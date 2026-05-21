@@ -108,7 +108,7 @@ export const DemandesDevisView = {
         } else {
             tbody.innerHTML = this.requests.map(r => {
                 const isTreated = r.status === 'TRAITÉ';
-                let actions = `<button class="btn btn-outline btn-small" onclick="window.app.views.demandesDevis.deleteRequest('${r.id}')" title="Supprimer" style="color: #ef4444; border-color: #ef4444; padding: 6px;"><i class="fas fa-trash"></i></button>`;
+                let actions = `<button class="amt-btn amt-btn-outline amt-btn-sm" onclick="window.app.views.demandesDevis.deleteRequest('${r.id}')" title="Supprimer" style="color: #ef4444; border-color: #ef4444; padding: 6px;"><i class="fas fa-trash"></i></button>`;
                 if (!isTreated) {
                     actions = `<button class="btn btn-primary btn-small" onclick="window.app.views.demandesDevis.processRequest('${r.id}')" title="Marquer Traité" style="padding: 6px;"><i class="fas fa-file-signature"></i> Traiter</button> ${actions}`;
                 }
