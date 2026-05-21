@@ -155,13 +155,17 @@ onAuthStateChanged(auth, async (user) => {
             const mobProfileBtn = header.querySelector('#mob-profileBtn');
             if (mobProfileBtn) mobProfileBtn.remove();
 
-            const agencyLinksHtml = Object.values(AGENCIES).map(a => {
-                const isActive = a.id === currentActiveAgency;
-                const style = isActive ? 'background-color: #eff6ff; color: #3b82f6; font-weight: bold; border-left: 3px solid #3b82f6;' : '';
-                const checkIcon = isActive ? '<i class="fas fa-check" style="margin-left: auto;"></i>' : '';
-                
-                return `<a href="#" onclick="window.switchAgency('${a.id}'); return false;" style="${style}"><i class="fas fa-plane-${a.type === 'departure' ? 'departure' : 'arrival'}"></i> ${a.name} ${a.flag} ${checkIcon}</a>`;
-            }).join('');
+            // Une seule entrée dans le dropdown : un bouton qui ouvre la modale
+            // « Choisir une agence » avec onglets Départs / Arrivées / Tout
+            // et cards visuelles. Scalable à 100+ routes.
+            const activeAgencyData = AGENCIES[currentActiveAgency] || {};
+            const activeFlag = activeAgencyData.flag || '🌍';
+            const activeName = activeAgencyData.name || currentActiveAgency;
+            const agencyLinksHtml = `<a href="#" onclick="window.openAgencyPicker(); return false;" style="display:flex; align-items:center; gap:10px;">
+                <span style="font-size:18px;">${activeFlag}</span>
+                <span style="flex:1;"><b>${activeName}</b><br><span style="font-size:11px; color:#8198B0;">Changer d'agence</span></span>
+                <i class="fas fa-chevron-right" style="color:#8198B0;"></i>
+            </a>`;
 
             // 2. Injecter le nouveau bloc utilisateur s'il n'existe pas encore
             if (!header.querySelector('.user-info')) {
@@ -396,6 +400,121 @@ onAuthStateChanged(auth, async (user) => {
                 } else {
                     window.location.href = (inParisFolder || inAbidjanFolder) ? '../index.html' : 'index.html';
                 }
+            };
+
+            // ── MODALE « Choisir une agence » ────────────────────────────
+            // Plein écran avec 3 onglets (Départs / Arrivées / Tout) +
+            // recherche + cards visuelles. Scalable à 100+ routes SaaS.
+            window.openAgencyPicker = () => {
+                // Fermer le dropdown utilisateur ouvert
+                document.querySelectorAll('.user-dropdown-menu').forEach((m) => m.classList.remove('active'));
+
+                // Supprimer une modale existante avant d'en créer une nouvelle
+                const existing = document.getElementById('agencyPickerModal');
+                if (existing) existing.remove();
+
+                const current = sessionStorage.getItem('currentActiveAgency') || 'abidjan';
+                const all = Object.values(AGENCIES || {});
+                const departures = all.filter((a) => a.type === 'departure');
+                const arrivals = all.filter((a) => a.type === 'arrival');
+
+                const renderCard = (a) => {
+                    const isActive = a.id === current;
+                    return `
+                        <button class="agp-card${isActive ? ' on' : ''}" data-agency="${a.id}" data-name="${(a.name || '').toLowerCase()}">
+                            <div class="agp-card-flag">${a.flag || '🌍'}</div>
+                            <div class="agp-card-name">${a.name || a.id}</div>
+                            <div class="agp-card-tag">${isActive ? a.id.toUpperCase() + ' · ACTIVE' : a.id.toUpperCase()}</div>
+                        </button>
+                    `;
+                };
+
+                const modal = document.createElement('div');
+                modal.id = 'agencyPickerModal';
+                modal.innerHTML = `
+                    <style>
+                        #agencyPickerModal { position: fixed; inset: 0; background: rgba(11,37,64,0.65); display: flex; align-items: center; justify-content: center; z-index: 100000; padding: 20px; backdrop-filter: blur(3px); animation: agpFadeIn 0.2s ease; }
+                        @keyframes agpFadeIn { from { opacity: 0; } to { opacity: 1; } }
+                        @keyframes agpSlideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+                        .agp-box { background: white; border-radius: 18px; max-width: 720px; width: 100%; max-height: 88vh; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 30px 80px -20px rgba(0,0,0,0.4); animation: agpSlideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1); }
+                        .agp-head { padding: 18px 22px; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center; }
+                        .agp-title { font-family: 'Comfortaa', 'Jost', sans-serif; font-weight: 700; font-size: 18px; color: #1A3553; display: flex; align-items: center; gap: 10px; }
+                        .agp-close { background: #f1f5f9; border: none; width: 36px; height: 36px; border-radius: 10px; cursor: pointer; font-size: 18px; color: #64748b; transition: background 0.15s; }
+                        .agp-close:hover { background: #e2e8f0; }
+                        .agp-search { padding: 12px 22px; border-bottom: 1px solid #e2e8f0; background: #f8fafc; }
+                        .agp-search input { width: 100%; border: 1px solid #cbd5e1; background: white; border-radius: 10px; padding: 10px 14px 10px 36px; font-size: 14px; outline: none; font-family: inherit; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='%238198B0' viewBox='0 0 16 16'%3E%3Cpath d='M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001q.044.06.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1 1 0 0 0-.115-.1zM12 6.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: 12px center; background-size: 15px; }
+                        .agp-search input:focus { border-color: #F2A312; box-shadow: 0 0 0 3px rgba(242,163,18,0.15); }
+                        .agp-tabs { display: flex; padding: 0 14px; border-bottom: 1px solid #e2e8f0; background: #f8fafc; }
+                        .agp-tab { padding: 13px 16px; font-size: 13px; font-weight: 600; color: #4A6178; border-bottom: 2px solid transparent; margin-bottom: -1px; cursor: pointer; transition: all 0.15s; background: none; border-top: none; border-left: none; border-right: none; font-family: inherit; }
+                        .agp-tab.on { color: #B8780A; border-bottom-color: #F2A312; }
+                        .agp-tab:hover:not(.on) { color: #1A3553; }
+                        .agp-tab-count { background: rgba(11,37,64,0.08); color: #4A6178; padding: 2px 8px; border-radius: 100px; font-size: 11px; margin-left: 6px; }
+                        .agp-tab.on .agp-tab-count { background: rgba(242,163,18,0.18); color: #B8780A; }
+                        .agp-grid { padding: 18px; display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 12px; overflow-y: auto; flex: 1; }
+                        .agp-card { background: white; border: 1.5px solid #e2e8f0; border-radius: 14px; padding: 16px 12px; cursor: pointer; text-align: center; transition: all 0.2s cubic-bezier(0.4,0,0.2,1); font-family: inherit; }
+                        .agp-card:hover { border-color: #F2A312; transform: translateY(-2px); box-shadow: 0 8px 18px -6px rgba(242,163,18,0.25); }
+                        .agp-card.on { background: linear-gradient(135deg, rgba(242,163,18,0.15) 0%, rgba(242,163,18,0.05) 100%); border-color: #F2A312; box-shadow: 0 4px 12px -2px rgba(242,163,18,0.2); }
+                        .agp-card-flag { font-size: 32px; line-height: 1; margin-bottom: 8px; }
+                        .agp-card-name { font-size: 13.5px; font-weight: 700; color: #1A3553; }
+                        .agp-card-tag { font-size: 10px; color: #8198B0; margin-top: 4px; font-family: 'JetBrains Mono', monospace; letter-spacing: 0.5px; }
+                        .agp-card.on .agp-card-tag { color: #B8780A; font-weight: 700; }
+                        .agp-empty { grid-column: 1 / -1; text-align: center; padding: 40px 20px; color: #8198B0; font-size: 13px; }
+                    </style>
+                    <div class="agp-box" onclick="event.stopPropagation()">
+                        <div class="agp-head">
+                            <div class="agp-title"><i class="fas fa-globe-africa" style="color:#F2A312;"></i> Choisir une agence</div>
+                            <button class="agp-close" onclick="document.getElementById('agencyPickerModal').remove()">✕</button>
+                        </div>
+                        <div class="agp-search">
+                            <input id="agp-search-input" type="text" placeholder="Rechercher une route…" autocomplete="off">
+                        </div>
+                        <div class="agp-tabs">
+                            <button class="agp-tab on" data-filter="departure">🛫 Départs <span class="agp-tab-count">${departures.length}</span></button>
+                            <button class="agp-tab" data-filter="arrival">🛬 Arrivées <span class="agp-tab-count">${arrivals.length}</span></button>
+                            <button class="agp-tab" data-filter="all">🌍 Tout <span class="agp-tab-count">${all.length}</span></button>
+                        </div>
+                        <div class="agp-grid" id="agp-grid">
+                            ${departures.map(renderCard).join('')}
+                        </div>
+                    </div>
+                `;
+                // Click outside ferme la modale
+                modal.addEventListener('click', (e) => { if (e.target === modal) modal.remove(); });
+                document.body.appendChild(modal);
+
+                // Tabs
+                let currentFilter = 'departure';
+                const grid = document.getElementById('agp-grid');
+                const refreshGrid = () => {
+                    const q = (document.getElementById('agp-search-input').value || '').toLowerCase().trim();
+                    let list;
+                    if (currentFilter === 'departure') list = departures;
+                    else if (currentFilter === 'arrival') list = arrivals;
+                    else list = all;
+                    if (q) list = list.filter((a) => (a.name || '').toLowerCase().includes(q) || (a.id || '').toLowerCase().includes(q));
+                    grid.innerHTML = list.length === 0
+                        ? `<div class="agp-empty">Aucune route ne correspond à « ${q} »</div>`
+                        : list.map(renderCard).join('');
+                };
+                modal.querySelectorAll('.agp-tab').forEach((t) => {
+                    t.addEventListener('click', () => {
+                        modal.querySelectorAll('.agp-tab').forEach((x) => x.classList.remove('on'));
+                        t.classList.add('on');
+                        currentFilter = t.dataset.filter;
+                        refreshGrid();
+                    });
+                });
+                // Recherche live
+                document.getElementById('agp-search-input').addEventListener('input', refreshGrid);
+                // Click sur une card → switch
+                modal.addEventListener('click', (e) => {
+                    const card = e.target.closest('.agp-card');
+                    if (card && card.dataset.agency) {
+                        window.switchAgency(card.dataset.agency);
+                    }
+                });
+                // Auto-focus search
+                setTimeout(() => document.getElementById('agp-search-input').focus(), 100);
             };
         }
 

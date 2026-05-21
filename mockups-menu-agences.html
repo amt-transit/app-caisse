@@ -1,0 +1,510 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AMT Trans'it — Menu agences : 3 propositions</title>
+<link href="https://fonts.googleapis.com/css2?family=Comfortaa:wght@400;500;600;700&family=Jost:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<style>
+  :root {
+    --amt-blue: #1A3553;
+    --amt-red: #E51F21;
+    --amt-gold: #F2A312;
+    --amt-gold-deep: #B8780A;
+    --paper: #F5F8FB;
+    --line: rgba(11,37,64,0.10);
+    --text: #0B2540;
+    --text-dim: #4A6178;
+    --text-faint: #8198B0;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Jost', sans-serif;
+    background: var(--paper);
+    color: var(--text);
+    min-height: 100vh;
+    padding: 40px 20px;
+    background-image: radial-gradient(ellipse 60% 40% at 100% 0%, rgba(242,163,18,0.08), transparent 60%);
+  }
+  header {
+    max-width: 1400px; margin: 0 auto 50px;
+    text-align: center;
+  }
+  h1 {
+    font-family: 'Comfortaa', sans-serif;
+    font-weight: 600; font-size: 36px;
+    color: var(--amt-blue);
+    letter-spacing: -1px;
+    margin-bottom: 12px;
+  }
+  .lede {
+    color: var(--text-dim); font-size: 15px;
+    max-width: 560px; margin: 0 auto;
+  }
+  .gallery {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 30px;
+    max-width: 1400px;
+    margin: 0 auto;
+  }
+  .prop {
+    background: white;
+    border-radius: 20px;
+    overflow: hidden;
+    box-shadow: 0 20px 50px -25px rgba(11,37,64,0.18);
+    border: 1px solid var(--line);
+    display: flex; flex-direction: column;
+  }
+  .prop-head {
+    padding: 24px 26px 18px;
+    background: linear-gradient(180deg, #fafcfe 0%, #f3f6fa 100%);
+    border-bottom: 1px solid var(--line);
+  }
+  .prop-letter {
+    font-family: 'Comfortaa', sans-serif;
+    font-weight: 700; font-size: 56px; line-height: 0.85;
+    background: linear-gradient(135deg, var(--amt-gold), var(--amt-gold-deep));
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  }
+  .prop-name { font-family: 'Comfortaa', sans-serif; font-weight: 700; font-size: 20px; color: var(--amt-blue); margin-top: 4px; }
+  .prop-tag { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--text-faint); letter-spacing: 1.5px; text-transform: uppercase; margin-top: 4px; }
+  .prop-desc { margin-top: 10px; font-size: 12.5px; color: var(--text-dim); line-height: 1.5; min-height: 50px; }
+  .prop-body {
+    padding: 30px 20px;
+    background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+    flex: 1;
+    display: flex; align-items: flex-start; justify-content: center;
+    min-height: 580px;
+  }
+
+  /* ── Avatar + header simulé ──── */
+  .header-sim {
+    position: relative;
+    width: 100%;
+    max-width: 320px;
+  }
+  .header-bar {
+    background: white;
+    border-radius: 12px;
+    padding: 10px 14px;
+    box-shadow: 0 2px 8px rgba(11,37,64,0.06);
+    display: flex; justify-content: flex-end; align-items: center; gap: 10px;
+    margin-bottom: 8px;
+  }
+  .avatar-mini {
+    width: 36px; height: 36px; border-radius: 50%;
+    background: linear-gradient(135deg, var(--amt-gold), var(--amt-gold-deep));
+    color: #1a0c08; display: flex; align-items: center; justify-content: center;
+    font-weight: 700; font-size: 14px;
+  }
+  .badge-route {
+    background: rgba(242,163,18,0.15);
+    color: var(--amt-gold-deep);
+    padding: 5px 10px; border-radius: 100px;
+    font-size: 11px; font-weight: 700;
+    display: flex; align-items: center; gap: 5px;
+  }
+
+  /* ════════════════ PROPOSITION A — Liste GROUPÉE + DRAPEAUX ════════════════ */
+  .menu-A {
+    background: white;
+    border-radius: 14px;
+    box-shadow: 0 20px 40px -10px rgba(11,37,64,0.25);
+    overflow: hidden;
+    width: 100%;
+    border: 1px solid var(--line);
+  }
+  .menu-A-section {
+    padding: 8px 0 4px;
+  }
+  .menu-A-section-title {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: var(--text-faint);
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    padding: 10px 16px 6px;
+    font-weight: 600;
+  }
+  .menu-A-item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 9px 16px;
+    cursor: pointer;
+    transition: background 0.15s;
+    font-size: 13px;
+    color: var(--text);
+  }
+  .menu-A-item:hover { background: #f8fafc; }
+  .menu-A-item.on {
+    background: rgba(242,163,18,0.10);
+    border-left: 3px solid var(--amt-gold);
+    padding-left: 13px;
+    font-weight: 700;
+    color: var(--amt-gold-deep);
+  }
+  .menu-A-flag { font-size: 18px; width: 22px; text-align: center; }
+  .menu-A-name { flex: 1; }
+  .menu-A-check { color: var(--amt-gold-deep); }
+  .menu-A-divider { height: 1px; background: var(--line); margin: 2px 12px; }
+
+  /* ════════════════ PROPOSITION B — Sections COLLAPSIBLES + RECHERCHE ════════════════ */
+  .menu-B {
+    background: white;
+    border-radius: 14px;
+    box-shadow: 0 20px 40px -10px rgba(11,37,64,0.25);
+    overflow: hidden;
+    width: 100%;
+    border: 1px solid var(--line);
+  }
+  .menu-B-search {
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--line);
+    background: #f8fafc;
+  }
+  .menu-B-search input {
+    width: 100%; border: 1px solid var(--line);
+    background: white;
+    border-radius: 8px;
+    padding: 8px 12px 8px 32px;
+    font-size: 12.5px;
+    font-family: inherit;
+    color: var(--text);
+    outline: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='%238198B0' viewBox='0 0 16 16'%3E%3Cpath d='M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001q.044.06.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1 1 0 0 0-.115-.1zM12 6.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0'/%3E%3C/svg%3E");
+    background-repeat: no-repeat; background-position: 10px center; background-size: 14px;
+  }
+  .menu-B-group { border-bottom: 1px solid var(--line); }
+  .menu-B-group:last-child { border-bottom: none; }
+  .menu-B-group-head {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 12px 16px;
+    cursor: pointer;
+    background: white;
+    transition: background 0.15s;
+  }
+  .menu-B-group-head:hover { background: #f8fafc; }
+  .menu-B-group-title {
+    font-family: 'Comfortaa', sans-serif;
+    font-weight: 600; font-size: 13px;
+    color: var(--amt-blue);
+    display: flex; align-items: center; gap: 8px;
+  }
+  .menu-B-group-count {
+    background: rgba(11,37,64,0.06);
+    color: var(--text-dim);
+    padding: 2px 8px; border-radius: 100px;
+    font-size: 10.5px; font-weight: 700;
+  }
+  .menu-B-group-chev {
+    color: var(--text-faint);
+    transition: transform 0.2s;
+  }
+  .menu-B-group.open .menu-B-group-chev { transform: rotate(90deg); }
+  .menu-B-group-body { background: #f8fafc; padding: 4px 0 8px; }
+  .menu-B-group:not(.open) .menu-B-group-body { display: none; }
+  .menu-B-item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 16px 8px 36px;
+    cursor: pointer;
+    font-size: 12.5px;
+    color: var(--text);
+    transition: background 0.15s;
+  }
+  .menu-B-item:hover { background: rgba(11,37,64,0.05); }
+  .menu-B-item.on {
+    color: var(--amt-gold-deep);
+    font-weight: 700;
+  }
+  .menu-B-item .menu-B-flag { font-size: 16px; }
+  .menu-B-item .menu-B-name { flex: 1; }
+  .menu-B-item.on::after { content: '✓'; color: var(--amt-gold-deep); }
+  .menu-B-fav { padding: 10px 16px; background: rgba(242,163,18,0.06); border-bottom: 1px solid var(--line); display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  .menu-B-fav-label { font-size: 10px; color: var(--amt-gold-deep); font-weight: 700; letter-spacing: 1px; text-transform: uppercase; margin-right: 4px; }
+  .menu-B-fav-chip {
+    background: white;
+    border: 1px solid rgba(242,163,18,0.3);
+    color: var(--amt-gold-deep);
+    padding: 4px 10px;
+    border-radius: 100px;
+    font-size: 11px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .menu-B-fav-chip:hover { background: var(--amt-gold); color: #1a0c08; }
+  .menu-B-fav-chip.on { background: var(--amt-gold); color: #1a0c08; border-color: var(--amt-gold-deep); }
+
+  /* ════════════════ PROPOSITION C — MODAL plein écran avec ONGLETS ════════════════ */
+  .modal-C-backdrop {
+    background: rgba(11,37,64,0.65);
+    border-radius: 14px;
+    padding: 30px 20px;
+    width: 100%;
+    box-shadow: 0 20px 40px -10px rgba(11,37,64,0.25);
+  }
+  .modal-C {
+    background: white;
+    border-radius: 16px;
+    overflow: hidden;
+    max-width: 100%;
+    border: 1px solid var(--line);
+  }
+  .modal-C-head {
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--line);
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .modal-C-title { font-family: 'Comfortaa', sans-serif; font-weight: 700; font-size: 16px; color: var(--amt-blue); }
+  .modal-C-close { background: none; border: none; cursor: pointer; color: var(--text-faint); font-size: 18px; }
+  .modal-C-tabs {
+    display: flex;
+    border-bottom: 1px solid var(--line);
+    padding: 0 8px;
+    background: #f8fafc;
+  }
+  .modal-C-tab {
+    padding: 12px 14px;
+    font-size: 12.5px; font-weight: 600;
+    color: var(--text-dim);
+    border-bottom: 2px solid transparent;
+    margin-bottom: -1px;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .modal-C-tab.on {
+    color: var(--amt-gold-deep);
+    border-bottom-color: var(--amt-gold);
+  }
+  .modal-C-tab-count {
+    background: rgba(11,37,64,0.08);
+    color: var(--text-dim);
+    padding: 1px 6px; border-radius: 100px;
+    font-size: 10px; margin-left: 4px;
+  }
+  .modal-C-grid {
+    padding: 16px;
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+    max-height: 420px;
+    overflow-y: auto;
+  }
+  .modal-C-card {
+    background: white;
+    border: 1.5px solid var(--line);
+    border-radius: 12px;
+    padding: 14px 12px;
+    cursor: pointer;
+    text-align: center;
+    transition: all 0.2s;
+  }
+  .modal-C-card:hover {
+    border-color: var(--amt-gold);
+    transform: translateY(-2px);
+    box-shadow: 0 6px 14px -4px rgba(242,163,18,0.18);
+  }
+  .modal-C-card.on {
+    background: rgba(242,163,18,0.10);
+    border-color: var(--amt-gold);
+  }
+  .modal-C-card-flag { font-size: 28px; line-height: 1; margin-bottom: 6px; }
+  .modal-C-card-name { font-size: 12.5px; font-weight: 700; color: var(--amt-blue); }
+  .modal-C-card-tag { font-size: 9.5px; color: var(--text-faint); margin-top: 2px; font-family: 'JetBrains Mono', monospace; }
+  .modal-C-card.on .modal-C-card-tag { color: var(--amt-gold-deep); }
+
+  .foot {
+    max-width: 700px; margin: 60px auto 40px;
+    text-align: center; font-size: 12px;
+    color: var(--text-faint);
+    border-top: 1px dashed var(--line); padding-top: 30px;
+  }
+
+  @media (max-width: 1100px) {
+    .gallery { grid-template-columns: 1fr; gap: 40px; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Menu agences — 3 propositions</h1>
+  <p class="lede">
+    Quand vous aurez 20+ routes SaaS, le simple dropdown ne suffira plus.
+    Voici trois directions pour un menu plus élégant et scalable.
+  </p>
+</header>
+
+<section class="gallery">
+
+  <!-- ──── PROPOSITION A ──── -->
+  <article class="prop">
+    <div class="prop-head">
+      <div class="prop-letter">A</div>
+      <div class="prop-name">Liste groupée</div>
+      <div class="prop-tag">Le plus simple</div>
+      <p class="prop-desc">
+        Sections « Départs » / « Arrivées » dans le dropdown.
+        Drapeaux à gauche. Indicateur visuel de la route active.
+        Marche jusqu'à ~30 routes sans recherche.
+      </p>
+    </div>
+    <div class="prop-body">
+      <div class="header-sim">
+        <div class="header-bar">
+          <div class="badge-route">🇨🇳 Chine</div>
+          <div class="avatar-mini">J</div>
+        </div>
+        <div class="menu-A">
+          <div class="menu-A-section">
+            <div class="menu-A-section-title">🛫 Agences de départ</div>
+            <div class="menu-A-item"><span class="menu-A-flag">🇫🇷</span><span class="menu-A-name">Paris</span></div>
+            <div class="menu-A-item on"><span class="menu-A-flag">🇨🇳</span><span class="menu-A-name">Chine</span><span class="menu-A-check">✓</span></div>
+            <div class="menu-A-item"><span class="menu-A-flag">🇺🇸</span><span class="menu-A-name">USA — New York</span></div>
+            <div class="menu-A-item"><span class="menu-A-flag">🇹🇷</span><span class="menu-A-name">Turquie</span></div>
+            <div class="menu-A-item"><span class="menu-A-flag">🇲🇦</span><span class="menu-A-name">Maroc</span></div>
+          </div>
+          <div class="menu-A-divider"></div>
+          <div class="menu-A-section">
+            <div class="menu-A-section-title">🛬 Agences d'arrivée</div>
+            <div class="menu-A-item"><span class="menu-A-flag">🇨🇮</span><span class="menu-A-name">Abidjan</span></div>
+            <div class="menu-A-item"><span class="menu-A-flag">🇨🇮</span><span class="menu-A-name">Abidjan ↔ Chine</span></div>
+            <div class="menu-A-item"><span class="menu-A-flag">🇨🇮</span><span class="menu-A-name">Abidjan ↔ USA</span></div>
+            <div class="menu-A-item"><span class="menu-A-flag">🇳🇬</span><span class="menu-A-name">Lagos</span></div>
+          </div>
+          <div class="menu-A-divider"></div>
+          <div class="menu-A-section">
+            <div class="menu-A-item" style="color: var(--amt-gold-deep); font-weight: 700;">
+              <span class="menu-A-flag">🌍</span><span class="menu-A-name">Toutes les routes</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </article>
+
+  <!-- ──── PROPOSITION B ──── -->
+  <article class="prop">
+    <div class="prop-head">
+      <div class="prop-letter">B</div>
+      <div class="prop-name">Collapsibles + favoris</div>
+      <div class="prop-tag">Évolutif jusqu'à 100+ routes</div>
+      <p class="prop-desc">
+        Recherche en haut, sections repliables, chips « favoris »
+        pour les 3-4 routes les plus utilisées. Le scroll reste
+        contenu même avec beaucoup de pays.
+      </p>
+    </div>
+    <div class="prop-body">
+      <div class="header-sim">
+        <div class="header-bar">
+          <div class="badge-route">🇨🇳 Chine</div>
+          <div class="avatar-mini">J</div>
+        </div>
+        <div class="menu-B">
+          <div class="menu-B-search">
+            <input type="text" placeholder="Rechercher une route…">
+          </div>
+          <div class="menu-B-fav">
+            <span class="menu-B-fav-label">⭐ Favoris</span>
+            <div class="menu-B-fav-chip">🇫🇷 Paris</div>
+            <div class="menu-B-fav-chip on">🇨🇳 Chine</div>
+            <div class="menu-B-fav-chip">🇨🇮 Abidjan</div>
+          </div>
+          <div class="menu-B-group open">
+            <div class="menu-B-group-head">
+              <div class="menu-B-group-title">🛫 Départs <span class="menu-B-group-count">5</span></div>
+              <span class="menu-B-group-chev">›</span>
+            </div>
+            <div class="menu-B-group-body">
+              <div class="menu-B-item"><span class="menu-B-flag">🇫🇷</span><span class="menu-B-name">Paris</span></div>
+              <div class="menu-B-item on"><span class="menu-B-flag">🇨🇳</span><span class="menu-B-name">Chine</span></div>
+              <div class="menu-B-item"><span class="menu-B-flag">🇺🇸</span><span class="menu-B-name">USA — NY</span></div>
+              <div class="menu-B-item"><span class="menu-B-flag">🇹🇷</span><span class="menu-B-name">Turquie</span></div>
+              <div class="menu-B-item"><span class="menu-B-flag">🇲🇦</span><span class="menu-B-name">Maroc</span></div>
+            </div>
+          </div>
+          <div class="menu-B-group">
+            <div class="menu-B-group-head">
+              <div class="menu-B-group-title">🛬 Arrivées <span class="menu-B-group-count">4</span></div>
+              <span class="menu-B-group-chev">›</span>
+            </div>
+          </div>
+          <div class="menu-B-group">
+            <div class="menu-B-group-head">
+              <div class="menu-B-group-title">🌍 Global <span class="menu-B-group-count">1</span></div>
+              <span class="menu-B-group-chev">›</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </article>
+
+  <!-- ──── PROPOSITION C ──── -->
+  <article class="prop">
+    <div class="prop-head">
+      <div class="prop-letter">C</div>
+      <div class="prop-name">Modal + Cards</div>
+      <div class="prop-tag">Le plus visuel</div>
+      <p class="prop-desc">
+        Au clic, ouverture d'une vraie modale (pas un dropdown).
+        Onglets « Départs / Arrivées / Toutes ». Cards avec gros
+        drapeau. Idéal pour parcourir visuellement le réseau mondial.
+      </p>
+    </div>
+    <div class="prop-body">
+      <div class="modal-C-backdrop">
+        <div class="modal-C">
+          <div class="modal-C-head">
+            <div class="modal-C-title">Choisir une agence</div>
+            <button class="modal-C-close">✕</button>
+          </div>
+          <div class="modal-C-tabs">
+            <div class="modal-C-tab on">🛫 Départs <span class="modal-C-tab-count">5</span></div>
+            <div class="modal-C-tab">🛬 Arrivées <span class="modal-C-tab-count">4</span></div>
+            <div class="modal-C-tab">🌍 Tout</div>
+          </div>
+          <div class="modal-C-grid">
+            <div class="modal-C-card">
+              <div class="modal-C-card-flag">🇫🇷</div>
+              <div class="modal-C-card-name">Paris</div>
+              <div class="modal-C-card-tag">PARIS</div>
+            </div>
+            <div class="modal-C-card on">
+              <div class="modal-C-card-flag">🇨🇳</div>
+              <div class="modal-C-card-name">Chine</div>
+              <div class="modal-C-card-tag">CHINE · ACTIVE</div>
+            </div>
+            <div class="modal-C-card">
+              <div class="modal-C-card-flag">🇺🇸</div>
+              <div class="modal-C-card-name">USA — NY</div>
+              <div class="modal-C-card-tag">USA</div>
+            </div>
+            <div class="modal-C-card">
+              <div class="modal-C-card-flag">🇹🇷</div>
+              <div class="modal-C-card-name">Turquie</div>
+              <div class="modal-C-card-tag">TURQUIE</div>
+            </div>
+            <div class="modal-C-card">
+              <div class="modal-C-card-flag">🇲🇦</div>
+              <div class="modal-C-card-name">Maroc</div>
+              <div class="modal-C-card-tag">MAROC</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </article>
+
+</section>
+
+<div class="foot">
+  Mon avis perso : <strong>A</strong> est suffisant pour <span style="color: var(--amt-gold-deep); font-weight: 700;">~10 routes</span> ·
+  <strong>B</strong> tient jusqu'à <span style="color: var(--amt-gold-deep); font-weight: 700;">100+ routes</span> ·
+  <strong>C</strong> est plus immersif mais demande un clic de plus.
+</div>
+
+</body>
+</html>
