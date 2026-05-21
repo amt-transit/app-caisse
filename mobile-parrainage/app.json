@@ -22,6 +22,7 @@
     },
     "android": {
       "package": "com.amttransit.parrainage",
+      "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
         "foregroundImage": "./assets/logo.png",
         "backgroundColor": "#F2A312"
@@ -37,7 +38,15 @@
     },
     "plugins": [
       "expo-asset",
-      "expo-font",
+      [
+        "expo-font",
+        {
+          "fonts": [
+            "./node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/Ionicons.ttf",
+            "./node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/FontAwesome.ttf"
+          ]
+        }
+      ],
       [
         "expo-notifications",
         {
