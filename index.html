@@ -33,6 +33,28 @@
 
             var safeName = String(name).replace(/[<>&"']/g, '');
 
+            // Convertit un emoji (ou plusieurs séparés par "_") en HTML
+            // d'images SVG Twemoji. Garantit que les drapeaux régionaux
+            // s'affichent identiques sur Windows, Mac et mobile (sans
+            // attendre que le JS Twemoji soit chargé).
+            var flagToTwemojiHtml = function(em){
+                if (!em) return '🌍';
+                var parts = String(em).split('_');
+                var pieces = parts.map(function(part){
+                    var codes = [];
+                    for (var i = 0; i < part.length;) {
+                        var cp = part.codePointAt(i);
+                        if (cp !== 0xfe0f && cp !== 0x200d) codes.push(cp.toString(16));
+                        i += cp > 0xFFFF ? 2 : 1;
+                    }
+                    if (!codes.length) return part;
+                    var url = 'https://cdn.jsdelivr.net/gh/jdecked/twemoji@latest/assets/svg/' + codes.join('-') + '.svg';
+                    return '<img src="' + url + '" alt="" onerror="this.style.display=\'none\'">';
+                });
+                return pieces.join('<span style="display:inline-block;width:14px"></span>');
+            };
+            var flagHtml = flagToTwemojiHtml(flag);
+
             var css = ''
                 + 'body{display:block !important;visibility:hidden !important;background:#0B2540 !important}'
                 + 'body > #agencySwitchOverlay{visibility:visible !important}'
@@ -44,9 +66,11 @@
                 + '@keyframes agpNameSlide{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}'
                 + '@keyframes agpLoaderSpin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}'
                 + '@keyframes agpDotPulse{0%,100%{opacity:.3}50%{opacity:1}}'
-                + '#agencySwitchOverlay .f{font-size:110px;line-height:1;margin-bottom:28px;'
+                + '#agencySwitchOverlay .f{display:flex;align-items:center;justify-content:center;'
+                + 'line-height:1;margin-bottom:28px;font-size:110px;'
                 + 'filter:drop-shadow(0 10px 30px rgba(242,163,18,0.4));'
                 + 'animation:agpFlagBounce 1.6s ease-in-out infinite}'
+                + '#agencySwitchOverlay .f img{width:110px;height:110px;display:inline-block}'
                 + '#agencySwitchOverlay .k{font-family:monospace;font-size:11px;color:#F2A312;'
                 + 'letter-spacing:4px;text-transform:uppercase;margin-bottom:14px;opacity:.9}'
                 + '#agencySwitchOverlay .n{font-family:Comfortaa,sans-serif;font-size:36px;'
@@ -65,7 +89,7 @@
             (document.head || document.documentElement).appendChild(styleEl);
 
             var html = ''
-                + '<div class="f">' + flag + '</div>'
+                + '<div class="f">' + flagHtml + '</div>'
                 + '<div class="k">Connexion en cours</div>'
                 + '<div class="n">' + safeName + '</div>'
                 + '<div class="l"></div>'
@@ -101,7 +125,52 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/fullcalendar@5.11.3/main.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.css">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/choices.js/public/assets/styles/choices.min.css"/>
-    
+
+    <!-- Twemoji : affiche les emojis (drapeaux compris) identiques partout
+         Windows, Mac, mobile. Sans lui Windows rend les drapeaux régionaux
+         en lettres (« FR » au lieu de 🇫🇷). -->
+    <script src="https://cdn.jsdelivr.net/npm/@twemoji/api@latest/dist/twemoji.min.js" crossorigin="anonymous"></script>
+    <script>
+    (function(){
+        // Helper exposé : remplace tous les emojis sous `root` (par défaut
+        // document.body) par des <img> SVG Twemoji. Idempotent (un emoji
+        // déjà remplacé n'est pas reparsé).
+        window.applyTwemoji = function(root){
+            if (!window.twemoji || typeof twemoji.parse !== 'function') return;
+            try {
+                twemoji.parse(root || document.body, {
+                    folder: 'svg',
+                    ext: '.svg',
+                    className: 'twemoji'
+                });
+            } catch(e) { /* on ignore */ }
+        };
+
+        // Style global pour les images Twemoji : se comportent comme un
+        // caractère (hauteur de ligne) et restent bien alignées.
+        var s = document.createElement('style');
+        s.textContent =
+            'img.twemoji{height:1em;width:1em;margin:0 .05em 0 .1em;vertical-align:-0.1em;display:inline-block}';
+        document.head.appendChild(s);
+
+        // Auto-parse au boot + à chaque mutation du DOM (debouncé 80 ms).
+        var pending = null;
+        var schedule = function(){
+            if (pending) return;
+            pending = setTimeout(function(){ pending = null; window.applyTwemoji(); }, 80);
+        };
+        var startObserver = function(){
+            window.applyTwemoji();
+            var mo = new MutationObserver(function(muts){
+                for (var i=0; i<muts.length; i++) if (muts[i].addedNodes.length) { schedule(); return; }
+            });
+            mo.observe(document.body, { childList: true, subtree: true });
+        };
+        if (document.body) startObserver();
+        else document.addEventListener('DOMContentLoaded', startObserver, { once: true });
+    })();
+    </script>
+
     <script src="https://cdn.jsdelivr.net/npm/fullcalendar@5.11.3/main.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
