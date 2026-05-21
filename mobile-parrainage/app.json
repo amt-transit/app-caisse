@@ -46,12 +46,6 @@
           "color": "#F2A312",
           "sounds": []
         }
-      ],
-      [
-        "react-native-vector-icons",
-        {
-          "iconFontNames": ["Ionicons", "FontAwesome", "FontAwesome5_Brands", "FontAwesome5_Regular", "FontAwesome5_Solid", "MaterialIcons"]
-        }
       ]
     ],
     "notification": {
