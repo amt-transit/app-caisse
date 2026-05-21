@@ -15,70 +15,81 @@ export const DashboardView = {
         const html = `
             <style>
                 [v-cloak] { display: none; }
-                .quick-action-btn:hover { transform: translateY(-3px) !important; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1) !important; border-color: #cbd5e1 !important; }
             </style>
             <div id="vue-dashboard" v-cloak>
-                <h3 style="margin: 0 0 20px 0; color: #0f172a; font-size: 20px; font-weight: 800;">🚀 Accès rapide</h3>
-                <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(min(130px, 45%), 1fr)); gap: 12px; margin-bottom: 30px;">
-                    <button v-if="checkAccess('invoice-new')" @click="renderPage('invoice-new')" class="quick-action-btn" style="display:flex; flex-direction:column; align-items:center; padding:15px; background:white; border:1px solid #e2e8f0; border-radius:12px; cursor:pointer; transition:all 0.2s; box-shadow:0 2px 4px rgba(0,0,0,0.02);">
-                        <i class="fas fa-file-invoice" style="font-size:24px; color:#3b82f6; margin-bottom:10px;"></i><span style="font-weight:600; color:#334155; font-size:12px; text-align:center;">Nouvelle facture</span>
+                <div class="amt-section-label">🚀 Accès rapide</div>
+                <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(min(135px, 45%), 1fr)); gap: 12px; margin-bottom: 30px;">
+                    <button v-if="checkAccess('invoice-new')" @click="renderPage('invoice-new')" class="amt-quick">
+                        <div class="amt-quick-icon"><i class="fas fa-file-invoice"></i></div>
+                        <span class="amt-quick-label">Nouvelle facture</span>
                     </button>
-                    <button v-if="checkAccess('invoices-list')" @click="renderPage('invoices-list')" class="quick-action-btn" style="display:flex; flex-direction:column; align-items:center; padding:15px; background:white; border:1px solid #e2e8f0; border-radius:12px; cursor:pointer; transition:all 0.2s; box-shadow:0 2px 4px rgba(0,0,0,0.02);">
-                        <i class="fas fa-list" style="font-size:24px; color:#64748b; margin-bottom:10px;"></i><span style="font-weight:600; color:#334155; font-size:12px; text-align:center;">Liste factures</span>
+                    <button v-if="checkAccess('invoices-list')" @click="renderPage('invoices-list')" class="amt-quick">
+                        <div class="amt-quick-icon"><i class="fas fa-list"></i></div>
+                        <span class="amt-quick-label">Liste factures</span>
                     </button>
-                    <button v-if="checkAccess('quote-new')" @click="renderPage('quote-new')" class="quick-action-btn" style="display:flex; flex-direction:column; align-items:center; padding:15px; background:white; border:1px solid #e2e8f0; border-radius:12px; cursor:pointer; transition:all 0.2s; box-shadow:0 2px 4px rgba(0,0,0,0.02);">
-                        <i class="fas fa-file-signature" style="font-size:24px; color:#10b981; margin-bottom:10px;"></i><span style="font-weight:600; color:#334155; font-size:12px; text-align:center;">Nouveau devis</span>
+                    <button v-if="checkAccess('quote-new')" @click="renderPage('quote-new')" class="amt-quick">
+                        <div class="amt-quick-icon"><i class="fas fa-file-signature"></i></div>
+                        <span class="amt-quick-label">Nouveau devis</span>
                     </button>
-                    <button v-if="checkAccess('quote-requests')" @click="renderPage('quote-requests')" class="quick-action-btn" style="display:flex; flex-direction:column; align-items:center; padding:15px; background:white; border:1px solid #e2e8f0; border-radius:12px; cursor:pointer; transition:all 0.2s; box-shadow:0 2px 4px rgba(0,0,0,0.02);">
-                        <i class="fas fa-inbox" style="font-size:24px; color:#f59e0b; margin-bottom:10px;"></i><span style="font-weight:600; color:#334155; font-size:12px; text-align:center;">Demandes devis</span>
+                    <button v-if="checkAccess('quote-requests')" @click="renderPage('quote-requests')" class="amt-quick">
+                        <div class="amt-quick-icon"><i class="fas fa-inbox"></i></div>
+                        <span class="amt-quick-label">Demandes devis</span>
                     </button>
-                    <button v-if="checkAccess('appointments-pending')" @click="renderPage('appointments-pending')" class="quick-action-btn" style="display:flex; flex-direction:column; align-items:center; padding:15px; background:white; border:1px solid #e2e8f0; border-radius:12px; cursor:pointer; transition:all 0.2s; box-shadow:0 2px 4px rgba(0,0,0,0.02);">
-                        <i class="fas fa-calendar-check" style="font-size:24px; color:#ef4444; margin-bottom:10px;"></i><span style="font-weight:600; color:#334155; font-size:12px; text-align:center;">RDV à valider</span>
+                    <button v-if="checkAccess('appointments-pending')" @click="renderPage('appointments-pending')" class="amt-quick">
+                        <div class="amt-quick-icon"><i class="fas fa-calendar-check"></i></div>
+                        <span class="amt-quick-label">RDV à valider</span>
                     </button>
-                    <button v-if="checkAccess('notifications')" @click="renderPage('notifications')" class="quick-action-btn" style="display:flex; flex-direction:column; align-items:center; padding:15px; background:white; border:1px solid #e2e8f0; border-radius:12px; cursor:pointer; transition:all 0.2s; box-shadow:0 2px 4px rgba(0,0,0,0.02);">
-                        <i class="fas fa-bell" style="font-size:24px; color:#8b5cf6; margin-bottom:10px;"></i><span style="font-weight:600; color:#334155; font-size:12px; text-align:center;">Notifications</span>
+                    <button v-if="checkAccess('notifications')" @click="renderPage('notifications')" class="amt-quick">
+                        <div class="amt-quick-icon"><i class="fas fa-bell"></i></div>
+                        <span class="amt-quick-label">Notifications</span>
                     </button>
-                    <button v-if="checkAccess('sms-send')" @click="renderPage('sms-send')" class="quick-action-btn" style="display:flex; flex-direction:column; align-items:center; padding:15px; background:white; border:1px solid #e2e8f0; border-radius:12px; cursor:pointer; transition:all 0.2s; box-shadow:0 2px 4px rgba(0,0,0,0.02);">
-                        <i class="fas fa-sms" style="font-size:24px; color:#ec4899; margin-bottom:10px;"></i><span style="font-weight:600; color:#334155; font-size:12px; text-align:center;">Envoi SMS</span>
+                    <button v-if="checkAccess('sms-send')" @click="renderPage('sms-send')" class="amt-quick">
+                        <div class="amt-quick-icon"><i class="fas fa-sms"></i></div>
+                        <span class="amt-quick-label">Envoi SMS</span>
                     </button>
-                    <button v-if="checkAccess('loading-boats')" @click="renderPage('loading-boats')" class="quick-action-btn" style="display:flex; flex-direction:column; align-items:center; padding:15px; background:white; border:1px solid #e2e8f0; border-radius:12px; cursor:pointer; transition:all 0.2s; box-shadow:0 2px 4px rgba(0,0,0,0.02);">
-                        <i class="fas fa-ship" style="font-size:24px; color:#0ea5e9; margin-bottom:10px;"></i><span style="font-weight:600; color:#334155; font-size:12px; text-align:center;">Bateaux & Départs</span>
+                    <button v-if="checkAccess('loading-boats')" @click="renderPage('loading-boats')" class="amt-quick">
+                        <div class="amt-quick-icon"><i class="fas fa-ship"></i></div>
+                        <span class="amt-quick-label">Bateaux & Départs</span>
                     </button>
-                    <button v-if="checkAccess('clients-list')" @click="renderPage('clients-list')" class="quick-action-btn" style="display:flex; flex-direction:column; align-items:center; padding:15px; background:white; border:1px solid #e2e8f0; border-radius:12px; cursor:pointer; transition:all 0.2s; box-shadow:0 2px 4px rgba(0,0,0,0.02);">
-                        <i class="fas fa-users" style="font-size:24px; color:#14b8a6; margin-bottom:10px;"></i><span style="font-weight:600; color:#334155; font-size:12px; text-align:center;">Clients</span>
+                    <button v-if="checkAccess('clients-list')" @click="renderPage('clients-list')" class="amt-quick">
+                        <div class="amt-quick-icon"><i class="fas fa-users"></i></div>
+                        <span class="amt-quick-label">Clients</span>
                     </button>
-                    <button v-if="checkAccess('balance-monthly')" @click="renderPage('balance-monthly')" class="quick-action-btn" style="display:flex; flex-direction:column; align-items:center; padding:15px; background:white; border:1px solid #e2e8f0; border-radius:12px; cursor:pointer; transition:all 0.2s; box-shadow:0 2px 4px rgba(0,0,0,0.02);">
-                        <i class="fas fa-chart-line" style="font-size:24px; color:#f43f5e; margin-bottom:10px;"></i><span style="font-weight:600; color:#334155; font-size:12px; text-align:center;">Bilan Comparatif</span>
+                    <button v-if="checkAccess('balance-monthly')" @click="renderPage('balance-monthly')" class="amt-quick">
+                        <div class="amt-quick-icon"><i class="fas fa-chart-line"></i></div>
+                        <span class="amt-quick-label">Bilan Comparatif</span>
                     </button>
-                    <button v-if="checkAccess('scan-warehouse')" @click="renderPage('scan-warehouse')" class="quick-action-btn" style="display:flex; flex-direction:column; align-items:center; padding:15px; background:white; border:1px solid #e2e8f0; border-radius:12px; cursor:pointer; transition:all 0.2s; box-shadow:0 2px 4px rgba(0,0,0,0.02);">
-                        <i class="fas fa-barcode" style="font-size:24px; color:#6366f1; margin-bottom:10px;"></i><span style="font-weight:600; color:#334155; font-size:12px; text-align:center;">Numérisation</span>
+                    <button v-if="checkAccess('scan-warehouse')" @click="renderPage('scan-warehouse')" class="amt-quick">
+                        <div class="amt-quick-icon"><i class="fas fa-barcode"></i></div>
+                        <span class="amt-quick-label">Numérisation</span>
                     </button>
-                    <button v-if="checkAccess('finance-expenses')" @click="renderPage('finance-expenses')" class="quick-action-btn" style="display:flex; flex-direction:column; align-items:center; padding:15px; background:white; border:1px solid #e2e8f0; border-radius:12px; cursor:pointer; transition:all 0.2s; box-shadow:0 2px 4px rgba(0,0,0,0.02);">
-                        <i class="fas fa-money-bill-wave" style="font-size:24px; color:#f97316; margin-bottom:10px;"></i><span style="font-weight:600; color:#334155; font-size:12px; text-align:center;">Dépenses</span>
+                    <button v-if="checkAccess('finance-expenses')" @click="renderPage('finance-expenses')" class="amt-quick">
+                        <div class="amt-quick-icon"><i class="fas fa-money-bill-wave"></i></div>
+                        <span class="amt-quick-label">Dépenses</span>
                     </button>
                 </div>
 
-                <h3 style="margin: 0 0 20px 0; color: #0f172a; font-size: 20px; font-weight: 800;">📊 Indicateurs du mois ({{ currentMonthLabel }})</h3>
-                <div class="stats-grid" style="margin-bottom: 30px;">
-                    <div class="stat-card">
-                        <div class="stat-icon" style="background:#dbeafe; color:#2563eb;"><i class="fas fa-file-invoice"></i></div>
-                        <div class="stat-value">{{ formatMoney(monthCA) }}</div>
-                        <div class="stat-label">Chiffre d'affaires facturé</div>
+                <div class="amt-section-label">📊 Indicateurs du mois ({{ currentMonthLabel }})</div>
+                <div class="amt-kpi-grid">
+                    <div class="amt-kpi amt-kpi-deep" @click="renderPage('invoices-list')">
+                        <div class="amt-kpi-title">Chiffre d'affaires facturé</div>
+                        <div class="amt-kpi-value">{{ formatMoney(monthCA) }}</div>
+                        <div class="amt-kpi-mark">💼</div>
                     </div>
-                    <div class="stat-card">
-                        <div class="stat-icon" style="background:#d1fae5; color:#059669;"><i class="fas fa-calendar"></i></div>
-                        <div class="stat-value">{{ pendingAppointments }}</div>
-                        <div class="stat-label">RDV en attente</div>
+                    <div class="amt-kpi amt-kpi-green" @click="renderPage('appointments-pending')">
+                        <div class="amt-kpi-title">RDV en attente</div>
+                        <div class="amt-kpi-value">{{ pendingAppointments }}</div>
+                        <div class="amt-kpi-mark">📅</div>
                     </div>
-                    <div class="stat-card">
-                        <div class="stat-icon" style="background:#fef3c7; color:#d97706;"><i class="fas fa-tasks"></i></div>
-                        <div class="stat-value">{{ activePrograms }}</div>
-                        <div class="stat-label">Chauffeurs en tournée</div>
+                    <div class="amt-kpi amt-kpi-gold" @click="renderPage('program-history')">
+                        <div class="amt-kpi-title">Chauffeurs en tournée</div>
+                        <div class="amt-kpi-value">{{ activePrograms }}</div>
+                        <div class="amt-kpi-mark">🚚</div>
                     </div>
-                    <div class="stat-card">
-                        <div class="stat-icon" style="background:#ede9fe; color:#7c3aed;"><i class="fas fa-box"></i></div>
-                        <div class="stat-value">{{ activeContainers }}</div>
-                        <div class="stat-label">Conteneurs en mer</div>
+                    <div class="amt-kpi amt-kpi-purple" @click="renderPage('loading-boats')">
+                        <div class="amt-kpi-title">Conteneurs en mer</div>
+                        <div class="amt-kpi-value">{{ activeContainers }}</div>
+                        <div class="amt-kpi-mark">🚢</div>
                     </div>
                 </div>
 
