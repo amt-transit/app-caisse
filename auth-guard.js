@@ -64,9 +64,20 @@ import { doc, getDoc, updateDoc, collection, query, where, orderBy, onSnapshot }
 
 // Fonction globale exposée pour retirer l'overlay (avec fade-out) à la fin
 // du boot une fois que l'app est prête à afficher l'écran principal.
+//
+// IMPORTANT : on retire D'ABORD la règle CSS injectée par le script inline
+// dans index.html (qui force body en visibility:hidden), pour que le
+// contenu de la nouvelle agence devienne visible PENDANT que l'overlay
+// fait son fondu. Sans cela, le user verrait l'overlay se dissoudre sur
+// un fond invisible (= flash blanc/sombre).
 window.hideAgencySwitchOverlay = () => {
     const o = document.getElementById('agencySwitchOverlay');
     if (!o) return;
+    const styleEl = document.getElementById('__amtSwitchOverlayStyle');
+    if (styleEl) styleEl.remove();
+    // Force un reflow pour que visibility:hidden soit effectivement levé
+    // avant que le fade ne commence.
+    void document.body.offsetWidth;
     o.style.opacity = '0';
     setTimeout(() => o.remove(), 420);
 };
@@ -85,14 +96,27 @@ if (sessionStorage.getItem('amt_switching_overlay') !== null
 // Hook global : dès qu'on rend le body visible (quelque branche que ce soit
 // dans auth-guard), on retire l'overlay. Évite d'avoir à ajouter
 // hideAgencySwitchOverlay() à TOUS les endroits document.body.style.display.
+// Pour ne pas laisser apparaître une page blanche pendant le fade-out,
+// on attend que :
+//   1. window.load soit déclenché (CSS, polices et images chargés)
+//   2. Deux requestAnimationFrame consécutifs (paint réellement commit)
+//   3. Un petit délai de stabilité (250 ms) pour les rendus asynchrones
+// AVANT de commencer le fondu de l'overlay.
 (function watchBodyDisplay() {
     let removed = false;
     const remove = () => {
         if (removed) return;
         removed = true;
-        if (typeof window.hideAgencySwitchOverlay === 'function') {
-            setTimeout(() => window.hideAgencySwitchOverlay(), 350);
-        }
+        if (typeof window.hideAgencySwitchOverlay !== 'function') return;
+        const startFade = () => {
+            requestAnimationFrame(() => {
+                requestAnimationFrame(() => {
+                    setTimeout(() => window.hideAgencySwitchOverlay(), 250);
+                });
+            });
+        };
+        if (document.readyState === 'complete') startFade();
+        else window.addEventListener('load', startFade, { once: true });
     };
     const observer = new MutationObserver(() => {
         if (document.body && document.body.style.display === 'block') remove();
@@ -818,12 +842,9 @@ onAuthStateChanged(auth, async (user) => {
         // Note : Le reste du masquage des menus est désormais géré dynamiquement par app.js via la configuration Firebase (settings-menus.js)
         document.body.style.display = 'block';
 
-        // Si on revient d'un switch d'agence : on retire maintenant l'overlay
-        // (l'écran principal est prêt à s'afficher). Un petit délai garantit
-        // que l'utilisateur perçoit la transition au lieu d'un flash.
-        if (typeof window.hideAgencySwitchOverlay === 'function') {
-            setTimeout(() => window.hideAgencySwitchOverlay(), 400);
-        }
+        // L'overlay de switch d'agence est retiré automatiquement par le
+        // MutationObserver watchBodyDisplay (en haut du fichier), qui attend
+        // window.load + 2 frames peintes pour éviter tout flash blanc.
 
     } catch (error) {
         console.error("Erreur auth :", error);

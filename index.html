@@ -4,6 +4,97 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes">
     <title>AMT Trans'it - Espace Global</title>
+
+    <!-- ════ OVERLAY DE TRANSITION AGENCE (au plus tôt possible) ════════
+         Script inline EXÉCUTÉ avant tout autre CSS / JS. Si l'utilisateur
+         arrive ici via switchAgency, l'overlay doit être visible AU PREMIER
+         PAINT et le rester jusqu'à ce que la nouvelle agence ait fini de
+         peindre.
+
+         Difficulté : <body> a style="display:none" tant qu'auth-guard n'a
+         pas validé l'utilisateur. Si l'overlay est dans body, il est caché
+         → flash blanc.
+
+         Solution : on injecte une règle CSS qui force
+         body{display:block !important; visibility:hidden} et qui rend
+         l'overlay visible via visibility:visible. Le contenu de l'app
+         reste invisible (mais layouté) jusqu'à ce que
+         hideAgencySwitchOverlay() retire la règle.
+    -->
+    <script>
+    (function(){
+        try {
+            var raw = sessionStorage.getItem('amt_switching_overlay');
+            if (!raw) return;
+            var info = JSON.parse(raw);
+            var flag = (info && info.flag) || '🌍';
+            var name = (info && info.name) || '';
+            sessionStorage.removeItem('amt_switching_overlay');
+
+            var safeName = String(name).replace(/[<>&"']/g, '');
+
+            var css = ''
+                + 'body{display:block !important;visibility:hidden !important;background:#0B2540 !important}'
+                + 'body > #agencySwitchOverlay{visibility:visible !important}'
+                + '#agencySwitchOverlay{position:fixed;inset:0;z-index:999999;'
+                + 'background:linear-gradient(135deg,#0B2540 0%,#1A3553 50%,#0F2238 100%);'
+                + 'display:flex;flex-direction:column;align-items:center;justify-content:center;'
+                + 'color:white;transition:opacity .4s ease}'
+                + '@keyframes agpFlagBounce{0%,100%{transform:scale(1)}50%{transform:scale(1.1)}}'
+                + '@keyframes agpNameSlide{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}'
+                + '@keyframes agpLoaderSpin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}'
+                + '@keyframes agpDotPulse{0%,100%{opacity:.3}50%{opacity:1}}'
+                + '#agencySwitchOverlay .f{font-size:110px;line-height:1;margin-bottom:28px;'
+                + 'filter:drop-shadow(0 10px 30px rgba(242,163,18,0.4));'
+                + 'animation:agpFlagBounce 1.6s ease-in-out infinite}'
+                + '#agencySwitchOverlay .k{font-family:monospace;font-size:11px;color:#F2A312;'
+                + 'letter-spacing:4px;text-transform:uppercase;margin-bottom:14px;opacity:.9}'
+                + '#agencySwitchOverlay .n{font-family:Comfortaa,sans-serif;font-size:36px;'
+                + 'font-weight:700;letter-spacing:-1px;margin-bottom:40px;'
+                + 'animation:agpNameSlide .5s cubic-bezier(.16,1,.3,1) .1s backwards;'
+                + 'text-align:center;padding:0 20px}'
+                + '#agencySwitchOverlay .l{width:44px;height:44px;'
+                + 'border:3px solid rgba(242,163,18,.18);border-top-color:#F2A312;'
+                + 'border-radius:50%;animation:agpLoaderSpin .9s linear infinite;margin-bottom:20px}'
+                + '#agencySwitchOverlay .t{color:#A0AEC4;font-size:13px;font-family:sans-serif;letter-spacing:.5px}'
+                + '#agencySwitchOverlay .t::after{content:"...";display:inline-block;animation:agpDotPulse 1.4s infinite}';
+
+            var styleEl = document.createElement('style');
+            styleEl.id = '__amtSwitchOverlayStyle';
+            styleEl.textContent = css;
+            (document.head || document.documentElement).appendChild(styleEl);
+
+            var html = ''
+                + '<div class="f">' + flag + '</div>'
+                + '<div class="k">Connexion en cours</div>'
+                + '<div class="n">' + safeName + '</div>'
+                + '<div class="l"></div>'
+                + '<div class="t">Chargement de votre espace</div>';
+
+            var attach = function(){
+                if (document.getElementById('agencySwitchOverlay')) return;
+                if (!document.body) return;
+                var ov = document.createElement('div');
+                ov.id = 'agencySwitchOverlay';
+                ov.innerHTML = html;
+                document.body.appendChild(ov);
+            };
+
+            if (document.body) {
+                attach();
+            } else {
+                // Body pas encore créé : on attend qu'il apparaisse pour
+                // y attacher l'overlay (sinon le sélecteur
+                // "body > #agencySwitchOverlay" ne s'appliquerait pas).
+                var mo = new MutationObserver(function(){
+                    if (document.body) { mo.disconnect(); attach(); }
+                });
+                mo.observe(document.documentElement, { childList: true, subtree: false });
+                document.addEventListener('DOMContentLoaded', attach, { once: true });
+            }
+        } catch(e) { /* on ignore */ }
+    })();
+    </script>
     
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Comfortaa:wght@400;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
