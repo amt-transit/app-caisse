@@ -71,6 +71,42 @@ window.hideAgencySwitchOverlay = () => {
     setTimeout(() => o.remove(), 420);
 };
 
+// ── FILET DE SÉCURITÉ ──────────────────────────────────────────────────────
+// Si pour une raison X l'init échoue (erreur Firebase, redirection, etc.)
+// et que personne n'appelle hideAgencySwitchOverlay(), on retire l'overlay
+// au bout de 6s pour ne pas figer l'utilisateur. Ce hard timeout couvre
+// tous les chemins de sortie (admin, manager, spectateur, erreur, etc.).
+// Il est armé seulement s'il y avait un switch en cours.
+if (sessionStorage.getItem('amt_switching_overlay') !== null
+    || document.getElementById('agencySwitchOverlay')) {
+    setTimeout(() => window.hideAgencySwitchOverlay(), 6000);
+}
+
+// Hook global : dès qu'on rend le body visible (quelque branche que ce soit
+// dans auth-guard), on retire l'overlay. Évite d'avoir à ajouter
+// hideAgencySwitchOverlay() à TOUS les endroits document.body.style.display.
+(function watchBodyDisplay() {
+    let removed = false;
+    const remove = () => {
+        if (removed) return;
+        removed = true;
+        if (typeof window.hideAgencySwitchOverlay === 'function') {
+            setTimeout(() => window.hideAgencySwitchOverlay(), 350);
+        }
+    };
+    const observer = new MutationObserver(() => {
+        if (document.body && document.body.style.display === 'block') remove();
+    });
+    const start = () => {
+        if (document.body && document.body.style.display === 'block') { remove(); return; }
+        observer.observe(document.body || document.documentElement, {
+            attributes: true, attributeFilter: ['style'], subtree: false,
+        });
+    };
+    if (document.body) start();
+    else document.addEventListener('DOMContentLoaded', start, { once: true });
+})();
+
 // --- MISE À JOUR VISUELLE INSTANTANÉE (Pré-chargement) ---
 const applyCachedProfile = () => {
     const cachedName = sessionStorage.getItem('userName');
@@ -472,15 +508,17 @@ onAuthStateChanged(auth, async (user) => {
                 window.showAgencySwitchOverlay(overlayInfo.flag, overlayInfo.name);
 
                 const isCurrentUnifiedRoot = window.location.pathname.endsWith('/index.html') && !window.location.pathname.includes('/paris/') && !window.location.pathname.includes('/abidjan/');
-                // Petit délai (250ms) pour que l'animation d'entrée de
-                // l'overlay soit visible avant le reload qui gèle le rendu.
-                setTimeout(() => {
+                // Force le browser à PEINDRE l'overlay (double rAF) AVANT de
+                // lancer le reload qui gèle le rendu. Sinon l'utilisateur voit
+                // une page blanche pendant 200-400ms avant que l'overlay du
+                // boot suivant n'apparaisse.
+                requestAnimationFrame(() => requestAnimationFrame(() => {
                     if (isCurrentUnifiedRoot) {
                         window.location.reload();
                     } else {
                         window.location.href = (inParisFolder || inAbidjanFolder) ? '../index.html' : 'index.html';
                     }
-                }, 250);
+                }));
             };
 
             // Overlay de transition : drapeau + nom de l'agence cible + loader.
