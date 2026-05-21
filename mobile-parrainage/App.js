@@ -11,11 +11,10 @@ import {
   Jost_600SemiBold,
   Jost_700Bold,
 } from '@expo-google-fonts/jost';
-// Note : les polices vectorielles d'icônes (Ionicons, FontAwesome, etc.) sont
-// chargées NATIVEMENT par le plugin expo-font configuré dans app.json — les
-// fichiers .ttf sont bundlés au build dans les assets natifs Android/iOS.
-// On NE LES IMPORTE PAS ici pour éviter le double-chargement qui crashait
-// l'app au boot (incompatibilité entre runtime expo-font et plugin natif).
+// Polices d'icônes : on les charge VIA useFonts au runtime avec les deux noms
+// possibles (capitalisé pour le bundle natif Android + minuscule pour ce que
+// @expo/vector-icons cherche en interne via createIconSet). Cette double
+// déclaration évite tout mismatch de fontFamily sur les builds EAS.
 import { AuthProvider, useAuth } from './src/auth/AuthContext';
 import LoginScreen from './src/screens/LoginScreen';
 import MainApp from './src/screens/MainApp';
@@ -50,6 +49,14 @@ export default function App() {
     Comfortaa_700Bold,
     Jost_600SemiBold,
     Jost_700Bold,
+    // Polices d'icônes — chargées sous DEUX noms pour couvrir tous les cas.
+    // Le composant <Ionicons name="..."> cherche 'ionicons' (minuscule, déclaré
+    // dans createIconSet), mais le bundle Android natif enregistre la police
+    // selon le nom du fichier ('Ionicons' capitalisé). On enregistre les deux.
+    Ionicons: require('@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/Ionicons.ttf'),
+    ionicons: require('@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/Ionicons.ttf'),
+    FontAwesome: require('@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/FontAwesome.ttf'),
+    fontawesome: require('@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/FontAwesome.ttf'),
   });
 
   // Filet de sécurité : l'app ne doit JAMAIS rester bloquée sur le splash.

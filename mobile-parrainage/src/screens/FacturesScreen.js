@@ -5,7 +5,7 @@
 // visibles sur l'onglet Wallet (bonus de parrainage).
 import React, { useMemo, useState } from 'react';
 import {
-  View, Text, TextInput, TouchableOpacity, Modal, ScrollView, StyleSheet,
+  View, Text, TextInput, TouchableOpacity, Modal, ScrollView, StyleSheet, Dimensions,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -415,10 +415,10 @@ const ds = StyleSheet.create({
   backdrop: { flex: 1, backgroundColor: 'rgba(11,37,64,0.45)', justifyContent: 'flex-end' },
   dismiss: { ...StyleSheet.absoluteFillObject },
   sheet: {
-    // height: '92%' (et non maxHeight) : indispensable pour que le
-    // ScrollView intérieur avec flex:1 ait une hauteur calculable. Avec
-    // maxHeight + flex:1 enfant, RN aboutit à hauteur 0 (modale vide).
-    height: '92%',
+    // Hauteur en pixels (et non en %). Sur Android, '92%' dans un parent
+    // Modal n'est pas toujours bien calculé -> ScrollView intérieur à 0
+    // de hauteur -> contenu non visible / non scrollable.
+    height: Math.round(Dimensions.get('window').height * 0.92),
     backgroundColor: colors.bgElevated,
     borderTopLeftRadius: 24, borderTopRightRadius: 24,
     padding: spacing.lg, paddingTop: 14,
