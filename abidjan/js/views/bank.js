@@ -31,7 +31,7 @@ export const BankView = {
                 </div>
                 <div class="import-section" style="background: white; padding: 20px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin-bottom: 20px;">
                     <h3 style="margin-top: 0; color: #334155;">📥 Import Relevé Bancaire (CSV)</h3>
-                    <div style="display: flex; gap: 10px; align-items: center;"><input type="file" id="csvFile" accept=".csv" style="padding: 5px; border: 1px solid #ccc; border-radius: 4px;"><button id="uploadCsvBtn" class="btn btn-primary" style="background: #3b82f6; color: white; border: none; padding: 8px 15px; border-radius: 4px; cursor: pointer;">Importer</button></div>
+                    <div style="display: flex; gap: 10px; align-items: center;"><input type="file" id="csvFile" accept=".csv" style="padding: 5px; border: 1px solid #ccc; border-radius: 4px;"><button id="uploadCsvBtn" class="amt-btn amt-btn-primary" style="background: #3b82f6; color: white; border: none; padding: 8px 15px; border-radius: 4px; cursor: pointer;">Importer</button></div>
                     <div id="uploadLog" style="display: none; margin-top: 10px; font-size: 13px; color: #64748b;"></div>
                 </div>
                 <div style="background: white; padding: 20px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">

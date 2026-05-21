@@ -165,8 +165,8 @@ export const ProspectingView = {
                         </select>
                     </div>
                     <div class="toolbar__right">
-                        <button class="btn btn-outline" onclick="window.app.views.prospecting.importDormantClients()"> 👤 Clients dormants </button>
-                        <button class="btn btn-primary" onclick="window.app.views.prospecting.openNewModal()"> + Nouveau dossier </button>
+                        <button class="amt-btn amt-btn-outline" onclick="window.app.views.prospecting.importDormantClients()"> 👤 Clients dormants </button>
+                        <button class="amt-btn amt-btn-primary" onclick="window.app.views.prospecting.openNewModal()"> + Nouveau dossier </button>
                     </div>
                 </div>
 
@@ -260,8 +260,8 @@ export const ProspectingView = {
                         </div>
                     </div>
                     <div class="modal__footer">
-                        <button class="btn btn-outline" onclick="window.app.views.prospecting.closeNewModal()">Annuler</button>
-                        <button class="btn btn-primary" id="npmSaveBtn" onclick="window.app.views.prospecting.saveProspect()">Créer le dossier</button>
+                        <button class="amt-btn amt-btn-outline" onclick="window.app.views.prospecting.closeNewModal()">Annuler</button>
+                        <button class="amt-btn amt-btn-primary" id="npmSaveBtn" onclick="window.app.views.prospecting.saveProspect()">Créer le dossier</button>
                     </div>
                 </div>
             </div>
@@ -326,8 +326,8 @@ export const ProspectingView = {
                         </div>
                     </div>
                     <div class="modal__footer">
-                        <button class="btn btn-outline" onclick="document.getElementById('contactProspectModal').classList.remove('active')">Annuler</button>
-                        <button class="btn btn-primary" onclick="window.app.views.prospecting.saveContact()">Enregistrer</button>
+                        <button class="amt-btn amt-btn-outline" onclick="document.getElementById('contactProspectModal').classList.remove('active')">Annuler</button>
+                        <button class="amt-btn amt-btn-primary" onclick="window.app.views.prospecting.saveContact()">Enregistrer</button>
                     </div>
                 </div>
             </div>
@@ -462,7 +462,7 @@ export const ProspectingView = {
                     <td class="${relanceClass}">${dateRelanceStr}</td>
                     <td class="agent-cell">${p.agent || '-'}</td>
                     <td>
-                        <button class="btn btn-outline btn-small" onclick="event.stopPropagation(); window.app.views.prospecting.openDetailModal('${p.id}')">Voir</button>
+                        <button class="amt-btn amt-btn-outline amt-btn-sm" onclick="event.stopPropagation(); window.app.views.prospecting.openDetailModal('${p.id}')">Voir</button>
                     </td>
                 </tr>
             `;
@@ -614,9 +614,9 @@ export const ProspectingView = {
                         </div>
                         ${p.note ? `<div class="detail-note"><strong>Note initiale :</strong><br>${p.note}</div>` : ''}
                         <div class="detail-actions">
-                            <button class="btn btn-primary" onclick="window.app.views.prospecting.openContactModal('${p.id}')">+ Enregistrer un contact</button>
-                            <button class="btn btn-outline" onclick="window.app.views.prospecting.openNewModal('${p.id}')">Modifier le dossier</button>
-                            ${p.status !== 'CONVERTI' ? `<button class="btn btn-outline" style="border-color:#10b981; color:#10b981;" onclick="window.app.views.prospecting.convertClient('${p.id}')">✨ Convertir en Client</button>` : ''}
+                            <button class="amt-btn amt-btn-primary" onclick="window.app.views.prospecting.openContactModal('${p.id}')">+ Enregistrer un contact</button>
+                            <button class="amt-btn amt-btn-outline" onclick="window.app.views.prospecting.openNewModal('${p.id}')">Modifier le dossier</button>
+                            ${p.status !== 'CONVERTI' ? `<button class="amt-btn amt-btn-outline" style="border-color:#10b981; color:#10b981;" onclick="window.app.views.prospecting.convertClient('${p.id}')">✨ Convertir en Client</button>` : ''}
                         </div>
                     </div>
                     

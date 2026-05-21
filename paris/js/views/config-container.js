@@ -62,7 +62,7 @@ export const ConfigContainerView = {
                     </div>
 
                     <div style="display: flex; justify-content: flex-end;">
-                        <button class="btn btn-primary" id="saveContainerConfigBtn" onclick="window.app.views.configContainer.saveData()" style="padding: 12px 24px; font-size: 15px; display: flex; align-items: center; gap: 8px; box-shadow: 0 4px 6px rgba(59,130,246,0.3);">
+                        <button class="amt-btn amt-btn-primary" id="saveContainerConfigBtn" onclick="window.app.views.configContainer.saveData()" style="padding: 12px 24px; font-size: 15px; display: flex; align-items: center; gap: 8px; box-shadow: 0 4px 6px rgba(59,130,246,0.3);">
                             <i class="fas fa-save"></i> Mettre à jour le Conteneur Actif
                         </button>
                     </div>

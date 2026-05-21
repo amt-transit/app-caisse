@@ -111,7 +111,7 @@ export const ConfigInvoiceView = {
                             <p class="ci-subtitle">Configurez le design et les conditions générales de vos documents PDF</p>
                         </div>
                     </div>
-                    <button class="btn btn-primary" id="saveInvoiceConfigBtn" onclick="window.app.views.configInvoice.saveData()" style="padding: 10px 20px; display: flex; align-items: center; gap: 8px;">
+                    <button class="amt-btn amt-btn-primary" id="saveInvoiceConfigBtn" onclick="window.app.views.configInvoice.saveData()" style="padding: 10px 20px; display: flex; align-items: center; gap: 8px;">
                         <i class="fas fa-save"></i> Enregistrer le modèle
                     </button>
                 </div>
@@ -138,7 +138,7 @@ export const ConfigInvoiceView = {
                                 </div>
                                 <div class="logo-actions">
                                     <input type="file" id="ciLogoInput" accept="image/*" style="width: 100%; font-size: 12px; padding: 8px; background: white; border: 1px solid #cbd5e1; border-radius: 6px;" onchange="window.app.views.configInvoice.handleLogoSelect(event)">
-                                    <button class="btn btn-outline btn-small" id="ciUploadBtn" onclick="window.app.views.configInvoice.uploadLogo()" disabled style="width: fit-content; border-color: #3b82f6; color: #3b82f6; font-weight: bold;">
+                                    <button class="amt-btn amt-btn-outline amt-btn-sm" id="ciUploadBtn" onclick="window.app.views.configInvoice.uploadLogo()" disabled style="width: fit-content; border-color: #3b82f6; color: #3b82f6; font-weight: bold;">
                                         <i class="fas fa-cloud-upload-alt"></i> Importer vers Firebase
                                     </button>
                                 </div>
@@ -286,7 +286,7 @@ export const ConfigInvoiceView = {
                     </div>
                     <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; margin-top:18px;">
                         <div style="font-size:12px; color:#64748b;"><i class="fas fa-info-circle"></i> Maritime Chine = Volume (CBM) × Coût CBM. Aérien = Poids (kg) × tarif Normal/Express. Modifiable à tout moment.</div>
-                        <button class="btn btn-primary" onclick="window.app.views.configInvoice.saveTarifs()" style="padding:10px 20px; display:flex; align-items:center; gap:8px;"><i class="fas fa-save"></i> Enregistrer les tarifs</button>
+                        <button class="amt-btn amt-btn-primary" onclick="window.app.views.configInvoice.saveTarifs()" style="padding:10px 20px; display:flex; align-items:center; gap:8px;"><i class="fas fa-save"></i> Enregistrer les tarifs</button>
                     </div>
                 </div>
             </div>

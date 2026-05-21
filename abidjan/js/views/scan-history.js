@@ -46,7 +46,7 @@ export const ScanHistoryView = {
             <div class="sh-page">
                 <div class="sh-header">
                     <h1 class="sh-title"><i class="fas fa-history"></i> Historique des Scans</h1>
-                    <button class="btn btn-outline" onclick="window.app.views.scanHistory.loadData()"><i class="fas fa-sync-alt"></i> Actualiser</button>
+                    <button class="amt-btn amt-btn-outline" onclick="window.app.views.scanHistory.loadData()"><i class="fas fa-sync-alt"></i> Actualiser</button>
                 </div>
 
                 <div class="sh-filters">

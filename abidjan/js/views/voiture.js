@@ -27,7 +27,7 @@ export const VoitureView = {
                     </div>
                     <div class="card" style="flex: 1; min-width: 250px;">
                         <h3 style="margin-top: 0;">Flotte Automobile</h3>
-                        <div style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 15px;"><input type="text" id="newVehicleName" placeholder="Nom / Marque (ex: Peugeot Boxer)" style="padding: 8px; border: 1px solid #ccc; border-radius: 4px;"><input type="text" id="newVehiclePlate" placeholder="Immatriculation" style="padding: 8px; border: 1px solid #ccc; border-radius: 4px;"><button id="addVehicleBtn" class="btn btn-primary">Ajouter Véhicule</button></div>
+                        <div style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 15px;"><input type="text" id="newVehicleName" placeholder="Nom / Marque (ex: Peugeot Boxer)" style="padding: 8px; border: 1px solid #ccc; border-radius: 4px;"><input type="text" id="newVehiclePlate" placeholder="Immatriculation" style="padding: 8px; border: 1px solid #ccc; border-radius: 4px;"><button id="addVehicleBtn" class="amt-btn amt-btn-primary">Ajouter Véhicule</button></div>
                         <ul id="vehiclesList" style="margin: 0; padding: 0; list-style: none;"></ul>
                     </div>
                 </div>

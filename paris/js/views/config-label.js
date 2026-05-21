@@ -74,10 +74,10 @@ export const ConfigLabelView = {
                         </div>
 
                         <div style="padding-top: 15px; border-top: 1px solid #f1f5f9;">
-                            <button class="btn btn-primary" style="width: 100%; justify-content: center; padding: 14px;" onclick="window.app.views.configLabel.saveConfig()">
+                            <button class="amt-btn amt-btn-primary" style="width: 100%; justify-content: center; padding: 14px;" onclick="window.app.views.configLabel.saveConfig()">
                                 <i class="fas fa-save"></i> Enregistrer par défaut
                             </button>
-                            <button class="btn btn-outline" style="width: 100%; justify-content: center; margin-top: 10px;" onclick="window.app.views.configLabel.printTest()">
+                            <button class="amt-btn amt-btn-outline" style="width: 100%; justify-content: center; margin-top: 10px;" onclick="window.app.views.configLabel.printTest()">
                                 <i class="fas fa-print"></i> Imprimer un test
                             </button>
                         </div>

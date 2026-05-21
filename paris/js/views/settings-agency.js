@@ -42,8 +42,8 @@ export const SettingsAgencyView = {
                         </div>
                     </div>
                     <div style="display: flex; gap: 10px;">
-                        <button class="btn btn-primary" onclick="window.app.views.settingsAgency.openModal()" style="display: flex; align-items: center; gap: 8px;"><i class="fas fa-plus"></i> Nouveau paramètre</button>
-                        <button class="btn btn-outline" onclick="window.app.views.settingsAgency.loadData()" title="Rafraîchir"><i class="fas fa-sync-alt"></i></button>
+                        <button class="amt-btn amt-btn-primary" onclick="window.app.views.settingsAgency.openModal()" style="display: flex; align-items: center; gap: 8px;"><i class="fas fa-plus"></i> Nouveau paramètre</button>
+                        <button class="amt-btn amt-btn-outline" onclick="window.app.views.settingsAgency.loadData()" title="Rafraîchir"><i class="fas fa-sync-alt"></i></button>
                     </div>
                 </div>
 
@@ -77,8 +77,8 @@ export const SettingsAgencyView = {
                     <div style="display: flex; justify-content: space-between; align-items: center;">
                         <button id="paramDeleteBtn" class="btn" style="background: #fef2f2; color: #ef4444; border: 1px solid #fecaca; display: none; padding: 10px 15px;" onclick="window.app.views.settingsAgency.deleteParam()"><i class="fas fa-trash"></i> Supprimer</button>
                         <div style="display: flex; gap: 10px; margin-left: auto;">
-                            <button class="btn btn-outline" style="padding: 10px 15px;" onclick="window.app.views.settingsAgency.closeModal()">Annuler</button>
-                            <button class="btn btn-primary" style="padding: 10px 20px; box-shadow: 0 4px 6px rgba(59,130,246,0.2);" onclick="window.app.views.settingsAgency.saveParam()"><i class="fas fa-save"></i> Enregistrer</button>
+                            <button class="amt-btn amt-btn-outline" style="padding: 10px 15px;" onclick="window.app.views.settingsAgency.closeModal()">Annuler</button>
+                            <button class="amt-btn amt-btn-primary" style="padding: 10px 20px; box-shadow: 0 4px 6px rgba(59,130,246,0.2);" onclick="window.app.views.settingsAgency.saveParam()"><i class="fas fa-save"></i> Enregistrer</button>
                         </div>
                     </div>
                 </div>
@@ -132,7 +132,7 @@ export const SettingsAgencyView = {
                 <div class="param-card__name">${key}</div>
                 <div class="param-card__value">${(value || '').length > 150 ? (value || '').substring(0, 150) + '...' : (value || '')}</div>
                 <div class="param-card__footer">
-                    <button class="btn btn-outline btn-small" onclick="window.app.views.settingsAgency.openModal('${key}')">✏️ Modifier</button>
+                    <button class="amt-btn amt-btn-outline amt-btn-sm" onclick="window.app.views.settingsAgency.openModal('${key}')">✏️ Modifier</button>
                 </div>
             </div>
         `).join('');
