@@ -1514,6 +1514,14 @@ td.status { text-align: center; }
 .mobile-toggle { display: none; background: none; border: none; font-size: 22px; cursor: pointer; color: #1e293b; }
 .page-title { font-size: 22px; font-weight: 700; color: #0f172a; letter-spacing: -0.3px; margin: 0; }
 
+/* Barre du haut : disposition robuste indépendante de la jauge.
+   La jauge (CBM) est masquée en mode aérien ; pour éviter que le bloc
+   utilisateur (auparavant en position absolue) ne chevauche le titre, on
+   le repasse en élément flex poussé à droite par margin-left:auto. Le
+   titre reste à gauche, le bloc utilisateur à droite, avec OU sans jauge. */
+.top-bar .user-info { position: static !important; right: auto !important; margin-left: auto; }
+.top-bar .container-gauge-wrapper { margin-right: 0; }
+
 .content-container { padding: 25px 30px; }
 
 /* Sidebar Overlay Mobile */

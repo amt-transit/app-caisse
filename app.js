@@ -264,6 +264,19 @@ export const app = {
 
     async initContainerGauge() {
         try {
+            // La jauge mesure le remplissage d'un CONTENEUR maritime (CBM / 68).
+            // En AÉRIEN cette notion n'existe pas (mesure au poids/kg) : on
+            // masque la jauge et on n'ouvre aucun écouteur.
+            const gaugeEl = document.getElementById('topBarGauge');
+            const mode = sessionStorage.getItem('shippingMode') || 'maritime';
+            if (mode === 'aerien') {
+                if (gaugeEl) gaugeEl.style.display = 'none';
+                if (this.unsubContainerGauge1) this.unsubContainerGauge1();
+                if (this.unsubContainerGauge2) this.unsubContainerGauge2();
+                return;
+            }
+            if (gaugeEl) gaugeEl.style.display = '';
+
             const { db } = await import('./firebase-config.js');
             const { doc, onSnapshot, collection, query, where } = await import('https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js');
             const { getCollectionName } = await import('./agencies-config.js');
