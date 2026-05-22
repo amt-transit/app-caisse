@@ -153,21 +153,16 @@
             'img.twemoji{height:1em;width:1em;margin:0 .05em 0 .1em;vertical-align:-0.1em;display:inline-block}';
         document.head.appendChild(s);
 
-        // Auto-parse au boot + à chaque mutation du DOM (debouncé 80 ms).
-        var pending = null;
-        var schedule = function(){
-            if (pending) return;
-            pending = setTimeout(function(){ pending = null; window.applyTwemoji(); }, 80);
-        };
-        var startObserver = function(){
-            window.applyTwemoji();
-            var mo = new MutationObserver(function(muts){
-                for (var i=0; i<muts.length; i++) if (muts[i].addedNodes.length) { schedule(); return; }
-            });
-            mo.observe(document.body, { childList: true, subtree: true });
-        };
-        if (document.body) startObserver();
-        else document.addEventListener('DOMContentLoaded', startObserver, { once: true });
+        // PAS d'auto-parse global. Twemoji modifie le DOM (remplace les
+        // emojis texte par des <img>), ce qui entre en conflit avec les
+        // librairies de rendu comme Vue : leur DOM diff est cassé et le
+        // contenu réactif peut disparaître silencieusement.
+        // Pour rendre les drapeaux sur Windows malgré tout :
+        //   - L'overlay de switch d'agence construit lui-même l'URL SVG
+        //     Twemoji depuis les codepoints (cf. plus haut dans cet HTML).
+        //   - Les vues qui veulent des drapeaux SVG peuvent appeler
+        //     window.applyTwemoji(domNode) sur un noeud STATIQUE (non géré
+        //     par Vue).
     })();
     </script>
 
