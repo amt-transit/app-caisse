@@ -2,6 +2,7 @@ import { db } from '../../../firebase-config.js';
 import { collection, addDoc, getDocs, query, where, limit, onSnapshot, orderBy, doc, updateDoc } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 import { Autocomplete } from './autocomplete.js';
 import { getCollectionName } from '../../../agencies-config.js';
+import { getShippingMode } from '../../../shipping-mode.js';
 
 export const NouveauRdvView = {
     unsubTodayRdv: null,
@@ -583,7 +584,8 @@ export const NouveauRdvView = {
                     segment: 'nouveau',
                     taille: 'petit',
                     ca: 0,
-                    factures: 0
+                    factures: 0,
+                    modeExpedition: getShippingMode()
                 });
                 this.app.showToast("Nouveau client créé !", "success");
             } catch(e) {

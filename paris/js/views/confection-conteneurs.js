@@ -425,7 +425,8 @@ export const ConfectionConteneursView = {
                                 agency: activeAgency,
                                 container: cont,
                                 status: 'SUCCES',
-                                manual: true
+                                manual: true,
+                                modeExpedition: sessionStorage.getItem('shippingMode') || 'maritime'
                             }).catch(e => console.error("Log scan (ajout manuel):", e));
                         }
                         globalApp.showToast(`${selected.length} dossier(s) ajouté(s) au conteneur ${cont}.`, "success");

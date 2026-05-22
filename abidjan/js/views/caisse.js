@@ -1,7 +1,7 @@
 import { db } from '../../../firebase-config.js';
 import { collection, doc, addDoc, updateDoc, getDocs, query, where, orderBy, limit, onSnapshot, writeBatch, arrayUnion } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 import { getCollectionName } from '../../../agencies-config.js';
-import { matchesShippingMode, isAerienMode } from '../../../shipping-mode.js';
+import { matchesShippingMode, isAerienMode, getShippingMode } from '../../../shipping-mode.js';
 import { createApp, ref, reactive, computed, onMounted, onUnmounted, watch } from "https://unpkg.com/vue@3/dist/vue.esm-browser.prod.js";
 
 export const CaisseView = {
@@ -802,7 +802,10 @@ export const CaisseView = {
                         batch.set(auditRef, {
                             date: new Date().toISOString(), entryDate: dateStr, user: currentUserName, agency: activeAgency, action: "VALIDATION_JOURNEE",
                             details: dls, targetId: isMob ? "BATCH_MOBILE" : "BATCH", status: "PENDING", transactionIds: touchedTransIds, expenseIds: touchedExpIds,
-                            agents: agentsStr, totalIn: espIn, totalGlobalIn: totalIn, totalOut: totalOut, result: espIn - totalOut
+                            agents: agentsStr, totalIn: espIn, totalGlobalIn: totalIn, totalOut: totalOut, result: espIn - totalOut,
+                            // Tag mode d'expedition (Maritime/Aerien). Anciens
+                            // logs sans ce champ = maritime (regle legacy).
+                            modeExpedition: getShippingMode()
                         });
                         
                         await batch.commit();

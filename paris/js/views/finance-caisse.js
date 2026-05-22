@@ -3,6 +3,7 @@ import { collection, query, where, onSnapshot } from "https://www.gstatic.com/fi
 import { CONSTANTS } from '../../../constants.js';
 import { isEurAgency } from '../../../agency-money.js';
 import { createApp, ref, computed, onMounted, onUnmounted } from "https://unpkg.com/vue@3/dist/vue.esm-browser.prod.js";
+import { getCollectionName } from '../../../agencies-config.js';
 
 export const FinanceCaisseView = {
     vueApp: null,
@@ -129,12 +130,12 @@ export const FinanceCaisseView = {
                         loading.value = false;
                     };
 
-                    unsubTrans = onSnapshot(query(collection(db, "transactions"), where("agency", "==", activeAgency), where("isDeleted", "==", false)), snap => {
+                    unsubTrans = onSnapshot(query(collection(db, getCollectionName("transactions")), where("agency", "==", activeAgency), where("isDeleted", "==", false)), snap => {
                         transList = snap.docs.map(d => ({ id: d.id, ...d.data() }));
                         if (!loading.value || expList.length > 0) mergeData();
                     });
 
-                    unsubExp = onSnapshot(query(collection(db, "expenses"), where("agency", "==", activeAgency), where("isDeleted", "==", false)), snap => {
+                    unsubExp = onSnapshot(query(collection(db, getCollectionName("expenses")), where("agency", "==", activeAgency), where("isDeleted", "==", false)), snap => {
                         expList = snap.docs.map(d => ({ id: d.id, ...d.data() }));
                         mergeData(); // Toujours appeler mergeData car on a besoin des deux pour enlever le loading complet
                     });

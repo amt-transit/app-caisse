@@ -1,5 +1,6 @@
 import { db } from '../../../firebase-config.js';
 import { collection, doc, addDoc, setDoc, updateDoc, query, where, orderBy, onSnapshot, writeBatch, limit } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
+import { getShippingMode, filterByShippingMode } from '../../../shipping-mode.js';
 
 export const OtherIncomeView = {
     render(app, container) {
@@ -161,9 +162,13 @@ export const OtherIncomeView = {
                 // AJOUT DU NOM DE L'AUTEUR
                 description: `${finalDesc} (${currentUserName})`,
                 montant: parseFloat(incomeAmount.value) || 0,
-                mode: document.getElementById('incomeMode').value, 
+                mode: document.getElementById('incomeMode').value,
                 isDeleted: false,
-                agency: activeAgency
+                agency: activeAgency,
+                // Tag mode d'expedition (Maritime/Aerien) pour isolation des
+                // comptes selon le bouton actif. Anciens docs sans ce champ
+                // = maritime (regle legacy de shipping-mode.js).
+                modeExpedition: getShippingMode()
             };
             
             if (!data.date || !incomeDesc.value || data.montant <= 0) {
@@ -214,8 +219,13 @@ export const OtherIncomeView = {
         function renderIncomeTable() {
             const term = incomeSearchInput ? incomeSearchInput.value.toLowerCase().trim() : "";
             const monthFilter = document.getElementById('incomeStatsMonthFilter')?.value;
-            
-            const filtered = allIncome.filter(item => {
+
+            // Isolation Maritime <-> Aerien : on ne garde que les entrees du
+            // mode actuellement actif (bouton 🚢/✈️). Anciennes entrees sans
+            // modeExpedition = maritime (regle legacy).
+            const incomeForMode = filterByShippingMode(allIncome);
+
+            const filtered = incomeForMode.filter(item => {
                 if (monthFilter && !item.date.startsWith(monthFilter)) return false;
                 
                 // Filtre Catégorie
@@ -292,7 +302,11 @@ export const OtherIncomeView = {
             let totalVente = 0;
             let totalAutre = 0;
 
-            allIncome.forEach(inc => {
+            // Stats Maritime/Aerien aussi dissociees : on ne compte que le
+            // mode actuellement actif.
+            const incomeForMode = filterByShippingMode(allIncome);
+
+            incomeForMode.forEach(inc => {
                 if (inc.isDeleted) return;
                 if (monthFilter && !inc.date.startsWith(monthFilter)) return;
 

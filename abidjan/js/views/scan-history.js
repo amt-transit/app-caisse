@@ -98,7 +98,11 @@ export const ScanHistoryView = {
         const q = query(collection(db, "scan_logs"), where("agency", "==", activeAgency), orderBy("date", "desc"), limit(1000));
 
         this.unsub = onSnapshot(q, (snapshot) => {
-            this.logs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            // Isolation Maritime/Aerien : on ne garde que les scans du mode
+            // actif. Anciens scans sans modeExpedition = maritime (legacy).
+            const _mode = sessionStorage.getItem('shippingMode') || 'maritime';
+            this.logs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))
+                .filter(s => ((s.modeExpedition === 'aerien') ? 'aerien' : 'maritime') === _mode);
             this.applyFilters();
         }, (error) => {
             console.error("Erreur chargement scan logs:", error);

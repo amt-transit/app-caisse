@@ -2,6 +2,7 @@ import { db } from '../../../firebase-config.js';
 import { collection, doc, updateDoc, setDoc, query, where, orderBy, onSnapshot, writeBatch, limit, getDocs } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 import { getCollectionName } from '../../../agencies-config.js';
 import { createApp, ref, reactive, computed, onMounted, onUnmounted, watch } from "https://unpkg.com/vue@3/dist/vue.esm-browser.prod.js";
+import { getShippingMode, filterByShippingMode } from '../../../shipping-mode.js';
 
 export const ExpensesView = {
     vueApp: null,
@@ -375,6 +376,10 @@ export const ExpensesView = {
                 watch([limitExp, () => filters.showDeleted], fetchExpenses);
 
                 // Computed
+                // Isolation Maritime/Aerien gérée « par construction » : en mode
+                // aérien getCollectionName('expenses') pointe sur expenses_aerien.
+                // Donc pas de filtre par champ ici (sinon un doc non tagué serait
+                // caché à tort).
                 const validExpenses = computed(() => expenses.value.filter(e => !e.sessionId || !unconfirmedSessions.value.has(e.sessionId)));
 
                 const filteredExpenses = computed(() => {
@@ -454,7 +459,10 @@ export const ExpensesView = {
                         mode: form.actionType === 'Depense' ? form.mode : 'Virement',
                         conteneur: form.type === 'Conteneur' && form.actionType === 'Depense' ? form.container.trim().toUpperCase() : '',
                         vehicleId: form.type === 'Mensuelle' ? form.vehicleId : '',
-                    agency: activeAgency, isDeleted: false
+                    agency: activeAgency, isDeleted: false,
+                    // Tag mode d'expedition (Maritime/Aerien). Anciennes
+                    // depenses sans ce champ = maritime (legacy).
+                    modeExpedition: getShippingMode()
                 };
                     if (!data.date || !form.desc || data.montant <= 0) {
                         return window.AppModal ? window.AppModal.error("Veuillez remplir la description et un montant valide.") : alert("Erreur de saisie");

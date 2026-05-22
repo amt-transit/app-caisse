@@ -176,7 +176,7 @@ export const SmsView = {
             if (smsLivCol === "livraisons") smsLivConstraints.unshift(where("agency", "==", activeAgency));
             const smsLivQuery = query(collection(db, smsLivCol), ...smsLivConstraints);
             const [clientsSnap, livSnap] = await Promise.all([
-                getDocs(query(collection(db, "clients"), where("agency", "==", activeAgency))),
+                getDocs(query(collection(db, getCollectionName("clients")), where("agency", "==", activeAgency))),
                 getDocs(smsLivQuery)
             ]);
 

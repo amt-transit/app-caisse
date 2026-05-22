@@ -222,7 +222,7 @@ export const ChauffeursListView = {
             });
 
             if (this.unsubTrans) this.unsubTrans();
-            this.unsubTrans = onSnapshot(query(collection(db, "transactions"), where("agency", "==", activeAgency), where("isDeleted", "==", false)), snap => {
+            this.unsubTrans = onSnapshot(query(collection(db, getCollectionName("transactions")), where("agency", "==", activeAgency), where("isDeleted", "==", false)), snap => {
                 this.transactions = snap.docs.map(d => ({id: d.id, ...d.data()}));
                 this.renderTable();
             });

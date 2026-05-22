@@ -1,6 +1,7 @@
 import { db } from '../../../firebase-config.js';
 import { collection, query, where, onSnapshot, doc, addDoc, updateDoc } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 import { createApp, ref, reactive, onMounted, onUnmounted } from "https://unpkg.com/vue@3/dist/vue.esm-browser.prod.js";
+import { getCollectionName } from '../../../agencies-config.js';
 
 export const FinanceDepensesView = {
     vueApp: null,
@@ -122,7 +123,7 @@ export const FinanceDepensesView = {
 
                 onMounted(() => {
                     const activeAgency = sessionStorage.getItem('currentActiveAgency') || 'paris';
-                    const q = query(collection(db, "expenses"), where("agency", "==", activeAgency), where("isDeleted", "==", false));
+                    const q = query(collection(db, getCollectionName("expenses")), where("agency", "==", activeAgency), where("isDeleted", "==", false));
                     
                     unsub = onSnapshot(q, snap => {
                         const data = snap.docs.map(d => ({ id: d.id, ...d.data() }));
@@ -159,14 +160,14 @@ export const FinanceDepensesView = {
                     
                     try {
                         const activeAgency = sessionStorage.getItem('currentActiveAgency') || 'paris';
-                        await addDoc(collection(db, "expenses"), {
-                            date: form.date, 
-                            category: form.category, 
-                            description: form.desc.trim(), 
+                        await addDoc(collection(db, getCollectionName("expenses")), {
+                            date: form.date,
+                            category: form.category,
+                            description: form.desc.trim(),
                             montant: amountParsed,
-                            type: 'Mensuelle', 
-                            mode: 'Espèce', 
-                            agency: activeAgency, 
+                            type: 'Mensuelle',
+                            mode: 'Espèce',
+                            agency: activeAgency,
                             isDeleted: false
                         });
                         globalApp.showToast("Dépense enregistrée", "success");
@@ -181,7 +182,7 @@ export const FinanceDepensesView = {
                 const deleteExpense = async (id) => {
                     if (!confirm("Supprimer cette dépense ?")) return;
                     try { 
-                        await updateDoc(doc(db, "expenses", id), { isDeleted: true }); 
+                        await updateDoc(doc(db, getCollectionName("expenses"), id), { isDeleted: true });
                         globalApp.showToast("Dépense supprimée", "success"); 
                     } catch(e) { 
                         globalApp.showToast("Erreur suppression", "error"); 

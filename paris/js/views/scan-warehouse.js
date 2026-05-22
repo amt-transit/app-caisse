@@ -351,7 +351,7 @@ export const ScanWarehouseView = {
                         globalApp.showToast("Erreur de connexion", "error"); 
                     }
                     
-                    addDoc(collection(db, 'scan_logs'), logData).catch(e => console.error("Log error", e));
+                    addDoc(collection(db, 'scan_logs'), { ...logData, modeExpedition: sessionStorage.getItem('shippingMode') || 'maritime' }).catch(e => console.error("Log error", e));
 
                     setTimeout(() => { isScanningPaused = false; }, 1500);
                 };

@@ -2,6 +2,7 @@ import { db } from '../../../firebase-config.js';
 import { collection, query, where, onSnapshot } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 import { CONSTANTS } from '../../../constants.js';
 import { createApp, ref, onMounted, onUnmounted } from "https://unpkg.com/vue@3/dist/vue.esm-browser.prod.js";
+import { getCollectionName } from '../../../agencies-config.js';
 
 export const FinanceChequesView = {
     vueApp: null,
@@ -71,7 +72,7 @@ export const FinanceChequesView = {
 
                 onMounted(() => {
                     const activeAgency = sessionStorage.getItem('currentActiveAgency') || 'paris';
-                    const q = query(collection(db, "transactions"), where("agency", "==", activeAgency), where("modePaiement", "==", "CHEQUES"), where("isDeleted", "==", false));
+                    const q = query(collection(db, getCollectionName("transactions")), where("agency", "==", activeAgency), where("modePaiement", "==", "CHEQUES"), where("isDeleted", "==", false));
                     
                     unsub = onSnapshot(q, snap => {
                         const data = snap.docs.map(d => ({ id: d.id, ...d.data() }));

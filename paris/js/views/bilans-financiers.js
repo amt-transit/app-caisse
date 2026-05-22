@@ -3,6 +3,7 @@ import { collection, query, where, onSnapshot, getDoc, doc } from "https://www.g
 import { CONSTANTS } from '../../../constants.js';
 import { getCollectionName } from '../../../agencies-config.js';
 import { isEurAgency } from '../../../agency-money.js';
+import { filterByShippingMode } from '../../../shipping-mode.js';
 
 export const BilansFinanciersView = {
     unsubTrans: null,
@@ -230,6 +231,9 @@ export const BilansFinanciersView = {
     loadData() {
         const activeAgency = sessionStorage.getItem('currentActiveAgency') || 'paris';
         
+        // Isolation Maritime/Aerien « par construction » : en mode aérien,
+        // getCollectionName pointe sur les sous-tables _aerien (transactions,
+        // livraisons, expenses, containers). Pas de filtre par champ ici.
         if (this.unsubTrans) this.unsubTrans();
         const qTrans = query(collection(db, getCollectionName("transactions")), where("agency", "==", activeAgency), where("isDeleted", "==", false));
         this.unsubTrans = onSnapshot(qTrans, snap => {

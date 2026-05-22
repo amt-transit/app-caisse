@@ -538,6 +538,8 @@ initVue(globalApp) {
                     const cd = new Map();
                     clientsSnap.forEach(doc => {
                         const data = doc.data();
+                        // Isolation Maritime/Aerien « par construction » :
+                        // getCollectionName('clients') -> clients_aerien en aérien.
                         // L'autocomplétion EXPÉDITEUR ne doit proposer QUE des
                         // expéditeurs : on exclut les clients type='destinataire'.
                         if (data.nom && data.type !== 'destinataire') cd.set(data.nom.trim(), data);
@@ -574,6 +576,8 @@ initVue(globalApp) {
                     const pd = new Map();
                     prodSnap.forEach(doc => {
                         const data = doc.data();
+                        // Isolation Maritime/Aerien « par construction » :
+                        // getCollectionName('products') -> products_aerien en aérien.
                         if (data.desc) pd.set(data.desc.trim(), data);
                     });
                     productsData.value = pd;
@@ -816,7 +820,8 @@ initVue(globalApp) {
                         nom: fullName, tel, email: clientModal.email.trim(), adresse,
                         type: clientType, expediteurs: expLink,
                         dateAjout: new Date().toISOString(), agency: clientAgency,
-                        risque: 'low', segment: 'nouveau', taille: 'petit', ca: 0, factures: 0
+                        risque: 'low', segment: 'nouveau', taille: 'petit', ca: 0, factures: 0,
+                        modeExpedition: sessionStorage.getItem('shippingMode') || 'maritime'
                     });
                     // Intègre immédiatement dans l'autocomplétion (sans recharger).
                     clientsData.value.set(fullName, { nom: fullName, tel, adresse, email: clientModal.email.trim() });
@@ -1073,7 +1078,8 @@ initVue(globalApp) {
                         const pRef = doc(collection(db, getCollectionName("products")));
                         batch.set(pRef, {
                             category: 'COLIS', desc: d, price: 0, dim: '',
-                            agency: activeAgency, createdAt: new Date().toISOString(), auto: true
+                            agency: activeAgency, createdAt: new Date().toISOString(), auto: true,
+                            modeExpedition: shippingMode
                         });
                     });
                 }

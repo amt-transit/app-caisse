@@ -392,7 +392,7 @@ export const ScanLivraisonView = {
             this.app.showToast("Erreur de connexion", "error"); 
         }
         
-        addDoc(collection(db, 'scan_logs'), logData).catch(e => console.error("Log error", e));
+        addDoc(collection(db, 'scan_logs'), { ...logData, modeExpedition: sessionStorage.getItem('shippingMode') || 'maritime' }).catch(e => console.error("Log error", e));
         this.updateKPIs();
         setTimeout(() => { this.isScanningPaused = false; }, 1500);
     },

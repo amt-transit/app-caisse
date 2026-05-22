@@ -737,9 +737,15 @@ onAuthStateChanged(auth, async (user) => {
         const badgeQuery = query(logsRef, where("action", "==", "VALIDATION_JOURNEE"), orderBy("date", "desc"));
         
         onSnapshot(badgeQuery, snapshot => {
+                // Isolation Maritime/Aérien : on ne compte que les sessions du
+                // mode actif. Anciennes sessions sans modeExpedition = maritime.
+                const _badgeMode = sessionStorage.getItem('shippingMode') || 'maritime';
                 let pendingCount = 0;
                 snapshot.forEach(doc => {
-                    if (doc.data().status !== "VALIDATED") {
+                    const data = doc.data();
+                    const sMode = (data.modeExpedition === 'aerien') ? 'aerien' : 'maritime';
+                    if (sMode !== _badgeMode) return;
+                    if (data.status !== "VALIDATED") {
                         pendingCount++;
                     }
                 });

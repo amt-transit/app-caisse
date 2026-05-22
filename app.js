@@ -415,8 +415,14 @@ export const app = {
             // audit_logs reste une collection globale (confirmation.js l'écrit en brut, sans suffixe de route)
             const qSess = query(collection(cfg.db, "audit_logs"), where("action", "==", "VALIDATION_JOURNEE"), where("agency", "==", activeAgency));
             this.unsubPendingSessions = onSnapshot(qSess, snap => {
+                // Isolation Maritime/Aérien : on ne compte que les sessions du
+                // mode actif. Anciennes sessions sans modeExpedition = maritime.
+                const mode = sessionStorage.getItem('shippingMode') || 'maritime';
                 const count = snap.docs.filter(d => {
-                    const s = d.data().status;
+                    const data = d.data();
+                    const sMode = (data.modeExpedition === 'aerien') ? 'aerien' : 'maritime';
+                    if (sMode !== mode) return false;
+                    const s = data.status;
                     return s !== "VALIDATED" && s !== "ARCHIVED";
                 }).length;
                 this.applyPendingSessionsBadge(count);

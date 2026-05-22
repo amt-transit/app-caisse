@@ -1,7 +1,7 @@
 import { db } from '../../../firebase-config.js';
 import { collection, doc, getDoc, getDocs, addDoc, setDoc, updateDoc, deleteDoc, query, where, orderBy, limit, onSnapshot, writeBatch, deleteField, arrayUnion } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 import { getCollectionName } from '../../../agencies-config.js';
-import { matchesShippingMode } from '../../../shipping-mode.js';
+import { matchesShippingMode, getShippingMode } from '../../../shipping-mode.js';
 
 export const LivraisonView = {
     async render(app, container) {
@@ -5385,7 +5385,10 @@ export const LivraisonView = {
                        totalIn: totalIn,
                        totalGlobalIn: amountAbidjan + amountParis,
                        totalOut: 0,
-                       result: totalIn
+                       result: totalIn,
+                       // Tag mode d'expedition (Maritime/Aerien). Anciens
+                       // logs sans ce champ = maritime (regle legacy).
+                       modeExpedition: getShippingMode()
                    });
                }
        

@@ -4,6 +4,7 @@ import { Autocomplete } from '../../paris/js/views/autocomplete.js';
 import { CONSTANTS } from '../../constants.js';
 import { getCollectionName, AGENCIES } from '../../agencies-config.js';
 import { normalizePhone } from '../../affiliations.js';
+import { getShippingMode, filterByShippingMode } from '../../shipping-mode.js';
 
 // EUR si agence historique 'paris' OU route SaaS dont la devise configurée
 // est EUR. (Même règle que app.formatMoneyLocal — cohérence d'affichage.)
@@ -356,16 +357,22 @@ export const ClientsView = {
     },
 
     computeClientStats() {
-        if (!this.rawClients || !this.rawLivraisons) return; 
-        
+        if (!this.rawClients || !this.rawLivraisons) return;
+
         const activeAgency = sessionStorage.getItem('currentActiveAgency') || 'paris';
         const isArrival = AGENCIES[activeAgency] && AGENCIES[activeAgency].type === 'arrival';
+
+        // Isolation Maritime/Aerien gérée « par construction » : en mode aérien,
+        // getCollectionName('clients') et ('livraisons') pointent sur les
+        // sous-tables _aerien. Pas de filtre par champ ici.
+        const clientsForMode = this.rawClients;
+        const livraisonsForMode = this.rawLivraisons;
 
         const statsMap = new Map();
         const clientProfiles = new Map();
 
         // Initialiser les clients existants
-        this.rawClients.forEach(data => {
+        clientsForMode.forEach(data => {
             // Séparation expéditeur / destinataire : on ignore un client dont
             // le rôle EXPLICITE ne correspond pas au contexte (agence de
             // départ = expéditeurs ; agence d'arrivée = destinataires).
@@ -383,9 +390,9 @@ export const ClientsView = {
             });
         });
 
-        // Agréger depuis les livraisons
-        this.rawLivraisons.forEach(liv => {
-            // DIFFÉRENCE CLÉ : 
+        // Agréger depuis les livraisons (déjà filtrées par mode ci-dessus)
+        livraisonsForMode.forEach(liv => {
+            // DIFFÉRENCE CLÉ :
             // Si c'est l'arrivée (Abidjan), le client est le Destinataire en priorité.
             // Si c'est le départ (Paris), le client est toujours l'Expéditeur.
             const rawName = isArrival ? (liv.destinataire || liv.expediteur) : liv.expediteur;
@@ -686,7 +693,8 @@ export const ClientsView = {
                 await addDoc(collection(db, getCollectionName("clients")), {
                     nom: newNom, tel: newTel, adresse: newAdresse,
                     type: isArrival ? 'destinataire' : 'expediteur',
-                    dateAjout: new Date().toISOString(), agency: activeAgency, risque: 'low', segment: 'nouveau', taille: 'petit', ca: 0, factures: 0
+                    dateAjout: new Date().toISOString(), agency: activeAgency, risque: 'low', segment: 'nouveau', taille: 'petit', ca: 0, factures: 0,
+                    modeExpedition: getShippingMode()
                 });
             } else {
                 await updateDoc(doc(db, getCollectionName("clients"), id), { nom: newNom, tel: newTel, adresse: newAdresse });
@@ -818,7 +826,8 @@ export const ClientsView = {
                 type: isArrival ? 'destinataire' : 'expediteur',
                 dateAjout: new Date().toISOString(),
                 agency: activeAgency,
-                risque: 'low', segment: 'nouveau', taille: 'petit', ca: 0, factures: 0
+                risque: 'low', segment: 'nouveau', taille: 'petit', ca: 0, factures: 0,
+                modeExpedition: getShippingMode()
             });
             if (appInstance) appInstance.showToast("Client créé avec succès !", "success");
             if (document.getElementById('newClientModal')) document.getElementById('newClientModal').style.display = 'none';

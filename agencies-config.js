@@ -42,21 +42,54 @@ export const getDepartureAgencies = () => Object.values(AGENCIES).filter(a => a.
 export const getArrivalAgencies = () => Object.values(AGENCIES).filter(a => a.type === 'arrival').map(a => a.id);
 export const getAgencyFolder = (agencyId) => AGENCIES[agencyId] ? AGENCIES[agencyId].appFolder : 'abidjan';
 
+// Collections « sensibles au mode d'expédition » : Maritime et Aérien sont
+// des univers TOTALEMENT séparés (demande métier). Pour ces tables, l'Aérien
+// écrit/lit dans une sous-table dédiée suffixée `_aerien`. Le Maritime reste
+// sur la table de base (tout l'historique = maritime). Ainsi aucune page ne
+// peut mélanger les deux : l'isolation est garantie « par construction »,
+// sans avoir à filtrer chaque écran.
+//
+// NB : other_income, bank_movements et audit_logs ne sont PAS dans cette
+// liste — ils restent en table de base et sont isolés par un filtre sur le
+// champ `modeExpedition` (collections à usage mixte / non routées partout).
+const MODE_SENSITIVE_COLLECTIONS = new Set([
+    'transactions',
+    'livraisons',
+    'livraisons_archives',
+    'expenses',
+    'clients',
+    'products',
+    'containers',
+    'appointments',
+    'quotes',
+    'quote_requests',
+    'boats'
+]);
+
 // OPTION 5 : Routage dynamique des collections (Data Mirroring)
 export const getCollectionName = (baseName) => {
     const agency = sessionStorage.getItem('currentActiveAgency') || 'paris';
-    
+
+    let name;
     // Flux historique (Paris <-> Abidjan) : on garde les tables d'origine
     if (agency === 'paris' || agency === 'abidjan' || agency === 'all') {
-        return baseName;
+        name = baseName;
     }
-    
     // Flux SaaS Arrivée (ex: abidjan_chine -> pointe sur transactions_chine)
-    if (AGENCIES[agency] && AGENCIES[agency].type === 'arrival' && agency.includes('_')) {
+    else if (AGENCIES[agency] && AGENCIES[agency].type === 'arrival' && agency.includes('_')) {
         const parts = agency.split('_');
-        return `${baseName}_${parts[1]}`;
+        name = `${baseName}_${parts[1]}`;
     }
-    
-    // Flux SaaS Départ (ex: chine, dakar -> pointe sur transactions_chine, transactions_dakar)
-    return `${baseName}_${agency}`;
+    // Flux SaaS Départ (ex: chine, dakar -> transactions_chine, transactions_dakar)
+    else {
+        name = `${baseName}_${agency}`;
+    }
+
+    // Suffixe Aérien : sous-table dédiée pour la séparation totale Maritime/Aérien.
+    const mode = sessionStorage.getItem('shippingMode') || 'maritime';
+    if (mode === 'aerien' && MODE_SENSITIVE_COLLECTIONS.has(baseName)) {
+        name = `${name}_aerien`;
+    }
+
+    return name;
 };

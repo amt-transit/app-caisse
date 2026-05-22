@@ -227,9 +227,14 @@ export const ScanHistoryView = {
                         const q = query(collection(db, "scan_logs"), where("agency", "==", activeAgency), orderBy("date", "desc"), limit(parseInt(currentLimit.value)));
                         
                         unsub = onSnapshot(q, (snapshot) => {
-                            scans.value = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+                            // Isolation Maritime/Aerien : on ne garde que les scans
+                            // du mode actif. Anciens scans sans modeExpedition =
+                            // maritime (regle legacy).
+                            const _mode = sessionStorage.getItem('shippingMode') || 'maritime';
+                            scans.value = snapshot.docs.map(d => ({ id: d.id, ...d.data() }))
+                                .filter(s => ((s.modeExpedition === 'aerien') ? 'aerien' : 'maritime') === _mode);
                             loading.value = false;
-                            
+
                             // Clean orphaned selections
                             const validIds = new Set(scans.value.map(s => s.id));
                             selectedIds.value = selectedIds.value.filter(id => validIds.has(id));

@@ -1,6 +1,7 @@
 import { db } from '../../../firebase-config.js';
 import { collection, doc, setDoc, updateDoc, getDocs, query, where, orderBy, onSnapshot, writeBatch } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 import { getCollectionName } from '../../../agencies-config.js';
+import { getShippingMode, filterByShippingMode } from '../../../shipping-mode.js';
 
 export const BankView = {
     render(app, container) {
@@ -105,10 +106,15 @@ export const BankView = {
                         }
                     }
                 });
+                // other_income / bank_movements restent en table de base : on
+                // isole Maritime/Aérien par le champ modeExpedition (legacy=maritime).
+                const _mode = sessionStorage.getItem('shippingMode') || 'maritime';
+                const _matchMode = (d) => ((d && d.modeExpedition === 'aerien') ? 'aerien' : 'maritime') === _mode;
                 const incSnap = await getDocs(query(collection(db, "other_income"), where("isDeleted", "!=", true), where("agency", "==", activeAgency)));
                 let totalAutres = 0;
                 incSnap.forEach(doc => {
                     const d = doc.data();
+                    if (!_matchMode(d)) return;
                     if (d.mode !== 'Virement' && d.mode !== 'Chèque') {
                         totalAutres += (d.montant || 0);
                     }
@@ -130,6 +136,7 @@ export const BankView = {
                 let totalDepots = 0;
                 bankSnap.forEach(doc => {
                     const d = doc.data();
+                    if (!_matchMode(d)) return;
                     if (d.type === 'Retrait') totalRetraits += (d.montant || 0);
                     if (d.type === 'Depot' && d.source !== 'Remise Chèques' && d.source !== 'Solde Initial') totalDepots += (d.montant || 0);
                 });
@@ -251,7 +258,10 @@ export const BankView = {
                 type: type,
                 source: isInitial ? 'Solde Initial' : 'Saisie Manuelle',
                 isDeleted: false,
-                agency: activeAgency
+                agency: activeAgency,
+                // Tag mode d'expedition (Maritime/Aerien). Anciens
+                // mouvements sans ce champ = maritime (legacy).
+                modeExpedition: getShippingMode()
             };
 
             if (!data.date || !data.bank || !bankDesc.value || data.montant <= 0) {
@@ -292,7 +302,10 @@ export const BankView = {
                         action: 'Depense',
                         isDeleted: false,
                         linkedBankMovementId: newDocRef.id, // Lien pour suppression en cascade
-                        agency: activeAgency
+                        agency: activeAgency,
+                        // Tag mode d'expedition pour rester aligne avec le
+                        // mouvement bancaire source.
+                        modeExpedition: getShippingMode()
                     });
                 }
 
@@ -466,7 +479,10 @@ export const BankView = {
             let soldeBridge = 0;
             let soldeOrange = 0;
 
-            allCombinedMovements.forEach(m => {
+            // Totaux Maritime/Aerien dissocies (regle legacy : sans champ
+            // modeExpedition = maritime).
+            const forMode = filterByShippingMode(allCombinedMovements);
+            forMode.forEach(m => {
                 const montant = m.montant || 0;
                 const bankName = (m.bank || "").toUpperCase();
                 let impact = 0;
@@ -513,7 +529,10 @@ export const BankView = {
 
         function renderBankTable() {
             const term = bankSearchInput ? bankSearchInput.value.toLowerCase().trim() : "";
-            const filtered = allCombinedMovements.filter(item => {
+            // Isolation Maritime <-> Aerien. Anciens mouvements sans
+            // modeExpedition = maritime (regle legacy).
+            const forMode = filterByShippingMode(allCombinedMovements);
+            const filtered = forMode.filter(item => {
                 if (!term) return true;
                 return (item.description || "").toLowerCase().includes(term) ||
                        (item.type || "").toLowerCase().includes(term) ||

@@ -94,6 +94,47 @@ service cloud.firestore {
       allow read, write: if isAuthenticated() && (hasGlobalAccess() || getUserData().agency in ['paris', 'abidjan']);
     }
 
+    // -------------------------------------------------------------------
+    // 3-bis. VARIANTES AÉRIEN des collections historiques Paris/Abidjan
+    // -------------------------------------------------------------------
+    // Séparation totale Maritime/Aérien : en mode aérien, getCollectionName()
+    // route vers des sous-tables suffixées `_aerien` (cf. agencies-config.js).
+    // Mêmes droits que les tables de base. (Les routes SaaS sont déjà
+    // couvertes par la règle 4 via le suffixe de route, ex. transactions_chine_aerien.)
+    match /transactions_aerien/{document=**} {
+      allow read, write: if isAuthenticated() && (hasGlobalAccess() || getUserData().agency in ['paris', 'abidjan']);
+    }
+    match /livraisons_aerien/{document=**} {
+      allow read, write: if isAuthenticated() && (hasGlobalAccess() || getUserData().agency in ['paris', 'abidjan']);
+    }
+    match /livraisons_archives_aerien/{document=**} {
+      allow read, write: if isAuthenticated() && (hasGlobalAccess() || getUserData().agency in ['paris', 'abidjan']);
+    }
+    match /expenses_aerien/{document=**} {
+      allow read, write: if isAuthenticated() && (hasGlobalAccess() || getUserData().agency in ['paris', 'abidjan']);
+    }
+    match /clients_aerien/{document=**} {
+      allow read, write: if isAuthenticated() && (hasGlobalAccess() || getUserData().agency in ['paris', 'abidjan']);
+    }
+    match /products_aerien/{document=**} {
+      allow read, write: if isAuthenticated() && (hasGlobalAccess() || getUserData().agency in ['paris', 'abidjan']);
+    }
+    match /containers_aerien/{document=**} {
+      allow read, write: if isAuthenticated() && (hasGlobalAccess() || getUserData().agency in ['paris', 'abidjan']);
+    }
+    match /appointments_aerien/{document=**} {
+      allow read, write: if isAuthenticated() && (hasGlobalAccess() || getUserData().agency in ['paris', 'abidjan']);
+    }
+    match /quotes_aerien/{document=**} {
+      allow read, write: if isAuthenticated() && (hasGlobalAccess() || getUserData().agency in ['paris', 'abidjan']);
+    }
+    match /quote_requests_aerien/{document=**} {
+      allow read, write: if isAuthenticated() && (hasGlobalAccess() || getUserData().agency in ['paris', 'abidjan']);
+    }
+    match /boats_aerien/{document=**} {
+      allow read, write: if isAuthenticated() && (hasGlobalAccess() || getUserData().agency in ['paris', 'abidjan']);
+    }
+
     // =====================================================================
     // 3bis. ACCÈS DÉMARCHEUR (app mobile parrainage — LECTURE SEULE, strict)
     // =====================================================================

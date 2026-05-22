@@ -1,6 +1,7 @@
 import { db } from '../../../firebase-config.js';
 import { collection, query, onSnapshot, doc, setDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 import { createApp, ref, computed, onMounted, onUnmounted } from "https://unpkg.com/vue@3/dist/vue.esm-browser.prod.js";
+import { getCollectionName } from '../../../agencies-config.js';
 
 export const GestionConteneursView = {
     vueApp: null,
@@ -97,7 +98,7 @@ export const GestionConteneursView = {
                 const activeAgency = sessionStorage.getItem('currentActiveAgency') || 'paris';
 
                 onMounted(() => {
-                    unsub = onSnapshot(query(collection(db, "containers"), where("agency", "==", activeAgency)), (snapshot) => {
+                    unsub = onSnapshot(query(collection(db, getCollectionName("containers")), where("agency", "==", activeAgency)), (snapshot) => {
                         containers.value = snapshot.docs.map(d => ({id: d.id, ...d.data()}));
                         loading.value = false;
                     });
@@ -130,7 +131,7 @@ export const GestionConteneursView = {
                     if (!num || !num.trim()) return;
                     try {
                         const id = num.trim().toUpperCase();
-                        await setDoc(doc(db, "containers", id), { number: id, status: 'EN_CHARGEMENT', destination: 'Abidjan', agency: activeAgency, createdAt: new Date().toISOString() });
+                        await setDoc(doc(db, getCollectionName("containers"), id), { number: id, status: 'EN_CHARGEMENT', destination: 'Abidjan', agency: activeAgency, createdAt: new Date().toISOString() });
                         globalApp.showToast("Conteneur créé !", "success");
                     } catch(e) { globalApp.showToast("Erreur création", "error"); }
                 };
@@ -138,7 +139,7 @@ export const GestionConteneursView = {
                 const deleteContainer = async (id) => {
                     if (!await window.AppModal.confirm(`Supprimer le conteneur ${id} ?`, "Supprimer", true)) return;
                     try { 
-                        await deleteDoc(doc(db, "containers", id)); 
+                        await deleteDoc(doc(db, getCollectionName("containers"), id));
                         globalApp.showToast("Supprimé !", "success"); 
                     } catch(e) { 
                         globalApp.showToast("Erreur", "error"); 

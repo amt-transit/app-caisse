@@ -1,6 +1,14 @@
 import { db } from '../../../firebase-config.js';
 import { collection, doc, updateDoc, deleteDoc, getDoc, getDocs, query, where, orderBy, onSnapshot, writeBatch, arrayRemove, limit } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 import { getCollectionName } from '../../../agencies-config.js';
+import { getShippingMode } from '../../../shipping-mode.js';
+// Helper : une session de validation appartient au mode actif si son
+// champ modeExpedition correspond. Anciennes sessions sans ce champ
+// = maritime (regle legacy unique).
+const sessionMatchesMode = (logData) => {
+    const m = (logData && logData.modeExpedition) === 'aerien' ? 'aerien' : 'maritime';
+    return m === getShippingMode();
+};
 
 export const ConfirmationView = {
     render(app, container) {
@@ -286,15 +294,19 @@ export const ConfirmationView = {
                 if (snapshot.empty) sessionsListPendingEl.innerHTML = '<p style="padding:10px; color:#999;">Aucune session.</p>';
     
                 snapshot.forEach(doc => {
-                    const div = createSessionElement(doc);
                     const data = doc.data();
-    
+                    // Isolation Maritime <-> Aerien : on ignore les sessions
+                    // qui ne correspondent pas au mode d'expedition actif.
+                    if (!sessionMatchesMode(data)) return;
+
+                    const div = createSessionElement(doc);
+
                     if (data.transactionIds && Array.isArray(data.transactionIds) && data.transactionIds.length === 0) {
                         if (!data.expenseIds || (Array.isArray(data.expenseIds) && data.expenseIds.length === 0)) return;
                     }
                     if (data.status === "ARCHIVED") return;
                     if (filterDateSession.value && data.date.split('T')[0] !== filterDateSession.value) return;
-    
+
                     if (data.status === "VALIDATED") sessionsListValidatedEl.appendChild(div);
                     else sessionsListPendingEl.appendChild(div);
                 });
@@ -349,8 +361,10 @@ export const ConfirmationView = {
             const qArchives = query(collection(db, "audit_logs"), where("action", "==", "VALIDATION_JOURNEE"), where("date", ">=", start), where("date", "<=", end), orderBy("date", "desc"));
             getDocs(qArchives).then(snapshot => {
                 sessionsListArchivesEl.innerHTML = '';
-                if (snapshot.empty) { sessionsListArchivesEl.innerHTML = '<p>Aucune session trouvée.</p>'; return; }
-                snapshot.forEach(doc => sessionsListArchivesEl.appendChild(createSessionElement(doc)));
+                // Isolation Maritime <-> Aerien sur les archives aussi.
+                const filtered = snapshot.docs.filter(d => sessionMatchesMode(d.data()));
+                if (filtered.length === 0) { sessionsListArchivesEl.innerHTML = '<p>Aucune session trouvée.</p>'; return; }
+                filtered.forEach(doc => sessionsListArchivesEl.appendChild(createSessionElement(doc)));
             }).catch(err => { console.error(err); sessionsListArchivesEl.innerHTML = '<p style="color:red;">Erreur chargement.</p>'; });
         });
     

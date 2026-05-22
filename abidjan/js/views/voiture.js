@@ -275,7 +275,9 @@ export const VoitureView = {
                     author: currentUserName,
                     timestamp: new Date().toISOString(),
                     isDeleted: false,
-                    agency: activeAgency
+                    agency: activeAgency,
+                    // Tag mode d'expedition : opération véhicule isolée Maritime/Aérien.
+                    modeExpedition: sessionStorage.getItem('shippingMode') || 'maritime'
                 };
 
                 try {
@@ -295,8 +297,12 @@ export const VoitureView = {
         // --- 3. AFFICHAGE ET ANALYSE ---
         const qTrans = query(collection(db, "fleet_transactions"), where("isDeleted", "!=", true), orderBy("isDeleted"), orderBy("date", "desc"));
         onSnapshot(qTrans, snap => {
+            // Isolation Maritime/Aérien : les opérations véhicules suivent le
+            // mode actif. Anciennes sans modeExpedition = maritime (legacy).
+            const _mode = sessionStorage.getItem('shippingMode') || 'maritime';
             let list = snap.docs.map(doc => ({ id: doc.id, ...doc.data(), _source: 'fleet' }));
-            allTransactions = list.filter(d => (d.agency || 'abidjan') === activeAgency);
+            allTransactions = list.filter(d => (d.agency || 'abidjan') === activeAgency
+                && ((d.modeExpedition === 'aerien') ? 'aerien' : 'maritime') === _mode);
             mergeAndRenderTransactions();
         });
 

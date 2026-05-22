@@ -1,5 +1,6 @@
 import { db } from '../../../firebase-config.js';
 import { collection, query, where, onSnapshot, doc, setDoc, addDoc, updateDoc, arrayUnion, getDocs, writeBatch, deleteField } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
+import { getCollectionName } from '../../../agencies-config.js';
 
 export const ProspectingView = {
     unsub: null,
@@ -342,8 +343,12 @@ export const ProspectingView = {
         const activeAgency = sessionStorage.getItem('currentActiveAgency') || 'paris';
         const q = query(collection(db, "prospects"), where("agency", "==", activeAgency));
         
+        const _mode = sessionStorage.getItem('shippingMode') || 'maritime';
         this.unsub = onSnapshot(q, (snapshot) => {
-            this.prospects = snapshot.docs.map(d => ({id: d.id, ...d.data()}));
+            // Isolation Maritime/Aérien : prospects du mode actif uniquement
+            // (anciens sans modeExpedition = maritime).
+            this.prospects = snapshot.docs.map(d => ({id: d.id, ...d.data()}))
+                .filter(p => ((p.modeExpedition === 'aerien') ? 'aerien' : 'maritime') === _mode);
             this.prospects.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
             this.applyFilters();
             
@@ -541,6 +546,7 @@ export const ProspectingView = {
                 data.agency = sessionStorage.getItem('currentActiveAgency') || 'paris';
                 data.agent = sessionStorage.getItem('userName') || 'Agent';
                 data.history = [];
+                data.modeExpedition = sessionStorage.getItem('shippingMode') || 'maritime';
                 await addDoc(collection(db, "prospects"), data);
                 this.app.showToast("Dossier créé", "success");
             }
@@ -686,7 +692,7 @@ export const ProspectingView = {
         this.app.showToast("Analyse en cours...", "info");
         
         try {
-            const snap = await getDocs(query(collection(db, "clients"), where("segment", "==", "dormant")));
+            const snap = await getDocs(query(collection(db, getCollectionName("clients")), where("segment", "==", "dormant")));
             if (snap.empty) {
                 this.app.showToast("Aucun client dormant trouvé.", "info");
                 return;
@@ -714,7 +720,8 @@ export const ProspectingView = {
                         createdAt: new Date().toISOString(),
                         agency: sessionStorage.getItem('currentActiveAgency') || 'paris',
                         agent: sessionStorage.getItem('userName') || 'Système',
-                        history: []
+                        history: [],
+                        modeExpedition: sessionStorage.getItem('shippingMode') || 'maritime'
                     });
                     imported++;
                 }
@@ -745,9 +752,9 @@ export const ProspectingView = {
             await updateDoc(doc(db, "prospects", id), { status: 'CONVERTI' });
             
             // 2. Créer le client dans la collection "clients" si le numéro n'existe pas
-            const cSnap = await getDocs(query(collection(db, "clients"), where("tel", "==", p.tel)));
+            const cSnap = await getDocs(query(collection(db, getCollectionName("clients")), where("tel", "==", p.tel)));
             if (cSnap.empty) {
-                await addDoc(collection(db, "clients"), {
+                await addDoc(collection(db, getCollectionName("clients")), {
                     nom: `${p.nom} ${p.prenom || ''}`.trim(),
                     tel: p.tel,
                     email: p.email || '',

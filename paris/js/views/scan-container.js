@@ -380,7 +380,7 @@ export const ScanContainerView = {
                     }
                     
                     // Sauvegarde silencieuse du log
-                    addDoc(collection(db, 'scan_logs'), logData).catch(e => console.error("Log error", e));
+                    addDoc(collection(db, 'scan_logs'), { ...logData, modeExpedition: sessionStorage.getItem('shippingMode') || 'maritime' }).catch(e => console.error("Log error", e));
 
                     setTimeout(() => { isScanningPaused.value = false; }, 1500);
                 };

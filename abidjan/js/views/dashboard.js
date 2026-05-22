@@ -581,22 +581,24 @@ export const DashboardView = {
         }
 
         function updateDashboard() {
-            // Maritime et Aérien sont DISSOCIÉS : on ne garde que les
-            // transactions du mode d'expédition actif (🚢/✈️). Les anciens
-            // documents sans modeExpedition = maritime (règle legacy unique
-            // de shipping-mode.js). Sinon les montants des deux modes se
-            // mélangent dans le tableau de bord.
-            const modeTransactions = filterByShippingMode(allTransactions);
-            const cleanTransactions = getCleanTransactions(modeTransactions);
+            // Transactions et dépenses : isolation Maritime/Aérien « par
+            // construction » (getCollectionName -> *_aerien en aérien). Pas
+            // besoin de filtrer par champ ici.
+            const cleanTransactions = getCleanTransactions(allTransactions);
             const cleanExpenses = allExpenses.filter(e => !e.sessionId || validatedSessions.has(e.sessionId));
+            // other_income et bank_movements restent en table de base (non
+            // routées) : on les isole par le champ modeExpedition. Anciens
+            // documents sans ce champ = maritime (règle legacy).
+            const modeOtherIncome = filterByShippingMode(allOtherIncome);
+            const modeBankMovements = filterByShippingMode(allBankMovements);
 
             const start = startDateInput.value;
             const end = endDateInput.value;
-            
+
             const filteredTrans = filterByDate(cleanTransactions, start, end);
             const filteredExp = filterByDate(cleanExpenses, start, end);
-            const filteredInc = filterByDate(allOtherIncome, start, end);
-            const filteredBank = filterByDate(allBankMovements, start, end);
+            const filteredInc = filterByDate(modeOtherIncome, start, end);
+            const filteredBank = filterByDate(modeBankMovements, start, end);
 
             calculateTotals(filteredTrans, filteredExp, filteredInc, filteredBank);
             
