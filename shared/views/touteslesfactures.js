@@ -200,7 +200,7 @@ export const ToutesLesFacturesView = {
                             <span>Factures trouvées</span>
                         </div>
                     </div>
-                    <div class="table-wrap">
+                    <div class="table-wrap hide-on-mobile">
                         <table class="factures-table">
                             <thead>
                                 <tr>
@@ -221,8 +221,9 @@ export const ToutesLesFacturesView = {
                             </tbody>
                         </table>
                     </div>
+                    <div class="show-on-mobile" id="invoicesCards"></div>
                 </div>
-                
+
                 <!-- Conteneur pour les fenêtres modales -->
                 <div id="tlfModalsContainer"></div>
             </div>
@@ -430,21 +431,27 @@ export const ToutesLesFacturesView = {
 
         if (this.filteredInvoices.length === 0) {
             tbody.innerHTML = '<tr><td colspan="10" style="text-align: center; padding: 40px; color: #64748b;">Aucune facture trouvée</td></tr>';
+            const emptyCards = document.getElementById('invoicesCards');
+            if (emptyCards) emptyCards.innerHTML = '<div style="text-align:center; padding:30px; color:#64748b;">Aucune facture trouvée</div>';
             return;
         }
-        
+
         const isEur = isEurAgency();
         const TAUX = isEur ? CONSTANTS.TAUX_CONVERSION : 1;
 
-        tbody.innerHTML = this.filteredInvoices.map(inv => {
+        // On construit en un seul passage les lignes du tableau (ordinateur)
+        // ET les fiches compactes (mobile, modèle validé : 3 lignes + actions).
+        const rows = [];
+        const cards = [];
+        this.filteredInvoices.forEach(inv => {
             const totalDisplay = (parseFloat(inv.prix) || 0) / TAUX;
             const resteDisplay = Math.abs(parseFloat(inv.reste) || 0) / TAUX;
             const isPayee = resteDisplay <= 0;
             const isDeposit = resteDisplay > 0 && resteDisplay < totalDisplay;
-            
+
             let statusClass = 'badge--unpaid';
             let statusText = 'Impayée';
-            if (isPayee) { statusClass = 'badge--paid'; statusText = 'Payée'; } 
+            if (isPayee) { statusClass = 'badge--paid'; statusText = 'Payée'; }
             else if (isDeposit) { statusClass = 'badge--deposit'; statusText = 'Acompte'; }
 
             const address = inv.adresseDestinataire || inv.adresse || '-';
@@ -469,14 +476,17 @@ export const ToutesLesFacturesView = {
             const parrainBadge = parrainName
                 ? `<div style="margin-top:4px; display:inline-flex; align-items:center; gap:5px; background:#fff7ed; color:#9a3412; padding:2px 8px; border-radius:10px; font-size:11px; font-weight:600;"><i class="fas fa-handshake" style="font-size:10px;"></i> Parrain : ${parrainName}</div>`
                 : '';
-            return `
+            const frBadge = inv.agency === 'paris' && !isEur ? '<span title="Créé à Paris" style="font-size:10px; background:#e0f2fe; padding:2px 5px; border-radius:4px; margin-left:4px; color:#0369a1; font-weight:800;">FR</span>' : '';
+            const dateStr = inv.date ? new Date(inv.date).toLocaleDateString('fr-FR') : '-';
+
+            rows.push(`
                 <tr data-invoice-id="${inv.id}">
                     <td data-label="Statut"><span class="status-badge ${statusClass}">${statusText}</span></td>
                     <td data-label="Référence" style="font-weight: 900;">
                         <button class="amount-link" onclick="window.app.views.toutesLesFactures.viewInvoice('${inv.id}')">${inv.reference || '-'}</button>
-                        ${inv.agency === 'paris' && !isEur ? '<span title="Créé à Paris" style="font-size:10px; background:#e0f2fe; padding:2px 5px; border-radius:4px; margin-left:4px; color:#0369a1; font-weight:800;">FR</span>' : ''}
+                        ${frBadge}
                     </td>
-                    <td data-label="Date">${inv.date ? new Date(inv.date).toLocaleDateString('fr-FR') : '-'}</td>
+                    <td data-label="Date">${dateStr}</td>
                     <td data-label="Client"><strong>${inv.nom || '-'}</strong></td>
                     <td data-label="Adresse"><span class="tooltip" title="${address.replace(/"/g, '&quot;')}">${shortAddress}</span></td>
                     <td data-label="Téléphone">${inv.tel || '-'}</td>
@@ -491,8 +501,36 @@ export const ToutesLesFacturesView = {
                         </div>
                     </td>
                 </tr>
-            `;
-        }).join('');
+            `);
+
+            cards.push(`
+                <div class="comm-mob-card" data-invoice-id="${inv.id}">
+                    <div class="comm-mob-l1">
+                        <button class="amount-link" style="font-weight:900;" onclick="window.app.views.toutesLesFactures.viewInvoice('${inv.id}')">${inv.reference || '-'}</button>${frBadge}
+                        <span class="status-badge ${statusClass}">${statusText}</span>
+                    </div>
+                    <div class="comm-mob-l1">
+                        <strong>${inv.nom || '-'}</strong>
+                        <button class="amount-link" style="font-weight:800;" onclick="window.app.views.toutesLesFactures.addPayment('${inv.id}')">${this.formatMoneyLocal(totalDisplay)}</button>
+                    </div>
+                    <div class="comm-mob-l2">
+                        <span>${dateStr}</span>
+                        ${inv.nomDestinataire ? `<span>➜ ${inv.nomDestinataire}</span>` : ''}
+                        <span>${nbColis} colis</span>
+                    </div>
+                    ${parrainBadge}
+                    <div style="display:flex; justify-content:flex-end; gap:10px; border-top:1px solid #f1f5f9; padding-top:6px; margin-top:4px;">
+                        <button class="icon-btn btn--edit" onclick="window.app.views.toutesLesFactures.editInvoice('${inv.id}')" title="Modifier">✏️</button>
+                        <button class="icon-btn btn--reuse" onclick="window.app.views.toutesLesFactures.reuseInvoice('${inv.id}')" title="Réutiliser">📋</button>
+                        <button class="icon-btn btn--del" onclick="window.app.views.toutesLesFactures.deleteInvoice('${inv.id}')" title="Supprimer">🗑️</button>
+                    </div>
+                </div>
+            `);
+        });
+
+        tbody.innerHTML = rows.join('');
+        const cardsEl = document.getElementById('invoicesCards');
+        if (cardsEl) cardsEl.innerHTML = cards.join('');
     },
 
     async viewInvoice(id) {

@@ -1070,6 +1070,15 @@ body.login-page {
     .comm-mob-l1 strong { font-size: 15px; color: #0f172a; }
     .comm-mob-l2 { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 12px; color: #64748b; margin-bottom: 7px; }
     .comm-mob-l3 { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; border-top: 1px solid #f1f5f9; padding-top: 7px; }
+
+    /* Cartes FACTURES (data-invoice-id) : version resserrée. Le montant ne
+       passe plus à la ligne (nowrap) et le nom long est tronqué ; marges
+       réduites pour limiter l'espace vide. */
+    .comm-mob-card[data-invoice-id] { padding: 8px 12px; }
+    .comm-mob-card[data-invoice-id] .comm-mob-l1 { margin-bottom: 3px; gap: 8px; }
+    .comm-mob-card[data-invoice-id] .comm-mob-l1 strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+    .comm-mob-card[data-invoice-id] .comm-mob-l1 .amount-link { white-space: nowrap; flex-shrink: 0; }
+    .comm-mob-card[data-invoice-id] .comm-mob-l2 { margin-bottom: 4px; row-gap: 2px; }
 }
 
 /* Masquer bottom-nav et FAB sur desktop */
