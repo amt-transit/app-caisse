@@ -7,7 +7,9 @@ import { filterByShippingMode } from '../../../shipping-mode.js';
 export const DashboardView = {
     render(app, container) {
         this.app = app;
-        
+        // Repli mobile réinitialisé à chaque ouverture (le détail démarre fermé).
+        document.body.classList.remove('dash-show-details');
+
         container.innerHTML = `
             <div class="dashboard-container modern-dashboard">
                 <!-- HEADER & FILTRES MODERNES -->
@@ -87,6 +89,11 @@ export const DashboardView = {
                     </div>
                 </div>
 
+                <!-- Mobile : bouton pour déplier le détail (trésorerie, tableaux, graphiques).
+                     Masqué sur ordinateur (tout est affiché). -->
+                <button type="button" class="dash-more-btn" onclick="document.body.classList.toggle('dash-show-details'); this.classList.toggle('on'); this.textContent = document.body.classList.contains('dash-show-details') ? '▴ Masquer le détail' : '▾ Afficher le détail complet'; setTimeout(function(){ window.dispatchEvent(new Event('resize')); }, 60);">▾ Afficher le détail complet</button>
+
+                <div class="dash-secondary">
                 <!-- 3. TRÉSORERIE, FLUX BANCAIRES & ACTIVITÉ -->
                 <h3 class="kpi-section-title"><span class="icon-bg">🏦</span> Trésorerie, Flux Bancaires & Activité</h3>
                 
@@ -244,11 +251,12 @@ export const DashboardView = {
                         <tbody id="adjustmentsTableBody"></tbody>
                     </table>
                 </div>
+                </div> <!-- /.dash-secondary (trésorerie + tableaux) -->
 
             </div>
 
             <!-- NOUVELLE SECTION GRAPHIQUES -->
-            <div class="dashboard-container" style="margin-top: 20px;">
+            <div class="dashboard-container dash-secondary" style="margin-top: 20px;">
                 <h2 style="margin-top:0;">📈 Évolution & Statistiques</h2>
                 <div class="charts-grid" style="grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 20px;">
                     <div class="chart-card">

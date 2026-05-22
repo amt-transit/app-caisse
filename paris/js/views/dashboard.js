@@ -18,7 +18,7 @@ export const DashboardView = {
             </style>
             <div id="vue-dashboard" v-cloak>
                 <div class="amt-section-label">🚀 Accès rapide</div>
-                <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(min(135px, 45%), 1fr)); gap: 12px; margin-bottom: 30px;">
+                <div class="amt-quick-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(min(135px, 45%), 1fr)); gap: 12px; margin-bottom: 30px;">
                     <button v-if="checkAccess('invoice-new')" @click="renderPage('invoice-new')" class="amt-quick">
                         <div class="amt-quick-icon"><i class="fas fa-file-invoice"></i></div>
                         <span class="amt-quick-label">Nouvelle facture</span>
@@ -93,7 +93,7 @@ export const DashboardView = {
                     </div>
                 </div>
 
-                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 25px; margin-bottom: 30px;">
+                <div class="dash-2col" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 25px; margin-bottom: 30px;">
                     <div style="background: white; border-radius: 16px; padding: 20px; border: 1px solid #e2e8f0; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);">
                         <h3 style="margin: 0 0 20px; font-size: 16px;">📈 Évolution Facturation (Général)</h3>
                         <div style="position: relative; height: 250px; width: 100%;">

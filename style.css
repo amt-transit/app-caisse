@@ -973,6 +973,81 @@ body.login-page {
         animation: slideUpModal 0.3s cubic-bezier(0.16, 1, 0.3, 1) !important;
     }
     @keyframes slideUpModal { from { transform: translateY(100%); } to { transform: translateY(0); } }
+
+    /* ── RESPONSIVE : grilles & barres qui débordaient sur téléphone ── */
+    /* Graphiques : une colonne pleine largeur (minmax(400px) débordait). */
+    .charts-grid { grid-template-columns: 1fr !important; gap: 15px !important; }
+    /* Les <canvas> Chart.js restent dans leur carte. */
+    .chart-card canvas, .chart-card { max-width: 100%; }
+    /* Barre de stats Livraison : passe à la ligne au lieu de déborder. */
+    .stats-bar { flex-wrap: wrap; gap: 12px; }
+    .stat-item { border-right: none; min-width: 40%; flex: 1 1 40%; }
+    /* Modales larges forcées (width:95%/max-width:1200px en inline) -> pleine largeur. */
+    .modal-content.modal-lg { width: 100% !important; max-width: 100% !important; }
+    /* Filet de sécurité : toute grille inline multi-colonnes repasse en 1 colonne. */
+    .charts-grid[style*="grid-template-columns"] { grid-template-columns: 1fr !important; }
+
+    /* ── TABLEAU DE BORD (en-tête + filtres date) ── */
+    .modern-dashboard { padding: 15px 12px !important; box-shadow: none !important; }
+    .dashboard-header-modern { margin-bottom: 18px; padding-bottom: 14px; }
+    .header-titles h2 { font-size: 20px; }
+    .header-titles p { font-size: 12.5px; }
+    /* Le bloc de filtres prend toute la largeur et passe à la ligne. */
+    .filter-controls-modern { width: 100%; flex-wrap: wrap; justify-content: space-between; gap: 8px; padding: 8px 10px; }
+    .date-filter-modern { flex-wrap: wrap; gap: 6px; }
+    .date-filter-modern input[type="date"] { flex: 1 1 120px; min-width: 0; }
+    /* Cartes KPI : un peu plus compactes sur mobile. */
+    .totals-container { gap: 12px !important; }
+    .total-card { padding: 16px 18px !important; }
+    .total-card p { font-size: 22px !important; }
+    /* Les blocs internes des grandes cartes (encaissements / dépenses détaillés)
+       s'empilent proprement au lieu de se serrer. */
+    .total-card .card-subtext { margin-top: 4px; }
+
+    /* ── TABLEAUX RÉCAP (Tableau de bord) : défilables au lieu d'être coupés ──
+       Les tableaux .table dans les onglets n'ont pas de conteneur scrollable :
+       on rend le tableau lui-même défilable horizontalement (le doigt fait
+       glisser pour voir les colonnes de droite). */
+    .tab-panel table {
+        display: block;
+        width: 100%;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        white-space: nowrap;
+    }
+    /* En-tête non collant dans ce contexte (évite les artefacts de sticky
+       dans un bloc à défilement horizontal). */
+    .tab-panel table thead { position: static; }
+}
+
+/* ── TABLEAU DE BORD MOBILE : « résumé d'abord » ──
+   Sur ordinateur, tout s'affiche (bouton masqué, .dash-secondary visible).
+   Sur téléphone, seule la Performance Financière reste visible ; le reste
+   (trésorerie, tableaux, graphiques) se déplie via le bouton. */
+.dash-more-btn { display: none; }
+@media (max-width: 768px) {
+    .dash-more-btn {
+        display: block; width: 100%; margin: 2px 0 18px;
+        padding: 12px 14px; border: 1px solid #F2A312;
+        background: #fff8ec; color: #B8780A; font-weight: 700;
+        border-radius: 12px; cursor: pointer; font-family: inherit; font-size: 14px;
+        text-align: center;
+    }
+    .dash-more-btn.on { background: #f1f5f9; color: #475569; border-color: #e2e8f0; }
+    .dash-secondary { display: none; }
+    body.dash-show-details .dash-secondary { display: block; }
+
+    /* ── Accès rapides (Tableau de bord Paris) : grille compacte 4 colonnes ──
+       Petits boutons « icône d'app » pour occuper un minimum de hauteur. */
+    .amt-quick-grid { grid-template-columns: repeat(4, 1fr) !important; gap: 6px !important; margin-bottom: 20px !important; }
+    .amt-quick { padding: 8px 3px !important; gap: 4px !important; border-radius: 11px !important; }
+    .amt-quick .amt-quick-icon { width: 30px; height: 30px; font-size: 13px; border-radius: 9px; }
+    .amt-quick-label { font-size: 9.5px; line-height: 1.15; }
+
+    /* « Évolution Facturation » + « Dernières Factures » : une colonne pleine
+       largeur (la grille minmax(400px) débordait en scroll horizontal). */
+    .dash-2col { grid-template-columns: 1fr !important; gap: 14px !important; }
+    .dash-2col > div { padding: 16px !important; }
 }
 
 /* Masquer bottom-nav et FAB sur desktop */
