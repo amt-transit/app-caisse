@@ -199,7 +199,17 @@ export const app = {
             manager: ['main', 'bilan', 'factures', 'entrees-caisse', 'finance', 'bilans-financiers', 'clients', 'stock']
         };
 
-        let allowedMenus = isSuperUser ? baseOrder : (config && config.roles ? config.roles[baseRole] || [] : defaultRoles[baseRole] || []);
+        let allowedMenus;
+        if (isSuperUser) {
+            allowedMenus = baseOrder;
+        } else if (config && config.roles) {
+            // Un rôle personnalisé utilise SES propres menus (clé = id exact du rôle).
+            // On ne retombe sur le groupe de base (agent/chauf/manager) que si le
+            // rôle n'a aucune configuration enregistrée.
+            allowedMenus = config.roles[userRole] || config.roles[baseRole] || defaultRoles[baseRole] || [];
+        } else {
+            allowedMenus = defaultRoles[baseRole] || [];
+        }
 
         // Application du filtre des menus physiquement disponibles pour l'agence (défini dans Apparence & Menus)
         if (config && config.visibleMenus) {
