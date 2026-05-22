@@ -84,22 +84,23 @@ export const app = {
         'daily-bilan': 'bilan', 'daily-users': 'bilan',
         'invoices-list': 'factures', 'invoice-new': 'factures', 'touteslesfactures': 'factures',
         'appointment-new': 'rdv', 'appointments-list': 'rdv', 'appointments-pending': 'rdv', 'appointments-calendar': 'rdv',
-        'program-new': 'operations', 'program-my': 'operations', 'program-history': 'operations', 'drivers': 'operations', 'departures-calendar': 'operations',
+        'program-new': 'programmes', 'program-my': 'programmes', 'program-history': 'programmes', 'drivers': 'programmes', 'departures-calendar': 'programmes',
         'quotes-list': 'devis', 'quote-new': 'devis', 'quote-requests': 'devis',
         'confection-containers': 'chargement', 'loading-boats': 'chargement',
         'scan-warehouse': 'scan', 'scan-container': 'scan', 'scan-classic': 'scan', 'scan-history': 'scan',
         'scan-dechargement': 'scan', 'scan-livraison': 'scan', 'scan-livrer': 'scan',
-        'clients-list': 'clients', 'clients-app': 'clients', 'clients-analytics': 'clients', 'clients': 'clients',
+        'clients-list': 'clients', 'clients-app': 'clients', 'clients-analytics': 'clients', 'clients': 'logistique',
         'chat': 'comms', 'sms-send': 'comms', 'sms-history': 'comms', 'notifications': 'comms', 'notifications-history': 'comms', 'sms': 'comms',
         'products-list': 'produits',
         'parrainage': 'special-asie', 'chine-dashboard': 'special-asie',
         'finance-cashier': 'finance', 'finance-cheques': 'finance', 'finance-expenses': 'finance',
-        'index': 'finance', 'confirmation': 'finance', 'history': 'finance', 'other-income': 'finance', 'expenses': 'finance', 'bank': 'finance', 'audit': 'finance',
-        'livraison': 'operations', 'livreurscan': 'operations', 'voiture': 'operations', 'magasinage': 'operations', 'points': 'operations',
+        'index': 'entrees-caisse', 'confirmation': 'entrees-caisse', 'history': 'entrees-caisse', 'other-income': 'entrees-caisse',
+        'expenses': 'finance', 'bank': 'finance', 'audit': 'finance',
+        'livraison': 'logistique', 'livreurscan': 'logistique', 'voiture': 'logistique', 'magasinage': 'logistique', 'points': 'logistique',
         'admin-panel': 'settings', 'salaire': 'settings', 'comptejb': 'settings', 'settings-agency': 'settings', 'settings-company': 'settings', 'settings-software': 'settings', 'settings-design': 'settings', 'settings-sms': 'settings', 'settings-notifications': 'settings', 'settings-menus': 'settings', 'settings-agents': 'settings', 'settings-agencies': 'settings', 'settings-roles': 'settings', 'settings-appointments': 'settings', 'settings-profile': 'settings',
         'stock-list': 'stock',
         'balance-monthly': 'bilans-financiers', 'balance-12m': 'bilans-financiers',
-        'stats-boat': 'statistique', 'stats-monthly': 'statistique', 'stats-yearly': 'statistique',
+        'stats-boat': 'bilans-financiers', 'stats-monthly': 'bilans-financiers', 'stats-yearly': 'bilans-financiers',
         'config-invoice': 'configuration', 'config-label': 'configuration', 'config-container': 'configuration', 'config-objectives': 'configuration', 'config-charges': 'configuration',
         'prospecting': 'prospecting',
         'audit-log': 'audit-log'
@@ -135,9 +136,46 @@ export const app = {
             
             const menusSnap = await getDoc(doc(db, "settings", `menus_${activeAgency}`));
             let menuConfig = menusSnap.exists() ? menusSnap.data() : null;
-            
-            this.applyMenuConfig(menuConfig);
+
+            this.applyMenuConfig(this.migrateMenuConfig(menuConfig));
         } catch(e) { console.error("Erreur chargement configuration des menus:", e); }
+    },
+
+    // Compatibilité ascendante : les configs enregistrées avant la refonte
+    // utilisent d'anciennes clés de section. On les convertit à la volée vers
+    // les nouvelles clés pour ne casser aucune agence déjà configurée.
+    //   operations   -> programmes + logistique
+    //   finance      -> finance + entrees-caisse (l'ancien 'finance' incluait
+    //                   la Saisie/Confirmation/Historique/Autres Entrées)
+    //   statistique  -> bilans-financiers
+    //   parrainage   -> special-asie
+    //   colis-recus  -> supprimée
+    migrateMenuKeys(arr) {
+        if (!Array.isArray(arr)) return arr;
+        const out = [];
+        const push = (k) => { if (k && !out.includes(k)) out.push(k); };
+        arr.forEach(k => {
+            if (k === 'operations') { push('programmes'); push('logistique'); }
+            else if (k === 'finance') { push('finance'); push('entrees-caisse'); }
+            else if (k === 'statistique') { push('bilans-financiers'); }
+            else if (k === 'parrainage') { push('special-asie'); }
+            else if (k === 'colis-recus') { /* section supprimée : on ignore */ }
+            else push(k);
+        });
+        return out;
+    },
+
+    migrateMenuConfig(config) {
+        if (!config) return config;
+        const c = { ...config };
+        if (Array.isArray(c.order)) c.order = this.migrateMenuKeys(c.order);
+        if (Array.isArray(c.visibleMenus)) c.visibleMenus = this.migrateMenuKeys(c.visibleMenus);
+        if (c.roles && typeof c.roles === 'object') {
+            const r = {};
+            Object.keys(c.roles).forEach(role => { r[role] = this.migrateMenuKeys(c.roles[role]); });
+            c.roles = r;
+        }
+        return c;
     },
 
     applyMenuConfig(config) {
@@ -147,7 +185,7 @@ export const app = {
         if (userRole.includes('manager') || userRole.includes('direction')) baseRole = 'manager';
         
         const isSuperUser = userRole === 'super_admin' || userRole === 'admin';
-        const defaultOrder = ['main', 'special-asie', 'parrainage', 'bilan', 'factures', 'rdv', 'operations', 'devis', 'chargement', 'scan', 'clients', 'comms', 'produits', 'finance', 'stock', 'bilans-financiers', 'statistique', 'settings', 'configuration', 'prospecting', 'audit-log'];
+        const defaultOrder = ['main', 'special-asie', 'bilan', 'factures', 'rdv', 'programmes', 'entrees-caisse', 'logistique', 'devis', 'chargement', 'scan', 'clients', 'comms', 'produits', 'finance', 'stock', 'bilans-financiers', 'settings', 'configuration', 'prospecting', 'audit-log'];
         let baseOrder = config && config.order ? config.order : [...defaultOrder];
         
         const activeAgency = sessionStorage.getItem('currentActiveAgency') || 'paris';
@@ -156,9 +194,9 @@ export const app = {
         defaultOrder.forEach(key => { if (!baseOrder.includes(key)) baseOrder.push(key); });
 
         const defaultRoles = {
-            agent: ['main', 'bilan', 'factures', 'rdv', 'operations', 'devis', 'chargement', 'scan', 'clients', 'comms', 'produits'],
-            chauf: ['main', 'chargement', 'scan', 'operations'],
-            manager: ['main', 'bilan', 'factures', 'finance', 'statistique', 'bilans-financiers', 'clients', 'stock']
+            agent: ['main', 'bilan', 'factures', 'rdv', 'programmes', 'entrees-caisse', 'logistique', 'devis', 'chargement', 'scan', 'clients', 'comms', 'produits'],
+            chauf: ['main', 'chargement', 'scan', 'programmes', 'logistique'],
+            manager: ['main', 'bilan', 'factures', 'entrees-caisse', 'finance', 'bilans-financiers', 'clients', 'stock']
         };
 
         let allowedMenus = isSuperUser ? baseOrder : (config && config.roles ? config.roles[baseRole] || [] : defaultRoles[baseRole] || []);
@@ -190,8 +228,8 @@ export const app = {
         const sections = Array.from(navContainer.querySelectorAll('.sidebar-category'));
         
         const titleToKey = {
-            'Dashboard': 'main', 'Bilan journalier': 'bilan', "Factures": 'factures', 'Entrées Caisse': 'finance',
-            'Rendez-vous': 'rdv', 'Les Programmes': 'operations', 'Logistique': 'operations', 'Devis': 'devis',
+            'Dashboard': 'main', 'Bilan journalier': 'bilan', "Factures": 'factures', 'Entrées Caisse': 'entrees-caisse',
+            'Rendez-vous': 'rdv', 'Les Programmes': 'programmes', 'Logistique': 'logistique', 'Devis': 'devis',
             'Chargement': 'chargement', 'Scan': 'scan', 'Clients': 'clients', 'Communication': 'comms',
             'PRODUITS': 'produits', 'Finance & Tréso': 'finance', 'Stock': 'stock',
             'Bilans & Stats': 'bilans-financiers', 'Administration': 'settings', 'Configuration': 'configuration',

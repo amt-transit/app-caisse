@@ -3,80 +3,120 @@ import { doc, setDoc, deleteDoc, onSnapshot, collection } from "https://www.gsta
 import { createApp, ref, reactive, onMounted, onUnmounted, computed } from "https://unpkg.com/vue@3/dist/vue.esm-browser.prod.js";
 import { AGENCIES } from '../../agencies-config.js';
 
-// Catalogue des menus : clé technique (utilisée par app.js) + libellé clair + icône.
+// Catalogue des menus : reflète FIDÈLEMENT le menu (sidebar) de index.html.
+// clé technique (utilisée par app.js) + libellé + icône + portée :
+//   scope = 'both' (les deux), 'departure' (départ/Paris), 'arrival' (arrivée/Abidjan).
 const MENU_META = [
-    { key: 'main', label: 'Tableau de bord', icon: '🏠' },
-    { key: 'special-asie', label: 'Spécial Asie', icon: '🌏' },
-    { key: 'parrainage', label: 'Réseau Partenaires', icon: '🤝' },
-    { key: 'bilan', label: 'Bilan journalier', icon: '📅' },
-    { key: 'factures', label: 'Factures', icon: '🧾' },
-    { key: 'rdv', label: 'Rendez-vous', icon: '📆' },
-    { key: 'operations', label: 'Programmes / Logistique', icon: '🚚' },
-    { key: 'devis', label: 'Devis', icon: '📄' },
-    { key: 'chargement', label: 'Chargement', icon: '📦' },
-    { key: 'scan', label: 'Scan', icon: '🔳' },
-    { key: 'clients', label: 'Clients', icon: '👥' },
-    { key: 'comms', label: 'Communication', icon: '💬' },
-    { key: 'produits', label: 'Produits', icon: '🏷️' },
-    { key: 'finance', label: 'Finance & Tréso', icon: '💰' },
-    { key: 'colis-recus', label: 'Colis reçus', icon: '📥' },
-    { key: 'stock', label: 'Stock', icon: '🗄️' },
-    { key: 'bilans-financiers', label: 'Bilans & Stats', icon: '📊' },
-    { key: 'statistique', label: 'Statistiques', icon: '📈' },
-    { key: 'settings', label: 'Administration', icon: '⚙️' },
-    { key: 'configuration', label: 'Configuration', icon: '🛠️' },
-    { key: 'prospecting', label: 'Prospection', icon: '🎯' },
-    { key: 'audit-log', label: "Journal d'activité", icon: '🕓' },
+    { key: 'main', label: 'Tableau de bord', icon: '🏠', scope: 'both' },
+    { key: 'special-asie', label: 'Réseau Partenaires (Spécial Asie)', icon: '🤝', scope: 'both' },
+    { key: 'bilan', label: 'Bilan journalier', icon: '📅', scope: 'both' },
+    { key: 'factures', label: 'Factures', icon: '🧾', scope: 'both' },
+    { key: 'rdv', label: 'Rendez-vous', icon: '📆', scope: 'departure' },
+    { key: 'programmes', label: 'Les Programmes', icon: '🗺️', scope: 'departure' },
+    { key: 'entrees-caisse', label: 'Entrées Caisse', icon: '💵', scope: 'arrival' },
+    { key: 'logistique', label: 'Logistique', icon: '🚚', scope: 'arrival' },
+    { key: 'devis', label: 'Devis', icon: '📄', scope: 'departure' },
+    { key: 'chargement', label: 'Chargement', icon: '📦', scope: 'departure' },
+    { key: 'scan', label: 'Scan', icon: '🔳', scope: 'both' },
+    { key: 'clients', label: 'Clients', icon: '👥', scope: 'departure' },
+    { key: 'comms', label: 'Communication', icon: '💬', scope: 'both' },
+    { key: 'produits', label: 'Produits', icon: '🏷️', scope: 'departure' },
+    { key: 'finance', label: 'Finance & Tréso', icon: '💰', scope: 'both' },
+    { key: 'stock', label: 'Stock', icon: '🗄️', scope: 'departure' },
+    { key: 'bilans-financiers', label: 'Bilans & Stats', icon: '📊', scope: 'both' },
+    { key: 'settings', label: 'Administration', icon: '⚙️', scope: 'both' },
+    { key: 'configuration', label: 'Configuration', icon: '🛠️', scope: 'departure' },
+    { key: 'prospecting', label: 'Prospection', icon: '🎯', scope: 'both' },
+    { key: 'audit-log', label: "Journal d'activité", icon: '🕓', scope: 'both' },
 ];
 
 // Modules (sous-éléments) de chaque section. La clé = clé de section (cf. MENU_META) ;
 // page = data-page réel (utilisé par app.js pour masquer via hiddenItems).
+// scope facultatif par item (sinon hérite de la section).
 const MENU_ITEMS = {
     main: [{ page: 'dashboard', label: 'Tableau de bord' }],
     'special-asie': [{ page: 'parrainage', label: 'Réseau Partenaires' }],
-    parrainage: [{ page: 'parrainage', label: 'Réseau Partenaires' }],
     bilan: [{ page: 'daily-bilan', label: 'Bilan du jour' }, { page: 'daily-users', label: 'Bilan par utilisateurs' }],
-    factures: [{ page: 'invoices-list', label: 'Toutes les factures' }, { page: 'invoice-new', label: 'Nouvelle facture' }, { page: 'touteslesfactures', label: 'Factures (Ancien)' }],
-    finance: [
-        { page: 'index', label: 'Saisie (caisse)' }, { page: 'confirmation', label: 'Confirmation' },
-        { page: 'history', label: 'Historique' }, { page: 'other-income', label: 'Autres Entrées' },
-        { page: 'finance-cashier', label: 'Caisse globale' }, { page: 'finance-cheques', label: 'Liste des chèques' },
-        { page: 'finance-expenses', label: 'Dépenses Finance' }, { page: 'expenses', label: 'Dépenses Tréso' },
-        { page: 'bank', label: 'Banque' }, { page: 'audit', label: 'Audit' },
+    factures: [
+        { page: 'invoices-list', label: 'Toutes les factures', scope: 'departure' },
+        { page: 'invoice-new', label: 'Nouvelle facture', scope: 'departure' },
+        { page: 'touteslesfactures', label: 'Factures (Ancien)', scope: 'arrival' },
     ],
-    operations: [
-        { page: 'livraison', label: 'LIVRAISON' },
-        { page: 'voiture', label: 'Gestion Véhicules' }, { page: 'magasinage', label: 'Magasinage' },
-        { page: 'points', label: 'Points' }, { page: 'clients', label: 'Clients (Logistique)' },
+    rdv: [{ page: 'appointment-new', label: 'Nouveau RDV' }, { page: 'appointments-list', label: 'Tous les RDV' }, { page: 'appointments-pending', label: 'À valider' }, { page: 'appointments-calendar', label: 'Calendrier RDV' }],
+    programmes: [
         { page: 'program-new', label: 'Nouveau programme' }, { page: 'program-my', label: 'Mon programme' },
         { page: 'program-history', label: 'Historique programmes' }, { page: 'drivers', label: 'Chauffeurs' },
         { page: 'departures-calendar', label: 'Calendrier départs' },
     ],
-    rdv: [{ page: 'appointment-new', label: 'Nouveau RDV' }, { page: 'appointments-list', label: 'Tous les RDV' }, { page: 'appointments-pending', label: 'À valider' }, { page: 'appointments-calendar', label: 'Calendrier RDV' }],
+    'entrees-caisse': [
+        { page: 'index', label: 'Saisie' }, { page: 'confirmation', label: 'Confirmation' },
+        { page: 'history', label: 'Historique' }, { page: 'other-income', label: 'Autres Entrées' },
+    ],
+    logistique: [
+        { page: 'livraison', label: 'LIVRAISON' }, { page: 'voiture', label: 'Gestion Véhicules' },
+        { page: 'magasinage', label: 'Magasinage' }, { page: 'points', label: 'Points' },
+        { page: 'clients', label: 'Clients (Logistique)' },
+    ],
     devis: [{ page: 'quotes-list', label: 'Tous les devis' }, { page: 'quote-new', label: 'Nouveau devis' }, { page: 'quote-requests', label: 'Demandes reçues' }],
     chargement: [{ page: 'confection-containers', label: 'Confection' }, { page: 'loading-boats', label: 'Bateaux départ' }],
     scan: [
-        { page: 'scan-warehouse', label: 'Mise en entrepôt' }, { page: 'scan-container', label: 'Charger conteneur' },
-        { page: 'scan-classic', label: 'Scanner (classique)' }, { page: 'scan-dechargement', label: 'Déchargement' },
-        { page: 'scan-livraison', label: 'En livraison' }, { page: 'scan-livrer', label: 'Remise Clients' },
+        { page: 'scan-warehouse', label: 'Mise en entrepôt', scope: 'departure' }, { page: 'scan-container', label: 'Charger conteneur', scope: 'departure' },
+        { page: 'scan-classic', label: 'Scanner (classique)', scope: 'departure' }, { page: 'scan-dechargement', label: 'Déchargement', scope: 'arrival' },
+        { page: 'scan-livraison', label: 'En livraison', scope: 'arrival' }, { page: 'scan-livrer', label: 'Remise Clients', scope: 'arrival' },
         { page: 'scan-history', label: 'Historique scans' },
     ],
     clients: [{ page: 'clients-list', label: 'Liste clients' }, { page: 'clients-app', label: 'Client application' }, { page: 'clients-analytics', label: 'Analytics' }],
-    comms: [{ page: 'chat', label: 'Chat' }, { page: 'sms-send', label: 'Envoi SMS' }, { page: 'sms-history', label: 'Historique SMS' }, { page: 'sms', label: 'Campagnes SMS' }, { page: 'notifications', label: 'Notifications' }, { page: 'notifications-history', label: 'Historique Notif' }],
+    comms: [
+        { page: 'chat', label: 'Chat' },
+        { page: 'sms-send', label: 'Envoi SMS', scope: 'departure' }, { page: 'sms-history', label: 'Historique SMS', scope: 'departure' },
+        { page: 'sms', label: 'Campagnes SMS', scope: 'arrival' },
+        { page: 'notifications', label: 'Notifications' }, { page: 'notifications-history', label: 'Historique Notif' },
+    ],
     produits: [{ page: 'products-list', label: 'Liste produits' }],
+    finance: [
+        { page: 'finance-cashier', label: 'Caisse globale', scope: 'departure' }, { page: 'finance-cheques', label: 'Liste des chèques', scope: 'departure' },
+        { page: 'finance-expenses', label: 'Dépenses Finance', scope: 'departure' },
+        { page: 'expenses', label: 'Dépenses Tréso', scope: 'arrival' }, { page: 'bank', label: 'Banque', scope: 'arrival' }, { page: 'audit', label: 'Audit', scope: 'arrival' },
+    ],
     stock: [{ page: 'stock-list', label: 'Liste produit stocké' }],
-    'bilans-financiers': [{ page: 'balance-monthly', label: 'Bilan Comparatif' }, { page: 'balance-12m', label: 'Direction 12M' }, { page: 'stats-boat', label: 'Stats bateau' }, { page: 'stats-monthly', label: 'Stats par mois' }, { page: 'stats-yearly', label: 'Stats par année' }],
+    'bilans-financiers': [
+        { page: 'balance-monthly', label: 'Bilan Comparatif', scope: 'departure' }, { page: 'balance-12m', label: 'Direction 12M', scope: 'departure' },
+        { page: 'stats-boat', label: 'Stats bateau' }, { page: 'stats-monthly', label: 'Stats par mois' }, { page: 'stats-yearly', label: 'Stats par année' },
+    ],
     settings: [
-        { page: 'admin-panel', label: 'Gestion agents & accès' }, { page: 'salaire', label: 'Salaire' },
-        { page: 'comptejb', label: 'Compte JB' }, { page: 'settings-agency', label: 'Agence' },
-        { page: 'settings-company', label: 'Entreprise' }, { page: 'settings-software', label: 'Paramètre logiciel' },
-        { page: 'settings-design', label: 'Apparence & menus' }, { page: 'settings-agents', label: 'Gestion des agents' },
-        { page: 'settings-agencies', label: 'Gestion des agences' }, { page: 'settings-roles', label: 'Rôles & Menus' },
-        { page: 'settings-appointments', label: 'Paramètres RDV' }, { page: 'settings-profile', label: 'Mon profil' },
+        { page: 'admin-panel', label: 'Gestion agents & accès' },
+        { page: 'salaire', label: 'Salaire', scope: 'arrival' }, { page: 'comptejb', label: 'Compte JB', scope: 'arrival' },
+        { page: 'settings-agency', label: 'Agence', scope: 'departure' }, { page: 'settings-company', label: 'Entreprise', scope: 'departure' },
+        { page: 'settings-software', label: 'Paramètre logiciel' },
+        { page: 'settings-design', label: 'Apparence & menus', scope: 'departure' }, { page: 'settings-agents', label: 'Gestion des agents', scope: 'departure' },
+        { page: 'settings-agencies', label: 'Gestion des agences', scope: 'departure' }, { page: 'settings-roles', label: 'Rôles & Menus' },
+        { page: 'settings-appointments', label: 'Paramètres RDV', scope: 'departure' }, { page: 'settings-profile', label: 'Mon profil' },
     ],
     configuration: [{ page: 'config-invoice', label: 'Choix facture' }, { page: 'config-label', label: 'Choix étiquette' }, { page: 'config-container', label: 'Conteneur Actif' }, { page: 'config-objectives', label: 'Objectifs' }, { page: 'config-charges', label: 'Charges' }],
     prospecting: [{ page: 'prospecting', label: 'Prospections' }],
     'audit-log': [{ page: 'audit-log', label: "Activités log" }],
+};
+
+// Badge de portée Départ / Arrivée (rien si 'both').
+const SCOPE_BADGE = { departure: '🛫 Départ', arrival: '🛬 Arrivée' };
+
+// Compatibilité ascendante : convertit les anciennes clés de section vers les
+// nouvelles (mêmes règles que app.migrateMenuKeys), pour les agences déjà
+// configurées avant la refonte. Filtre aussi toute clé inconnue.
+const VALID_KEYS = new Set(MENU_META.map(m => m.key));
+const migrateKeys = (arr) => {
+    if (!Array.isArray(arr)) return [];
+    const out = [];
+    const push = (k) => { if (k && VALID_KEYS.has(k) && !out.includes(k)) out.push(k); };
+    arr.forEach(k => {
+        if (k === 'operations') { push('programmes'); push('logistique'); }
+        else if (k === 'finance') { push('finance'); push('entrees-caisse'); }
+        else if (k === 'statistique') { push('bilans-financiers'); }
+        else if (k === 'parrainage') { push('special-asie'); }
+        else if (k === 'colis-recus') { /* section supprimée */ }
+        else push(k);
+    });
+    return out;
 };
 
 const ACTION_PERMS = [
@@ -137,6 +177,9 @@ export const SettingsRolesMenusView = {
                 .mn-rank { width:26px; height:26px; flex-shrink:0; border-radius:50%; background:#eef2ff; color:#4f46e5; font-size:11px; font-weight:800; display:flex; align-items:center; justify-content:center; }
                 .mn-ic { font-size:22px; width:30px; text-align:center; }
                 .mn-name { flex:1; font-weight:700; color:#0f172a; font-size:15px; }
+                .mn-scope { font-size:10px; font-weight:800; padding:2px 8px; border-radius:8px; margin-left:8px; white-space:nowrap; vertical-align:middle; }
+                .mn-scope.sc-departure { background:#dbeafe; color:#1e40af; }
+                .mn-scope.sc-arrival { background:#dcfce7; color:#166534; }
                 .mn-state { font-size:11px; font-weight:800; padding:3px 9px; border-radius:999px; }
                 .mn-state.s-on { background:#dcfce7; color:#166534; }
                 .mn-state.s-off { background:#fee2e2; color:#991b1b; }
@@ -209,6 +252,7 @@ export const SettingsRolesMenusView = {
                             <span class="mn-ic">{{ metaOf(key).icon }}</span>
                             <span class="mn-name">
                                 {{ metaOf(key).label }}
+                                <span v-if="scopeBadge(metaOf(key).scope)" class="mn-scope" :class="'sc-' + metaOf(key).scope">{{ scopeBadge(metaOf(key).scope) }}</span>
                                 <button v-if="itemsOf(key).length" class="mn-exp" @click.stop="toggleExpand(key)">
                                     {{ expanded[key] ? '▾' : '▸' }} {{ itemsOf(key).length }} module(s)
                                 </button>
@@ -223,6 +267,7 @@ export const SettingsRolesMenusView = {
                             <label v-for="it in itemsOf(key)" :key="it.page" class="mn-sub" :class="isItemVisible(it.page) ? '' : 'soff'">
                                 <input type="checkbox" :checked="isItemVisible(it.page)" @change="toggleItem(it.page)">
                                 <span class="mn-sub-n">{{ it.label }}</span>
+                                <span v-if="scopeBadge(it.scope)" class="mn-scope" :class="'sc-' + it.scope">{{ scopeBadge(it.scope) }}</span>
                                 <span class="mn-sub-s">{{ isItemVisible(it.page) ? 'affiché' : 'masqué' }}</span>
                             </label>
                         </div>
@@ -284,7 +329,7 @@ export const SettingsRolesMenusView = {
                                 <p style="font-size:13px;color:#475569;background:white;padding:12px;border-radius:8px;border:1px solid #e2e8f0;">Menus visibles pour les utilisateurs de ce rôle.</p>
                                 <div class="mn-grid">
                                     <label v-for="m in MENU_META" :key="m.key" class="mn-chk">
-                                        <input type="checkbox" :value="m.key" v-model="roleForm.menus"><span>{{ m.icon }} {{ m.label }}</span>
+                                        <input type="checkbox" :value="m.key" v-model="roleForm.menus"><span>{{ m.icon }} {{ m.label }}</span><span v-if="scopeBadge(m.scope)" class="mn-scope" :class="'sc-' + m.scope">{{ scopeBadge(m.scope) }}</span>
                                     </label>
                                 </div>
                             </div>
@@ -350,9 +395,13 @@ export const SettingsRolesMenusView = {
                     unsubs.push(onSnapshot(menuDocRef, (snap) => {
                         if (snap.exists()) {
                             const data = snap.data();
-                            menuConfig.order = data.order || [];
-                            menuConfig.roles = data.roles || {};
-                            menuConfig.visibleMenus = data.visibleMenus || [];
+                            // Migration des anciennes clés (operations/finance/statistique...).
+                            menuConfig.order = migrateKeys(data.order || []);
+                            menuConfig.visibleMenus = migrateKeys(data.visibleMenus || []);
+                            const rolesRaw = data.roles || {};
+                            const rolesMig = {};
+                            Object.keys(rolesRaw).forEach(r => { rolesMig[r] = migrateKeys(rolesRaw[r]); });
+                            menuConfig.roles = rolesMig;
                             menuConfig.hiddenItems = data.hiddenItems || [];
                         }
                         // Garantir que tous les menus connus sont présents dans l'ordre.
@@ -368,6 +417,8 @@ export const SettingsRolesMenusView = {
                 }, {}));
 
                 const isProtectedRole = (id) => ['super_admin', 'admin', 'agent', 'chauf', 'manager', 'spectateur'].includes(id);
+                // Badge de portée Départ/Arrivée (vide si 'both' ou non défini).
+                const scopeBadge = (scope) => SCOPE_BADGE[scope] || '';
                 // --- Modules (sous-éléments) par section ---
                 const itemsOf = (key) => MENU_ITEMS[key] || [];
                 const toggleExpand = (key) => { expanded[key] = !expanded[key]; };
@@ -469,7 +520,7 @@ export const SettingsRolesMenusView = {
 
                 return {
                     MENU_META, agencyName, roles, menuConfig, loadingRoles, loadingMenus,
-                    expanded, itemsOf, toggleExpand, isItemVisible, toggleItem,
+                    expanded, itemsOf, toggleExpand, isItemVisible, toggleItem, scopeBadge,
                     savingMenus, showRoleForm, isEditing, savingRole, activeTab, roleForm, draggedIndex,
                     groupedPermissions, metaOf, isProtectedRole, isMenuVisible, toggleVisibleMenu,
                     showAll, resetAuto, onDragStart, onDrop, onDragEnd, saveMenus,
