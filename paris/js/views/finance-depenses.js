@@ -24,8 +24,8 @@ export const FinanceDepensesView = {
                     <div style="padding: 20px; border-bottom: 1px solid #e2e8f0; background: #f8fafc; display: flex; justify-content: space-between; align-items: center;">
                         <h3 style="margin: 0; font-size: 16px; color: #1e293b;">📉 Historique des Dépenses</h3>
                     </div>
-                    <div class="table-wrap" style="overflow-x: auto;">
-                        <table class="factures-table table-as-cards" style="width: 100%; border-collapse: collapse;">
+                    <div class="table-wrap hide-on-mobile" style="overflow-x: auto;">
+                        <table class="factures-table" style="width: 100%; border-collapse: collapse;">
                             <thead style="background: #f8fafc; border-bottom: 1px solid #e2e8f0;">
                                 <tr>
                                     <th style="padding: 16px 12px; text-align: left; font-size: 12px; color: #475569; text-transform: uppercase;">Date</th>
@@ -39,11 +39,11 @@ export const FinanceDepensesView = {
                                 <tr v-if="loading"><td colspan="5" style="text-align: center; padding: 40px;"><i class="fas fa-spinner fa-spin"></i> Chargement...</td></tr>
                                 <tr v-else-if="expenses.length === 0"><td colspan="5" style="text-align: center; padding: 40px; color: #64748b;">Aucune dépense enregistrée.</td></tr>
                                 <tr v-else v-for="e in expenses" :key="e.id">
-                                    <td data-label="Date" style="padding: 14px 12px;">{{ formatDate(e.date) }}</td>
-                                    <td data-label="Description" style="padding: 14px 12px; font-weight: 600; color: #0f172a;">{{ e.description || '-' }}</td>
-                                    <td data-label="Catégorie" style="padding: 14px 12px;"><span class="badge" style="background:#f1f5f9; color:#475569;">{{ e.category || 'Mensuelle' }}</span></td>
-                                    <td data-label="Montant" style="padding: 14px 12px; text-align: right; font-weight: bold; color: #ef4444;">- {{ formatMoney(e.montant) }}</td>
-                                    <td data-label="Actions" style="padding: 14px 12px; text-align: right;">
+                                    <td style="padding: 14px 12px;">{{ formatDate(e.date) }}</td>
+                                    <td style="padding: 14px 12px; font-weight: 600; color: #0f172a;">{{ e.description || '-' }}</td>
+                                    <td style="padding: 14px 12px;"><span class="badge" style="background:#f1f5f9; color:#475569;">{{ e.category || 'Mensuelle' }}</span></td>
+                                    <td style="padding: 14px 12px; text-align: right; font-weight: bold; color: #ef4444;">- {{ formatMoney(e.montant) }}</td>
+                                    <td style="padding: 14px 12px; text-align: right;">
                                         <button class="amt-btn amt-btn-outline amt-btn-sm" @click="deleteExpense(e.id)" style="color: #ef4444; border-color: #ef4444; padding: 6px;" title="Supprimer">
                                             <i class="fas fa-trash"></i>
                                         </button>
@@ -51,6 +51,23 @@ export const FinanceDepensesView = {
                                 </tr>
                             </tbody>
                         </table>
+                    </div>
+                    <div class="show-on-mobile">
+                        <div v-if="loading" style="text-align:center; padding:30px;"><i class="fas fa-spinner fa-spin"></i> Chargement...</div>
+                        <div v-else-if="expenses.length === 0" style="text-align:center; padding:30px; color:#64748b;">Aucune dépense enregistrée.</div>
+                        <div v-else v-for="e in expenses" :key="'m'+e.id" class="comm-mob-card">
+                            <div class="comm-mob-l1">
+                                <strong>{{ e.description || '-' }}</strong>
+                                <span style="color:#ef4444; font-weight:800; white-space:nowrap;">- {{ formatMoney(e.montant) }}</span>
+                            </div>
+                            <div class="comm-mob-l2">
+                                <span>{{ formatDate(e.date) }}</span>
+                                <span class="badge" style="background:#f1f5f9; color:#475569;">{{ e.category || 'Mensuelle' }}</span>
+                            </div>
+                            <div style="display:flex; justify-content:flex-end; border-top:1px solid #f1f5f9; padding-top:6px; margin-top:4px;">
+                                <button class="amt-btn amt-btn-outline amt-btn-sm" @click="deleteExpense(e.id)" style="color:#ef4444; border-color:#ef4444; padding:6px 12px;" title="Supprimer"><i class="fas fa-trash"></i> Supprimer</button>
+                            </div>
+                        </div>
                     </div>
                 </div>
                 

@@ -43,8 +43,8 @@ export const FinanceCaisseView = {
                     <div style="padding: 20px; border-bottom: 1px solid #e2e8f0; background: #f8fafc;">
                         <h3 style="margin: 0; font-size: 16px; color: #1e293b;">📋 Historique des dernières opérations</h3>
                     </div>
-                    <div class="table-wrap" style="overflow-x: auto;">
-                        <table class="factures-table table-as-cards" style="width: 100%; border-collapse: collapse;">
+                    <div class="table-wrap hide-on-mobile" style="overflow-x: auto;">
+                        <table class="factures-table" style="width: 100%; border-collapse: collapse;">
                             <thead style="background: #f8fafc; border-bottom: 1px solid #e2e8f0;">
                                 <tr>
                                     <th style="padding: 16px 12px; text-align: left; font-size: 12px; color: #475569; text-transform: uppercase;">Date</th>
@@ -57,17 +57,31 @@ export const FinanceCaisseView = {
                                 <tr v-if="loading"><td colspan="4" style="text-align: center; padding: 40px;"><i class="fas fa-spinner fa-spin"></i> Chargement...</td></tr>
                                 <tr v-else-if="operations.length === 0"><td colspan="4" style="text-align: center; padding: 40px; color: #64748b;">Aucune opération trouvée.</td></tr>
                                 <tr v-else v-for="op in operations.slice(0, 100)" :key="op.id">
-                                    <td data-label="Date" style="padding: 14px 12px;">{{ formatDate(op.date) }}</td>
-                                    <td data-label="Libellé" style="padding: 14px 12px; font-weight: 600; color: #0f172a;">{{ op.label }}</td>
-                                    <td data-label="Type" style="padding: 14px 12px; text-align: center;">
+                                    <td style="padding: 14px 12px;">{{ formatDate(op.date) }}</td>
+                                    <td style="padding: 14px 12px; font-weight: 600; color: #0f172a;">{{ op.label }}</td>
+                                    <td style="padding: 14px 12px; text-align: center;">
                                         <span class="badge" :style="op.type === 'Entrée' ? 'background:#dcfce7; color:#10b981;' : 'background:#fee2e2; color:#ef4444;'">{{ op.type }}</span>
                                     </td>
-                                    <td data-label="Montant" style="padding: 14px 12px; text-align: right; font-weight: bold;" :style="op.type === 'Entrée' ? 'color:#10b981;' : 'color:#ef4444;'">
+                                    <td style="padding: 14px 12px; text-align: right; font-weight: bold;" :style="op.type === 'Entrée' ? 'color:#10b981;' : 'color:#ef4444;'">
                                         {{ op.type === 'Entrée' ? '+' : '-' }} {{ formatMoney(op.amount) }}
                                     </td>
                                 </tr>
                             </tbody>
                         </table>
+                    </div>
+                    <div class="show-on-mobile">
+                        <div v-if="loading" style="text-align:center; padding:30px;"><i class="fas fa-spinner fa-spin"></i> Chargement...</div>
+                        <div v-else-if="operations.length === 0" style="text-align:center; padding:30px; color:#64748b;">Aucune opération trouvée.</div>
+                        <div v-else v-for="op in operations.slice(0, 100)" :key="'m'+op.id" class="comm-mob-card">
+                            <div class="comm-mob-l1">
+                                <strong>{{ op.label }}</strong>
+                                <span style="font-weight:800; white-space:nowrap;" :style="op.type === 'Entrée' ? 'color:#10b981;' : 'color:#ef4444;'">{{ op.type === 'Entrée' ? '+' : '-' }} {{ formatMoney(op.amount) }}</span>
+                            </div>
+                            <div class="comm-mob-l2">
+                                <span>{{ formatDate(op.date) }}</span>
+                                <span class="badge" :style="op.type === 'Entrée' ? 'background:#dcfce7; color:#10b981;' : 'background:#fee2e2; color:#ef4444;'">{{ op.type }}</span>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>

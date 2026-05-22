@@ -26,8 +26,8 @@ export const FinanceChequesView = {
                 </div>
 
                 <div class="factures-table-card" style="background: white; border-radius: 16px; border: 1px solid #e2e8f0; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);">
-                    <div class="table-wrap" style="overflow-x: auto;">
-                        <table class="factures-table table-as-cards" style="width: 100%; border-collapse: collapse;">
+                    <div class="table-wrap hide-on-mobile" style="overflow-x: auto;">
+                        <table class="factures-table" style="width: 100%; border-collapse: collapse;">
                             <thead style="background: #f8fafc; border-bottom: 1px solid #e2e8f0;">
                                 <tr>
                                     <th style="padding: 16px 12px; text-align: left; font-size: 12px; color: #475569; text-transform: uppercase;">Date</th>
@@ -41,14 +41,29 @@ export const FinanceChequesView = {
                                 <tr v-if="loading"><td colspan="5" style="text-align: center; padding: 40px;"><i class="fas fa-spinner fa-spin"></i> Chargement...</td></tr>
                                 <tr v-else-if="cheques.length === 0"><td colspan="5" style="text-align: center; padding: 40px; color: #64748b;">Aucun chèque enregistré.</td></tr>
                                 <tr v-else v-for="c in cheques" :key="c.id">
-                                    <td data-label="Date" style="padding: 14px 12px;">{{ formatDate(c.date) }}</td>
-                                    <td data-label="Facture" style="padding: 14px 12px; font-weight: bold; color: #3b82f6;">{{ c.reference || '-' }}</td>
-                                    <td data-label="Client" style="padding: 14px 12px; font-weight: 600; color: #0f172a;">{{ c.nom || '-' }}</td>
-                                    <td data-label="Montant Chèque" style="padding: 14px 12px; text-align: right; font-weight: bold; color: #0f172a;">{{ formatMoney(c.montantParis / TAUX) }}</td>
-                                    <td data-label="Statut" style="padding: 14px 12px; text-align: center;"><span class="badge" style="background:#d1fae5; color:#065f46;">✔ Validé en Caisse</span></td>
+                                    <td style="padding: 14px 12px;">{{ formatDate(c.date) }}</td>
+                                    <td style="padding: 14px 12px; font-weight: bold; color: #3b82f6;">{{ c.reference || '-' }}</td>
+                                    <td style="padding: 14px 12px; font-weight: 600; color: #0f172a;">{{ c.nom || '-' }}</td>
+                                    <td style="padding: 14px 12px; text-align: right; font-weight: bold; color: #0f172a;">{{ formatMoney(c.montantParis / TAUX) }}</td>
+                                    <td style="padding: 14px 12px; text-align: center;"><span class="badge" style="background:#d1fae5; color:#065f46;">✔ Validé en Caisse</span></td>
                                 </tr>
                             </tbody>
                         </table>
+                    </div>
+                    <div class="show-on-mobile">
+                        <div v-if="loading" style="text-align:center; padding:30px;"><i class="fas fa-spinner fa-spin"></i> Chargement...</div>
+                        <div v-else-if="cheques.length === 0" style="text-align:center; padding:30px; color:#64748b;">Aucun chèque enregistré.</div>
+                        <div v-else v-for="c in cheques" :key="'m'+c.id" class="comm-mob-card">
+                            <div class="comm-mob-l1">
+                                <strong style="color:#3b82f6;">{{ c.reference || '-' }}</strong>
+                                <span style="font-weight:800; white-space:nowrap;">{{ formatMoney(c.montantParis / TAUX) }}</span>
+                            </div>
+                            <div class="comm-mob-l2">
+                                <span>{{ c.nom || '-' }}</span>
+                                <span>{{ formatDate(c.date) }}</span>
+                                <span class="badge" style="background:#d1fae5; color:#065f46;">✔ Validé</span>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>

@@ -1069,6 +1069,11 @@ body.login-page {
        min-width (300/400px) qui débordaient l'écran -> pleine largeur empilée. */
     .confirm-col { min-width: 0 !important; max-width: none !important; flex-basis: 100% !important; }
 
+    /* Dépenses Tréso : cases de catégories en grille 2 colonnes (au lieu de
+       s'empiler verticalement). */
+    .exp-stats-grid { display: grid !important; grid-template-columns: 1fr 1fr !important; gap: 10px !important; }
+    .exp-stats-grid .stat-box { min-width: 0; }
+
     /* Bascule tableau (ordinateur) / fiches (mobile). */
     .hide-on-mobile { display: none !important; }
     .show-on-mobile { display: block; }

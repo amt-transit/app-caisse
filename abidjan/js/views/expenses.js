@@ -100,7 +100,7 @@ export const ExpensesView = {
                 </div>
 
                 <!-- KPI Statistiques Dynamiques -->
-                <div style="display:flex; gap:15px; margin-bottom:15px; flex-wrap:wrap;">
+                <div class="exp-stats-grid" style="display:flex; gap:15px; margin-bottom:15px; flex-wrap:wrap;">
                     <div @click="filters.category = null" class="stat-box" :class="{ active: filters.category === null }" style="background:#10b981; color:white; border: 1px solid #10b981;">
                         <div style="font-size:0.8em; text-transform:uppercase;">Total Mensuel</div>
                         <div style="font-size:1.4em; font-weight:bold;">{{ formatCFA(expenseStats.total) }}</div>
