@@ -132,6 +132,32 @@ const ACTION_PERMS = [
     { id: 'manage_settings', label: 'Accéder aux paramètres globaux', category: 'Sécurité & Admin' },
 ];
 
+// Rôles INTÉGRÉS livrés avec l'application. On les affiche TOUJOURS dans la
+// liste (même sans fiche Firestore) pour que l'admin puisse leur cocher des
+// permissions "Actions" (modèle additif) et configurer leurs menus.
+const BUILTIN_ROLES = [
+    { id: 'super_admin', name: 'Super Admin', description: 'Accès total à tout (non limité).' },
+    { id: 'admin', name: 'Administrateur', description: 'Accès complet à la gestion.' },
+    { id: 'manager', name: 'Manager', description: 'Supervision : bilans, finance, factures.' },
+    { id: 'agent', name: 'Agent Standard', description: 'Saisie quotidienne (caisse, livraisons, factures).' },
+    { id: 'chauf', name: 'Chauffeur / Livreur', description: 'Chargement, scan, livraisons.' },
+    { id: 'spectateur', name: 'Spectateur', description: 'Lecture seule.' },
+];
+const BUILTIN_IDS = BUILTIN_ROLES.map(r => r.id);
+
+// Menus par défaut des rôles intégrés (DOIT rester aligné sur defaultRoles
+// dans app.js). null = tous les menus (super_admin / admin). Sert à pré-cocher
+// l'onglet "Menus du rôle" quand le rôle n'a pas encore de config enregistrée,
+// pour éviter d'enregistrer une liste vide (= plus aucun menu).
+const DEFAULT_ROLE_MENUS = {
+    super_admin: null,
+    admin: null,
+    manager: ['main', 'bilan', 'factures', 'entrees-caisse', 'finance', 'bilans-financiers', 'clients', 'stock'],
+    agent: ['main', 'bilan', 'factures', 'rdv', 'programmes', 'entrees-caisse', 'logistique', 'devis', 'chargement', 'scan', 'clients', 'comms', 'produits'],
+    chauf: ['main', 'chargement', 'scan', 'programmes', 'logistique'],
+    spectateur: ['main', 'bilan', 'factures', 'rdv', 'programmes', 'entrees-caisse', 'logistique', 'devis', 'chargement', 'scan', 'clients', 'comms', 'produits'],
+};
+
 export const SettingsRolesMenusView = {
     vueApp: null,
 
@@ -388,7 +414,18 @@ export const SettingsRolesMenusView = {
 
                 onMounted(() => {
                     unsubs.push(onSnapshot(collection(db, "roles"), (snap) => {
-                        roles.value = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+                        const docs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+                        const byId = {};
+                        docs.forEach(d => { byId[d.id] = d; });
+                        // 1) Rôles intégrés (toujours présents) enrichis de leur fiche
+                        //    Firestore si elle existe (permissions déjà cochées).
+                        const merged = BUILTIN_ROLES.map(b => {
+                            const saved = byId[b.id];
+                            return saved ? { ...b, ...saved, builtin: true } : { ...b, permissions: [], builtin: true };
+                        });
+                        // 2) Rôles personnalisés (fiches non intégrées).
+                        docs.filter(d => !BUILTIN_IDS.includes(d.id)).forEach(d => merged.push({ ...d, builtin: false }));
+                        roles.value = merged;
                         loadingRoles.value = false;
                     }, () => { loadingRoles.value = false; }));
 
@@ -484,7 +521,17 @@ export const SettingsRolesMenusView = {
                 };
                 const editRole = (role) => {
                     Object.assign(roleForm, role);
-                    roleForm.menus = menuConfig.roles[role.id] ? [...menuConfig.roles[role.id]] : [];
+                    // Menus : config enregistrée si elle existe, sinon menus par
+                    // défaut du rôle intégré (évite d'écrire une liste vide qui
+                    // masquerait tous les menus). Rôle perso sans config = vide.
+                    if (menuConfig.roles[role.id]) {
+                        roleForm.menus = [...menuConfig.roles[role.id]];
+                    } else if (Object.prototype.hasOwnProperty.call(DEFAULT_ROLE_MENUS, role.id)) {
+                        const def = DEFAULT_ROLE_MENUS[role.id];
+                        roleForm.menus = def === null ? MENU_META.map(m => m.key) : [...def];
+                    } else {
+                        roleForm.menus = [];
+                    }
                     if (!roleForm.permissions) roleForm.permissions = [];
                     isEditing.value = true; activeTab.value = 'info'; showRoleForm.value = true;
                 };

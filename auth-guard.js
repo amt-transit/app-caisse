@@ -732,10 +732,13 @@ onAuthStateChanged(auth, async (user) => {
         }
 
         // --- GESTION GLOBALE DU BADGE DE NOTIFICATION (Placé ici pour s'exécuter AVANT les return) ---
-        // Vérification des sessions en attente sur toutes les pages
+        // Vérification des sessions en attente sur toutes les pages.
+        // audit_logs n'est lisible que par les admins (cf. firestore.rules) : on
+        // n'ouvre donc l'écouteur que pour eux, sinon permission-denied inutile.
+        if (userRole === 'admin' || userRole === 'super_admin') {
         const logsRef = collection(db, getCollectionName("audit_logs"));
         const badgeQuery = query(logsRef, where("action", "==", "VALIDATION_JOURNEE"), orderBy("date", "desc"));
-        
+
         onSnapshot(badgeQuery, snapshot => {
                 // Isolation Maritime/Aérien : on ne compte que les sessions du
                 // mode actif. Anciennes sessions sans modeExpedition = maritime.
@@ -777,6 +780,7 @@ onAuthStateChanged(auth, async (user) => {
                     }
                 }
             }, error => console.log("Badge check info:", error.message));
+        }
 
         // --- GESTION DES ACCÈS ---
         const currentPage = window.location.pathname;

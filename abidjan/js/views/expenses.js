@@ -79,7 +79,7 @@ export const ExpensesView = {
                     </button>
                 </div>
 
-                <div class="form-buttons">
+                <div class="form-buttons" v-if="canManageExp">
                     <button @click="addExpense" class="primary">Valider</button>
                 </div>
             </div>
@@ -136,7 +136,7 @@ export const ExpensesView = {
                             <td class="reste-negatif"><b>- {{ formatCFA(exp.montant) }}</b></td>
                             <td>{{ exp.type }}</td><td>{{ exp.mode || 'Espèce' }}</td><td>{{ exp.conteneur || '-' }}</td>
                             <td>
-                                <div v-if="(userRole === 'admin' || userRole === 'super_admin') && !exp.isDeleted && !isViewer">
+                                <div v-if="canDeleteExp && !exp.isDeleted && !isViewer">
                                     <button class="editBtn" @click="openEditModal(exp)">Modif.</button>
                                     <button class="deleteBtn" @click="deleteExpense(exp.id)">Suppr.</button>
                                 </div>
@@ -159,7 +159,7 @@ export const ExpensesView = {
                             <span>{{ exp.mode || 'Espèce' }}</span>
                             <span v-if="exp.conteneur">📦 {{ exp.conteneur }}</span>
                         </div>
-                        <div v-if="(userRole === 'admin' || userRole === 'super_admin') && !exp.isDeleted && !isViewer" style="display:flex; justify-content:flex-end; gap:8px; border-top:1px solid #f1f5f9; padding-top:6px; margin-top:4px;">
+                        <div v-if="canDeleteExp && !exp.isDeleted && !isViewer" style="display:flex; justify-content:flex-end; gap:8px; border-top:1px solid #f1f5f9; padding-top:6px; margin-top:4px;">
                             <button class="editBtn" @click="openEditModal(exp)">Modif.</button>
                             <button class="deleteBtn" @click="deleteExpense(exp.id)">Suppr.</button>
                         </div>
@@ -295,7 +295,13 @@ export const ExpensesView = {
                 const userRole = sessionStorage.getItem('userRole') || 'Utilisateur';
                 const currentUserName = sessionStorage.getItem('userName') || 'Inconnu';
                 const isViewer = ref(userRole === 'spectateur');
-                const canSaveDirectly = ['admin', 'super_admin'].includes(userRole);
+                // Gérer les dépenses : rôles intégrés inchangés ; un rôle
+                // personnalisé doit avoir la permission "manage_expenses".
+                //  - canManageExp : droit d'AJOUTER (tous les intégrés le pouvaient).
+                //  - canDeleteExp : droit de SUPPRIMER (réservé admin historiquement).
+                const canManageExp = window.app.isBuiltinRole() || window.app.hasPermission('manage_expenses');
+                const canDeleteExp = ['admin', 'super_admin'].includes(userRole) || window.app.hasPermission('manage_expenses');
+                const canSaveDirectly = ['admin', 'super_admin'].includes(userRole) || window.app.hasPermission('manage_expenses');
 
                 const currentTab = ref('monthly');
                 const expenses = ref([]);
@@ -470,6 +476,7 @@ export const ExpensesView = {
 
                 // Actions
                 const addExpense = async () => {
+                if (!canManageExp) return window.app.showToast("Vous n'avez pas la permission de gérer les dépenses.", "error");
                 const data = {
                         date: form.date,
                         description: `${form.type === 'Mensuelle' && form.subtype ? form.subtype + ' - ' : ''}${form.desc} (${currentUserName})`,
@@ -501,6 +508,7 @@ export const ExpensesView = {
                 const removePendingExpense = (idx) => pendingExpenses.value.splice(idx, 1);
 
                 const commitPendingExpenses = async () => {
+                    if (!canManageExp) return window.app.showToast("Vous n'avez pas la permission de gérer les dépenses.", "error");
                     if (pendingExpenses.value.length === 0) return;
                     saving.value = true;
                 const batch = writeBatch(db);
@@ -512,6 +520,7 @@ export const ExpensesView = {
                 };
 
                 const deleteExpense = async (id) => {
+                    if (!canDeleteExp) return window.app.showToast("Vous n'avez pas la permission de supprimer une dépense.", "error");
                     if (window.AppModal) { if (!await window.AppModal.confirm("Supprimer cette dépense ?", "Suppression", true)) return; }
                     else { if (!confirm("Supprimer ?")) return; }
                     await updateDoc(doc(db, getCollectionName("expenses"), id), { isDeleted: true });
@@ -550,7 +559,7 @@ export const ExpensesView = {
                 };
 
                 return {
-                    isViewer, canSaveDirectly, currentTab, expenses, pendingExpenses, dbVehicles, dbContainers,
+                    isViewer, canSaveDirectly, canManageExp, canDeleteExp, currentTab, expenses, pendingExpenses, dbVehicles, dbContainers,
                     limitExp, saving, form, editForm, filters, expenseCategories,
                     filteredExpenses, hasMore, expenseStats, totalsData, showDetailsModal, detailsModalTitle, detailsModalData, showEditModal,
                     formatCFA, getExpenseCategory, addExpense, removePendingExpense, commitPendingExpenses, deleteExpense, openEditModal, updateExpense, openMonthDetails, openContainerDetails

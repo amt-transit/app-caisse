@@ -439,6 +439,12 @@ export const ToutesLesFacturesView = {
         const isEur = isEurAgency();
         const TAUX = isEur ? CONSTANTS.TAUX_CONVERSION : 1;
 
+        // Droit de supprimer une facture : aucune restriction historique, donc
+        // les rôles intégrés gardent l'accès ; un rôle personnalisé doit avoir
+        // la permission "delete_invoice" cochée dans Rôles & Menus.
+        const canDel = window.app.isBuiltinRole() || window.app.hasPermission('delete_invoice');
+        const delBtnTable = canDel ? `<button class="icon-btn btn--del" onclick="window.app.views.toutesLesFactures.deleteInvoice('__ID__')" title="Supprimer">🗑️</button>` : '';
+
         // On construit en un seul passage les lignes du tableau (ordinateur)
         // ET les fiches compactes (mobile, modèle validé : 3 lignes + actions).
         const rows = [];
@@ -497,7 +503,7 @@ export const ToutesLesFacturesView = {
                         <div class="row-actions">
                             <button class="icon-btn btn--edit" onclick="window.app.views.toutesLesFactures.editInvoice('${inv.id}')" title="Modifier">✏️</button>
                             <button class="icon-btn btn--reuse" onclick="window.app.views.toutesLesFactures.reuseInvoice('${inv.id}')" title="Réutiliser">📋</button>
-                            <button class="icon-btn btn--del" onclick="window.app.views.toutesLesFactures.deleteInvoice('${inv.id}')" title="Supprimer">🗑️</button>
+                            ${delBtnTable.replace('__ID__', inv.id)}
                         </div>
                     </td>
                 </tr>
@@ -522,7 +528,7 @@ export const ToutesLesFacturesView = {
                     <div style="display:flex; justify-content:flex-end; gap:10px; border-top:1px solid #f1f5f9; padding-top:6px; margin-top:4px;">
                         <button class="icon-btn btn--edit" onclick="window.app.views.toutesLesFactures.editInvoice('${inv.id}')" title="Modifier">✏️</button>
                         <button class="icon-btn btn--reuse" onclick="window.app.views.toutesLesFactures.reuseInvoice('${inv.id}')" title="Réutiliser">📋</button>
-                        <button class="icon-btn btn--del" onclick="window.app.views.toutesLesFactures.deleteInvoice('${inv.id}')" title="Supprimer">🗑️</button>
+                        ${delBtnTable.replace('__ID__', inv.id)}
                     </div>
                 </div>
             `);
@@ -821,7 +827,7 @@ export const ToutesLesFacturesView = {
                                 <div class="modal-actionsRow">
                                     <button class="amt-btn amt-btn-primary" onclick="window.app.views.toutesLesFactures.addPayment('${invoice.id}'); this.closest('.modal').remove();"><i class="fas fa-money-bill-wave"></i> Ajouter un paiement</button>
                                     <button class="amt-btn amt-btn-outline" onclick="window.app.views.toutesLesFactures.editInvoice('${invoice.id}'); this.closest('.modal').remove();"><i class="fas fa-edit"></i> Modifier</button>
-                                    <button class="amt-btn amt-btn-danger" onclick="window.app.views.toutesLesFactures.deleteInvoice('${invoice.id}')"><i class="fas fa-trash"></i> Supprimer</button>
+                                    ${(window.app.isBuiltinRole() || window.app.hasPermission('delete_invoice')) ? `<button class="amt-btn amt-btn-danger" onclick="window.app.views.toutesLesFactures.deleteInvoice('${invoice.id}')"><i class="fas fa-trash"></i> Supprimer</button>` : ''}
                                 </div>
                             </div>
                         </div>
@@ -1755,7 +1761,11 @@ export const ToutesLesFacturesView = {
     async deleteInvoice(id) {
         const inv = this.invoices.find(i => i.id === id);
         if (!inv) return;
-        
+
+        if (!window.app.isBuiltinRole() && !window.app.hasPermission('delete_invoice')) {
+            return window.app.showToast("Vous n'avez pas la permission de supprimer une facture.", "error");
+        }
+
         if (!await window.AppModal.confirm(`Voulez-vous vraiment supprimer la facture ${inv.reference} ?\n\nCela supprimera également les données logistiques associées. Cette action est irréversible.`, "Supprimer la facture", true)) return;
 
         try {

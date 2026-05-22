@@ -471,6 +471,12 @@ export const app = {
     // la page ouverte (le module Saisie/caisse.js n'est pas toujours monté).
     // S'affiche sur l'élément de menu « Confirmation » + le titre « Entrées Caisse ».
     initPendingSessionsBadge() {
+        // audit_logs n'est lisible que par les admins (cf. firestore.rules).
+        // Inutile d'ouvrir l'écouteur pour les autres rôles : cela générait un
+        // permission-denied dans la console sans aucune utilité (ces rôles ne
+        // confirment pas les sessions).
+        const role = sessionStorage.getItem('userRole') || '';
+        if (role !== 'admin' && role !== 'super_admin') return;
         const activeAgency = sessionStorage.getItem('currentActiveAgency') || 'paris';
         import('./firebase-config.js').then(async cfg => {
             const { collection, query, where, onSnapshot } = await import('https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js');
@@ -711,6 +717,32 @@ export const app = {
     // Rétrocompatibilité : alias pour les modules utilisant encore l'ancienne nomenclature
     formatMoney(amount, forceCfa = false) {
         return this.formatMoneyLocal(amount, forceCfa);
+    },
+
+    // Vérifie si l'utilisateur courant a une permission "Action".
+    // Modèle "Ajout de pouvoirs" (choix maintainer) :
+    //  - super_admin / admin : accès total.
+    //  - TOUS les autres rôles (intégrés OU personnalisés) : la permission est
+    //    accordée si elle est cochée pour leur rôle dans Rôles & Menus.
+    // Les contrôles historiques de chaque page restent en place comme PLANCHER :
+    // on les combine en `ancienneConditionRole || app.hasPermission('id')`, donc
+    // cocher une action ne fait qu'AJOUTER un pouvoir, sans jamais en retirer.
+    hasPermission(permId) {
+        const userRole = sessionStorage.getItem('userRole') || '';
+        if (userRole === 'super_admin' || userRole === 'admin') return true;
+        try {
+            const perms = JSON.parse(sessionStorage.getItem('userPermissions') || '[]');
+            return Array.isArray(perms) && perms.includes(permId);
+        } catch (e) { return false; }
+    },
+
+    // Rôle intégré (livré avec l'app) vs rôle personnalisé créé par l'admin.
+    // Sert aux actions SANS restriction historique : on garde l'accès complet
+    // pour les rôles intégrés et on n'exige une permission que pour les rôles
+    // personnalisés -> `app.isBuiltinRole() || app.hasPermission('id')`.
+    isBuiltinRole() {
+        const r = sessionStorage.getItem('userRole') || '';
+        return ['super_admin', 'admin', 'agent', 'chauf', 'manager', 'spectateur', 'saisie_full'].includes(r);
     },
 
     // --- INLINE RENDERERS (Provenant de Paris) ---

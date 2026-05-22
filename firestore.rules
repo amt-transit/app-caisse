@@ -77,6 +77,16 @@ service cloud.firestore {
       allow write: if isAuthenticated();
     }
 
+    // Rôles : définitions (menus + permissions "Actions") lisibles par TOUT
+    // utilisateur connecté — auth-guard charge les permissions du rôle courant
+    // au login, et sans ce droit un agent ne récupère jamais ses permissions
+    // (bouton d'action masqué). Création / modification réservée aux admins
+    // (panneau Rôles & Menus).
+    match /roles/{roleId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+
     // =====================================================================
     // 3. RÈGLES HISTORIQUES (Paris/Abidjan classiques)
     // =====================================================================
@@ -91,6 +101,17 @@ service cloud.firestore {
       allow read, write: if isAuthenticated() && (hasGlobalAccess() || getUserData().agency in ['paris', 'abidjan']);
     }
     match /bank_movements/{document=**} {
+      allow read, write: if isAuthenticated() && (hasGlobalAccess() || getUserData().agency in ['paris', 'abidjan']);
+    }
+    // Flotte automobile (Gestion Véhicule) : collections NON suffixées par route,
+    // partagées par le personnel logistique paris/abidjan. Sans cette règle,
+    // seuls les comptes globaux (super admin / agency 'all') pouvaient charger
+    // la page -> un agent recevait permission-denied. L'affichage du bouton
+    // d'enregistrement reste géré finement côté UI (permission manage_fleet).
+    match /fleet_vehicles/{document=**} {
+      allow read, write: if isAuthenticated() && (hasGlobalAccess() || getUserData().agency in ['paris', 'abidjan']);
+    }
+    match /fleet_transactions/{document=**} {
       allow read, write: if isAuthenticated() && (hasGlobalAccess() || getUserData().agency in ['paris', 'abidjan']);
     }
 

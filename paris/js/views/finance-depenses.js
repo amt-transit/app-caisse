@@ -15,7 +15,7 @@ export const FinanceDepensesView = {
             <style>[v-cloak] { display: none; }</style>
             <div id="vue-finance-depenses" class="page" v-cloak>
                 <div class="quick-actions" style="margin-bottom: 20px;">
-                    <button class="amt-btn amt-btn-primary" @click="openAddModal" style="display: flex; align-items: center; gap: 8px;">
+                    <button v-if="canManage" class="amt-btn amt-btn-primary" @click="openAddModal" style="display: flex; align-items: center; gap: 8px;">
                         <i class="fas fa-plus"></i> Nouvelle Dépense
                     </button>
                 </div>
@@ -44,7 +44,7 @@ export const FinanceDepensesView = {
                                     <td style="padding: 14px 12px;"><span class="badge" style="background:#f1f5f9; color:#475569;">{{ e.category || 'Mensuelle' }}</span></td>
                                     <td style="padding: 14px 12px; text-align: right; font-weight: bold; color: #ef4444;">- {{ formatMoney(e.montant) }}</td>
                                     <td style="padding: 14px 12px; text-align: right;">
-                                        <button class="amt-btn amt-btn-outline amt-btn-sm" @click="deleteExpense(e.id)" style="color: #ef4444; border-color: #ef4444; padding: 6px;" title="Supprimer">
+                                        <button v-if="canManage" class="amt-btn amt-btn-outline amt-btn-sm" @click="deleteExpense(e.id)" style="color: #ef4444; border-color: #ef4444; padding: 6px;" title="Supprimer">
                                             <i class="fas fa-trash"></i>
                                         </button>
                                     </td>
@@ -64,7 +64,7 @@ export const FinanceDepensesView = {
                                 <span>{{ formatDate(e.date) }}</span>
                                 <span class="badge" style="background:#f1f5f9; color:#475569;">{{ e.category || 'Mensuelle' }}</span>
                             </div>
-                            <div style="display:flex; justify-content:flex-end; border-top:1px solid #f1f5f9; padding-top:6px; margin-top:4px;">
+                            <div v-if="canManage" style="display:flex; justify-content:flex-end; border-top:1px solid #f1f5f9; padding-top:6px; margin-top:4px;">
                                 <button class="amt-btn amt-btn-outline amt-btn-sm" @click="deleteExpense(e.id)" style="color:#ef4444; border-color:#ef4444; padding:6px 12px;" title="Supprimer"><i class="fas fa-trash"></i> Supprimer</button>
                             </div>
                         </div>
@@ -125,6 +125,9 @@ export const FinanceDepensesView = {
                 const loading = ref(true);
                 const showModal = ref(false);
                 const saving = ref(false);
+                // Gérer les dépenses : rôles intégrés inchangés ; un rôle
+                // personnalisé doit avoir la permission "manage_expenses".
+                const canManage = globalApp.isBuiltinRole() || globalApp.hasPermission('manage_expenses');
                 
                 const form = reactive({
                     date: new Date().toISOString().split('T')[0],
@@ -167,6 +170,7 @@ export const FinanceDepensesView = {
                 };
 
                 const saveExpense = async () => {
+                    if (!canManage) return globalApp.showToast("Vous n'avez pas la permission de gérer les dépenses.", "error");
                     const amountParsed = parseFloat(form.amount) || 0;
                     if (!form.desc.trim() || amountParsed <= 0) {
                         globalApp.showToast("Remplissez la description et le montant", "error");
@@ -197,6 +201,7 @@ export const FinanceDepensesView = {
                 };
 
                 const deleteExpense = async (id) => {
+                    if (!canManage) return globalApp.showToast("Vous n'avez pas la permission de gérer les dépenses.", "error");
                     if (!confirm("Supprimer cette dépense ?")) return;
                     try { 
                         await updateDoc(doc(db, getCollectionName("expenses"), id), { isDeleted: true });
@@ -206,8 +211,8 @@ export const FinanceDepensesView = {
                     }
                 };
 
-                return { 
-                    expenses, loading, showModal, saving, form,
+                return {
+                    expenses, loading, showModal, saving, form, canManage,
                     formatMoney, formatDate, openAddModal, closeModal, saveExpense, deleteExpense
                 };
             }

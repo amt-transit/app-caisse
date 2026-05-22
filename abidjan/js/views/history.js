@@ -492,7 +492,7 @@ export const HistoryView = {
                     const agentTags = agents.map(a => `<span class="tag ${_tcn(a)}">${a}</span>`).join(' ');
                     let btns = '';
                     if ((userRole === 'admin' || userRole === 'super_admin') && data.isDeleted !== true) btns += `<button class="editBtn" data-id="${data.id}" data-prix="${data.prix||0}" data-paris="${data.montantParis||0}" data-abidjan="${data.montantAbidjan||0}" style="background-color:#007bff;">Modif.</button>`;
-                    if ((userRole === 'admin' || userRole === 'super_admin' || userRole === 'saisie_full') && data.isDeleted !== true) btns += `<button class="deleteBtn" data-id="${data.id}">Suppr.</button>`;
+                    if ((userRole === 'admin' || userRole === 'super_admin' || userRole === 'saisie_full' || window.app.hasPermission('delete_transaction')) && data.isDeleted !== true) btns += `<button class="deleteBtn" data-id="${data.id}">Suppr.</button>`;
                     const displayDate = data.lastPaymentDate || data.date || 'En attente';
                     return `<div class="comm-mob-card" data-id="${data.id}"${data.isDeleted ? ' style="opacity:.55;"' : ''}>
                         <div class="comm-mob-l1"><strong>${data.reference || '-'}</strong><span class="${resteCls}" style="font-weight:800; white-space:nowrap;">${formatCFA(data.reste)}</span></div>
@@ -668,7 +668,7 @@ export const HistoryView = {
             if ((userRole === 'admin' || userRole === 'super_admin') && data.isDeleted !== true) {
                 btns += `<button class="editBtn" data-id="${data.id}" data-prix="${data.prix||0}" data-paris="${data.montantParis||0}" data-abidjan="${data.montantAbidjan||0}" style="background-color:#007bff; margin-right:5px;">Modif.</button>`;
             }
-            if ((userRole === 'admin' || userRole === 'super_admin' || userRole === 'saisie_full') && data.isDeleted !== true) {
+            if ((userRole === 'admin' || userRole === 'super_admin' || userRole === 'saisie_full' || window.app.hasPermission('delete_transaction')) && data.isDeleted !== true) {
                 btns += `<button class="deleteBtn" data-id="${data.id}">Suppr.</button>`;
             }
             
