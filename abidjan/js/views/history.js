@@ -23,7 +23,7 @@ export const HistoryView = {
                     </div>
                 </div>
                 
-                <div style="overflow-x: auto; background: white; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+                <div class="hide-on-mobile" style="overflow-x: auto; background: white; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
                     <table class="table" style="margin-bottom: 0;">
                         <thead>
                             <tr><th>Date</th><th>Référence</th><th>Nom Client</th><th>Conteneur</th><th>Ajust. / Magas.</th><th>Prix Total</th><th>Paris</th><th>Abidjan</th><th>Paiements</th><th>Reste</th><th>Commune</th><th>Agent(s)</th><th>Actions</th></tr>
@@ -31,6 +31,7 @@ export const HistoryView = {
                         <tbody id="tableBody"><tr><td colspan="13" style="text-align:center;">Chargement...</td></tr></tbody>
                     </table>
                 </div>
+                <div class="show-on-mobile" id="historyCards"></div>
                 
                 <div style="text-align: center; margin-top: 15px;"><button id="loadMoreBtn" class="btn" style="background: #f1f5f9; color: #475569; border: 1px solid #cbd5e1; display: none;">⬇️ Charger plus</button></div>
             </div>
@@ -200,6 +201,24 @@ export const HistoryView = {
             }
             if (row && row.dataset.id) {
                 const transaction = allTransactions.find(t => t.id === row.dataset.id);
+                if (transaction) openViewHistoryModal(transaction);
+            }
+        });
+
+        // Mêmes actions sur les fiches mobile (édition / suppression / détails).
+        document.getElementById('historyCards')?.addEventListener('click', async (event) => {
+            const target = event.target;
+            const card = target.closest('.comm-mob-card');
+            if (target.classList.contains('deleteBtn')) {
+                if (await AppModal.confirm("Voulez-vous vraiment supprimer cette transaction ?", "Suppression", true)) {
+                    updateDoc(doc(db, getCollectionName("transactions"), target.dataset.id), { isDeleted: true, deletedBy: sessionStorage.getItem('userName') || 'Utilisateur' })
+                        .then(() => { if (card) card.remove(); logAudit("SUPPRESSION", `Transaction ${target.dataset.id} supprimée`, target.dataset.id); });
+                }
+                return;
+            }
+            if (target.classList.contains('editBtn')) { openEditModal(target.dataset.id); return; }
+            if (card && card.dataset.id) {
+                const transaction = allTransactions.find(t => t.id === card.dataset.id);
                 if (transaction) openViewHistoryModal(transaction);
             }
         });
@@ -451,15 +470,38 @@ export const HistoryView = {
 
         function renderTable(transactions) {
             tableBody.innerHTML = '';
+            const historyCards = document.getElementById('historyCards');
 
             if (transactions.length === 0) {
                 const isFiltering = startDateInput.value || endDateInput.value || smartSearchInput.value || agentFilterInput.value || (showReductionsCheckbox && showReductionsCheckbox.checked);
                 tableBody.innerHTML = `<tr><td colspan="13" style="text-align:center; padding: 20px;">${isFiltering ? 'Aucun résultat pour cette recherche.' : 'Aucune donnée chargée.'}</td></tr>`;
+                if (historyCards) historyCards.innerHTML = `<div style="text-align:center; padding:20px; color:#94a3b8;">${isFiltering ? 'Aucun résultat pour cette recherche.' : 'Aucune donnée chargée.'}</div>`;
                 return;
             }
 
             // Tri principal par date pour le regroupement
             transactions.sort((a, b) => new Date(b.lastPaymentDate || b.date) - new Date(a.lastPaymentDate || a.date));
+
+            // Fiches compactes (mobile) : liste plate triée par date (pas de
+            // regroupement semaine/mois — réservé à l'affichage tableau ordinateur).
+            if (historyCards) {
+                const _tcn = (t) => t ? t.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g,"").replace(/\s+/g,'-') : '';
+                historyCards.innerHTML = transactions.map(data => {
+                    const resteCls = (data.reste || 0) < 0 ? 'reste-negatif' : 'reste-positif';
+                    const agents = (data.agent || '').split(',').map(a => a.trim()).filter(Boolean);
+                    const agentTags = agents.map(a => `<span class="tag ${_tcn(a)}">${a}</span>`).join(' ');
+                    let btns = '';
+                    if ((userRole === 'admin' || userRole === 'super_admin') && data.isDeleted !== true) btns += `<button class="editBtn" data-id="${data.id}" data-prix="${data.prix||0}" data-paris="${data.montantParis||0}" data-abidjan="${data.montantAbidjan||0}" style="background-color:#007bff;">Modif.</button>`;
+                    if ((userRole === 'admin' || userRole === 'super_admin' || userRole === 'saisie_full') && data.isDeleted !== true) btns += `<button class="deleteBtn" data-id="${data.id}">Suppr.</button>`;
+                    const displayDate = data.lastPaymentDate || data.date || 'En attente';
+                    return `<div class="comm-mob-card" data-id="${data.id}"${data.isDeleted ? ' style="opacity:.55;"' : ''}>
+                        <div class="comm-mob-l1"><strong>${data.reference || '-'}</strong><span class="${resteCls}" style="font-weight:800; white-space:nowrap;">${formatCFA(data.reste)}</span></div>
+                        <div class="comm-mob-l1"><span>${data.nom || '-'}</span><span style="white-space:nowrap;">${formatCFA(data.prix)}</span></div>
+                        <div class="comm-mob-l2"><span>${displayDate}</span>${data.conteneur ? `<span>📦 ${data.conteneur}</span>` : ''}${agentTags}</div>
+                        ${btns ? `<div style="display:flex; justify-content:flex-end; gap:8px; border-top:1px solid #f1f5f9; padding-top:6px; margin-top:4px;">${btns}</div>` : ''}
+                    </div>`;
+                }).join('');
+            }
 
             const now = new Date();
             // Début de la semaine en cours (Lundi)

@@ -126,7 +126,7 @@ export const ExpensesView = {
                     </div>
                 </div>
                 <h2>Historique des Opérations</h2>
-                <table class="table">
+                <table class="table hide-on-mobile">
                     <thead>
                         <tr><th>Date</th><th>Description</th><th>Montant</th><th>Type</th><th>Mode</th><th>Conteneur</th><th>Action</th></tr>
                     </thead>
@@ -137,7 +137,7 @@ export const ExpensesView = {
                             <td>{{ exp.type }}</td><td>{{ exp.mode || 'Espèce' }}</td><td>{{ exp.conteneur || '-' }}</td>
                             <td>
                                 <div v-if="(userRole === 'admin' || userRole === 'super_admin') && !exp.isDeleted && !isViewer">
-                                    <button class="editBtn" @click="openEditModal(exp)">Modif.</button> 
+                                    <button class="editBtn" @click="openEditModal(exp)">Modif.</button>
                                     <button class="deleteBtn" @click="deleteExpense(exp.id)">Suppr.</button>
                                 </div>
                             </td>
@@ -146,6 +146,26 @@ export const ExpensesView = {
                         <tr v-if="hasMore"><td colspan="7" style="text-align: center;"><button class="btn" @click="limitExp += 50">⬇️ Charger plus de résultats</button></td></tr>
                     </tbody>
                 </table>
+                <div class="show-on-mobile">
+                    <div v-if="filteredExpenses.length === 0" style="text-align:center; padding:16px; color:#94a3b8;">Aucun résultat.</div>
+                    <div v-for="exp in filteredExpenses" :key="'m'+exp.id" class="comm-mob-card" :style="exp.isDeleted ? 'opacity:.55;' : ''">
+                        <div class="comm-mob-l1">
+                            <strong>{{ exp.description }}</strong>
+                            <span class="reste-negatif" style="font-weight:800; white-space:nowrap;">- {{ formatCFA(exp.montant) }}</span>
+                        </div>
+                        <div class="comm-mob-l2">
+                            <span>{{ exp.date }}</span>
+                            <span>{{ exp.type }}</span>
+                            <span>{{ exp.mode || 'Espèce' }}</span>
+                            <span v-if="exp.conteneur">📦 {{ exp.conteneur }}</span>
+                        </div>
+                        <div v-if="(userRole === 'admin' || userRole === 'super_admin') && !exp.isDeleted && !isViewer" style="display:flex; justify-content:flex-end; gap:8px; border-top:1px solid #f1f5f9; padding-top:6px; margin-top:4px;">
+                            <button class="editBtn" @click="openEditModal(exp)">Modif.</button>
+                            <button class="deleteBtn" @click="deleteExpense(exp.id)">Suppr.</button>
+                        </div>
+                    </div>
+                    <div v-if="hasMore" style="text-align:center; padding:10px;"><button class="btn" @click="limitExp += 50">⬇️ Charger plus</button></div>
+                </div>
             </div>
 
             <!-- VUE TOTAUX -->

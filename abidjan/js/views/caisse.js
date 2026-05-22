@@ -219,15 +219,15 @@ export const CaisseView = {
             
             <!-- VUE MOBILE (SPA Livreur) -->
             <div class="mobile-view-container" v-show="isMobile">
-                <div class="mob-header" style="display: flex; justify-content: center; align-items: center;">
-                    <img src="../LOGOAMT.png" alt="Logo" class="app-logo" style="height: 25px; margin-right: 10px;">
-                    <h2 style="margin:0;">Mode Livreur</h2>
-                </div>
-
                 <div class="mob-summary">
                     <div class="mob-stat"><span>Encaissements</span><b style="color:#10b981;">{{ formatCFA(mTotals.totalIn) }}</b></div>
                     <div class="mob-stat"><span>Dépenses</span><b style="color:#ef4444;">{{ formatCFA(mTotals.totalOut) }}</b></div>
                     <div class="mob-stat"><span>Net à verser</span><b>{{ formatCFA(mTotals.net) }}</b></div>
+                </div>
+
+                <div class="mob-top-tabs">
+                    <button class="mob-top-tab" :class="{active: mobileTab === 'saisie'}" @click="mobileTab = 'saisie'">📦 Saisie</button>
+                    <button class="mob-top-tab" :class="{active: mobileTab === 'depenses'}" @click="mobileTab = 'depenses'">⛽ Dépenses</button>
                 </div>
 
                 <div class="mob-card" v-show="mobileTab === 'saisie'">
@@ -302,10 +302,6 @@ export const CaisseView = {
                     </button>
                 </div>
 
-                <div class="mob-bottom-nav">
-                    <div class="mob-nav-item" :class="{active: mobileTab === 'saisie'}" @click="mobileTab = 'saisie'">📦 Saisie</div>
-                    <div class="mob-nav-item" :class="{active: mobileTab === 'depenses'}" @click="mobileTab = 'depenses'">⛽ Dépenses</div>
-                </div>
             </div>
             </div>
         `;

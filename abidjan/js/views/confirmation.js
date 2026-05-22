@@ -28,7 +28,7 @@ export const ConfirmationView = {
 
                 <div style="display: flex; gap: 20px; flex-wrap: wrap;">
                     <!-- COLONNE GAUCHE : LISTE DES SESSIONS -->
-                    <div style="flex: 1; min-width: 300px; max-width: 350px;">
+                    <div class="confirm-col" style="flex: 1; min-width: 300px; max-width: 350px;">
                         <div class="card" style="margin-bottom: 20px;">
                             <h3 style="color: #ef4444; border-bottom: 2px solid #fecaca; padding-bottom: 10px;">⏳ En attente de validation</h3>
                             <div id="sessionsListPending" style="max-height: 300px; overflow-y: auto;">
@@ -43,7 +43,7 @@ export const ConfirmationView = {
                     </div>
 
                     <!-- COLONNE DROITE : DÉTAILS DE LA SESSION -->
-                    <div style="flex: 2; min-width: 400px;">
+                    <div class="confirm-col" style="flex: 2; min-width: 400px;">
                         <div class="card" id="noSelectionMsg" style="text-align: center; padding: 50px; color: #94a3b8;">
                             <i class="fas fa-hand-pointer fa-3x" style="margin-bottom: 15px;"></i>
                             <h2>Sélectionnez une session</h2>
@@ -51,7 +51,7 @@ export const ConfirmationView = {
                         </div>
 
                         <div id="sessionDetails" style="display: none;">
-                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; background: #f8fafc; padding: 15px; border-radius: 8px; border: 1px solid #e2e8f0;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; background: #f8fafc; padding: 15px; border-radius: 8px; border: 1px solid #e2e8f0; flex-wrap: wrap; gap: 10px;">
                                 <div>
                                     <h2 id="detailDateUser" style="margin: 0 0 5px 0; color: #0f172a;"></h2>
                                     <span id="detailStatus" class="tag" style="font-size: 14px;"></span>
@@ -65,28 +65,30 @@ export const ConfirmationView = {
                             <!-- GRILLES DE DÉTAILS -->
                             <div class="card" style="margin-bottom: 20px;">
                                 <h3 style="color: #3b82f6;">📥 Encaissements (Total: <span id="totalEsp">0</span>)</h3>
-                                <div style="overflow-x: auto;">
+                                <div class="hide-on-mobile" style="overflow-x: auto;">
                                     <table class="table">
                                         <thead>
                                             <tr><th>Réf</th><th>Client</th><th>Conteneur</th><th>Livreur</th><th>Obs.</th><th>Prix</th><th>A. Abidjan</th><th>A. Paris</th><th>Mode</th><th>Reste</th><th>Action</th></tr>
                                         </thead>
                                         <tbody id="detailsEncaissementsBody"></tbody>
                                     </table>
-                                    <p style="text-align: right; color: #64748b; font-size: 12px; margin-top: 5px;">Total transactions modifiées : <span id="countEncaissements">0</span></p>
                                 </div>
+                                <div class="show-on-mobile" id="detailsEncaissementsCards"></div>
+                                <p style="text-align: right; color: #64748b; font-size: 12px; margin-top: 5px;">Total transactions modifiées : <span id="countEncaissements">0</span></p>
                             </div>
 
                             <div class="card">
                                 <h3 style="color: #ef4444;">📤 Dépenses Livreur (Total: <span id="totalDep">0</span>)</h3>
-                                <div style="overflow-x: auto;">
+                                <div class="hide-on-mobile" style="overflow-x: auto;">
                                     <table class="table">
                                         <thead>
                                             <tr><th>Motif</th><th>Type</th><th>Montant</th><th>Action</th></tr>
                                         </thead>
                                         <tbody id="detailsDepensesBody"></tbody>
                                     </table>
-                                    <p style="text-align: right; color: #64748b; font-size: 12px; margin-top: 5px;">Total dépenses : <span id="countDepenses">0</span></p>
                                 </div>
+                                <div class="show-on-mobile" id="detailsDepensesCards"></div>
+                                <p style="text-align: right; color: #64748b; font-size: 12px; margin-top: 5px;">Total dépenses : <span id="countDepenses">0</span></p>
                             </div>
                             
                             <div style="text-align: center; margin-top: 20px; font-size: 24px;">
@@ -100,9 +102,9 @@ export const ConfirmationView = {
                 <div class="dashboard-container" style="margin-top: 30px;">
                     <h2 style="color: #1e293b;">🗄️ Recherche dans les Archives (Mois Précédents)</h2>
                     <div style="background: white; padding: 20px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
-                        <div style="display: flex; gap: 15px; align-items: center; margin-bottom: 20px;">
+                        <div style="display: flex; gap: 15px; align-items: center; margin-bottom: 20px; flex-wrap: wrap;">
                             <label>Sélectionnez un mois :</label>
-                            <input type="month" id="archiveMonth" class="search-filter">
+                            <input type="month" id="archiveMonth" class="search-filter" style="flex: 1 1 140px; min-width: 0; width: auto;">
                             <button id="searchArchiveBtn" class="btn primary">Rechercher</button>
                         </div>
                         <div id="sessionsListArchives" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 15px;">
@@ -493,6 +495,7 @@ export const ConfirmationView = {
             }
     
             detailsDepensesBody.innerHTML = ''; let sumDep = 0;
+            const depCards = [];
             expensesDocs.forEach((e) => {
                 sumDep += (e.montant || 0);
                 let actions = '';
@@ -500,7 +503,14 @@ export const ConfirmationView = {
                     actions = `<button class="btn-edit-exp" data-id="${e.id}" style="background:#3b82f6; color:white; border:none; padding:2px 6px; border-radius:4px; cursor:pointer; margin-right:5px;">✏️</button><button class="btn-delete-exp" data-id="${e.id}" style="background:#ef4444; color:white; border:none; padding:2px 6px; border-radius:4px; cursor:pointer;">🗑️</button>`;
                 }
                 detailsDepensesBody.innerHTML += `<tr><td>${e.description}</td><td>${e.type}</td><td>${formatCFA(e.montant)}</td><td>${actions}</td></tr>`;
+                depCards.push(`<div class="comm-mob-card">
+                    <div class="comm-mob-l1"><strong>${e.description || '-'}</strong><span style="color:#ef4444; font-weight:800; white-space:nowrap;">${formatCFA(e.montant)}</span></div>
+                    <div class="comm-mob-l2"><span>${e.type || '-'}</span></div>
+                    ${actions ? `<div style="display:flex; justify-content:flex-end; gap:8px; border-top:1px solid #f1f5f9; padding-top:6px; margin-top:4px;">${actions}</div>` : ''}
+                </div>`);
             });
+            const depCardsEl = document.getElementById('detailsDepensesCards');
+            if (depCardsEl) depCardsEl.innerHTML = depCards.length ? depCards.join('') : '<div style="text-align:center; padding:12px; color:#94a3b8;">Aucune dépense.</div>';
             countDepenses.textContent = expensesDocs.length;
     
             totalEspEl.textContent = formatCFA(sumEsp); totalDepEl.textContent = formatCFA(sumDep); totalNetEl.textContent = formatCFA(sumEsp - sumDep);
@@ -520,11 +530,15 @@ export const ConfirmationView = {
     
         function renderTransactionsTable(transactionsToRender) {
             detailsEncaissementsBody.innerHTML = '';
+            const encCardsEl = document.getElementById('detailsEncaissementsCards');
+            if (encCardsEl) encCardsEl.innerHTML = '';
             if (transactionsToRender.length === 0) {
                 detailsEncaissementsBody.innerHTML = '<tr><td colspan="11" style="text-align:center; padding:15px;">Aucun encaissement trouvé pour cette recherche.</td></tr>';
+                if (encCardsEl) encCardsEl.innerHTML = '<div style="text-align:center; padding:12px; color:#94a3b8;">Aucun encaissement trouvé.</div>';
                 countEncaissements.textContent = 0; return;
             }
-    
+
+            const encCards = [];
             transactionsToRender.forEach(trans => {
                 const { docId, data: t, payeAbidjanCeJour, payeParisCeJour, sessionModes } = trans;
                 let actionButtons = '';
@@ -545,7 +559,15 @@ export const ConfirmationView = {
                 const row = document.createElement('tr'); row.dataset.id = docId;
                 row.innerHTML = `<td>${t.reference}</td><td>${t.nom}</td><td>${t.conteneur}</td><td>${agentsDisplay}</td><td>${magasinageDisplay}</td><td>${formatCFA(t.prix)}</td><td style="font-weight:bold; color:#d97706;">${formatCFA(payeAbidjanCeJour)}</td><td style="font-weight:bold; color:#2563eb;">${formatCFA(payeParisCeJour)}</td><td>${modeDisplay}</td><td class="${resteClass}">${formatCFA(t.reste)}</td><td>${actionButtons}</td>`;
                 detailsEncaissementsBody.appendChild(row);
+
+                encCards.push(`<div class="comm-mob-card" data-id="${docId}">
+                    <div class="comm-mob-l1"><strong>${t.reference || '-'}</strong><span class="${resteClass}" style="font-weight:800; white-space:nowrap;">${formatCFA(t.reste)}</span></div>
+                    <div class="comm-mob-l1"><span>${t.nom || '-'}</span>${t.conteneur ? `<span style="white-space:nowrap;">📦 ${t.conteneur}</span>` : ''}</div>
+                    <div class="comm-mob-l2"><span style="color:#d97706; font-weight:700;">Abj ${formatCFA(payeAbidjanCeJour)}</span><span style="color:#2563eb; font-weight:700;">Paris ${formatCFA(payeParisCeJour)}</span></div>
+                    <div style="display:flex; justify-content:flex-end; gap:8px; border-top:1px solid #f1f5f9; padding-top:6px; margin-top:4px;">${actionButtons}</div>
+                </div>`);
             });
+            if (encCardsEl) encCardsEl.innerHTML = encCards.join('');
             countEncaissements.textContent = transactionsToRender.length;
         }
     
@@ -619,23 +641,30 @@ export const ConfirmationView = {
             });
         }
     
-        detailsEncaissementsBody.addEventListener('click', async (e) => {
+        // Encaissements : marche pour le tableau (tr[data-id]) ET les fiches
+        // (.comm-mob-card[data-id]) -> on remonte au plus proche [data-id].
+        const handleEncaisseClick = async (e) => {
             const btn = e.target.closest('button');
             if (!btn) return;
-            const tr = btn.closest('tr');
-            const docId = tr.dataset.id;
+            const holder = btn.closest('[data-id]');
+            if (!holder) return;
+            const docId = holder.dataset.id;
             if (detailStatus.textContent.includes("Validé")) { AppModal.error("Impossible de modifier une session déjà validée."); return; }
             if (btn.classList.contains('btn-delete')) await handleDelete(docId);
             else if (btn.classList.contains('btn-edit')) await handleEdit(docId);
-        });
-    
-        detailsDepensesBody.addEventListener('click', async (e) => {
+        };
+        detailsEncaissementsBody.addEventListener('click', handleEncaisseClick);
+        document.getElementById('detailsEncaissementsCards')?.addEventListener('click', handleEncaisseClick);
+
+        const handleDepenseClick = async (e) => {
             const btn = e.target.closest('button');
             if (!btn || isViewer) return;
             const docId = btn.dataset.id;
             if (btn.classList.contains('btn-delete-exp')) await handleDeleteExpense(docId);
             else if (btn.classList.contains('btn-edit-exp')) await handleEditExpense(docId);
-        });
+        };
+        detailsDepensesBody.addEventListener('click', handleDepenseClick);
+        document.getElementById('detailsDepensesCards')?.addEventListener('click', handleDepenseClick);
     
         async function handleDelete(docId) {
             if (!await AppModal.confirm("Voulez-vous vraiment supprimer cet encaissement de la journée ?", "Suppression", true)) return;

@@ -24,7 +24,7 @@ export const AuditView = {
                     </div>
                 </div>
 
-                <div style="overflow-x: auto; background: white; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+                <div class="hide-on-mobile" style="overflow-x: auto; background: white; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
                     <table class="table" style="margin-bottom: 0;">
                         <thead>
                             <tr>
@@ -43,6 +43,7 @@ export const AuditView = {
                         </tbody>
                     </table>
                 </div>
+                <div class="show-on-mobile" id="auditCards"></div>
             </div>
 
             <div id="auditDetailsModal" class="modal">
@@ -160,20 +161,34 @@ export const AuditView = {
     
         function renderTable(data) {
             tableBody.innerHTML = '';
+            const auditCards = document.getElementById('auditCards');
             const term = searchInput.value.toLowerCase();
-    
-            const filtered = data.filter(s => 
-                s.user.toLowerCase().includes(term) || 
+
+            const filtered = data.filter(s =>
+                s.user.toLowerCase().includes(term) ||
                 s.dateSaisie.includes(term) ||
                 new Date(s.dateValidation).toLocaleDateString('fr-FR').includes(term) ||
                 s.detailsTrans.some(t => (t.reference || '').toLowerCase().includes(term)) ||
                 s.totalIn.toString().includes(term) ||
                 s.detailsTrans.some(t => (t.montantSpecifique || 0).toString().includes(term))
             );
-    
+
             if (filtered.length === 0) {
                 tableBody.innerHTML = '<tr><td colspan="8" style="text-align:center;">Aucune donnée trouvée.</td></tr>';
+                if (auditCards) auditCards.innerHTML = '<div style="text-align:center; padding:20px; color:#94a3b8;">Aucune donnée trouvée.</div>';
                 return;
+            }
+
+            // Fiches compactes (mobile) : liste plate (pas de regroupement
+            // semaine/mois, réservé au tableau ordinateur). Clic = détails.
+            if (auditCards) {
+                auditCards.innerHTML = filtered.map(s => {
+                    const dateSaisie = new Date(s.dateSaisie).toLocaleDateString('fr-FR');
+                    return `<div class="comm-mob-card" data-sid="${s.id}">
+                        <div class="comm-mob-l1"><strong>${s.user}</strong><span style="color:#2563eb; font-weight:800;">${formatCFA(s.balance)}</span></div>
+                        <div class="comm-mob-l2"><span>${dateSaisie}</span><span style="color:#10b981;">+${formatCFA(s.totalIn)}</span><span style="color:#ef4444;">-${formatCFA(s.totalOut)}</span><span>Bilan ${formatCFA(s.result)}</span></div>
+                    </div>`;
+                }).join('');
             }
     
             const now = new Date();
@@ -367,8 +382,14 @@ export const AuditView = {
             XLSX.writeFile(wb, "Audit_Detaille.xlsx");
         });
     
-        searchInput.addEventListener('input', () => renderTable(allSessions.slice().reverse())); 
-    
+        searchInput.addEventListener('input', () => renderTable(allSessions.slice().reverse()));
+
+        // Clic sur une fiche (mobile) -> ouvre le détail de la session.
+        document.getElementById('auditCards')?.addEventListener('click', (e) => {
+            const card = e.target.closest('.comm-mob-card');
+            if (card && card.dataset.sid) window.openAuditDetails(card.dataset.sid);
+        });
+
         window.onclick = (e) => { if (e.target == modal) modal.style.display = "none"; };
     
         loadAuditData();

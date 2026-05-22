@@ -30,7 +30,8 @@ export const OtherIncomeView = {
                         <input type="text" id="incomeSearch" placeholder="Rechercher..." style="padding: 8px; border-radius: 4px; border: 1px solid #ccc; min-width: 250px;">
                         <div style="display: flex; align-items: center; gap: 5px;"><input type="checkbox" id="showDeletedCheckbox" style="width: auto; margin: 0;"><label for="showDeletedCheckbox" style="margin: 0; cursor: pointer; font-size: 13px;">Afficher supprimés</label></div>
                     </div>
-                    <div style="overflow-x: auto;"><table class="table" style="margin-bottom: 0;"><thead><tr><th>Date</th><th>Description</th><th>Montant</th><th>Actions</th></tr></thead><tbody id="incomeTableBody"><tr><td colspan="4" style="text-align:center;">Chargement...</td></tr></tbody></table></div>
+                    <div class="hide-on-mobile" style="overflow-x: auto;"><table class="table" style="margin-bottom: 0;"><thead><tr><th>Date</th><th>Description</th><th>Montant</th><th>Actions</th></tr></thead><tbody id="incomeTableBody"><tr><td colspan="4" style="text-align:center;">Chargement...</td></tr></tbody></table></div>
+                    <div class="show-on-mobile" id="incomeCards"></div>
                 </div>
             </div>
         `;
@@ -283,8 +284,21 @@ export const OtherIncomeView = {
                     <td>${formatCFA(income.montant)}</td>
                     <td>${deleteButtonHTML}</td>
                 `;
-                incomeTableBody.appendChild(row); 
+                incomeTableBody.appendChild(row);
             });
+
+            // Fiches compactes (mobile) : Description + Montant / Date + suppr.
+            const incomeCards = document.getElementById('incomeCards');
+            if (incomeCards) {
+                incomeCards.innerHTML = filtered.map(income => {
+                    const delBtn = ((userRole === 'admin' || userRole === 'super_admin') && income.isDeleted !== true && !isViewer)
+                        ? `<button class="deleteBtn" data-id="${income.id}">Suppr.</button>` : '';
+                    return `<div class="comm-mob-card"${income.isDeleted ? ' style="opacity:.55;"' : ''}>
+                        <div class="comm-mob-l1"><strong>${income.description || '-'}</strong><span style="font-weight:800; color:#10b981;">${formatCFA(income.montant)}</span></div>
+                        <div class="comm-mob-l2"><span>${income.date || '-'}</span>${delBtn}</div>
+                    </div>`;
+                }).join('');
+            }
 
             // Bouton Charger Plus
             if (filtered.length >= currentLimit || allIncome.length >= currentLimit) {
@@ -329,8 +343,8 @@ export const OtherIncomeView = {
         
         fetchIncome();
 
-        // 3. SUPPRESSION
-        incomeTableBody.addEventListener('click', async (event) => {
+        // 3. SUPPRESSION (tableau ordinateur + fiches mobile)
+        const handleIncomeDelete = async (event) => {
             if (isViewer) return;
             if (event.target.classList.contains('deleteBtn')) {
                 const docId = event.target.getAttribute('data-id');
@@ -338,7 +352,9 @@ export const OtherIncomeView = {
                     updateDoc(doc(db, "other_income", docId), { isDeleted: true });
                 }
             }
-        });
+        };
+        incomeTableBody.addEventListener('click', handleIncomeDelete);
+        document.getElementById('incomeCards')?.addEventListener('click', handleIncomeDelete);
 
         // --- GESTION DES ENREGISTREMENTS MULTIPLES ---
 

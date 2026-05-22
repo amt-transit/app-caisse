@@ -40,12 +40,13 @@ export const BankView = {
                         <input type="text" id="bankSearch" placeholder="Rechercher (Desc, Banque...)" style="padding: 8px; border-radius: 4px; border: 1px solid #ccc; min-width: 250px;">
                         <div style="display: flex; align-items: center; gap: 5px;"><input type="checkbox" id="showDeletedCheckbox" style="width: auto; margin: 0;"><label for="showDeletedCheckbox" style="margin: 0; cursor: pointer; font-size: 13px;">Afficher supprimés</label></div>
                     </div>
-                    <div style="overflow-x: auto;">
+                    <div class="hide-on-mobile" style="overflow-x: auto;">
                         <table class="table" id="bankTable" style="margin-bottom: 0;">
                             <thead><tr><th>Date</th><th>Banque</th><th>Description</th><th>Type</th><th>Montant</th><th>Actions</th></tr></thead>
                             <tbody id="bankTableBody"><tr><td colspan="6" style="text-align:center;">Chargement...</td></tr></tbody>
                         </table>
                     </div>
+                    <div class="show-on-mobile" id="bankCards"></div>
                 </div>
             </div>
         `;
@@ -539,12 +540,29 @@ export const BankView = {
                        (item.bank || "").toLowerCase().includes(term);
             });
 
-            bankTableBody.innerHTML = ''; 
+            bankTableBody.innerHTML = '';
+            const bankCards = document.getElementById('bankCards');
             if (filtered.length === 0) {
                 bankTableBody.innerHTML = '<tr><td colspan="5">Aucun résultat.</td></tr>';
+                if (bankCards) bankCards.innerHTML = '<div style="text-align:center; padding:16px; color:#94a3b8;">Aucun résultat.</div>';
                 return;
             }
             const toShow = filtered.slice(0, currentLimit);
+            if (bankCards) {
+                bankCards.innerHTML = toShow.map(move => {
+                    const neg = (move.type === 'Depot' && move.source === 'Saisie Manuelle') || move.type === 'Paiement';
+                    const cls = neg ? 'reste-negatif' : 'reste-positif';
+                    const sgn = neg ? '-' : '+';
+                    const del = (move.isDeleted !== true && !isViewer)
+                        ? (move._source === 'transaction' ? '<span style="font-size:11px; color:#94a3b8;">Via Historique</span>' : `<button class="deleteBtn" data-id="${move.id}">Suppr.</button>`)
+                        : '';
+                    return `<div class="comm-mob-card"${move.isDeleted ? ' style="opacity:.55;"' : ''}>
+                        <div class="comm-mob-l1"><strong>${move.description || '-'}</strong><span class="${cls}" style="font-weight:800; white-space:nowrap;">${sgn} ${formatCFA(move.montant)}</span></div>
+                        <div class="comm-mob-l2"><span>${move.date || '-'}</span><span class="tag" style="background:#e2e8f0; color:#334155;">${move.bank || '-'}</span><span>${move.type}</span></div>
+                        ${del ? `<div style="display:flex; justify-content:flex-end; border-top:1px solid #f1f5f9; padding-top:6px; margin-top:4px;">${del}</div>` : ''}
+                    </div>`;
+                }).join('');
+            }
             toShow.forEach(move => {
                 const row = document.createElement('tr');
                 if (move.isDeleted === true) row.classList.add('deleted-row');
@@ -595,8 +613,8 @@ export const BankView = {
         if(bankSearchInput) bankSearchInput.addEventListener('input', renderBankTable);
         fetchBankMovements();
 
-        // 4. SUPPRESSION
-        bankTableBody.addEventListener('click', async (event) => {
+        // 4. SUPPRESSION (tableau ordinateur + fiches mobile)
+        const handleBankDelete = async (event) => {
             if (isViewer) return;
             if (event.target.classList.contains('deleteBtn')) {
                 const docId = event.target.getAttribute('data-id');
@@ -610,7 +628,9 @@ export const BankView = {
 
                 updateDoc(doc(db, "bank_movements", docId), { isDeleted: true });
             }
-        });
+        };
+        bankTableBody.addEventListener('click', handleBankDelete);
+        document.getElementById('bankCards')?.addEventListener('click', handleBankDelete);
 
         if(typeof initBackToTopButton === 'function') initBackToTopButton();
     }

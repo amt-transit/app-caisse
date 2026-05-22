@@ -778,6 +778,12 @@ body.login-page {
     .mob-nav-item { flex: 1; text-align: center; padding: 15px 0; font-size: 13px; font-weight: bold; color: #64748b; cursor: pointer; transition: 0.2s; text-transform: uppercase; letter-spacing: 0.5px;}
     .mob-nav-item.active { color: #4f46e5; border-top: 3px solid #4f46e5; background: #f8fafc; }
 
+    /* Onglets Saisie/Dépenses EN HAUT (remplacent l'ancien nav fixe en bas
+       qui masquait la navigation globale Accueil/Caisse/Livraison/Menu). */
+    .mob-top-tabs { display: flex; gap: 8px; margin-bottom: 15px; }
+    .mob-top-tab { flex: 1; padding: 12px; border: 1px solid #e2e8f0; background: #fff; border-radius: 10px; font-weight: 700; font-size: 14px; cursor: pointer; font-family: inherit; color: #64748b; }
+    .mob-top-tab.active { background: #1e293b; color: #fff; border-color: #1e293b; }
+
         /* --- HAMBURGER MENU (OFF-CANVAS) MOBILE --- */
         .hamburger-btn, #mobileToggle, .mobile-toggle {
             display: flex !important; align-items: center; justify-content: center;
@@ -1054,6 +1060,15 @@ body.login-page {
        (sans toucher au padding des enfants). */
     .resp-1col-mobile { grid-template-columns: 1fr !important; }
 
+    /* Barres de contrôles (recherche + cases à cocher) : s'enroulent au lieu
+       de déborder du cadre. L'input de recherche prend toute la largeur. */
+    .history-controls { flex-wrap: wrap !important; gap: 10px !important; }
+    .history-controls input[type="text"] { min-width: 0 !important; flex: 1 1 100%; box-sizing: border-box; }
+
+    /* Confirmation : les 2 colonnes (liste sessions / détails) avaient des
+       min-width (300/400px) qui débordaient l'écran -> pleine largeur empilée. */
+    .confirm-col { min-width: 0 !important; max-width: none !important; flex-basis: 100% !important; }
+
     /* Bascule tableau (ordinateur) / fiches (mobile). */
     .hide-on-mobile { display: none !important; }
     .show-on-mobile { display: block; }
@@ -1070,6 +1085,14 @@ body.login-page {
     .comm-mob-l1 strong { font-size: 15px; color: #0f172a; }
     .comm-mob-l2 { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 12px; color: #64748b; margin-bottom: 7px; }
     .comm-mob-l3 { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; border-top: 1px solid #f1f5f9; padding-top: 7px; }
+
+    /* Boutons d'action dans les fiches (les regles globales sont scopees a
+       "td button", donc sans effet hors tableau). */
+    .comm-mob-card .editBtn { background-color: #007bff; color: #fff; border: none; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 700; }
+    .comm-mob-card .deleteBtn { background-color: #dc3545; color: #fff; border: none; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 700; }
+    /* Tags (agents, modes...) : fond lisible par defaut dans les fiches
+       (.tag a color:white ; sans fond defini -> blanc sur blanc). */
+    .comm-mob-card .tag { background-color: #475569; color: #fff; box-shadow: none; }
 
     /* Cartes FACTURES (data-invoice-id) : version resserrée. Le montant ne
        passe plus à la ligne (nowrap) et le nom long est tronqué ; marges
