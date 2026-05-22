@@ -128,7 +128,7 @@ export const ParrainageView = {
                             </div>
                         </div>
 
-                        <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(350px,1fr)); gap:20px; margin-bottom:20px;">
+                        <div class="resp-1col-mobile" style="display:grid; grid-template-columns:repeat(auto-fit, minmax(350px,1fr)); gap:20px; margin-bottom:20px;">
                             <div class="chart-container">
                                 <h3 style="margin-top:0; font-size:16px; color:#1e293b;"><i class="fas fa-trophy text-orange-500"></i> Top 5 du Réseau</h3>
                                 <div class="ranking-list">
@@ -260,7 +260,7 @@ export const ParrainageView = {
                             <div class="stat-box" style="padding: 15px;"><div class="stat-label">Bonus Réseau</div><div class="stat-value text-warning" style="font-size:20px;">{{ formatMoney(commKpis.bonusParrainage) }}</div></div>
                         </div>
 
-                        <div class="table-card table-wrap">
+                        <div class="table-card table-wrap hide-on-mobile">
                             <table class="data-table">
                                 <thead>
                                     <tr><th>Date</th><th>Partenaire</th><th>Type</th><th>Colis Réf</th><th>Bénéfice Base</th><th>Part (Net)</th><th>Bonus Généré</th><th>Statut</th></tr>
@@ -268,17 +268,38 @@ export const ParrainageView = {
                                 <tbody>
                                     <tr v-if="filteredCommissions.length === 0"><td colspan="8" style="text-align:center;">Aucune commission trouvée.</td></tr>
                                     <tr v-for="c in filteredCommissions" :key="c.id">
-                                        <td>{{ formatDate(c.dateCreation) }}</td>
-                                        <td><strong>{{ getPartnerName(c.demarcheurId) }}</strong></td>
-                                        <td><span :class="['badge', c.type === 'parrainage' ? 'badge-warning' : 'badge-info']">{{ c.type === 'parrainage' ? 'Parrainage' : 'Direct' }}</span></td>
-                                        <td style="font-family: monospace;">{{ c.expeditionId || '-' }}</td>
-                                        <td>{{ formatMoney(c.montantBrut) }}</td>
-                                        <td style="font-weight:700; color:#10b981;">{{ formatMoney(c.montantNet) }}</td>
-                                        <td style="color:#d97706;">{{ formatMoney(c.bonusParrainage) }}</td>
-                                        <td><span :class="['badge', c.statut === 'retire' ? 'badge-success' : 'badge-warning']">{{ c.statut === 'retire' ? 'Retiré' : 'En attente' }}</span></td>
+                                        <td data-label="Date">{{ formatDate(c.dateCreation) }}</td>
+                                        <td data-label="Partenaire"><strong>{{ getPartnerName(c.demarcheurId) }}</strong></td>
+                                        <td data-label="Type"><span :class="['badge', c.type === 'parrainage' ? 'badge-warning' : 'badge-info']">{{ c.type === 'parrainage' ? 'Parrainage' : 'Direct' }}</span></td>
+                                        <td data-label="Colis Réf" style="font-family: monospace;">{{ c.expeditionId || '-' }}</td>
+                                        <td data-label="Bénéfice Base">{{ formatMoney(c.montantBrut) }}</td>
+                                        <td data-label="Part (Net)" style="font-weight:700; color:#10b981;">{{ formatMoney(c.montantNet) }}</td>
+                                        <td data-label="Bonus" style="color:#d97706;">{{ formatMoney(c.bonusParrainage) }}</td>
+                                        <td data-label="Statut"><span :class="['badge', c.statut === 'retire' ? 'badge-success' : 'badge-warning']">{{ c.statut === 'retire' ? 'Retiré' : 'En attente' }}</span></td>
                                     </tr>
                                 </tbody>
                             </table>
+                        </div>
+
+                        <!-- Mobile : fiches commissions compactes (3 lignes) -->
+                        <div class="comm-mob show-on-mobile">
+                            <div v-if="filteredCommissions.length === 0" style="text-align:center; padding:24px; color:#94a3b8;">Aucune commission trouvée.</div>
+                            <div v-for="c in filteredCommissions" :key="'m'+c.id" class="comm-mob-card">
+                                <div class="comm-mob-l1">
+                                    <strong>{{ getPartnerName(c.demarcheurId) }}</strong>
+                                    <span :class="['badge', c.statut === 'retire' ? 'badge-success' : 'badge-warning']">{{ c.statut === 'retire' ? 'Retiré' : 'En attente' }}</span>
+                                </div>
+                                <div class="comm-mob-l2">
+                                    <span>{{ formatDate(c.dateCreation) }}</span>
+                                    <span :class="['badge', c.type === 'parrainage' ? 'badge-warning' : 'badge-info']">{{ c.type === 'parrainage' ? 'Parrainage' : 'Direct' }}</span>
+                                    <span style="font-family:monospace;">{{ c.expeditionId || '-' }}</span>
+                                </div>
+                                <div class="comm-mob-l3">
+                                    <span style="color:#0f172a;">{{ formatMoney(c.montantBrut) }}</span>
+                                    <span style="color:#10b981; font-weight:700;">{{ formatMoney(c.montantNet) }}</span>
+                                    <span style="color:#d97706;">{{ formatMoney(c.bonusParrainage) }}</span>
+                                </div>
+                            </div>
                         </div>
                     </div>
 
@@ -293,7 +314,7 @@ export const ParrainageView = {
                         <div style="background:#fffbeb; border:1px solid #fde68a; color:#92400e; padding:12px 16px; border-radius:10px; margin-bottom:18px; font-size:13px;">
                             <i class="fas fa-info-circle"></i> « Payer » crée le paiement réel (déduit du solde du partenaire) ET marque la demande comme traitée. Le partenaire voit alors « Transféré » dans son app.
                         </div>
-                        <div class="table-card table-wrap">
+                        <div class="table-card table-wrap hide-on-mobile">
                             <table class="data-table">
                                 <thead>
                                     <tr><th>Date</th><th>Partenaire</th><th style="text-align:right;">Montant</th><th>Type</th><th>Moyen</th><th>Numéro</th><th>Statut</th><th>Action</th></tr>
@@ -322,6 +343,33 @@ export const ParrainageView = {
                                     </tr>
                                 </tbody>
                             </table>
+                        </div>
+
+                        <!-- Mobile : fiches demandes de retrait (3 lignes) -->
+                        <div class="show-on-mobile">
+                            <div v-if="demandesRetrait.length === 0" style="text-align:center; padding:24px; color:#94a3b8;">Aucune demande de retrait pour le moment.</div>
+                            <div v-for="d in demandesRetrait" :key="'m'+d.id" class="comm-mob-card">
+                                <div class="comm-mob-l1">
+                                    <strong>{{ getPartnerName(d.demarcheurId) }}</strong>
+                                    <span v-if="(d.statut||'en_attente')==='en_attente'" class="badge badge-warning">⏳ En attente</span>
+                                    <span v-else-if="d.statut==='paye' || d.statut==='traite'" class="badge badge-success">✓ Payé</span>
+                                    <span v-else style="background:#fee2e2;color:#991b1b;padding:3px 9px;border-radius:999px;font-size:11px;font-weight:800;">✕ Refusée</span>
+                                </div>
+                                <div class="comm-mob-l2">
+                                    <span>{{ formatDate(d.dateDemande) }}</span>
+                                    <span>{{ d.type === 'total' ? 'Totalité' : 'Partiel' }}</span>
+                                    <span style="background:#f1f5f9; padding:3px 8px; border-radius:6px; font-weight:700;">{{ d.moyenPaiement || '-' }}</span>
+                                    <span v-if="d.numero">{{ d.numero }}</span>
+                                </div>
+                                <div class="comm-mob-l3">
+                                    <span style="font-weight:800; color:#0f172a;">{{ formatMoney(d.montant) }}</span>
+                                    <div v-if="(d.statut||'en_attente')==='en_attente'" style="display:flex; gap:6px;">
+                                        <button class="btn btn-sm" :disabled="saving" @click="payerDemande(d)" style="background:#10b981; color:#fff; border:none; padding:6px 12px; border-radius:6px; font-size:12px; font-weight:700; cursor:pointer;">Payer</button>
+                                        <button class="btn btn-sm" :disabled="saving" @click="refuserDemande(d)" style="background:#fff; color:#ef4444; border:1px solid #ef4444; padding:6px 12px; border-radius:6px; font-size:12px; font-weight:700; cursor:pointer;">Refuser</button>
+                                    </div>
+                                    <span v-else style="font-size:12px; color:#94a3b8;">{{ d.traitePar ? ('par ' + d.traitePar) : '—' }}</span>
+                                </div>
+                            </div>
                         </div>
                     </div>
 
@@ -352,7 +400,7 @@ export const ParrainageView = {
                             </div>
                         </div>
 
-                        <div class="table-card table-wrap">
+                        <div class="table-card table-wrap hide-on-mobile">
                             <div style="padding: 15px 20px; background: #f8fafc; border-bottom: 1px solid #e2e8f0; font-weight: 700; color: #1e293b;">Historique des paiements</div>
                             <table class="data-table">
                                 <thead>
@@ -372,13 +420,33 @@ export const ParrainageView = {
                                 </tbody>
                             </table>
                         </div>
+
+                        <!-- Mobile : fiches historique paiements (3 lignes) -->
+                        <div class="show-on-mobile">
+                            <div v-if="filteredWithdrawals.length === 0" style="text-align:center; padding:24px; color:#94a3b8;">Aucun paiement enregistré pour cette sélection.</div>
+                            <div v-for="w in filteredWithdrawals" :key="'m'+w.id" class="comm-mob-card">
+                                <div class="comm-mob-l1">
+                                    <strong>{{ getPartnerName(w.demarcheurId) }}</strong>
+                                    <span class="badge badge-success">✓ Payé</span>
+                                </div>
+                                <div class="comm-mob-l2">
+                                    <span>{{ formatDate(w.dateRetrait) }}</span>
+                                    <span v-if="w.periode">{{ w.periode }}</span>
+                                    <span style="background:#f1f5f9; padding:3px 8px; border-radius:6px; font-weight:700;">{{ w.moyenPaiement || 'Espèces' }}</span>
+                                    <span v-if="w.validePar">par {{ w.validePar }}</span>
+                                </div>
+                                <div class="comm-mob-l3">
+                                    <span style="font-weight:800; color:#10b981;">{{ formatMoney(w.montant) }}</span>
+                                </div>
+                            </div>
+                        </div>
                     </div>
 
                     <!-- ============================================== -->
                     <!-- ONGLET: ANALYTIQUE -->
                     <!-- ============================================== -->
                     <div v-if="currentTab === 'analytique'">
-                        <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(350px,1fr)); gap:20px; margin-bottom:20px;">
+                        <div class="resp-1col-mobile" style="display:grid; grid-template-columns:repeat(auto-fit, minmax(350px,1fr)); gap:20px; margin-bottom:20px;">
                             <div class="chart-container">
                                 <h3 style="margin-top:0; font-size:16px;">Distribution des commissions</h3>
                                 <canvas id="distributionChart" style="max-height:250px; width:100%;"></canvas>
