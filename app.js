@@ -279,10 +279,12 @@ export const app = {
 
             const { db } = await import('./firebase-config.js');
             const { doc, onSnapshot, collection, query, where } = await import('https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js');
-            const { getCollectionName } = await import('./agencies-config.js');
-            const activeAgency = sessionStorage.getItem('currentActiveAgency') || 'paris';
+            const { getCollectionName, getContainerConfigAgency } = await import('./agencies-config.js');
+            // Conteneur actif : le départ décide, l'arrivée suit -> on lit la
+            // config de l'agence de départ de la route (cf. getContainerConfigAgency).
+            const configAgency = getContainerConfigAgency();
 
-            onSnapshot(doc(db, "settings", `container_config_${activeAgency}`), (configSnap) => {
+            onSnapshot(doc(db, "settings", `container_config_${configAgency}`), (configSnap) => {
                 let activeContainer = configSnap.exists() && configSnap.data().activeContainer ? configSnap.data().activeContainer.trim().toUpperCase() : 'ATT';
                 const nameEl = document.getElementById('globalActiveContainerName');
                 if (nameEl) nameEl.textContent = activeContainer;
