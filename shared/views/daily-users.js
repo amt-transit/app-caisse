@@ -47,7 +47,7 @@ export const DailyUsersView = {
                 </div>
 
                 <div class="form-card" style="padding: 0; overflow: hidden; box-shadow: 0 2px 4px rgba(0,0,0,0.02);">
-                    <table class="data-table">
+                    <table class="data-table hide-on-mobile">
                         <thead>
                             <tr>
                                 <th>Utilisateur</th>
@@ -61,6 +61,7 @@ export const DailyUsersView = {
                             <tr><td colspan="5" style="text-align:center; padding: 40px;">Chargement...</td></tr>
                         </tbody>
                     </table>
+                    <div class="show-on-mobile" id="u-cards" style="padding: 10px;"></div>
                 </div>
             </div>
         `;
@@ -142,7 +143,8 @@ export const DailyUsersView = {
             if (!tbody) return; 
             if (usersMap.size === 0) { tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;">Aucune activité ce jour.</td></tr>`; return; }
 
-            tbody.innerHTML = Array.from(usersMap.entries()).sort((a,b) => b[1].collected - a[1].collected).map(([name, stats]) => `
+            const sortedUsers = Array.from(usersMap.entries()).sort((a,b) => b[1].collected - a[1].collected);
+            tbody.innerHTML = sortedUsers.map(([name, stats]) => `
                 <tr>
                     <td><b>${name}</b></td>
                     <td><span class="badge" style="background:#f1f5f9; color:#475569;">${stats.deliveries > 0 ? (isEur ? 'Agent' : 'Livreur') : 'Agent de Saisie'}</span></td>
@@ -150,6 +152,22 @@ export const DailyUsersView = {
                     <td style="text-align:right; font-weight:bold; color:#10b981;">${this.formatMoneyLocal(stats.collected)}</td>
                     <td style="text-align:right; font-weight:bold; color:#3b82f6;">${stats.deliveries}</td>
                 </tr>
+            `).join('');
+
+            // Fiches compactes (mobile) : 2 lignes par utilisateur.
+            const uCards = document.getElementById('u-cards');
+            if (uCards) uCards.innerHTML = sortedUsers.map(([name, stats]) => `
+                <div class="comm-mob-card">
+                    <div class="comm-mob-l1">
+                        <strong>${name}</strong>
+                        <span style="color:#10b981; font-weight:800;">${this.formatMoneyLocal(stats.collected)}</span>
+                    </div>
+                    <div class="comm-mob-l2">
+                        <span class="badge" style="background:#f1f5f9; color:#475569;">${stats.deliveries > 0 ? (isEur ? 'Agent' : 'Livreur') : 'Agent de Saisie'}</span>
+                        <span><i class="fas fa-receipt"></i> ${stats.transCount} trans.</span>
+                        <span style="color:#3b82f6;"><i class="fas fa-box"></i> ${stats.deliveries} colis</span>
+                    </div>
+                </div>
             `).join('');
         } catch(e) { console.error(e); this.app.showToast("Erreur", "error"); }
     }

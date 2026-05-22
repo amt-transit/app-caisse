@@ -72,17 +72,19 @@ export const DailyBilanView = {
                 <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 24px;">
                     <div class="form-card" style="padding: 0; overflow: hidden;">
                         <h3 style="padding: 20px; margin: 0; border-bottom: 1px solid #e2e8f0; background: #f8fafc; display: flex; align-items: center; gap: 8px;"><i class="fas fa-money-bill-wave" style="color: #10b981;"></i> Encaissements</h3>
-                        <table class="data-table">
+                        <table class="data-table hide-on-mobile">
                             <thead><tr><th>Réf</th><th>Client</th><th style="text-align:right;">Montant</th></tr></thead>
                             <tbody id="b-encaisse-table"><tr><td colspan="3" style="text-align:center;">Chargement...</td></tr></tbody>
                         </table>
+                        <div class="show-on-mobile" id="b-encaisse-cards" style="padding: 10px;"></div>
                     </div>
                     <div class="form-card" style="padding: 0; overflow: hidden;">
                         <h3 style="padding: 20px; margin: 0; border-bottom: 1px solid #e2e8f0; background: #f8fafc; display: flex; align-items: center; gap: 8px;"><i class="fas fa-receipt" style="color: #ef4444;"></i> Dépenses</h3>
-                        <table class="data-table">
+                        <table class="data-table hide-on-mobile">
                             <thead><tr><th>Catégorie</th><th>Motif</th><th style="text-align:right;">Montant</th></tr></thead>
                             <tbody id="b-depense-table"><tr><td colspan="3" style="text-align:center;">Chargement...</td></tr></tbody>
                         </table>
+                        <div class="show-on-mobile" id="b-depense-cards" style="padding: 10px;"></div>
                     </div>
                 </div>
             </div>
@@ -162,6 +164,12 @@ export const DailyBilanView = {
 
             document.getElementById('b-encaisse-table').innerHTML = encaissements.length ? encaissements.map(e => `<tr><td><b>${e.ref}</b></td><td>${e.nom}</td><td style="text-align:right; font-weight:bold; color:#10b981;">${this.formatMoneyLocal(e.mnt)}</td></tr>`).join('') : `<tr><td colspan="3" style="text-align:center;">Aucun encaissement</td></tr>`;
             document.getElementById('b-depense-table').innerHTML = depenses.length ? depenses.map(e => `<tr><td><span class="badge" style="background:#f1f5f9; color:#475569;">${e.cat || 'Dépense'}</span></td><td>${e.desc}</td><td style="text-align:right; font-weight:bold; color:#ef4444;">${this.formatMoneyLocal(e.mnt)}</td></tr>`).join('') : `<tr><td colspan="3" style="text-align:center;">Aucune dépense</td></tr>`;
+
+            // Fiches compactes (mobile) : 2 lignes par entrée.
+            const encCards = document.getElementById('b-encaisse-cards');
+            if (encCards) encCards.innerHTML = encaissements.length ? encaissements.map(e => `<div class="comm-mob-card"><div class="comm-mob-l1"><strong>${e.ref}</strong><span style="color:#10b981; font-weight:800;">${this.formatMoneyLocal(e.mnt)}</span></div><div class="comm-mob-l2"><span>${e.nom || '-'}</span></div></div>`).join('') : `<div style="text-align:center; padding:16px; color:#94a3b8;">Aucun encaissement</div>`;
+            const depCards = document.getElementById('b-depense-cards');
+            if (depCards) depCards.innerHTML = depenses.length ? depenses.map(e => `<div class="comm-mob-card"><div class="comm-mob-l1"><span class="badge" style="background:#f1f5f9; color:#475569;">${e.cat || 'Dépense'}</span><span style="color:#ef4444; font-weight:800;">${this.formatMoneyLocal(e.mnt)}</span></div><div class="comm-mob-l2"><span>${e.desc || '-'}</span></div></div>`).join('') : `<div style="text-align:center; padding:16px; color:#94a3b8;">Aucune dépense</div>`;
 
         } catch(e) { console.error("Erreur Bilan:", e); this.app.showToast("Erreur de chargement", "error"); }
     }
