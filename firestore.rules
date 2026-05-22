@@ -163,11 +163,17 @@ service cloud.firestore {
     // Un démarcheur ne lit QUE son périmètre. Aucune écriture.
 
     match /demarcheurs/{id} {
-      // Sa propre fiche + celles de ses filleuls directs (parrainId == lui).
-      allow read: if isDemarcheur() && (
-        id in myDemarcheurIds() ||
-        resource.data.parrainId in myDemarcheurIds()
-      );
+      // Lecture :
+      //  - démarcheur mobile : sa fiche + celles de ses filleuls directs ;
+      //  - personnel staff (paris/abidjan + accès global) : peut lister les
+      //    démarcheurs (badge "Parrain" sur la page Factures, gestion). On place
+      //    la condition démarcheur EN PREMIER pour court-circuiter avant
+      //    getUserData() (un démarcheur n'a pas de fiche /users).
+      allow read: if (isDemarcheur() && (
+                       id in myDemarcheurIds() ||
+                       resource.data.parrainId in myDemarcheurIds()
+                     ))
+                  || (isAuthenticated() && (hasGlobalAccess() || getUserData().agency in ['paris', 'abidjan']));
       // Le démarcheur peut écrire UNIQUEMENT le token push sur SA fiche.
       // On verrouille à 3 champs précis pour empêcher toute escalade
       // (impossibilité de modifier solde / nom / parrainId / etc.).
@@ -188,7 +194,10 @@ service cloud.firestore {
     }
 
     match /client_affiliations/{phone} {
-      allow read: if isDemarcheur() && resource.data.demarcheurId in myDemarcheurIds();
+      // Démarcheur : ses propres affiliations. Personnel staff : lecture pour le
+      // badge "Parrain" sur la page Factures (condition démarcheur en premier).
+      allow read: if (isDemarcheur() && resource.data.demarcheurId in myDemarcheurIds())
+                  || (isAuthenticated() && (hasGlobalAccess() || getUserData().agency in ['paris', 'abidjan']));
     }
 
     match /retrait_demandes/{id} {

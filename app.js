@@ -78,7 +78,8 @@ import { SettingsSoftwareView as AbidjanSettingsSoftwareView } from './abidjan/j
 export const app = {
     currentPage: 'dashboard',
     allowedMenus: null,
-    
+    _pageRendered: false,
+
     pageToMenuMap: {
         'dashboard': 'main',
         'daily-bilan': 'bilan', 'daily-users': 'bilan',
@@ -113,17 +114,21 @@ export const app = {
             window.AppModal.init();
         }
 
-        this.loadMenuConfig();
         this.initContainerGauge();
         this.initSidebarEvents();
         this.initMobileToggle();
         this.initGlobalEvents();
-        
-        // Récupération de la dernière page visitée, peu importe l'ancien système
-        let savedPage = sessionStorage.getItem('globalCurrentPage') || sessionStorage.getItem('parisCurrentPage') || sessionStorage.getItem('abidjanCurrentPage');
-        if (!savedPage || savedPage === 'null' || savedPage === 'undefined') savedPage = 'dashboard';
-        
-        this.renderPage(savedPage);
+
+        // On rend la page initiale UNIQUEMENT après le chargement de la config
+        // (menus + permissions). Sinon la page se rend avant que les droits
+        // soient connus : un écran interdit (ex. tableau de bord) s'affiche puis
+        // est remplacé, laissant des écouteurs Firestore orphelins (erreurs
+        // console "Cannot read properties of null").
+        this.loadMenuConfig().then(() => {
+            let savedPage = sessionStorage.getItem('globalCurrentPage') || sessionStorage.getItem('parisCurrentPage') || sessionStorage.getItem('abidjanCurrentPage');
+            if (!savedPage || savedPage === 'null' || savedPage === 'undefined') savedPage = 'dashboard';
+            this.renderPage(savedPage);
+        });
         this.updateBadges();
         this.initPendingSessionsBadge();
     },
@@ -258,6 +263,16 @@ export const app = {
         // (liste noire par data-page, gérée dans Rôles & Menus). S'applique
         // dans les 2 modes ; défaut = visible (non régressif).
         const hiddenItems = new Set(config && Array.isArray(config.hiddenItems) ? config.hiddenItems : []);
+        // Pages masquées spécifiquement pour le RÔLE de l'utilisateur courant
+        // (liste noire par data-page, gérée dans Rôles & Menus > Menus du rôle).
+        // Permet ex. : un livreur voit "Entrées Caisse > Saisie" mais pas
+        // "Confirmation / Historique / Autres entrées". super_admin/admin = aucun
+        // masquage. Conservée sur l'instance pour checkPageAccess (accès direct).
+        const roleHidden = new Set(
+            (!isSuperUser && config && config.roleHiddenItems && Array.isArray(config.roleHiddenItems[userRole]))
+                ? config.roleHiddenItems[userRole] : []
+        );
+        this.roleHiddenPages = roleHidden;
 
         baseOrder.forEach(key => {
             if (!this.allowedMenus.includes(key)) return;
@@ -281,6 +296,8 @@ export const app = {
                 section.querySelectorAll('.sidebar-item').forEach(item => {
                     // 1) Module explicitement masqué pour cette agence (prioritaire).
                     if (hiddenItems.has(item.dataset.page)) { item.style.display = 'none'; return; }
+                    // 1-bis) Module masqué pour CE rôle (par-rôle, prioritaire).
+                    if (roleHidden.has(item.dataset.page)) { item.style.display = 'none'; return; }
                     if (configAuthoritative) {
                         // La config fait foi : on affiche tous les items de la catégorie.
                         item.style.display = '';
@@ -294,8 +311,15 @@ export const app = {
             });
         });
 
-        if (this.currentPage && !this.checkPageAccess(this.currentPage)) {
-            this.renderPage('dashboard');
+        // La page courante n'est pas accessible (ex. tableau de bord masqué pour
+        // ce rôle) : on bascule vers la PREMIÈRE page réellement accessible.
+        // Uniquement si une page est DÉJÀ affichée (re-application du menu) :
+        // au tout 1er chargement, c'est renderPage(savedPage) qui gère l'accès,
+        // pour éviter un double rendu.
+        if (this._pageRendered && this.currentPage && !this.checkPageAccess(this.currentPage)) {
+            const fallback = this.getFirstAccessiblePage();
+            if (fallback) this.renderPage(fallback);
+            else this.showNoAccessMessage();
         }
 
         // Le menu vient d'être reconstruit : on repose le badge "sessions non confirmées"
@@ -305,9 +329,33 @@ export const app = {
     },
 
     checkPageAccess(page) {
+        // Page masquée spécifiquement pour le rôle de l'utilisateur : accès refusé
+        // même par navigation directe.
+        if (this.roleHiddenPages && this.roleHiddenPages.has(page)) return false;
         if (!this.allowedMenus) return true;
         const requiredMenu = this.pageToMenuMap[page];
         return !(requiredMenu && !this.allowedMenus.includes(requiredMenu));
+    },
+
+    // Première page réellement accessible dans le menu reconstruit (ordre du
+    // menu). Sert de page d'atterrissage quand la page demandée est interdite
+    // pour le rôle (ex. tableau de bord masqué). Renvoie null si aucune.
+    getFirstAccessiblePage() {
+        const items = document.querySelectorAll('.sidebar-nav .sidebar-item');
+        for (const item of items) {
+            const page = item.dataset.page;
+            if (!page) continue;
+            if (item.style.display === 'none') continue;          // item masqué
+            const section = item.closest('.sidebar-category');
+            if (section && section.style.display === 'none') continue; // section masquée
+            if (this.checkPageAccess(page)) return page;
+        }
+        return null;
+    },
+
+    showNoAccessMessage() {
+        const c = document.getElementById('contentContainer');
+        if (c) c.innerHTML = '<div style="padding:48px 20px; text-align:center; color:#64748b;"><i class="fas fa-lock" style="font-size:32px; display:block; margin-bottom:12px; color:#cbd5e1;"></i>Aucune page accessible avec votre rôle.<br>Contactez un administrateur.</div>';
     },
 
     async initContainerGauge() {
@@ -517,12 +565,17 @@ export const app = {
 
     renderPage(page) {
         if (!this.checkPageAccess(page)) {
-            this.showToast("Accès refusé. Permissions insuffisantes.", "error");
-            if (page !== 'dashboard') this.renderPage('dashboard');
+            // Page interdite pour ce rôle : on bascule silencieusement vers la
+            // première page accessible (pas de repli forcé vers le tableau de
+            // bord, qui peut lui-même être masqué pour ce rôle).
+            const fallback = this.getFirstAccessiblePage();
+            if (fallback && fallback !== page) { this.renderPage(fallback); return; }
+            this.showNoAccessMessage();
             return;
         }
 
         this.currentPage = page;
+        this._pageRendered = true;
         sessionStorage.setItem('globalCurrentPage', page);
         
         const activeAgency = sessionStorage.getItem('currentActiveAgency') || 'paris';

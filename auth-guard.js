@@ -245,12 +245,29 @@ onAuthStateChanged(auth, async (user) => {
         sessionStorage.setItem('userName', userName || 'Utilisateur');
         sessionStorage.setItem('userAgency', userData.agency || 'abidjan');
 
-        // Détermination de l'agence actuellement "Active"
+        // Détermination de l'agence actuellement "Active".
+        // app.js (au démarrage, DOMContentLoaded) construit le menu en lisant
+        // currentActiveAgency, avec 'paris' par défaut si absente. Or auth-guard
+        // ne connaît l'agence de l'utilisateur qu'APRÈS lecture asynchrone de sa
+        // fiche : course possible où le menu est bâti sur la mauvaise agence
+        //  - session vide -> défaut 'paris' alors que l'agent est à l'arrivée ;
+        //  - session héritée d'un autre utilisateur.
+        // On calcule l'agence DÉSIRÉE ; si elle diffère de celle qu'app.js a
+        // probablement utilisée, on recharge UNE fois (après reload les valeurs
+        // coïncident -> aucune boucle). APP_DEFAULT_AGENCY doit rester aligné
+        // avec le défaut d'app.js (loadMenuConfig).
+        const APP_DEFAULT_AGENCY = 'paris';
         let currentActiveAgency = sessionStorage.getItem('currentActiveAgency');
-        if (!currentActiveAgency || (userData.agency !== 'all' && currentActiveAgency !== userData.agency)) {
-            currentActiveAgency = userData.agency === 'all' ? 'abidjan' : (userData.agency || 'abidjan');
-            sessionStorage.setItem('currentActiveAgency', currentActiveAgency);
+        const desiredAgency = userData.agency === 'all'
+            ? (currentActiveAgency || 'abidjan')
+            : (userData.agency || 'abidjan');
+        const renderedAgency = currentActiveAgency || APP_DEFAULT_AGENCY;
+        sessionStorage.setItem('currentActiveAgency', desiredAgency);
+        if (renderedAgency !== desiredAgency) {
+            location.reload();
+            return;
         }
+        currentActiveAgency = desiredAgency;
 
         // --- INJECTION DYNAMIQUE DU MENU PROFIL (POUR TOUTES LES PAGES ET MOBILES) ---
         // Mode d'expédition (Maritime par défaut / Aérien). Mémorisé pour la

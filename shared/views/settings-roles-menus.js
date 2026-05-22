@@ -194,6 +194,8 @@ export const SettingsRolesMenusView = {
                 .mn-sub input { width:15px; height:15px; accent-color:#4f46e5; }
                 .mn-sub-n { flex:1; font-weight:600; color:#0f172a; }
                 .mn-sub-s { font-size:10px; font-weight:800; color:#94a3b8; text-transform:uppercase; }
+                .mn-role-grp { margin-bottom:8px; }
+                .mn-role-menus .mn-subs { margin-left:22px; grid-template-columns:repeat(auto-fill,minmax(190px,1fr)); }
                 .mn-row { display:flex; align-items:center; gap:14px; background:white; border:1px solid #e2e8f0; border-radius:14px; padding:14px 16px; transition:.18s; }
                 .mn-row.on { border-color:#c7d2fe; box-shadow:0 2px 8px -3px rgba(79,70,229,.25); }
                 .mn-row.off { opacity:.62; background:#f8fafc; }
@@ -352,11 +354,21 @@ export const SettingsRolesMenusView = {
                                 <div class="mn-fld" style="grid-column:1/-1;"><label>Description</label><textarea v-model="roleForm.description" rows="3" placeholder="Rôle de cet utilisateur ?"></textarea></div>
                             </div>
                             <div v-show="activeTab==='menus'">
-                                <p style="font-size:13px;color:#475569;background:white;padding:12px;border-radius:8px;border:1px solid #e2e8f0;">Menus visibles pour les utilisateurs de ce rôle.</p>
-                                <div class="mn-grid">
-                                    <label v-for="m in MENU_META" :key="m.key" class="mn-chk">
-                                        <input type="checkbox" :value="m.key" v-model="roleForm.menus"><span>{{ m.icon }} {{ m.label }}</span><span v-if="scopeBadge(m.scope)" class="mn-scope" :class="'sc-' + m.scope">{{ scopeBadge(m.scope) }}</span>
-                                    </label>
+                                <p style="font-size:13px;color:#475569;background:white;padding:12px;border-radius:8px;border:1px solid #e2e8f0;">Cochez les <b>sections</b> visibles pour ce rôle. Une section cochée se déplie : <b>décochez les pages</b> que ce rôle ne doit pas voir (tout est visible par défaut).</p>
+                                <div class="mn-role-menus">
+                                    <div v-for="m in MENU_META" :key="m.key" class="mn-role-grp">
+                                        <label class="mn-chk">
+                                            <input type="checkbox" :value="m.key" v-model="roleForm.menus"><span>{{ m.icon }} {{ m.label }}</span><span v-if="scopeBadge(m.scope)" class="mn-scope" :class="'sc-' + m.scope">{{ scopeBadge(m.scope) }}</span>
+                                        </label>
+                                        <div v-if="roleForm.menus.includes(m.key) && itemsOf(m.key).length" class="mn-subs">
+                                            <label v-for="it in itemsOf(m.key)" :key="it.page" class="mn-sub" :class="rolePageOn(it.page) ? '' : 'soff'">
+                                                <input type="checkbox" :checked="rolePageOn(it.page)" @change="toggleRolePage(it.page)">
+                                                <span class="mn-sub-n">{{ it.label }}</span>
+                                                <span v-if="scopeBadge(it.scope)" class="mn-scope" :class="'sc-' + it.scope">{{ scopeBadge(it.scope) }}</span>
+                                                <span class="mn-sub-s">{{ rolePageOn(it.page) ? 'affiché' : 'masqué' }}</span>
+                                            </label>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                             <div v-show="activeTab==='actions'">
@@ -396,7 +408,7 @@ export const SettingsRolesMenusView = {
                 const agencyName = (AGENCIES[activeAgency] && AGENCIES[activeAgency].name) || activeAgency;
 
                 const roles = ref([]);
-                const menuConfig = reactive({ order: [], roles: {}, visibleMenus: [], hiddenItems: [] });
+                const menuConfig = reactive({ order: [], roles: {}, visibleMenus: [], hiddenItems: [], roleHiddenItems: {} });
                 const expanded = reactive({});
                 const loadingRoles = ref(true);
                 const loadingMenus = ref(true);
@@ -405,7 +417,7 @@ export const SettingsRolesMenusView = {
                 const isEditing = ref(false);
                 const savingRole = ref(false);
                 const activeTab = ref('info');
-                const roleForm = reactive({ id: '', name: '', description: '', menus: [], permissions: [] });
+                const roleForm = reactive({ id: '', name: '', description: '', menus: [], permissions: [], hiddenPages: [] });
                 const draggedIndex = ref(null);
                 let unsubs = [];
 
@@ -440,6 +452,7 @@ export const SettingsRolesMenusView = {
                             Object.keys(rolesRaw).forEach(r => { rolesMig[r] = migrateKeys(rolesRaw[r]); });
                             menuConfig.roles = rolesMig;
                             menuConfig.hiddenItems = data.hiddenItems || [];
+                            menuConfig.roleHiddenItems = data.roleHiddenItems || {};
                         }
                         // Garantir que tous les menus connus sont présents dans l'ordre.
                         const seen = new Set(menuConfig.order);
@@ -465,6 +478,16 @@ export const SettingsRolesMenusView = {
                     const i = menuConfig.hiddenItems.indexOf(page);
                     if (i > -1) menuConfig.hiddenItems.splice(i, 1); // ré-affiche
                     else menuConfig.hiddenItems.push(page);          // masque
+                };
+
+                // --- Pages masquées par RÔLE (dans le formulaire de rôle) ---
+                // roleForm.hiddenPages = liste noire des pages cachées pour ce rôle.
+                // Une page est affichée si elle N'EST PAS dans cette liste.
+                const rolePageOn = (page) => !roleForm.hiddenPages.includes(page);
+                const toggleRolePage = (page) => {
+                    const i = roleForm.hiddenPages.indexOf(page);
+                    if (i > -1) roleForm.hiddenPages.splice(i, 1); // ré-affiche
+                    else roleForm.hiddenPages.push(page);          // masque
                 };
 
                 const isMenuVisible = (key) => menuConfig.visibleMenus.includes(key);
@@ -516,7 +539,7 @@ export const SettingsRolesMenusView = {
                 };
                 const openRoleForm = () => {
                     roleForm.id = ''; roleForm.name = ''; roleForm.description = '';
-                    roleForm.menus = []; roleForm.permissions = [];
+                    roleForm.menus = []; roleForm.permissions = []; roleForm.hiddenPages = [];
                     isEditing.value = false; activeTab.value = 'info'; showRoleForm.value = true;
                 };
                 const editRole = (role) => {
@@ -533,6 +556,9 @@ export const SettingsRolesMenusView = {
                         roleForm.menus = [];
                     }
                     if (!roleForm.permissions) roleForm.permissions = [];
+                    // Pages masquées pour ce rôle (liste noire) chargées depuis la config.
+                    roleForm.hiddenPages = (menuConfig.roleHiddenItems && menuConfig.roleHiddenItems[role.id])
+                        ? [...menuConfig.roleHiddenItems[role.id]] : [];
                     isEditing.value = true; activeTab.value = 'info'; showRoleForm.value = true;
                 };
                 const saveRole = async () => {
@@ -547,7 +573,12 @@ export const SettingsRolesMenusView = {
                             updatedAt: new Date().toISOString(),
                         });
                         menuConfig.roles[cleanId] = Array.from(roleForm.menus);
-                        await setDoc(menuDocRef, { roles: menuConfig.roles }, { merge: true });
+                        if (!menuConfig.roleHiddenItems) menuConfig.roleHiddenItems = {};
+                        menuConfig.roleHiddenItems[cleanId] = Array.from(roleForm.hiddenPages);
+                        await setDoc(menuDocRef, {
+                            roles: menuConfig.roles,
+                            roleHiddenItems: menuConfig.roleHiddenItems,
+                        }, { merge: true });
                         globalApp.showToast("Rôle enregistré ✔", "success");
                         if (globalApp.applyMenuConfig) globalApp.applyMenuConfig(menuConfig);
                         showRoleForm.value = false;
@@ -560,7 +591,11 @@ export const SettingsRolesMenusView = {
                     try {
                         await deleteDoc(doc(db, "roles", id));
                         delete menuConfig.roles[id];
-                        await setDoc(menuDocRef, { roles: menuConfig.roles }, { merge: true });
+                        if (menuConfig.roleHiddenItems) delete menuConfig.roleHiddenItems[id];
+                        await setDoc(menuDocRef, {
+                            roles: menuConfig.roles,
+                            roleHiddenItems: menuConfig.roleHiddenItems || {},
+                        }, { merge: true });
                         globalApp.showToast("Rôle supprimé.", "success");
                     } catch (e) { globalApp.showToast("Erreur", "error"); }
                 };
@@ -568,6 +603,7 @@ export const SettingsRolesMenusView = {
                 return {
                     MENU_META, agencyName, roles, menuConfig, loadingRoles, loadingMenus,
                     expanded, itemsOf, toggleExpand, isItemVisible, toggleItem, scopeBadge,
+                    rolePageOn, toggleRolePage,
                     savingMenus, showRoleForm, isEditing, savingRole, activeTab, roleForm, draggedIndex,
                     groupedPermissions, metaOf, isProtectedRole, isMenuVisible, toggleVisibleMenu,
                     showAll, resetAuto, onDragStart, onDrop, onDragEnd, saveMenus,
