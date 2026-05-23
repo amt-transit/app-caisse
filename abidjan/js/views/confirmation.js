@@ -10,6 +10,18 @@ const sessionMatchesMode = (logData) => {
     return m === getShippingMode();
 };
 
+// Isolation par ROUTE : une session n'appartient qu'à son agence. audit_logs est
+// une collection de base partagée ; sans ce filtre, la page Confirmation d'une
+// route SaaS (ex. abidjan_chine) affichait par erreur les sessions d'Abidjan.
+// Les sessions héritées SANS champ `agency` = historique : visibles uniquement
+// sur les routes historiques (paris/abidjan), jamais sur une route SaaS.
+const sessionMatchesAgency = (logData, activeAgency) => {
+    const a = logData && logData.agency;
+    if (a === activeAgency) return true;
+    if (!a && (activeAgency === 'paris' || activeAgency === 'abidjan')) return true;
+    return false;
+};
+
 export const ConfirmationView = {
     render(app, container) {
         this.app = app;
@@ -288,15 +300,18 @@ export const ConfirmationView = {
         function formatCFA(n) { return new Intl.NumberFormat('fr-CI', { style: 'currency', currency: 'XOF' }).format(n || 0).replace(/[\u202F\u00A0]/g, ' ').replace(/\s*\/\s*/g, ' '); }
     
         function loadSessions() {
+            const activeAgency = sessionStorage.getItem('currentActiveAgency') || 'abidjan';
             const qLogs = query(collection(db, "audit_logs"), where("action", "==", "VALIDATION_JOURNEE"), orderBy("date", "desc"));
             onSnapshot(qLogs, snapshot => {
                 sessionsListPendingEl.innerHTML = '';
                 sessionsListValidatedEl.innerHTML = '';
-                
+
                 if (snapshot.empty) sessionsListPendingEl.innerHTML = '<p style="padding:10px; color:#999;">Aucune session.</p>';
-    
+
                 snapshot.forEach(doc => {
                     const data = doc.data();
+                    // Isolation par ROUTE : ne montrer que les sessions de l'agence active.
+                    if (!sessionMatchesAgency(data, activeAgency)) return;
                     // Isolation Maritime <-> Aerien : on ignore les sessions
                     // qui ne correspondent pas au mode d'expedition actif.
                     if (!sessionMatchesMode(data)) return;
@@ -363,8 +378,9 @@ export const ConfirmationView = {
             const qArchives = query(collection(db, "audit_logs"), where("action", "==", "VALIDATION_JOURNEE"), where("date", ">=", start), where("date", "<=", end), orderBy("date", "desc"));
             getDocs(qArchives).then(snapshot => {
                 sessionsListArchivesEl.innerHTML = '';
-                // Isolation Maritime <-> Aerien sur les archives aussi.
-                const filtered = snapshot.docs.filter(d => sessionMatchesMode(d.data()));
+                const activeAgency = sessionStorage.getItem('currentActiveAgency') || 'abidjan';
+                // Isolation par ROUTE + Maritime/Aerien sur les archives aussi.
+                const filtered = snapshot.docs.filter(d => sessionMatchesAgency(d.data(), activeAgency) && sessionMatchesMode(d.data()));
                 if (filtered.length === 0) { sessionsListArchivesEl.innerHTML = '<p>Aucune session trouvée.</p>'; return; }
                 filtered.forEach(doc => sessionsListArchivesEl.appendChild(createSessionElement(doc)));
             }).catch(err => { console.error(err); sessionsListArchivesEl.innerHTML = '<p style="color:red;">Erreur chargement.</p>'; });
