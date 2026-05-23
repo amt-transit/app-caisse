@@ -94,13 +94,13 @@ export const getCollectionName = (baseName) => {
     return name;
 };
 
-// Conteneur actif : « le DÉPART décide, l'arrivée suit ». Renvoie l'agence
-// dont on doit lire la config conteneur (settings/container_config_<agence>).
+// « Le DÉPART décide, l'arrivée suit ». Renvoie l'agence-SOURCE des réglages
+// partagés d'une route (config conteneur, modèle de facture/BL/acte, etc.) :
 // - Agence de DÉPART  -> elle-même (c'est la source).
 // - Agence d'ARRIVÉE -> l'agence de départ de SA route :
 //     abidjan        -> paris   (route historique)
 //     abidjan_chine  -> chine   (routes SaaS : on retire le préfixe arrivée)
-export const getContainerConfigAgency = () => {
+export const getConfigSourceAgency = () => {
     const agency = sessionStorage.getItem('currentActiveAgency') || 'paris';
     const a = AGENCIES[agency];
     if (a && a.type === 'arrival') {
@@ -109,3 +109,6 @@ export const getContainerConfigAgency = () => {
     }
     return agency; // agence de départ = source
 };
+
+// Alias historique (conteneur) : même règle « le départ décide, l'arrivée suit ».
+export const getContainerConfigAgency = () => getConfigSourceAgency();
