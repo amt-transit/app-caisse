@@ -6,6 +6,7 @@ import { createApp, ref, computed, reactive, onMounted, onUnmounted } from "http
 import { getCollectionName, AGENCIES } from '../../agencies-config.js';
 import { filterByShippingMode } from '../../shipping-mode.js';
 import { normalizePhone } from '../../affiliations.js';
+import { calculateStorageFee } from '../../services/storageFee.js';
 
 // EUR si agence historique 'paris' OU route SaaS dont la devise configurée
 // est EUR. (Même règle que app.formatMoneyLocal — cohérence d'affichage.)
@@ -211,7 +212,7 @@ export const ToutesLesFacturesView = {
                                     <th>Adresse</th>
                                     <th>Téléphone</th>
                                     <th>Destinataire</th>
-                                    <th class="col--amount th-sort" onclick="window.app.views.toutesLesFactures.sortBy('amount')" style="text-align: right;">Montant <span class="th-sort__icon"></span></th>
+                                    <th class="col--amount th-sort" onclick="window.app.views.toutesLesFactures.sortBy('amount')" style="text-align: right;">Reste à payer <span class="th-sort__icon"></span></th>
                                     <th style="text-align: right;">Nb colis</th>
                                     <th style="width: 240px;"></th>
                                 </tr>
@@ -497,8 +498,8 @@ export const ToutesLesFacturesView = {
                     <td data-label="Adresse"><span class="tooltip" title="${address.replace(/"/g, '&quot;')}">${shortAddress}</span></td>
                     <td data-label="Téléphone">${inv.tel || '-'}</td>
                     <td data-label="Destinataire">${inv.nomDestinataire || '-'}${parrainBadge}</td>
+                    <td data-label="Reste à payer" class="cell--amount"><button class="amount-link" onclick="window.app.views.toutesLesFactures.addPayment('${inv.id}')">${this.formatMoneyLocal(resteDisplay)}</button></td>
                     <td data-label="Nb colis" style="text-align: right; font-weight: bold;">${nbColis}</td>
-                    <td data-label="Montant" class="cell--amount"><button class="amount-link" onclick="window.app.views.toutesLesFactures.addPayment('${inv.id}')">${this.formatMoneyLocal(totalDisplay)}</button></td>
                     <td data-label="Actions" style="text-align: right;">
                         <div class="row-actions">
                             <button class="icon-btn btn--edit" onclick="window.app.views.toutesLesFactures.editInvoice('${inv.id}')" title="Modifier">✏️</button>
@@ -517,7 +518,7 @@ export const ToutesLesFacturesView = {
                     </div>
                     <div class="comm-mob-l1">
                         <strong>${inv.nom || '-'}</strong>
-                        <button class="amount-link" style="font-weight:800;" onclick="window.app.views.toutesLesFactures.addPayment('${inv.id}')">${this.formatMoneyLocal(totalDisplay)}</button>
+                        <button class="amount-link" style="font-weight:800;" onclick="window.app.views.toutesLesFactures.addPayment('${inv.id}')">${this.formatMoneyLocal(resteDisplay)}</button>
                     </div>
                     <div class="comm-mob-l2">
                         <span>${dateStr}</span>
@@ -571,7 +572,13 @@ export const ToutesLesFacturesView = {
         const total = (parseFloat(invoice.prix) || 0) / TAUX;
         const paye = ((parseFloat(invoice.montantParis) || 0) + (parseFloat(invoice.montantAbidjan) || 0)) / TAUX;
         const reste = Math.abs(parseFloat(invoice.reste) || 0) / TAUX;
-        
+        // Frais de magasinage (FCFA -> devise d'affichage) : affichés dans le
+        // Bilan et inclus dans le reste à payer (cohérent avec la facture PDF).
+        // Calcul basé sur la date d'entrepôt de la livraison liée (comme Livraison).
+        const storage = this.calculateStorageFeeForInvoice(invoice, this.pickLivraisonForStorage(livraisons));
+        const storageFeeDisplay = (storage.fee || 0) / TAUX;
+        const resteTotal = reste + storageFeeDisplay;
+
         let statusText = reste <= 0 ? 'Payée' : (paye > 0 ? 'Acompte' : 'Impayée');
         let statusBg = reste <= 0 ? '#dcfce7' : (paye > 0 ? '#fef3c7' : '#fee2e2');
         let statusColor = reste <= 0 ? '#166534' : (paye > 0 ? '#92400e' : '#991b1b');
@@ -769,9 +776,14 @@ export const ToutesLesFacturesView = {
                                     <div class="bilan-pill__label">MONTANT PAYÉ</div>
                                     <div class="bilan-pill__value">${this.formatMoneyLocal(paye)}</div>
                                 </div>
+                                ${storageFeeDisplay > 0 ? `
+                                <div class="bilan-pill" style="background:#fff7ed; border-color:#fdba74;">
+                                    <div class="bilan-pill__label">FRAIS MAGASINAGE (${storage.days} j)</div>
+                                    <div class="bilan-pill__value" style="color:#c2410c;">${this.formatMoneyLocal(storageFeeDisplay)}</div>
+                                </div>` : ''}
                                 <div class="bilan-pill bilan-pill--remaining">
                                     <div class="bilan-pill__label">RESTE À PAYER</div>
-                                    <div class="bilan-pill__value">${this.formatMoneyLocal(reste)}</div>
+                                    <div class="bilan-pill__value">${this.formatMoneyLocal(resteTotal)}</div>
                                 </div>
                             </div>
                         </div>
@@ -1894,6 +1906,29 @@ export const ToutesLesFacturesView = {
         if (originalFormat) localStorage.setItem('amt_label_format', originalFormat);
     },
 
+    // Livraison "représentative" d'une facture pour le magasinage : on prend en
+    // priorité un colis encore EN ENTREPÔT (EN_COURS, non livré) avec une date
+    // d'entrée (dateAjout) ; sinon la première ayant une dateAjout.
+    pickLivraisonForStorage(livraisons) {
+        if (!Array.isArray(livraisons) || !livraisons.length) return null;
+        return livraisons.find(l => l && l.dateAjout && l.containerStatus === 'EN_COURS' && l.status !== 'LIVRE' && l.status !== 'ABANDONNE')
+            || livraisons.find(l => l && l.dateAjout)
+            || null;
+    },
+
+    // Frais de magasinage d'une facture (source unique : services/storageFee.js).
+    // IMPORTANT : on calcule à partir de la date d'entrée en ENTREPÔT (dateAjout
+    // de la LIVRAISON liée), exactement comme la page Livraison — et NON la date
+    // de la facture. La quantité vient aussi de la livraison (restante/quantité).
+    // Pas de frais si "offerts" (storageFeeWaived sur la transaction) ou colis
+    // déjà livré/abandonné.
+    calculateStorageFeeForInvoice(invoice, livraison, compareDate = new Date()) {
+        if (!invoice || invoice.storageFeeWaived === true) return { days: 0, fee: 0 };
+        if (!livraison || !livraison.dateAjout) return { days: 0, fee: 0 };
+        if (livraison.status === 'LIVRE' || livraison.status === 'ABANDONNE') return { days: 0, fee: 0 };
+        return calculateStorageFee(livraison.dateAjout, livraison, compareDate);
+    },
+
     async printDocument(id, docType) {
         const invoice = this.invoices.find(i => i.id === id);
         if(!invoice) return;
@@ -2079,25 +2114,44 @@ export const ToutesLesFacturesView = {
         const reste = Math.abs(parseFloat(invoice.reste) || 0) / TAUX;
 
         if (docType === 'FACTURE' || docType === 'RECU') {
+            // Frais de magasinage : calcul basé sur la date d'entrepôt (dateAjout)
+            // de la livraison liée, comme la page Livraison. Converti en devise
+            // d'affichage (÷ TAUX, comme le fret) puis AJOUTÉ au reste à payer.
+            let livForFee = null;
+            try {
+                const { collection, query, where, getDocs } = await import("https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js");
+                const lq = await getDocs(query(collection(db, getCollectionName("livraisons")), where("ref", "==", invoice.reference)));
+                livForFee = this.pickLivraisonForStorage(lq.docs.map(d => ({ id: d.id, ...d.data() })));
+            } catch (e) { console.warn('magasinage facture (livraison):', e); }
+            const storage = this.calculateStorageFeeForInvoice(invoice, livForFee);
+            const storageFeeDisplay = (storage.fee || 0) / TAUX;
+            const totalDue = reste + storageFeeDisplay;
+
             doc.setFont("helvetica", "bold");
             doc.text("RÉCAPITULATIF FINANCIER", 115, finalY);
             doc.setFont("helvetica", "normal");
-            
+
             let currentLineY = finalY + 8;
             doc.text("Total Fret :", 115, currentLineY);
             doc.text(`${this.formatMoneyLocal(prixFret)}`, 195, currentLineY, { align: 'right' });
             currentLineY += 6;
-            
+
+            if (storageFeeDisplay > 0) {
+                doc.text(`Frais magasinage (${storage.days} j) :`, 115, currentLineY);
+                doc.text(`${this.formatMoneyLocal(storageFeeDisplay)}`, 195, currentLineY, { align: 'right' });
+                currentLineY += 6;
+            }
+
             doc.text("Montant Payé :", 115, currentLineY);
             doc.text(`${this.formatMoneyLocal(paye)}`, 195, currentLineY, { align: 'right' });
             currentLineY += 6;
-            
-            doc.setFillColor(reste > 0 ? 254 : 240, reste > 0 ? 242 : 253, reste > 0 ? 242 : 244);
+
+            doc.setFillColor(totalDue > 0 ? 254 : 240, totalDue > 0 ? 242 : 253, totalDue > 0 ? 242 : 244);
             doc.rect(115, currentLineY + 2, 80, 10, 'F');
             doc.setFont("helvetica", "bold");
             doc.text("RESTE À PAYER :", 118, currentLineY + 9);
-            doc.setTextColor(reste > 0 ? 220 : 22, reste > 0 ? 38 : 163, reste > 0 ? 38 : 74);
-            doc.text(`${this.formatMoneyLocal(reste)}`, 192, currentLineY + 9, { align: 'right' });
+            doc.setTextColor(totalDue > 0 ? 220 : 22, totalDue > 0 ? 38 : 163, totalDue > 0 ? 38 : 74);
+            doc.text(`${this.formatMoneyLocal(totalDue)}`, 192, currentLineY + 9, { align: 'right' });
             doc.setTextColor(0, 0, 0);
 
             doc.text("La Direction AMT TRANS'IT", 15, currentLineY + 9);

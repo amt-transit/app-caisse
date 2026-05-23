@@ -2,6 +2,7 @@ import { db } from '../../../firebase-config.js';
 import { collection, doc, getDoc, getDocs, addDoc, setDoc, updateDoc, deleteDoc, query, where, orderBy, limit, onSnapshot, writeBatch, deleteField, arrayUnion } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 import { getCollectionName } from '../../../agencies-config.js';
 import { matchesShippingMode, getShippingMode } from '../../../shipping-mode.js';
+import { calculateStorageFee } from '../../../services/storageFee.js';
 
 export const LivraisonView = {
     async render(app, container) {
@@ -682,22 +683,16 @@ export const LivraisonView = {
 
         function calculateMagasinageFee(dateAjout, d, transData) {
             if (!dateAjout) return { days: 0, fee: 0, isPalette: false };
-            if (typeof window !== 'undefined' && window.transactionService && typeof window.transactionService.calculateStorageFee === 'function') {
-                const res = window.transactionService.calculateStorageFee(dateAjout, d);
-                return { days: res.days, fee: res.fee, isPalette: res.isPalette || false };
-            }
-            const diffTime  = new Date() - new Date(dateAjout);
-            const diffDays  = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-            if (diffDays <= 7) return { days: diffDays, fee: 0, isPalette: false };
+            // Calcul centralisé (source unique : services/storageFee.js, barème
+            // officiel 14 j). On combine les descriptions livraison + transaction
+            // pour la détection palette ; la quantité vient de la livraison.
             const transDesc = transData ? (transData.description || transData.desc || transData.nature || '') : '';
-            const combinedDesc = [ d.description || '', d.nature || '', d.info || '', transDesc ].join(' ').toLowerCase();
-            const isPalette = combinedDesc.includes('palette');
-            const tarifJour = isPalette ? 3000 : 1000;
-            const qte = (d.quantiteRestante !== undefined && d.quantiteRestante !== null) ? parseInt(d.quantiteRestante) : (parseInt(d.quantite) || 1);
-            let fee = 0;
-            if (diffDays <= 13) fee = 10000 * qte;
-            else { const joursSupp = diffDays - 13; fee = (10000 + joursSupp * tarifJour) * qte; }
-            return { days: diffDays, fee, isPalette };
+            const combinedDesc = [d && d.description, d && d.nature, d && d.info, transDesc].filter(Boolean).join(' ');
+            return calculateStorageFee(dateAjout, {
+                quantiteRestante: d ? d.quantiteRestante : undefined,
+                quantite: d ? d.quantite : undefined,
+                description: combinedDesc
+            });
         }
 
         function buildActionMenu(d, phone, displayDestinataire) {
@@ -4819,16 +4814,9 @@ export const LivraisonView = {
            let fee = 0;
            let diffDays = 0;
            if (data.dateAjout) {
-               if (typeof transactionService !== 'undefined') {
-                   const computed = transactionService.calculateStorageFee(data.dateAjout, data);
-                   diffDays = computed.days;
-                   fee = computed.fee;
-               } else {
-                   const diffTime = new Date() - new Date(data.dateAjout);
-                   diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-                   const qte = parseInt(data.quantite) || 1;
-                   fee = calculateMagasinageFee(data.dateAjout, data, null).fee;
-               }
+               const computed = calculateMagasinageFee(data.dateAjout, data, null);
+               diffDays = computed.days;
+               fee = computed.fee;
            }
            const totalVal = resteVal + fee;
        

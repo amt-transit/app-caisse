@@ -3,6 +3,7 @@ import { collection, getDocs, query, where, onSnapshot } from "https://www.gstat
 import { CONSTANTS } from '../../../constants.js';
 import { getCollectionName } from '../../../agencies-config.js';
 import { filterByShippingMode } from '../../../shipping-mode.js';
+import { calculateStorageFee } from '../../../services/storageFee.js';
 
 export const DashboardView = {
     render(app, container) {
@@ -478,31 +479,8 @@ export const DashboardView = {
                 });
                 return (totalVentes + totalAutres + totalRetraits) - (totalDepenses + totalDepots);
             },
-            calculateStorageFee(dateString, quantityOrItem = 1, compareDate = new Date()) {
-                if (!dateString) return { days: 0, fee: 0 };
-                let qte = 1;
-                let tarifJour = 1000;
-                if (typeof quantityOrItem === 'object' && quantityOrItem !== null) {
-                    qte = quantityOrItem.quantiteRestante !== undefined ? parseInt(quantityOrItem.quantiteRestante) : (parseInt(quantityOrItem.quantite) || 1);
-                    const desc = (quantityOrItem.description || '').toLowerCase();
-                    if (desc.includes('palette')) {
-                        tarifJour = 3000;
-                    }
-                } else {
-                    qte = parseInt(quantityOrItem) || 1;
-                }
-                const arrivalDate = new Date(dateString);
-                const diffTime = compareDate - arrivalDate;
-                if (diffTime < 0) return { days: 0, fee: 0 };
-                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-                if (diffDays <= 7) return { days: diffDays, fee: 0 };
-                else if (diffDays <= 14) return { days: diffDays, fee: 10000 * qte };
-                else {
-                    const extraDays = diffDays - 14;
-                    const unitFee = 10000 + (extraDays * tarifJour);
-                    return { days: diffDays, fee: unitFee * qte };
-                }
-            }
+            // Calcul centralisé (source unique : services/storageFee.js).
+            calculateStorageFee
         };
 
         // --- 1. DOM ELEMENTS & CONFIG ---

@@ -1,6 +1,7 @@
 import { db } from '../../../firebase-config.js';
 import { collection, getDocs, query, where, orderBy, onSnapshot } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 import { getCollectionName } from '../../../agencies-config.js';
+import { calculateStorageFee } from '../../../services/storageFee.js';
 
 export const MagasinageView = {
     render(app, container) {
@@ -50,33 +51,8 @@ export const MagasinageView = {
     initLogic() {
         const activeAgency = sessionStorage.getItem('currentActiveAgency') || 'abidjan';
 
-        const transactionService = {
-            calculateStorageFee(dateString, quantityOrItem = 1, compareDate = new Date()) {
-                if (!dateString) return { days: 0, fee: 0 };
-                let qte = 1;
-                let tarifJour = 1000;
-                if (typeof quantityOrItem === 'object' && quantityOrItem !== null) {
-                    qte = quantityOrItem.quantiteRestante !== undefined ? parseInt(quantityOrItem.quantiteRestante) : (parseInt(quantityOrItem.quantite) || 1);
-                    const desc = (quantityOrItem.description || '').toLowerCase();
-                    if (desc.includes('palette')) {
-                        tarifJour = 3000;
-                    }
-                } else {
-                    qte = parseInt(quantityOrItem) || 1;
-                }
-                const arrivalDate = new Date(dateString);
-                const diffTime = compareDate - arrivalDate;
-                if (diffTime < 0) return { days: 0, fee: 0 };
-                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-                if (diffDays <= 7) return { days: diffDays, fee: 0 };
-                else if (diffDays <= 14) return { days: diffDays, fee: 10000 * qte };
-                else {
-                    const extraDays = diffDays - 14;
-                    const unitFee = 10000 + (extraDays * tarifJour);
-                    return { days: diffDays, fee: unitFee * qte };
-                }
-            }
-        };
+        // Calcul centralisé (source unique : services/storageFee.js).
+        const transactionService = { calculateStorageFee };
 
         function formatCFA(n) {
             return new Intl.NumberFormat('fr-CI', { style: 'currency', currency: 'XOF' }).format(n || 0).replace(/[\u202F\u00A0]/g, ' ').replace(/\s*\/\s*/g, ' ');
@@ -115,7 +91,8 @@ export const MagasinageView = {
                     status: d.status,
                     containerStatus: d.containerStatus,
                     quantite: d.quantite,
-                    quantiteRestante: d.quantiteRestante
+                    quantiteRestante: d.quantiteRestante,
+                    dateAjout: d.dateAjout
                 });
             });
             renderTable();
@@ -140,12 +117,15 @@ export const MagasinageView = {
 
                 if (logData.quantite !== undefined) t.quantite = logData.quantite;
                 if (logData.quantiteRestante !== undefined) t.quantiteRestante = logData.quantiteRestante;
+                // Date d'entrée en entrepôt (source du calcul magasinage) : on la
+                // récupère de la livraison liée, comme Livraison/caisse/facture.
+                if (logData.dateAjout) t.dateAjout = logData.dateAjout;
 
                 if (logData.containerStatus !== 'EN_COURS') return false;
                 if (logData.status === 'LIVRE' || logData.status === 'ABANDONNE' || logData.status === 'ARCHIVE') return false;
                 if (t.storageFeeWaived === true) return false;
 
-                const { fee } = transactionService.calculateStorageFee(t.date, t);
+                const { fee } = transactionService.calculateStorageFee(t.dateAjout || t.date, t);
                 if (fee <= 0) return false;
 
                 if (!term) return true; 
@@ -173,7 +153,7 @@ export const MagasinageView = {
             }
 
             filtered.forEach(t => {
-                const { days, fee } = transactionService.calculateStorageFee(t.date, t);
+                const { days, fee } = transactionService.calculateStorageFee(t.dateAjout || t.date, t);
                 if (fee > 0) totalPotentialFees += fee;
 
                 const row = document.createElement('tr');
@@ -237,7 +217,7 @@ export const MagasinageView = {
                 const { jsPDF } = window.jspdf;
                 const doc = new jsPDF({ orientation: "landscape" });
                 doc.setFontSize(18); doc.text("État des Frais de Magasinage", 14, 22);
-                const tableRows = currentFiltered.map(t => [t.date || '', t.reference || '', t.quantite || 1, t.nom || '', t.conteneur || '', `${transactionService.calculateStorageFee(t.date, t).days} jours`, formatCFA(t.prix || 0).replace(/\u202F/g, ' '), formatCFA(transactionService.calculateStorageFee(t.date, t).fee).replace(/\u202F/g, ' ')]);
+                const tableRows = currentFiltered.map(t => [t.date || '', t.reference || '', t.quantite || 1, t.nom || '', t.conteneur || '', `${transactionService.calculateStorageFee(t.dateAjout || t.date, t).days} jours`, formatCFA(t.prix || 0).replace(/\u202F/g, ' '), formatCFA(transactionService.calculateStorageFee(t.dateAjout || t.date, t).fee).replace(/\u202F/g, ' ')]);
                 doc.autoTable({ head: [["Date", "Référence", "Qté", "Client", "Conteneur", "Durée", "Fret", "Magasinage"]], body: tableRows, startY: 30, theme: 'grid', headStyles: { fillColor: [217, 119, 6] } });
                 doc.save(`Magasinage_${new Date().toLocaleDateString('fr-FR').replace(/\//g, '-')}.pdf`);
             });

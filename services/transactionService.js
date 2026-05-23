@@ -1,5 +1,7 @@
 // c:\Users\JEANAFFA\Desktop\MonAppli Gemini\services\transactionService.js
 
+import { calculateStorageFee } from './storageFee.js';
+
 const transactionService = {
     /**
      * Nettoie les transactions en ne gardant que les paiements validés.
@@ -113,27 +115,9 @@ const transactionService = {
         return (totalVentes + totalAutres + totalRetraits) - (totalDepenses + totalDepots);
     },
 
-    /**
-     * Calcule les frais de magasinage.
-     * @param {string} dateString - Date d'arrivée
-     * @param {number} quantity - Quantité (défaut 1)
-     * @param {Date} compareDate - Date de référence (défaut aujourd'hui)
-     */
-    calculateStorageFee(dateString, quantity = 1, compareDate = new Date()) {
-        if (!dateString) return { days: 0, fee: 0 };
-        const qte = parseInt(quantity) || 1;
-        const arrivalDate = new Date(dateString);
-        
-        const diffTime = compareDate - arrivalDate;
-        if (diffTime < 0) return { days: 0, fee: 0 };
-        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-
-        if (diffDays <= 7) return { days: diffDays, fee: 0 };
-        else if (diffDays <= 14) return { days: diffDays, fee: 10000 * qte };
-        else {
-            const extraDays = diffDays - 14;
-            const unitFee = 10000 + (extraDays * 1000);
-            return { days: diffDays, fee: unitFee * qte };
-        }
+    // Frais de magasinage : délègue au calcul centralisé (services/storageFee.js)
+    // pour rester aligné avec toutes les pages (barème officiel + palettes).
+    calculateStorageFee(dateString, quantityOrItem = 1, compareDate = new Date()) {
+        return calculateStorageFee(dateString, quantityOrItem, compareDate);
     }
 };

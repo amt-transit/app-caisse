@@ -2,6 +2,7 @@ import { db } from '../../../firebase-config.js';
 import { collection, doc, addDoc, updateDoc, getDocs, query, where, orderBy, limit, onSnapshot, writeBatch, arrayUnion } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 import { getCollectionName } from '../../../agencies-config.js';
 import { matchesShippingMode, isAerienMode, getShippingMode } from '../../../shipping-mode.js';
+import { calculateStorageFee } from '../../../services/storageFee.js';
 import { createApp, ref, reactive, computed, onMounted, onUnmounted, watch } from "https://unpkg.com/vue@3/dist/vue.esm-browser.prod.js";
 
 export const CaisseView = {
@@ -361,22 +362,7 @@ export const CaisseView = {
                 // Helper: Format CFA
                 const formatCFA = (n) => new Intl.NumberFormat('fr-CI', { style: 'currency', currency: 'XOF' }).format(n || 0).replace(/[\u202F\u00A0]/g, ' ').replace(/\s*\/\s*/g, ' ');
 
-                // Helper: Magasinage Logic (Centralisé)
-                const calculateStorageFee = (dateString, quantityOrItem = 1, compareDate = new Date()) => {
-                    if (!dateString) return { days: 0, fee: 0 };
-                    let qte = 1; let tarifJour = 1000;
-                    if (typeof quantityOrItem === 'object' && quantityOrItem !== null) {
-                        qte = quantityOrItem.quantiteRestante !== undefined ? parseInt(quantityOrItem.quantiteRestante) : (parseInt(quantityOrItem.quantite) || 1);
-                        if ((quantityOrItem.description || '').toLowerCase().includes('palette')) tarifJour = 3000;
-                    } else { qte = parseInt(quantityOrItem) || 1; }
-                    const arrivalDate = new Date(dateString);
-                    const diffTime = compareDate - arrivalDate;
-                    if (diffTime < 0) return { days: 0, fee: 0 };
-                    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-                    if (diffDays <= 7) return { days: diffDays, fee: 0 };
-                    else if (diffDays <= 14) return { days: diffDays, fee: 10000 * qte };
-                    else { const extraDays = diffDays - 14; const unitFee = 10000 + (extraDays * tarifJour); return { days: diffDays, fee: unitFee * qte }; }
-                };
+                // Magasinage : calcul centralisé importé (services/storageFee.js).
 
                 // --- COMPUTED ---
                 const dFormReste = computed(() => {
@@ -495,7 +481,16 @@ export const CaisseView = {
                         const reste = ((data.montantParis || 0) + (data.montantAbidjan || 0)) - effectivePrix;
 
                         if (reste < 0 && !data.storageFeeWaived) {
-                            const { fee } = calculateStorageFee(data.date, data);
+                            // Magasinage basé sur la livraison liée (date d'ENTRÉE
+                            // EN ENTREPÔT + quantité de colis), comme Livraison/
+                            // facture/Magasinage — pas la date/quantité de la transaction.
+                            let feeDate = data.date;
+                            let livData = null;
+                            try {
+                                const livQ = await getDocs(query(collection(db, getCollectionName("livraisons")), where("ref", "==", ref), limit(1)));
+                                if (!livQ.empty) { livData = livQ.docs[0].data(); if (livData.dateAjout) feeDate = livData.dateAjout; }
+                            } catch (e) {}
+                            const { fee } = calculateStorageFee(feeDate, livData || data);
                             if (fee > 0) {
                                 const res = window.AppModal ? await window.AppModal.prompt(`⚠️ MAGASINAGE : ${formatCFA(fee)}. Montant à appliquer (0 pour offrir) :`, fee) : prompt(`Magasinage ${fee}. Appliquer :`, fee);
                                 if (res === null) { dForm.reference = ''; return; }
@@ -603,7 +598,15 @@ export const CaisseView = {
                         let reste = ((data.montantParis || 0) + (data.montantAbidjan || 0)) - effectivePrix;
 
                         if (reste < 0 && !data.storageFeeWaived) {
-                            const { fee } = calculateStorageFee(data.date, data);
+                            // Magasinage basé sur la livraison liée (date d'ENTRÉE
+                            // EN ENTREPÔT + quantité de colis), comme Livraison/facture.
+                            let feeDate = data.date;
+                            let livData = null;
+                            try {
+                                const livQ = await getDocs(query(collection(db, getCollectionName("livraisons")), where("ref", "==", ref), limit(1)));
+                                if (!livQ.empty) { livData = livQ.docs[0].data(); if (livData.dateAjout) feeDate = livData.dateAjout; }
+                            } catch (e) {}
+                            const { fee } = calculateStorageFee(feeDate, livData || data);
                             if (fee > 0) {
                                 const res = window.AppModal ? await window.AppModal.prompt(`⚠️ MAGASINAGE : ${fee} CFA\nMontant à appliquer (0 pour offrir) :`, fee) : prompt(`Magasinage ${fee}. Appliquer :`, fee);
                                 if (res !== null) {
