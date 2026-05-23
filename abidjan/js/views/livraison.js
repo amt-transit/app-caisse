@@ -10,18 +10,8 @@ export const LivraisonView = {
         
         container.innerHTML = `
         <div id="livraison-content">
-            <div class="stats-bar" style="display:none!important">
-                <div class="stat-item"><div class="stat-number" id="totalDeliveries">0</div><div class="stat-label">Total</div></div>
-                <div class="stat-item"><div class="stat-number" id="pendingDeliveries">0</div><div class="stat-label">En Attente</div></div>
-                <div class="stat-item"><div class="stat-number" id="completedDeliveries">0</div><div class="stat-label">Livrées</div></div>
-            </div>
-            <div class="delivery-tabs" style="display:none!important">
-                <a href="#" class="tab-btn active" onclick="switchTab('EN_COURS');return false;" id="tabEnCours">📦 En cours</a>
-                <a href="#" class="tab-btn" onclick="switchTab('A_VENIR');return false;" id="tabAVenir">🚢 À venir</a>
-                <a href="#" class="tab-btn" onclick="switchTab('PARIS');return false;" id="tabParis">🇫🇷 Paris</a>
-                <a href="#" class="tab-btn" onclick="switchTab('PROGRAMME');return false;" id="tabProgramme">📅 Programmes</a>
-            </div>
-            <div id="tabDescription" style="display:none!important"></div>
+            <!-- (Ancienne barre de stats / onglets / description retirée :
+                 remplacée par la barre de commande lv-command-bar ci-dessous.) -->
             <div class="toolbar" style="display:none!important">
                 <div id="activeContainerSection" style="display:flex;align-items:center;gap:5px;background:#e3f2fd;padding:5px 10px;border-radius:6px;border:1px solid #bbdefb;">
                     <span style="font-weight:bold;color:#1565c0;font-size:12px;">📦 Actif :</span>
@@ -30,35 +20,10 @@ export const LivraisonView = {
                     <select id="quickContainerSelect" class="form-control" style="max-width:200px;margin-left:10px;display:none;"></select>
                     <button class="btn btn-small btn-success" onclick="setActiveContainer()">OK</button>
                 </div>
-                <div id="toolbar-EN_COURS" class="tab-toolbar" style="display:flex;gap:10px;align-items:center;">
-                    <label class="btn btn-small">📊 Import<input type="file" accept=".xlsx,.xls,.csv" onchange="importExcel(event)"></label>
-                    <button class="btn btn-small" onclick="openProgramModal()">📅 Programmer</button>
-                    <button class="btn btn-small" onclick="openAssignContainerModal()">📦 Attribuer</button>
-                    <button class="btn btn-small" onclick="openBulkStatusModal()">🔄 Statut</button>
-                    <button class="btn btn-small" onclick="forceSyncTransactions()" style="background-color:#8b5cf6;color:white;">🔄 Synchro Saisie</button>
-                    <button class="btn btn-small btn-danger" onclick="deleteSelectedDeliveries()">🗑️ Supprimer</button>
-                    <button class="btn btn-small btn-success" onclick="exportToExcel()">📥 Export</button>
-                    <button class="btn btn-small" onclick="showAddModal()">➕ Ajouter</button>
-                    <button class="btn btn-small btn-warning" onclick="archiveCompletedDeliveries()">📦 Archiver</button>
-                    <button class="btn btn-small" onclick="openArchivesModal()">🗄️ Archives</button>
-                </div>
-                <div id="toolbar-A_VENIR" class="tab-toolbar" style="display:none;gap:10px;">
-                    <label class="btn btn-small">📊 Import<input type="file" accept=".xlsx,.xls,.csv" onchange="importExcel(event)"></label>
-                    <button class="btn btn-small" onclick="openAssignContainerModal()">📦 Attribuer</button>
-                    <button class="btn btn-small btn-danger" onclick="deleteSelectedDeliveries()">🗑️ Supprimer</button>
-                    <button class="btn btn-small btn-success" onclick="exportToExcel()">📥 Export</button>
-                    <button class="btn btn-small" onclick="showAddModal()">➕ Ajouter</button>
-                </div>
-                <div id="toolbar-PARIS" class="tab-toolbar" style="display:none;gap:10px;">
-                    <label class="btn btn-small">📊 Import<input type="file" accept=".xlsx,.xls,.csv" onchange="importExcel(event)"></label>
-                    <button class="btn btn-small btn-danger" onclick="deleteSelectedDeliveries()">🗑️ Supprimer</button>
-                    <button class="btn btn-small btn-success" onclick="exportToExcel()">📥 Export</button>
-                    <button class="btn btn-small" onclick="showAddModal()">➕ Ajouter</button>
-                </div>
-                <div id="toolbar-PROGRAMME" class="tab-toolbar" style="display:none;gap:10px;">
-                    <button class="btn btn-small btn-success" onclick="exportToExcel()">📥 Export</button>
-                    <button class="btn btn-small" onclick="openArchivesModal()">🗄️ Archives</button>
-                </div>
+                <!-- (Anciennes toolbars par onglet retirées : leurs boutons sont
+                     désormais dans lv-toolbar / lv-tb-* de la barre de commande.
+                     Ce conteneur garde uniquement la section "conteneur actif"
+                     ci-dessus, qui sert de pont caché lu par setActiveContainer.) -->
             </div>
 
             <div class="lv-command-bar">
@@ -820,67 +785,14 @@ export const LivraisonView = {
                 }, (error) => { console.error("Erreur sync Transactions:", error); });
         }
 
-        const TAB_DESCRIPTIONS = {
-            'EN_COURS': "📍 <strong>ABIDJAN (Réception) :</strong> Gestion des colis physiquement arrivés et prêts à être livrés. <span style='color:#d97706;'>⚠️ C'est ici que la dette financière est calculée.</span>",
-            'A_VENIR': "🌊 <strong>TRANSIT (Mer) :</strong> Suivi des colis chargés dans les conteneurs. Vérifiez les numéros et notifiez les clients.",
-            'PARIS': "🇫🇷 <strong>DÉPART (France) :</strong> Saisie initiale des colis reçus à l'entrepôt de départ. Aucune transaction financière n'est encore créée.",
-            'PROGRAMME': "🚚 <strong>DISTRIBUTION :</strong> Organisation des tournées. Assignez des livreurs, imprimez les feuilles de route et validez la remise."
-        };
-
         function switchTab(tab) {
             currentTab = tab;
-            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
-            if (tab === 'EN_COURS') document.getElementById('tabEnCours').classList.add('active');
-            else if (tab === 'A_VENIR') document.getElementById('tabAVenir').classList.add('active');
-            else if (tab === 'PARIS') document.getElementById('tabParis').classList.add('active');
-            else if (tab === 'PROGRAMME') document.getElementById('tabProgramme').classList.add('active');
 
             const tableContainer = document.querySelector('.table-container');
-            const toolbar = document.querySelector('.toolbar');
-            if(tableContainer) tableContainer.style.display = 'block';
-            if(toolbar) toolbar.style.display = 'flex';
-
-            const descEl = document.getElementById('tabDescription');
-            if (descEl) descEl.innerHTML = TAB_DESCRIPTIONS[tab] || '';
-
-            document.querySelectorAll('.tab-toolbar').forEach(el => el.style.display = 'none');
-            const activeToolbar = document.getElementById(`toolbar-${tab}`);
-            if (activeToolbar) {
-                activeToolbar.style.display = 'flex';
-                if (isViewer) {
-                    const addBtn = activeToolbar.querySelector('button[onclick="showAddModal()"]');
-                    const labels = activeToolbar.querySelectorAll('label.btn');
-                    if (addBtn) addBtn.style.display = 'none';
-                    if (labels) labels.forEach(l => l.style.display = 'none');
-                }
-            }
+            if (tableContainer) tableContainer.style.display = 'block';
+            // (Onglets, toolbars contextuelles et description : gérés par lvTab
+            //  sur la nouvelle barre de commande lv-command-bar.)
             
-            const activeContainerSection = document.getElementById('activeContainerSection');
-            if (activeContainerSection) {
-                const input = document.getElementById('activeContainerInput');
-                const btn = activeContainerSection.querySelector('button');
-                const label = activeContainerSection.querySelector('span');
-                const select = document.getElementById('quickContainerSelect');
-                const filterWrapper = document.getElementById('filterContainerWrapper');
-
-                if (tab === 'EN_COURS') {
-                    activeContainerSection.style.display = 'flex';
-                    if(input) input.style.display = '';
-                    if(btn) btn.style.display = '';
-                    if(label) label.style.display = '';
-                    if(filterWrapper) filterWrapper.style.display = '';
-                    if(select) select.style.display = 'none';
-                } else if (tab === 'A_VENIR') {
-                    activeContainerSection.style.display = 'flex';
-                    if(input) input.style.display = 'none';
-                    if(btn) btn.style.display = 'none';
-                    if(label) label.style.display = 'none';
-                    if(filterWrapper) filterWrapper.style.display = 'none';
-                    if(select) select.style.display = '';
-                } else {
-                    activeContainerSection.style.display = 'none';
-                }
-            }
 
             if (tab === 'EN_COURS' || tab === 'A_VENIR') {
                 const key = `container_filter_${tab}`;
@@ -1061,87 +973,10 @@ export const LivraisonView = {
             filterDeliveries();
         }
 
-        function updateContainerTitle() {
-            const titleEl = document.getElementById('currentContainerTitle');
-            if (titleEl) {
-                titleEl.style.display = (currentContainerName && currentContainerName !== 'Aucun') ? 'block' : 'none';
-                titleEl.textContent = `Conteneur en cours : ${currentContainerName}`;
-            }
-            const badge = document.getElementById('lvBadgeTxt');
-            if (badge) badge.textContent = currentContainerName || 'Aucun conteneur';
-        }
-
-        // ⚠️ CODE MORT (P6) — cette définition est SURCHARGÉE par celle de la
-        // ligne ~3971 (déclaration de fonction la plus tardive = celle qui
-        // s'applique). Ce corps n'est JAMAIS exécuté. Ne pas le modifier en
-        // pensant agir sur la liste : éditer la version ~3971. Conservé tel
-        // quel volontairement (suppression = tâche dédiée testée).
-        function filterDeliveries() {
-            filteredDeliveries = deliveries.filter(d => {
-                if (currentTab === 'PARIS' && d.containerStatus !== 'PARIS') return false;
-                if (currentTab === 'A_VENIR' && d.containerStatus !== 'A_VENIR') return false;
-                if (currentTab === 'EN_COURS' && d.containerStatus !== 'EN_COURS') return false;
-                
-                const cb = document.getElementById('filterByContainerCb');
-                if (cb && cb.checked && currentContainerName !== 'Aucun' && d.conteneur !== currentContainerName) return false;
-                
-                const searchBox = document.getElementById('searchBox');
-                if (searchBox && searchBox.value) {
-                    const q = searchBox.value.toLowerCase();
-                    if (!(d.ref || '').toLowerCase().includes(q) && !(d.destinataire || '').toLowerCase().includes(q)) return false;
-                }
-                
-                return true;
-            });
-            renderTable();
-        }
-
-        // ⚠️ CODE MORT (P6) — cette définition est SURCHARGÉE par celle de la
-        // ligne ~2264. Ce corps n'est JAMAIS exécuté. Éditer la version ~2264
-        // pour agir sur le rendu du tableau. Conservé volontairement.
-        function renderTable() {
-            const tbody = document.getElementById('deliveriesBody');
-            if (!tbody) return;
-            if (filteredDeliveries.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="14" class="empty-state">Aucun colis trouvé</td></tr>';
-                return;
-            }
-            tbody.innerHTML = filteredDeliveries.map(d => `
-                <tr>
-                    <td><input type="checkbox" value="${d.id}"></td>
-                    <td>${d.conteneur || '-'}</td>
-                    <td style="font-weight:bold;">${d.ref || '-'}</td>
-                    <td>${d.quantite || 1}</td>
-                    <td style="color:#10b981;font-weight:bold;">${d.montant || '0 CFA'}</td>
-                    <td>${d.expediteur || '-'}</td>
-                    <td>${d.lieuLivraison || '-'}</td>
-                    <td>${d.destinataire || '-'}</td>
-                    <td>${d.numero || '-'}</td>
-                    <td>${d.description || '-'}</td>
-                    <td>-</td>
-                    <td>-</td>
-                    <td><span class="lv-badge" style="background:#e0e7ff; color:#3730a3;">${(d.status || 'EN_ATTENTE').replace('_', ' ')}</span></td>
-                    <td>-</td>
-                </tr>
-            `).join('');
-        }
-
-        function updateStats() {
-            const total = filteredDeliveries.length;
-            const livre = filteredDeliveries.filter(d => d.status === 'LIVRE').length;
-            const attente = total - livre;
-            
-            const elTotal = document.getElementById('lv-n-total');
-            const elLivre = document.getElementById('lv-n-livre');
-            const elAttente = document.getElementById('lv-n-attente');
-            
-            if (elTotal) elTotal.textContent = total;
-            if (elLivre) elLivre.textContent = livre;
-            if (elAttente) elAttente.textContent = attente;
-        }
-
-        function updateAutocomplete() {}
-        function updateLocationFilterOptions() {}
+        // NB : updateContainerTitle, filterDeliveries, renderTable, updateStats,
+        // updateAutocomplete et updateLocationFilterOptions ont leur UNIQUE
+        // définition active plus bas dans ce fichier (versions complètes).
+        // Les anciennes copies en double ont été retirées (code mort).
 
        // Import PDF
        async function importPDF(event) {
@@ -5455,11 +5290,18 @@ export const LivraisonView = {
        
        // Stats
        function updateStats() {
-           document.getElementById('totalDeliveries').textContent = filteredDeliveries.length;
-           document.getElementById('pendingDeliveries').textContent = 
-               filteredDeliveries.filter(d => d.status === 'EN_ATTENTE' || d.status === 'EN_COURS' || d.status === 'PARTIEL').length;
-           document.getElementById('completedDeliveries').textContent = 
-               filteredDeliveries.filter(d => d.status === 'LIVRE').length;
+           // Met à jour les compteurs de la barre de commande (lv-chips).
+           const total = filteredDeliveries.length;
+           const livre = filteredDeliveries.filter(d => d.status === 'LIVRE').length;
+           const partiel = filteredDeliveries.filter(d => d.status === 'PARTIEL').length;
+           const attente = total - livre - partiel;
+           const setTxt = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+           setTxt('lv-n-total', total);
+           setTxt('lv-n-attente', attente);
+           setTxt('lv-n-livre', livre);
+           setTxt('lv-n-partiel', partiel);
+           const partielChip = document.getElementById('lv-chip-partiel');
+           if (partielChip) partielChip.style.display = partiel > 0 ? '' : 'none';
        }
        
        // Sauvegarde

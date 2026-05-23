@@ -1999,7 +1999,9 @@ tr.clickable-row:hover { background: #f1f5f9 !important; }
     --lv-shadow:0 1px 3px rgba(0,0,0,.08),0 1px 2px rgba(0,0,0,.04);
     --lv-shadow2:0 4px 12px rgba(0,0,0,.1);
 }
-#livraison-content .stats-bar, #livraison-content .delivery-tabs, #livraison-content #tabDescription, #livraison-content .toolbar { display:none!important; }
+/* .toolbar reste masqué : il ne contient plus que la section "conteneur actif"
+   (pont caché lu par setActiveContainer / la barre lv-command-bar). */
+#livraison-content .toolbar { display:none!important; }
 #livraison-content { padding:0; background:var(--lv-bg); }
 
 /* ── COMMAND BAR ── */
