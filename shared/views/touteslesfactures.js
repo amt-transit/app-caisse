@@ -3,7 +3,7 @@ import { collection, query, where, onSnapshot, doc, writeBatch, getDocs, orderBy
 import { Autocomplete } from '../../paris/js/views/autocomplete.js';
 import { CONSTANTS } from '../../constants.js';
 import { createApp, ref, computed, reactive, onMounted, onUnmounted } from "https://unpkg.com/vue@3/dist/vue.esm-browser.prod.js";
-import { getCollectionName, AGENCIES } from '../../agencies-config.js';
+import { getCollectionName, AGENCIES, getConfigSourceAgency } from '../../agencies-config.js';
 import { filterByShippingMode } from '../../shipping-mode.js';
 import { normalizePhone } from '../../affiliations.js';
 import { calculateStorageFee } from '../../services/storageFee.js';
@@ -2104,13 +2104,16 @@ export const ToutesLesFacturesView = {
         let companyName = "AMT TRANS'IT";
         let invoiceConfig = null;
         try {
-            const activeAgency = sessionStorage.getItem('currentActiveAgency') || 'paris'; // Fallback to paris settings if needed
-            const compSnap = await getDoc(fsDoc(db, "settings", `company_${activeAgency}`));
+            // « Le départ décide, l'arrivée suit » : modèle de document = config
+            // du DÉPART de la route (logo/couleur/CGV/pied) → rendu identique
+            // entre les deux agences d'une même route.
+            const configAgency = getConfigSourceAgency();
+            const compSnap = await getDoc(fsDoc(db, "settings", `company_${configAgency}`));
             if (compSnap.exists()) {
                 if (compSnap.data().logoBase64) logoBase64 = compSnap.data().logoBase64;
                 if (compSnap.data().name) companyName = compSnap.data().name;
             }
-            const invConfigSnap = await getDoc(fsDoc(db, "settings", `invoice_config_${activeAgency}`));
+            const invConfigSnap = await getDoc(fsDoc(db, "settings", `invoice_config_${configAgency}`));
             if (invConfigSnap.exists()) {
                 invoiceConfig = invConfigSnap.data();
                 if (invoiceConfig.companyName) companyName = invoiceConfig.companyName;
