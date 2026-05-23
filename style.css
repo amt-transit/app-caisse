@@ -1142,6 +1142,15 @@ body.login-page {
 .btn-warning { background: var(--warning); }
 .btn-small { padding: 4px 10px; font-size: 11px; }
 .btn input[type="file"] { display: none; }
+/* .btn pose color:white ; sans cette règle, un bouton "btn btn-outline" (ex.
+   Annuler) garde un texte blanc sur fond clair = illisible. On rétablit un
+   style outline lisible globalement (l'app unifiée ne charge pas paris/css). */
+.btn-outline { background: #fff; color: #475569; border: 1px solid #cbd5e1; }
+.btn-outline:hover { background: #f1f5f9; border-color: #94a3b8; opacity: 1; }
+/* Même problème pour la variante "ghost" (non définie globalement) : on force
+   un texte foncé pour rester lisible sur fond clair/blanc. */
+.btn--ghost { background: transparent; color: #475569; border: 1px solid #cbd5e1; }
+.btn--ghost:hover { background: #f1f5f9; border-color: #94a3b8; opacity: 1; }
 
 /* Badges de Statut */
 .status-badge { display: inline-block; padding: 4px 12px; border-radius: 12px; font-size: 11px; font-weight: 600; }
