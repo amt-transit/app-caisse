@@ -256,9 +256,20 @@ export const ToutesLesFacturesView = {
             const livSnap = await getDocs(collection(db, getCollectionName("livraisons")));
             const communesSet = new Set(['ABOBO', 'ADJAME', 'ATTECOUBE', 'BINGERVILLE', 'COCODY', 'KOUMASSI', 'MARCORY', 'PLATEAU', 'PORT-BOUET', 'YOPOUGON']);
             const destSet = new Set();
+            // Index des livraisons par référence : sert à calculer le magasinage
+            // (date d'entrepôt + quantité) côté facture, sans requête par ligne.
+            this.livByRef = new Map();
 
             livSnap.forEach(doc => {
                 const data = doc.data();
+                if (data.ref) this.livByRef.set(String(data.ref).toUpperCase().trim(), {
+                    dateAjout: data.dateAjout,
+                    quantite: data.quantite,
+                    quantiteRestante: data.quantiteRestante,
+                    status: data.status,
+                    containerStatus: data.containerStatus,
+                    description: data.description
+                });
                 if (data.lieuLivraison && data.lieuLivraison.trim() !== '') communesSet.add(data.lieuLivraison.trim());
                 if (data.destinataire && data.destinataire.trim() !== '') {
                     const destName = data.destinataire.trim();
@@ -278,6 +289,9 @@ export const ToutesLesFacturesView = {
                 const data = doc.data();
                 if (data.desc) this.productsData.set(data.desc.trim(), data);
             });
+            // Les livraisons sont chargées : on rafraîchit pour afficher les
+            // badges « magasinage » sur les lignes concernées.
+            this.applyFilters();
         } catch (e) {
             console.error("Erreur auto-complétion:", e);
         }
@@ -484,6 +498,13 @@ export const ToutesLesFacturesView = {
                 ? `<div style="margin-top:4px; display:inline-flex; align-items:center; gap:5px; background:#fff7ed; color:#9a3412; padding:2px 8px; border-radius:10px; font-size:11px; font-weight:600;"><i class="fas fa-handshake" style="font-size:10px;"></i> Parrain : ${parrainName}</div>`
                 : '';
             const frBadge = inv.agency === 'paris' && !isEur ? '<span title="Créé à Paris" style="font-size:10px; background:#e0f2fe; padding:2px 5px; border-radius:4px; margin-left:4px; color:#0369a1; font-weight:800;">FR</span>' : '';
+            // Indice "magasinage à payer" : colis encore en entrepôt avec des frais
+            // pas encore facturés (pas d'augmentation déjà appliquée).
+            const livForMag = this.livByRef ? this.livByRef.get(String(inv.reference || '').toUpperCase().trim()) : null;
+            const magForRow = this.calculateStorageFeeForInvoice(inv, livForMag);
+            const magBadge = (magForRow.fee > 0 && inv.adjustmentType !== 'augmentation')
+                ? `<span title="Frais de magasinage à payer (${magForRow.days} j)" style="display:inline-flex; align-items:center; gap:3px; background:#fff7ed; color:#c2410c; border:1px solid #fdba74; padding:1px 6px; border-radius:8px; font-size:10px; font-weight:800; margin-left:4px; white-space:nowrap;">📦 ${this.formatMoneyLocal(magForRow.fee / TAUX)}</span>`
+                : '';
             const dateStr = inv.date ? new Date(inv.date).toLocaleDateString('fr-FR') : '-';
 
             rows.push(`
@@ -491,14 +512,14 @@ export const ToutesLesFacturesView = {
                     <td data-label="Statut"><span class="status-badge ${statusClass}">${statusText}</span></td>
                     <td data-label="Référence" style="font-weight: 900;">
                         <button class="amount-link" onclick="window.app.views.toutesLesFactures.viewInvoice('${inv.id}')">${inv.reference || '-'}</button>
-                        ${frBadge}
+                        ${frBadge}${magBadge}
                     </td>
                     <td data-label="Date">${dateStr}</td>
                     <td data-label="Client"><strong>${inv.nom || '-'}</strong></td>
                     <td data-label="Adresse"><span class="tooltip" title="${address.replace(/"/g, '&quot;')}">${shortAddress}</span></td>
                     <td data-label="Téléphone">${inv.tel || '-'}</td>
                     <td data-label="Destinataire">${inv.nomDestinataire || '-'}${parrainBadge}</td>
-                    <td data-label="Reste à payer" class="cell--amount"><button class="amount-link" onclick="window.app.views.toutesLesFactures.addPayment('${inv.id}')">${this.formatMoneyLocal(resteDisplay)}</button></td>
+                    <td data-label="Reste à payer" class="cell--amount"><button class="amount-link" onclick="window.app.views.toutesLesFactures.quickPay('${inv.id}')">${this.formatMoneyLocal(resteDisplay)}</button></td>
                     <td data-label="Nb colis" style="text-align: right; font-weight: bold;">${nbColis}</td>
                     <td data-label="Actions" style="text-align: right;">
                         <div class="row-actions">
@@ -513,12 +534,12 @@ export const ToutesLesFacturesView = {
             cards.push(`
                 <div class="comm-mob-card" data-invoice-id="${inv.id}">
                     <div class="comm-mob-l1">
-                        <button class="amount-link" style="font-weight:900;" onclick="window.app.views.toutesLesFactures.viewInvoice('${inv.id}')">${inv.reference || '-'}</button>${frBadge}
+                        <button class="amount-link" style="font-weight:900;" onclick="window.app.views.toutesLesFactures.viewInvoice('${inv.id}')">${inv.reference || '-'}</button>${frBadge}${magBadge}
                         <span class="status-badge ${statusClass}">${statusText}</span>
                     </div>
                     <div class="comm-mob-l1">
                         <strong>${inv.nom || '-'}</strong>
-                        <button class="amount-link" style="font-weight:800;" onclick="window.app.views.toutesLesFactures.addPayment('${inv.id}')">${this.formatMoneyLocal(resteDisplay)}</button>
+                        <button class="amount-link" style="font-weight:800;" onclick="window.app.views.toutesLesFactures.quickPay('${inv.id}')">${this.formatMoneyLocal(resteDisplay)}</button>
                     </div>
                     <div class="comm-mob-l2">
                         <span>${dateStr}</span>
@@ -955,15 +976,125 @@ export const ToutesLesFacturesView = {
         document.getElementById('tlfModalsContainer').insertAdjacentHTML('beforeend', html);
     },
 
+    // Encaissement EXPRESS : petit formulaire pour le cas courant (le client
+    // paie le reste, en espèces). Montant pré-rempli avec le reste à payer,
+    // un seul mode, un bouton. Les cas complexes (split Paris/Abidjan,
+    // ajustement, historique) passent par "Détails" -> addPayment().
+    quickPay(id) {
+        const inv = this.invoices.find(i => i.id === id);
+        if (!inv) return;
+        const isEur = isEurAgency();
+        const TAUX = isEur ? CONSTANTS.TAUX_CONVERSION : 1;
+        const resteDisplay = Math.max(0, Math.abs(parseFloat(inv.reste) || 0) / TAUX);
+        // Magasinage du colis lié (date d'entrepôt + quantité). On ne l'ajoute
+        // automatiquement que si la facture n'a PAS déjà un ajustement saisi à
+        // la main (la facture n'a qu'un seul emplacement d'ajustement).
+        const liv = this.livByRef ? this.livByRef.get(String(inv.reference || '').toUpperCase().trim()) : null;
+        const mag = this.calculateStorageFeeForInvoice(inv, liv);
+        const applyMag = mag.fee > 0 && !inv.adjustmentType;
+        const magDisplay = mag.fee / TAUX;
+        const totalDisplay = resteDisplay + (applyMag ? magDisplay : 0);
+        const totalVal = isEur ? totalDisplay.toFixed(2) : Math.round(totalDisplay);
+        // Champs cachés d'ajustement transmis à savePaymentsToFirestore :
+        // si magasinage -> on le verrouille en "augmentation" ; sinon on
+        // conserve l'ajustement existant de la facture.
+        const adjTypeVal = applyMag ? 'augmentation' : (inv.adjustmentType || '');
+        const adjValVal = applyMag
+            ? (isEur ? magDisplay.toFixed(2) : Math.round(magDisplay))
+            : (inv.adjustmentVal ? (isEur ? (inv.adjustmentVal / TAUX).toFixed(2) : inv.adjustmentVal) : '');
+        const recapHtml = applyMag
+            ? `<div style="font-size:13px; color:#64748b; margin-top:4px; line-height:1.7;">Reste fret : <strong style="color:#0f172a;">${this.formatMoneyLocal(resteDisplay)}</strong><br>Magasinage (${mag.days} j) : <strong style="color:#c2410c;">${this.formatMoneyLocal(magDisplay)}</strong><br>Total à encaisser : <strong style="color:#0f172a;">${this.formatMoneyLocal(totalDisplay)}</strong></div>`
+            : `<div style="font-size:13px; color:#64748b; margin-top:2px;">Reste à payer : <strong style="color:#0f172a;">${this.formatMoneyLocal(resteDisplay)}</strong></div>`;
+        const cur = isEur ? '€' : 'CFA';
+        const modeOptions = `
+            <option value="ESPECES">ESPÈCES</option>
+            ${isEur ? '<option value="CB">CARTE BANCAIRE</option><option value="BON D ENVOI">BON D\'ENVOI</option>' : '<option value="WAVE">WAVE</option><option value="ORANGE MONEY">ORANGE MONEY</option>'}
+            <option value="CHEQUES">CHÈQUE</option>
+            <option value="VIREMENTS">VIREMENT</option>`;
+
+        const html = `
+        <div class="modal active" style="z-index: 10000; position: fixed; inset: 0; background: rgba(15,23,42,0.6); display: flex; align-items: center; justify-content: center; backdrop-filter: blur(4px);">
+            <div style="background:#fff; border-radius:16px; width:380px; max-width:94%; overflow:hidden; box-shadow:0 25px 50px -12px rgba(0,0,0,0.25);">
+                <div style="padding:18px 22px; border-bottom:1px solid #e2e8f0; background:#f8fafc;">
+                    <div style="font-size:12px; color:#64748b; font-weight:800; text-transform:uppercase;">Facture ${inv.reference}</div>
+                    <div style="font-size:17px; font-weight:900; color:#0f172a;">Encaisser</div>
+                    ${recapHtml}
+                </div>
+                <div style="padding:20px 22px;">
+                    <!-- Champs cachés transmis à l'enregistrement (ajustement) -->
+                    <input type="hidden" id="tlfPayGlobalAdjType" value="${adjTypeVal}">
+                    <input type="hidden" id="tlfPayGlobalAdjVal" value="${adjValVal}">
+                    <div class="form-group" style="margin-bottom:14px;">
+                        <label style="font-size:12px; font-weight:800; color:#475569; margin-bottom:6px; display:block;">Montant (${cur})</label>
+                        <input type="number" id="tlfQuickAmount" step="${isEur ? '0.01' : '1'}" value="${totalVal}" style="width:100%; padding:12px; border-radius:8px; border:1px solid #cbd5e1; font-weight:900; font-size:18px; outline:none; box-sizing:border-box;">
+                    </div>
+                    <div class="form-group">
+                        <label style="font-size:12px; font-weight:800; color:#475569; margin-bottom:6px; display:block;">Mode de paiement</label>
+                        <select id="tlfQuickMode" style="width:100%; padding:12px; border-radius:8px; border:1px solid #cbd5e1; font-weight:600; outline:none; box-sizing:border-box;">${modeOptions}</select>
+                    </div>
+                </div>
+                <div style="padding:16px 22px; border-top:1px solid #e2e8f0; background:#f8fafc; display:flex; align-items:center; justify-content:space-between; gap:10px;">
+                    <button onclick="window.app.views.toutesLesFactures.addPayment('${inv.id}')" style="background:none; border:none; color:#3b82f6; font-weight:700; cursor:pointer; font-size:13px;">Détails…</button>
+                    <div style="display:flex; gap:8px;">
+                        <button class="btn btn-outline" onclick="this.closest('.modal').remove()" style="padding:10px 14px; background:#fff; color:#334155; border:1px solid #cbd5e1; border-radius:8px; font-weight:600;">Annuler</button>
+                        <button class="btn btn-primary" onclick="window.app.views.toutesLesFactures.confirmQuickPay('${inv.id}')" style="padding:10px 18px; background:#10b981; color:#fff; border:none; border-radius:8px; font-weight:700;"><i class="fas fa-check"></i> Encaisser</button>
+                    </div>
+                </div>
+            </div>
+        </div>`;
+        document.getElementById('tlfModalsContainer').innerHTML = html;
+        setTimeout(() => { const f = document.getElementById('tlfQuickAmount'); if (f) { f.focus(); f.select(); } }, 50);
+    },
+
+    async confirmQuickPay(id) {
+        const inv = this.invoices.find(i => i.id === id);
+        if (!inv) return;
+        const isEur = isEurAgency();
+        const TAUX = isEur ? CONSTANTS.TAUX_CONVERSION : 1;
+        const amountInput = parseFloat(document.getElementById('tlfQuickAmount').value) || 0;
+        if (amountInput <= 0) { this.app.showToast("Veuillez saisir un montant.", "error"); return; }
+        const mode = document.getElementById('tlfQuickMode').value;
+        const amountCfa = isEur ? Math.round(amountInput * TAUX) : amountInput;
+        // Le "panier" (caisse) dépend du TYPE d'agence active, pas de la devise :
+        // agence d'arrivée -> caisse Abidjan ; agence de départ -> caisse Paris.
+        const activeAgency = sessionStorage.getItem('currentActiveAgency') || 'paris';
+        const isArrival = !!(AGENCIES[activeAgency] && AGENCIES[activeAgency].type === 'arrival');
+
+        this.currentPaymentInvoice = JSON.parse(JSON.stringify(inv));
+        if (!this.currentPaymentInvoice.paymentHistory) this.currentPaymentInvoice.paymentHistory = [];
+        this.currentPaymentInvoice.paymentHistory.push({
+            date: new Date().toISOString().split('T')[0],
+            montantParis: isArrival ? 0 : amountCfa,
+            montantAbidjan: isArrival ? amountCfa : 0,
+            modePaiement: mode,
+            agentMobileMoney: '',
+            agent: '',
+            saisiPar: sessionStorage.getItem('userName') || 'Agent',
+            isNew: true
+        });
+        await this.savePaymentsToFirestore(id);
+    },
+
     async addPayment(id) {
         const inv = this.invoices.find(i => i.id === id);
         if (!inv) return;
-        
+
         this.currentPaymentInvoice = JSON.parse(JSON.stringify(inv));
         if (!this.currentPaymentInvoice.paymentHistory) this.currentPaymentInvoice.paymentHistory = [];
 
         const isEur = isEurAgency();
         const TAUX = isEur ? CONSTANTS.TAUX_CONVERSION : 1;
+
+        // Magasinage en attente : si la facture n'a pas déjà un ajustement, on
+        // pré-remplit l'ajustement global avec le magasinage (comme l'encaissement
+        // express), pour qu'il reste VISIBLE et facturé aussi dans ce détail.
+        const _liv = this.livByRef ? this.livByRef.get(String(inv.reference || '').toUpperCase().trim()) : null;
+        const _mag = this.calculateStorageFeeForInvoice(inv, _liv);
+        const _applyMag = _mag.fee > 0 && !inv.adjustmentType;
+        const adjTypeSel = _applyMag ? 'augmentation' : (inv.adjustmentType || '');
+        const adjValDisplay = _applyMag
+            ? (isEur ? (_mag.fee / TAUX).toFixed(2) : Math.round(_mag.fee))
+            : (inv.adjustmentVal ? (isEur ? (inv.adjustmentVal / TAUX).toFixed(2) : inv.adjustmentVal) : '');
 
         // Chargement des agents pour la liste déroulante
         let agentsOptions = '<option value="">-- Sélectionnez --</option>';
@@ -994,10 +1125,10 @@ export const ToutesLesFacturesView = {
                         <div style="display:flex; gap:10px;">
                             <select id="tlfPayGlobalAdjType" style="flex:1; padding: 10px; border-radius: 8px; border: 1px solid #cbd5e1; outline: none;" onchange="window.app.views.toutesLesFactures.renderLocalPaymentsTable()">
                                 <option value="">-- Aucun --</option>
-                                <option value="reduction" ${inv.adjustmentType === 'reduction' ? 'selected' : ''}>Réduction ⬇️</option>
-                                <option value="augmentation" ${inv.adjustmentType === 'augmentation' ? 'selected' : ''}>Augmentation ⬆️</option>
+                                <option value="reduction" ${adjTypeSel === 'reduction' ? 'selected' : ''}>Réduction ⬇️</option>
+                                <option value="augmentation" ${adjTypeSel === 'augmentation' ? 'selected' : ''}>Augmentation ⬆️ ${_applyMag ? '(magasinage)' : ''}</option>
                             </select>
-                            <input type="number" id="tlfPayGlobalAdjVal" step="${isEur ? '0.01' : '1'}" value="${inv.adjustmentVal ? (isEur ? (inv.adjustmentVal / TAUX).toFixed(2) : inv.adjustmentVal) : ''}" placeholder="Valeur (${isEur ? '€' : 'CFA'})" style="flex:1; padding: 10px; border-radius: 8px; border: 1px solid #cbd5e1; font-weight: 900; outline: none;" oninput="window.app.views.toutesLesFactures.renderLocalPaymentsTable()">
+                            <input type="number" id="tlfPayGlobalAdjVal" step="${isEur ? '0.01' : '1'}" value="${adjValDisplay}" placeholder="Valeur (${isEur ? '€' : 'CFA'})" style="flex:1; padding: 10px; border-radius: 8px; border: 1px solid #cbd5e1; font-weight: 900; outline: none;" oninput="window.app.views.toutesLesFactures.renderLocalPaymentsTable()">
                         </div>
                     </div>
 
@@ -1054,7 +1185,7 @@ export const ToutesLesFacturesView = {
                 </div>
                 
                 <div style="padding: 20px 25px; border-top: 1px solid #e2e8f0; background: #f8fafc; display: flex; justify-content: flex-end; gap: 10px;">
-                    <button class="btn btn-outline" onclick="this.closest('.modal').remove()" style="padding: 10px 15px; font-weight: 600; background: white; border: 1px solid #cbd5e1; border-radius: 8px;">Annuler</button>
+                    <button class="btn btn-outline" onclick="this.closest('.modal').remove()" style="padding: 10px 15px; font-weight: 600; background: white; color:#334155; border: 1px solid #cbd5e1; border-radius: 8px;">Annuler</button>
                     <button class="btn btn-primary" onclick="window.app.views.toutesLesFactures.savePaymentsToFirestore('${inv.id}')" style="padding: 10px 20px; font-weight: 600; background: #10b981; color: white; border: none; border-radius: 8px;">
                         <i class="fas fa-save"></i> Enregistrer les modifications
                     </button>
@@ -1130,10 +1261,22 @@ export const ToutesLesFacturesView = {
             `;
         }
 
-        const amountParisEl = document.getElementById('tlfPayAmountParis');
-        if (amountParisEl && document.getElementById('tlfPayIndex').value === '') {
-            const displayReste = resteCfa > 0 ? (resteCfa / TAUX) : '';
-            amountParisEl.value = isEur ? (displayReste ? displayReste.toFixed(2) : '') : displayReste;
+        // Pré-remplissage du reste dans le BON champ selon le TYPE d'agence
+        // active : agence d'arrivée -> Montant Abidjan ; agence de départ ->
+        // Montant Paris. (Avant : toujours dans Montant Paris, même à l'arrivée.)
+        if (document.getElementById('tlfPayIndex')?.value === '') {
+            const activeAgency = sessionStorage.getItem('currentActiveAgency') || 'paris';
+            const isArrival = !!(AGENCIES[activeAgency] && AGENCIES[activeAgency].type === 'arrival');
+            const parisEl = document.getElementById('tlfPayAmountParis');
+            const abidjanEl = document.getElementById('tlfPayAmountAbidjan');
+            if (isArrival) {
+                if (abidjanEl) abidjanEl.value = resteCfa > 0 ? Math.round(resteCfa) : '';
+                if (parisEl) parisEl.value = '';
+            } else {
+                const dr = resteCfa > 0 ? (resteCfa / TAUX) : '';
+                if (parisEl) parisEl.value = isEur ? (dr ? dr.toFixed(2) : '') : (dr === '' ? '' : Math.round(dr));
+                if (abidjanEl) abidjanEl.value = '';
+            }
         }
     },
 
@@ -1925,6 +2068,9 @@ export const ToutesLesFacturesView = {
     calculateStorageFeeForInvoice(invoice, livraison, compareDate = new Date()) {
         if (!invoice || invoice.storageFeeWaived === true) return { days: 0, fee: 0 };
         if (!livraison || !livraison.dateAjout) return { days: 0, fee: 0 };
+        // Magasinage uniquement pour un colis ENCORE EN ENTREPÔT (comme Livraison
+        // et la page Magasinage) : ni livré, ni abandonné, ni encore au départ.
+        if (livraison.containerStatus !== 'EN_COURS') return { days: 0, fee: 0 };
         if (livraison.status === 'LIVRE' || livraison.status === 'ABANDONNE') return { days: 0, fee: 0 };
         return calculateStorageFee(livraison.dateAjout, livraison, compareDate);
     },
