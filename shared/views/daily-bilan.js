@@ -5,24 +5,10 @@ import { getCollectionName, AGENCIES } from '../../agencies-config.js';
 import { matchesShippingMode } from '../../shipping-mode.js';
 import { paidAmount } from '../../agency-money.js';
 
-// EUR si agence historique 'paris' OU route SaaS dont la devise configurée
-// est EUR. (Même règle que app.formatMoneyLocal — cohérence d'affichage.)
-const isEurAgency = () => {
-    const ag = sessionStorage.getItem('currentActiveAgency') || 'abidjan';
-    if (ag === 'paris') return true;
-    const a = AGENCIES && AGENCIES[ag];
-    return !!(a && a.currency === 'EUR');
-};
+import { formatMoney, isEurAgency } from '../../services/format.js';
 
 export const DailyBilanView = {
-    formatMoneyLocal(amount) {
-        const isEur = isEurAgency();
-        if (isEur) {
-            return new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(amount || 0).replace(/[\u202F\u00A0]/g, ' ').replace(/\s*\/\s*/g, ' ');
-        } else {
-            return new Intl.NumberFormat('fr-CI', { style: 'currency', currency: 'XOF' }).format(amount || 0).replace(/[\u202F\u00A0]/g, ' ').replace(/\s*\/\s*/g, ' ');
-        }
-    },
+    formatMoneyLocal(amount) { return formatMoney(amount); },
 
     render(app, container) {
         this.app = app;

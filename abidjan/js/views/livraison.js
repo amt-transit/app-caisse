@@ -6,6 +6,8 @@ import { calculateStorageFee } from '../../../services/storageFee.js';
 import { createDocumentTemplates } from '../../../services/document-templates.js';
 import { CI_PHONE_REGEX, extractPhone, toE164 } from '../../../services/phone.js';
 
+import { formatMoney } from '../../../services/format.js';
+
 export const LivraisonView = {
     async render(app, container) {
         this.app = app;
@@ -2399,7 +2401,7 @@ export const LivraisonView = {
                    computedFee = _calc1.fee;
        
                    if (computedFee > 0) {
-                       const formattedFee = new Intl.NumberFormat('fr-CI', { style: 'currency', currency: 'XOF' }).format(computedFee).replace(/[\u202F\u00A0]/g, ' ').replace(/\s*\/\s*/g, ' ');
+                       const formattedFee = formatMoney(computedFee, true);
                        const qte = d.quantiteRestante !== undefined ? parseInt(d.quantiteRestante) : (parseInt(d.quantite) || 1);
                        const badgeColor = computedFee > (10000 * qte) ? '#dc2626' : '#f97316';
                        const borderColor = computedFee > (10000 * qte) ? '#dc2626' : '#f97316';

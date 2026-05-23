@@ -3,6 +3,8 @@ import { collection, getDocs, query, where, orderBy } from "https://www.gstatic.
 import { getCollectionName, AGENCIES } from '../../../agencies-config.js';
 import { matchesShippingMode } from '../../../shipping-mode.js';
 
+import { formatMoney } from '../../../services/format.js';
+
 export const PointsView = {
     render(app, container) {
         this.app = app;
@@ -312,7 +314,7 @@ export const PointsView = {
         };
         
         if(typeof formatCFA !== 'function') {
-            window.formatCFA = (n) => new Intl.NumberFormat('fr-CI', { style: 'currency', currency: 'XOF' }).format(n || 0).replace(/[\u202F\u00A0]/g, ' ').replace(/\s*\/\s*/g, ' ');
+            window.formatCFA = (n) => formatMoney(n, true);
         }
         if(typeof initBackToTopButton === 'function') initBackToTopButton();
     }

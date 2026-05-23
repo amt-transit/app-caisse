@@ -22,6 +22,8 @@ const sessionMatchesAgency = (logData, activeAgency) => {
     return false;
 };
 
+import { formatMoney } from '../../../services/format.js';
+
 export const ConfirmationView = {
     render(app, container) {
         this.app = app;
@@ -297,7 +299,7 @@ export const ConfirmationView = {
             if(editPayAgent) editPayAgent.innerHTML = '<option value="">- Aucun -</option>' + allAgents.map(a => `<option value="${a}">${a}</option>`).join('');
         });
     
-        function formatCFA(n) { return new Intl.NumberFormat('fr-CI', { style: 'currency', currency: 'XOF' }).format(n || 0).replace(/[\u202F\u00A0]/g, ' ').replace(/\s*\/\s*/g, ' '); }
+        function formatCFA(n) { return formatMoney(n, true); }
     
         function loadSessions() {
             const activeAgency = sessionStorage.getItem('currentActiveAgency') || 'abidjan';

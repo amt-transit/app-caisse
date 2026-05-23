@@ -2,6 +2,8 @@ import { db } from '../../../firebase-config.js';
 import { collection, doc, addDoc, setDoc, updateDoc, query, where, orderBy, onSnapshot } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 import { getCollectionName } from '../../../agencies-config.js';
 
+import { formatMoney } from '../../../services/format.js';
+
 export const VoitureView = {
     render(app, container) {
         this.app = app;
@@ -442,7 +444,7 @@ export const VoitureView = {
 
         if (typeof initBackToTopButton === 'function') initBackToTopButton();
         if (typeof formatCFA !== 'function') {
-            window.formatCFA = (n) => new Intl.NumberFormat('fr-CI', { style: 'currency', currency: 'XOF' }).format(n || 0).replace(/[\u202F\u00A0]/g, ' ').replace(/\s*\/\s*/g, ' ');
+            window.formatCFA = (n) => formatMoney(n, true);
         }
     }
 };

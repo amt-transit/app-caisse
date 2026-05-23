@@ -2,6 +2,8 @@ import { db } from '../../../firebase-config.js';
 import { collection, addDoc, getDocs, serverTimestamp, query, orderBy, onSnapshot, where, doc, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 import { getCollectionName } from '../../../agencies-config.js';
 
+import { formatMoney } from '../../../services/format.js';
+
 export const ComptejbView = {
     render(app, container) {
         this.app = app;
@@ -111,8 +113,7 @@ export const ComptejbView = {
         // =========================================================
         // 2. UTILITAIRES
         // =========================================================
-        const fmt = (val) =>
-            new Intl.NumberFormat('fr-CI', { style: 'currency', currency: 'XOF' }).format(val || 0).replace(/[\u202F\u00A0]/g, ' ').replace(/\s*\/\s*/g, ' ');
+        const fmt = (val) => formatMoney(val, true);
 
         const parseNum = (s) =>
             parseFloat(String(s).replace(/\s/g, '').replace(',', '.')) || 0;

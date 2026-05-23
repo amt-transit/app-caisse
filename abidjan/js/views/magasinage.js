@@ -4,6 +4,8 @@ import { getCollectionName } from '../../../agencies-config.js';
 import { calculateStorageFee } from '../../../services/storageFee.js';
 import { CI_PHONE_REGEX } from '../../../services/phone.js';
 
+import { formatMoney } from '../../../services/format.js';
+
 export const MagasinageView = {
     render(app, container) {
         this.app = app;
@@ -55,9 +57,7 @@ export const MagasinageView = {
         // Calcul centralisé (source unique : services/storageFee.js).
         const transactionService = { calculateStorageFee };
 
-        function formatCFA(n) {
-            return new Intl.NumberFormat('fr-CI', { style: 'currency', currency: 'XOF' }).format(n || 0).replace(/[\u202F\u00A0]/g, ' ').replace(/\s*\/\s*/g, ' ');
-        }
+        function formatCFA(n) { return formatMoney(n, true); }
 
         const tableBody = document.getElementById('magasinageTableBody');
         const searchInput = document.getElementById('magasinageSearch');

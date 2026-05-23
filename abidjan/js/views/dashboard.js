@@ -6,6 +6,8 @@ import { filterByShippingMode } from '../../../shipping-mode.js';
 import { calculateStorageFee } from '../../../services/storageFee.js';
 import { loadJsPdf } from '../../../services/pdf-common.js';
 
+import { formatMoney } from '../../../services/format.js';
+
 export const DashboardView = {
     render(app, container) {
         this.app = app;
@@ -1370,7 +1372,7 @@ export const DashboardView = {
             updateDashboard();
         });
 
-        function formatCFA(n) { return new Intl.NumberFormat('fr-CI', { style: 'currency', currency: 'XOF' }).format(n || 0).replace(/[\u202F\u00A0]/g, ' ').replace(/\s*\/\s*/g, ' '); }
+        function formatCFA(n) { return formatMoney(n, true); }
 
         startDateInput.addEventListener('change', updateDashboard);
         endDateInput.addEventListener('change', updateDashboard);

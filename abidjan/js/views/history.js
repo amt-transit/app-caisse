@@ -3,6 +3,8 @@ import { collection, doc, updateDoc, getDocs, query, where, orderBy, onSnapshot,
 import { getCollectionName } from '../../../agencies-config.js';
 import { matchesShippingMode } from '../../../shipping-mode.js';
 
+import { formatMoney } from '../../../services/format.js';
+
 export const HistoryView = {
     render(app, container) {
         this.app = app;
@@ -943,7 +945,7 @@ export const HistoryView = {
         });
         
         if(typeof formatCFA !== 'function') {
-            window.formatCFA = (n) => new Intl.NumberFormat('fr-CI', { style: 'currency', currency: 'XOF' }).format(n || 0).replace(/[\u202F\u00A0]/g, ' ').replace(/\s*\/\s*/g, ' ');
+            window.formatCFA = (n) => formatMoney(n, true);
         }
         if(typeof initBackToTopButton === 'function') initBackToTopButton();
     }

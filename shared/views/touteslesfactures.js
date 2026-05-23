@@ -10,14 +10,7 @@ import { filterByShippingMode } from '../../shipping-mode.js';
 import { normalizePhone } from '../../affiliations.js';
 import { calculateStorageFee } from '../../services/storageFee.js';
 
-// EUR si agence historique 'paris' OU route SaaS dont la devise configurée
-// est EUR. (Même règle que app.formatMoneyLocal — cohérence d'affichage.)
-const isEurAgency = () => {
-    const ag = sessionStorage.getItem('currentActiveAgency') || 'abidjan';
-    if (ag === 'paris') return true;
-    const a = AGENCIES && AGENCIES[ag];
-    return !!(a && a.currency === 'EUR');
-};
+import { formatMoney, isEurAgency } from '../../services/format.js';
 
 export const ToutesLesFacturesView = {
     unsub: null,
@@ -37,14 +30,7 @@ export const ToutesLesFacturesView = {
     cachedAgentsOptions: '',
 
     // Helper centralisé pour le formatage des devises selon l'agence active
-    formatMoneyLocal(amount, forceCfa = false) {
-        const isEur = isEurAgency();
-        if (isEur && !forceCfa) {
-            return new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(amount || 0).replace(/[\u202F\u00A0]/g, ' ').replace(/\s*\/\s*/g, ' ');
-        } else {
-            return new Intl.NumberFormat('fr-CI', { style: 'currency', currency: 'XOF' }).format(amount || 0).replace(/[\u202F\u00A0]/g, ' ').replace(/\s*\/\s*/g, ' ');
-        }
-    },
+    formatMoneyLocal(amount, forceCfa = false) { return formatMoney(amount, forceCfa); },
 
     render(app, container) {
         this.app = app;

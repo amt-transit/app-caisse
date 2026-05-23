@@ -3,6 +3,7 @@ import { collection, doc, addDoc, updateDoc, getDocs, query, where, orderBy, lim
 import { getCollectionName } from '../../../agencies-config.js';
 import { matchesShippingMode, isAerienMode, getShippingMode } from '../../../shipping-mode.js';
 import { calculateStorageFee } from '../../../services/storageFee.js';
+import { formatMoney } from '../../../services/format.js';
 import { createApp, ref, reactive, computed, onMounted, onUnmounted, watch } from "https://unpkg.com/vue@3/dist/vue.esm-browser.prod.js";
 
 export const CaisseView = {
@@ -501,7 +502,7 @@ export const CaisseView = {
                 let unsubs = [];
 
                 // Helper: Format CFA
-                const formatCFA = (n) => new Intl.NumberFormat('fr-CI', { style: 'currency', currency: 'XOF' }).format(n || 0).replace(/[\u202F\u00A0]/g, ' ').replace(/\s*\/\s*/g, ' ');
+                const formatCFA = (n) => formatMoney(n, true);
 
                 // Magasinage : calcul centralisé importé (services/storageFee.js).
 

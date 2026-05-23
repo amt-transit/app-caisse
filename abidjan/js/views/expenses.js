@@ -3,6 +3,7 @@ import { collection, doc, updateDoc, setDoc, query, where, orderBy, onSnapshot, 
 import { getCollectionName } from '../../../agencies-config.js';
 import { createApp, ref, reactive, computed, onMounted, onUnmounted, watch } from "https://unpkg.com/vue@3/dist/vue.esm-browser.prod.js";
 import { getShippingMode, filterByShippingMode } from '../../../shipping-mode.js';
+import { formatMoney } from '../../../services/format.js';
 
 export const ExpensesView = {
     vueApp: null,
@@ -346,7 +347,7 @@ export const ExpensesView = {
                     'Autres': { style: 'background:#e2e8f0; color:#475569;' }
                 };
 
-                const formatCFA = (n) => new Intl.NumberFormat('fr-CI', { style: 'currency', currency: 'XOF' }).format(n || 0).replace(/[\u202F\u00A0]/g, ' ').replace(/\s*\/\s*/g, ' ');
+                const formatCFA = (n) => formatMoney(n, true);
 
                 const getExpenseCategory = (desc) => {
                     desc = (desc || '').toLowerCase();

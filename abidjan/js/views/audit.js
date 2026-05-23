@@ -10,6 +10,8 @@ const sessionMatchesMode = (logData) => {
     return m === getShippingMode();
 };
 
+import { formatMoney } from '../../../services/format.js';
+
 export const AuditView = {
     render(app, container) {
         this.app = app;
@@ -157,7 +159,7 @@ export const AuditView = {
             return Math.ceil(( ( (d - yearStart) / 86400000) + 1)/7);
         }
     
-        function formatCFA(n) { return new Intl.NumberFormat('fr-CI', { style: 'currency', currency: 'XOF' }).format(n || 0).replace(/[\u202F\u00A0]/g, ' ').replace(/\s*\/\s*/g, ' '); }
+        function formatCFA(n) { return formatMoney(n, true); }
     
         function renderTable(data) {
             tableBody.innerHTML = '';
