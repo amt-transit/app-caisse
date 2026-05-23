@@ -4,6 +4,7 @@ import { getCollectionName } from '../../../agencies-config.js';
 import { matchesShippingMode, getShippingMode } from '../../../shipping-mode.js';
 import { calculateStorageFee } from '../../../services/storageFee.js';
 import { createDocumentTemplates } from '../../../services/document-templates.js';
+import { CI_PHONE_REGEX, extractPhone, toE164 } from '../../../services/phone.js';
 
 export const LivraisonView = {
     async render(app, container) {
@@ -674,8 +675,7 @@ export const LivraisonView = {
 
             let primaryBtn = '';
             if (phone && currentTab !== 'PARIS') {
-                const cleanPhone = phone.replace(/[^\d]/g, '').replace(/^00/, '');
-                const phoneE164 = cleanPhone.length === 10 ? '225' + cleanPhone : cleanPhone;
+                const phoneE164 = toE164(phone);
 
                 if (currentTab === 'A_VENIR') {
                     const msgNotif = encodeURIComponent(`Bonjour ${displayDestinataire || 'Client'},\n\n🚢 Votre colis *${d.ref}* (Conteneur ${d.conteneur || 'en transit'}) arrive bientôt à Abidjan.\n\nMerci de confirmer votre lieu de livraison :\n${d.lieuLivraison || '(à confirmer)'}\n\n— AMT TRANS'IT`);
@@ -1383,7 +1383,7 @@ export const LivraisonView = {
                            }
                            // Extraction Numéro et Nettoyage SYSTEMATIQUE du destinataire (Regex)
                            if (item.destinataire) {
-                               const phoneRegex = /(?:(?:\+|00)225[\s.-]?)?(?:01|05|07|0)\d(?:[\s.-]?\d{2}){4}|(?:(?:\+|00)225[\s.-]?)?(?:01|05|07|0)\d{8,}/;
+                               const phoneRegex = CI_PHONE_REGEX;
                                const phoneMatch = item.destinataire.match(phoneRegex);
                                if (phoneMatch) {
                                    // Si on n'a pas encore de numéro, on le capture
@@ -2342,7 +2342,7 @@ export const LivraisonView = {
        
                // --- LOGIQUE WHATSAPP & BOUTONS ---
                let phoneCandidate = d.numero;
-               const robustRegex = /(?:(?:\+|00)225[\s.-]?)?(?:01|05|07|0)\d(?:[\s.-]?\d{2}){4}|(?:(?:\+|00)225[\s.-]?)?(?:01|05|07|0)\d{8,}/;
+               const robustRegex = CI_PHONE_REGEX;
        
                // Recherche intelligente du numéro
                if (!phoneCandidate) {
@@ -3958,7 +3958,7 @@ export const LivraisonView = {
            listEl.innerHTML = '';
        
            itemsToNotify.forEach(d => {
-               let phone = d.numero || d.destinataire?.match(/(?:(?:\+|00)225[\s.-]?)?(?:01|05|07|0)\d(?:[\s.-]?\d{2}){4}|(?:(?:\+|00)225[\s.-]?)?(?:01|05|07|0)\d{8,}/)?.[0] || '';
+               let phone = d.numero || extractPhone(d.destinataire);
                phone = phone.replace(/[^\d]/g, '');
                if (phone.length === 10 && phone.startsWith('0')) phone = '225' + phone.substring(1);
                else if (phone.length === 10) phone = '225' + phone;

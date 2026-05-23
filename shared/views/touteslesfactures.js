@@ -5,6 +5,7 @@ import { CONSTANTS, DEFAULT_CGV, DEFAULT_COMPANY_FOOTER } from '../../constants.
 import { createApp, ref, computed, reactive, onMounted, onUnmounted } from "https://unpkg.com/vue@3/dist/vue.esm-browser.prod.js";
 import { getCollectionName, AGENCIES, getConfigSourceAgency } from '../../agencies-config.js';
 import { loadJsPdf } from '../../services/pdf-common.js';
+import { extractPhone, stripPhoneFromName } from '../../services/phone.js';
 import { filterByShippingMode } from '../../shipping-mode.js';
 import { normalizePhone } from '../../affiliations.js';
 import { calculateStorageFee } from '../../services/storageFee.js';
@@ -489,11 +490,7 @@ export const ToutesLesFacturesView = {
             // Téléphone destinataire : utilisé pour lookup de l'affiliation parrain.
             // Source 1 : champ explicite (numero/tel) ; sinon on tente d'extraire
             // un numéro de la chaîne nomDestinataire.
-            let destPhone = inv.numero || '';
-            if (!destPhone) {
-                const m = String(inv.nomDestinataire || '').match(/(?:(?:\+|00)225[\s.-]?)?(?:01|05|07|0)\d(?:[\s.-]?\d{2}){4}|(?:(?:\+|00)225[\s.-]?)?(?:01|05|07|0)\d{8,}/);
-                if (m) destPhone = m[0];
-            }
+            let destPhone = inv.numero || extractPhone(inv.nomDestinataire);
             const parrainName = this.getParrainNameForPhone(destPhone);
             const parrainBadge = parrainName
                 ? `<div style="margin-top:4px; display:inline-flex; align-items:center; gap:5px; background:#fff7ed; color:#9a3412; padding:2px 8px; border-radius:10px; font-size:11px; font-weight:600;"><i class="fas fa-handshake" style="font-size:10px;"></i> Parrain : ${parrainName}</div>`
@@ -605,13 +602,8 @@ export const ToutesLesFacturesView = {
         let statusBg = reste <= 0 ? '#dcfce7' : (paye > 0 ? '#fef3c7' : '#fee2e2');
         let statusColor = reste <= 0 ? '#166534' : (paye > 0 ? '#92400e' : '#991b1b');
 
-        let destName = invoice.nomDestinataire || '';
-        let destPhone = invoice.numero || invoice.tel || 'Non renseigné';
-        const phoneMatch = destName.match(/(?:(?:\+|00)225[\s.-]?)?(?:01|05|07|0)\d(?:[\s.-]?\d{2}){4}|(?:(?:\+|00)225[\s.-]?)?(?:01|05|07|0)\d{8,}/);
-        if (phoneMatch) {
-            destName = destName.replace(phoneMatch[0], '').replace(/[-–,;:\/\s]+$/, '').trim();
-            if (destPhone === 'Non renseigné') destPhone = phoneMatch[0];
-        }
+        let destName = stripPhoneFromName(invoice.nomDestinataire || '');
+        let destPhone = invoice.numero || invoice.tel || extractPhone(invoice.nomDestinataire) || 'Non renseigné';
 
         // Lookup parrain (démarcheur affilié au téléphone destinataire). Lecture
         // ponctuelle non bloquante : si la collection est vide ou inaccessible,
@@ -2026,13 +2018,8 @@ export const ToutesLesFacturesView = {
         const clientQ = await getDocs(query(collection(db, getCollectionName("clients")), where("nom", "==", invoice.nom), limit(1)));
         if (!clientQ.empty) expAddress = clientQ.docs[0].data().adresse || '';
 
-        let dName = invoice.nomDestinataire || '';
-        let dPhone = invoice.numero || invoice.tel || '';
-        const phoneMatch = dName.match(/(?:(?:\+|00)225[\s.-]?)?(?:01|05|07|0)\d(?:[\s.-]?\d{2}){4}|(?:(?:\+|00)225[\s.-]?)?(?:01|05|07|0)\d{8,}/);
-        if (phoneMatch) {
-            dName = dName.replace(phoneMatch[0], '').replace(/[-–,;:\/\s]+$/, '').trim();
-            if (!dPhone) dPhone = phoneMatch[0];
-        }
+        let dName = stripPhoneFromName(invoice.nomDestinataire || '');
+        let dPhone = invoice.numero || invoice.tel || extractPhone(invoice.nomDestinataire) || '';
 
         const data = {
             ref: invoice.reference,
@@ -2188,13 +2175,8 @@ export const ToutesLesFacturesView = {
         doc.text(docType === 'BL' || docType === 'ATTESTATION' ? "LIVRÉ À :" : "FACTURÉ À :", 120, 52);
         doc.setFont("helvetica", "normal");
         
-        let clientName = invoice.nomDestinataire || '';
-        let clientPhone = invoice.numero || invoice.tel || '';
-        const phoneMatch = clientName.match(/(?:(?:\+|00)225[\s.-]?)?(?:01|05|07|0)\d(?:[\s.-]?\d{2}){4}|(?:(?:\+|00)225[\s.-]?)?(?:01|05|07|0)\d{8,}/);
-        if (phoneMatch) {
-            clientName = clientName.replace(phoneMatch[0], '').replace(/[-–,;:\/\s]+$/, '').trim();
-            if (!clientPhone) clientPhone = phoneMatch[0];
-        }
+        let clientName = stripPhoneFromName(invoice.nomDestinataire || '');
+        let clientPhone = invoice.numero || invoice.tel || extractPhone(invoice.nomDestinataire) || '';
         
         doc.text(`${clientName}`, 120, 59);
         doc.text(`${clientPhone}`, 120, 66);

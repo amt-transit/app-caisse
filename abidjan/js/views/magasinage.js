@@ -2,6 +2,7 @@ import { db } from '../../../firebase-config.js';
 import { collection, getDocs, query, where, orderBy, onSnapshot } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 import { getCollectionName } from '../../../agencies-config.js';
 import { calculateStorageFee } from '../../../services/storageFee.js';
+import { CI_PHONE_REGEX } from '../../../services/phone.js';
 
 export const MagasinageView = {
     render(app, container) {
@@ -168,7 +169,7 @@ export const MagasinageView = {
 
                 let phoneCandidate = t.numero;
                 if (!phoneCandidate) {
-                    const phoneRegex = /(?:(?:\+|00)225[\s.-]?)?(?:01|05|07|0)\d(?:[\s.-]?\d{2}){4}|(?:(?:\+|00)225[\s.-]?)?(?:01|05|07|0)\d{8,}/;
+                    const phoneRegex = CI_PHONE_REGEX;
                     const match = (t.nomDestinataire || t.nom || '').match(phoneRegex) || (t.description || '').match(phoneRegex);
                     if (match) phoneCandidate = match[0];
                 }

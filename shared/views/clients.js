@@ -4,6 +4,7 @@ import { Autocomplete } from '../../paris/js/views/autocomplete.js';
 import { CONSTANTS } from '../../constants.js';
 import { getCollectionName, AGENCIES } from '../../agencies-config.js';
 import { normalizePhone } from '../../affiliations.js';
+import { CI_PHONE_REGEX } from '../../services/phone.js';
 import { getShippingMode, filterByShippingMode } from '../../shipping-mode.js';
 
 // EUR si agence historique 'paris' OU route SaaS dont la devise configurée
@@ -419,7 +420,7 @@ export const ClientsView = {
                 // Créer profil dynamique (surtout utilisé à Abidjan pour les destinataires)
                 if (!clientProfiles.has(nomUpper) && isArrival) {
                     let tel = liv.numero || '-';
-                    const phoneRegex = /(?:(?:\+|00)225[\s.-]?)?(?:01|05|07|0)\d(?:[\s.-]?\d{2}){4}|(?:(?:\+|00)225[\s.-]?)?(?:01|05|07|0)\d{8,}/;
+                    const phoneRegex = CI_PHONE_REGEX;
                     if (tel === '-' || !tel) {
                         const match = rawName.match(phoneRegex);
                         if (match) tel = match[0];

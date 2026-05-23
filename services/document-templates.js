@@ -14,6 +14,7 @@ import { db } from '../firebase-config.js';
 import { getDoc, getDocs, doc, collection, query, where, limit } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 import { getCollectionName, getConfigSourceAgency } from '../agencies-config.js';
 import { DEFAULT_CGV, DEFAULT_COMPANY_FOOTER } from '../constants.js';
+import { stripPhoneFromName } from './phone.js';
 
 export function createDocumentTemplates({ showToast, calculateMagasinageFee }) {
 
@@ -114,11 +115,7 @@ export function createDocumentTemplates({ showToast, calculateMagasinageFee }) {
         doc2.text("LIVRÉ À :", 120, 52);
         doc2.setFont("helvetica", "normal");
 
-        let clientName = transData ? transData.nom : (d.destinataire || 'Client non spécifié');
-        const phoneMatchBL = clientName.match(/(?:(?:\+|00)225[\s.-]?)?(?:01|05|07|0)\d(?:[\s.-]?\d{2}){4}|(?:(?:\+|00)225[\s.-]?)?(?:01|05|07|0)\d{8,}/);
-        if (phoneMatchBL) {
-            clientName = clientName.replace(phoneMatchBL[0], '').replace(/[-–,;:\/\s]+$/, '').trim();
-        }
+        let clientName = stripPhoneFromName(transData ? transData.nom : (d.destinataire || 'Client non spécifié'));
         doc2.text(`${clientName}`, 120, 59);
         doc2.text(`${d.numero || transData?.numero || ''}`, 120, 66);
         const addrStr = doc2.splitTextToSize(`${d.lieuLivraison || d.commune || transData?.adresseDestinataire || ''}`, 70);
@@ -295,11 +292,7 @@ export function createDocumentTemplates({ showToast, calculateMagasinageFee }) {
         doc2.text("FACTURÉ À :", 120, 52);
         doc2.setFont("helvetica", "normal");
 
-        let clientName = transData ? transData.nom : (d.destinataire || 'Client');
-        const phoneMatchFacture = clientName.match(/(?:(?:\+|00)225[\s.-]?)?(?:01|05|07|0)\d(?:[\s.-]?\d{2}){4}|(?:(?:\+|00)225[\s.-]?)?(?:01|05|07|0)\d{8,}/);
-        if (phoneMatchFacture) {
-            clientName = clientName.replace(phoneMatchFacture[0], '').replace(/[-–,;:\/\s]+$/, '').trim();
-        }
+        let clientName = stripPhoneFromName(transData ? transData.nom : (d.destinataire || 'Client'));
         doc2.text(`${clientName}`, 120, 59);
         doc2.text(`${d.numero || transData?.numero || ''}`, 120, 66);
         const addrStr = doc2.splitTextToSize(`${d.lieuLivraison || d.commune || transData?.adresseDestinataire || ''}`, 70);
@@ -537,11 +530,7 @@ export function createDocumentTemplates({ showToast, calculateMagasinageFee }) {
         doc2.setTextColor(15, 23, 42);
         doc2.setFont("helvetica", "bold");
 
-        let destClean = data.destinataire || 'Non spécifié';
-        const phoneMatchDest = destClean.match(/(?:(?:\+|00)225[\s.-]?)?(?:01|05|07|0)\d(?:[\s.-]?\d{2}){4}|(?:(?:\+|00)225[\s.-]?)?(?:01|05|07|0)\d{8,}/);
-        if (phoneMatchDest) {
-            destClean = destClean.replace(phoneMatchDest[0], '').replace(/[-–,;:\/\s]+$/, '').trim();
-        }
+        let destClean = stripPhoneFromName(data.destinataire || 'Non spécifié');
         doc2.text(`${destClean}`, 45, y);
         doc2.text(`${data.numero || 'Non spécifié'}`, 45, y + 6);
         doc2.text(`${data.expediteur || 'Non spécifié'}`, 45, y + 12);
