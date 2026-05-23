@@ -1,9 +1,10 @@
 import { db } from '../../firebase-config.js';
 import { collection, query, where, onSnapshot, doc, writeBatch, getDocs, orderBy, limit } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 import { Autocomplete } from '../../paris/js/views/autocomplete.js';
-import { CONSTANTS } from '../../constants.js';
+import { CONSTANTS, DEFAULT_CGV, DEFAULT_COMPANY_FOOTER } from '../../constants.js';
 import { createApp, ref, computed, reactive, onMounted, onUnmounted } from "https://unpkg.com/vue@3/dist/vue.esm-browser.prod.js";
 import { getCollectionName, AGENCIES, getConfigSourceAgency } from '../../agencies-config.js';
+import { loadJsPdf } from '../../services/pdf-common.js';
 import { filterByShippingMode } from '../../shipping-mode.js';
 import { normalizePhone } from '../../affiliations.js';
 import { calculateStorageFee } from '../../services/storageFee.js';
@@ -2081,20 +2082,8 @@ export const ToutesLesFacturesView = {
 
         this.app.showToast(`Génération de ${docType}...`, "info");
 
-        if (typeof window.jspdf === 'undefined') {
-            await new Promise((resolve) => {
-                const script1 = document.createElement('script');
-                script1.src = "https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js";
-                script1.onload = () => {
-                    const script2 = document.createElement('script');
-                    script2.src = "https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js";
-                    script2.onload = resolve;
-                    document.head.appendChild(script2);
-                };
-                document.head.appendChild(script1);
-            });
-        }
-
+        // Chargement jsPDF + autotable (versions figées, source unique).
+        await loadJsPdf();
         const { jsPDF } = window.jspdf;
         const doc = new jsPDF('p', 'mm', 'a4');
         const pageWidth = doc.internal.pageSize.getWidth();
@@ -2338,8 +2327,7 @@ export const ToutesLesFacturesView = {
             
             doc.setFont("helvetica", "normal");
             doc.setFontSize(7);
-            const defaultCgv = "1- Les temps et les délais de transports sont donnés à titre indicatifs par AMT TRANS'IT.\\n2- Les enlèvements à domicile sont gratuits dans la limite géographique.\\n3- Tous les colis et marchandises devront être intégralement payés avant la remise au destinataire.\\n4- En cas de litige, une solution amiable est privilégiée.";
-            const cgvText = invoiceConfig?.cgv || defaultCgv;
+            const cgvText = invoiceConfig?.cgv || DEFAULT_CGV;
             const cgvLines = cgvText.replace(/\\n/g, '\n').split('\n');
             
             cgvLines.forEach(line => {
@@ -2352,7 +2340,7 @@ export const ToutesLesFacturesView = {
         doc.setFont("helvetica", "normal");
         doc.setFontSize(8);
         doc.setTextColor(100, 116, 139);
-        const footerText = invoiceConfig?.footer || "AMT TRANS'IT | 81 AVENUE ARISTIDE BRIAND 93240 STAINS | Tel. 0186900380 | amt.transit@gmail.com";
+        const footerText = invoiceConfig?.footer || DEFAULT_COMPANY_FOOTER;
         doc.text(footerText, pageWidth / 2, doc.internal.pageSize.getHeight() - 10, { align: 'center' });
 
         doc.save(`${titleText.replace(/ /g, '_')}_${invoice.reference}.pdf`);

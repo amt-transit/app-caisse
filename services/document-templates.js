@@ -13,6 +13,7 @@
 import { db } from '../firebase-config.js';
 import { getDoc, getDocs, doc, collection, query, where, limit } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 import { getCollectionName, getConfigSourceAgency } from '../agencies-config.js';
+import { DEFAULT_CGV, DEFAULT_COMPANY_FOOTER } from '../constants.js';
 
 export function createDocumentTemplates({ showToast, calculateMagasinageFee }) {
 
@@ -177,7 +178,7 @@ export function createDocumentTemplates({ showToast, calculateMagasinageFee }) {
         doc2.setFont("helvetica", "normal");
         doc2.setFontSize(8);
         doc2.setTextColor(100, 116, 139);
-        const footerText = invoiceConfig?.footer || "AMT TRANS'IT | 81 AVENUE ARISTIDE BRIAND 93240 STAINS | Tel. 0186900380 | amt.transit@gmail.com";
+        const footerText = invoiceConfig?.footer || DEFAULT_COMPANY_FOOTER;
         doc2.text(footerText, pageWidth / 2, doc2.internal.pageSize.getHeight() - 10, { align: 'center' });
 
         doc2.save(`BL_${d.ref}.pdf`);
@@ -422,8 +423,7 @@ export function createDocumentTemplates({ showToast, calculateMagasinageFee }) {
 
         doc2.setFont("helvetica", "normal");
         doc2.setFontSize(7);
-        const defaultCgv = "1- Les temps et les délais de transports sont donnés à titre indicatifs par AMT TRANS'IT.\\n2- Les enlèvements à domicile sont gratuits dans la limite géographique.\\n3- Tous les colis et marchandises devront être intégralement payés avant la remise au destinataire.\\n4- En cas de litige, une solution amiable est privilégiée.";
-        const cgvText = invoiceConfig?.cgv || defaultCgv;
+        const cgvText = invoiceConfig?.cgv || DEFAULT_CGV;
         const cgvLines = cgvText.replace(/\\n/g, '\n').split('\n');
 
         cgvLines.forEach(line => {
@@ -436,7 +436,7 @@ export function createDocumentTemplates({ showToast, calculateMagasinageFee }) {
         doc2.setFont("helvetica", "normal");
         doc2.setFontSize(8);
         doc2.setTextColor(100, 116, 139);
-        const footerText = invoiceConfig?.footer || "AMT TRANS'IT | 81 AVENUE ARISTIDE BRIAND 93240 STAINS | Tel. 0186900380 | amt.transit@gmail.com";
+        const footerText = invoiceConfig?.footer || DEFAULT_COMPANY_FOOTER;
         doc2.text(footerText, pageWidth / 2, doc2.internal.pageSize.getHeight() - 10, { align: 'center' });
 
         doc2.save(`Facture_${d.ref}.pdf`);

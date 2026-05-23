@@ -5,6 +5,7 @@ import { httpsCallable } from "https://www.gstatic.com/firebasejs/9.22.0/firebas
 import { createApp, ref, reactive, computed, onMounted, onUnmounted, nextTick, watch } from "https://unpkg.com/vue@3/dist/vue.esm-browser.prod.js";
 import { isAffiliationActive } from '../../affiliation-config.js';
 import { AGENCIES, getCollectionName } from '../../agencies-config.js';
+import { loadJsPdf } from '../../services/pdf-common.js';
 
 export const ParrainageView = {
     vueApp: null,
@@ -1714,21 +1715,8 @@ export const ParrainageView = {
                     }
                 };
 
-                // Lazy-load jspdf + autotable (CDN). Idempotent.
-                const _loadJsPdf = () => new Promise((resolve, reject) => {
-                    if (window.jspdf) return resolve();
-                    const s1 = document.createElement('script');
-                    s1.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
-                    s1.onload = () => {
-                        const s2 = document.createElement('script');
-                        s2.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js';
-                        s2.onload = resolve;
-                        s2.onerror = reject;
-                        document.head.appendChild(s2);
-                    };
-                    s1.onerror = reject;
-                    document.head.appendChild(s1);
-                });
+                // Chargement jspdf + autotable : source unique services/pdf-common.js.
+                const _loadJsPdf = loadJsPdf;
 
                 const exportCommissionsPDF = async () => {
                     exportBusy.value = true;

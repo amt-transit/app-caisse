@@ -4,6 +4,7 @@ import { CONSTANTS } from '../../../constants.js';
 import { getCollectionName } from '../../../agencies-config.js';
 import { filterByShippingMode } from '../../../shipping-mode.js';
 import { calculateStorageFee } from '../../../services/storageFee.js';
+import { loadJsPdf } from '../../../services/pdf-common.js';
 
 export const DashboardView = {
     render(app, container) {
@@ -1308,24 +1309,8 @@ export const DashboardView = {
             if(btnPdf) {
                 btnPdf.onclick = async () => {
                     try {
-                        // jsPDF n'est PAS chargé globalement : on le charge à la
-                        // demande (comme touteslesfactures.js) sinon window.jspdf
-                        // est undefined sur cette page.
-                        if (typeof window.jspdf === 'undefined') {
-                            await new Promise((resolve, reject) => {
-                                const s1 = document.createElement('script');
-                                s1.src = "https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js";
-                                s1.onload = () => {
-                                    const s2 = document.createElement('script');
-                                    s2.src = "https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js";
-                                    s2.onload = resolve;
-                                    s2.onerror = reject;
-                                    document.head.appendChild(s2);
-                                };
-                                s1.onerror = reject;
-                                document.head.appendChild(s1);
-                            });
-                        }
+                        // Chargement jsPDF + autotable (versions figées, source unique).
+                        await loadJsPdf();
                         const { jsPDF } = window.jspdf;
                         const doc = new jsPDF({ orientation: 'landscape' });
                         doc.text(`Détails conteneur : ${containerName}`, 14, 16);
