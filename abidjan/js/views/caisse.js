@@ -20,6 +20,137 @@ export const CaisseView = {
                     .desktop-view-container { display: none; }
                     .mobile-view-container { display: block; }
                 }
+
+                /* ===== Charte AMT — page Saisie Caisse (Bleu de Prusse · Or · Rouge) ===== */
+                #vue-caisse-app {
+                    --c-blue:#1A3553; --c-blue-soft:#2C4E76; --c-gold:#F2A312;
+                    --c-gold-deep:#B8780A; --c-gold-warm:#FDF1DA;
+                    --c-red:#E51F21; --c-red-deep:#B5181A; --c-line:rgba(11,37,64,0.10);
+                }
+                /* Panneaux en cartes premium */
+                #vue-caisse-app #caisseForm {
+                    border-radius: 16px;
+                    box-shadow: 0 8px 22px -12px rgba(11,37,64,0.22);
+                    padding: 22px 24px; margin-bottom: 18px;
+                }
+                #vue-caisse-app #caisseForm[class*="mobile-step"] {
+                    background:#fff !important; border:1px solid var(--c-line) !important;
+                    border-left:4px solid var(--c-gold) !important;
+                }
+                #vue-caisse-app #caisseForm[style*="fff3e0"] {
+                    border:1px solid rgba(229,31,33,0.18) !important;
+                    border-left:4px solid var(--c-red) !important;
+                }
+                /* Titres */
+                #vue-caisse-app .desktop-only-title { color: var(--c-blue) !important; font-weight: 800; letter-spacing:-0.3px; }
+                #vue-caisse-app #caisseForm[style*="fff3e0"] > h3 { color: var(--c-red) !important; font-weight: 800; }
+                /* Barre de progression */
+                #vue-caisse-app .step-indicator.active {
+                    background: linear-gradient(135deg,var(--c-blue-soft),var(--c-blue)) !important;
+                    color:#fff !important; border-color:var(--c-blue) !important;
+                }
+                #vue-caisse-app .step-indicator.completed {
+                    background: var(--c-gold-warm) !important; color: var(--c-gold-deep) !important; border-color: var(--c-gold) !important;
+                }
+                /* Champs */
+                #vue-caisse-app input, #vue-caisse-app select { border-radius: 9px; }
+                #vue-caisse-app input:focus, #vue-caisse-app select:focus {
+                    border-color: var(--c-gold) !important; box-shadow: 0 0 0 3px rgba(242,163,18,0.18) !important; outline: none;
+                }
+                /* Boutons wizard */
+                #vue-caisse-app .btn-next {
+                    background: linear-gradient(135deg,var(--c-blue-soft),var(--c-blue)) !important;
+                    color:#fff !important; border:none !important; border-radius:10px; font-weight:700;
+                    box-shadow:0 6px 14px -6px rgba(26,53,83,0.5);
+                }
+                #vue-caisse-app .btn-prev {
+                    background:#fff !important; color:var(--c-blue) !important;
+                    border:1px solid var(--c-line) !important; border-radius:10px; font-weight:600;
+                }
+                /* Boutons ENREGISTRER + Valider la journée (or marigold) */
+                #vue-caisse-app .form-buttons button, #vue-caisse-app button.primary {
+                    background: linear-gradient(135deg,var(--c-gold),var(--c-gold-deep)) !important;
+                    color:#1a0c08 !important; border:none !important; border-radius:12px; font-weight:800;
+                    box-shadow:0 9px 20px -7px rgba(242,163,18,0.55);
+                }
+                /* Carte résumé étape 3 */
+                #vue-caisse-app .summary-card {
+                    background:#fff !important; border:1px solid var(--c-line) !important;
+                    border-radius:14px; box-shadow:0 6px 14px -10px rgba(11,37,64,0.18);
+                }
+                /* Bandeaux résumé / NET À VERSER */
+                #vue-caisse-app .daily-summary {
+                    background:#fff !important; border:1px solid var(--c-line) !important;
+                    border-top:4px solid var(--c-gold) !important; border-radius:16px !important;
+                    box-shadow:0 8px 20px -12px rgba(11,37,64,0.20);
+                }
+                #vue-caisse-app .daily-summary h2 { color: var(--c-blue) !important; }
+                /* Tables */
+                #vue-caisse-app table.table thead th { background: var(--c-blue) !important; color:#fff !important; border:none !important; }
+                #vue-caisse-app .deleteBtn {
+                    background: linear-gradient(135deg,var(--c-red),var(--c-red-deep)) !important;
+                    color:#fff !important; border:none !important; border-radius:8px;
+                }
+                /* Bouton « Ajouter Dépense » (rouge) + « + » nouvel agent (bleu) */
+                #vue-caisse-app #caisseForm[style*="fff3e0"] .form-grid button {
+                    background: linear-gradient(135deg,var(--c-red),var(--c-red-deep)) !important;
+                    color:#fff !important; border:none !important; border-radius:10px; font-weight:700;
+                }
+                #vue-caisse-app button[title="Ajouter un nouvel agent"] {
+                    background: linear-gradient(135deg,var(--c-blue-soft),var(--c-blue)) !important;
+                    color:#fff !important; border:none !important; border-radius:8px;
+                }
+                /* Sélection d'agents — liste déroulante à cocher */
+                #vue-caisse-app .agent-select { width:100%; position:relative; }
+                #vue-caisse-app .agent-picker-head { display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; }
+                #vue-caisse-app .agent-picker-label { font-size:12px; font-weight:700; color:var(--c-blue); text-transform:uppercase; letter-spacing:0.5px; display:flex; align-items:center; gap:6px; }
+                #vue-caisse-app .agent-count {
+                    background:var(--c-gold); color:#1a0c08; font-size:11px; font-weight:800;
+                    min-width:18px; height:18px; padding:0 5px; border-radius:9px; display:inline-flex; align-items:center; justify-content:center;
+                }
+                #vue-caisse-app .agent-add-btn {
+                    background: linear-gradient(135deg,var(--c-blue-soft),var(--c-blue));
+                    color:#fff; border:none; border-radius:8px; padding:6px 12px; font-size:12px; font-weight:700; cursor:pointer;
+                }
+                #vue-caisse-app .agent-add-btn:hover { filter:brightness(1.08); }
+                /* Champ fermé */
+                #vue-caisse-app .agent-select-control {
+                    display:flex; align-items:center; justify-content:space-between;
+                    background:#fff; border:1.5px solid var(--c-line); border-radius:10px;
+                    padding:10px 14px; cursor:pointer; user-select:none; transition: border-color 0.15s;
+                }
+                #vue-caisse-app .agent-select-control:hover { border-color:var(--c-gold); }
+                #vue-caisse-app .agent-select-control.open { border-color:var(--c-gold); box-shadow:0 0 0 3px rgba(242,163,18,0.18); }
+                #vue-caisse-app .agent-select-text { font-size:13.5px; color:#94a3b8; }
+                #vue-caisse-app .agent-select-text.filled { color:var(--c-blue); font-weight:700; }
+                #vue-caisse-app .agent-select-arrow { color:var(--c-blue); font-weight:900; transition: transform 0.2s; }
+                #vue-caisse-app .agent-select-control.open .agent-select-arrow { transform: rotate(180deg); }
+                /* Panneau ouvert */
+                #vue-caisse-app .agent-select-panel {
+                    position:absolute; left:0; right:0; top:100%; margin-top:6px; z-index:30;
+                    background:#fff; border:1px solid var(--c-line); border-radius:12px;
+                    box-shadow:0 14px 30px -10px rgba(11,37,64,0.30);
+                    max-height:230px; overflow-y:auto; padding:6px;
+                }
+                #vue-caisse-app .agent-option {
+                    display:flex; align-items:center; gap:10px;
+                    padding:9px 12px; border-radius:8px; cursor:pointer; font-size:13.5px; color:var(--c-blue);
+                    transition: background 0.12s;
+                }
+                #vue-caisse-app .agent-option:hover { background:#f1f5f9; }
+                #vue-caisse-app .agent-option.selected { background:var(--c-gold-warm); font-weight:700; }
+                #vue-caisse-app .agent-option input[type="checkbox"] {
+                    width:17px; height:17px; accent-color:var(--c-gold); cursor:pointer; margin:0; flex-shrink:0;
+                }
+                #vue-caisse-app .agent-empty { color:#94a3b8; font-size:13px; padding:10px 12px; }
+                /* Mobile — actions principales */
+                #vue-caisse-app .mob-top-tab.active { background: var(--c-blue) !important; color:#fff !important; }
+                #vue-caisse-app .mob-btn-primary, #vue-caisse-app .mob-btn-success {
+                    background: linear-gradient(135deg,var(--c-gold),var(--c-gold-deep)) !important; color:#1a0c08 !important;
+                }
+                #vue-caisse-app .mob-btn-danger {
+                    background: linear-gradient(135deg,var(--c-red),var(--c-red-deep)) !important; color:#fff !important;
+                }
             </style>
             <div id="vue-caisse-app" v-cloak>
             <div class="desktop-view-container" v-show="!isMobile">
@@ -114,14 +245,23 @@ export const CaisseView = {
                                 <option value="Cocody">Cocody</option><option value="Entrepôt">Entrepôt</option><option value="Yopougon">Yopougon</option>
                             </select>
                             
-                            <div style="display: flex; gap: 5px; align-items: flex-start;">
-                                <div style="flex-grow: 1;">
-                                    <select v-model="dForm.agents" multiple style="width: 100%; height: 80px; padding: 5px;">
-                                        <option v-for="ag in dbAgents" :key="ag.id" :value="ag.name">{{ ag.name }}</option>
-                                    </select>
-                                    <small style="color: #64748b;">Maintenez Ctrl/Cmd pour sélection multiple</small>
+                            <div class="agent-select">
+                                <div class="agent-picker-head">
+                                    <span class="agent-picker-label">Agents <span v-if="dForm.agents.length" class="agent-count">{{ dForm.agents.length }}</span></span>
+                                    <button type="button" @click="addNewAgent" class="agent-add-btn" title="Ajouter un nouvel agent">+ Agent</button>
                                 </div>
-                                <button @click="addNewAgent" style="background: #28a745; color: white; border: none; border-radius: 4px; width: 30px; height: 30px; font-weight: bold; cursor: pointer; display: flex; align-items: center; justify-content: center;" title="Ajouter un nouvel agent">+</button>
+                                <div class="agent-select-control" :class="{ open: agentDropdownOpen }" @click="agentDropdownOpen = !agentDropdownOpen">
+                                    <span class="agent-select-text" v-if="!dForm.agents.length">Sélectionner des agents…</span>
+                                    <span class="agent-select-text filled" v-else>{{ dForm.agents.length }} agent{{ dForm.agents.length > 1 ? 's' : '' }} sélectionné{{ dForm.agents.length > 1 ? 's' : '' }}</span>
+                                    <span class="agent-select-arrow">⌄</span>
+                                </div>
+                                <div class="agent-select-panel" v-show="agentDropdownOpen">
+                                    <div v-if="!dbAgents.length" class="agent-empty">Aucun agent — cliquez « + Agent ».</div>
+                                    <label v-for="ag in dbAgents" :key="ag.id" class="agent-option" :class="{ selected: dForm.agents.includes(ag.name) }">
+                                        <input type="checkbox" :value="ag.name" v-model="dForm.agents">
+                                        <span>{{ ag.name }}</span>
+                                    </label>
+                                </div>
                             </div>
                             
                             <select v-model="dForm.adjustmentType">
@@ -324,6 +464,7 @@ export const CaisseView = {
                 const desktopStep = ref(1);
                 const mobileTab = ref('saisie');
                 const showAdvanced = ref(false);
+                const agentDropdownOpen = ref(false);
                 const saving = ref(false);
 
                 // Data State
@@ -398,9 +539,13 @@ export const CaisseView = {
                     return { totalIn: tIn, totalOut: tOut, net: tIn - tOut };
                 });
 
+                // Ferme la liste déroulante des agents si on clique en dehors.
+                const onDocClickAgents = (e) => { if (!e.target.closest('.agent-select')) agentDropdownOpen.value = false; };
+
                 // --- FIREBASE LISTENERS ---
                 onMounted(() => {
                     window.addEventListener('resize', () => isMobile.value = window.innerWidth <= 768);
+                    document.addEventListener('click', onDocClickAgents);
 
                     // Agents
                     unsubs.push(onSnapshot(query(collection(db, "agents"), orderBy("name")), snap => {
@@ -434,7 +579,7 @@ export const CaisseView = {
                     if (typeof window.initBackToTopButton === 'function') window.initBackToTopButton();
                 });
 
-                onUnmounted(() => unsubs.forEach(u => u()));
+                onUnmounted(() => { unsubs.forEach(u => u()); document.removeEventListener('click', onDocClickAgents); });
 
                 // --- LOGIC: DESKTOP ---
                 const goToDesktopStep = (step) => {
@@ -448,6 +593,7 @@ export const CaisseView = {
                     const newName = window.AppModal ? await window.AppModal.prompt("Nom du nouvel agent :", "", "Nouvel Agent") : prompt("Nom du nouvel agent :");
                     if (newName && newName.trim()) {
                         await addDoc(collection(db, "agents"), { name: newName.trim() });
+                        if (!dForm.agents.includes(newName.trim())) dForm.agents.push(newName.trim());
                         if (window.AppModal) window.AppModal.success("Agent ajouté !");
                     }
                 };
@@ -461,7 +607,11 @@ export const CaisseView = {
                     if (localItem) {
                         const tPaid = dailyTransactions.value.filter(t => t.reference === ref).reduce((sum, t) => sum + t.montantParis + t.montantAbidjan, 0);
                         dForm.nom = localItem.nom; dForm.conteneur = localItem.conteneur;
-                        dForm.prix = 0; dForm.baseReste = (localItem.prix - tPaid) * -1; // Reste en neg
+                        // On facture le RELIQUAT restant (prix - déjà saisi dans la
+                        // journée). Mettre 0 affichait "soldé" à tort et bloquait la
+                        // 2e saisie ("Trop perçu"). saveDay agrège via le prix de la
+                        // transaction, donc ce prix "reliquat" ne fausse pas le total.
+                        dForm.prix = Math.max(0, (localItem.prix || 0) - tPaid); dForm.baseReste = 0;
                         return;
                     }
 
@@ -480,7 +630,7 @@ export const CaisseView = {
                         if (data.adjustmentType === 'reduction') effectivePrix -= (data.adjustmentVal || 0);
                         const reste = ((data.montantParis || 0) + (data.montantAbidjan || 0)) - effectivePrix;
 
-                        if (reste < 0 && !data.storageFeeWaived) {
+                        if (reste < 0 && !data.storageFeeWaived && data.adjustmentType !== 'augmentation') {
                             // Magasinage basé sur la livraison liée (date d'ENTRÉE
                             // EN ENTREPÔT + quantité de colis), comme Livraison/
                             // facture/Magasinage — pas la date/quantité de la transaction.
@@ -500,7 +650,20 @@ export const CaisseView = {
                             }
                         }
                         dForm.nom = data.nomDestinataire || data.nom || ''; dForm.conteneur = data.conteneur || '';
-                        dForm.prix = effectivePrix; dForm.modePaiement = data.modePaiement || 'Espèce';
+                        // On affiche/valide le RELIQUAT (prix attendu − déjà payé sur ce
+                        // colis lors d'une session précédente). Sinon une 2e saisie cross-
+                        // session affichait le prix plein au lieu du reste dû. saveDay
+                        // ignore ce prix pour une transaction existante (il agrège via
+                        // oldData.prix), donc ce reliquat ne fausse pas le total.
+                        const paidBefore = (data.montantParis || 0) + (data.montantAbidjan || 0);
+                        if (dForm.isNewAdjustment && dForm.adjustmentType === 'augmentation') {
+                            // Magasinage ajouté à l'instant : le prix exclut le magasinage
+                            // (réappliqué par dFormReste/addDesktop via l'ajustement).
+                            dForm.prix = Math.max(0, effectivePrix - (dForm.adjustmentVal || 0) - paidBefore);
+                        } else {
+                            dForm.prix = Math.max(0, effectivePrix - paidBefore);
+                        }
+                        dForm.modePaiement = data.modePaiement || 'Espèce';
                         if (data.agentMobileMoney && ['Virement', 'Chèque'].includes(dForm.modePaiement)) dForm.banque = data.agentMobileMoney;
                     } else {
                         const livQ = await getDocs(query(collection(db, getCollectionName("livraisons")), where("ref", "==", ref), limit(1)));
@@ -597,7 +760,7 @@ export const CaisseView = {
                         if (data.adjustmentType === 'reduction') effectivePrix -= (data.adjustmentVal || 0);
                         let reste = ((data.montantParis || 0) + (data.montantAbidjan || 0)) - effectivePrix;
 
-                        if (reste < 0 && !data.storageFeeWaived) {
+                        if (reste < 0 && !data.storageFeeWaived && data.adjustmentType !== 'augmentation') {
                             // Magasinage basé sur la livraison liée (date d'ENTRÉE
                             // EN ENTREPÔT + quantité de colis), comme Livraison/facture.
                             let feeDate = data.date;
@@ -890,7 +1053,7 @@ export const CaisseView = {
                     dForm, dExpForm, mForm, mExpForm, dbAgents, dbVehicles, uniqueReferences,
                     dailyTransactions, dailyExpenses, mobileTransactions, mobileExpenses,
                     dFormReste, mFormReste, dTotals, mTotals, formatCFA,
-                    goToDesktopStep, addNewAgent, onDesktopRefChange, addDesktopTransaction, removeDesktopTransaction, addDesktopExpense, removeDesktopExpense,
+                    goToDesktopStep, addNewAgent, agentDropdownOpen, onDesktopRefChange, addDesktopTransaction, removeDesktopTransaction, addDesktopExpense, removeDesktopExpense,
                     onMobileRefChange, addMobileTransaction, removeMobileTransaction, editMobileTransaction, addMobileExpense, removeMobileExpense,
                     saveDay
                 };
