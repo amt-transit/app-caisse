@@ -24,9 +24,8 @@ const LOGO = require('../../assets/logo.png');
 export default function MainApp() {
   const { user, logout } = useAuth();
   const data = useDemarcheur();
-  // À la connexion : on arrive directement sur « Factures » — le démarcheur
-  // voit immédiatement l'état de ses dossiers (paiements + suivi colis).
-  const [tab, setTab] = useState('factures');
+  // À la connexion : on arrive sur « Accueil » (1er onglet).
+  const [tab, setTab] = useState('dashboard');
 
   // Filet de sécurité : si le chargement dépasse 8s (= cold start Cloud
   // Functions, réseau lent…), on propose de réessayer ou de se reconnecter.
@@ -36,6 +35,55 @@ export default function MainApp() {
     const t = setTimeout(() => setLoadTimedOut(true), 8000);
     return () => clearTimeout(t);
   }, [data.loading]);
+
+  // ── Onboarding notifications. IMPORTANT : ce hook doit être déclaré AVANT
+  // tout return conditionnel (loading/error) — sinon le nombre de hooks change
+  // entre deux rendus et React plante ("Rendered more hooks than during the
+  // previous render"), ce qui fait fermer l'app en version release.
+  // À la première ouverture, on propose d'activer les notifs si la fiche n'a
+  // pas encore de pushToken.
+  const promptShownRef = useRef(false);
+  useEffect(() => {
+    const me = data.me;
+    if (!me) return; // attendre que la fiche soit chargée
+    if (promptShownRef.current) return; // un seul prompt par session
+    if (me.pushToken) return; // déjà activé, rien à faire
+    promptShownRef.current = true;
+    // Petit délai pour laisser l'écran d'accueil s'afficher avant l'alerte
+    const t = setTimeout(() => {
+      Alert.alert(
+        '🔔 Activer les notifications',
+        "Pour recevoir vos commissions et paiements en direct, activez les notifications. Vous pourrez le changer à tout moment depuis l'onglet Profil.",
+        [
+          { text: 'Plus tard', style: 'cancel' },
+          {
+            text: 'Activer',
+            onPress: async () => {
+              const res = await requestPushPermissionManually({
+                demarcheurId: data.activeLink?.demarcheurId || me?.id,
+                agency: data.activeLink?.agency || me?.agency,
+              });
+              if (res.status === 'granted') {
+                Alert.alert('Notifications activées ✔', res.hint);
+              } else if (res.status === 'denied' && res.reason === 'blocked_in_settings') {
+                Alert.alert(
+                  'Permission bloquée',
+                  res.hint,
+                  [
+                    { text: 'Annuler', style: 'cancel' },
+                    { text: 'Ouvrir les paramètres', onPress: () => Linking.openSettings() },
+                  ],
+                );
+              } else if (res.status !== 'granted') {
+                Alert.alert('Activation impossible', res.hint || "Vous pouvez réessayer depuis Profil.");
+              }
+            },
+          },
+        ],
+      );
+    }, 1200);
+    return () => clearTimeout(t);
+  }, [data.me?.id, data.me?.pushToken]);
 
   if (data.loading) {
     return (
@@ -107,53 +155,6 @@ export default function MainApp() {
 
   const me = data.me;
   const prenom = me?.prenom || (user?.email ? user.email.split('@')[0] : 'Partenaire');
-
-  // ── Onboarding notifications : à la première ouverture, on propose
-  // automatiquement d'activer les notifs. Si la fiche n'a pas de pushToken
-  // ET que l'utilisateur ne l'a pas déjà décliné dans cette session, on
-  // affiche une Alert proactive. Le bouton "Activer" force la demande
-  // Android (ou ouvre les paramètres si la permission est bloquée).
-  const promptShownRef = useRef(false);
-  useEffect(() => {
-    if (!me) return; // attendre que la fiche soit chargée
-    if (promptShownRef.current) return; // un seul prompt par session
-    if (me.pushToken) return; // déjà activé, rien à faire
-    promptShownRef.current = true;
-    // Petit délai pour laisser l'écran d'accueil s'afficher avant l'alerte
-    const t = setTimeout(() => {
-      Alert.alert(
-        '🔔 Activer les notifications',
-        "Pour recevoir vos commissions et paiements en direct, activez les notifications. Vous pourrez le changer à tout moment depuis l'onglet Profil.",
-        [
-          { text: 'Plus tard', style: 'cancel' },
-          {
-            text: 'Activer',
-            onPress: async () => {
-              const res = await requestPushPermissionManually({
-                demarcheurId: data.activeLink?.demarcheurId || me?.id,
-                agency: data.activeLink?.agency || me?.agency,
-              });
-              if (res.status === 'granted') {
-                Alert.alert('Notifications activées ✔', res.hint);
-              } else if (res.status === 'denied' && res.reason === 'blocked_in_settings') {
-                Alert.alert(
-                  'Permission bloquée',
-                  res.hint,
-                  [
-                    { text: 'Annuler', style: 'cancel' },
-                    { text: 'Ouvrir les paramètres', onPress: () => Linking.openSettings() },
-                  ],
-                );
-              } else if (res.status !== 'granted') {
-                Alert.alert('Activation impossible', res.hint || "Vous pouvez réessayer depuis Profil.");
-              }
-            },
-          },
-        ],
-      );
-    }, 1200);
-    return () => clearTimeout(t);
-  }, [me?.id, me?.pushToken]);
 
   const screens = {
     factures: <FacturesScreen data={data} />,

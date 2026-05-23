@@ -8,8 +8,8 @@ import { Ionicons } from './Icon';
 import { colors, spacing, radius, font } from '../theme';
 
 export const TABS = [
-  { key: 'factures', label: 'Factures', icon: 'receipt' },
   { key: 'dashboard', label: 'Accueil', icon: 'grid' },
+  { key: 'factures', label: 'Factures', icon: 'receipt' },
   { key: 'wallet', label: 'Wallet', icon: 'wallet' },
   { key: 'filleuls', label: 'Filleuls', icon: 'git-network' },
   { key: 'profil', label: 'Profil', icon: 'person-circle' },
