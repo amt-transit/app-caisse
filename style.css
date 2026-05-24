@@ -2004,6 +2004,51 @@ tr.clickable-row:hover { background: #f1f5f9 !important; }
 #livraison-content .toolbar { display:none!important; }
 #livraison-content { padding:0; background:var(--lv-bg); }
 
+/* ── Vue FICHES (onglet « En cours ») — charte AMT ── */
+#livraison-content .lv-viewtoggle { display:inline-flex; background:#fff; border:1px solid rgba(11,37,64,.10); border-radius:10px; overflow:hidden; }
+#livraison-content .lv-viewtoggle button { border:0; background:transparent; padding:8px 13px; font:inherit; font-weight:600; font-size:12.5px; color:#5A7088; cursor:pointer; }
+#livraison-content .lv-viewtoggle button.on { background:#1A3553; color:#fff; }
+
+#livraison-content .lv-cards { display:grid; grid-template-columns:repeat(auto-fill, minmax(340px,1fr)); gap:14px; padding:16px; }
+#livraison-content .lv-card { position:relative; background:#fff; border:1px solid rgba(11,37,64,.10); border-left:5px solid #5A7088; border-radius:16px; padding:14px 16px; box-shadow:0 8px 20px -14px rgba(11,37,64,.25); transition:transform .18s, box-shadow .18s; }
+#livraison-content .lv-card:hover { transform:translateY(-3px); box-shadow:0 18px 34px -18px rgba(11,37,64,.3); z-index:4; }
+#livraison-content .lv-card:has(.act-menu-wrap.open) { z-index:30; }
+#livraison-content .lv-card.s-attente { border-left-color:#F2A312; }
+#livraison-content .lv-card.s-livre { border-left-color:#10B981; }
+#livraison-content .lv-card.s-incident { border-left-color:#E51F21; }
+#livraison-content .lv-c-top { display:flex; align-items:flex-start; justify-content:space-between; gap:10px; }
+#livraison-content .lv-c-ref { font-family:'Comfortaa',sans-serif; font-weight:700; font-size:16px; color:#1A3553; text-decoration:none; letter-spacing:-.3px; }
+#livraison-content .lv-c-ref:hover { text-decoration:underline; }
+#livraison-content .lv-c-cont { font-size:11px; font-weight:700; color:#1A3553; background:#eef2f8; border:1px solid rgba(11,37,64,.10); padding:3px 9px; border-radius:7px; white-space:nowrap; }
+#livraison-content .lv-c-name { font-weight:700; font-size:14.5px; margin-top:8px; color:#0B2540; }
+#livraison-content .lv-c-meta { font-size:12.5px; color:#5A7088; margin-top:2px; }
+#livraison-content .lv-c-desc { font-size:12.5px; color:#0B2540; margin-top:6px; background:#f8fafc; border:1px solid rgba(11,37,64,.10); border-radius:8px; padding:5px 9px; display:inline-block; }
+#livraison-content .lv-c-money { font-family:'Comfortaa',sans-serif; font-weight:700; font-size:17px; margin-top:9px; color:#0B2540; }
+#livraison-content .lv-magas { font-size:11px; color:#9a3412; font-weight:700; }
+#livraison-content .lv-partiel { display:inline-flex; align-items:center; gap:5px; background:linear-gradient(135deg,#fb923c,#c2410c); color:#fff; font-size:11px; font-weight:800; padding:3px 9px; border-radius:999px; margin-top:6px; }
+#livraison-content .lv-complet { display:inline-flex; align-items:center; gap:5px; background:#FDF1DA; color:#B8780A; font-size:11px; font-weight:800; padding:3px 9px; border-radius:999px; border:1px solid rgba(242,163,18,.35); margin-top:6px; }
+#livraison-content .lv-badges { display:flex; gap:8px; flex-wrap:wrap; margin-top:10px; }
+#livraison-content .lv-badge { display:inline-flex; align-items:center; gap:6px; font-size:11.5px; font-weight:700; padding:5px 11px; border-radius:999px; border:1px solid transparent; }
+#livraison-content .lv-badge .k { opacity:.6; font-weight:600; }
+#livraison-content .lv-badge.b-wait { background:#fff7e6; color:#b45309; border-color:#fcd9a3; }
+#livraison-content .lv-badge.b-done { background:#dcfce7; color:#047857; border-color:#a7f3d0; }
+#livraison-content .lv-badge.b-unpaid { background:#fee2e2; color:#B5181A; border-color:#fecaca; }
+#livraison-content .lv-badge.b-paid { background:#dcfce7; color:#047857; border-color:#a7f3d0; }
+#livraison-content .lv-edit { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:11px; padding:11px; background:#f8fafc; border:1px solid rgba(11,37,64,.10); border-radius:10px; }
+#livraison-content .lv-edit label { display:flex; flex-direction:column; font-size:11px; font-weight:700; color:#5A7088; gap:3px; }
+#livraison-content .lv-edit input { border:1px solid rgba(11,37,64,.18); border-radius:7px; padding:6px 8px; font:inherit; font-size:13px; }
+#livraison-content .lv-edit input:focus { outline:0; border-color:#F2A312; box-shadow:0 0 0 3px rgba(242,163,18,.18); }
+#livraison-content .lv-acts { display:flex; gap:8px; align-items:center; margin-top:12px; padding-top:11px; border-top:1px dashed rgba(11,37,64,.10); flex-wrap:wrap; }
+#livraison-content .lv-a { border:0; border-radius:9px; padding:8px 12px; font:inherit; font-weight:700; font-size:12.5px; cursor:pointer; display:inline-flex; align-items:center; gap:6px; transition:.15s; }
+#livraison-content .lv-a:hover { filter:brightness(1.06); transform:translateY(-1px); }
+#livraison-content .lv-a-livre { background:linear-gradient(135deg,#10B981,#047857); color:#fff; }
+#livraison-content .lv-a-pay { background:linear-gradient(135deg,#F2A312,#B8780A); color:#1a0c08; }
+#livraison-content .lv-a-edit, #livraison-content .lv-a-ghost { background:#eef2f8; color:#1A3553; }
+#livraison-content .lv-more-slot { margin-left:auto; }
+#livraison-content .lv-cards-empty { grid-column:1 / -1; text-align:center; color:#5A7088; padding:40px 20px; }
+#livraison-content .lv-cards-empty h3 { margin:8px 0 4px; color:#1A3553; }
+#livraison-content .lv-cards-more { grid-column:1 / -1; text-align:center; padding:6px; }
+
 /* ── COMMAND BAR ── */
 .lv-command-bar { background:var(--lv-surface); border-bottom:1px solid var(--lv-border); padding:0 16px; position:sticky; top:0; z-index:100; box-shadow:var(--lv-shadow); }
 .lv-toprow { display:flex; align-items:center; gap:12px; padding:8px 0 6px; border-bottom:1px solid var(--lv-border); flex-wrap:wrap; }

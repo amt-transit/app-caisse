@@ -4,7 +4,7 @@ import { getCollectionName } from '../../../agencies-config.js';
 import { matchesShippingMode, getShippingMode } from '../../../shipping-mode.js';
 import { calculateStorageFee } from '../../../services/storageFee.js';
 import { createDocumentTemplates } from '../../../services/document-templates.js';
-import { CI_PHONE_REGEX, extractPhone, toE164 } from '../../../services/phone.js';
+import { CI_PHONE_REGEX, extractPhone, toE164, stripPhoneFromName } from '../../../services/phone.js';
 
 import { formatMoney } from '../../../services/format.js';
 
@@ -206,6 +206,10 @@ export const LivraisonView = {
                     <span class="ico">🔍</span>
                     <input type="text" class="lv-search" id="searchBox" placeholder="Rechercher réf, client, lieu..." oninput="debouncedFilterDeliveries()">
                 </div>
+                <div class="lv-viewtoggle" id="lv-viewtoggle" title="Affichage en fiches ou en liste">
+                    <button id="lv-vt-fiches" class="on" onclick="lvSetView('fiches')">🗂️ Fiches</button>
+                    <button id="lv-vt-liste" onclick="lvSetView('liste')">📋 Liste</button>
+                </div>
             </div>
 
             <!-- BARRE DE SÉLECTION CONTEXTUELLE -->
@@ -245,6 +249,7 @@ export const LivraisonView = {
                     </tr></thead>
                     <tbody id="deliveriesBody"><tr><td colspan="14" class="empty-state">Chargement...</td></tr></tbody>
                 </table>
+                <div id="deliveriesCards" class="lv-cards" style="display:none"></div>
             </div>
 
             <!-- MODALE CONTENEUR RAPIDE -->
@@ -608,7 +613,9 @@ export const LivraisonView = {
         let filteredDeliveries = [];
         let pendingImport = [];
         let currentContainerName = localStorage.getItem(CONSTANTS.STORAGE_KEYS.CONTAINER_NAME) || 'Aucun';
-        let currentTab = 'EN_COURS'; 
+        let currentTab = 'EN_COURS';
+        // Mode d'affichage de l'onglet « En cours » : fiches (par défaut) ou liste (tableau).
+        let lvViewMode = localStorage.getItem('lv_view_mode') || 'fiches';
         let selectedIds = new Set(); 
         window.selectedIds = selectedIds;
         let currentSort = { column: null, direction: 'asc' };
@@ -2110,7 +2117,24 @@ export const LivraisonView = {
        function renderTable() {
            const tbody = document.getElementById('deliveriesBody');
            const theadRow = document.querySelector('#deliveriesTable thead tr');
-       
+
+           // Vue « fiches » (par défaut) pour l'onglet En cours : on délègue au
+           // rendu en cartes et on masque le tableau. Sinon, vue liste (tableau).
+           const vtEl = document.getElementById('lv-viewtoggle');
+           if (vtEl) vtEl.style.display = (currentTab === 'EN_COURS') ? 'inline-flex' : 'none';
+           const vtF = document.getElementById('lv-vt-fiches'), vtL = document.getElementById('lv-vt-liste');
+           if (vtF) vtF.classList.toggle('on', lvViewMode === 'fiches');
+           if (vtL) vtL.classList.toggle('on', lvViewMode === 'liste');
+
+           const cardsEl = document.getElementById('deliveriesCards');
+           const tableEl = document.getElementById('deliveriesTable');
+           const useCards = (currentTab === 'EN_COURS' && lvViewMode === 'fiches');
+           if (cardsEl) cardsEl.style.display = useCards ? 'grid' : 'none';
+           if (tableEl) tableEl.style.display = useCards ? 'none' : '';
+           // En mode fiches, le conteneur ne doit pas couper le menu ⋮ (overflow).
+           if (cardsEl && cardsEl.parentElement) cardsEl.parentElement.style.overflow = useCards ? 'visible' : '';
+           if (useCards) { renderEnCoursCards(cardsEl); return; }
+
            if (filteredDeliveries.length === 0) {
                // Restaurer les en-têtes par défaut si vide pour éviter un tableau cassé
                if (currentTab !== 'PROGRAMME') {
@@ -2492,7 +2516,110 @@ export const LivraisonView = {
        
            tbody.innerHTML = tableRows;
        }
-       
+
+       // ===== VUE FICHES (onglet « En cours ») =====
+       function lvEsc(s){ return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+       function renderEnCoursCards(container) {
+           if (!container) return;
+           const list = filteredDeliveries.slice(0, itemsPerPage);
+           if (list.length === 0) {
+               container.innerHTML = `<div class="lv-cards-empty"><div style="font-size:40px">📦</div><h3>Aucun colis à Abidjan</h3><p>Importez le fichier du scanner ou validez l'arrivée d'un conteneur.</p></div>`;
+               return;
+           }
+           container.innerHTML = list.map(d => {
+               // Montant à jour depuis la caisse si disponible
+               const t = d.ref ? transactionsMap.get(d.ref.toUpperCase().trim()) : null;
+               const montantStr = (t && t.montant) ? t.montant : (d.montant || '0 CFA');
+               const montantVal = parseFloat(String(montantStr).replace(/[^\d]/g, '')) || 0;
+               const paye = montantVal === 0;
+
+               // Statut LIVRAISON
+               const isLivre = d.status === 'LIVRE';
+               const isAband = d.status === 'ABANDONNE';
+               let livLabel = '⏳ En attente', livCls = 'b-wait', cardCls = 's-attente';
+               if (isLivre) { livLabel = '✅ Livré'; livCls = 'b-done'; cardCls = 's-livre'; }
+               else if (d.status === 'PARTIEL' || d.status === 'LIVRAISON_PARTIELLE') { livLabel = `🌗 Partiel ${d.quantiteLivree||0}/${d.quantite||1}`; }
+               else if (d.status === 'INCIDENT') { livLabel = '⚠️ Incident'; livCls = 'b-unpaid'; cardCls = 's-incident'; }
+               else if (d.status === 'RETOUR') { livLabel = '↩️ Retour'; }
+               else if (isAband) { livLabel = '⚫ Abandonné'; livCls = 'b-unpaid'; cardCls = 's-incident'; }
+
+               // Téléphone + nom propre
+               let phone = d.numero || extractPhone(d.destinataire) || extractPhone(d.description) || extractPhone(d.info) || '';
+               const destName = stripPhoneFromName(d.destinataire || '') || 'Client';
+
+               // Arrivée (partielle / complète)
+               let arrBadge = '';
+               if (d.arrivagePartiel && d.quantiteAttendue) arrBadge = `<span class="lv-partiel" title="Attendu : ${lvEsc(d.quantiteAttendue)}">📦 ${lvEsc(d.quantite||0)}/${lvEsc(d.quantiteAttendue)} arrivés</span>`;
+               else if (d.quantite) arrBadge = `<span class="lv-complet">✓ ${lvEsc(d.quantite)} colis</span>`;
+
+               // Magasinage
+               let magas = '';
+               if (d.containerStatus === 'EN_COURS' && !isLivre && !isAband && d.dateAjout) {
+                   const fee = calculateMagasinageFee(d.dateAjout, d, t).fee;
+                   if (fee > 0) magas = ` <span class="lv-magas">+ ${formatMoney(fee, true)} magasinage</span>`;
+               }
+
+               // Badge PAIEMENT
+               const payBadge = paye
+                   ? `<span class="lv-badge b-paid"><span class="k">Paiement</span> ✅ Soldé</span>`
+                   : `<span class="lv-badge b-unpaid"><span class="k">Paiement</span> ⚠️ Reste ${lvEsc(montantStr)}</span>`;
+
+               // Actions surfacées + menu ⋮ (réutilise buildActionMenu = WhatsApp + dropdown)
+               let primary = '';
+               if (!isViewer) {
+                   if (isLivre) primary = `<button class="lv-a lv-a-ghost" onclick="markAsPending('${d.id}')">↩️ En attente</button>`;
+                   else if (!isAband) primary = `<button class="lv-a lv-a-livre" onclick="markAsDelivered('${d.id}')">✅ Livré</button>`;
+               }
+               const payBtn = (!isViewer && !paye) ? `<button class="lv-a lv-a-pay" onclick="openPaymentModal('${d.id}')">💰 Encaisser</button>` : '';
+               const editBtn = !isViewer ? `<button class="lv-a lv-a-edit" onclick="lvToggleCardEdit('${d.id}')" title="Modifier les infos destinataire">✏️</button>` : '';
+               const moreMenu = buildActionMenu(d, phone, destName);
+
+               const editPanel = !isViewer ? `
+                   <div class="lv-edit" id="lvedit-${d.id}" style="display:none">
+                       <label>Destinataire<input type="text" value="${lvEsc(destName)}" onchange="updateDeliveryRecipient('${d.id}', this.value)"></label>
+                       <label>Téléphone<input type="text" value="${lvEsc(phone)}" onchange="updateDeliveryPhone('${d.id}', this.value)"></label>
+                       <label>Lieu de livraison<input type="text" value="${lvEsc(d.lieuLivraison||'')}" onchange="updateDeliveryLocation('${d.id}', this.value)"></label>
+                       <label>Info<input type="text" value="${lvEsc(d.info||'')}" onchange="updateDeliveryInfo('${d.id}', this.value)"></label>
+                   </div>` : '';
+
+               return `
+               <div class="lv-card ${cardCls}">
+                   <div class="lv-c-top">
+                       <div>
+                           <a href="#" class="lv-c-ref" onclick="event.preventDefault();showScanHistory('${d.id}')">${lvEsc(d.ref)}</a>
+                           ${arrBadge}
+                       </div>
+                       <span class="lv-c-cont">${lvEsc(d.conteneur||'-')}</span>
+                   </div>
+                   <div class="lv-c-name">${lvEsc(destName)}</div>
+                   <div class="lv-c-meta">📍 ${lvEsc(d.lieuLivraison||d.commune||'—')}${d.expediteur?` · 👤 ${lvEsc(d.expediteur)}`:''}</div>
+                   ${d.description?`<div class="lv-c-desc">${lvEsc(d.description)}</div>`:''}
+                   <div class="lv-c-money">${paye?'✅ Soldé':lvEsc(montantStr)}${magas}</div>
+                   <div class="lv-badges">
+                       <span class="lv-badge ${livCls}"><span class="k">Livraison</span> ${livLabel}</span>
+                       ${payBadge}
+                   </div>
+                   ${editPanel}
+                   <div class="lv-acts">
+                       ${primary}${payBtn}${editBtn}
+                       <span class="lv-more-slot">${moreMenu}</span>
+                   </div>
+               </div>`;
+           }).join('') + (filteredDeliveries.length > itemsPerPage ? `<div class="lv-cards-more"><button class="lv-btn" onclick="loadMoreItems()">Afficher plus</button></div>` : '');
+       }
+
+       function lvToggleCardEdit(id) {
+           const el = document.getElementById('lvedit-' + id);
+           if (el) el.style.display = (el.style.display === 'none' || !el.style.display) ? 'grid' : 'none';
+       }
+
+       function lvSetView(mode) {
+           lvViewMode = (mode === 'liste') ? 'liste' : 'fiches';
+           localStorage.setItem('lv_view_mode', lvViewMode);
+           renderTable();
+       }
+
        // Détails du programme (Modal)
        function viewProgramDetails(date, livreur) {
            // Réinitialiser le tri si on change de programme
@@ -5188,6 +5315,7 @@ export const LivraisonView = {
         Object.assign(window, {
             lvTab, lvUpdateBadge,
             lvOpenContModal, lvCloseContModal, lvApplyCont, lvDeselAll, lvToggleMore,
+            lvSetView, lvToggleCardEdit,
         });
 
         window.activeAgency = sessionStorage.getItem('currentActiveAgency') || 'abidjan';
