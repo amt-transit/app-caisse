@@ -31,28 +31,18 @@ export const LivraisonView = {
             </div>
 
             <div class="lv-command-bar">
-                <div class="lv-toprow">
-                    <div class="lv-stat-chips">
-                        <div class="lv-chip total"><span class="n" id="lv-n-total">0</span><span>colis</span></div>
-                        <div class="lv-chip attente"><span class="n" id="lv-n-attente">0</span><span>en attente</span></div>
-                        <div class="lv-chip livre"><span class="n" id="lv-n-livre">0</span><span>livrés</span></div>
-                        <div class="lv-chip partiel" id="lv-chip-partiel" style="display:none"><span class="n" id="lv-n-partiel">0</span><span>partiels</span></div>
-                    </div>
-                    <div class="lv-toprow-right">
-                        <div class="lv-container-badge" id="lvBadge" onclick="lvOpenContModal()" title="Changer le conteneur actif">
-                            📦 <span id="lvBadgeTxt">Aucun conteneur</span> <span style="opacity:.4;font-size:10px">▼</span>
-                        </div>
-                        <a href="livreurscan.html" class="lv-btn go" style="text-decoration:none">
-                            <span>📱</span><span class="lv-l">Mode Livreur</span>
-                        </a>
-                    </div>
-                </div>
                 <div class="lv-tabs">
                     <button class="lv-tab active" id="lvT-EN_COURS"  onclick="lvTab('EN_COURS')">📦 En cours <span class="lv-badge" id="lvC-EN_COURS">0</span></button>
                     <button class="lv-tab"        id="lvT-A_VENIR"   onclick="lvTab('A_VENIR')">🚢 À venir <span class="lv-badge" id="lvC-A_VENIR">0</span></button>
                     <button class="lv-tab"        id="lvT-PARIS"     onclick="lvTab('PARIS')">🇫🇷 Paris <span class="lv-badge" id="lvC-PARIS">0</span></button>
                     <button class="lv-tab"        id="lvT-PROGRAMME" onclick="lvTab('PROGRAMME')">📅 Programmes <span class="lv-badge" id="lvC-PROGRAMME">0</span></button>
                     <div class="lv-tabs-spacer"></div>
+                    <div class="lv-stat-chips">
+                        <div class="lv-chip total"><span class="n" id="lv-n-total">0</span><span>colis</span></div>
+                        <div class="lv-chip attente"><span class="n" id="lv-n-attente">0</span><span>en attente</span></div>
+                        <div class="lv-chip livre"><span class="n" id="lv-n-livre">0</span><span>livrés</span></div>
+                        <div class="lv-chip partiel" id="lv-chip-partiel" style="display:none"><span class="n" id="lv-n-partiel">0</span><span>partiels</span></div>
+                    </div>
                     <button class="lv-help-btn" onclick="openHelpModal()">❓ Guide</button>
                 </div>
             </div>
@@ -654,6 +644,10 @@ export const LivraisonView = {
         document.addEventListener('click', e => {
             if (!e.target.closest('.act-menu-wrap')) {
                 document.querySelectorAll('.act-menu-wrap.open').forEach(m => m.classList.remove('open'));
+            }
+            // Ferme aussi le menu « ⋯ Plus » de la barre d'outils si clic en dehors.
+            if (!e.target.closest('.lv-more')) {
+                document.querySelectorAll('.lv-more-drop.open').forEach(m => m.classList.remove('open'));
             }
         });
 
@@ -5378,14 +5372,21 @@ export const LivraisonView = {
             if (typeof renderTable === 'function') renderTable();
         }
 
-        // "Plus" : affiche 100 lignes de plus (logique existante loadMoreItems).
-        function lvToggleMore() {
-            if (typeof loadMoreItems === 'function') loadMoreItems();
+        // "⋯ Plus" : ouvre/ferme le menu déroulant contextuel de l'onglet.
+        function lvToggleMore(tab) {
+            const drop = document.getElementById('lvDrop-' + tab);
+            if (!drop) return;
+            const willOpen = !drop.classList.contains('open');
+            document.querySelectorAll('.lv-more-drop.open').forEach(d => d.classList.remove('open'));
+            if (willOpen) drop.classList.add('open');
+        }
+        function lvCloseMore() {
+            document.querySelectorAll('.lv-more-drop.open').forEach(d => d.classList.remove('open'));
         }
 
         Object.assign(window, {
             lvTab, lvUpdateBadge,
-            lvOpenContModal, lvCloseContModal, lvApplyCont, lvDeselAll, lvToggleMore,
+            lvOpenContModal, lvCloseContModal, lvApplyCont, lvDeselAll, lvToggleMore, lvCloseMore,
             lvSetView, lvToggleCardEdit,
         });
 
