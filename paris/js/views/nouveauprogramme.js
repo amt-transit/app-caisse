@@ -297,7 +297,7 @@ export const NouveauProgrammeView = {
                 </div>
 
             <!-- Modal Assignation RDV -->
-            <div v-if="showAssignModal" class="modal active" style="display:flex; position:fixed; z-index:9999; left:0; top:0; width:100%; height:100%; background:rgba(15, 23, 42, 0.6); backdrop-filter: blur(4px); align-items:center; justify-content:center;">
+            <div v-if="showAssignModal" class="modal active amt-modal" style="display:flex; position:fixed; z-index:9999; left:0; top:0; width:100%; height:100%; background:rgba(15, 23, 42, 0.6); backdrop-filter: blur(4px); align-items:center; justify-content:center;">
                 <div class="modal-box">
                     <div class="modal-header">
                         <h2 style="margin:0; font-size:18px; color:#0f172a;">➕ Assigner des Rendez-vous</h2>
@@ -392,7 +392,7 @@ export const NouveauProgrammeView = {
             </div>
 
             <!-- Modal Ajouter Chauffeur -->
-            <div v-if="showAddDriverModal" class="modal active" style="display:flex; position:fixed; z-index:9999; left:0; top:0; width:100%; height:100%; background:rgba(15, 23, 42, 0.6); backdrop-filter: blur(4px); align-items:center; justify-content:center;">
+            <div v-if="showAddDriverModal" class="modal active amt-modal" style="display:flex; position:fixed; z-index:9999; left:0; top:0; width:100%; height:100%; background:rgba(15, 23, 42, 0.6); backdrop-filter: blur(4px); align-items:center; justify-content:center;">
                 <div class="modal-box" style="max-width: 450px;">
                     <div class="modal-header">
                         <h2 style="margin:0; font-size:18px; color:#0f172a;">➕ Ajouter un chauffeur</h2>

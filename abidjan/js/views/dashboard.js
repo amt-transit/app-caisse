@@ -326,25 +326,26 @@ export const DashboardView = {
                 </div>
             </div>
 
-            <div id="containerDetailsModal" class="modal" style="z-index: 1050;">
+            <div id="containerDetailsModal" class="modal amt-modal" style="z-index: 1050;">
                 <div class="modal-content modal-lg" style="display: flex; flex-direction: column; overflow: hidden; padding: 0; max-height: 90vh;">
-                    <div style="padding: 20px 25px 10px 25px; background: #fff; border-bottom: 1px solid #e2e8f0; flex-shrink: 0;">
-                        <div class="modal-header" style="position: static; margin: 0; padding: 0 0 15px 0; border: none; box-shadow: none;">
+                    <div style="flex-shrink: 0;">
+                        <div class="modal-header" style="position: static; margin: 0;">
                             <h2 id="modalContainerTitle" style="margin:0;">Détails du Conteneur</h2>
                             <div style="display: flex; align-items: center; gap: 10px;">
-                                <button id="downloadContainerExcelBtn" style="background-color: #217346; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 12px; display: flex; align-items: center; gap: 5px;">📊 Excel</button>
-                                <button id="downloadContainerPdfBtn" style="background-color: #d32f2f; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 12px; display: flex; align-items: center; gap: 5px;">📄 PDF</button>
+                                <button id="downloadContainerExcelBtn" style="background:rgba(255,255,255,.16); color:#fff; border:0; padding:7px 12px; border-radius:8px; cursor:pointer; font-weight:bold; font-size:12px; display:flex; align-items:center; gap:5px;">📊 Excel</button>
+                                <button id="downloadContainerPdfBtn" style="background:rgba(255,255,255,.16); color:#fff; border:0; padding:7px 12px; border-radius:8px; cursor:pointer; font-weight:bold; font-size:12px; display:flex; align-items:center; gap:5px;">📄 PDF</button>
                                 <span class="close-modal" id="closeContainerModal">&times;</span>
                             </div>
                         </div>
-                        
-                        <div id="containerStats" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; background: #f8fafc; padding: 10px; border-radius: 8px; border: 1px solid #e2e8f0;">
-                            <div style="text-align:center;"><div style="font-size:11px; color:#64748b; text-transform:uppercase;">Total Prix</div><div id="topTotalPrix" style="font-weight:bold; font-size:1.2em; color:#0f172a;">0</div></div>
-                            <div style="text-align:center;"><div style="font-size:11px; color:#64748b; text-transform:uppercase;">Total Abidjan</div><div id="topTotalPayeAbj" style="font-weight:bold; font-size:1.2em; color:#d97706;">0</div></div>
-                            <div style="text-align:center;"><div style="font-size:11px; color:#64748b; text-transform:uppercase;">Total Paris</div><div id="topTotalPayePar" style="font-weight:bold; font-size:1.2em; color:#2563eb;">0</div></div>
-                            <div style="text-align:center;"><div style="font-size:11px; color:#64748b; text-transform:uppercase;">Total Reste</div><div id="topTotalReste" style="font-weight:bold; font-size:1.2em;">0</div></div>
-                            <div style="text-align:center;"><div style="font-size:11px; color:#64748b; text-transform:uppercase;">Dépenses</div><div id="topTotalDep" style="font-weight:bold; font-size:1.2em; color:#ef4444;">0</div></div>
-                            <div style="text-align:center;"><div style="font-size:11px; color:#64748b; text-transform:uppercase;">Bénéfice</div><div id="topTotalBen" style="font-weight:bold; font-size:1.2em; color:#10b981;">0</div></div>
+                        <div style="padding: 15px 25px;">
+                            <div id="containerStats" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; background: #f8fafc; padding: 10px; border-radius: 8px; border: 1px solid #e2e8f0;">
+                                <div style="text-align:center;"><div style="font-size:11px; color:#64748b; text-transform:uppercase;">Total Prix</div><div id="topTotalPrix" style="font-weight:bold; font-size:1.2em; color:#0f172a;">0</div></div>
+                                <div style="text-align:center;"><div style="font-size:11px; color:#64748b; text-transform:uppercase;">Total Abidjan</div><div id="topTotalPayeAbj" style="font-weight:bold; font-size:1.2em; color:#d97706;">0</div></div>
+                                <div style="text-align:center;"><div style="font-size:11px; color:#64748b; text-transform:uppercase;">Total Paris</div><div id="topTotalPayePar" style="font-weight:bold; font-size:1.2em; color:#2563eb;">0</div></div>
+                                <div style="text-align:center;"><div style="font-size:11px; color:#64748b; text-transform:uppercase;">Total Reste</div><div id="topTotalReste" style="font-weight:bold; font-size:1.2em;">0</div></div>
+                                <div style="text-align:center;"><div style="font-size:11px; color:#64748b; text-transform:uppercase;">Dépenses</div><div id="topTotalDep" style="font-weight:bold; font-size:1.2em; color:#ef4444;">0</div></div>
+                                <div style="text-align:center;"><div style="font-size:11px; color:#64748b; text-transform:uppercase;">Bénéfice</div><div id="topTotalBen" style="font-weight:bold; font-size:1.2em; color:#10b981;">0</div></div>
+                            </div>
                         </div>
                     </div>
 
@@ -371,7 +372,7 @@ export const DashboardView = {
             </div>
 
             <!-- MODAL DÉTAILS MOIS (LISTE CONTENEURS) -->
-            <div id="monthDetailsModal" class="modal">
+            <div id="monthDetailsModal" class="modal amt-modal">
                 <div class="modal-content modal-lg" style="width: 95% !important; max-width: 1200px !important;">
                     <div class="modal-header">
                         <h2 id="modalMonthTitle">Détails du Mois</h2>

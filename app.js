@@ -185,11 +185,16 @@ export const app = {
 
     applyMenuConfig(config) {
         const userRole = sessionStorage.getItem('userRole') || 'agent';
+        // Robustesse à la casse : un rôle peut être stocké « LIVREUR » alors que
+        // sa config menu est rangée sous « livreur » (les id sont en minuscules).
+        // On compare en minuscules partout pour éviter un repli involontaire sur
+        // les menus « agent ».
+        const ur = userRole.toLowerCase();
         let baseRole = 'agent';
-        if (userRole.includes('chauf')) baseRole = 'chauf';
-        if (userRole.includes('manager') || userRole.includes('direction')) baseRole = 'manager';
-        
-        const isSuperUser = userRole === 'super_admin' || userRole === 'admin';
+        if (ur.includes('chauf') || ur.includes('livreur')) baseRole = 'chauf';
+        if (ur.includes('manager') || ur.includes('direction')) baseRole = 'manager';
+
+        const isSuperUser = ur === 'super_admin' || ur === 'admin';
         const defaultOrder = ['main', 'special-asie', 'bilan', 'factures', 'rdv', 'programmes', 'entrees-caisse', 'logistique', 'devis', 'chargement', 'scan', 'clients', 'comms', 'produits', 'finance', 'stock', 'bilans-financiers', 'settings', 'configuration', 'prospecting', 'audit-log'];
         let baseOrder = config && config.order ? config.order : [...defaultOrder];
         
@@ -211,7 +216,10 @@ export const app = {
             // Un rôle personnalisé utilise SES propres menus (clé = id exact du rôle).
             // On ne retombe sur le groupe de base (agent/chauf/manager) que si le
             // rôle n'a aucune configuration enregistrée.
-            allowedMenus = config.roles[userRole] || config.roles[baseRole] || defaultRoles[baseRole] || [];
+            allowedMenus = config.roles[userRole] || config.roles[ur] || config.roles[baseRole] || defaultRoles[baseRole] || [];
+            if (!config.roles[userRole] && !config.roles[ur] && !['agent', 'chauf', 'manager', 'spectateur'].includes(ur)) {
+                console.warn(`[Menus] Aucune config de menu pour le rôle « ${userRole} » sur l'agence « ${activeAgency} » → repli sur « ${baseRole} ». Configurez ce rôle dans Rôles & Menus pour CETTE agence.`);
+            }
         } else {
             allowedMenus = defaultRoles[baseRole] || [];
         }
@@ -268,9 +276,10 @@ export const app = {
         // Permet ex. : un livreur voit "Entrées Caisse > Saisie" mais pas
         // "Confirmation / Historique / Autres entrées". super_admin/admin = aucun
         // masquage. Conservée sur l'instance pour checkPageAccess (accès direct).
+        const roleHiddenList = (config && config.roleHiddenItems)
+            ? (config.roleHiddenItems[userRole] || config.roleHiddenItems[ur]) : null;
         const roleHidden = new Set(
-            (!isSuperUser && config && config.roleHiddenItems && Array.isArray(config.roleHiddenItems[userRole]))
-                ? config.roleHiddenItems[userRole] : []
+            (!isSuperUser && Array.isArray(roleHiddenList)) ? roleHiddenList : []
         );
         this.roleHiddenPages = roleHidden;
 

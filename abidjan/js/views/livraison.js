@@ -264,7 +264,7 @@ export const LivraisonView = {
             </div>
 
             <!-- MODALS D'ACTION -->
-            <div id="addModal" class="modal">
+            <div id="addModal" class="modal amt-modal">
                 <div class="modal-content modal-xl">
                     <h2 class="modal-header">➕ Nouvelle Livraison</h2>
                     <form id="deliveryForm">
@@ -305,7 +305,7 @@ export const LivraisonView = {
                     </form>
                 </div>
             </div>
-            <div id="previewModal" class="modal">
+            <div id="previewModal" class="modal amt-modal">
                 <div class="modal-content modal-xl">
                     <h2 class="modal-header">📋 Aperçu de l'import</h2>
                     <div class="form-grid" style="margin-bottom:20px;background:#f8f9fa;padding:15px;border-radius:8px">
@@ -326,10 +326,10 @@ export const LivraisonView = {
                     </div>
                 </div>
             </div>
-            <div id="rapprochementModal" class="modal" style="z-index: 2005;">
+            <div id="rapprochementModal" class="modal amt-modal" style="z-index: 2005;">
                 <div class="modal-content" style="max-width: 600px;">
                     <span class="close-modal" id="closeRapModal" style="float:right; cursor:pointer; font-size:24px;">&times;</span>
-                    <h2 class="modal-header" style="color: #1e293b; margin-top: 0;">📊 Rapport de Dépotage</h2>
+                    <h2 class="modal-header">📊 Rapport de Dépotage</h2>
                     <div style="background: #f8fafc; padding: 15px; border-radius: 8px; margin-bottom: 15px; border: 1px solid #e2e8f0;">
                         <div style="display: flex; justify-content: space-between; margin-bottom: 10px; font-size: 14px;">
                             <span><strong>Conteneur :</strong> <span id="rapConteneur" style="color: #3b82f6;"></span></span>
@@ -351,48 +351,61 @@ export const LivraisonView = {
                     </div>
                 </div>
             </div>
-            <div id="programModal" class="modal">
-                <div class="modal-content">
-                    <h2 class="modal-header">📅 Programmer Livraison</h2>
-                    <p>Pour <strong id="selectedCount">0</strong> colis :</p>
-                    <div class="form-grid">
-                        <div class="form-group full-width"><label>Programme Existant</label><select id="existingProgramSelect" onchange="fillProgramFields()"><option value="">-- Nouveau --</option></select></div>
-                        <div class="form-group full-width"><label>Livreur</label><input type="text" id="progLivreur"></div>
-                        <div class="form-group full-width"><label>Date</label><input type="date" id="progDate"></div>
+            <div id="programModal" class="modal lvmm">
+                <div class="modal-content lvmm-card">
+                    <div class="lvmm-head">
+                        <h2>📅 Programmer la livraison</h2>
+                        <button class="lvmm-x" onclick="closeProgramModal()" aria-label="Fermer">×</button>
                     </div>
-                    <div style="display:flex;gap:10px;margin-top:20px">
-                        <button class="btn btn-success" onclick="confirmProgram()">💾 Enregistrer</button>
-                        <button class="btn btn-danger" onclick="closeProgramModal()">❌ Annuler</button>
+                    <div class="lvmm-body">
+                        <p class="lvmm-sub">Pour <strong id="selectedCount">0</strong> colis sélectionné(s)</p>
+                        <div class="lvmm-field"><label>Programme existant</label><select id="existingProgramSelect" onchange="fillProgramFields()"><option value="">— Nouveau programme —</option></select></div>
+                        <div class="lvmm-field"><label>Livreur</label><input type="text" id="progLivreur" placeholder="Nom du livreur" list="livreurSuggestions" autocomplete="off"><datalist id="livreurSuggestions"></datalist></div>
+                        <div class="lvmm-field"><label>Date de livraison</label><input type="date" id="progDate"></div>
                     </div>
-                </div>
-            </div>
-            <div id="assignContainerModal" class="modal">
-                <div class="modal-content">
-                    <h2 class="modal-header">📦 Attribuer Conteneur</h2>
-                    <p>Pour <strong id="assignSelectedCount">0</strong> colis :</p>
-                    <div class="form-group full-width"><label>Nouvelle Position</label><select id="assignContainerStatus"><option value="">-- Ne pas changer --</option><option value="PARIS">🇫🇷 Stock Paris</option><option value="A_VENIR">🚢 En Transit</option><option value="EN_COURS">📦 Arrivé</option></select></div>
-                    <div class="form-group full-width"><label>N° Conteneur</label><input type="text" id="assignConteneurInput"></div>
-                    <div style="display:flex;gap:10px;margin-top:20px">
-                        <button class="btn btn-success" onclick="confirmAssignContainer()">💾 Enregistrer</button>
-                        <button class="btn btn-danger" onclick="closeAssignContainerModal()">❌ Annuler</button>
+                    <div class="lvmm-foot">
+                        <button class="lvmm-btn lvmm-cancel" onclick="closeProgramModal()">Annuler</button>
+                        <button class="lvmm-btn lvmm-save" onclick="confirmProgram()">💾 Enregistrer</button>
                     </div>
                 </div>
             </div>
-            <div id="bulkStatusModal" class="modal">
-                <div class="modal-content">
-                    <h2 class="modal-header">🔄 Changer le statut</h2>
-                    <p>Pour <strong id="bulkStatusCount">0</strong> colis sélectionnés :</p>
-                    <div class="form-group full-width"><label>Nouveau Statut</label><select id="bulkStatusSelect"><option value="EN_ATTENTE">⏳ En Attente</option><option value="EN_COURS">🚚 En Cours</option><option value="LIVRE">✅ Livré</option><option value="INCIDENT">⚠️ Incident</option><option value="RETOUR">↩️ Retour</option><option value="ABANDONNE">⚫ Abandonné</option></select></div>
-                    <div style="display:flex;gap:10px;margin-top:20px">
-                        <button class="btn btn-success" onclick="confirmBulkStatusChange()">💾 Enregistrer</button>
-                        <button class="btn btn-danger" onclick="closeBulkStatusModal()">❌ Annuler</button>
+            <div id="assignContainerModal" class="modal lvmm">
+                <div class="modal-content lvmm-card">
+                    <div class="lvmm-head">
+                        <h2>📦 Attribuer un conteneur</h2>
+                        <button class="lvmm-x" onclick="closeAssignContainerModal()" aria-label="Fermer">×</button>
+                    </div>
+                    <div class="lvmm-body">
+                        <p class="lvmm-sub">Pour <strong id="assignSelectedCount">0</strong> colis sélectionné(s)</p>
+                        <div class="lvmm-field"><label>Nouvelle position</label><select id="assignContainerStatus"><option value="">— Ne pas changer —</option><option value="PARIS">🇫🇷 Stock Paris</option><option value="A_VENIR">🚢 En transit</option><option value="EN_COURS">📦 Arrivé</option></select></div>
+                        <div class="lvmm-field"><label>N° de conteneur</label><input type="text" id="assignConteneurInput" placeholder="Ex : E9"></div>
+                    </div>
+                    <div class="lvmm-foot">
+                        <button class="lvmm-btn lvmm-cancel" onclick="closeAssignContainerModal()">Annuler</button>
+                        <button class="lvmm-btn lvmm-save" onclick="confirmAssignContainer()">💾 Enregistrer</button>
                     </div>
                 </div>
             </div>
-            <div id="programDetailsModal" class="modal">
+            <div id="bulkStatusModal" class="modal lvmm">
+                <div class="modal-content lvmm-card">
+                    <div class="lvmm-head">
+                        <h2>🔄 Changer le statut</h2>
+                        <button class="lvmm-x" onclick="closeBulkStatusModal()" aria-label="Fermer">×</button>
+                    </div>
+                    <div class="lvmm-body">
+                        <p class="lvmm-sub">Pour <strong id="bulkStatusCount">0</strong> colis sélectionné(s)</p>
+                        <div class="lvmm-field"><label>Nouveau statut</label><select id="bulkStatusSelect"><option value="EN_ATTENTE">⏳ En attente</option><option value="EN_COURS">🚚 En cours</option><option value="LIVRE">✅ Livré</option><option value="INCIDENT">⚠️ Incident</option><option value="RETOUR">↩️ Retour</option><option value="ABANDONNE">⚫ Abandonné</option></select></div>
+                    </div>
+                    <div class="lvmm-foot">
+                        <button class="lvmm-btn lvmm-cancel" onclick="closeBulkStatusModal()">Annuler</button>
+                        <button class="lvmm-btn lvmm-save" onclick="confirmBulkStatusChange()">💾 Enregistrer</button>
+                    </div>
+                </div>
+            </div>
+            <div id="programDetailsModal" class="modal amt-modal">
                 <div class="modal-content modal-xl">
-                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
-                        <h2 class="modal-header" style="margin:0">📋 Feuille de route</h2>
+                    <div class="modal-header">
+                        <h2 style="margin:0">📋 Feuille de route</h2>
                         <div style="display:flex;gap:10px">
                             <button id="btnOpenMap" class="btn btn-warning btn-small">🗺️ Carte</button>
                             <button id="btnExportPdf" class="btn btn-success btn-small">📄 PDF</button>
@@ -405,7 +418,7 @@ export const LivraisonView = {
                     <div class="preview-table"><table id="programDetailsTable"></table></div>
                 </div>
             </div>
-            <div id="helpModal" class="modal">
+            <div id="helpModal" class="modal amt-modal">
                 <div class="modal-content" style="max-width:600px">
                     <div class="modal-header"><h2 style="margin:0">📘 Guide du Flux Logistique</h2><span class="close-modal" onclick="document.getElementById('helpModal').classList.remove('active')">&times;</span></div>
                     <div style="padding:10px 0">
@@ -418,10 +431,10 @@ export const LivraisonView = {
                     <div style="text-align:right;margin-top:10px"><button class="btn" onclick="document.getElementById('helpModal').classList.remove('active')">Fermer</button></div>
                 </div>
             </div>
-            <div id="archivesModal" class="modal">
+            <div id="archivesModal" class="modal amt-modal">
                 <div class="modal-content modal-xl" style="height:90vh">
-                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
-                        <h2 class="modal-header" style="margin:0">🗄️ Archives</h2>
+                    <div class="modal-header">
+                        <h2 style="margin:0">🗄️ Archives</h2>
                         <div style="display:flex; gap:10px;">
                             <button class="btn btn-success btn-small" onclick="exportArchivesToExcel()">📥 Export Excel</button>
                             <button class="btn btn-danger btn-small" onclick="closeArchivesModal()">Fermer</button>
@@ -433,7 +446,7 @@ export const LivraisonView = {
                     </div>
                 </div>
             </div>
-            <div id="abandonModal" class="modal">
+            <div id="abandonModal" class="modal amt-modal">
                 <div class="modal-content">
                     <h2 class="modal-header">⚫ Déclarer un Abandon</h2>
                     <p style="margin-bottom:15px">Pour le colis Réf : <strong id="abandonRefDisplay" style="color:#ef4444"></strong></p>
@@ -447,10 +460,10 @@ export const LivraisonView = {
             </div>
             <datalist id="sharedLocationsList"></datalist>
             
-            <div id="paymentModal" class="modal" style="z-index:2005">
+            <div id="paymentModal" class="modal amt-modal" style="z-index:2005">
                 <div class="modal-content" style="max-width:500px">
                     <span class="close-modal" onclick="closePaymentModal()" style="float:right; cursor:pointer; font-size:24px;">&times;</span>
-                    <h2 class="modal-header" style="margin-top:0;">💰 Encaisser un paiement</h2>
+                    <h2 class="modal-header">💰 Encaisser un paiement</h2>
                     <p>Colis Réf: <strong id="payRefDisplay" style="color:#2563eb;"></strong></p>
                     
                     <div class="form-grid" style="grid-template-columns: 1fr 1fr; gap:15px; margin-bottom:20px;">
@@ -499,7 +512,7 @@ export const LivraisonView = {
                 </div>
             </div>
 
-            <div id="importProgressModal" class="modal" style="z-index:2000">
+            <div id="importProgressModal" class="modal amt-modal" style="z-index:2000">
                 <div class="modal-content" style="max-width:400px;text-align:center;padding:30px">
                     <h3 style="margin-top:0;color:#333">Importation en cours...</h3>
                     <div style="margin:20px 0;background:#f3f4f6;border-radius:10px;height:20px;width:100%;overflow:hidden;border:1px solid #e5e7eb"><div id="importProgressBar" style="background:#10b981;height:100%;width:0%;transition:width .3s ease"></div></div>
@@ -507,14 +520,14 @@ export const LivraisonView = {
                     <p style="font-size:.85em;color:#9ca3af;margin-top:10px">Veuillez ne pas fermer la page.</p>
                 </div>
             </div>
-            <div id="importResultModal" class="modal" style="z-index:2000">
+            <div id="importResultModal" class="modal amt-modal" style="z-index:2000">
                 <div class="modal-content" style="max-width:500px">
                     <div class="modal-header"><h2 style="margin:0">Rapport d'Importation</h2><span class="close-modal" onclick="document.getElementById('importResultModal').classList.remove('active')">&times;</span></div>
                     <div id="importResultContent" style="padding:20px;font-size:1.1em;line-height:1.6"></div>
                     <div style="text-align:right;margin-top:10px"><button class="btn btn-success" onclick="document.getElementById('importResultModal').classList.remove('active')">Fermer</button></div>
                 </div>
             </div>
-            <div id="deleteChoiceModal" class="modal" style="z-index:2001">
+            <div id="deleteChoiceModal" class="modal amt-modal" style="z-index:2001">
                 <div class="modal-content" style="max-width:400px;text-align:center;padding:30px">
                     <h3 style="margin-top:0;color:#333">Action de Suppression</h3>
                     <p style="color:#666;margin-bottom:25px">Que voulez-vous faire de ces colis ?</p>
@@ -525,7 +538,7 @@ export const LivraisonView = {
                     </div>
                 </div>
             </div>
-            <div id="massNotificationModal" class="modal">
+            <div id="massNotificationModal" class="modal amt-modal">
                 <div class="modal-content">
                     <h2 class="modal-header">💬 Notification en Masse (WhatsApp)</h2>
                     <p>Cliquez sur chaque lien pour envoyer le message. Le client sera automatiquement coché "Notifié".</p>
@@ -606,6 +619,16 @@ export const LivraisonView = {
         let currentTab = 'EN_COURS';
         // Mode d'affichage de l'onglet « En cours » : fiches (par défaut) ou liste (tableau).
         let lvViewMode = localStorage.getItem('lv_view_mode') || 'fiches';
+        // Mode LIVREUR : si l'utilisateur est un chauffeur, la page devient
+        // « Mon programme » (uniquement SA tournée du jour, en fiches).
+        const _urLiv = (sessionStorage.getItem('userRole') || '').toLowerCase();
+        const isDriver = (_urLiv === 'chauf' || _urLiv.includes('chauf') || _urLiv.includes('livreur'));
+        const driverName = (sessionStorage.getItem('userName') || '').trim();
+        // Anciennes tournées du livreur (colis livrés/archivés) — lecture seule.
+        let driverArchive = [];
+        // « Mon programme » = calendrier : mois affiché + jour sélectionné.
+        let driverMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+        let driverSelectedDate = null;
         let selectedIds = new Set(); 
         window.selectedIds = selectedIds;
         let currentSort = { column: null, direction: 'asc' };
@@ -2114,20 +2137,22 @@ export const LivraisonView = {
 
            // Vue « fiches » (par défaut) pour l'onglet En cours : on délègue au
            // rendu en cartes et on masque le tableau. Sinon, vue liste (tableau).
+           // Vue fiches dispo sur En cours / À venir / Paris (pas Programmes).
+           const cardTabs = (currentTab === 'EN_COURS' || currentTab === 'A_VENIR' || currentTab === 'PARIS');
            const vtEl = document.getElementById('lv-viewtoggle');
-           if (vtEl) vtEl.style.display = (currentTab === 'EN_COURS') ? 'inline-flex' : 'none';
+           if (vtEl) vtEl.style.display = cardTabs ? 'inline-flex' : 'none';
            const vtF = document.getElementById('lv-vt-fiches'), vtL = document.getElementById('lv-vt-liste');
            if (vtF) vtF.classList.toggle('on', lvViewMode === 'fiches');
            if (vtL) vtL.classList.toggle('on', lvViewMode === 'liste');
 
            const cardsEl = document.getElementById('deliveriesCards');
            const tableEl = document.getElementById('deliveriesTable');
-           const useCards = (currentTab === 'EN_COURS' && lvViewMode === 'fiches');
+           const useCards = (cardTabs && lvViewMode === 'fiches');
            if (cardsEl) cardsEl.style.display = useCards ? 'grid' : 'none';
            if (tableEl) tableEl.style.display = useCards ? 'none' : '';
            // En mode fiches, le conteneur ne doit pas couper le menu ⋮ (overflow).
            if (cardsEl && cardsEl.parentElement) cardsEl.parentElement.style.overflow = useCards ? 'visible' : '';
-           if (useCards) { renderEnCoursCards(cardsEl); return; }
+           if (useCards) { renderCards(cardsEl); return; }
 
            if (filteredDeliveries.length === 0) {
                // Restaurer les en-têtes par défaut si vide pour éviter un tableau cassé
@@ -2514,11 +2539,16 @@ export const LivraisonView = {
        // ===== VUE FICHES (onglet « En cours ») =====
        function lvEsc(s){ return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
-       function renderEnCoursCards(container) {
+       function renderCards(container) {
            if (!container) return;
+           const tab = currentTab;
            const list = filteredDeliveries.slice(0, itemsPerPage);
            if (list.length === 0) {
-               container.innerHTML = `<div class="lv-cards-empty"><div style="font-size:40px">📦</div><h3>Aucun colis à Abidjan</h3><p>Importez le fichier du scanner ou validez l'arrivée d'un conteneur.</p></div>`;
+               let title = 'Aucun colis à Abidjan';
+               let sub = "Importez le fichier du scanner ou validez l'arrivée d'un conteneur.";
+               if (tab === 'PARIS') { title = 'Entrepôt Paris vide'; sub = 'Importez les factures / le manifeste, ou ajoutez un colis.'; }
+               else if (tab === 'A_VENIR') { title = 'Rien en transit'; sub = 'Les colis embarqués depuis Paris apparaîtront ici.'; }
+               container.innerHTML = `<div class="lv-cards-empty"><div style="font-size:40px">📦</div><h3>${title}</h3><p>${sub}</p></div>`;
                return;
            }
            container.innerHTML = list.map(d => {
@@ -2528,54 +2558,84 @@ export const LivraisonView = {
                const montantVal = parseFloat(String(montantStr).replace(/[^\d]/g, '')) || 0;
                const paye = montantVal === 0;
 
-               // Statut LIVRAISON
-               const isLivre = d.status === 'LIVRE';
-               const isAband = d.status === 'ABANDONNE';
-               let livLabel = '⏳ En attente', livCls = 'b-wait', cardCls = 's-attente';
-               if (isLivre) { livLabel = '✅ Livré'; livCls = 'b-done'; cardCls = 's-livre'; }
-               else if (d.status === 'PARTIEL' || d.status === 'LIVRAISON_PARTIELLE') { livLabel = `🌗 Partiel ${d.quantiteLivree||0}/${d.quantite||1}`; }
-               else if (d.status === 'INCIDENT') { livLabel = '⚠️ Incident'; livCls = 'b-unpaid'; cardCls = 's-incident'; }
-               else if (d.status === 'RETOUR') { livLabel = '↩️ Retour'; }
-               else if (isAband) { livLabel = '⚫ Abandonné'; livCls = 'b-unpaid'; cardCls = 's-incident'; }
-
                // Téléphone + nom propre
                let phone = d.numero || extractPhone(d.destinataire) || extractPhone(d.description) || extractPhone(d.info) || '';
                const destName = stripPhoneFromName(d.destinataire || '') || 'Client';
 
-               // Arrivée (partielle / complète)
-               let arrBadge = '';
-               if (d.arrivagePartiel && d.quantiteAttendue) arrBadge = `<span class="lv-partiel" title="Attendu : ${lvEsc(d.quantiteAttendue)}">📦 ${lvEsc(d.quantite||0)}/${lvEsc(d.quantiteAttendue)} arrivés</span>`;
-               else if (d.quantite) arrBadge = `<span class="lv-complet">✓ ${lvEsc(d.quantite)} colis</span>`;
-
-               // Magasinage
-               let magas = '';
-               if (d.containerStatus === 'EN_COURS' && !isLivre && !isAband && d.dateAjout) {
-                   const fee = calculateMagasinageFee(d.dateAjout, d, t).fee;
-                   if (fee > 0) magas = ` <span class="lv-magas">+ ${formatMoney(fee, true)} magasinage</span>`;
-               }
-
-               // Badge PAIEMENT
-               const payBadge = paye
-                   ? `<span class="lv-badge b-paid"><span class="k">Paiement</span> ✅ Soldé</span>`
-                   : `<span class="lv-badge b-unpaid"><span class="k">Paiement</span> ⚠️ Reste ${lvEsc(montantStr)}</span>`;
-
-               // Actions surfacées + menu ⋮ (réutilise buildActionMenu = WhatsApp + dropdown)
-               let primary = '';
-               if (!isViewer) {
-                   if (isLivre) primary = `<button class="lv-a lv-a-ghost" onclick="markAsPending('${d.id}')">↩️ En attente</button>`;
-                   else if (!isAband) primary = `<button class="lv-a lv-a-livre" onclick="markAsDelivered('${d.id}')">✅ Livré</button>`;
-               }
-               const payBtn = (!isViewer && !paye) ? `<button class="lv-a lv-a-pay" onclick="openPaymentModal('${d.id}')">💰 Encaisser</button>` : '';
-               const editBtn = !isViewer ? `<button class="lv-a lv-a-edit" onclick="lvToggleCardEdit('${d.id}')" title="Modifier les infos destinataire">✏️</button>` : '';
-               const moreMenu = buildActionMenu(d, phone, destName);
-
-               const editPanel = !isViewer ? `
+               // Colis archivé (ancienne tournée du livreur) : LECTURE SEULE — pas
+               // d'actions (elles viseraient la mauvaise collection).
+               const archived = !!d._archived;
+               // Éléments communs à tous les onglets
+               const editBtn = (!isViewer && !archived) ? `<button class="lv-a lv-a-edit" onclick="lvToggleCardEdit('${d.id}')" title="Modifier les infos">✏️</button>` : '';
+               const moreMenu = archived ? '' : buildActionMenu(d, phone, destName);
+               const editPanel = (!isViewer && !archived) ? `
                    <div class="lv-edit" id="lvedit-${d.id}" style="display:none">
                        <label>Destinataire<input type="text" value="${lvEsc(destName)}" onchange="updateDeliveryRecipient('${d.id}', this.value)"></label>
                        <label>Téléphone<input type="text" value="${lvEsc(phone)}" onchange="updateDeliveryPhone('${d.id}', this.value)"></label>
                        <label>Lieu de livraison<input type="text" value="${lvEsc(d.lieuLivraison||'')}" onchange="updateDeliveryLocation('${d.id}', this.value)"></label>
                        <label>Info<input type="text" value="${lvEsc(d.info||'')}" onchange="updateDeliveryInfo('${d.id}', this.value)"></label>
                    </div>` : '';
+
+               let cardCls = 's-attente', arrBadge = '', badgesHtml = '', moneyHtml = '', actionsHtml = '';
+
+               if (tab === 'EN_COURS') {
+                   const isLivre = d.status === 'LIVRE';
+                   const isAband = d.status === 'ABANDONNE';
+                   let livLabel = '⏳ En attente', livCls = 'b-wait';
+                   if (isLivre) { livLabel = '✅ Livré'; livCls = 'b-done'; cardCls = 's-livre'; }
+                   else if (d.status === 'PARTIEL' || d.status === 'LIVRAISON_PARTIELLE') { livLabel = `🌗 Partiel ${d.quantiteLivree||0}/${d.quantite||1}`; }
+                   else if (d.status === 'INCIDENT') { livLabel = '⚠️ Incident'; livCls = 'b-unpaid'; cardCls = 's-incident'; }
+                   else if (d.status === 'RETOUR') { livLabel = '↩️ Retour'; }
+                   else if (isAband) { livLabel = '⚫ Abandonné'; livCls = 'b-unpaid'; cardCls = 's-incident'; }
+
+                   if (d.arrivagePartiel && d.quantiteAttendue) arrBadge = `<span class="lv-partiel" title="Attendu : ${lvEsc(d.quantiteAttendue)}">📦 ${lvEsc(d.quantite||0)}/${lvEsc(d.quantiteAttendue)} arrivés</span>`;
+                   else if (d.quantite) arrBadge = `<span class="lv-complet">✓ ${lvEsc(d.quantite)} colis</span>`;
+
+                   let magas = '';
+                   if (!isLivre && !isAband && d.dateAjout) {
+                       const fee = calculateMagasinageFee(d.dateAjout, d, t).fee;
+                       if (fee > 0) magas = ` <span class="lv-magas">+ ${formatMoney(fee, true)} magasinage</span>`;
+                   }
+                   moneyHtml = `<div class="lv-c-money">${paye ? '✅ Soldé' : lvEsc(montantStr)}${magas}</div>`;
+                   const payBadge = paye
+                       ? `<span class="lv-badge b-paid"><span class="k">Paiement</span> ✅ Soldé</span>`
+                       : `<span class="lv-badge b-unpaid"><span class="k">Paiement</span> ⚠️ Reste ${lvEsc(montantStr)}</span>`;
+                   badgesHtml = `<span class="lv-badge ${livCls}"><span class="k">Livraison</span> ${livLabel}</span>${payBadge}`;
+
+                   if (archived) {
+                       actionsHtml = `<span class="lv-archived-note">📦 Archivé — lecture seule${d.dateLivraison ? ' · livré le ' + new Date(d.dateLivraison).toLocaleDateString('fr-FR') : ''}</span>`;
+                   } else {
+                       let primary = '';
+                       if (!isViewer) {
+                           if (isLivre) primary = `<button class="lv-a lv-a-ghost" onclick="markAsPending('${d.id}')">↩️ En attente</button>`;
+                           else if (!isAband) primary = `<button class="lv-a lv-a-livre" onclick="markAsDelivered('${d.id}')">✅ Livré</button>`;
+                       }
+                       const payBtn = (!isViewer && !paye) ? `<button class="lv-a lv-a-pay" onclick="openPaymentModal('${d.id}')">💰 Encaisser</button>` : '';
+                       actionsHtml = `${primary}${payBtn}${editBtn}<span class="lv-more-slot">${moreMenu}</span>`;
+                   }
+
+               } else if (tab === 'A_VENIR') {
+                   if (d.quantite) arrBadge = `<span class="lv-complet">📦 ${lvEsc(d.quantite)} colis</span>`;
+                   const notif = d.clientNotified;
+                   cardCls = notif ? 's-livre' : 's-attente';
+                   badgesHtml = `<span class="lv-badge b-wait">🚢 En transit</span>` +
+                       (notif ? `<span class="lv-badge b-done">📞 Notifié</span>` : `<span class="lv-badge b-unpaid">📞 Non notifié</span>`);
+                   if (!paye) moneyHtml = `<div class="lv-c-money">${lvEsc(montantStr)}</div>`;
+                   let notifBtn = '';
+                   if (!isViewer) notifBtn = notif
+                       ? `<button class="lv-a lv-a-ghost" onclick="toggleClientNotified('${d.id}', false)">↩️ Non notifié</button>`
+                       : `<button class="lv-a lv-a-livre" style="background:linear-gradient(135deg,#2C4E76,#1A3553)" onclick="toggleClientNotified('${d.id}', true)">📞 Marquer appelé</button>`;
+                   actionsHtml = `${notifBtn}${editBtn}<span class="lv-more-slot">${moreMenu}</span>`;
+
+               } else { // PARIS
+                   if (d.quantite) arrBadge = `<span class="lv-complet">📦 ${lvEsc(d.quantite)} colis</span>`;
+                   badgesHtml = `<span class="lv-badge b-wait">🇫🇷 À embarquer</span>`;
+                   if (montantVal > 0) moneyHtml = `<div class="lv-c-money">${lvEsc(montantStr)}</div>`;
+                   actionsHtml = `${editBtn}<span class="lv-more-slot">${moreMenu}</span>`;
+               }
+
+               const metaParts = [`📍 ${lvEsc(d.lieuLivraison || d.commune || '—')}`];
+               if (d.expediteur) metaParts.push(`👤 ${lvEsc(d.expediteur)}`);
 
                return `
                <div class="lv-card ${cardCls}">
@@ -2587,18 +2647,12 @@ export const LivraisonView = {
                        <span class="lv-c-cont">${lvEsc(d.conteneur||'-')}</span>
                    </div>
                    <div class="lv-c-name">${lvEsc(destName)}</div>
-                   <div class="lv-c-meta">📍 ${lvEsc(d.lieuLivraison||d.commune||'—')}${d.expediteur?` · 👤 ${lvEsc(d.expediteur)}`:''}</div>
+                   <div class="lv-c-meta">${metaParts.join(' · ')}</div>
                    ${d.description?`<div class="lv-c-desc">${lvEsc(d.description)}</div>`:''}
-                   <div class="lv-c-money">${paye?'✅ Soldé':lvEsc(montantStr)}${magas}</div>
-                   <div class="lv-badges">
-                       <span class="lv-badge ${livCls}"><span class="k">Livraison</span> ${livLabel}</span>
-                       ${payBadge}
-                   </div>
+                   ${moneyHtml}
+                   <div class="lv-badges">${badgesHtml}</div>
                    ${editPanel}
-                   <div class="lv-acts">
-                       ${primary}${payBtn}${editBtn}
-                       <span class="lv-more-slot">${moreMenu}</span>
-                   </div>
+                   <div class="lv-acts">${actionsHtml}</div>
                </div>`;
            }).join('') + (filteredDeliveries.length > itemsPerPage ? `<div class="lv-cards-more"><button class="lv-btn" onclick="loadMoreItems()">Afficher plus</button></div>` : '');
        }
@@ -3042,12 +3096,47 @@ export const LivraisonView = {
        }
        
        // Programmation
+       // Saisie intelligente du Livreur : suggestions = comptes livreurs (rôle
+       // chauffeur/livreur de l'agence) + livreurs déjà utilisés dans les colis.
+       let livreurAccountsCache = null;
+       async function loadLivreurAccounts() {
+           if (livreurAccountsCache) return livreurAccountsCache;
+           const activeAgency = sessionStorage.getItem('currentActiveAgency') || 'abidjan';
+           const names = new Set();
+           try {
+               const usersSnap = await getDocs(collection(db, 'users'));
+               usersSnap.forEach(doc => {
+                   const data = doc.data();
+                   const role = (data.role || '').toLowerCase();
+                   const isDrv = role.includes('chauf') || role.includes('livreur') || data.isChauffeur;
+                   if (isDrv && (data.agency === activeAgency || data.agency === 'all')) {
+                       const n = (data.displayName || data.email || '').trim();
+                       if (n) names.add(n);
+                   }
+               });
+           } catch (e) { console.warn('Chargement comptes livreurs :', e); }
+           livreurAccountsCache = Array.from(names);
+           return livreurAccountsCache;
+       }
+       function fillLivreurDatalist() {
+           const dl = document.getElementById('livreurSuggestions');
+           if (!dl) return;
+           const names = new Set();
+           deliveries.forEach(d => { if (d.livreur && d.livreur.trim()) names.add(d.livreur.trim()); });
+           (livreurAccountsCache || []).forEach(n => names.add(n));
+           const sorted = Array.from(names).sort((a, b) => a.localeCompare(b, 'fr'));
+           dl.innerHTML = sorted.map(n => `<option value="${lvEsc(n)}"></option>`).join('');
+       }
+
        function openProgramModal() {
            if (selectedIds.size === 0) {
                showToast('Veuillez sélectionner au moins une livraison', 'error');
                return;
            }
            document.getElementById('selectedCount').textContent = selectedIds.size;
+           // Suggestions livreur (immédiat depuis les colis, puis comptes en différé)
+           fillLivreurDatalist();
+           loadLivreurAccounts().then(fillLivreurDatalist);
            // Pré-remplir la date avec la date du jour
            document.getElementById('progDate').valueAsDate = new Date();
            
@@ -3505,6 +3594,15 @@ export const LivraisonView = {
        // Filtres
        // Correction de la fonction de filtrage pour être plus fluide
        function filterDeliveries() {
+           // MODE LIVREUR : on ignore tous les filtres admin et on ne montre que
+           // la tournée du chauffeur connecté pour la date choisie.
+           if (isDriver) {
+               // « Mon programme » = calendrier. On rafraîchit le calendrier (et le
+               // jour ouvert s'il y en a un) au lieu du tableau admin.
+               renderDriverUI();
+               return;
+           }
+
            // Récupération des communes sélectionnées (Multi-select)
            const checkboxes = document.querySelectorAll('#communeDropdownList input[type="checkbox"]:checked');
            const selectedCommunes = Array.from(checkboxes).map(cb => cb.value);
@@ -4705,10 +4803,10 @@ export const LivraisonView = {
        // --- GESTION HISTORIQUE DES SCANS ---
        function initScanHistoryModal() {
            const scanModalHTML = `
-           <div id="scanHistoryModal" class="modal">
-               <div class="modal-content" style="max-width: 500px; border-radius: 12px; padding: 20px;">
+           <div id="scanHistoryModal" class="modal amt-modal">
+               <div class="modal-content" style="max-width: 500px; padding: 25px;">
                    <span class="close-modal" id="closeScanHistoryModal" style="float:right; cursor:pointer; font-size:24px;">&times;</span>
-                   <h2 style="margin-top:0; color:#1e293b;">Détail des Scans</h2>
+                   <h2 class="modal-header">Détail des Scans</h2>
                    <p id="scanHistorySubtitle" style="color:#64748b; font-size:14px; margin-bottom:15px;"></p>
                    <div style="max-height: 300px; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 8px;">
                        <table class="table" style="margin: 0; width: 100%;">
@@ -5388,9 +5486,185 @@ export const LivraisonView = {
             lvTab, lvUpdateBadge,
             lvOpenContModal, lvCloseContModal, lvApplyCont, lvDeselAll, lvToggleMore, lvCloseMore,
             lvSetView, lvToggleCardEdit,
+            lvDriverOpenDay, lvDriverCloseDay, lvDriverPrevMonth, lvDriverNextMonth, lvDriverRoute,
         });
 
         window.activeAgency = sessionStorage.getItem('currentActiveAgency') || 'abidjan';
+
+        // ===== Mode LIVREUR : « Mon programme » sous forme de CALENDRIER =====
+        // Pool = tournées actives + anciennes (archives, lecture seule) du livreur.
+        const driverPool = () => {
+            const dn = driverName.toLowerCase();
+            const mine = (d) => (d.livreur || '').trim().toLowerCase() === dn && d.dateProgramme;
+            return deliveries.filter(mine).concat((driverArchive || []).filter(mine));
+        };
+
+        function initDriverMode() {
+            const root = document.getElementById('livraison-content');
+            if (root) root.classList.add('lv-driver');
+            const app = document.createElement('div');
+            app.className = 'lvd-app';
+            app.innerHTML = `
+                <div class="lvd-hero">
+                    <div class="lvd-hero-title">🚚 Mon programme — ${lvEsc(driverName || 'Livreur')}</div>
+                    <div class="lvd-hero-sub">Touchez une date marquée pour voir vos livraisons.</div>
+                </div>
+                <div class="lvd-cal-card">
+                    <div class="lvd-cal-nav">
+                        <button class="lvd-nav-arrow" id="lvd-prev">‹</button>
+                        <div class="lvd-cal-month" id="lvd-month"></div>
+                        <button class="lvd-nav-arrow" id="lvd-next">›</button>
+                    </div>
+                    <div class="lvd-weekdays"><span>Lun</span><span>Mar</span><span>Mer</span><span>Jeu</span><span>Ven</span><span>Sam</span><span>Dim</span></div>
+                    <div class="lvd-grid" id="lvd-grid"></div>
+                </div>`;
+            if (root) root.insertBefore(app, root.firstChild);
+            const prev = document.getElementById('lvd-prev'); if (prev) prev.onclick = lvDriverPrevMonth;
+            const next = document.getElementById('lvd-next'); if (next) next.onclick = lvDriverNextMonth;
+
+            // Modale du jour (liste des colis à livrer) — créée une seule fois.
+            if (!document.getElementById('lvd-modal')) {
+                const modal = document.createElement('div');
+                modal.className = 'lvd-modal';
+                modal.id = 'lvd-modal';
+                modal.style.display = 'none';
+                modal.innerHTML = `
+                    <div class="lvd-modal-backdrop" onclick="lvDriverCloseDay()"></div>
+                    <div class="lvd-modal-card">
+                        <button class="lvd-modal-close" onclick="lvDriverCloseDay()" aria-label="Fermer">×</button>
+                        <div id="lvd-day"></div>
+                    </div>`;
+                document.body.appendChild(modal);
+            }
+
+            // Anciennes tournées (archives) du livreur — lecture seule.
+            (async () => {
+                try {
+                    const snap = await getDocs(query(collection(db, getCollectionName('livraisons_archives')), where('livreur', '==', driverName)));
+                    driverArchive = snap.docs.map(x => ({ id: x.id, ...x.data(), _archived: true })).filter(d => matchesShippingMode(d));
+                    renderDriverUI();
+                } catch (e) { console.warn('Chargement archives livreur :', e); }
+            })();
+
+            renderDriverUI();
+        }
+
+        function renderDriverUI() {
+            renderDriverCalendar();
+            const modal = document.getElementById('lvd-modal');
+            if (driverSelectedDate && modal && modal.style.display !== 'none') renderDriverDay(driverSelectedDate);
+        }
+
+        function renderDriverCalendar() {
+            const grid = document.getElementById('lvd-grid');
+            const monthLbl = document.getElementById('lvd-month');
+            if (!grid || !monthLbl) return;
+            const year = driverMonth.getFullYear(), month = driverMonth.getMonth();
+            monthLbl.textContent = driverMonth.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
+
+            const byDate = {};
+            driverPool().forEach(d => { byDate[d.dateProgramme] = (byDate[d.dateProgramme] || 0) + 1; });
+
+            let firstDay = new Date(year, month, 1).getDay();
+            firstDay = firstDay === 0 ? 6 : firstDay - 1;
+            const daysInMonth = new Date(year, month + 1, 0).getDate();
+            const today = new Date();
+            const todayStr = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
+
+            let html = '';
+            for (let i = 0; i < firstDay; i++) html += `<div class="lvd-cell lvd-empty"></div>`;
+            for (let day = 1; day <= daysInMonth; day++) {
+                const ds = `${year}-${String(month+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+                const n = byDate[ds] || 0;
+                const cls = ['lvd-cell'];
+                if (n > 0) cls.push('lvd-has');
+                if (ds === todayStr) cls.push('lvd-today');
+                if (ds === driverSelectedDate) cls.push('lvd-sel');
+                const onclick = n > 0 ? `onclick="lvDriverOpenDay('${ds}')"` : '';
+                html += `<div class="${cls.join(' ')}" ${onclick}><span class="lvd-num">${day}</span>${n>0?`<span class="lvd-badge">${n}</span>`:''}</div>`;
+            }
+            grid.innerHTML = html;
+        }
+
+        function renderDriverDay(ds) {
+            const panel = document.getElementById('lvd-day');
+            if (!panel) return;
+            const items = driverPool().filter(d => d.dateProgramme === ds).sort((a,b)=>(a.orderInRoute||0)-(b.orderInRoute||0));
+            const dObj = new Date(ds);
+            const head = `<div class="lvd-day-head">
+                <div><div class="lvd-day-title">📅 ${dObj.toLocaleDateString('fr-FR', { weekday:'long', day:'numeric', month:'long' })}</div>
+                <div class="lvd-day-sub">${items.length} colis à livrer</div></div>
+                <button class="lvd-route-btn" onclick="lvDriverRoute('${ds}')">🧭 Itinéraire depuis ma position</button>
+            </div>`;
+            if (items.length === 0) { panel.innerHTML = head + `<div class="lvd-empty-msg">Aucune livraison ce jour.</div>`; return; }
+            const cards = items.map(d => {
+                const t = d.ref ? transactionsMap.get(d.ref.toUpperCase().trim()) : null;
+                const restant = (t && t.montant) ? t.montant : (d.montant || '0 CFA');
+                const restVal = parseFloat(String(restant).replace(/[^\d]/g,'')) || 0;
+                const destName = stripPhoneFromName(d.destinataire || '') || 'Client';
+                const phone = d.numero || extractPhone(d.destinataire) || extractPhone(d.description) || extractPhone(d.info) || '';
+                const archived = !!d._archived;
+                const isLivre = d.status === 'LIVRE';
+                let actions = '';
+                if (archived) {
+                    actions = `<span class="lv-archived-note">📦 Archivé${d.dateLivraison?' · livré le '+new Date(d.dateLivraison).toLocaleDateString('fr-FR'):''}</span>`;
+                } else {
+                    const wa = phone ? `<a class="lv-a lv-a-wa" target="_blank" href="https://wa.me/${toE164(phone)}?text=${encodeURIComponent('Bonjour, votre colis '+d.ref+' est en cours de livraison.')}">💬</a>` : '';
+                    const livre = isLivre
+                        ? `<button class="lv-a lv-a-ghost" onclick="markAsPending('${d.id}')">↩️ En attente</button>`
+                        : `<button class="lv-a lv-a-livre" onclick="markAsDelivered('${d.id}')">✅ Livré</button>`;
+                    const pay = (restVal > 0) ? `<button class="lv-a lv-a-pay" onclick="openPaymentModal('${d.id}')">💰 Encaisser</button>` : '';
+                    actions = `${livre}${pay}${wa}`;
+                }
+                return `<div class="lvd-card ${isLivre?'s-livre':'s-attente'}">
+                    <div class="lvd-c-top"><span class="lvd-c-ref">${lvEsc(d.ref)}</span><span class="lvd-c-rest ${restVal>0?'due':'paid'}">${restVal>0?lvEsc(restant):'✅ Soldé'}</span></div>
+                    <div class="lvd-c-dest">👤 ${lvEsc(destName)}</div>
+                    <div class="lvd-c-meta">📍 ${lvEsc(d.lieuLivraison||d.commune||'—')}${d.expediteur?` · 🏷️ Exp : ${lvEsc(d.expediteur)}`:''}</div>
+                    ${d.description?`<div class="lvd-c-desc">${lvEsc(d.description)}</div>`:''}
+                    <div class="lvd-c-acts">${actions}</div>
+                </div>`;
+            }).join('');
+            panel.innerHTML = head + `<div class="lvd-cards">${cards}</div>`;
+        }
+
+        function lvDriverOpenDay(ds) {
+            driverSelectedDate = ds;
+            renderDriverCalendar();
+            renderDriverDay(ds);
+            const modal = document.getElementById('lvd-modal');
+            if (modal) modal.style.display = 'flex';
+            document.body.style.overflow = 'hidden';
+        }
+        function lvDriverCloseDay() {
+            const modal = document.getElementById('lvd-modal');
+            if (modal) modal.style.display = 'none';
+            document.body.style.overflow = '';
+            driverSelectedDate = null;
+            renderDriverCalendar();
+        }
+        function lvDriverPrevMonth() { driverMonth = new Date(driverMonth.getFullYear(), driverMonth.getMonth() - 1, 1); renderDriverCalendar(); }
+        function lvDriverNextMonth() { driverMonth = new Date(driverMonth.getFullYear(), driverMonth.getMonth() + 1, 1); renderDriverCalendar(); }
+        function lvDriverRoute(ds) {
+            const items = driverPool().filter(d => d.dateProgramme === ds).sort((a,b)=>(a.orderInRoute||0)-(b.orderInRoute||0));
+            const addrs = items.map(d => `${d.lieuLivraison||''} ${d.commune||''} Abidjan`.replace(/\s+/g,' ').trim()).filter(a => a && a !== 'Abidjan');
+            if (!addrs.length) { showToast('Aucune adresse pour cette tournée', 'error'); return; }
+            const build = (origin) => {
+                const dest = encodeURIComponent(addrs[addrs.length - 1]);
+                const wpts = addrs.slice(0, -1).map(a => encodeURIComponent(a)).join('|');
+                let url = `https://www.google.com/maps/dir/?api=1&travelmode=driving&destination=${dest}`;
+                if (origin) url += `&origin=${origin}`;
+                if (wpts) url += `&waypoints=${wpts}`;
+                window.open(url, '_blank');
+            };
+            if (navigator.geolocation) {
+                showToast('Localisation en cours…', 'success');
+                navigator.geolocation.getCurrentPosition(
+                    (pos) => build(`${pos.coords.latitude},${pos.coords.longitude}`),
+                    () => { showToast("Position indisponible : itinéraire sans point de départ.", 'error'); build(null); },
+                    { enableHighAccuracy: true, timeout: 8000 }
+                );
+            } else { build(null); }
+        }
 
         initRealtimeSync();
         if (typeof updateContainerTitle === 'function') updateContainerTitle();
@@ -5408,16 +5682,21 @@ export const LivraisonView = {
             searchBox.addEventListener('input', debouncedFilterDeliveries);
         }
 
-        setTimeout(()=>{
-            lvTab('EN_COURS');
-            const h=document.getElementById('activeContainerInput');
-            const p=document.getElementById('lv-ci');
-            if(h&&p) p.value=h.value;
-            lvUpdateBadge(h?h.value:'');
-            
-            const fcb_h = document.getElementById('filterByContainerCb');
-            const fcb_v = document.getElementById('lv-fcb');
-            if (fcb_h && fcb_v) fcb_v.checked = fcb_h.checked;
-        }, 600);
+        if (isDriver) {
+            // Livreur : on bascule directement sur « Mon programme ».
+            initDriverMode();
+        } else {
+            setTimeout(()=>{
+                lvTab('EN_COURS');
+                const h=document.getElementById('activeContainerInput');
+                const p=document.getElementById('lv-ci');
+                if(h&&p) p.value=h.value;
+                lvUpdateBadge(h?h.value:'');
+
+                const fcb_h = document.getElementById('filterByContainerCb');
+                const fcb_v = document.getElementById('lv-fcb');
+                if (fcb_h && fcb_v) fcb_v.checked = fcb_h.checked;
+            }, 600);
+        }
     }
 };

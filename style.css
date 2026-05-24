@@ -2049,6 +2049,146 @@ tr.clickable-row:hover { background: #f1f5f9 !important; }
 #livraison-content .lv-cards-empty h3 { margin:8px 0 4px; color:#1A3553; }
 #livraison-content .lv-cards-more { grid-column:1 / -1; text-align:center; padding:6px; }
 
+/* ── Mode LIVREUR (« Mon programme ») : page simplifiee ── */
+#livraison-content.lv-driver .lv-command-bar,
+#livraison-content.lv-driver .lv-toolbar,
+#livraison-content.lv-driver .lv-filter-bar,
+#livraison-content.lv-driver .lv-sel-bar,
+#livraison-content.lv-driver .lv-ctx,
+#livraison-content.lv-driver #currentContainerTitle,
+#livraison-content.lv-driver #paris-info-banner { display:none !important; }
+.lv-driver-bar { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;
+    background:linear-gradient(135deg,#2C4E76,#0F2238); color:#fff; padding:14px 18px; position:sticky; top:0; z-index:60; }
+.lv-driver-title { font-family:'Comfortaa',sans-serif; font-weight:700; font-size:17px; }
+.lv-driver-tools { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+.lv-driver-datelbl { display:inline-flex; align-items:center; gap:6px; font-weight:600; font-size:13px; }
+.lv-driver-tools input[type=date] { border:0; border-radius:8px; padding:6px 10px; font:inherit; color:#1A3553; }
+.lv-driver-count { font-weight:800; background:rgba(255,255,255,.18); padding:5px 12px; border-radius:999px; font-size:13px; }
+.lv-driver-tools select { border:0; border-radius:8px; padding:6px 10px; font:inherit; color:#1A3553; max-width:200px; }
+#livraison-content .lv-archived-note { font-size:12px; color:#5A7088; font-style:italic; padding:4px 2px; }
+
+/* En mode livreur, on masque entierement l'ancien tableau */
+#livraison-content.lv-driver .table-container { display:none !important; }
+
+/* ── Mode LIVREUR : « Mon programme » sous forme de CALENDRIER ── */
+.lvd-app { max-width:760px; margin:0 auto; padding:14px 12px 40px; }
+.lvd-hero { background:linear-gradient(135deg,#1A3553,#0F2238); color:#fff; border-radius:16px;
+    padding:18px 20px; margin-bottom:16px; box-shadow:0 8px 24px rgba(15,34,56,.28); position:relative; overflow:hidden; }
+.lvd-hero::after { content:'🚚'; position:absolute; right:-6px; bottom:-14px; font-size:78px; opacity:.12; transform:rotate(-12deg); }
+.lvd-hero-title { font-family:'Comfortaa',sans-serif; font-weight:700; font-size:18px; }
+.lvd-hero-sub { font-size:13px; opacity:.9; margin-top:4px; }
+
+.lvd-cal-card { background:#fff; border-radius:16px; padding:14px; box-shadow:0 4px 18px rgba(26,53,83,.10); border:1px solid #E6ECF3; }
+.lvd-cal-nav { display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; }
+.lvd-cal-month { font-family:'Comfortaa',sans-serif; font-weight:700; font-size:16px; color:#1A3553; text-transform:capitalize; }
+.lvd-nav-arrow { width:38px; height:38px; border-radius:50%; border:1px solid #E6ECF3; background:#F6F9FC;
+    color:#1A3553; font-size:22px; line-height:1; cursor:pointer; transition:.15s; }
+.lvd-nav-arrow:hover { background:#1A3553; color:#fff; }
+.lvd-weekdays { display:grid; grid-template-columns:repeat(7,1fr); gap:4px; margin-bottom:6px; }
+.lvd-weekdays span { text-align:center; font-size:11px; font-weight:700; color:#7C8DA0; text-transform:uppercase; }
+.lvd-grid { display:grid; grid-template-columns:repeat(7,1fr); gap:4px; }
+.lvd-cell { position:relative; aspect-ratio:1/1; border-radius:10px; display:flex; align-items:center; justify-content:center;
+    font-size:14px; color:#43586E; background:#F6F9FC; }
+.lvd-empty { background:transparent; }
+.lvd-has { background:linear-gradient(135deg,#F2A312,#E08600); color:#fff; font-weight:700; cursor:pointer;
+    box-shadow:0 3px 8px rgba(242,163,18,.35); transition:.15s; }
+.lvd-has:hover { transform:translateY(-2px); box-shadow:0 6px 14px rgba(242,163,18,.45); }
+.lvd-today { outline:2px solid #1A3553; outline-offset:-2px; }
+.lvd-sel { outline:3px solid #E51F21; outline-offset:-2px; }
+.lvd-num { line-height:1; }
+.lvd-badge { position:absolute; top:3px; right:4px; background:#E51F21; color:#fff; font-size:10px; font-weight:800;
+    min-width:16px; height:16px; padding:0 3px; border-radius:9px; display:flex; align-items:center; justify-content:center; }
+
+/* Modale du jour */
+.lvd-modal { position:fixed; inset:0; z-index:1200; display:flex; align-items:flex-end; justify-content:center; }
+.lvd-modal-backdrop { position:absolute; inset:0; background:rgba(15,34,56,.55); backdrop-filter:blur(2px); }
+.lvd-modal-card { position:relative; background:#F6F9FC; width:100%; max-width:560px; max-height:88vh; overflow-y:auto;
+    border-radius:20px 20px 0 0; padding:20px 16px 28px; box-shadow:0 -8px 30px rgba(15,34,56,.35);
+    animation:lvdSlideUp .22s ease; }
+@keyframes lvdSlideUp { from { transform:translateY(40px); opacity:.6; } to { transform:translateY(0); opacity:1; } }
+.lvd-modal-close { position:absolute; top:12px; right:14px; width:34px; height:34px; border-radius:50%; border:0;
+    background:#E6ECF3; color:#1A3553; font-size:22px; line-height:1; cursor:pointer; z-index:2; }
+.lvd-modal-close:hover { background:#1A3553; color:#fff; }
+.lvd-day-head { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; margin-bottom:12px; padding-right:40px; }
+.lvd-day-title { font-family:'Comfortaa',sans-serif; font-weight:700; font-size:16px; color:#1A3553; text-transform:capitalize; }
+.lvd-day-sub { font-size:13px; color:#7C8DA0; margin-top:2px; }
+.lvd-route-btn { background:linear-gradient(135deg,#1A3553,#2C4E76); color:#fff; border:0; border-radius:10px;
+    padding:10px 16px; font-weight:700; font-size:13px; cursor:pointer; box-shadow:0 4px 12px rgba(26,53,83,.25); transition:.15s; }
+.lvd-route-btn:hover { transform:translateY(-2px); box-shadow:0 6px 16px rgba(26,53,83,.35); }
+.lvd-cards { display:flex; flex-direction:column; gap:10px; }
+.lvd-card { background:#fff; border:1px solid #E6ECF3; border-left:4px solid #F2A312; border-radius:12px;
+    padding:12px 14px; box-shadow:0 2px 8px rgba(26,53,83,.06); }
+.lvd-card.s-livre { border-left-color:#28A745; opacity:.85; }
+.lvd-c-top { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:6px; }
+.lvd-c-ref { font-family:'Comfortaa',sans-serif; font-weight:700; font-size:15px; color:#1A3553; }
+.lvd-c-rest { font-size:13px; font-weight:800; padding:3px 10px; border-radius:8px; white-space:nowrap; }
+.lvd-c-rest.due { background:#FDECEC; color:#E51F21; }
+.lvd-c-rest.paid { background:#E8F6EC; color:#28A745; }
+.lvd-c-dest { font-size:14px; font-weight:600; color:#2B3F55; }
+.lvd-c-meta { font-size:12.5px; color:#5A7088; margin-top:3px; }
+.lvd-c-desc { font-size:12.5px; color:#43586E; margin-top:5px; background:#F6F9FC; border-radius:8px; padding:6px 9px; }
+.lvd-c-acts { display:flex; flex-wrap:wrap; gap:8px; margin-top:10px; }
+.lvd-c-acts .lv-a { border:0; border-radius:9px; padding:8px 12px; font-size:13px; font-weight:700; cursor:pointer; text-decoration:none; display:inline-flex; align-items:center; gap:5px; }
+.lvd-c-acts .lv-a-livre { background:#28A745; color:#fff; }
+.lvd-c-acts .lv-a-ghost { background:#F6F9FC; color:#5A7088; border:1px solid #E6ECF3; }
+.lvd-c-acts .lv-a-pay { background:#F2A312; color:#fff; }
+.lvd-c-acts .lv-a-wa { background:#25D366; color:#fff; }
+.lvd-empty-msg { text-align:center; color:#7C8DA0; font-size:14px; padding:24px; }
+@media (max-width:520px) {
+    .lvd-cell { font-size:13px; border-radius:8px; }
+    .lvd-route-btn { width:100%; }
+}
+@media (min-width:560px) {
+    .lvd-modal { align-items:center; }
+    .lvd-modal-card { border-radius:20px; max-height:84vh; }
+}
+
+/* ── Mini-modales En cours (Programmer / Attribuer / Statut) charte AMT ── */
+.lvmm .lvmm-card { padding:0; width:92%; max-width:440px; overflow:hidden; border-radius:18px; }
+.lvmm-head { display:flex; align-items:center; justify-content:space-between; gap:10px;
+    background:linear-gradient(135deg,#1A3553,#2C4E76); color:#fff; padding:16px 20px; }
+.lvmm-head h2 { margin:0; font-family:'Comfortaa',sans-serif; font-weight:700; font-size:17px; }
+.lvmm-x { background:rgba(255,255,255,.16); border:0; color:#fff; width:32px; height:32px; border-radius:50%;
+    font-size:20px; line-height:1; cursor:pointer; flex:0 0 auto; transition:.15s; }
+.lvmm-x:hover { background:rgba(255,255,255,.32); }
+.lvmm-body { padding:20px; }
+.lvmm-sub { margin:0 0 16px; font-size:13.5px; color:#5A7088; }
+.lvmm-sub strong { color:#E51F21; font-weight:800; }
+.lvmm-field { margin-bottom:14px; }
+.lvmm-field label { display:block; font-size:11.5px; font-weight:700; text-transform:uppercase; letter-spacing:.4px; color:#1A3553; margin-bottom:6px; }
+.lvmm-field input, .lvmm-field select { width:100%; height:44px; border:1px solid #D8E1EA; border-radius:10px;
+    padding:0 12px; font-size:14px; color:#1A3553; background:#F8FAFC; box-sizing:border-box; }
+.lvmm-field input:focus, .lvmm-field select:focus { outline:none; border-color:#F2A312; box-shadow:0 0 0 3px rgba(242,163,18,.18); background:#fff; }
+.lvmm-foot { display:flex; gap:10px; padding:4px 20px 20px; }
+.lvmm-btn { flex:1; height:46px; border:0; border-radius:11px; font-size:14px; font-weight:700; cursor:pointer; transition:.15s; }
+.lvmm-save { background:linear-gradient(135deg,#F2A312,#E08600); color:#fff; box-shadow:0 4px 12px rgba(242,163,18,.3); }
+.lvmm-save:hover { transform:translateY(-2px); box-shadow:0 6px 16px rgba(242,163,18,.42); }
+.lvmm-cancel { background:#EEF2F6; color:#5A7088; }
+.lvmm-cancel:hover { background:#E1E8EF; }
+
+/* ── Habillage AMT réutilisable pour les modales génériques (.amt-modal) ── */
+.amt-modal .modal-content { border-radius:18px; position:relative; }
+.amt-modal .modal-header { background:linear-gradient(135deg,#1A3553,#2C4E76) !important; border-bottom:0 !important; border-radius:16px 16px 0 0; }
+.amt-modal .modal-header .icon-btn { color:#fff !important; }
+.amt-modal .modal-header,
+.amt-modal .modal-header h2,
+.amt-modal .modal-header h3,
+.amt-modal .modal-header .modal-header__title { color:#fff !important; }
+.amt-modal .modal-header h2 { font-family:'Comfortaa',sans-serif; font-weight:700; }
+.amt-modal .close-modal { color:rgba(255,255,255,.85); transition:.15s; }
+.amt-modal .close-modal:hover { color:#fff; }
+/* croix placée hors de l'en-tête (flottante) → calée sur la barre */
+.amt-modal .modal-content > .close-modal { position:absolute; top:13px; right:18px; z-index:120; float:none !important; }
+.amt-modal label { color:#1A3553; font-weight:600; }
+.amt-modal input:focus, .amt-modal select:focus, .amt-modal textarea:focus {
+    border-color:#F2A312 !important; box-shadow:0 0 0 3px rgba(242,163,18,.18) !important; }
+.amt-modal .btn.btn-success { background:linear-gradient(135deg,#F2A312,#E08600) !important; border:0 !important; color:#fff !important; }
+.amt-modal .btn.btn-success:hover { background:linear-gradient(135deg,#E08600,#C77400) !important; }
+.amt-modal .btn.btn-warning { background:#fff !important; border:1.5px solid #F2A312 !important; color:#C77E00 !important; }
+.amt-modal .btn.btn-warning:hover { background:#FFF6E6 !important; }
+.amt-modal .btn.btn-danger { background:#E51F21 !important; border:0 !important; color:#fff !important; }
+.amt-modal .btn.btn-danger:hover { background:#C81719 !important; }
+
 /* ── COMMAND BAR ── */
 .lv-command-bar { background:var(--lv-surface); border-bottom:1px solid var(--lv-border); padding:0 16px; position:sticky; top:0; z-index:60; box-shadow:var(--lv-shadow); }
 .lv-toprow { display:flex; align-items:center; gap:12px; padding:8px 0 6px; border-bottom:1px solid var(--lv-border); flex-wrap:wrap; }
