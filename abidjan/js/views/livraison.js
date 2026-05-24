@@ -1,6 +1,6 @@
 import { db } from '../../../firebase-config.js';
 import { collection, doc, getDoc, getDocs, addDoc, setDoc, updateDoc, deleteDoc, query, where, orderBy, limit, onSnapshot, writeBatch, deleteField, arrayUnion } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
-import { getCollectionName } from '../../../agencies-config.js';
+import { getCollectionName, getConfigSourceAgency } from '../../../agencies-config.js';
 import { matchesShippingMode, getShippingMode } from '../../../shipping-mode.js';
 import { calculateStorageFee } from '../../../services/storageFee.js';
 import { createDocumentTemplates } from '../../../services/document-templates.js';
@@ -3712,6 +3712,53 @@ export const LivraisonView = {
        }
        
        // Mise à jour du lieu de livraison en direct
+       // Propage les coordonnées destinataire vers la collection `clients`
+       // (source unique lue par Nouvelle Facture et la page Clients).
+       // Identification : par (tél + nom) si présents, sinon par celui présent ;
+       // sinon création. Comme une seule clé change par édition, l'autre sert
+       // d'ancre pour retrouver la bonne fiche.
+       async function syncDestinataireToClients({ nom, tel, adresse }) {
+           try {
+               // « Le départ décide » : les destinataires sont stockés sous l'agence
+               // de DÉPART de la route (c'est là que Nouvelle Facture les lit/crée).
+               // La page Clients de l'arrivée, elle, dérive déjà des livraisons.
+               const targetAgency = getConfigSourceAgency();
+               const cleanNom = stripPhoneFromName(nom || '').trim();
+               const nNom = cleanNom.toUpperCase();
+               const nTel = tel ? toE164(tel) : '';
+               if (!nNom && !nTel) return;
+
+               const snap = await getDocs(query(collection(db, getCollectionName('clients')), where('agency', '==', targetAgency)));
+               let both = null, byTel = null, byNom = null;
+               snap.forEach(docu => {
+                   const c = docu.data();
+                   if (c.type && c.type !== 'destinataire') return; // côté arrivée = destinataires
+                   const cTel = c.tel ? toE164(c.tel) : '';
+                   const cNom = (c.nom || '').toUpperCase().trim();
+                   const tMatch = nTel && cTel === nTel;
+                   const noMatch = nNom && cNom === nNom;
+                   if (tMatch && noMatch) { if (!both) both = docu.id; }
+                   else if (tMatch) { if (!byTel) byTel = docu.id; }
+                   else if (noMatch) { if (!byNom) byNom = docu.id; }
+               });
+               const targetId = both || byTel || byNom;
+
+               const payload = {};
+               if (cleanNom) payload.nom = cleanNom;
+               if (tel && cleanString(tel)) payload.tel = cleanString(tel);
+               if (adresse && adresse.trim()) payload.adresse = adresse.trim();
+               if (Object.keys(payload).length === 0) return;
+
+               if (targetId) {
+                   await updateDoc(doc(db, getCollectionName('clients'), targetId), payload);
+               } else {
+                   await addDoc(collection(db, getCollectionName('clients')), {
+                       ...payload, agency: targetAgency, type: 'destinataire', dateAjout: new Date().toISOString()
+                   });
+               }
+           } catch (e) { console.warn('Sync destinataire -> clients :', e); }
+       }
+
        function updateDeliveryLocation(id, newLocation) {
            newLocation = cleanString(newLocation);
            const detected = detectCommune(newLocation);
@@ -3723,6 +3770,8 @@ export const LivraisonView = {
            updateDoc(doc(db, CONSTANTS.COLLECTION, id), updates).then(() => {
                if (d && oldLoc !== newLocation) logLivraisonAudit("MODIF_LIVRAISON", `Colis ${d.ref} : Adresse modifiée de "${oldLoc}" à "${newLocation}"`, id);
            });
+           // Propagation vers la fiche client (page Clients + création de facture)
+           if (d) syncDestinataireToClients({ nom: d.destinataire, tel: d.numero, adresse: newLocation });
        
            // PROPAGATION : Mettre à jour tous les colis du même destinataire (tous onglets confondus)
            const currentItem = deliveries.find(d => d.id === id);
@@ -3759,6 +3808,8 @@ export const LivraisonView = {
            updateDoc(doc(db, CONSTANTS.COLLECTION, id), { destinataire: cleanRecip }).then(() => {
                if (d && oldRecip !== cleanRecip) logLivraisonAudit("MODIF_LIVRAISON", `Colis ${d.ref} : Destinataire modifié de "${oldRecip}" à "${cleanRecip}"`, id);
            });
+           // Propagation vers la fiche client (le numéro sert d'ancre).
+           syncDestinataireToClients({ nom: cleanRecip, tel: d ? d.numero : '', adresse: d ? d.lieuLivraison : '' });
        }
        
        // Mise à jour du numéro en direct
@@ -3769,6 +3820,8 @@ export const LivraisonView = {
            updateDoc(doc(db, CONSTANTS.COLLECTION, id), { numero: cleanPhone }).then(() => {
                if (d && oldPhone !== cleanPhone) logLivraisonAudit("MODIF_LIVRAISON", `Colis ${d.ref} : Téléphone modifié de "${oldPhone}" à "${cleanPhone}"`, id);
            });
+           // Propagation vers la fiche client (le nom sert d'ancre).
+           if (d) syncDestinataireToClients({ nom: d.destinataire, tel: cleanPhone, adresse: d.lieuLivraison });
        }
        
        // Mise à jour du montant en direct
@@ -4729,6 +4782,24 @@ export const LivraisonView = {
            setTxt('lv-n-partiel', partiel);
            const partielChip = document.getElementById('lv-chip-partiel');
            if (partielChip) partielChip.style.display = partiel > 0 ? '' : 'none';
+
+           lvUpdateCounts();
+       }
+
+       // Compteurs RÉELS des onglets du pipeline (calculés sur TOUS les colis,
+       // pas seulement l'onglet courant).
+       function lvUpdateCounts() {
+           const c = { PARIS: 0, A_VENIR: 0, EN_COURS: 0, PROGRAMME: 0 };
+           deliveries.forEach(d => {
+               const st = d.containerStatus || 'EN_COURS';
+               if (c[st] !== undefined) c[st]++;
+               if (d.dateProgramme) c.PROGRAMME++;
+           });
+           const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+           set('lvC-PARIS', c.PARIS);
+           set('lvC-A_VENIR', c.A_VENIR);
+           set('lvC-EN_COURS', c.EN_COURS);
+           set('lvC-PROGRAMME', c.PROGRAMME);
        }
        
        // Sauvegarde
