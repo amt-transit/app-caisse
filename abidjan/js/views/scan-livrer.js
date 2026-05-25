@@ -59,7 +59,14 @@ export const ScanLivrerView = {
                 .viewfinder-box::before, .viewfinder-box::after { content: ''; position: absolute; width: 30px; height: 30px; border-color: #8b5cf6; border-style: solid; }
                 .viewfinder-box::before { top: -3px; left: -3px; border-width: 4px 0 0 4px; border-radius: 8px 0 0 0; }
                 .viewfinder-box::after { bottom: -3px; right: -3px; border-width: 0 4px 4px 0; border-radius: 0 0 8px 0; }
-                
+                .viewfinder-box { transition: border-color .1s, box-shadow .1s; }
+                .viewfinder-box.flash-ok { border-color: #10b981 !important; box-shadow: 0 0 0 9999px rgba(16,185,129,0.30); }
+                .viewfinder-box.flash-ok::before, .viewfinder-box.flash-ok::after { border-color: #10b981 !important; }
+                .viewfinder-box.flash-warn { border-color: #f59e0b !important; }
+                .viewfinder-box.flash-warn::before, .viewfinder-box.flash-warn::after { border-color: #f59e0b !important; }
+                .viewfinder-box.flash-err { border-color: #ef4444 !important; box-shadow: 0 0 0 9999px rgba(239,68,68,0.30); }
+                .viewfinder-box.flash-err::before, .viewfinder-box.flash-err::after { border-color: #ef4444 !important; }
+
                 .scan-line { position: absolute; top: 0; left: 0; right: 0; height: 2px; background: linear-gradient(90deg, transparent, #8b5cf6, transparent); animation: scan-anim 2s ease-in-out infinite; border-radius: 1px; box-shadow: 0 0 8px #8b5cf6; }
                 @keyframes scan-anim { 0% { top: 5%; opacity: 1; } 50% { top: 90%; opacity: 0.7; } 100% { top: 5%; opacity: 1; } }
 
@@ -186,6 +193,10 @@ export const ScanLivrerView = {
 
         container.innerHTML = html;
 
+        // Déverrouillage audio mobile : le son ne démarre qu'après un 1er geste.
+        document.addEventListener('touchstart', () => this.ensureAudio(), { once: true });
+        document.addEventListener('click', () => this.ensureAudio(), { once: true });
+
         const observer = new MutationObserver(() => {
             if (!document.body.contains(document.getElementById('sw-page'))) {
                 this.stopScanner();
@@ -195,6 +206,39 @@ export const ScanLivrerView = {
         observer.observe(document.body, { childList: true, subtree: true });
 
         this.loadScannerScript();
+    },
+
+    // Retour combiné son + flash du cadre + vibration (comme au départ).
+    ensureAudio() {
+        try {
+            if (!this._audioCtx) this._audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            if (this._audioCtx && this._audioCtx.state === 'suspended') this._audioCtx.resume();
+        } catch (e) { /* audio non supporté */ }
+    },
+    playBeep(type) {
+        if (!this.isSoundEnabled) return;
+        try {
+            this.ensureAudio();
+            if (!this._audioCtx) return;
+            const osc = this._audioCtx.createOscillator();
+            const gain = this._audioCtx.createGain();
+            osc.connect(gain); gain.connect(this._audioCtx.destination);
+            osc.frequency.value = type === 'ok' ? 950 : (type === 'warn' ? 600 : 300);
+            gain.gain.value = 0.35;
+            osc.start();
+            gain.gain.exponentialRampToValueAtTime(0.00001, this._audioCtx.currentTime + 0.3);
+            osc.stop(this._audioCtx.currentTime + 0.3);
+        } catch (e) { /* audio non supporté */ }
+    },
+    feedback(type) {
+        const box = document.querySelector('.viewfinder-box');
+        if (box) {
+            box.classList.remove('flash-ok', 'flash-warn', 'flash-err');
+            box.classList.add('flash-' + type);
+            setTimeout(() => box.classList.remove('flash-' + type), 600);
+        }
+        this.playBeep(type);
+        if (navigator.vibrate) navigator.vibrate(type === 'ok' ? [40] : (type === 'warn' ? [40, 40, 40] : [120]));
     },
 
     toggleSound() {
@@ -377,13 +421,13 @@ export const ScanLivrerView = {
                     this.stats.duplicate++;
                     logData.status = 'DOUBLON';
                     this.addRecentScan(text, clientName, 'Déjà livré', 'warn');
-                    if (this.isSoundEnabled && navigator.vibrate) navigator.vibrate([50, 50, 50]);
+                    this.feedback('warn');
                 } else if (isDuplicate) {
                     // Ce label précis a déjà été scanné dans une session précédente.
                     this.stats.duplicate++;
                     logData.status = 'DOUBLON';
                     this.addRecentScan(text, clientName, `Déjà scanné · ${alreadyScanned.size}/${labelsTotal.length}`, 'warn');
-                    if (this.isSoundEnabled && navigator.vibrate) navigator.vibrate([50, 50, 50]);
+                    this.feedback('warn');
                 } else {
                     // Calcul du compteur APRES ce nouveau scan.
                     // Si l'utilisateur scanne la baseRef d'un colis multi-labels,
@@ -413,7 +457,7 @@ export const ScanLivrerView = {
                         ? `Livré · ${nowCount}/${labelsTotal.length} ✔`
                         : `Reçu · ${nowCount}/${labelsTotal.length} colis`;
                     this.addRecentScan(text, clientName, msg, 'ok');
-                    if (this.isSoundEnabled && navigator.vibrate) navigator.vibrate([30, 20, 30]);
+                    this.feedback('ok');
                 }
 
                 // Ajouter aux éléments à partager (Évite les doublons stricts).
@@ -433,7 +477,7 @@ export const ScanLivrerView = {
                 this.stats.error++;
                 logData.status = 'ERREUR';
                 this.addRecentScan(text, 'Non trouvé en base', 'Colis inconnu', 'err');
-                if(this.isSoundEnabled && navigator.vibrate) navigator.vibrate([100, 50, 100]);
+                this.feedback('err');
             }
         } catch(e) { 
             console.error(e); 
