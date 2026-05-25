@@ -61,6 +61,7 @@ const MENU_ITEMS = {
     chargement: [{ page: 'confection-containers', label: 'Confection' }, { page: 'loading-boats', label: 'Bateaux départ' }],
     scan: [
         { page: 'scan-warehouse', label: 'Mise en entrepôt', scope: 'departure' }, { page: 'scan-container', label: 'Charger conteneur', scope: 'departure' },
+        { page: 'scan-depart-vol', label: 'Départ vol (aérien)', scope: 'departure' },
         { page: 'scan-classic', label: 'Scanner (classique)', scope: 'departure' }, { page: 'scan-dechargement', label: 'Déchargement', scope: 'arrival' },
         { page: 'scan-livraison', label: 'En livraison', scope: 'arrival' }, { page: 'scan-livrer', label: 'Remise Clients', scope: 'arrival' },
         { page: 'scan-history', label: 'Historique scans' },

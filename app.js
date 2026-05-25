@@ -45,6 +45,7 @@ import { ConfigLabelView } from './paris/js/views/config-label.js';
 import { ConfigContainerView } from './paris/js/views/config-container.js';
 import { ScanWarehouseView } from './paris/js/views/scan-warehouse.js';
 import { ScanContainerView } from './paris/js/views/scan-container.js';
+import { ScanDepartVolView } from './paris/js/views/scan-depart-vol.js';
 import { BilansFinanciersView } from './paris/js/views/bilans-financiers.js';
 import { ChatView as ParisChatView } from './paris/js/views/chat.js';
 import { AuditLogView as ParisAuditLogView } from './paris/js/views/audit-log.js';
@@ -89,7 +90,7 @@ export const app = {
         'program-new': 'programmes', 'program-my': 'programmes', 'program-history': 'programmes', 'drivers': 'programmes', 'departures-calendar': 'programmes',
         'quotes-list': 'devis', 'quote-new': 'devis', 'quote-requests': 'devis',
         'confection-containers': 'chargement', 'loading-boats': 'chargement',
-        'scan-warehouse': 'scan', 'scan-container': 'scan', 'scan-classic': 'scan', 'scan-history': 'scan',
+        'scan-warehouse': 'scan', 'scan-container': 'scan', 'scan-depart-vol': 'scan', 'scan-classic': 'scan', 'scan-history': 'scan',
         'scan-dechargement': 'scan', 'scan-livraison': 'scan', 'scan-livrer': 'scan',
         'clients-list': 'clients', 'clients-app': 'clients', 'clients-analytics': 'clients', 'clients': 'logistique',
         'chat': 'comms', 'sms-send': 'comms', 'sms-history': 'comms', 'notifications': 'comms', 'notifications-history': 'comms', 'sms': 'comms',
@@ -651,7 +652,7 @@ export const app = {
             'program-new': 'Nouveau programme', 'program-my': 'Mon programme', 'program-history': 'Historique programmes', 'drivers': 'Chauffeurs', 'departures-calendar': 'Calendrier départs',
             'quotes-list': 'Tous les devis', 'quote-new': 'Nouveau devis', 'quote-requests': 'Demandes reçues',
             'confection-containers': 'Confection Conteneurs', 'loading-boats': 'Bateaux départ',
-            'scan-warehouse': 'Mise en entrepôt', 'scan-container': 'Charger conteneur', 'scan-classic': 'Scanner classique', 'scan-history': 'Historique scans',
+            'scan-warehouse': 'Mise en entrepôt', 'scan-container': 'Charger conteneur', 'scan-depart-vol': 'Départ vol', 'scan-classic': 'Scanner classique', 'scan-history': 'Historique scans',
             'scan-dechargement': 'Scan Déchargement', 'scan-livraison': 'Scan Mise en Livraison', 'scan-livrer': 'Scan Remise Client',
             'clients-list': 'Liste clients', 'clients-app': 'Client application', 'clients-analytics': 'Analytics clients', 'clients': 'Fichier Clients',
             'chat': 'Chat Interne', 'sms-send': 'Envoi SMS', 'sms-history': 'Historique SMS', 'notifications': 'Notifications', 'notifications-history': 'Historique notifications', 'sms': 'Campagnes SMS',
@@ -744,6 +745,7 @@ export const app = {
             'config-container': () => ConfigContainerView.render(this),
             'scan-warehouse': () => ScanWarehouseView.render(this),
             'scan-container': () => ScanContainerView.render(this),
+            'scan-depart-vol': () => ScanDepartVolView.render(this),
             'scan-classic': () => ScanWarehouseView.render(this),
             'bilans-financiers': () => BilansFinanciersView.render(this),
             'balance-monthly': () => BilansFinanciersView.render(this),
