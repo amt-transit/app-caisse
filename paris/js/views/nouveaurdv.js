@@ -9,6 +9,11 @@ export const NouveauRdvView = {
     clientsMap: new Map(),
     todayRdv: [],
     isNewClient: false,
+    // Calendrier des places disponibles (cliquable)
+    RDV_CAPACITY: 80,            // 4 camions × 20 RDV par jour
+    availMonth: null,           // Date (1er du mois affiché)
+    selectedDate: null,         // 'YYYY-MM-DD' choisie sur le calendrier
+    availCounts: {},            // { 'YYYY-MM-DD': nb de RDV } pour l'agence
 
     render(app) {
         this.app = app;
@@ -28,8 +33,12 @@ export const NouveauRdvView = {
                 .av-day--off { border-color: #ef4444; color: #ef4444; }
                 .av-day--selected { background: #10b981; color: white; border-color: #10b981; }
                 .av-day--selected .av-day__meta { color: white; }
+                .av-day--ok:hover { background: #ecfdf5; transform: translateY(-1px); }
+                .av-day--ok.av-day--selected:hover { background: #0ea371; }
                 .av-day__num { font-weight: bold; font-size: 14px; }
                 .av-day__meta { font-size: 9px; margin-top: 2px; }
+                .av-nav-btn { border: 1px solid #cbd5e1; border-radius: 6px; background: white; cursor: pointer; padding: 3px 10px; font-size: 16px; color: #475569; line-height: 1; }
+                .av-nav-btn:hover { background: #f1f5f9; }
                 .creneaux-grid { display: flex; gap: 10px; }
                 .creneau-btn { flex: 1; padding: 10px; border: 1px solid #cbd5e1; border-radius: 8px; background: white; color: #64748b; cursor: pointer; font-weight: 600; transition: 0.2s; }
                 .creneau-btn--active { background: #eff6ff; color: #3b82f6; border-color: #3b82f6; }
@@ -208,63 +217,27 @@ export const NouveauRdvView = {
                         <div class="form-section">
                             <h3 class="form-section-title">📋 Détails du RDV</h3>
                             
-                            <!-- Calendrier Visuel Statique -->
+                            <!-- Calendrier des places disponibles (cliquable) -->
                             <div class="availability-box" style="background: white; border: 1px solid #e2e8f0; border-radius: 12px; padding: 15px; margin-bottom: 20px;">
-                                <div class="availability-box__header" style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px;">
+                                <div class="availability-box__header" style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px; gap: 10px; flex-wrap: wrap;">
                                     <div>
                                         <div class="availability-box__title" style="font-weight: 700; color: #0f172a; font-size: 14px;">Calendrier des places disponibles</div>
-                                        <div class="availability-box__subtitle" style="font-size: 12px; color: #64748b;">Base: 4 camion(s) × 20 RDV</div>
+                                        <div class="availability-box__subtitle" style="font-size: 12px; color: #64748b;">Cliquez une date verte. Base : 4 camions × 20 = 80 places/jour</div>
                                     </div>
-                                    <div class="availability-box__actions" style="display: flex; gap: 5px;">
-                                        <input class="availability-month control" type="month" style="width: auto; padding: 4px 8px;">
-                                        <button class="availability-refresh btn btn-outline" type="button" style="padding: 4px 8px; border: 1px solid #cbd5e1; border-radius: 6px; background: white; cursor: pointer;">↻</button>
+                                    <div class="availability-box__actions" style="display: flex; gap: 6px; align-items: center;">
+                                        <button class="av-nav-btn" type="button" onclick="window.app.views.nouveauRdv.availPrevMonth()">‹</button>
+                                        <div class="availability-month-label" id="rdvAvailMonthLabel" style="font-weight: bold; color: #1e293b; min-width: 130px; text-align: center; text-transform: capitalize;"></div>
+                                        <button class="av-nav-btn" type="button" onclick="window.app.views.nouveauRdv.availNextMonth()">›</button>
                                     </div>
                                 </div>
-                                <div class="availability-month-label" style="font-weight: bold; text-align: center; color: #1e293b; margin-bottom: 5px;">mai 2026</div>
                                 <div class="availability-weekdays">
                                     <span>Lun</span><span>Mar</span><span>Mer</span><span>Jeu</span><span>Ven</span><span>Sam</span><span>Dim</span>
                                 </div>
-                                <div class="availability-grid">
-                                    <div class="av-day av-day--empty"></div>
-                                    <div class="av-day av-day--empty"></div>
-                                    <div class="av-day av-day--empty"></div>
-                                    <div class="av-day av-day--empty"></div>
-                                    <div class="av-day av-day--past av-day--disabled"><div class="av-day__num">1</div><div class="av-day__meta">Dispo: 80</div></div>
-                                    <div class="av-day av-day--past av-day--disabled"><div class="av-day__num">2</div><div class="av-day__meta">Dispo: 21</div></div>
-                                    <div class="av-day av-day--past av-day--disabled"><div class="av-day__num">3</div><div class="av-day__meta">Dispo: 0</div></div>
-                                    <div class="av-day av-day--past av-day--disabled"><div class="av-day__num">4</div><div class="av-day__meta">Dispo: 39</div></div>
-                                    <div class="av-day av-day--past av-day--disabled"><div class="av-day__num">5</div><div class="av-day__meta">Dispo: 37</div></div>
-                                    <div class="av-day av-day--past av-day--disabled"><div class="av-day__num">6</div><div class="av-day__meta">Dispo: 34</div></div>
-                                    <div class="av-day av-day--past av-day--disabled"><div class="av-day__num">7</div><div class="av-day__meta">Dispo: 32</div></div>
-                                    <div class="av-day av-day--ok av-day--selected"><div class="av-day__num">8</div><div class="av-day__meta">Dispo: 27</div></div>
-                                    <div class="av-day av-day--ok"><div class="av-day__num">9</div><div class="av-day__meta">Dispo: 37</div></div>
-                                    <div class="av-day av-day--off av-day--disabled"><div class="av-day__num">10</div><div class="av-day__meta">Dispo: 0</div></div>
-                                    <div class="av-day av-day--ok"><div class="av-day__num">11</div><div class="av-day__meta">Dispo: 55</div></div>
-                                    <div class="av-day av-day--ok"><div class="av-day__num">12</div><div class="av-day__meta">Dispo: 75</div></div>
-                                    <div class="av-day av-day--ok"><div class="av-day__num">13</div><div class="av-day__meta">Dispo: 74</div></div>
-                                    <div class="av-day av-day--ok"><div class="av-day__num">14</div><div class="av-day__meta">Dispo: 76</div></div>
-                                    <div class="av-day av-day--ok"><div class="av-day__num">15</div><div class="av-day__meta">Dispo: 80</div></div>
-                                    <div class="av-day av-day--ok"><div class="av-day__num">16</div><div class="av-day__meta">Dispo: 77</div></div>
-                                    <div class="av-day av-day--off av-day--disabled"><div class="av-day__num">17</div><div class="av-day__meta">Dispo: 0</div></div>
-                                    <div class="av-day av-day--ok"><div class="av-day__num">18</div><div class="av-day__meta">Dispo: 80</div></div>
-                                    <div class="av-day av-day--ok"><div class="av-day__num">19</div><div class="av-day__meta">Dispo: 80</div></div>
-                                    <div class="av-day av-day--ok"><div class="av-day__num">20</div><div class="av-day__meta">Dispo: 80</div></div>
-                                    <div class="av-day av-day--ok"><div class="av-day__num">21</div><div class="av-day__meta">Dispo: 80</div></div>
-                                    <div class="av-day av-day--ok"><div class="av-day__num">22</div><div class="av-day__meta">Dispo: 78</div></div>
-                                    <div class="av-day av-day--ok"><div class="av-day__num">23</div><div class="av-day__meta">Dispo: 80</div></div>
-                                    <div class="av-day av-day--off av-day--disabled"><div class="av-day__num">24</div><div class="av-day__meta">Dispo: 0</div></div>
-                                    <div class="av-day av-day--ok"><div class="av-day__num">25</div><div class="av-day__meta">Dispo: 80</div></div>
-                                    <div class="av-day av-day--ok"><div class="av-day__num">26</div><div class="av-day__meta">Dispo: 78</div></div>
-                                    <div class="av-day av-day--ok"><div class="av-day__num">27</div><div class="av-day__meta">Dispo: 80</div></div>
-                                    <div class="av-day av-day--ok"><div class="av-day__num">28</div><div class="av-day__meta">Dispo: 80</div></div>
-                                    <div class="av-day av-day--ok"><div class="av-day__num">29</div><div class="av-day__meta">Dispo: 80</div></div>
-                                    <div class="av-day av-day--ok"><div class="av-day__num">30</div><div class="av-day__meta">Dispo: 80</div></div>
-                                    <div class="av-day av-day--off av-day--disabled"><div class="av-day__num">31</div><div class="av-day__meta">Dispo: 0</div></div>
+                                <div class="availability-grid" id="rdvAvailGrid">
+                                    <div style="grid-column: 1 / -1; text-align:center; padding:20px; color:#64748b;"><i class="fas fa-spinner fa-spin"></i></div>
                                 </div>
-                                <div class="availability-selected">
-                                    <span>Date sélectionnée: <strong>2026-05-08</strong></span>
-                                    <span>Programmés: <strong>53</strong></span>
-                                    <span>Disponibles: <strong>27</strong></span>
+                                <div class="availability-selected" id="rdvAvailFooter">
+                                    <span>Aucune date sélectionnée</span>
                                 </div>
                             </div>
 
@@ -279,9 +252,10 @@ export const NouveauRdvView = {
                                     </select>
                                 </div>
                                 <div class="form-field">
-                                    <label class="label">Date *</label>
-                                    <input id="rdvDate" class="control" type="date" value="${new Date().toISOString().split('T')[0]}">
+                                    <label class="label">Étage / Bâtiment *</label>
+                                    <input id="rdvEtage" class="control" placeholder="Ex : Bloc B, 3e étage, Porte 12">
                                 </div>
+                                <input type="hidden" id="rdvDate" value="${new Date().toISOString().split('T')[0]}">
                                 <div class="form-field form-field--full" style="grid-column: 1 / -1;">
                                     <label class="label">Créneaux</label>
                                     <div class="creneaux-grid">
@@ -291,19 +265,32 @@ export const NouveauRdvView = {
                                     <input type="hidden" id="rdvTime" value="Matin (10H-12H)">
                                 </div>
                                 <div class="form-field">
-                                    <label class="label">Téléphone</label>
+                                    <label class="label">Téléphone *</label>
                                     <input id="rdvTel" class="control" placeholder="Téléphone de contact">
                                 </div>
                                 <div class="form-field">
-                                    <label class="label">Adresse</label>
+                                    <label class="label">Adresse *</label>
                                     <div class="address-autocomplete" style="position: relative;">
                                         <input id="rdvAdresse" class="control" placeholder="Adresse du RDV" autocomplete="off">
                                     <ul id="rdvAdresseSuggestions" class="autocomplete-suggestions autocomplete-up"></ul>
                                     </div>
                                 </div>
+                                <div class="form-field">
+                                    <label class="label">Accès au bâtiment *</label>
+                                    <select id="rdvAcces" class="control" onchange="window.app.views.nouveauRdv.toggleAccessCode()">
+                                        <option value="" selected>Sélectionner…</option>
+                                        <option value="Interphone">Interphone</option>
+                                        <option value="Code">Code / Digicode</option>
+                                        <option value="Aucun">Aucun / Accès libre</option>
+                                    </select>
+                                </div>
+                                <div class="form-field" id="rdvCodeWrapper" style="display:none;">
+                                    <label class="label">Code / Nom à l'interphone *</label>
+                                    <input id="rdvCode" class="control" placeholder="Ex : B1234 ou DUPONT">
+                                </div>
                                 <div class="form-field form-field--full" style="grid-column: 1 / -1;">
                                     <label class="label">Commentaire</label>
-                                    <textarea id="rdvNotes" class="control control--textarea" placeholder="Notes ou instructions..." rows="3" style="resize: vertical; font-family: inherit;"></textarea>
+                                    <textarea id="rdvNotes" class="control control--textarea" placeholder="Notes ou instructions (facultatif)..." rows="3" style="resize: vertical; font-family: inherit;"></textarea>
                                 </div>
                             </div>
                         </div>
@@ -340,15 +327,120 @@ export const NouveauRdvView = {
     openModal() {
         const modal = document.getElementById('nouveauRdvModal');
         if (modal) {
-            document.getElementById('rdvDate').value = new Date().toISOString().split('T')[0];
+            const today = new Date().toISOString().split('T')[0];
+            document.getElementById('rdvDate').value = today;
+            this.selectedDate = today;
+            this.availMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
             this.toggleNewClientForm(false);
+            // Réinitialiser les nouveaux champs
+            ['rdvEtage', 'rdvCode'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+            const acc = document.getElementById('rdvAcces'); if (acc) acc.value = '';
+            this.toggleAccessCode();
             modal.style.display = 'flex';
+            this.initAvailabilityCalendar();
         }
     },
 
     closeModal() {
         const modal = document.getElementById('nouveauRdvModal');
         if (modal) modal.style.display = 'none';
+    },
+
+    // Affiche/masque le champ Code selon le type d'accès choisi.
+    toggleAccessCode() {
+        const acc = document.getElementById('rdvAcces');
+        const wrap = document.getElementById('rdvCodeWrapper');
+        if (!acc || !wrap) return;
+        const needCode = acc.value === 'Interphone' || acc.value === 'Code';
+        wrap.style.display = needCode ? 'block' : 'none';
+        if (!needCode) { const c = document.getElementById('rdvCode'); if (c) c.value = ''; }
+    },
+
+    // Charge le nombre de RDV par jour (agence courante) pour calculer les
+    // places disponibles, puis dessine le calendrier cliquable.
+    async initAvailabilityCalendar() {
+        const grid = document.getElementById('rdvAvailGrid');
+        if (grid) grid.innerHTML = '<div style="grid-column:1 / -1; text-align:center; padding:20px; color:#64748b;"><i class="fas fa-spinner fa-spin"></i></div>';
+        try {
+            const activeAgency = sessionStorage.getItem('currentActiveAgency') || 'paris';
+            const snap = await getDocs(query(collection(db, getCollectionName("appointments")), where("agency", "==", activeAgency)));
+            const counts = {};
+            snap.forEach(d => {
+                const data = d.data();
+                if (data.status === 'annulé') return; // un RDV annulé libère la place
+                if (data.date) counts[data.date] = (counts[data.date] || 0) + 1;
+            });
+            this.availCounts = counts;
+        } catch (e) {
+            console.warn('Calendrier RDV (comptage) :', e && e.message);
+            this.availCounts = {};
+        }
+        this.renderAvailabilityCalendar();
+    },
+
+    renderAvailabilityCalendar() {
+        const grid = document.getElementById('rdvAvailGrid');
+        const label = document.getElementById('rdvAvailMonthLabel');
+        if (!grid || !this.availMonth) return;
+        const year = this.availMonth.getFullYear();
+        const month = this.availMonth.getMonth();
+        if (label) label.textContent = this.availMonth.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
+
+        const todayStr = new Date().toISOString().split('T')[0];
+        let firstDay = new Date(year, month, 1).getDay();
+        firstDay = firstDay === 0 ? 6 : firstDay - 1; // Lundi en tête
+        const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+        let html = '';
+        for (let i = 0; i < firstDay; i++) html += '<div class="av-day av-day--empty"></div>';
+        for (let day = 1; day <= daysInMonth; day++) {
+            const ds = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+            const used = this.availCounts[ds] || 0;
+            const dispo = this.RDV_CAPACITY - used;
+            const isPast = ds < todayStr;
+            const isFull = dispo <= 0;
+            const cls = ['av-day'];
+            let onclick = '';
+            if (isPast) { cls.push('av-day--disabled'); }
+            else if (isFull) { cls.push('av-day--off', 'av-day--disabled'); }
+            else {
+                cls.push('av-day--ok');
+                onclick = `onclick="window.app.views.nouveauRdv.selectAvailDate('${ds}')"`;
+            }
+            if (ds === this.selectedDate && !isPast && !isFull) cls.push('av-day--selected');
+            html += `<div class="${cls.join(' ')}" ${onclick}><div class="av-day__num">${day}</div><div class="av-day__meta">Dispo: ${Math.max(0, dispo)}</div></div>`;
+        }
+        grid.innerHTML = html;
+        this.renderAvailFooter();
+    },
+
+    renderAvailFooter() {
+        const footer = document.getElementById('rdvAvailFooter');
+        if (!footer) return;
+        if (!this.selectedDate) { footer.innerHTML = '<span>Aucune date sélectionnée</span>'; return; }
+        const used = this.availCounts[this.selectedDate] || 0;
+        const dispo = Math.max(0, this.RDV_CAPACITY - used);
+        const dLabel = new Date(this.selectedDate).toLocaleDateString('fr-FR');
+        footer.innerHTML = `<span>Date : <strong>${dLabel}</strong></span><span>Programmés : <strong>${used}</strong></span><span>Disponibles : <strong>${dispo}</strong></span>`;
+    },
+
+    selectAvailDate(ds) {
+        this.selectedDate = ds;
+        const hidden = document.getElementById('rdvDate');
+        if (hidden) hidden.value = ds;
+        this.renderAvailabilityCalendar();
+    },
+
+    availPrevMonth() {
+        if (!this.availMonth) this.availMonth = new Date();
+        this.availMonth = new Date(this.availMonth.getFullYear(), this.availMonth.getMonth() - 1, 1);
+        this.renderAvailabilityCalendar();
+    },
+
+    availNextMonth() {
+        if (!this.availMonth) this.availMonth = new Date();
+        this.availMonth = new Date(this.availMonth.getFullYear(), this.availMonth.getMonth() + 1, 1);
+        this.renderAvailabilityCalendar();
     },
 
     selectCreneau(creneau) {
@@ -536,7 +628,11 @@ export const NouveauRdvView = {
                         </div>
                         <div class="rdv-address">
                             <span class="rdv-address-icon">📍</span>
-                            <span>${rdv.adresse || 'Adresse non spécifiée'}</span>
+                            <span>
+                                ${rdv.adresse || 'Adresse non spécifiée'}
+                                ${rdv.etage ? `<br>🏢 ${rdv.etage}` : ''}
+                                ${rdv.acces && rdv.acces !== 'Aucun' ? `<br>🔑 ${rdv.acces}${rdv.codeAcces ? ' : ' + rdv.codeAcces : ''}` : ''}
+                            </span>
                         </div>
                     </div>
                     <div class="rdv-card__footer">
@@ -567,8 +663,8 @@ export const NouveauRdvView = {
             clientAdresse = document.getElementById('newClientAdresse') ? document.getElementById('newClientAdresse').value.trim() : '';
             const email = document.getElementById('newClientEmail') ? document.getElementById('newClientEmail').value.trim() : '';
 
-            if (!nom || !clientTel || !date) {
-                this.app.showToast("Veuillez remplir le nom, le téléphone et la date.", "error");
+            if (!nom || !prenom || !clientTel || !clientAdresse) {
+                this.app.showToast("Prospect : nom, prénom, téléphone et adresse sont obligatoires.", "error");
                 return;
             }
 
@@ -598,23 +694,41 @@ export const NouveauRdvView = {
             clientTel = document.getElementById('rdvTel').value.trim();
             clientAdresse = document.getElementById('rdvAdresse').value.trim();
 
-            if (!clientName || !date) {
-                this.app.showToast("Veuillez remplir le nom du client et la date.", "error");
+            if (!clientName) {
+                this.app.showToast("Sélectionnez un client ou créez un prospect.", "error");
+                return;
+            }
+            if (!clientTel || !clientAdresse) {
+                this.app.showToast("Téléphone et adresse du RDV sont obligatoires.", "error");
                 return;
             }
         }
+
+        // Champs « Détails du RDV » : tous obligatoires (sauf le commentaire).
+        const etage = document.getElementById('rdvEtage') ? document.getElementById('rdvEtage').value.trim() : '';
+        const acces = document.getElementById('rdvAcces') ? document.getElementById('rdvAcces').value : '';
+        const codeAcces = document.getElementById('rdvCode') ? document.getElementById('rdvCode').value.trim() : '';
+        const rdvType = document.getElementById('rdvType') ? document.getElementById('rdvType').value : '';
+        if (!date) { this.app.showToast("Choisissez une date sur le calendrier.", "error"); return; }
+        if (!rdvType) { this.app.showToast("Choisissez le type de RDV.", "error"); return; }
+        if (!etage) { this.app.showToast("Renseignez l'étage / bâtiment.", "error"); return; }
+        if (!acces) { this.app.showToast("Choisissez le type d'accès au bâtiment.", "error"); return; }
+        if ((acces === 'Interphone' || acces === 'Code') && !codeAcces) { this.app.showToast("Renseignez le code / nom à l'interphone.", "error"); return; }
 
         const btn = document.getElementById('rdvSubmitBtn');
         btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Enregistrement...';
         btn.disabled = true;
 
         const rdvData = {
-            client: clientName, 
-            tel: clientTel, 
+            client: clientName,
+            tel: clientTel,
             adresse: clientAdresse,
-            date: date, time: document.getElementById('rdvTime').value, 
+            etage: etage,
+            acces: acces,
+            codeAcces: codeAcces,
+            date: date, time: document.getElementById('rdvTime').value,
             notes: document.getElementById('rdvNotes').value.trim(),
-            rdvType: document.getElementById('rdvType').value,
+            rdvType: rdvType,
             status: "en_attente", agency: sessionStorage.getItem('currentActiveAgency') || 'paris', createdAt: new Date().toISOString(), saisiPar: sessionStorage.getItem('userName') || 'Agent'
         };
 
@@ -643,11 +757,15 @@ export const NouveauRdvView = {
         const rdv = (this.todayRdv || []).find(r => r.id === rdvId);
         if (!rdv) { this.app.showToast("RDV introuvable.", "error"); return; }
         try {
+            const extra = [];
+            if (rdv.etage) extra.push(rdv.etage);
+            if (rdv.acces && rdv.acces !== 'Aucun') extra.push(rdv.acces + (rdv.codeAcces ? ' ' + rdv.codeAcces : ''));
+            const fullAdresse = [rdv.adresse || '', ...extra].filter(Boolean).join(' — ');
             sessionStorage.setItem('nf_prefill', JSON.stringify({
                 appointmentId: rdv.id,
                 client: rdv.client || '',
                 tel: rdv.tel || '',
-                adresse: rdv.adresse || '',
+                adresse: fullAdresse,
             }));
         } catch (e) { /* sessionStorage indisponible : on ouvre la facture vide */ }
         window.app.renderPage('invoice-new');
