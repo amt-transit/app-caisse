@@ -132,7 +132,7 @@ export const ScanDepartVolView = {
                         <div class="sm__kpi-lbl">En vol</div>
                     </div>
                     <div class="sm__kpi sm__kpi--orange">
-                        <div class="sm__kpi-val">{{ toEmbark.length }}</div>
+                        <div class="sm__kpi-val">{{ toEmbarkActive.length }}</div>
                         <div class="sm__kpi-lbl">À embarquer</div>
                     </div>
                     <div class="sm__kpi sm__kpi--green">
@@ -165,8 +165,8 @@ export const ScanDepartVolView = {
                 </div>
 
                 <div style="display:flex; gap:10px; margin-bottom:20px;">
-                    <button class="btn-search" type="button" @click="validateDepart" :disabled="validating || loading || (toEmbark.length === 0 && broughtBack.length === 0)" style="flex:1; padding:16px; font-size:15px; background:#7c3aed;">
-                        {{ validating ? '⏳ Validation…' : '✅ Valider (' + toEmbark.length + ' partent · ' + broughtBack.length + ' reviennent)' }}
+                    <button class="btn-search" type="button" @click="validateDepart" :disabled="validating || loading || (toEmbarkActive.length === 0 && broughtBack.length === 0)" style="flex:1; padding:16px; font-size:15px; background:#7c3aed;">
+                        {{ validating ? '⏳ Validation…' : '✅ Valider (' + toEmbarkActive.length + ' partent · ' + broughtBack.length + ' reviennent)' }}
                     </button>
                 </div>
 
@@ -176,9 +176,9 @@ export const ScanDepartVolView = {
                         <span class="recent-count">{{ broughtBack.length }}</span>
                     </div>
                     <div>
-                        <div v-for="p in broughtBack" :key="p.docId" class="scan-item">
+                        <div v-for="p in broughtBack" :key="p.subRef" class="scan-item">
                             <div class="scan-item-info">
-                                <span class="scan-item-ref">{{ p.ref }}</span>
+                                <span class="scan-item-ref">{{ p.subRef }}</span>
                                 <span class="scan-item-client">{{ p.client }}</span>
                             </div>
                             <span class="scan-item-status status-ok">revient</span>
@@ -189,14 +189,15 @@ export const ScanDepartVolView = {
                 <div class="recent-scans" style="margin-bottom:20px;">
                     <div class="recent-scans-header">
                         <span>✈️ À EMBARQUER (seront marqués « en vol »)</span>
-                        <span class="recent-count">{{ toEmbark.length }}</span>
+                        <span class="recent-count">{{ toEmbarkActive.length }}</span>
                     </div>
                     <div v-if="loading" style="padding:30px; text-align:center; color:#94a3b8; font-size:14px;">⏳ Chargement des colis en entrepôt…</div>
-                    <div v-else-if="toEmbark.length === 0" style="padding:30px; text-align:center; color:#94a3b8; font-size:14px;">Tous les colis en entrepôt ont été scannés (aucun départ).</div>
+                    <div v-else-if="!hasStarted" style="padding:30px; text-align:center; color:#94a3b8; font-size:14px;">Scannez d'abord les colis <b>restés en entrepôt</b>. Les sous-colis non scannés apparaîtront ici (= à embarquer).</div>
+                    <div v-else-if="toEmbarkActive.length === 0" style="padding:30px; text-align:center; color:#94a3b8; font-size:14px;">Tous les sous-colis restants ont été scannés (aucun départ).</div>
                     <div v-else>
-                        <div v-for="p in toEmbark" :key="p.docId" class="scan-item">
+                        <div v-for="p in toEmbarkActive" :key="p.subRef" class="scan-item">
                             <div class="scan-item-info">
-                                <span class="scan-item-ref">{{ p.ref }}</span>
+                                <span class="scan-item-ref">{{ p.subRef }}</span>
                                 <span class="scan-item-client">{{ p.client }}</span>
                             </div>
                             <span class="scan-item-status status-warn">à embarquer</span>
@@ -267,11 +268,15 @@ export const ScanDepartVolView = {
                 // ========== POPULATION + DIFFÉRENCE ==========
                 const enEntrepotCount = computed(() => population.value.filter(p => p.status === 'PARIS').length);
                 const enVolCount = computed(() => population.value.filter(p => p.status === 'A_VENIR').length);
-                const scannedCount = computed(() => population.value.filter(p => scanned.value[p.ref]).length);
-                // À embarquer = colis EN ENTREPÔT (PARIS) non scannés.
-                const toEmbark = computed(() => population.value.filter(p => p.status === 'PARIS' && !scanned.value[p.ref]));
-                // Corrections : colis déjà « en vol » (A_VENIR) re-scannés -> reviennent en entrepôt.
-                const broughtBack = computed(() => population.value.filter(p => p.status === 'A_VENIR' && scanned.value[p.ref]));
+                const scannedCount = computed(() => population.value.filter(p => scanned.value[p.subRef]).length);
+                // À embarquer = pièces EN ENTREPÔT (PARIS) non scannées.
+                const toEmbark = computed(() => population.value.filter(p => p.status === 'PARIS' && !scanned.value[p.subRef]));
+                // Corrections : pièces déjà « en vol » (A_VENIR) re-scannées -> reviennent en entrepôt.
+                const broughtBack = computed(() => population.value.filter(p => p.status === 'A_VENIR' && scanned.value[p.subRef]));
+                // Tant qu'AUCUNE pièce n'est scannée, rien n'est proposé à l'embarquement
+                // (on n'embarque pas par défaut : il faut d'abord pointer les colis restés).
+                const hasStarted = computed(() => Object.keys(scanned.value).length > 0);
+                const toEmbarkActive = computed(() => hasStarted.value ? toEmbark.value : []);
 
                 // ========== FONCTIONS UTILES ==========
                 const formatMoney = (amount) => globalApp.formatMoney(amount);
@@ -312,7 +317,12 @@ export const ScanDepartVolView = {
                     // Les KPIs sont réactifs via stats.value
                 };
 
-                // ========== POPULATION : colis aériens en entrepôt / en vol ==========
+                // ========== POPULATION : SOUS-COLIS (pièces) en entrepôt / en vol ==========
+                // Une pièce = une étiquette (ex. J-003-AER1_1_41). Elle est suivie
+                // INDIVIDUELLEMENT via l'historique des scans : une pièce passée par
+                // « Mise en entrepôt » (ENTREPOT_PARIS) entre dans la population ; son
+                // statut courant vient de son DERNIER scan (DEPART_VOL = en vol,
+                // ENTREPOT_PARIS / DEPART_VOL_RETOUR = en entrepôt).
                 const loadPopulation = async () => {
                     loading.value = true;
                     try {
@@ -320,22 +330,28 @@ export const ScanDepartVolView = {
                         const snap = (livCol !== "livraisons")
                             ? await getDocs(query(collection(db, livCol)))
                             : await getDocs(query(collection(db, livCol), where("agency", "==", activeAgency)));
-                        // Population = colis réellement passés par « Mise en entrepôt »
-                        // (scanHistory ENTREPOT_PARIS) et encore PARIS, + ceux déjà
-                        // « en vol » (A_VENIR) pour permettre les corrections.
-                        const wasInWarehouse = (d) => Array.isArray(d.scanHistory) && d.scanHistory.some(s => s.type === 'ENTREPOT_PARIS');
-                        population.value = snap.docs
-                            .map(d => ({ docId: d.id, ...d.data() }))
-                            .filter(d => !d.isDeleted && (
-                                (d.containerStatus === 'PARIS' && wasInWarehouse(d)) ||
-                                d.containerStatus === 'A_VENIR'
-                            ))
-                            .map(d => ({
-                                docId: d.docId,
-                                ref: d.ref,
-                                client: d.destinataire || d.expediteur || 'Client',
-                                status: d.containerStatus
-                            }));
+                        const pieces = [];
+                        snap.docs.forEach(d => {
+                            const data = d.data();
+                            if (data.isDeleted) return;
+                            const hist = Array.isArray(data.scanHistory) ? data.scanHistory : [];
+                            // Pièces réellement mises en entrepôt (réf de pièce distincte).
+                            const warehoused = [...new Set(hist.filter(s => s.type === 'ENTREPOT_PARIS' && s.scanRef).map(s => s.scanRef))];
+                            warehoused.forEach(subRef => {
+                                const rel = hist.filter(s => s.scanRef === subRef && ['ENTREPOT_PARIS', 'DEPART_VOL', 'DEPART_VOL_RETOUR'].includes(s.type))
+                                    .sort((a, b) => new Date(b.date) - new Date(a.date));
+                                const last = rel[0];
+                                const status = (last && last.type === 'DEPART_VOL') ? 'A_VENIR' : 'PARIS';
+                                pieces.push({
+                                    subRef,
+                                    docId: d.id,
+                                    ref: data.ref,
+                                    client: data.destinataire || data.expediteur || 'Client',
+                                    status
+                                });
+                            });
+                        });
+                        population.value = pieces;
                     } catch (e) {
                         console.error('Chargement population (Départ vol) :', e);
                         globalApp.showToast("Erreur de chargement des colis en entrepôt", "error");
@@ -366,19 +382,15 @@ export const ScanDepartVolView = {
                     lastScanTime.value = Date.now();
                     isScanningPaused.value = true;
 
-                    // Étiquette = `<ref>_<labelIndex>_<uniqueId>` : on retire le suffixe.
-                    const baseRefMatch = text.match(/^(.+)_\d+_\d+$/);
-                    const baseRef = (baseRefMatch ? baseRefMatch[1] : text).trim();
-
-                    // Comparaison robuste (casse/espaces) sur la réf de base.
-                    const norm = baseRef.toUpperCase();
-                    const p = population.value.find(x => (x.ref || '').toUpperCase().trim() === norm);
+                    // On matche le SOUS-COLIS EXACT (chaque pièce a sa propre étiquette).
+                    const norm = text.toUpperCase().trim();
+                    const p = population.value.find(x => (x.subRef || '').toUpperCase().trim() === norm);
                     if (p) {
-                        if (scanned.value[p.ref]) {
-                            addRecentScan(text, p.client, 'Colis déjà scanné', 'warn');
+                        if (scanned.value[p.subRef]) {
+                            addRecentScan(text, p.client, 'Sous-colis déjà scanné', 'warn');
                             feedback('warn');
                         } else {
-                            scanned.value = { ...scanned.value, [p.ref]: true };
+                            scanned.value = { ...scanned.value, [p.subRef]: true };
                             addRecentScan(text, p.client, 'Resté en entrepôt ✓', 'ok');
                             feedback('ok');
                         }
@@ -398,32 +410,44 @@ export const ScanDepartVolView = {
                     }
                 };
 
-                // ========== VALIDATION DU DÉPART (applique la différence) ==========
+                // ========== VALIDATION DU DÉPART (applique la différence, PAR PIÈCE) ==========
                 const validateDepart = async () => {
-                    const embark = toEmbark.value;    // PARIS non scannés -> A_VENIR (en vol)
-                    const back = broughtBack.value;   // A_VENIR scannés -> PARIS (correction)
+                    if (!hasStarted.value) {
+                        globalApp.showToast("Scannez d'abord les colis restés en entrepôt.", "info");
+                        return;
+                    }
+                    const embark = toEmbarkActive.value;  // pièces PARIS non scannées -> en vol
+                    const back = broughtBack.value;       // pièces A_VENIR re-scannées -> entrepôt
                     if (embark.length === 0 && back.length === 0) {
                         globalApp.showToast("Rien à valider.", "info");
                         return;
                     }
-                    const msg = `${embark.length} colis seront marqués « en vol », ${back.length} ramenés en entrepôt. Confirmer le départ ?`;
+                    const msg = `${embark.length} sous-colis partent « en vol », ${back.length} reviennent en entrepôt. Confirmer le départ ?`;
                     const ok = window.AppModal ? await window.AppModal.confirm(msg, "Valider le départ vol", true) : confirm(msg);
                     if (!ok) return;
                     validating.value = true;
                     try {
                         const livColName = getCollectionName("livraisons");
                         const nowIso = new Date().toISOString();
+                        const embarkSet = new Set(embark.map(p => p.subRef));
+                        const backSet = new Set(back.map(p => p.subRef));
+                        // Regroupe les pièces par livraison pour recalculer le statut colis.
+                        const byDoc = {};
+                        population.value.forEach(pc => { (byDoc[pc.docId] = byDoc[pc.docId] || []).push(pc); });
                         const batch = writeBatch(db);
-                        embark.forEach(p => {
-                            batch.update(doc(db, livColName, p.docId), {
-                                containerStatus: 'A_VENIR',
-                                scanHistory: arrayUnion({ scanRef: p.ref, date: nowIso, type: 'DEPART_VOL', agent: currentUserName })
+                        Object.keys(byDoc).forEach(docId => {
+                            const pcs = byDoc[docId];
+                            const newEntries = [];
+                            pcs.forEach(pc => {
+                                if (embarkSet.has(pc.subRef)) newEntries.push({ scanRef: pc.subRef, date: nowIso, type: 'DEPART_VOL', agent: currentUserName });
+                                else if (backSet.has(pc.subRef)) newEntries.push({ scanRef: pc.subRef, date: nowIso, type: 'DEPART_VOL_RETOUR', agent: currentUserName });
                             });
-                        });
-                        back.forEach(p => {
-                            batch.update(doc(db, livColName, p.docId), {
-                                containerStatus: 'PARIS',
-                                scanHistory: arrayUnion({ scanRef: p.ref, date: nowIso, type: 'DEPART_VOL_RETOUR', agent: currentUserName })
+                            if (!newEntries.length) return; // livraison non concernée
+                            // Statut colis = « en vol » dès qu'AU MOINS une pièce part.
+                            const anyVol = pcs.some(pc => embarkSet.has(pc.subRef) ? true : (backSet.has(pc.subRef) ? false : pc.status === 'A_VENIR'));
+                            batch.update(doc(db, livColName, docId), {
+                                containerStatus: anyVol ? 'A_VENIR' : 'PARIS',
+                                scanHistory: arrayUnion(...newEntries)
                             });
                         });
                         await batch.commit();
@@ -558,7 +582,7 @@ export const ScanDepartVolView = {
                     population, scanned, loading, validating, outCount, flash,
                     recentScans, manualRef, scanStatusText, isSoundEnabled,
                     // Computeds
-                    enEntrepotCount, enVolCount, scannedCount, toEmbark, broughtBack,
+                    enEntrepotCount, enVolCount, scannedCount, toEmbark, toEmbarkActive, broughtBack, hasStarted,
                     // Refs DOM
                     qrReader, videoPreview,
                     // Méthodes
