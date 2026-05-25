@@ -72,6 +72,19 @@ export const ScanHistoryView = {
                 .status-badge--success { background: #dcfce7; color: #166534; border: 1px solid #bbf7d0; }
                 .status-badge--warning { background: #ffedd5; color: #c2410c; border: 1px solid #fed7aa; }
                 .status-badge--error { background: #fee2e2; color: #991b1b; border: 1px solid #fecaca; }
+
+                /* Regroupement par dossier */
+                .group-row { cursor: pointer; background: #f8fafc; }
+                .group-row:hover { background: #eef2f7; }
+                .group-row td { padding: 12px 20px; border-bottom: 1px solid #e2e8f0; }
+                .group-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+                .group-caret { color: #3b82f6; font-weight: 800; width: 14px; }
+                .group-dossier { font-family: monospace; font-weight: 800; color: #0f172a; background: #e0f2fe; padding: 3px 10px; border-radius: 6px; }
+                .group-count { font-weight: 800; color: #1e40af; }
+                .group-type { color: #64748b; font-weight: 600; font-size: 12px; }
+                .group-date { color: #475569; font-size: 12px; }
+                .group-agent { color: #1e293b; font-weight: 600; font-size: 12px; margin-left: auto; }
+                .detail-row td:first-child { padding-left: 38px; }
             </style>
 
             <div id="vue-scan-history-app" class="scan-history-page" v-cloak>
@@ -79,7 +92,7 @@ export const ScanHistoryView = {
                     <div class="scan-history-header__content">
                         <div class="scan-history-header__info">
                             <h1 class="scan-history-header__title">📊 Scan — Historique</h1>
-                            <p class="scan-history-header__subtitle">Journal d'audit — {{ filteredScans.length }} résultat(s)</p>
+                            <p class="scan-history-header__subtitle">Journal d'audit — {{ groupedScans.length }} regroupement(s) · {{ filteredScans.length }} scan(s)</p>
                         </div>
                         <div class="scan-history-header__actions">
                             <button class="btn-export btn-export--excel" type="button" @click="exportExcel"> 📄 Excel </button>
@@ -171,27 +184,48 @@ export const ScanHistoryView = {
                             </thead>
                             <tbody>
                                 <tr v-if="loading"><td colspan="8" style="text-align: center; padding: 40px;"><i class="fas fa-spinner fa-spin"></i> Chargement du journal...</td></tr>
-                                <tr v-else-if="filteredScans.length === 0"><td colspan="8" style="text-align: center; padding: 40px; color:#64748b;">Aucun log ne correspond à vos filtres.</td></tr>
-                                <tr v-else v-for="s in filteredScans" :key="s.id" :class="['table-row', selectedIds.includes(s.id) ? 'selected' : '']" @click="toggleRow(s.id)">
-                                    <td data-label="Sélect." class="col-checkbox">
-                                        <input type="checkbox" class="table-checkbox" :value="s.id" v-model="selectedIds" @click.stop>
-                                    </td>
-                                    <td data-label="Heure" class="col-time">{{ formatDateStr(s.date) }}</td>
-                                    <td data-label="QR Code" class="col-qr"><code>{{ s.scanRef || '-' }}</code></td>
-                                    <td data-label="Nature">{{ s.description || '-' }}</td>
-                                    <td data-label="Conteneur" class="col-container">
-                                        <span v-if="!s.container || s.container === '-'" style="color:#94a3b8;">-</span>
-                                        <span v-else>{{ s.container }}</span>
-                                    </td>
-                                    <td data-label="Statut">
-                                        <span v-if="s.status === 'SUCCES'" class="status-badge status-badge--success">✅ SUCCÈS</span>
-                                        <span v-else-if="s.status === 'DOUBLON'" class="status-badge status-badge--warning">⚠️ DÉJÀ TRAITÉ</span>
-                                        <span v-else-if="s.status === 'ERREUR'" class="status-badge status-badge--error">❌ ERREUR</span>
-                                        <span v-else class="status-badge status-badge--error">❌ INCONNU</span>
-                                    </td>
-                                    <td data-label="Type"><span style="font-size:11px; font-weight:600; color:#64748b;">{{ getTypeLabel(s.type) }}</span></td>
-                                    <td data-label="Agent" class="col-agent">{{ s.agent || '-' }} <span style="font-size:10px; background:#e2e8f0; padding:2px 6px; border-radius:4px; margin-left:4px; color:#475569;">{{ getAgencyBadge(s.agency) }}</span></td>
-                                </tr>
+                                <tr v-else-if="groupedScans.length === 0"><td colspan="8" style="text-align: center; padding: 40px; color:#64748b;">Aucun log ne correspond à vos filtres.</td></tr>
+                                <template v-else v-for="g in groupedScans" :key="g.key">
+                                    <!-- Ligne de regroupement : 1 client + 1 action -->
+                                    <tr class="group-row" @click="toggleGroup(g.key)">
+                                        <td colspan="8">
+                                            <div class="group-head">
+                                                <span class="group-caret">{{ isExpanded(g.key) ? '▾' : '▸' }}</span>
+                                                <span class="group-dossier">{{ g.baseRef }}</span>
+                                                <span class="group-count">{{ g.items.length }} colis</span>
+                                                <span class="group-type">{{ getTypeLabel(g.type) }}</span>
+                                                <span class="group-date">{{ formatDateStr(g.latest) }}</span>
+                                                <span v-if="g.nSuccess" class="status-badge status-badge--success">✅ {{ g.nSuccess }}</span>
+                                                <span v-if="g.nDup" class="status-badge status-badge--warning">⚠️ {{ g.nDup }}</span>
+                                                <span v-if="g.nErr" class="status-badge status-badge--error">❌ {{ g.nErr }}</span>
+                                                <span class="group-agent">👤 {{ g.agent || '-' }} · {{ getAgencyBadge(g.agency) }}</span>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                    <!-- Détail des colis (déplié) -->
+                                    <template v-if="isExpanded(g.key)">
+                                        <tr v-for="s in g.items" :key="s.id" :class="['table-row', 'detail-row', selectedIds.includes(s.id) ? 'selected' : '']" @click="toggleRow(s.id)">
+                                            <td data-label="Sélect." class="col-checkbox">
+                                                <input type="checkbox" class="table-checkbox" :value="s.id" v-model="selectedIds" @click.stop>
+                                            </td>
+                                            <td data-label="Heure" class="col-time">{{ formatDateStr(s.date) }}</td>
+                                            <td data-label="QR Code" class="col-qr"><code>{{ s.scanRef || '-' }}</code></td>
+                                            <td data-label="Nature">{{ s.description || '-' }}</td>
+                                            <td data-label="Conteneur" class="col-container">
+                                                <span v-if="!s.container || s.container === '-'" style="color:#94a3b8;">-</span>
+                                                <span v-else>{{ s.container }}</span>
+                                            </td>
+                                            <td data-label="Statut">
+                                                <span v-if="s.status === 'SUCCES'" class="status-badge status-badge--success">✅ SUCCÈS</span>
+                                                <span v-else-if="s.status === 'DOUBLON'" class="status-badge status-badge--warning">⚠️ DÉJÀ TRAITÉ</span>
+                                                <span v-else-if="s.status === 'ERREUR'" class="status-badge status-badge--error">❌ ERREUR</span>
+                                                <span v-else class="status-badge status-badge--error">❌ INCONNU</span>
+                                            </td>
+                                            <td data-label="Type"><span style="font-size:11px; font-weight:600; color:#64748b;">{{ getTypeLabel(s.type) }}</span></td>
+                                            <td data-label="Agent" class="col-agent">{{ s.agent || '-' }} <span style="font-size:10px; background:#e2e8f0; padding:2px 6px; border-radius:4px; margin-left:4px; color:#475569;">{{ getAgencyBadge(s.agency) }}</span></td>
+                                        </tr>
+                                    </template>
+                                </template>
                             </tbody>
                         </table>
                     </div>
@@ -269,6 +303,43 @@ export const ScanHistoryView = {
                     });
                 });
 
+                // Référence du DOSSIER (client) à partir d'un sous-colis :
+                // « J-004-AER1_13_22 » -> « J-004-AER1 ».
+                const baseRefOf = (ref) => {
+                    const r = ref || '';
+                    const cleaned = r.replace(/_\d+_\d+$/, '');
+                    return cleaned || r || '-';
+                };
+
+                // Regroupement par DOSSIER + ACTION (type) + JOUR : une ligne
+                // résume « ce client, cette action, ce jour : N colis ».
+                const expandedKeys = ref(new Set());
+                const groupedScans = computed(() => {
+                    const map = new Map();
+                    filteredScans.value.forEach(s => {
+                        const base = baseRefOf(s.scanRef);
+                        const day = (s.date || '').slice(0, 10);
+                        const key = `${base}__${s.type || ''}__${day}`;
+                        if (!map.has(key)) {
+                            map.set(key, { key, baseRef: base, type: s.type, day, items: [], latest: s.date || '', agent: s.agent, agency: s.agency, nSuccess: 0, nDup: 0, nErr: 0 });
+                        }
+                        const g = map.get(key);
+                        g.items.push(s);
+                        if (!g.latest || (s.date || '') > g.latest) g.latest = s.date || '';
+                        if (s.status === 'SUCCES') g.nSuccess++;
+                        else if (s.status === 'DOUBLON') g.nDup++;
+                        else g.nErr++;
+                    });
+                    return Array.from(map.values()).sort((a, b) => (b.latest || '').localeCompare(a.latest || ''));
+                });
+
+                const isExpanded = (key) => expandedKeys.value.has(key);
+                const toggleGroup = (key) => {
+                    const s = new Set(expandedKeys.value);
+                    if (s.has(key)) s.delete(key); else s.add(key);
+                    expandedKeys.value = s;
+                };
+
                 const selectAllCb = computed({
                     get: () => filteredScans.value.length > 0 && selectedIds.value.length === filteredScans.value.length,
                     set: (val) => {
@@ -331,6 +402,7 @@ export const ScanHistoryView = {
 
                 return {
                     scans, loading, selectedIds, currentLimit, filters, filteredScans, selectAllCb,
+                    groupedScans, expandedKeys, isExpanded, toggleGroup,
                     loadData, selectAll, clearSelection, toggleRow, deleteSelected, exportExcel, exportPDF,
                     formatDateStr, getTypeLabel, getAgencyBadge
                 };

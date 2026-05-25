@@ -339,27 +339,44 @@ export const ScanDechargementView = {
             if (!snapLiv.empty) {
                 const docId = snapLiv.docs[0].id;
                 const data = snapLiv.docs[0].data();
-                
-                const isAlreadyScanned = data.scanHistory && data.scanHistory.some(s => s.scanRef === text && s.type === 'DECHARGEMENT_ABIDJAN');
+                const clientName = data.destinataire || data.expediteur || 'Client inconnu';
 
-                if (isAlreadyScanned) {
+                // Suivi PAR SOUS-COLIS : on ne bascule pas tout le dossier sur un
+                // seul scan. On compte les colis réellement déchargés (X/N) ; un
+                // colis oublié au départ reste donc visible comme non reçu.
+                const labelsTotal = (Array.isArray(data.labels) && data.labels.length > 0) ? data.labels : [data.ref];
+                const alreadyScanned = new Set((data.scanHistory || []).filter(s => s && s.type === 'DECHARGEMENT_ABIDJAN' && s.scanRef).map(s => s.scanRef));
+                const isKnownLabel = labelsTotal.includes(text);
+                const scanIsBaseRef = text === baseRef && labelsTotal.length > 1 && !isKnownLabel;
+
+                if (alreadyScanned.has(text)) {
                     this.stats.duplicate++;
                     logData.status = 'DOUBLON';
-                    this.addRecentScan(text, data.destinataire || data.expediteur || 'Client inconnu', 'Déjà déchargé', 'warn');
+                    this.addRecentScan(text, clientName, `Déjà déchargé · ${alreadyScanned.size}/${labelsTotal.length}`, 'warn');
                     if (this.isSoundEnabled && navigator.vibrate) navigator.vibrate([50, 50, 50]);
                 } else {
-                    // Mettre à jour avec le conteneur cible, statut EN_COURS et déclenchement dateAjout pour le magasinage
-                    await updateDoc(doc(db, getCollectionName('livraisons'),docId), {
+                    const nowCount = scanIsBaseRef ? labelsTotal.length : (isKnownLabel ? alreadyScanned.size + 1 : Math.min(alreadyScanned.size + 1, labelsTotal.length));
+                    const allDone = nowCount >= labelsTotal.length;
+                    const isFirst = alreadyScanned.size === 0;
+
+                    const updates = {
                         conteneur: targetCont,
-                        containerStatus: 'EN_COURS',
-                        status: data.status === 'EN_ATTENTE' ? 'EN_ATTENTE' : data.status, // Garde le statut si déjà livré/partiel
-                        dateAjout: new Date().toISOString(),
-                        scanHistory: arrayUnion({ scanRef: text, date: new Date().toISOString(), type: 'DECHARGEMENT_ABIDJAN', container: targetCont })
-                    });
-    
+                        scanHistory: arrayUnion({ scanRef: text, date: new Date().toISOString(), type: 'DECHARGEMENT_ABIDJAN', container: targetCont }),
+                        quantiteRecue: nowCount,
+                        quantiteRestante: Math.max(0, labelsTotal.length - nowCount)
+                    };
+                    // Magasinage : démarre au 1er colis déchargé (choix métier).
+                    if (isFirst) {
+                        updates.containerStatus = 'EN_COURS';
+                        updates.dateAjout = new Date().toISOString();
+                        updates.status = data.status === 'EN_ATTENTE' ? 'EN_ATTENTE' : data.status; // garde livré/partiel
+                    }
+                    if (allDone) updates.recuComplet = true;
+                    await updateDoc(doc(db, getCollectionName('livraisons'), docId), updates);
+
                     this.stats.success++;
                     logData.status = 'SUCCES';
-                    this.addRecentScan(text, data.destinataire || data.expediteur || 'Client inconnu', 'Déchargé avec succès', 'ok');
+                    this.addRecentScan(text, clientName, allDone ? `Déchargé · ${nowCount}/${labelsTotal.length} ✔` : `Déchargé · ${nowCount}/${labelsTotal.length}`, 'ok');
                     if (this.isSoundEnabled && navigator.vibrate) navigator.vibrate([30, 20, 30]);
                 }
             } else {

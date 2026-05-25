@@ -356,27 +356,40 @@ export const ScanLivraisonView = {
             if (!snapLiv.empty) {
                 const docId = snapLiv.docs[0].id;
                 const data = snapLiv.docs[0].data();
-                
-                const isAlreadyScanned = data.scanHistory && data.scanHistory.some(s => s.scanRef === text && s.type === 'MISE_EN_LIVRAISON');
+                const clientName = data.destinataire || data.expediteur || 'Client inconnu';
 
-                if (isAlreadyScanned) {
+                // Suivi PAR SOUS-COLIS : on compte les colis réellement mis en
+                // livraison (X/N) ; le dossier n'est « entièrement en livraison »
+                // que quand toutes ses pièces sont scannées.
+                const labelsTotal = (Array.isArray(data.labels) && data.labels.length > 0) ? data.labels : [data.ref];
+                const alreadyScanned = new Set((data.scanHistory || []).filter(s => s && s.type === 'MISE_EN_LIVRAISON' && s.scanRef).map(s => s.scanRef));
+                const isKnownLabel = labelsTotal.includes(text);
+                const scanIsBaseRef = text === baseRef && labelsTotal.length > 1 && !isKnownLabel;
+
+                if (alreadyScanned.has(text)) {
                     this.stats.duplicate++;
                     logData.status = 'DOUBLON';
-                    this.addRecentScan(text, data.destinataire || data.expediteur || 'Client inconnu', 'Déjà en livraison', 'warn');
+                    this.addRecentScan(text, clientName, `Déjà en livraison · ${alreadyScanned.size}/${labelsTotal.length}`, 'warn');
                     if (this.isSoundEnabled && navigator.vibrate) navigator.vibrate([50, 50, 50]);
                 } else {
                     const today = new Date().toISOString().split('T')[0];
-                    // Mettre à jour avec le livreur et statut EN_COURS
-                    await updateDoc(doc(db, getCollectionName('livraisons'), docId), {
+                    const nowCount = scanIsBaseRef ? labelsTotal.length : (isKnownLabel ? alreadyScanned.size + 1 : Math.min(alreadyScanned.size + 1, labelsTotal.length));
+                    const allDone = nowCount >= labelsTotal.length;
+
+                    const updates = {
                         status: 'EN_COURS',
                         livreur: targetDriver,
                         dateProgramme: today,
-                        scanHistory: arrayUnion({ scanRef: text, date: new Date().toISOString(), type: 'MISE_EN_LIVRAISON', livreur: targetDriver })
-                    });
-    
+                        scanHistory: arrayUnion({ scanRef: text, date: new Date().toISOString(), type: 'MISE_EN_LIVRAISON', livreur: targetDriver }),
+                        quantiteEnLivraison: nowCount,
+                        quantiteRestante: Math.max(0, labelsTotal.length - nowCount)
+                    };
+                    if (allDone) updates.enLivraisonComplet = true;
+                    await updateDoc(doc(db, getCollectionName('livraisons'), docId), updates);
+
                     this.stats.success++;
                     logData.status = 'SUCCES';
-                    this.addRecentScan(text, data.destinataire || data.expediteur || 'Client inconnu', 'Mis en livraison', 'ok');
+                    this.addRecentScan(text, clientName, allDone ? `En livraison · ${nowCount}/${labelsTotal.length} ✔` : `En livraison · ${nowCount}/${labelsTotal.length}`, 'ok');
                     if (this.isSoundEnabled && navigator.vibrate) navigator.vibrate([30, 20, 30]);
                 }
             } else {

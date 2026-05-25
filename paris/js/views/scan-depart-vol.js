@@ -520,15 +520,6 @@ export const ScanDepartVolView = {
                             }).catch(async () => await navigator.mediaDevices.getUserMedia({ video: { width: { ideal: 1280 } } }));
                             
                             videoPreview.value.srcObject = nativeVideoStream;
-                            // Force le zoom au minimum (certains téléphones ouvrent
-                            // la caméra zoomée par défaut).
-                            try {
-                                const _vt = nativeVideoStream.getVideoTracks()[0];
-                                if (_vt && _vt.getCapabilities) {
-                                    const _caps = _vt.getCapabilities();
-                                    if (_caps && _caps.zoom) await _vt.applyConstraints({ advanced: [{ zoom: _caps.zoom.min || 1 }] });
-                                }
-                            } catch (e) { /* zoom non réglable sur cet appareil */ }
                             videoPreview.value.onloadedmetadata = () => {
                                 videoPreview.value.play();
                                 detectNativeBarcode();

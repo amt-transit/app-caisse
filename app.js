@@ -30,6 +30,8 @@ import { TousLesDevisView } from './paris/js/views/touslesdevis.js';
 import { DemandesDevisView } from './paris/js/views/demandesdevis.js';
 import { ConfectionConteneursView } from './paris/js/views/confection-conteneurs.js';
 import { BateauxDepartView } from './paris/js/views/bateaux-depart.js';
+import { AvionsDepartView } from './paris/js/views/avions-depart.js';
+import { ArriveesView } from './abidjan/js/views/arrivees.js';
 import { ScanHistoryView as ParisScanHistoryView } from './paris/js/views/scan-history.js';
 import { FinanceCaisseView } from './paris/js/views/finance-caisse.js';
 import { FinanceDepensesView } from './paris/js/views/finance-depenses.js';
@@ -89,7 +91,7 @@ export const app = {
         'appointment-new': 'rdv', 'appointments-list': 'rdv', 'appointments-pending': 'rdv', 'appointments-calendar': 'rdv',
         'program-new': 'programmes', 'program-my': 'programmes', 'program-history': 'programmes', 'drivers': 'programmes', 'departures-calendar': 'programmes',
         'quotes-list': 'devis', 'quote-new': 'devis', 'quote-requests': 'devis',
-        'confection-containers': 'chargement', 'loading-boats': 'chargement',
+        'confection-containers': 'chargement', 'loading-boats': 'chargement', 'arrivals-boats': 'chargement',
         'scan-warehouse': 'scan', 'scan-container': 'scan', 'scan-depart-vol': 'scan', 'scan-classic': 'scan', 'scan-history': 'scan',
         'scan-dechargement': 'scan', 'scan-livraison': 'scan', 'scan-livrer': 'scan',
         'clients-list': 'clients', 'clients-app': 'clients', 'clients-analytics': 'clients', 'clients': 'logistique',
@@ -228,8 +230,19 @@ export const app = {
 
         // Application du filtre des menus physiquement disponibles pour l'agence (défini dans Apparence & Menus)
         if (config && config.visibleMenus) {
-            baseOrder = baseOrder.filter(k => config.visibleMenus.includes(k));
-            allowedMenus = allowedMenus.filter(k => config.visibleMenus.includes(k));
+            const _filteredBase = baseOrder.filter(k => config.visibleMenus.includes(k));
+            const _filteredAllowed = allowedMenus.filter(k => config.visibleMenus.includes(k));
+            // GARDE-FOU anti-verrouillage : une config qui ne laisse AUCUN menu
+            // accessible est forcément une erreur (ex. « tout masqué puis
+            // enregistré »). On l'ignore pour ne pas enfermer l'utilisateur hors
+            // de l'application — il retrouve les menus par défaut et peut aller
+            // corriger la configuration dans « Rôles & Menus ».
+            if (_filteredAllowed.length > 0) {
+                baseOrder = _filteredBase;
+                allowedMenus = _filteredAllowed;
+            } else {
+                console.warn('[Menus] visibleMenus ne laisse aucun menu accessible — configuration ignorée (garde-fou anti-verrouillage).');
+            }
         }
 
         // Section "Spécial Asie" / "Réseau Partenaires" : compatibilité
@@ -246,6 +259,24 @@ export const app = {
             allowedMenus = allowedMenus.filter(k => k !== 'special-asie' && k !== 'parrainage');
         }
         
+        // Sécurité finale : si après tous les filtres aucun menu n'est
+        // accessible (config de rôle vidée, etc.), on rétablit un menu de base
+        // pour ne jamais bloquer totalement l'utilisateur.
+        if (!allowedMenus || allowedMenus.length === 0) {
+            console.warn('[Menus] Aucun menu accessible après filtrage — repli sur les menus par défaut.');
+            allowedMenus = isSuperUser ? [...baseOrder] : ['main'];
+            if (!allowedMenus.includes('main')) allowedMenus.unshift('main');
+        }
+
+        // GARANTIE ADMINISTRATION : pour un admin/super_admin, la section
+        // « Administration » (réglages) ne peut JAMAIS être masquée. C'est
+        // l'accès de secours qui permet de corriger toute configuration de menu
+        // erronée (ex. « tout masqué puis enregistré ») sans rester enfermé.
+        if (isSuperUser) {
+            if (!baseOrder.includes('settings')) baseOrder.push('settings');
+            if (!allowedMenus.includes('settings')) allowedMenus.push('settings');
+        }
+
         this.allowedMenus = allowedMenus;
 
         const navContainer = document.querySelector('.sidebar-nav');
@@ -299,8 +330,12 @@ export const app = {
                 return titleEl && titleToKey[titleEl.textContent.trim()] === key;
             });
 
+            // Administration toujours accessible pour un admin/super_admin :
+            // on ne lui applique AUCUN masquage sur cette section.
+            const _adminGuard = isSuperUser && key === 'settings';
+
             matching.forEach(section => {
-                if (!configAuthoritative) {
+                if (!configAuthoritative && !_adminGuard) {
                     // Mode historique : filtrage départ/arrivée au niveau section.
                     const isSecDep = section.classList.contains('departure-only');
                     const isSecArr = section.classList.contains('arrival-only');
@@ -309,6 +344,9 @@ export const app = {
 
                 section.style.display = '';
                 section.querySelectorAll('.sidebar-item').forEach(item => {
+                    // 0) Garantie Administration : un admin/super_admin voit
+                    // TOUJOURS tous les outils d'administration (non masquables).
+                    if (_adminGuard) { item.style.display = ''; return; }
                     // 1) Module explicitement masqué pour cette agence (prioritaire).
                     if (hiddenItems.has(item.dataset.page)) { item.style.display = 'none'; return; }
                     // 1-bis) Module masqué pour CE rôle (par-rôle, prioritaire).
@@ -333,6 +371,33 @@ export const app = {
                 navContainer.appendChild(section);
             });
         });
+
+        // Renommage mode-aware du menu : « Bateaux départ » (🚢) devient
+        // « Avion départ » (✈️) en aérien — même item, vue différente.
+        const _boatsItem = document.querySelector('.sidebar-item[data-page="loading-boats"]');
+        if (_boatsItem) {
+            const _span = _boatsItem.querySelector('span');
+            const _icon = _boatsItem.querySelector('i');
+            if (_shipMode === 'aerien') {
+                if (_span) _span.textContent = 'Avion départ';
+                if (_icon) _icon.className = 'fas fa-plane-departure';
+            } else {
+                if (_span) _span.textContent = 'Bateaux départ';
+                if (_icon) _icon.className = 'fas fa-ship';
+            }
+        }
+        const _arrivalItem = document.querySelector('.sidebar-item[data-page="arrivals-boats"]');
+        if (_arrivalItem) {
+            const _span = _arrivalItem.querySelector('span');
+            const _icon = _arrivalItem.querySelector('i');
+            if (_shipMode === 'aerien') {
+                if (_span) _span.textContent = 'Vol arrivée';
+                if (_icon) _icon.className = 'fas fa-plane-arrival';
+            } else {
+                if (_span) _span.textContent = 'Bateau arrivée';
+                if (_icon) _icon.className = 'fas fa-anchor';
+            }
+        }
 
         // Accès AÉRIEN par rôle : si ce rôle n'a pas l'aérien, on masque le
         // bouton « ✈️ Aérien » (bascule de mode). super_admin = toujours autorisé.
@@ -418,12 +483,31 @@ export const app = {
             // « en magasin » = livraisons aériennes au statut PARIS (reçues, pas
             // encore expédiées). getCollectionName route déjà vers livraisons_..._aerien.
             if (mode === 'aerien') {
+                // Jauge = colis PHYSIQUEMENT en magasin, comptés PAR SOUS-COLIS.
+                // Règle IDENTIQUE à « Voir facture » : une pièce est « en magasin »
+                // si son DERNIER scan est « Mise en entrepôt » (ENTREPOT_PARIS) ou
+                // « Retour entrepôt » (DEPART_VOL_RETOUR). On NE filtre PAS sur
+                // containerStatus (sinon un dossier au statut inattendu serait exclu
+                // de la jauge alors que ses colis sont visibles en entrepôt -> jauge
+                // à zéro à tort). Poids réparti au prorata des pièces (indicateur).
                 this.unsubAerienGauge = onSnapshot(
-                    query(collection(db, getCollectionName("livraisons")), where("containerStatus", "==", "PARIS")),
+                    query(collection(db, getCollectionName("livraisons"))),
                     (snap) => {
-                        let totalKg = 0, n = 0;
-                        snap.forEach(d => { totalKg += parseFloat(d.data().poids) || 0; n++; });
-                        this.updateAerienGaugeUI(totalKg, n);
+                        let totalKg = 0, pieces = 0;
+                        snap.forEach(d => {
+                            const liv = d.data();
+                            if (liv.isDeleted) return;
+                            const labels = (liv.labels && liv.labels.length) ? liv.labels : [liv.ref];
+                            const totalPieces = labels.length || 1;
+                            const perPiece = (parseFloat(liv.poids) || 0) / totalPieces;
+                            const hist = Array.isArray(liv.scanHistory) ? liv.scanHistory : [];
+                            labels.forEach(lbl => {
+                                const scans = hist.filter(s => s.scanRef === lbl).sort((a, b) => new Date(b.date) - new Date(a.date));
+                                const inWarehouse = scans.length > 0 && (scans[0].type === 'ENTREPOT_PARIS' || scans[0].type === 'DEPART_VOL_RETOUR');
+                                if (inWarehouse) { totalKg += perPiece; pieces++; }
+                            });
+                        });
+                        this.updateAerienGaugeUI(totalKg, pieces);
                     },
                     (err) => console.warn("Jauge aérien :", err && err.message)
                 );
@@ -651,7 +735,7 @@ export const app = {
             'appointment-new': 'Nouveau RDV', 'appointments-list': 'Tous les RDV', 'appointments-pending': 'RDV à valider', 'appointments-calendar': 'Calendrier RDV',
             'program-new': 'Nouveau programme', 'program-my': 'Mon programme', 'program-history': 'Historique programmes', 'drivers': 'Chauffeurs', 'departures-calendar': 'Calendrier départs',
             'quotes-list': 'Tous les devis', 'quote-new': 'Nouveau devis', 'quote-requests': 'Demandes reçues',
-            'confection-containers': 'Confection Conteneurs', 'loading-boats': 'Bateaux départ',
+            'confection-containers': 'Confection Conteneurs', 'loading-boats': 'Bateaux départ', 'arrivals-boats': 'Bateau arrivée',
             'scan-warehouse': 'Mise en entrepôt', 'scan-container': 'Charger conteneur', 'scan-depart-vol': 'Départ vol', 'scan-classic': 'Scanner classique', 'scan-history': 'Historique scans',
             'scan-dechargement': 'Scan Déchargement', 'scan-livraison': 'Scan Mise en Livraison', 'scan-livrer': 'Scan Remise Client',
             'clients-list': 'Liste clients', 'clients-app': 'Client application', 'clients-analytics': 'Analytics clients', 'clients': 'Fichier Clients',
@@ -669,6 +753,15 @@ export const app = {
             'config-invoice': 'Choix facture', 'config-label': 'Choix étiquette', 'config-container': 'Conteneur Actif', 'config-objectives': 'Objectifs', 'config-charges': 'Charges',
             'prospecting': 'Prospections', 'audit-log': 'Journal d\'activités'
         };
+
+        // « Bateaux départ » devient « Avion départ » en mode aérien.
+        if (page === 'loading-boats' && sessionStorage.getItem('shippingMode') === 'aerien') {
+            titleMap['loading-boats'] = 'Avion départ';
+        }
+        // « Bateau arrivée » devient « Vol arrivée » en mode aérien.
+        if (page === 'arrivals-boats' && sessionStorage.getItem('shippingMode') === 'aerien') {
+            titleMap['arrivals-boats'] = 'Vol arrivée';
+        }
 
         const titleEl = document.getElementById('pageTitle') || document.querySelector('.page-title');
         if (titleEl) titleEl.textContent = titleMap[page] || page;
@@ -729,7 +822,8 @@ export const app = {
             'quotes-list': () => TousLesDevisView.render(this),
             'quote-requests': () => DemandesDevisView.render(this),
             'confection-containers': () => ConfectionConteneursView.render(this),
-            'loading-boats': () => BateauxDepartView.render(this),
+            'loading-boats': () => (sessionStorage.getItem('shippingMode') === 'aerien') ? AvionsDepartView.render(this) : BateauxDepartView.render(this),
+            'arrivals-boats': () => ArriveesView.render(this, container),
             'finance-caisse': () => FinanceCaisseView.render(this),
             'finance-cashier': () => FinanceCaisseView.render(this), // alias menu "Caisse globale"
             'finance-depenses': () => FinanceDepensesView.render(this),
@@ -1057,6 +1151,9 @@ export const app = {
         const model = localStorage.getItem('amt_label_model') || 'classic';
         const colorScheme = localStorage.getItem('amt_label_color') || 'default';
         const headerColor = localStorage.getItem('amt_label_header_color') || '#000000';
+        // Étiquette aérienne : couleur de bande propre (Choix Étiquette, mode Aérien).
+        // data.headerColor permet l'aperçu en direct avant enregistrement.
+        const aerienHeaderColor = data.headerColor || localStorage.getItem('amt_label_aerien_header_color') || '#1A3553';
         
         const dimensions = { A5: { width: 210, height: 148 }, A6: { width: 148, height: 105 } };
         const dim = dimensions[format] || dimensions.A5;
@@ -1094,7 +1191,8 @@ export const app = {
         let labelsHtml = '';
         for (const label of data.labels) {
             const qrDataUrl = await generateQR(label.sousRef);
-            if (model === 'compact') labelsHtml += this.renderCompactLabel(widthMm, heightMm, qrDataUrl, data, label, theme, headerColor);
+            if (data.isAerien) labelsHtml += this.renderAerienLabel(widthMm, heightMm, qrDataUrl, data, label, aerienHeaderColor);
+            else if (model === 'compact') labelsHtml += this.renderCompactLabel(widthMm, heightMm, qrDataUrl, data, label, theme, headerColor);
             else if (model === 'premium') labelsHtml += this.renderPremiumLabel(widthMm, heightMm, qrDataUrl, data, label, theme, headerColor);
             else labelsHtml += this.renderClassicLabel(widthMm, heightMm, qrDataUrl, data, label, theme, headerColor);
         }
@@ -1245,6 +1343,56 @@ export const app = {
                             <div style="font-size: ${isA5 ? '24pt' : '16pt'}; font-weight: 900; letter-spacing: 1px; word-break: break-all;">${data.ref}</div>
                             <div style="font-size: ${isA5 ? '10pt' : '8pt'}; font-weight: bold; margin-top: 1.5mm; text-transform: uppercase; color: #475569;">${label.desc}</div>
                         </div>
+                    </div>
+                </div>
+            </div>
+        `;
+    },
+
+    renderAerienLabel(widthMm, heightMm, qrDataUrl, data, label, headerColor = '#1A3553') {
+        const isA5 = widthMm === 210;
+        const fontSize = isA5 ? '11pt' : '9pt';
+        const titleFont = isA5 ? '14pt' : '11pt';
+        const refFont = isA5 ? '26pt' : '20pt';
+        const stripe = `repeating-linear-gradient(45deg, #E51F21 0, #E51F21 8px, #ffffff 8px, #ffffff 16px, ${headerColor} 16px, ${headerColor} 24px, #ffffff 24px, #ffffff 32px)`;
+        const poidsTxt = (label.poids && label.poids > 0) ? (Number(label.poids).toFixed(1) + ' kg') : '—';
+        return `
+            <div class="label" style="width: ${widthMm}mm; height: ${heightMm}mm; background: ${stripe}; padding: 3mm;">
+                <div style="background: #fff; height: 100%; display: flex; flex-direction: column; padding: 4mm; box-sizing: border-box;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; background: ${headerColor}; color: #fff; border-radius: 8px; padding: 2mm 3mm; margin-bottom: 3mm;">
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <img src="LOGOAMT.png" style="height: ${isA5 ? '9mm' : '6mm'}; object-fit: contain; background: #fff; border-radius: 4px; padding: 2px;" alt="Logo" onerror="this.style.display='none'"/>
+                            <div>
+                                <div style="font-size: ${fontSize}; font-weight: bold;">AMT TRANSIT CI FRET</div>
+                                <div style="font-size: ${isA5 ? '8pt' : '6pt'};">81 AV. ARISTIDE BRIAND - 0180893370</div>
+                            </div>
+                        </div>
+                        <div style="text-align: right;">
+                            <div style="background: #F2A312; color: #1A3553; font-weight: 900; font-size: ${isA5 ? '13pt' : '10pt'}; padding: 2px 10px; border-radius: 20px; letter-spacing: 1px;">✈ PAR AVION</div>
+                            <div style="font-size: ${isA5 ? '7pt' : '6pt'}; margin-top: 1mm; letter-spacing: 1px;">BY AIR · AÉRIEN</div>
+                        </div>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 3mm;">
+                        <div style="flex: 1;">
+                            <div style="font-size: ${titleFont}; font-weight: bold; color: #1A3553;">${label.sousRef}</div>
+                            <div style="margin-top: 3mm;">
+                                <div style="font-size: ${isA5 ? '9pt' : '7pt'}; font-weight: bold; color: #94a3b8; letter-spacing: 1px;">DESTINATAIRE</div>
+                                <div style="font-size: ${titleFont}; font-weight: bold;">${data.destName}</div>
+                                <div style="font-size: ${fontSize};">${data.destPhone || ''}</div>
+                            </div>
+                            <div style="margin-top: 2mm;">
+                                <div style="font-size: ${isA5 ? '9pt' : '7pt'}; font-weight: bold; color: #94a3b8; letter-spacing: 1px;">EXPÉDITEUR</div>
+                                <div style="font-size: ${fontSize}; font-weight: bold;">${data.expName}</div>
+                            </div>
+                        </div>
+                        <div style="text-align: center;">
+                            <img src="${qrDataUrl}" style="width: ${isA5 ? '42mm' : '33mm'}; height: ${isA5 ? '42mm' : '33mm'};" />
+                            <div style="margin-top: 1.5mm; background: #E51F21; color: #fff; font-weight: 900; font-size: ${isA5 ? '14pt' : '11pt'}; padding: 2px 6px; border-radius: 8px;">⚖ ${poidsTxt}</div>
+                        </div>
+                    </div>
+                    <div style="flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; width: 100%;">
+                        <div style="font-size: ${refFont}; font-weight: 900; letter-spacing: 2px; word-break: break-all; color: #1A3553;">${data.ref}</div>
+                        <div style="font-size: ${fontSize}; font-weight: bold; margin-top: 1mm; text-transform: uppercase; color: #475569;">${label.desc}</div>
                     </div>
                 </div>
             </div>

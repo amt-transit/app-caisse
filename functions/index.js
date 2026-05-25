@@ -31,7 +31,7 @@ async function assertCallerIsAdmin(auth) {
 }
 
 // Fonction pour Créer un Agent
-exports.createAgent = onCall({ region: REGION }, async (request) => {
+exports.createAgent = onCall({ region: REGION, invoker: "public" }, async (request) => {
     // 1. SÉCURITÉ : seul un admin/super_admin peut créer un compte
     await assertCallerIsAdmin(request.auth);
     const data = request.data || {};
@@ -51,7 +51,7 @@ exports.createAgent = onCall({ region: REGION }, async (request) => {
 });
 
 // Fonction pour Supprimer un Agent
-exports.deleteAgent = onCall({ region: REGION }, async (request) => {
+exports.deleteAgent = onCall({ region: REGION, invoker: "public" }, async (request) => {
     // SÉCURITÉ : seul un admin/super_admin peut supprimer un compte
     await assertCallerIsAdmin(request.auth);
     const data = request.data || {};
@@ -70,7 +70,7 @@ exports.deleteAgent = onCall({ region: REGION }, async (request) => {
 // l'app mobile. Réservé admin/super_admin. Idempotent (réutilise le compte
 // existant). NE donne AUCUN privilège staff (les règles staff lisent le rôle
 // dans la collection users, pas le token).
-exports.provisionDemarcheurAuth = onCall({ region: REGION }, async (request) => {
+exports.provisionDemarcheurAuth = onCall({ region: REGION, invoker: "public" }, async (request) => {
     await assertCallerIsAdmin(request.auth);
     const data = request.data || {};
 
@@ -353,7 +353,7 @@ async function reconcileOne(demId, agency) {
 // (en passant demarcheurId). L'app mobile l'appelle au chargement : le
 // partenaire voit toujours des montants justes, et soldeDisponible (utilisé
 // pour les retraits) est à jour.
-exports.reconcilePartnerBalances = onCall({ region: REGION }, async (request) => {
+exports.reconcilePartnerBalances = onCall({ region: REGION, invoker: "public" }, async (request) => {
     if (!request.auth) {
         throw new HttpsError("unauthenticated", "Vous devez être connecté.");
     }
@@ -389,7 +389,7 @@ exports.reconcilePartnerBalances = onCall({ region: REGION }, async (request) =>
 // MIGRATION / recalcul global — réservé admin/super_admin. À lancer UNE fois
 // après déploiement, puis à volonté (idempotent).
 exports.reconcileAllPartnersBalances = onCall(
-    { region: REGION, timeoutSeconds: 540, memory: "512MiB" },
+    { region: REGION, timeoutSeconds: 540, memory: "512MiB", invoker: "public" },
     async (request) => {
         await assertCallerIsAdmin(request.auth);
         try {
@@ -479,7 +479,7 @@ async function migrateBaseCollection(db, base) {
 // Réservé admin/super_admin. À lancer UNE fois après déploiement de P2a.
 // Idempotent : rejouable sans risque.
 exports.migrateSaasRdvDevis = onCall(
-    { region: REGION, timeoutSeconds: 540, memory: "512MiB" },
+    { region: REGION, timeoutSeconds: 540, memory: "512MiB", invoker: "public" },
     async (request) => {
         await assertCallerIsAdmin(request.auth);
         try {
@@ -629,7 +629,7 @@ exports.notifyWithdrawalPushChine = onDocumentCreated(
 //   - les permissions notification sont accordées sur le device
 // Sécurité : doit être appelé par un démarcheur connecté. La fonction lit le
 // token UNIQUEMENT sur sa propre fiche (pas moyen de notifier quelqu'un d'autre).
-exports.sendTestPush = onCall({ region: REGION }, async (request) => {
+exports.sendTestPush = onCall({ region: REGION, invoker: "public" }, async (request) => {
     if (!request.auth) {
         throw new HttpsError("unauthenticated", "Connexion requise.");
     }

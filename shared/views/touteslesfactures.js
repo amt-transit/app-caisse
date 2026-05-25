@@ -646,23 +646,40 @@ export const ToutesLesFacturesView = {
                 let lblStatusClass = 'colis-pending';
                 let lblContainer = liv.conteneur || '-';
 
-                // 2. Vérification individuelle via l'historique des scans
-                // (l'AÉRIEN se suit PAR PIÈCE : Départ vol marque chaque sous-colis).
-                let pieceAerienResolved = false;
+                // 2. Vérification individuelle via l'historique des scans.
+                //    PRINCIPE : tout se suit PAR PIÈCE (sous-colis). Le dernier
+                //    scan d'une pièce détermine son statut réel. Les étapes
+                //    d'ARRIVÉE (déchargement, mise en livraison, remise) sont
+                //    « résolues » par pièce et ne doivent pas être écrasées par le
+                //    statut global du dossier.
+                let pieceResolved = false;
                 if (liv.scanHistory && Array.isArray(liv.scanHistory)) {
                     const myScans = liv.scanHistory.filter(s => s.scanRef === lbl);
                     myScans.sort((a, b) => new Date(b.date) - new Date(a.date)); // Du plus récent au plus ancien
 
                     if (myScans.length > 0) {
                         const lastScan = myScans[0];
-                        if (lastScan.type === 'ENTREPOT_PARIS' || lastScan.type === 'DEPART_VOL_RETOUR') {
+                        if (lastScan.type === 'REMISE_CLIENT') {
+                            lblStatusDisplay = 'Livré au destinataire';
+                            lblStatusClass = 'colis-delivered';
+                            pieceResolved = true;
+                        } else if (lastScan.type === 'MISE_EN_LIVRAISON') {
+                            lblStatusDisplay = 'En livraison';
+                            lblStatusClass = 'colis-abidjan';
+                            pieceResolved = true;
+                        } else if (lastScan.type === 'DECHARGEMENT_ABIDJAN') {
+                            lblStatusDisplay = 'Arrivé à Abidjan';
+                            lblStatusClass = 'colis-abidjan';
+                            lblContainer = lastScan.container || liv.conteneur || '-';
+                            pieceResolved = true;
+                        } else if (lastScan.type === 'ENTREPOT_PARIS' || lastScan.type === 'DEPART_VOL_RETOUR') {
                             lblStatusDisplay = 'Mise en Entrepôt';
                             lblStatusClass = 'colis-paris';
-                            if (liv.modeExpedition === 'aerien') pieceAerienResolved = true; // pièce restée
+                            if (liv.modeExpedition === 'aerien') pieceResolved = true; // pièce restée
                         } else if (lastScan.type === 'DEPART_VOL') {
                             lblStatusDisplay = 'En vol (Aérien)';
                             lblStatusClass = 'colis-transit';
-                            pieceAerienResolved = true; // pièce partie
+                            pieceResolved = true; // pièce partie
                         } else if (lastScan.type === 'CONTENEUR_CHARGEMENT') {
                             lblStatusDisplay = 'Chargé (Conteneur)';
                             lblStatusClass = 'colis-transit';
@@ -671,11 +688,11 @@ export const ToutesLesFacturesView = {
                     }
                 }
 
-                // 3. Surcharges globales pour les étapes ultérieures.
-                //    En aérien, si la PIÈCE a déjà son statut (Départ vol), on ne
-                //    l'écrase pas avec le statut global du colis (sinon une pièce
-                //    restée afficherait « en vol » à tort).
-                if (liv.containerStatus === 'A_VENIR' && !pieceAerienResolved) {
+                // 3. Surcharges globales (statut du dossier) — appliquées
+                //    UNIQUEMENT aux pièces non encore résolues par leur propre
+                //    scan. Ainsi une pièce non déchargée n'est jamais marquée
+                //    « Arrivé » à tort parce qu'une autre pièce du dossier l'est.
+                if (liv.containerStatus === 'A_VENIR' && !pieceResolved) {
                     if (liv.modeExpedition === 'aerien') {
                         lblStatusDisplay = 'En vol (Aérien)';
                     } else if (lblStatusClass === 'colis-transit') {
@@ -685,16 +702,24 @@ export const ToutesLesFacturesView = {
                     }
                     lblStatusClass = 'colis-transit';
                     lblContainer = liv.conteneur || lblContainer;
-                } else if (liv.containerStatus === 'EN_COURS') {
+                } else if (liv.containerStatus === 'EN_COURS' && !pieceResolved && lblStatusClass === 'colis-pending') {
+                    // Repli : seules les pièces SANS aucun scan suivent le statut
+                    // global « arrivé » (anciennes données / validation en masse).
                     lblStatusDisplay = 'Arrivé à Abidjan';
                     lblStatusClass = 'colis-abidjan';
                     lblContainer = liv.conteneur || lblContainer;
                 }
-                if (liv.status === 'LIVRE') {
+                if (liv.status === 'LIVRE' && !pieceResolved) {
                     lblStatusDisplay = 'Livré au destinataire';
                     lblStatusClass = 'colis-delivered';
                     lblContainer = liv.conteneur || lblContainer;
                 }
+
+                // Dates départ/arrivée stockées au niveau du DOSSIER, mais le
+                // suivi est PAR PIÈCE : une pièce restée en entrepôt (ou non
+                // scannée) ne doit PAS afficher les dates du vol/bateau — seules
+                // les pièces réellement parties / arrivées / livrées les portent.
+                const lblShowDates = (lblStatusClass !== 'colis-paris' && lblStatusClass !== 'colis-pending');
 
                 trackingRows += `
                     <tr>
@@ -702,8 +727,8 @@ export const ToutesLesFacturesView = {
                         <td class="modal-table__desc">${specificDesc}</td>
                         <td><span class="status-badge ${lblStatusClass}">${lblStatusDisplay}</span></td>
                         <td><span style="background:#f1f5f9; padding:4px 8px; border-radius:6px; font-weight:600;">${lblContainer}</span></td>
-                        <td>${liv.departureDate ? new Date(liv.departureDate).toLocaleDateString('fr-FR') : '-'}</td>
-                        <td>${liv.arrivalDate ? new Date(liv.arrivalDate).toLocaleDateString('fr-FR') : '-'}</td>
+                        <td>${lblShowDates && liv.departureDate ? new Date(liv.departureDate).toLocaleDateString('fr-FR') : '-'}</td>
+                        <td>${lblShowDates && liv.arrivalDate ? new Date(liv.arrivalDate).toLocaleDateString('fr-FR') : '-'}</td>
                     </tr>
                 `;
             });
@@ -2012,12 +2037,20 @@ export const ToutesLesFacturesView = {
             const liv = livQ.docs[0].data();
             
             let descMap = {};
+            let kgMap = {};
             let currentLabelIdx = 1;
+            const _aBilledKg = (it) => {
+                const real = parseFloat(it.poids) || 0;
+                const vol = ((parseFloat(it.lng) || 0) * (parseFloat(it.lrg) || 0) * (parseFloat(it.haut) || 0)) / 5000;
+                return (it.mode === 'poids') ? Math.max(real, vol) : real;
+            };
             if (invoice.items && Array.isArray(invoice.items)) {
                 invoice.items.forEach(item => {
                     const qty = parseInt(item.qty) || 1;
+                    const _kg = _aBilledKg(item);
                     for (let i = 0; i < qty; i++) {
                         descMap[currentLabelIdx] = item.desc;
+                        kgMap[currentLabelIdx] = _kg;
                         currentLabelIdx++;
                     }
                 });
@@ -2026,16 +2059,20 @@ export const ToutesLesFacturesView = {
             if (liv.labels && liv.labels.length > 0) {
                 labelsList = liv.labels.map((lbl, idx) => {
                     let specificDesc = invoice.description || 'COLIS';
+                    let specificKg = 0;
                     const match = lbl.match(/_(\d+)_/);
                     if (match && descMap[parseInt(match[1])]) {
                         specificDesc = descMap[parseInt(match[1])];
+                        specificKg = kgMap[parseInt(match[1])] || 0;
                     } else if (descMap[idx + 1]) {
                         specificDesc = descMap[idx + 1];
+                        specificKg = kgMap[idx + 1] || 0;
                     }
-                    
+
                     return {
                         sousRef: lbl,
                         desc: specificDesc,
+                        poids: specificKg,
                         index: idx + 1,
                         total: liv.labels.length
                     };
@@ -2057,12 +2094,13 @@ export const ToutesLesFacturesView = {
 
         const data = {
             ref: invoice.reference,
-            date: invoice.date + ' 12:00:00', 
+            date: invoice.date + ' 12:00:00',
             destName: dName,
             destPhone: dPhone,
             destAddress: invoice.adresseDestinataire || invoice.lieuLivraison || '',
             expName: invoice.nom,
             expAddress: expAddress,
+            isAerien: invoice.modeExpedition === 'aerien',
             labels: labelsList
         };
         

@@ -42,6 +42,18 @@ export const ScanHistoryView = {
                 .sh-ref { font-family: monospace; font-weight: 800; color: #0f172a; font-size: 14px; }
                 .sh-agent { display: flex; align-items: center; gap: 8px; font-weight: 600; }
                 .sh-agency { font-size: 10px; background: #e2e8f0; padding: 2px 6px; border-radius: 4px; text-transform: uppercase; color: #475569; }
+
+                /* Regroupement par dossier */
+                .sh-group-row { cursor: pointer; }
+                .sh-group-row td { background: #f8fafc; border-bottom: 1px solid #e2e8f0; }
+                .sh-group-row:hover td { background: #eef2f7; }
+                .sh-group-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+                .sh-caret { color: #3b82f6; font-weight: 800; width: 14px; }
+                .sh-group-ref { font-family: monospace; font-weight: 800; color: #0f172a; background: #e0f2fe; padding: 3px 10px; border-radius: 6px; }
+                .sh-group-count { font-weight: 800; color: #1e40af; }
+                .sh-group-meta { color: #64748b; font-size: 12px; }
+                .sh-group-agent { margin-left: auto; color: #1e293b; font-weight: 600; font-size: 12px; }
+                .sh-detail td:first-child { padding-left: 40px; }
             </style>
             <div class="sh-page">
                 <div class="sh-header">
@@ -130,9 +142,24 @@ export const ScanHistoryView = {
         this.renderTable();
     },
 
+    // Référence du DOSSIER (client) à partir d'un sous-colis :
+    // « J-004-AER1_13_22 » -> « J-004-AER1 ».
+    baseRefOf(ref) {
+        const r = ref || '';
+        return r.replace(/_\d+_\d+$/, '') || r || '-';
+    },
+
+    toggleGroup(key) {
+        if (!this.expanded) this.expanded = new Set();
+        if (this.expanded.has(key)) this.expanded.delete(key);
+        else this.expanded.add(key);
+        this.renderTable();
+    },
+
     renderTable() {
         const tbody = document.getElementById('shTableBody');
         if (!tbody) return;
+        if (!this.expanded) this.expanded = new Set();
         if (this.filteredLogs.length === 0) {
             tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 40px; color: #64748b;">Aucun scan trouvé pour ces critères.</td></tr>';
             return;
@@ -156,29 +183,75 @@ export const ScanHistoryView = {
             return status || '-';
         };
 
-        tbody.innerHTML = this.filteredLogs.slice(0, 200).map(log => {
-            const dateStr = log.date ? new Date(log.date).toLocaleString('fr-FR') : '-';
-            const typeInfo = getTypeInfo(log.type);
-            
-            let extraInfo = '-';
-            if (log.container) extraInfo = `Conteneur: <b>${log.container}</b>`;
-            if (log.livreur) extraInfo = `Livreur: <b>${log.livreur}</b>`;
+        // Regroupement par DOSSIER + ACTION (type) + JOUR.
+        const map = new Map();
+        this.filteredLogs.forEach(log => {
+            const base = this.baseRefOf(log.scanRef);
+            const day = (log.date || '').slice(0, 10);
+            const key = `${base}__${log.type || ''}__${day}`;
+            if (!map.has(key)) map.set(key, { key, baseRef: base, type: log.type, day, items: [], latest: log.date || '', agent: log.agent, agency: log.agency, nSuccess: 0, nDup: 0, nErr: 0 });
+            const g = map.get(key);
+            g.items.push(log);
+            if (!g.latest || (log.date || '') > g.latest) g.latest = log.date || '';
+            if (log.status === 'SUCCES') g.nSuccess++;
+            else if (log.status === 'DOUBLON') g.nDup++;
+            else g.nErr++;
+        });
+        const groups = Array.from(map.values()).sort((a, b) => (b.latest || '').localeCompare(a.latest || ''));
 
-            return `
-                <tr>
-                    <td>${dateStr}</td>
-                    <td class="sh-ref">${log.scanRef || '—'}</td>
-                    <td><span class="sh-badge ${typeInfo.cls}">${typeInfo.label}</span></td>
-                    <td>${getStatusHtml(log.status)}</td>
-                    <td>${extraInfo}</td>
-                    <td>
-                        <div class="sh-agent">
-                            ${log.agent || 'Système'} 
-                            <span class="sh-agency">${log.agency === 'paris' ? 'FR' : (log.agency === 'abidjan' ? 'CI' : log.agency || 'N/A')}</span>
+        tbody.innerHTML = groups.map(g => {
+            const typeInfo = getTypeInfo(g.type);
+            const dateStr = g.latest ? new Date(g.latest).toLocaleString('fr-FR') : '-';
+            const keyAttr = g.key.replace(/'/g, '');
+            const isOpen = this.expanded.has(g.key);
+            const agencyBadge = g.agency === 'paris' ? 'FR' : (g.agency === 'abidjan' ? 'CI' : (g.agency || 'N/A'));
+
+            let rollup = '';
+            if (g.nSuccess) rollup += `<span class="sh-status-succes">✅ ${g.nSuccess}</span> `;
+            if (g.nDup) rollup += `<span class="sh-status-doublon">⚠️ ${g.nDup}</span> `;
+            if (g.nErr) rollup += `<span class="sh-status-erreur">❌ ${g.nErr}</span>`;
+
+            const header = `
+                <tr class="sh-group-row" onclick="window.app.views.scanHistory.toggleGroup('${keyAttr}')">
+                    <td colspan="6">
+                        <div class="sh-group-head">
+                            <span class="sh-caret">${isOpen ? '▾' : '▸'}</span>
+                            <span class="sh-group-ref">${g.baseRef}</span>
+                            <span class="sh-group-count">${g.items.length} colis</span>
+                            <span class="sh-badge ${typeInfo.cls}">${typeInfo.label}</span>
+                            <span class="sh-group-meta">${dateStr}</span>
+                            <span>${rollup}</span>
+                            <span class="sh-group-agent">👤 ${g.agent || 'Système'} · ${agencyBadge}</span>
                         </div>
                     </td>
                 </tr>
             `;
+
+            if (!isOpen) return header;
+
+            const details = g.items.map(log => {
+                const dStr = log.date ? new Date(log.date).toLocaleString('fr-FR') : '-';
+                let extraInfo = '-';
+                if (log.container) extraInfo = `Conteneur: <b>${log.container}</b>`;
+                if (log.livreur) extraInfo = `Livreur: <b>${log.livreur}</b>`;
+                return `
+                    <tr class="sh-detail">
+                        <td>${dStr}</td>
+                        <td class="sh-ref">${log.scanRef || '—'}</td>
+                        <td><span class="sh-badge ${typeInfo.cls}">${typeInfo.label}</span></td>
+                        <td>${getStatusHtml(log.status)}</td>
+                        <td>${extraInfo}</td>
+                        <td>
+                            <div class="sh-agent">
+                                ${log.agent || 'Système'}
+                                <span class="sh-agency">${log.agency === 'paris' ? 'FR' : (log.agency === 'abidjan' ? 'CI' : log.agency || 'N/A')}</span>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+
+            return header + details;
         }).join('');
     }
 };

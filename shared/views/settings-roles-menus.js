@@ -16,7 +16,7 @@ const MENU_META = [
     { key: 'entrees-caisse', label: 'Entrées Caisse', icon: '💵', scope: 'arrival' },
     { key: 'logistique', label: 'Logistique', icon: '🚚', scope: 'arrival' },
     { key: 'devis', label: 'Devis', icon: '📄', scope: 'departure' },
-    { key: 'chargement', label: 'Chargement', icon: '📦', scope: 'departure' },
+    { key: 'chargement', label: 'Chargement', icon: '📦', scope: 'both' },
     { key: 'scan', label: 'Scan', icon: '🔳', scope: 'both' },
     { key: 'clients', label: 'Clients', icon: '👥', scope: 'departure' },
     { key: 'comms', label: 'Communication', icon: '💬', scope: 'both' },
@@ -58,7 +58,11 @@ const MENU_ITEMS = {
         { page: 'clients', label: 'Clients (Logistique)' },
     ],
     devis: [{ page: 'quotes-list', label: 'Tous les devis' }, { page: 'quote-new', label: 'Nouveau devis' }, { page: 'quote-requests', label: 'Demandes reçues' }],
-    chargement: [{ page: 'confection-containers', label: 'Confection' }, { page: 'loading-boats', label: 'Bateaux départ' }],
+    chargement: [
+        { page: 'confection-containers', label: 'Confection', scope: 'departure' },
+        { page: 'loading-boats', label: 'Bateaux / Avion départ', scope: 'departure' },
+        { page: 'arrivals-boats', label: 'Bateau / Vol arrivée', scope: 'arrival' },
+    ],
     scan: [
         { page: 'scan-warehouse', label: 'Mise en entrepôt', scope: 'departure' }, { page: 'scan-container', label: 'Charger conteneur', scope: 'departure' },
         { page: 'scan-depart-vol', label: 'Départ vol (aérien)', scope: 'departure' },

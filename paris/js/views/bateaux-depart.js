@@ -13,6 +13,13 @@ export const BateauxDepartView = {
 
         const html = `
             <style>
+                .al__btn { padding: 10px 16px; border-radius: 8px; font-weight: 600; font-size: 13px; cursor: pointer; transition: 0.2s; border: 1px solid transparent; display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
+                .al__btn--primary { background: #3b82f6; color: white; box-shadow: 0 2px 4px rgba(59,130,246,0.2); }
+                .al__btn--primary:hover { background: #2563eb; }
+                .al__btn--ghost { background: white; border-color: #cbd5e1; color: #475569; }
+                .al__btn--ghost:hover { background: #f1f5f9; color: #0f172a; }
+                .al__btn--sm { padding: 6px 12px; font-size: 12px; }
+                .al__btn:disabled { opacity: 0.55; cursor: not-allowed; }
                 .departs-page { max-width: 1400px; margin: 0 auto; animation: fadeIn 0.3s ease; }
                 .departs-header { background: white; border-radius: 16px; padding: 20px 25px; margin-bottom: 20px; border: 1px solid #e2e8f0; box-shadow: 0 2px 4px rgba(0,0,0,0.02); }
                 .departs-header__content { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 15px; }
@@ -220,9 +227,9 @@ export const BateauxDepartView = {
                                         <td style="text-align: center;"><span class="status-badge" :class="b.status === 'ARRIVE' ? 'status-badge--arrived' : 'status-badge--valid'">{{ b.status === 'ARRIVE' ? '✅ À quai' : '🌊 En mer' }}</span></td>
                                         <td style="text-align: right;">
                                             <div style="display:flex; gap:6px; justify-content:flex-end;">
-                                                <button v-if="b.status !== 'ARRIVE'" class="btn-sm btn-sm--ghost" style="color:#ef4444;" @click="unRegisterBoat(b.id)" title="Annuler le départ">↩</button>
-                                                <button v-if="b.status !== 'ARRIVE'" class="btn-sm" style="background:#10b981; color:white; border:none;" @click="marquerArrive(b.id)">⚓ Marquer arrivé</button>
-                                                <span v-else style="color:#94a3b8; font-size:12px; font-weight:600;">Terminé</span>
+                                                <button class="btn-sm btn-sm--ghost" @click="openColis(b.id)" title="Voir les colis de ce bateau">👁️ Voir les colis</button>
+                                                <button v-if="b.status !== 'ARRIVE'" class="btn-sm btn-sm--ghost" style="color:#ef4444;" @click="unRegisterBoat(b.id)" title="Annuler le départ">↩ Annuler le départ</button>
+                                                <span v-else style="color:#94a3b8; font-size:12px; font-weight:600;">Arrivé à destination</span>
                                             </div>
                                         </td>
                                     </tr>
@@ -269,6 +276,35 @@ export const BateauxDepartView = {
                         </div>
                     </div>
                 </div>
+
+                <!-- MODAL DÉTAIL COLIS D'UN BATEAU -->
+                <div class="bd-modal" :class="{ active: !!colisBoatId }">
+                    <div class="bd-modal-box" v-if="colisBoatId" style="max-width: 680px;">
+                        <div class="bd-modal-header">
+                            <h2 class="bd-modal-title">📦 Colis du bateau {{ colisBoatRef }}</h2>
+                            <button @click="colisBoatId = null" style="background:none; border:none; font-size:24px; cursor:pointer; color:#64748b;">&times;</button>
+                        </div>
+                        <div class="bd-modal-body" style="max-height:70vh; overflow-y:auto;">
+                            <table class="reg-table">
+                                <thead><tr><th>Sous-colis</th><th>Nature</th><th>Dossier</th><th>Conteneur</th><th>Destinataire</th><th style="text-align:center;">Statut</th></tr></thead>
+                                <tbody>
+                                    <tr v-for="p in getBoatPieces(colisBoatId)" :key="p.sousRef">
+                                        <td class="mono" style="font-weight:700;">{{ p.sousRef }}</td>
+                                        <td>{{ p.desc || '-' }}</td>
+                                        <td class="mono">{{ p.livRef }}</td>
+                                        <td class="mono">{{ p.conteneur || '-' }}</td>
+                                        <td>{{ p.destinataire || '-' }}</td>
+                                        <td style="text-align:center;"><span class="status-badge" :style="pieceStatusStyle(p)">{{ pieceStatus(p) }}</span></td>
+                                    </tr>
+                                    <tr v-if="getBoatPieces(colisBoatId).length === 0"><td colspan="6" style="text-align:center; color:#94a3b8; padding:20px;">Aucun colis chargé sur ce bateau.</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                        <div class="bd-modal-footer">
+                            <button class="al__btn al__btn--ghost" @click="colisBoatId = null">Fermer</button>
+                        </div>
+                    </div>
+                </div>
             </div>
         `;
         document.getElementById('contentContainer').innerHTML = html;
@@ -285,6 +321,7 @@ export const BateauxDepartView = {
                 const containers = ref([]);
                 const boats = ref([]);
                 const livraisons = ref([]);
+                const transactions = ref([]);
                 const selectedContainerIds = ref(new Set());
                 const showModal = ref(false);
                 const editingBoatId = ref(null);
@@ -303,6 +340,7 @@ export const BateauxDepartView = {
                 let unsubContainers = null;
                 let unsubBoats = null;
                 let unsubLivraisons = null;
+                let unsubTransactions = null;
                 
                 // Computed
                 const availableContainers = computed(() => {
@@ -332,6 +370,81 @@ export const BateauxDepartView = {
                 
                 const getBoatContainers = (boatId) => {
                     return containers.value.filter(c => c.boatId === boatId);
+                };
+
+                // Détail des colis d'un bateau (envoi) : on relie via le n° de
+                // conteneur. Statut lisible par colis (entrepôt → transit → reçu
+                // → livré). Lecture seule : c'est un suivi/archive.
+                const colisBoatId = ref(null);
+                const colisBoatRef = computed(() => {
+                    const b = boats.value.find(x => x.id === colisBoatId.value);
+                    return b ? b.reference : '';
+                });
+                const openColis = (boatId) => { colisBoatId.value = boatId; };
+                const getBoatParcels = (boatId) => {
+                    const nums = getBoatContainers(boatId).map(c => c.number || c.id);
+                    return livraisons.value.filter(l => nums.includes(l.conteneur));
+                };
+                // Nature par sous-colis, reconstruite depuis les lignes (items) de
+                // la transaction du dossier (1 ligne × qté = N sous-colis).
+                const descMapOf = (livRef) => {
+                    const t = transactions.value.find(x => x.reference === livRef && !x.isDeleted);
+                    const descMap = {};
+                    if (t && Array.isArray(t.items)) {
+                        let idx = 1;
+                        t.items.forEach(it => {
+                            const q = parseInt(it.qty) || 1;
+                            for (let i = 0; i < q; i++) { descMap[idx] = it.desc; idx++; }
+                        });
+                    }
+                    return descMap;
+                };
+                // Sous-colis réellement CHARGÉS dans un conteneur (scan « Charger
+                // conteneur » = CONTENEUR_CHARGEMENT dans l'historique de la pièce).
+                const loadedPiecesOf = (liv) => {
+                    const labels = (liv.labels && liv.labels.length) ? liv.labels : [liv.ref];
+                    const descMap = descMapOf(liv.ref);
+                    const hist = Array.isArray(liv.scanHistory) ? liv.scanHistory : [];
+                    const out = [];
+                    labels.forEach((lbl, idx) => {
+                        const scansOfPiece = hist.filter(h => h.scanRef === lbl);
+                        const loaded = scansOfPiece.some(h => h.type === 'CONTENEUR_CHARGEMENT')
+                            || (scansOfPiece.length === 0 && liv.containerStatus === 'A_VENIR'); // repli (pas de suivi par pièce)
+                        if (!loaded) return;
+                        const m = lbl.match(/_(\d+)_/);
+                        const li = m ? parseInt(m[1]) : (idx + 1);
+                        out.push({
+                            sousRef: lbl,
+                            desc: descMap[li] || liv.description || 'Colis',
+                            livId: liv.id,
+                            livRef: liv.ref,
+                            conteneur: liv.conteneur || '',
+                            destinataire: liv.destinataire || ''
+                        });
+                    });
+                    return out;
+                };
+                const getBoatPieces = (boatId) => {
+                    const arr = [];
+                    getBoatParcels(boatId).forEach(l => loadedPiecesOf(l).forEach(p => arr.push(p)));
+                    return arr;
+                };
+                const pieceStatus = (p) => {
+                    const liv = livraisons.value.find(l => l.id === p.livId);
+                    if (liv) {
+                        if (liv.status === 'LIVRE') return 'Livré';
+                        const hist = Array.isArray(liv.scanHistory) ? liv.scanHistory : [];
+                        if (hist.some(h => h.scanRef === p.sousRef && h.type === 'DECHARGEMENT_ABIDJAN')) return 'Reçu (Abidjan)';
+                        if (liv.containerStatus === 'A_VENIR') return 'En transit';
+                    }
+                    return 'Chargé';
+                };
+                const pieceStatusStyle = (p) => {
+                    const st = pieceStatus(p);
+                    if (st === 'Livré') return 'background:#dcfce7; color:#166534;';
+                    if (st === 'Reçu (Abidjan)') return 'background:#dbeafe; color:#1e40af;';
+                    if (st === 'En transit') return 'background:#fef3c7; color:#b45309;';
+                    return 'background:#e0f2fe; color:#0369a1;';
                 };
                 
                 // Actions
@@ -525,47 +638,11 @@ export const BateauxDepartView = {
                         globalApp.showToast("Erreur d'annulation.", "error");
                     }
                 };
-                
-                const marquerArrive = async (boatId) => {
-                    if (!confirm("Confirmer l'arrivée de ce bateau à destination (Abidjan) ?\n\nTous ses conteneurs et colis passeront au statut 'En Cours' (Réceptionnés).")) return;
-                    
-                    const boat = boats.value.find(b => b.id === boatId);
-                    const ctns = containers.value.filter(c => c.boatId === boatId);
-                    
-                    try {
-                        const batch = writeBatch(db);
-                        const realArrivalDate = new Date().toISOString();
-                        
-                        batch.update(doc(db, getCollectionName("boats"),boatId), {
-                            status: 'ARRIVE',
-                            realArrivalDate: realArrivalDate
-                        });
-                        
-                        const containerNumbers = [];
-                        ctns.forEach(c => {
-                            batch.update(doc(db, getCollectionName("containers"),c.id), { status: 'ARRIVE' });
-                            containerNumbers.push(c.number || c.id);
-                        });
-                        
-                        for (const cNum of containerNumbers) {
-                            const qLiv = query(collection(db, getCollectionName("livraisons")), where("conteneur", "==", cNum));
-                            const snap = await getDocs(qLiv);
-                            snap.forEach(d => {
-                                batch.update(d.ref, {
-                                    containerStatus: 'EN_COURS',
-                                    dateAjout: realArrivalDate,
-                                    arrivalDate: realArrivalDate
-                                });
-                            });
-                        }
-                        
-                        await batch.commit();
-                        globalApp.showToast("Bateau et colis réceptionnés à destination !", "success");
-                    } catch(e) {
-                        console.error(e);
-                        globalApp.showToast("Erreur de mise à jour", "error");
-                    }
-                };
+                // NB : la validation d'ARRIVÉE n'est plus faite ici (page de
+                // départ). Elle se fait côté agence d'arrivée dans « Bateau / Vol
+                // arrivée », et la réception réelle des colis se fait au scan
+                // Déchargement. La page de départ ne gère que la confection et le
+                // départ (et son annulation tant que le bateau n'est pas arrivé).
                 
                 const loadData = () => {
                     const activeAgency = sessionStorage.getItem('currentActiveAgency') || 'paris';
@@ -573,7 +650,8 @@ export const BateauxDepartView = {
                     if (unsubContainers) unsubContainers();
                     if (unsubBoats) unsubBoats();
                     if (unsubLivraisons) unsubLivraisons();
-                    
+                    if (unsubTransactions) unsubTransactions();
+
                     loadingContainers.value = true;
                     loadingBoats.value = true;
 
@@ -583,9 +661,11 @@ export const BateauxDepartView = {
                     const contCol = getCollectionName("containers");
                     const boatCol = getCollectionName("boats");
                     const livCol = getCollectionName("livraisons");
+                    const transCol = getCollectionName("transactions");
                     const qC = (contCol !== "containers") ? query(collection(db, contCol)) : query(collection(db, contCol), where("agency", "==", activeAgency));
                     const qB = (boatCol !== "boats") ? query(collection(db, boatCol)) : query(collection(db, boatCol), where("agency", "==", activeAgency));
                     const qL = (livCol !== "livraisons") ? query(collection(db, livCol)) : query(collection(db, livCol), where("agency", "==", activeAgency));
+                    const qT = (transCol !== "transactions") ? query(collection(db, transCol)) : query(collection(db, transCol), where("agency", "==", activeAgency));
 
                     unsubContainers = onSnapshot(qC, snap => {
                         containers.value = snap.docs.map(d => ({ id: d.id, ...d.data() }));
@@ -600,6 +680,11 @@ export const BateauxDepartView = {
                     unsubLivraisons = onSnapshot(qL, snap => {
                         livraisons.value = snap.docs.map(d => ({ id: d.id, ...d.data() }));
                     });
+
+                    // Transactions : pour la nature (désignation) par sous-colis.
+                    unsubTransactions = onSnapshot(qT, snap => {
+                        transactions.value = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+                    });
                 };
                 
                 onMounted(() => {
@@ -610,15 +695,17 @@ export const BateauxDepartView = {
                     if (unsubContainers) unsubContainers();
                     if (unsubBoats) unsubBoats();
                     if (unsubLivraisons) unsubLivraisons();
+                    if (unsubTransactions) unsubTransactions();
                 });
-                
+
                 return {
-                    containers, boats, livraisons, selectedContainerIds, showModal, editingBoatId, saving,
+                    containers, boats, livraisons, transactions, selectedContainerIds, showModal, editingBoatId, saving,
                     loadingContainers, loadingBoats, boatForm,
                     availableContainers, confBoats, regBoats,
                     formatDate, formatDateTime, getDossiersCount, getBoatContainers,
                     toggleSelection, selectAllLeft, openBoatModal, closeBoatModal, saveBoat,
-                    deleteBoat, addToBoat, removeFromBoat, registerBoat, unRegisterBoat, marquerArrive, loadData
+                    deleteBoat, addToBoat, removeFromBoat, registerBoat, unRegisterBoat, loadData,
+                    colisBoatId, colisBoatRef, openColis, getBoatParcels, getBoatPieces, pieceStatus, pieceStatusStyle
                 };
             }
         });

@@ -3,24 +3,54 @@ export const ConfigLabelView = {
         format: 'A5',
         model: 'classic',
         colorScheme: 'default',
-        headerColor: '#000000'
+        headerColor: '#000000',
+        aerienHeaderColor: '#1A3553'
     },
 
     render(app) {
         this.app = app;
+        this.isAerien = sessionStorage.getItem('shippingMode') === 'aerien';
         this.loadSavedSettings();
-        
+
+        const aerienBanner = this.isAerien ? `
+                <div style="background: linear-gradient(135deg, #1A3553, #E51F21); color: #fff; border-radius: 14px; padding: 14px 20px; margin-bottom: 20px; display: flex; align-items: center; gap: 12px;">
+                    <span style="font-size: 26px;">✈️</span>
+                    <div>
+                        <div style="font-weight: 800; font-size: 15px;">Étiquette AÉRIENNE « PAR AVION »</div>
+                        <div style="font-size: 12px; opacity: 0.9;">Design dédié, différent du maritime, avec le poids affiché par colis. Réglez ci-dessous la couleur de la bande.</div>
+                    </div>
+                </div>` : '';
+
+        const configPanel = this.isAerien ? this.renderAerienConfigPanel() : this.renderMaritimeConfigPanel();
+
         const html = `
             <div class="page" style="max-width: 1400px; margin: 0 auto; animation: fadeIn 0.3s ease;">
-                
+                ${aerienBanner}
                 <div style="display: grid; grid-template-columns: 320px 1fr; gap: 25px; align-items: start;">
-                    
+                    ${configPanel}
+                    <!-- Aperçu -->
+                    <div style="background: #f8fafc; padding: 40px; border-radius: 24px; border: 1px dashed #cbd5e1; display: flex; flex-direction: column; align-items: center; min-height: 550px;">
+                        <div id="labelPreviewContainer" style="transition: all 0.3s ease; transform-origin: top center;"></div>
+                        <p style="margin-top: 20px; color: #64748b; font-size: 13px; font-style: italic;"><i class="fas fa-info-circle"></i> Aperçu tel qu'il apparaîtra sur l'imprimante thermique</p>
+                    </div>
+                </div>
+            </div>
+        `;
+        document.getElementById('contentContainer').innerHTML = html;
+        window.app.views = window.app.views || {};
+        window.app.views.configLabel = this;
+
+        this.updatePreview();
+    },
+
+    renderMaritimeConfigPanel() {
+        return `
                     <!-- Panneau de configuration -->
                     <div style="background: white; padding: 25px; border-radius: 16px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); border: 1px solid #e2e8f0;">
                         <h3 style="margin: 0 0 20px 0; font-size: 18px; font-weight: 800; color: #0f172a;">
                             <i class="fas fa-tag"></i> Configuration étiquette
                         </h3>
-                        
+
                         <!-- Format -->
                         <div class="form-group" style="margin-bottom: 20px;">
                             <label style="font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase; margin-bottom: 8px; display: block;">
@@ -82,33 +112,65 @@ export const ConfigLabelView = {
                             </button>
                         </div>
                     </div>
-
-                    <!-- Aperçu -->
-                    <div style="background: #f8fafc; padding: 40px; border-radius: 24px; border: 1px dashed #cbd5e1; display: flex; flex-direction: column; align-items: center; min-height: 550px;">
-                        <div id="labelPreviewContainer" style="transition: all 0.3s ease; transform-origin: top center;"></div>
-                        <p style="margin-top: 20px; color: #64748b; font-size: 13px; font-style: italic;"><i class="fas fa-info-circle"></i> Aperçu tel qu'il apparaîtra sur l'imprimante thermique</p>
-                    </div>
-
-                </div>
-            </div>
         `;
-        document.getElementById('contentContainer').innerHTML = html;
-        window.app.views = window.app.views || {};
-        window.app.views.configLabel = this;
+    },
 
-        this.updatePreview();
+    renderAerienConfigPanel() {
+        return `
+                    <!-- Panneau de configuration AÉRIEN -->
+                    <div style="background: white; padding: 25px; border-radius: 16px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); border: 1px solid #e2e8f0;">
+                        <h3 style="margin: 0 0 20px 0; font-size: 18px; font-weight: 800; color: #0f172a;">
+                            <i class="fas fa-plane"></i> Étiquette aérienne
+                        </h3>
+
+                        <!-- Format -->
+                        <div class="form-group" style="margin-bottom: 20px;">
+                            <label style="font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase; margin-bottom: 8px; display: block;">
+                                📏 Format de papier
+                            </label>
+                            <select id="labelFormat" class="config-select" style="width: 100%; padding: 12px; border-radius: 10px; border: 1px solid #e2e8f0; font-weight: 500;" onchange="window.app.views.configLabel.updatePreview()">
+                                <option value="A5" ${this.settings.format === 'A5' ? 'selected' : ''}>A5 Paysage (210 x 148 mm)</option>
+                                <option value="A6" ${this.settings.format === 'A6' ? 'selected' : ''}>A6 Paysage (148 x 105 mm)</option>
+                            </select>
+                        </div>
+
+                        <!-- Couleur de la bande -->
+                        <div class="form-group" style="margin-bottom: 20px;">
+                            <label style="font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase; margin-bottom: 8px; display: block;">
+                                🎨 Couleur de la bande d'en-tête
+                            </label>
+                            <input type="color" id="labelAerienHeaderColor" value="${this.settings.aerienHeaderColor}" style="width: 100%; height: 40px; border: 1px solid #cbd5e1; border-radius: 8px; cursor: pointer; background: white;" onchange="window.app.views.configLabel.settings.aerienHeaderColor = this.value; window.app.views.configLabel.updatePreview()">
+                            <p style="font-size: 11px; color: #94a3b8; margin: 8px 0 0 0;">Cette couleur habille la bande du logo et les rayures « par avion » du cadre.</p>
+                        </div>
+
+                        <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 12px; margin-bottom: 20px; font-size: 12px; color: #475569;">
+                            ℹ️ Le design aérien est fixe (rayures « PAR AVION » + badge ✈ + poids du colis) pour rester reconnaissable. Seules la couleur et le format sont réglables.
+                        </div>
+
+                        <div style="padding-top: 15px; border-top: 1px solid #f1f5f9;">
+                            <button class="amt-btn amt-btn-primary" style="width: 100%; justify-content: center; padding: 14px;" onclick="window.app.views.configLabel.saveConfig()">
+                                <i class="fas fa-save"></i> Enregistrer par défaut
+                            </button>
+                            <button class="amt-btn amt-btn-outline" style="width: 100%; justify-content: center; margin-top: 10px;" onclick="window.app.views.configLabel.printTest()">
+                                <i class="fas fa-print"></i> Imprimer un test
+                            </button>
+                        </div>
+                    </div>
+        `;
     },
 
     loadSavedSettings() {
-        const savedFormat = localStorage.getItem('amt_label_format');
+        const savedFormat = localStorage.getItem(this.isAerien ? 'amt_label_aerien_format' : 'amt_label_format');
         const savedModel = localStorage.getItem('amt_label_model');
         const savedColor = localStorage.getItem('amt_label_color');
         const savedHeaderColor = localStorage.getItem('amt_label_header_color');
-        
+        const savedAerienHeaderColor = localStorage.getItem('amt_label_aerien_header_color');
+
         if (savedFormat) this.settings.format = savedFormat;
         if (savedModel) this.settings.model = savedModel;
         if (savedColor) this.settings.colorScheme = savedColor;
         if (savedHeaderColor) this.settings.headerColor = savedHeaderColor;
+        if (savedAerienHeaderColor) this.settings.aerienHeaderColor = savedAerienHeaderColor;
     },
 
     setColorScheme(color) {
@@ -143,9 +205,11 @@ export const ConfigLabelView = {
         const dim = dimensions[format] || dimensions.A5;
         
         const container = document.getElementById('labelPreviewContainer');
-        
+
         let contentHtml = '';
-        if (model === 'compact') {
+        if (this.isAerien) {
+            contentHtml = this.renderAerienModel(dim.width, dim.height);
+        } else if (model === 'compact') {
             contentHtml = this.renderCompactModel(dim.width, dim.height, colors);
         } else if (model === 'premium') {
             contentHtml = this.renderPremiumModel(dim.width, dim.height, colors);
@@ -339,8 +403,65 @@ export const ConfigLabelView = {
         `;
     },
 
+    // Aperçu de l'étiquette AÉRIENNE (reflète app.renderAerienLabel)
+    renderAerienModel(widthMm, heightMm) {
+        const isA5 = widthMm === 210;
+        const fontSize = isA5 ? '11pt' : '9pt';
+        const titleFont = isA5 ? '14pt' : '11pt';
+        const refFont = isA5 ? '26pt' : '20pt';
+        const headerColor = this.settings.aerienHeaderColor || '#1A3553';
+        const stripe = `repeating-linear-gradient(45deg, #E51F21 0, #E51F21 8px, #ffffff 8px, #ffffff 16px, ${headerColor} 16px, ${headerColor} 24px, #ffffff 24px, #ffffff 32px)`;
+        return `
+            <div id="thermalLabel" style="width: ${widthMm}mm; height: ${heightMm}mm; background: ${stripe}; padding: 3mm; box-sizing: border-box; font-family: 'Arial', sans-serif; box-shadow: 0 4px 12px rgba(0,0,0,0.1);">
+                <div style="background: #fff; height: 100%; display: flex; flex-direction: column; padding: 4mm; box-sizing: border-box;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; background: ${headerColor}; color: #fff; border-radius: 8px; padding: 2mm 3mm; margin-bottom: 3mm;">
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <img src="../LOGOAMT.png" style="height: ${isA5 ? '9mm' : '6mm'}; object-fit: contain; background: #fff; border-radius: 4px; padding: 2px;" alt="Logo" />
+                            <div>
+                                <div style="font-size: ${fontSize}; font-weight: bold;">AMT TRANSIT CI FRET</div>
+                                <div style="font-size: ${isA5 ? '8pt' : '6pt'};">81 AV. ARISTIDE BRIAND - 0180893370</div>
+                            </div>
+                        </div>
+                        <div style="text-align: right;">
+                            <div style="background: #F2A312; color: #1A3553; font-weight: 900; font-size: ${isA5 ? '13pt' : '10pt'}; padding: 2px 10px; border-radius: 20px; letter-spacing: 1px;">✈ PAR AVION</div>
+                            <div style="font-size: ${isA5 ? '7pt' : '6pt'}; margin-top: 1mm; letter-spacing: 1px;">BY AIR · AÉRIEN</div>
+                        </div>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 3mm;">
+                        <div style="flex: 1;">
+                            <div style="font-size: ${titleFont}; font-weight: bold; color: #1A3553;">AB-169-D20_1_71</div>
+                            <div style="margin-top: 3mm;">
+                                <div style="font-size: ${isA5 ? '9pt' : '7pt'}; font-weight: bold; color: #94a3b8; letter-spacing: 1px;">DESTINATAIRE</div>
+                                <div style="font-size: ${titleFont}; font-weight: bold;">CEDRIC DADIE</div>
+                                <div style="font-size: ${fontSize};">07 67 00 75 28</div>
+                            </div>
+                            <div style="margin-top: 2mm;">
+                                <div style="font-size: ${isA5 ? '9pt' : '7pt'}; font-weight: bold; color: #94a3b8; letter-spacing: 1px;">EXPÉDITEUR</div>
+                                <div style="font-size: ${fontSize}; font-weight: bold;">WILLIAM DADIE</div>
+                            </div>
+                        </div>
+                        <div style="text-align: center;">
+                            <div id="previewQRCode" style="width: ${isA5 ? '42mm' : '33mm'}; height: ${isA5 ? '42mm' : '33mm'};"></div>
+                            <div style="margin-top: 1.5mm; background: #E51F21; color: #fff; font-weight: 900; font-size: ${isA5 ? '14pt' : '11pt'}; padding: 2px 6px; border-radius: 8px;">⚖ 12.5 kg</div>
+                        </div>
+                    </div>
+                    <div style="flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; width: 100%;">
+                        <div style="font-size: ${refFont}; font-weight: 900; letter-spacing: 2px; word-break: break-all; color: #1A3553;">AB-169-D20</div>
+                        <div style="font-size: ${fontSize}; font-weight: bold; margin-top: 1mm; text-transform: uppercase; color: #475569;">CARTON LONG</div>
+                    </div>
+                </div>
+            </div>
+        `;
+    },
+
     saveConfig() {
         const format = document.getElementById('labelFormat').value;
+        if (this.isAerien) {
+            localStorage.setItem('amt_label_aerien_format', format);
+            localStorage.setItem('amt_label_aerien_header_color', this.settings.aerienHeaderColor);
+            this.app.showToast(`Étiquette aérienne ${format} enregistrée !`, "success");
+            return;
+        }
         const model = document.getElementById('labelModel').value;
         localStorage.setItem('amt_label_format', format);
         localStorage.setItem('amt_label_model', model);
@@ -350,10 +471,15 @@ export const ConfigLabelView = {
     },
 
     printTest() {
-        const format = localStorage.getItem('amt_label_format') || 'A5';
-        const model = localStorage.getItem('amt_label_model') || 'classic';
-        const colorScheme = localStorage.getItem('amt_label_color') || 'default';
-        
+        if (!this.app.printLabels) {
+            this.app.showToast("Fonction d'impression non disponible", "error");
+            return;
+        }
+
+        const format = document.getElementById('labelFormat')?.value || this.settings.format;
+        const prevFormat = localStorage.getItem('amt_label_format');
+        localStorage.setItem('amt_label_format', format);
+
         const testData = {
             ref: 'AB-169-D20',
             expName: 'WILLIAM DADIE',
@@ -361,15 +487,16 @@ export const ConfigLabelView = {
             destName: 'CEDRIC DADIE',
             destPhone: '07 67 00 75 28',
             destAddress: 'COCODY ANGRÉ, ABIDJAN',
+            isAerien: this.isAerien,
+            headerColor: this.isAerien ? this.settings.aerienHeaderColor : undefined,
             labels: [
-                { sousRef: 'AB-169-D20', desc: 'COLIS', index: 1, total: 1 }
+                { sousRef: 'AB-169-D20_1_71', desc: 'CARTON LONG', poids: 12.5, index: 1, total: 1 }
             ]
         };
-        
-        if (this.app.printLabels) {
-            this.app.printLabels(testData);
-        } else {
-            this.app.showToast("Fonction d'impression non disponible", "error");
-        }
+
+        this.app.printLabels(testData);
+        // printLabels lit le format de façon synchrone avant son 1er await :
+        // on peut restaurer le défaut maritime tout de suite.
+        if (prevFormat) localStorage.setItem('amt_label_format', prevFormat);
     }
 };

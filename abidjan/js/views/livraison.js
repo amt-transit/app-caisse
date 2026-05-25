@@ -793,7 +793,7 @@ export const LivraisonView = {
                         if (t.reference) {
                             let resteAPayer = 0;
                             if (t.reste < 0) { resteAPayer = Math.abs(t.reste); }
-                            transactionsMap.set(t.reference.toUpperCase().trim(), { montant: resteAPayer + " CFA", desc: t.description || '' });
+                            transactionsMap.set(t.reference.toUpperCase().trim(), { montant: resteAPayer + " CFA", desc: t.description || '', items: Array.isArray(t.items) ? t.items : [] });
                         }
                     });
                     
@@ -2482,7 +2482,7 @@ export const LivraisonView = {
                            <td class="col-checkbox">${!isViewer ? `<input type="checkbox" onchange="toggleSelection('${d.id}')" ${selectedIds.has(d.id) ? 'checked' : ''}>` : ''}</td>
                            <td>${d.dateAjout ? new Date(d.dateAjout).toLocaleDateString('fr-FR') : '-'}</td>
                            <td>${d.conteneur || '-'}</td>
-                           <td class="ref"><a href="#" onclick="event.preventDefault(); showScanHistory('${d.id}');" style="color: #2563eb; text-decoration: underline; font-weight: bold;">${d.ref}</a></td>
+                           <td class="ref"><a href="#" onclick="event.preventDefault(); showScanHistory('${d.id}');" style="color: #2563eb; text-decoration: underline; font-weight: bold;">${d.ref}</a>${lvStageBadge(d)}</td>
                            <td style="text-align:center;">${renderInput(d.quantite || 1, "number", `updateDeliveryQuantity('${d.id}', this.value)`, "width: 50px; text-align:center; font-weight:bold;")}</td>
                            <td class="montant">${renderInput(displayMontant, "text", `updateDeliveryAmount('${d.id}', this.value)`, montantStyle)}</td>
                            <td>${d.expediteur || ''}</td>
@@ -2499,7 +2499,7 @@ export const LivraisonView = {
                    <tr class="${rowClass}">
                        <td class="col-checkbox">${!isViewer ? `<input type="checkbox" onchange="toggleSelection('${d.id}')" ${selectedIds.has(d.id) ? 'checked' : ''}>` : ''}</td>
                        <td>${d.conteneur || '-'}</td>
-                       <td class="ref">${transitIndicator}<a href="#" onclick="event.preventDefault(); showScanHistory('${d.id}');" style="color: #2563eb; text-decoration: underline; font-weight: bold;">${d.ref}</a></td>
+                       <td class="ref">${transitIndicator}<a href="#" onclick="event.preventDefault(); showScanHistory('${d.id}');" style="color: #2563eb; text-decoration: underline; font-weight: bold;">${d.ref}</a>${lvStageBadge(d)}</td>
                        <td style="text-align:center;">
                            ${renderInput(d.quantite || 1, "number", `updateDeliveryQuantity('${d.id}', this.value)`, "width: 50px; text-align:center; font-weight:bold;")}
                            ${partielBadge}
@@ -3657,8 +3657,8 @@ export const LivraisonView = {
                statusBtn.textContent = `📊 ${selectedStatuses.length} statuts`;
            }
        
-           // Filtre Conteneur Actif
-           const filterContainerCb = document.getElementById('filterByContainerCb');
+           // Filtre Conteneur Actif (case historique OU case visible « Filtrer »)
+           const filterContainerCb = document.getElementById('filterByContainerCb') || document.getElementById('lv-fcb');
            const isContainerFilterActive = filterContainerCb && filterContainerCb.checked;
        
            const searchQuery = document.getElementById('searchBox').value.toLowerCase().trim();
@@ -4806,14 +4806,16 @@ export const LivraisonView = {
            <div id="scanHistoryModal" class="modal amt-modal">
                <div class="modal-content" style="max-width: 500px; padding: 25px;">
                    <span class="close-modal" id="closeScanHistoryModal" style="float:right; cursor:pointer; font-size:24px;">&times;</span>
-                   <h2 class="modal-header">Détail des Scans</h2>
+                   <h2 class="modal-header">Suivi par colis</h2>
                    <p id="scanHistorySubtitle" style="color:#64748b; font-size:14px; margin-bottom:15px;"></p>
-                   <div style="max-height: 300px; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 8px;">
+                   <div style="max-height: 360px; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 8px;">
                        <table class="table" style="margin: 0; width: 100%;">
                            <thead style="position: sticky; top: 0; background: #f8fafc; z-index: 1;">
                                <tr>
-                                   <th style="text-align: left; padding: 8px;">Code Barre (Scan)</th>
-                                   <th style="text-align: right; padding: 8px;">Date & Heure</th>
+                                   <th style="text-align: left; padding: 8px;">Sous-colis</th>
+                                   <th style="text-align: left; padding: 8px;">Nature</th>
+                                   <th style="text-align: left; padding: 8px;">Statut</th>
+                                   <th style="text-align: right; padding: 8px;">Dernière action</th>
                                </tr>
                            </thead>
                            <tbody id="scanHistoryBody">
@@ -4837,26 +4839,114 @@ export const LivraisonView = {
            });
        }
        
+       // Statut PAR SOUS-COLIS — MÊMES règles que « Voir facture »
+       // (touteslesfactures) : le dernier scan d'une pièce fait foi ; les étapes
+       // d'arrivée sont « résolues » et ne sont pas écrasées par le statut global.
+       function lvPieceStatus(item, lbl) {
+           const hist = Array.isArray(item.scanHistory) ? item.scanHistory : [];
+           const myScans = hist.filter(s => s.scanRef === lbl).sort((a, b) => new Date(b.date) - new Date(a.date));
+           let txt = 'À traiter (Non scanné)';
+           let cls = 'colis-pending';
+           let resolved = false;
+           const lastDate = myScans.length ? myScans[0].date : null;
+           if (myScans.length) {
+               const t = myScans[0].type;
+               if (t === 'REMISE_CLIENT') { txt = 'Livré au destinataire'; cls = 'colis-delivered'; resolved = true; }
+               else if (t === 'MISE_EN_LIVRAISON') { txt = 'En livraison'; cls = 'colis-abidjan'; resolved = true; }
+               else if (t === 'DECHARGEMENT_ABIDJAN') { txt = 'Arrivé à Abidjan'; cls = 'colis-abidjan'; resolved = true; }
+               else if (t === 'ENTREPOT_PARIS' || t === 'DEPART_VOL_RETOUR') { txt = 'Mise en Entrepôt'; cls = 'colis-paris'; if (item.modeExpedition === 'aerien') resolved = true; }
+               else if (t === 'DEPART_VOL') { txt = 'En vol (Aérien)'; cls = 'colis-transit'; resolved = true; }
+               else if (t === 'CONTENEUR_CHARGEMENT') { txt = 'Chargé (Conteneur)'; cls = 'colis-transit'; }
+           }
+           if (item.containerStatus === 'A_VENIR' && !resolved) {
+               txt = item.modeExpedition === 'aerien' ? 'En vol (Aérien)' : (cls === 'colis-transit' ? 'En Transit (Mer)' : 'Assigné (Conteneur)');
+               cls = 'colis-transit';
+           } else if (item.containerStatus === 'EN_COURS' && !resolved && cls === 'colis-pending') {
+               txt = 'Arrivé à Abidjan'; cls = 'colis-abidjan';
+           }
+           if (item.status === 'LIVRE' && !resolved) { txt = 'Livré au destinataire'; cls = 'colis-delivered'; }
+           return { txt, cls, lastDate };
+       }
+
+       function lvStatusBadge(cls, txt) {
+           const styles = {
+               'colis-pending':   'background:#f1f5f9; color:#475569;',
+               'colis-paris':     'background:#e0f2fe; color:#0284c7;',
+               'colis-transit':   'background:#fef3c7; color:#b45309;',
+               'colis-abidjan':   'background:#dbeafe; color:#1e40af;',
+               'colis-delivered': 'background:#dcfce7; color:#166534;'
+           };
+           return `<span style="${styles[cls] || styles['colis-pending']} padding:3px 9px; border-radius:12px; font-size:11px; font-weight:700;">${txt}</span>`;
+       }
+
+       // Progression PAR SOUS-COLIS selon l'onglet courant : combien de pièces
+       // ont atteint l'étape de cet onglet (X/N). Affiché sur la ligne du client.
+       function lvStageProgress(d) {
+           const labels = (Array.isArray(d.labels) && d.labels.length > 0) ? d.labels : [d.ref];
+           const total = labels.length;
+           const hist = Array.isArray(d.scanHistory) ? d.scanHistory : [];
+           const countLatest = (types) => {
+               let n = 0;
+               labels.forEach(lbl => {
+                   const sc = hist.filter(s => s.scanRef === lbl).sort((a, b) => new Date(b.date) - new Date(a.date));
+                   if (sc.length && types.includes(sc[0].type)) n++;
+               });
+               return n;
+           };
+           if (currentTab === 'EN_COURS') return { done: countLatest(['DECHARGEMENT_ABIDJAN', 'MISE_EN_LIVRAISON', 'REMISE_CLIENT']), total, icon: '📦', word: 'reçus' };
+           if (currentTab === 'A_VENIR') return { done: countLatest(['CONTENEUR_CHARGEMENT', 'DEPART_VOL']), total, icon: (d.modeExpedition === 'aerien' ? '✈' : '🚢'), word: (d.modeExpedition === 'aerien' ? 'embarqués' : 'chargés') };
+           if (currentTab === 'PARIS') return { done: countLatest(['ENTREPOT_PARIS', 'DEPART_VOL_RETOUR']), total, icon: '🏭', word: 'en entrepôt' };
+           return null;
+       }
+       function lvStageBadge(d) {
+           const p = lvStageProgress(d);
+           if (!p || p.total <= 1) return ''; // colis unique : pas de compteur
+           let style;
+           if (p.done === 0) style = 'background:#f1f5f9; color:#475569;';
+           else if (p.done >= p.total) style = 'background:#dcfce7; color:#166534;';
+           else style = 'background:#fef3c7; color:#b45309;';
+           return `<div style="margin-top:4px;"><span style="${style} padding:2px 8px; border-radius:10px; font-size:10px; font-weight:700; white-space:nowrap;" title="${p.done} colis sur ${p.total} ${p.word}">${p.icon} ${p.done}/${p.total} ${p.word}</span></div>`;
+       }
+
        function showScanHistory(id) {
            const item = deliveries.find(d => d.id === id);
            if (!item) return;
-       
-           document.getElementById('scanHistorySubtitle').textContent = `Lot / Référence : ${item.ref} (${item.quantite || 1} colis au total)`;
-           
-           const tbody = document.getElementById('scanHistoryBody');
-           if (!item.scanHistory || item.scanHistory.length === 0) {
-               tbody.innerHTML = '<tr><td colspan="2" style="text-align:center; padding:20px; color:#94a3b8;">Aucun historique de scan disponible pour ce lot.</td></tr>';
-           } else {
-               // Trier du plus récent au plus ancien
-               const sortedScans = [...item.scanHistory].sort((a, b) => new Date(b.date) - new Date(a.date));
-               tbody.innerHTML = sortedScans.map((scan, index) => `
-                   <tr style="background: ${index % 2 === 0 ? '#ffffff' : '#f8fafc'};">
-                       <td style="padding: 10px 8px; border-bottom: 1px solid #e2e8f0; font-family: monospace; font-weight: bold; color: #334155;">${scan.scanRef}</td>
-                       <td style="text-align: right; padding: 10px 8px; border-bottom: 1px solid #e2e8f0; color: #64748b; font-size: 12px;">${new Date(scan.date).toLocaleString('fr-FR')}</td>
-                   </tr>
-               `).join('');
+
+           const labels = (Array.isArray(item.labels) && item.labels.length > 0) ? item.labels : [item.ref];
+           document.getElementById('scanHistorySubtitle').textContent = `Réf : ${item.ref} — ${labels.length} colis — ${item.destinataire || ''}`;
+
+           // Nature PAR sous-colis : reconstruite depuis les lignes (items) de la
+           // transaction du dossier (1 ligne × qté = N sous-colis), comme « Voir facture ».
+           const trans = transactionsMap.get((item.ref || '').toUpperCase().trim());
+           const descMap = {};
+           if (trans && Array.isArray(trans.items) && trans.items.length) {
+               let idx = 1;
+               trans.items.forEach(it => {
+                   const q = parseInt(it.qty) || 1;
+                   for (let i = 0; i < q; i++) { descMap[idx] = it.desc; idx++; }
+               });
            }
-           
+           const natureOf = (lbl, index) => {
+               const m = lbl.match(/_(\d+)_/);
+               if (m && descMap[parseInt(m[1])]) return descMap[parseInt(m[1])];
+               if (descMap[index + 1]) return descMap[index + 1];
+               return item.description || 'Colis';
+           };
+
+           const tbody = document.getElementById('scanHistoryBody');
+           tbody.innerHTML = labels.map((lbl, index) => {
+               const st = lvPieceStatus(item, lbl);
+               const dateTxt = st.lastDate ? new Date(st.lastDate).toLocaleString('fr-FR') : '—';
+               return `
+                   <tr style="background: ${index % 2 === 0 ? '#ffffff' : '#f8fafc'};">
+                       <td style="padding: 10px 8px; border-bottom: 1px solid #e2e8f0; font-family: monospace; font-weight: bold; color: #334155;">${lbl}</td>
+                       <td style="padding: 10px 8px; border-bottom: 1px solid #e2e8f0; color: #334155;">${natureOf(lbl, index)}</td>
+                       <td style="padding: 10px 8px; border-bottom: 1px solid #e2e8f0;">${lvStatusBadge(st.cls, st.txt)}</td>
+                       <td style="text-align: right; padding: 10px 8px; border-bottom: 1px solid #e2e8f0; color: #64748b; font-size: 12px;">${dateTxt}</td>
+                   </tr>
+               `;
+           }).join('');
+
            document.getElementById('scanHistoryModal').classList.add('active');
        }
        
@@ -5482,10 +5572,44 @@ export const LivraisonView = {
             document.querySelectorAll('.lv-more-drop.open').forEach(d => d.classList.remove('open'));
         }
 
+        // ── Barre de filtre « Conteneur actif » (UI visible) <-> contrôles
+        //    historiques que la logique de filtrage lit réellement. Ces fonctions
+        //    étaient référencées dans le HTML (onchange/oninput) mais jamais
+        //    définies -> erreur « lvSyncFCB is not defined » au clic. ──
+        function lvSyncCI(val) {
+            // Saisie du n° de conteneur (input visible) -> input historique.
+            const h = document.getElementById('activeContainerInput');
+            if (h) h.value = val;
+            lvUpdateBadge(val);
+        }
+        function lvSyncFCB(checked) {
+            // Case « Filtrer » visible -> case historique + persistance + refiltre.
+            const cb = document.getElementById('filterByContainerCb');
+            if (cb) cb.checked = checked;
+            if (currentTab === 'EN_COURS' || currentTab === 'A_VENIR') {
+                localStorage.setItem(`container_filter_${currentTab}_active`, checked);
+            }
+            if (typeof filterDeliveries === 'function') filterDeliveries();
+        }
+        function lvSyncQS(val) {
+            // Sélecteur conteneur rapide visible -> sélecteur historique (porte la logique).
+            const qs = document.getElementById('quickContainerSelect');
+            if (qs) {
+                qs.value = val;
+                if (typeof qs.onchange === 'function') qs.onchange({ target: qs });
+            }
+        }
+        function lvSyncQS2Change(val) {
+            // Sécurité : on s'assure que la vue se rafraîchit même si le sélecteur
+            // historique n'est pas monté.
+            if (typeof filterDeliveries === 'function') filterDeliveries();
+        }
+
         Object.assign(window, {
             lvTab, lvUpdateBadge,
             lvOpenContModal, lvCloseContModal, lvApplyCont, lvDeselAll, lvToggleMore, lvCloseMore,
             lvSetView, lvToggleCardEdit,
+            lvSyncCI, lvSyncFCB, lvSyncQS, lvSyncQS2Change,
             lvDriverOpenDay, lvDriverCloseDay, lvDriverPrevMonth, lvDriverNextMonth, lvDriverRoute,
         });
 
