@@ -731,9 +731,45 @@ export const ToutesLesFacturesView = {
             paymentsHtml = '<tr><td colspan="7" class="muted">Aucun paiement enregistré.</td></tr>';
         }
 
-        // Transformation de la description en lignes pour le tableau
+        // Transformation de la description en lignes pour le tableau.
+        // AÉRIEN : modèle propre (mode par colis, poids/volume, parfum/alcool).
+        const isAerienInv = invoice.modeExpedition === 'aerien';
+        const A_STD = 13, A_PARFUM = 15; // €/kg
+        const aBilledKg = (it) => {
+            const real = parseFloat(it.poids) || 0;
+            const vol = ((parseFloat(it.lng) || 0) * (parseFloat(it.lrg) || 0) * (parseFloat(it.haut) || 0)) / 5000;
+            return (it.mode === 'poids') ? Math.max(real, vol) : real;
+        };
+        const aLineEur = (it) => {
+            const qty = parseFloat(it.qty) || 0;
+            if (it.mode === 'poids') return aBilledKg(it) * qty * (it.parfum ? A_PARFUM : A_STD);
+            return (parseFloat(it.pu) || 0) * qty;
+        };
+        const aMoney = (eur) => this.formatMoneyLocal(isEur ? eur : eur * TAUX);
+
         let itemsList = '';
-        if (invoice.items && Array.isArray(invoice.items)) {
+        let descTableHead = '<tr><th>Description</th><th style="text-align:right;">Quantité</th><th style="text-align:right;">Prix unitaire</th><th style="text-align:right;">Prix total</th></tr>';
+
+        if (isAerienInv && invoice.items && Array.isArray(invoice.items)) {
+            descTableHead = '<tr><th>Description</th><th style="text-align:right;">Qté</th><th>Mode</th><th style="text-align:right;">Poids</th><th style="text-align:right;">Tarif / P.U</th><th style="text-align:right;">Total</th></tr>';
+            let totalPoids = 0;
+            itemsList = invoice.items.map(item => {
+                const isPoids = item.mode === 'poids';
+                const kg = aBilledKg(item);
+                totalPoids += kg * (parseFloat(item.qty) || 0);
+                const modeLbl = isPoids ? ('Poids/volume' + (item.parfum ? ' · parfum/alcool' : '')) : 'À la valeur';
+                const tarifLbl = isPoids ? ((item.parfum ? A_PARFUM : A_STD) + ' €/kg') : aMoney(parseFloat(item.pu) || 0);
+                return `<tr>
+                    <td class="modal-table__desc">${item.desc || '-'}</td>
+                    <td style="text-align:right; font-weight:bold;">${item.qty}</td>
+                    <td>${modeLbl}</td>
+                    <td style="text-align:right;">${kg ? kg.toFixed(1) + ' kg' : '-'}</td>
+                    <td style="text-align:right;">${tarifLbl}</td>
+                    <td style="text-align:right; font-weight:900; color:#0f172a;">${aMoney(aLineEur(item))}</td>
+                </tr>`;
+            }).join('');
+            itemsList += `<tr style="background:#f8fafc; font-weight:800;"><td colspan="3" style="text-align:right;">Poids total facturé</td><td style="text-align:right; color:#1e40af;">${totalPoids.toFixed(1)} kg</td><td colspan="2"></td></tr>`;
+        } else if (invoice.items && Array.isArray(invoice.items)) {
             itemsList = invoice.items.map(item => `
                 <tr>
                     <td class="modal-table__desc">${item.desc}</td>
@@ -861,7 +897,7 @@ export const ToutesLesFacturesView = {
                             <div class="detail-card__header"><h3 class="detail-card__title">Description facture</h3></div>
                             <div class="modal-table-wrap">
                                 <table class="modal-table">
-                                    <thead><tr><th>Description</th><th style="text-align: right;">Quantité</th><th style="text-align: right;">Prix unitaire</th><th style="text-align: right;">Prix total</th></tr></thead>
+                                    <thead>${descTableHead}</thead>
                                     <tbody>${itemsList}</tbody>
                                 </table>
                             </div>
