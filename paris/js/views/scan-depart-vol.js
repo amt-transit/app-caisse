@@ -127,23 +127,23 @@ export const ScanDepartVolView = {
                         <div class="sm__kpi-val">{{ enEntrepotCount }}</div>
                         <div class="sm__kpi-lbl">En entrepôt</div>
                     </div>
-                    <div class="sm__kpi sm__kpi--green">
-                        <div class="sm__kpi-val">{{ scannedCount }}</div>
-                        <div class="sm__kpi-lbl">Restés (scannés)</div>
+                    <div class="sm__kpi sm__kpi--red">
+                        <div class="sm__kpi-val">{{ enVolCount }}</div>
+                        <div class="sm__kpi-lbl">En vol</div>
                     </div>
                     <div class="sm__kpi sm__kpi--orange">
                         <div class="sm__kpi-val">{{ toEmbark.length }}</div>
                         <div class="sm__kpi-lbl">À embarquer</div>
                     </div>
-                    <div class="sm__kpi sm__kpi--red">
-                        <div class="sm__kpi-val">{{ outCount }}</div>
-                        <div class="sm__kpi-lbl">Hors liste</div>
+                    <div class="sm__kpi sm__kpi--green">
+                        <div class="sm__kpi-val">{{ broughtBack.length }}</div>
+                        <div class="sm__kpi-lbl">À ramener</div>
                     </div>
                 </div>
 
                 <div class="container-selector">
-                    <label>📦 {{ enEntrepotCount }} colis aériens en entrepôt</label>
-                    <div style="font-size:13px;color:#64748b;">Scannez les colis qui <b>restent</b>. À la validation, ceux qui ne sont plus là seront marqués <b>« en vol »</b>.</div>
+                    <label>📦 {{ enEntrepotCount }} en entrepôt · ✈️ {{ enVolCount }} en vol</label>
+                    <div style="font-size:13px;color:#64748b;">Scannez les colis qui <b>restent en entrepôt</b>. À la validation : les non-scannés partent <b>« en vol »</b> ; un colis déjà « en vol » re-scanné <b>revient en entrepôt</b>. Pensez à <b>Valider</b>.</div>
                 </div>
 
                 <div class="viewfinder-wrap">
@@ -165,9 +165,25 @@ export const ScanDepartVolView = {
                 </div>
 
                 <div style="display:flex; gap:10px; margin-bottom:20px;">
-                    <button class="btn-search" type="button" @click="validateDepart" :disabled="validating || loading" style="flex:1; padding:16px; font-size:15px; background:#7c3aed;">
-                        {{ validating ? '⏳ Validation…' : '✅ Valider le départ (' + toEmbark.length + ' à embarquer)' }}
+                    <button class="btn-search" type="button" @click="validateDepart" :disabled="validating || loading || (toEmbark.length === 0 && broughtBack.length === 0)" style="flex:1; padding:16px; font-size:15px; background:#7c3aed;">
+                        {{ validating ? '⏳ Validation…' : '✅ Valider (' + toEmbark.length + ' partent · ' + broughtBack.length + ' reviennent)' }}
                     </button>
+                </div>
+
+                <div v-if="broughtBack.length" class="recent-scans" style="margin-bottom:20px;">
+                    <div class="recent-scans-header">
+                        <span>↩️ À RAMENER EN ENTREPÔT (re-scannés)</span>
+                        <span class="recent-count">{{ broughtBack.length }}</span>
+                    </div>
+                    <div>
+                        <div v-for="p in broughtBack" :key="p.docId" class="scan-item">
+                            <div class="scan-item-info">
+                                <span class="scan-item-ref">{{ p.ref }}</span>
+                                <span class="scan-item-client">{{ p.client }}</span>
+                            </div>
+                            <span class="scan-item-status status-ok">revient</span>
+                        </div>
+                    </div>
                 </div>
 
                 <div class="recent-scans" style="margin-bottom:20px;">
@@ -250,6 +266,7 @@ export const ScanDepartVolView = {
 
                 // ========== POPULATION + DIFFÉRENCE ==========
                 const enEntrepotCount = computed(() => population.value.filter(p => p.status === 'PARIS').length);
+                const enVolCount = computed(() => population.value.filter(p => p.status === 'A_VENIR').length);
                 const scannedCount = computed(() => population.value.filter(p => scanned.value[p.ref]).length);
                 // À embarquer = colis EN ENTREPÔT (PARIS) non scannés.
                 const toEmbark = computed(() => population.value.filter(p => p.status === 'PARIS' && !scanned.value[p.ref]));
@@ -541,7 +558,7 @@ export const ScanDepartVolView = {
                     population, scanned, loading, validating, outCount, flash,
                     recentScans, manualRef, scanStatusText, isSoundEnabled,
                     // Computeds
-                    enEntrepotCount, scannedCount, toEmbark,
+                    enEntrepotCount, enVolCount, scannedCount, toEmbark, broughtBack,
                     // Refs DOM
                     qrReader, videoPreview,
                     // Méthodes

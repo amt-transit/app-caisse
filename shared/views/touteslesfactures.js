@@ -666,12 +666,14 @@ export const ToutesLesFacturesView = {
 
                 // 3. Surcharges globales pour les étapes ultérieures
                 if (liv.containerStatus === 'A_VENIR') {
-                    if (lblStatusClass === 'colis-transit') {
+                    if (liv.modeExpedition === 'aerien') {
+                        lblStatusDisplay = 'En vol (Aérien)';
+                    } else if (lblStatusClass === 'colis-transit') {
                         lblStatusDisplay = 'En Transit (Mer)';
                     } else {
                         lblStatusDisplay = 'Assigné (Conteneur)';
-                        lblStatusClass = 'colis-transit';
                     }
+                    lblStatusClass = 'colis-transit';
                     lblContainer = liv.conteneur || lblContainer;
                 } else if (liv.containerStatus === 'EN_COURS') {
                     lblStatusDisplay = 'Arrivé à Abidjan';
