@@ -2123,19 +2123,27 @@ export const ToutesLesFacturesView = {
                 if (compSnap.data().logoBase64) logoBase64 = compSnap.data().logoBase64;
                 if (compSnap.data().name) companyName = compSnap.data().name;
             }
-            const invConfigSnap = await getDoc(fsDoc(db, "settings", `invoice_config_${configAgency}`));
-            if (invConfigSnap.exists()) {
-                invoiceConfig = invConfigSnap.data();
-                if (invoiceConfig.companyName) companyName = invoiceConfig.companyName;
-                if (invoiceConfig.logoUrl) logoBase64 = invoiceConfig.logoUrl;
+            // Thème du MODE actif : en aérien, un doc dédié `_aerien` SURCHARGE le
+            // maritime (les champs non définis en aérien héritent du maritime).
+            const _mode = sessionStorage.getItem('shippingMode') || 'maritime';
+            const baseSnap = await getDoc(fsDoc(db, "settings", `invoice_config_${configAgency}`));
+            invoiceConfig = baseSnap.exists() ? baseSnap.data() : {};
+            if (_mode === 'aerien') {
+                const aSnap = await getDoc(fsDoc(db, "settings", `invoice_config_${configAgency}_aerien`));
+                if (aSnap.exists()) invoiceConfig = { ...invoiceConfig, ...aSnap.data() };
             }
+            if (invoiceConfig.companyName) companyName = invoiceConfig.companyName;
+            if (invoiceConfig.logoUrl) logoBase64 = invoiceConfig.logoUrl;
         } catch(e) { console.error(e); }
 
         let defaultColor = invoiceConfig?.primaryColor ? JSON.parse(invoiceConfig.primaryColor) : [59, 130, 246];
         let accentColor = defaultColor;
         if (docType === 'BL' || docType === 'ATTESTATION') accentColor = [16, 185, 129];
 
-        doc.setFillColor(30, 41, 59);
+        // Bande d'en-tête : couleur configurée (Choix Facture) ou bleu nuit par défaut.
+        const _hm = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(String(invoiceConfig?.headerColorHex || ''));
+        const _headerRgb = _hm ? [parseInt(_hm[1], 16), parseInt(_hm[2], 16), parseInt(_hm[3], 16)] : [30, 41, 59];
+        doc.setFillColor(..._headerRgb);
         doc.rect(0, 0, pageWidth, 35, 'F');
         doc.setFillColor(...accentColor);
         doc.rect(0, 35, pageWidth, 2, 'F');
@@ -2218,40 +2226,61 @@ export const ToutesLesFacturesView = {
         doc.text(addrStr, 120, 73);
 
         const isBL = docType === 'BL' || docType === 'ATTESTATION';
-        const tableColumn = isBL 
-            ? ["Description / Nature du Colis", "Qté", "Statut", "Observations"]
-            : ["Description / Nature du Colis", "Qté", "P.U", "Total"];
-        const tableRows = [];
-        
         const isEur = isEurAgency();
         const TAUX = isEur ? CONSTANTS.TAUX_CONVERSION : 1;
+        const isAerienDoc = invoice.modeExpedition === 'aerien';
+        const _aBilledKg = (it) => { const real = parseFloat(it.poids) || 0; const vol = ((parseFloat(it.lng)||0)*(parseFloat(it.lrg)||0)*(parseFloat(it.haut)||0))/5000; return (it.mode === 'poids') ? Math.max(real, vol) : real; };
+        const _aMoney = (eur) => this.formatMoneyLocal(isEur ? eur : eur * TAUX);
+        const _aLineEur = (it) => { const q = parseFloat(it.qty)||0; return (it.mode === 'poids') ? _aBilledKg(it)*q*(it.parfum?15:13) : (parseFloat(it.pu)||0)*q; };
 
-        if (invoice.items && Array.isArray(invoice.items)) {
+        let tableColumn, columnStyles;
+        const tableRows = [];
+
+        if (isAerienDoc && !isBL && invoice.items && Array.isArray(invoice.items)) {
+            tableColumn = ["Description / Nature", "Qté", "Mode", "Poids", "Tarif / P.U", "Total"];
+            let _tk = 0;
             invoice.items.forEach(item => {
-                if (isBL) {
-                    tableRows.push([item.desc, item.qty.toString(), "À LIVRER", "-"]);
-                } else {
-                    tableRows.push([
-                        item.desc,
-                        item.qty.toString(),
-                        this.formatMoneyLocal((item.pu || 0) / (isEur ? 1 : TAUX)),
-                        this.formatMoneyLocal((item.total || 0) / (isEur ? 1 : TAUX))
-                    ]);
-                }
+                const isP = item.mode === 'poids'; const kg = _aBilledKg(item); _tk += kg * (parseFloat(item.qty)||0);
+                tableRows.push([ item.desc, item.qty.toString(), isP ? ('Poids'+(item.parfum?' (parfum/alcool)':'')) : 'Valeur', kg?kg.toFixed(1)+' kg':'-', isP ? ((item.parfum?15:13)+' €/kg') : _aMoney(parseFloat(item.pu)||0), _aMoney(_aLineEur(item)) ]);
             });
+            tableRows.push(['Poids total facturé', '', '', _tk.toFixed(1)+' kg', '', '']);
+            columnStyles = { 1: { halign: 'center' }, 3: { halign: 'right' }, 4: { halign: 'right' }, 5: { halign: 'right' } };
+        } else if (isAerienDoc && isBL && invoice.items && Array.isArray(invoice.items)) {
+            tableColumn = ["Description / Nature", "Qté", "Poids", "Statut", "Observations"];
+            let _tk = 0;
+            invoice.items.forEach(item => { const kg = _aBilledKg(item); _tk += kg * (parseFloat(item.qty)||0); tableRows.push([item.desc, item.qty.toString(), kg?kg.toFixed(1)+' kg':'-', "À LIVRER", "-"]); });
+            tableRows.push(['Poids total', '', _tk.toFixed(1)+' kg', '', '']);
+            columnStyles = { 1: { halign: 'center' }, 2: { halign: 'right' }, 3: { halign: 'center' } };
         } else {
-            (invoice.description || '').split(',').forEach(d => {
-                const match = d.trim().match(/^(\d+)x\s+(.+)$/);
-                const desc = match ? match[2] : d.trim();
-                const qty = match ? match[1] : '1';
-                if (isBL) tableRows.push([desc, qty, "À LIVRER", "-"]);
-                else tableRows.push([desc, qty, "-", "-"]);
-            });
+            tableColumn = isBL
+                ? ["Description / Nature du Colis", "Qté", "Statut", "Observations"]
+                : ["Description / Nature du Colis", "Qté", "P.U", "Total"];
+            if (invoice.items && Array.isArray(invoice.items)) {
+                invoice.items.forEach(item => {
+                    if (isBL) {
+                        tableRows.push([item.desc, item.qty.toString(), "À LIVRER", "-"]);
+                    } else {
+                        tableRows.push([
+                            item.desc,
+                            item.qty.toString(),
+                            this.formatMoneyLocal((item.pu || 0) / (isEur ? 1 : TAUX)),
+                            this.formatMoneyLocal((item.total || 0) / (isEur ? 1 : TAUX))
+                        ]);
+                    }
+                });
+            } else {
+                (invoice.description || '').split(',').forEach(d => {
+                    const match = d.trim().match(/^(\d+)x\s+(.+)$/);
+                    const desc = match ? match[2] : d.trim();
+                    const qty = match ? match[1] : '1';
+                    if (isBL) tableRows.push([desc, qty, "À LIVRER", "-"]);
+                    else tableRows.push([desc, qty, "-", "-"]);
+                });
+            }
+            columnStyles = isBL
+                ? { 1: { halign: 'center' }, 2: { halign: 'center' } }
+                : { 1: { halign: 'center' }, 2: { halign: 'right' }, 3: { halign: 'right' } };
         }
-
-        const columnStyles = isBL 
-            ? { 1: { halign: 'center' }, 2: { halign: 'center' } }
-            : { 1: { halign: 'center' }, 2: { halign: 'right' }, 3: { halign: 'right' } };
 
         doc.autoTable({
             startY: 90,

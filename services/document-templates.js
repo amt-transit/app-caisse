@@ -24,12 +24,15 @@ export function createDocumentTemplates({ showToast, calculateMagasinageFee }) {
     async function loadInvoiceConfig(src) {
         const mode = sessionStorage.getItem('shippingMode') || 'maritime';
         try {
+            const baseSnap = await getDoc(doc(db, "settings", `invoice_config_${src}`));
+            const base = baseSnap.exists() ? baseSnap.data() : {};
             if (mode === 'aerien') {
                 const aSnap = await getDoc(doc(db, "settings", `invoice_config_${src}_aerien`));
-                if (aSnap.exists()) return aSnap.data();
+                // Le thème aérien SURCHARGE le maritime ; les champs non définis
+                // en aérien héritent du maritime (couleur de bande, logo, CGV...).
+                if (aSnap.exists()) return { ...base, ...aSnap.data() };
             }
-            const snap = await getDoc(doc(db, "settings", `invoice_config_${src}`));
-            return snap.exists() ? snap.data() : null;
+            return base;
         } catch (e) { return null; }
     }
 
