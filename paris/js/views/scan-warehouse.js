@@ -47,6 +47,12 @@ export const ScanWarehouseView = {
                 .viewfinder-box::before, .viewfinder-box::after { content: ''; position: absolute; width: 30px; height: 30px; border-color: #3b82f6; border-style: solid; }
                 .viewfinder-box::before { top: -3px; left: -3px; border-width: 4px 0 0 4px; border-radius: 8px 0 0 0; }
                 .viewfinder-box::after { bottom: -3px; right: -3px; border-width: 0 4px 4px 0; border-radius: 0 0 8px 0; }
+                .viewfinder-box { transition: border-color .1s, box-shadow .1s; }
+                .viewfinder-box.flash-ok { border-color:#10b981; box-shadow:0 0 0 9999px rgba(16,185,129,0.30); }
+                .viewfinder-box.flash-ok::before, .viewfinder-box.flash-ok::after { border-color:#10b981; }
+                .viewfinder-box.flash-warn { border-color:#f59e0b; }
+                .viewfinder-box.flash-err { border-color:#ef4444; box-shadow:0 0 0 9999px rgba(239,68,68,0.30); }
+                .viewfinder-box.flash-err::before, .viewfinder-box.flash-err::after { border-color:#ef4444; }
                 
                 .scan-line { position: absolute; top: 0; left: 0; right: 0; height: 2px; background: linear-gradient(90deg, transparent, #3b82f6, transparent); animation: scan-anim 2s ease-in-out infinite; border-radius: 1px; box-shadow: 0 0 8px #3b82f6; }
                 @keyframes scan-anim { 0% { top: 5%; opacity: 1; } 50% { top: 90%; opacity: 0.7; } 100% { top: 5%; opacity: 1; } }
@@ -114,7 +120,7 @@ export const ScanWarehouseView = {
                     <div id="sw-reader" style="display: none; background: #000;"></div>
                     <video id="sw-video-preview" autoplay muted playsinline style="display: none;"></video>
                     <div class="viewfinder-overlay">
-                        <div class="viewfinder-box"><div class="scan-line"></div></div>
+                        <div class="viewfinder-box" :class="flash ? 'flash-' + flash : ''"><div class="scan-line"></div></div>
                     </div>
                 </div>
 
@@ -170,6 +176,29 @@ export const ScanWarehouseView = {
                 let lastScanTime = 0;
 
                 const toggleSound = () => { isSoundEnabled.value = !isSoundEnabled.value; };
+
+                // Retour scan : son (débloqué au 1er geste) + vibration + flash du cadre.
+                const flash = ref('');
+                let audioCtx = null;
+                const ensureAudio = () => { try { if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)(); if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume(); } catch (e) {} };
+                const playBeep = (type) => {
+                    if (!isSoundEnabled.value) return;
+                    try {
+                        ensureAudio(); if (!audioCtx) return;
+                        const osc = audioCtx.createOscillator(); const gain = audioCtx.createGain();
+                        osc.connect(gain); gain.connect(audioCtx.destination);
+                        osc.frequency.value = type === 'ok' ? 950 : (type === 'warn' ? 600 : 300);
+                        gain.gain.value = 0.35; osc.start();
+                        gain.gain.exponentialRampToValueAtTime(0.00001, audioCtx.currentTime + 0.3);
+                        osc.stop(audioCtx.currentTime + 0.3);
+                    } catch (e) {}
+                };
+                const feedback = (type) => {
+                    flash.value = type;
+                    setTimeout(() => { if (flash.value === type) flash.value = ''; }, 600);
+                    playBeep(type);
+                    if (navigator.vibrate) navigator.vibrate(type === 'ok' ? [40] : (type === 'warn' ? [40, 40, 40] : [120]));
+                };
 
                 const clearSession = () => {
                     if (confirm("Voulez-vous vraiment effacer les données de scan de cette session ?")) {
@@ -320,14 +349,15 @@ export const ScanWarehouseView = {
                         if (!snap.empty) {
                             const docId = snap.docs[0].id;
                             const data = snap.docs[0].data();
-                            
+                            logData.description = data.description || '';
+
                             const isAlreadyScanned = data.scanHistory && data.scanHistory.some(s => s.scanRef === text && s.type === 'ENTREPOT_PARIS');
 
                             if (isAlreadyScanned) {
                                 stats.duplicate++;
                                 logData.status = 'DOUBLON';
                                 addRecentScan(text, data.destinataire || data.expediteur || 'Client inconnu', 'Déjà en entrepôt', 'warn');
-                                if (isSoundEnabled.value && navigator.vibrate) navigator.vibrate([50, 50, 50]);
+                                feedback('warn');
                             } else {
                                 await updateDoc(doc(db, livCol, docId), {
                                     containerStatus: 'PARIS',
@@ -336,13 +366,13 @@ export const ScanWarehouseView = {
                                 stats.success++;
                                 logData.status = 'SUCCES';
                                 addRecentScan(text, data.destinataire || data.expediteur || 'Client inconnu', 'Mise en entrepôt OK', 'ok');
-                                if (isSoundEnabled.value && navigator.vibrate) navigator.vibrate([30, 20, 30]);
+                                feedback('ok');
                             }
                         } else {
                             stats.error++;
                             logData.status = 'ERREUR';
                             addRecentScan(text, 'Non trouvé en base', 'Colis inconnu', 'err');
-                            if(isSoundEnabled.value && navigator.vibrate) navigator.vibrate([100, 50, 100]);
+                            feedback('err');
                         }
                     } catch(e) { 
                         console.error(e); 
@@ -358,6 +388,8 @@ export const ScanWarehouseView = {
 
                 onMounted(() => {
                     loadScannerScript();
+                    document.addEventListener('touchstart', ensureAudio, { once: true });
+                    document.addEventListener('click', ensureAudio, { once: true });
                 });
 
                 onUnmounted(() => {
@@ -365,7 +397,7 @@ export const ScanWarehouseView = {
                 });
 
                 return {
-                    stats, recentScans, isSoundEnabled, statusText, manualRef,
+                    stats, recentScans, isSoundEnabled, statusText, manualRef, flash,
                     toggleSound, clearSession, processManualScan
                 };
             }

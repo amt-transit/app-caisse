@@ -347,6 +347,7 @@ export const ScanDepartVolView = {
                                     docId: d.id,
                                     ref: data.ref,
                                     client: data.destinataire || data.expediteur || 'Client',
+                                    desc: data.description || '',
                                     status
                                 });
                             });
@@ -451,10 +452,12 @@ export const ScanDepartVolView = {
                             });
                         });
                         await batch.commit();
-                        addDoc(collection(db, 'scan_logs'), {
-                            date: nowIso, agent: currentUserName, agency: activeAgency,
-                            type: 'DEPART_VOL', embarques: embark.length, retours: back.length, modeExpedition: 'aerien'
-                        }).catch(() => {});
+                        // Journal d'audit PAR PIÈCE (avec la nature du colis) pour
+                        // que l'Historique des scans liste chaque sous-colis parti/ramené.
+                        const logs = [];
+                        embark.forEach(p => logs.push({ scanRef: p.subRef, description: p.desc || '', date: nowIso, type: 'DEPART_VOL', status: 'SUCCES', agent: currentUserName, agency: activeAgency, container: '-', modeExpedition: 'aerien' }));
+                        back.forEach(p => logs.push({ scanRef: p.subRef, description: p.desc || '', date: nowIso, type: 'DEPART_VOL_RETOUR', status: 'SUCCES', agent: currentUserName, agency: activeAgency, container: '-', modeExpedition: 'aerien' }));
+                        Promise.all(logs.map(l => addDoc(collection(db, 'scan_logs'), l))).catch(() => {});
                         globalApp.showToast(`Départ validé : ${embark.length} en vol, ${back.length} ramenés.`, "success");
                         scanned.value = {};
                         outCount.value = 0;
@@ -500,6 +503,15 @@ export const ScanDepartVolView = {
                             }).catch(async () => await navigator.mediaDevices.getUserMedia({ video: { width: { ideal: 1280 } } }));
                             
                             videoPreview.value.srcObject = nativeVideoStream;
+                            // Force le zoom au minimum (certains téléphones ouvrent
+                            // la caméra zoomée par défaut).
+                            try {
+                                const _vt = nativeVideoStream.getVideoTracks()[0];
+                                if (_vt && _vt.getCapabilities) {
+                                    const _caps = _vt.getCapabilities();
+                                    if (_caps && _caps.zoom) await _vt.applyConstraints({ advanced: [{ zoom: _caps.zoom.min || 1 }] });
+                                }
+                            } catch (e) { /* zoom non réglable sur cet appareil */ }
                             videoPreview.value.onloadedmetadata = () => {
                                 videoPreview.value.play();
                                 detectNativeBarcode();

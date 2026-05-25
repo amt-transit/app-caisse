@@ -58,6 +58,12 @@ export const ScanContainerView = {
                 .viewfinder-box::before, .viewfinder-box::after { content: ''; position: absolute; width: 30px; height: 30px; border-color: #f59e0b; border-style: solid; }
                 .viewfinder-box::before { top: -3px; left: -3px; border-width: 4px 0 0 4px; border-radius: 8px 0 0 0; }
                 .viewfinder-box::after { bottom: -3px; right: -3px; border-width: 0 4px 4px 0; border-radius: 0 0 8px 0; }
+                .viewfinder-box { transition: border-color .1s, box-shadow .1s; }
+                .viewfinder-box.flash-ok { border-color:#10b981; box-shadow:0 0 0 9999px rgba(16,185,129,0.30); }
+                .viewfinder-box.flash-ok::before, .viewfinder-box.flash-ok::after { border-color:#10b981; }
+                .viewfinder-box.flash-warn { border-color:#f59e0b; }
+                .viewfinder-box.flash-err { border-color:#ef4444; box-shadow:0 0 0 9999px rgba(239,68,68,0.30); }
+                .viewfinder-box.flash-err::before, .viewfinder-box.flash-err::after { border-color:#ef4444; }
                 
                 .scan-line { position: absolute; top: 0; left: 0; right: 0; height: 2px; background: linear-gradient(90deg, transparent, #f59e0b, transparent); animation: scan-anim 2s ease-in-out infinite; border-radius: 1px; box-shadow: 0 0 8px #f59e0b; }
                 @keyframes scan-anim { 0% { top: 5%; opacity: 1; } 50% { top: 90%; opacity: 0.7; } 100% { top: 5%; opacity: 1; } }
@@ -136,7 +142,7 @@ export const ScanContainerView = {
                     <div id="sw-reader" ref="qrReader" style="display: none; background: #000;"></div>
                     <video ref="videoPreview" autoplay muted playsinline style="display: none;"></video>
                     <div class="viewfinder-overlay">
-                        <div class="viewfinder-box"><div class="scan-line"></div></div>
+                        <div class="viewfinder-box" :class="flash ? 'flash-' + flash : ''"><div class="scan-line"></div></div>
                     </div>
                 </div>
 
@@ -223,21 +229,26 @@ export const ScanContainerView = {
                 const formatMoney = (amount) => globalApp.formatMoney(amount);
                 const showToast = (message, type) => globalApp.showToast(message, type);
 
-                const playBeep = () => {
+                const flash = ref('');
+                let audioCtx = null;
+                const ensureAudio = () => { try { if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)(); if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume(); } catch (e) {} };
+                const playBeep = (type) => {
                     if (!isSoundEnabled.value) return;
                     try {
-                        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-                        const oscillator = audioCtx.createOscillator();
-                        const gainNode = audioCtx.createGain();
-                        oscillator.connect(gainNode);
-                        gainNode.connect(audioCtx.destination);
-                        oscillator.frequency.value = 800;
-                        gainNode.gain.value = 0.3;
-                        oscillator.start();
-                        gainNode.gain.exponentialRampToValueAtTime(0.00001, audioCtx.currentTime + 0.3);
-                        oscillator.stop(audioCtx.currentTime + 0.3);
-                        setTimeout(() => audioCtx.close(), 350);
-                    } catch(e) { console.log("Audio not supported"); }
+                        ensureAudio(); if (!audioCtx) return;
+                        const osc = audioCtx.createOscillator(); const gain = audioCtx.createGain();
+                        osc.connect(gain); gain.connect(audioCtx.destination);
+                        osc.frequency.value = type === 'ok' ? 950 : (type === 'warn' ? 600 : 300);
+                        gain.gain.value = 0.35; osc.start();
+                        gain.gain.exponentialRampToValueAtTime(0.00001, audioCtx.currentTime + 0.3);
+                        osc.stop(audioCtx.currentTime + 0.3);
+                    } catch (e) {}
+                };
+                const feedback = (type) => {
+                    flash.value = type;
+                    setTimeout(() => { if (flash.value === type) flash.value = ''; }, 600);
+                    playBeep(type);
+                    if (navigator.vibrate) navigator.vibrate(type === 'ok' ? [40] : (type === 'warn' ? [40, 40, 40] : [120]));
                 };
 
                 const updateKPIs = () => {
@@ -295,7 +306,7 @@ export const ScanContainerView = {
                     if (isScanningPaused.value) return;
                     if (!selectedContainerId.value) {
                         showToast("⚠️ Sélectionnez d'abord un conteneur !", "error");
-                        if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
+                        feedback('err');
                         return;
                     }
 
@@ -331,15 +342,15 @@ export const ScanContainerView = {
                         if (!snapLiv.empty) {
                             const docId = snapLiv.docs[0].id;
                             const data = snapLiv.docs[0].data();
-                            
+                            logData.description = data.description || '';
+
                             const isAlreadyScanned = data.scanHistory && data.scanHistory.some(s => s.scanRef === text && s.type === 'CONTENEUR_CHARGEMENT');
 
                             if (isAlreadyScanned) {
                                 stats.value.duplicate++;
                                 logData.status = 'DOUBLON';
                                 addRecentScan(text, data.destinataire || data.expediteur || 'Client inconnu', 'Déjà dans ce conteneur', 'warn');
-                                if (isSoundEnabled.value && navigator.vibrate) navigator.vibrate([50, 50, 50]);
-                                else if (isSoundEnabled.value) playBeep();
+                                feedback('warn');
                             } else {
                                 await updateDoc(doc(db, getCollectionName("livraisons"), docId), {
                                     conteneur: selectedContainerId.value,
@@ -362,15 +373,13 @@ export const ScanContainerView = {
                                 stats.value.success++;
                                 logData.status = 'SUCCES';
                                 addRecentScan(text, data.destinataire || data.expediteur || 'Client inconnu', 'Chargé avec succès', 'ok');
-                                if (isSoundEnabled.value && navigator.vibrate) navigator.vibrate([30, 20, 30]);
-                                else if (isSoundEnabled.value) playBeep();
+                                feedback('ok');
                             }
                         } else {
                             stats.value.error++;
                             logData.status = 'ERREUR';
                             addRecentScan(text, 'Non trouvé en base', 'Colis inconnu', 'err');
-                            if (isSoundEnabled.value && navigator.vibrate) navigator.vibrate([100, 50, 100]);
-                            else if (isSoundEnabled.value) playBeep();
+                            feedback('err');
                         }
                     } catch(e) { 
                         console.error(e); 
@@ -493,6 +502,8 @@ export const ScanContainerView = {
                 onMounted(() => {
                     loadContainers();
                     loadScannerScript();
+                    document.addEventListener('touchstart', ensureAudio, { once: true });
+                    document.addEventListener('click', ensureAudio, { once: true });
                 });
 
                 onUnmounted(() => {
@@ -518,6 +529,7 @@ export const ScanContainerView = {
                     manualRef,
                     scanStatusText,
                     isSoundEnabled,
+                    flash,
                     stats,
                     // Refs DOM
                     qrReader,

@@ -97,6 +97,8 @@ export const ScanHistoryView = {
                                 <option value="">Tous les types</option>
                                 <option value="ENTREPOT_PARIS">Mise en entrepôt (Paris)</option>
                                 <option value="CONTENEUR_CHARGEMENT">Chargement Conteneur (Paris)</option>
+                                <option value="DEPART_VOL">Départ vol (Aérien)</option>
+                                <option value="DEPART_VOL_RETOUR">Retour entrepôt (Aérien)</option>
                                 <option value="DECHARGEMENT_ABIDJAN">Déchargement Conteneur (Abidjan)</option>
                                 <option value="MISE_EN_LIVRAISON">Mise en Livraison (Abidjan)</option>
                                 <option value="REMISE_CLIENT">Remise au Client (Abidjan)</option>
@@ -160,6 +162,7 @@ export const ScanHistoryView = {
                                     </th>
                                     <th>⏰ Heure</th>
                                     <th>📱 QR Code</th>
+                                    <th>📋 Nature</th>
                                     <th>📦 Conteneur</th>
                                     <th>📊 Statut</th>
                                     <th>🏷️ Type</th>
@@ -167,14 +170,15 @@ export const ScanHistoryView = {
                                 </tr>
                             </thead>
                             <tbody>
-                                <tr v-if="loading"><td colspan="7" style="text-align: center; padding: 40px;"><i class="fas fa-spinner fa-spin"></i> Chargement du journal...</td></tr>
-                                <tr v-else-if="filteredScans.length === 0"><td colspan="7" style="text-align: center; padding: 40px; color:#64748b;">Aucun log ne correspond à vos filtres.</td></tr>
+                                <tr v-if="loading"><td colspan="8" style="text-align: center; padding: 40px;"><i class="fas fa-spinner fa-spin"></i> Chargement du journal...</td></tr>
+                                <tr v-else-if="filteredScans.length === 0"><td colspan="8" style="text-align: center; padding: 40px; color:#64748b;">Aucun log ne correspond à vos filtres.</td></tr>
                                 <tr v-else v-for="s in filteredScans" :key="s.id" :class="['table-row', selectedIds.includes(s.id) ? 'selected' : '']" @click="toggleRow(s.id)">
                                     <td data-label="Sélect." class="col-checkbox">
                                         <input type="checkbox" class="table-checkbox" :value="s.id" v-model="selectedIds" @click.stop>
                                     </td>
                                     <td data-label="Heure" class="col-time">{{ formatDateStr(s.date) }}</td>
                                     <td data-label="QR Code" class="col-qr"><code>{{ s.scanRef || '-' }}</code></td>
+                                    <td data-label="Nature">{{ s.description || '-' }}</td>
                                     <td data-label="Conteneur" class="col-container">
                                         <span v-if="!s.container || s.container === '-'" style="color:#94a3b8;">-</span>
                                         <span v-else>{{ s.container }}</span>
@@ -258,7 +262,7 @@ export const ScanHistoryView = {
                         if (filters.status && s.status !== filters.status) return false;
                         if (filters.date && (!s.date || !s.date.startsWith(filters.date))) return false;
                         if (filters.search) {
-                            const str = `${s.scanRef || ''} ${s.container || ''} ${s.agent || ''}`.toLowerCase();
+                            const str = `${s.scanRef || ''} ${s.container || ''} ${s.agent || ''} ${s.description || ''}`.toLowerCase();
                             if (!str.includes(filters.search.toLowerCase().trim())) return false;
                         }
                         return true;
@@ -313,6 +317,8 @@ export const ScanHistoryView = {
                 const getTypeLabel = (type) => {
                     if (type === 'ENTREPOT_PARIS') return '🏭 Mise en entrepôt (Paris)';
                     if (type === 'CONTENEUR_CHARGEMENT') return '🚢 Chargement Conteneur (Paris)';
+                    if (type === 'DEPART_VOL') return '✈️ Départ vol (Aérien)';
+                    if (type === 'DEPART_VOL_RETOUR') return '↩️ Retour entrepôt (Aérien)';
                     if (type === 'DECHARGEMENT_ABIDJAN') return '📦 Déchargement (Abidjan)';
                     if (type === 'MISE_EN_LIVRAISON') return '🚚 Mise en Livraison (Abidjan)';
                     if (type === 'REMISE_CLIENT') return '🤝 Remise Client (Abidjan)';

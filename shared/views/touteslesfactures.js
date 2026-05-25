@@ -647,15 +647,22 @@ export const ToutesLesFacturesView = {
                 let lblContainer = liv.conteneur || '-';
 
                 // 2. Vérification individuelle via l'historique des scans
+                // (l'AÉRIEN se suit PAR PIÈCE : Départ vol marque chaque sous-colis).
+                let pieceAerienResolved = false;
                 if (liv.scanHistory && Array.isArray(liv.scanHistory)) {
                     const myScans = liv.scanHistory.filter(s => s.scanRef === lbl);
                     myScans.sort((a, b) => new Date(b.date) - new Date(a.date)); // Du plus récent au plus ancien
 
                     if (myScans.length > 0) {
                         const lastScan = myScans[0];
-                        if (lastScan.type === 'ENTREPOT_PARIS') {
+                        if (lastScan.type === 'ENTREPOT_PARIS' || lastScan.type === 'DEPART_VOL_RETOUR') {
                             lblStatusDisplay = 'Mise en Entrepôt';
                             lblStatusClass = 'colis-paris';
+                            if (liv.modeExpedition === 'aerien') pieceAerienResolved = true; // pièce restée
+                        } else if (lastScan.type === 'DEPART_VOL') {
+                            lblStatusDisplay = 'En vol (Aérien)';
+                            lblStatusClass = 'colis-transit';
+                            pieceAerienResolved = true; // pièce partie
                         } else if (lastScan.type === 'CONTENEUR_CHARGEMENT') {
                             lblStatusDisplay = 'Chargé (Conteneur)';
                             lblStatusClass = 'colis-transit';
@@ -664,8 +671,11 @@ export const ToutesLesFacturesView = {
                     }
                 }
 
-                // 3. Surcharges globales pour les étapes ultérieures
-                if (liv.containerStatus === 'A_VENIR') {
+                // 3. Surcharges globales pour les étapes ultérieures.
+                //    En aérien, si la PIÈCE a déjà son statut (Départ vol), on ne
+                //    l'écrase pas avec le statut global du colis (sinon une pièce
+                //    restée afficherait « en vol » à tort).
+                if (liv.containerStatus === 'A_VENIR' && !pieceAerienResolved) {
                     if (liv.modeExpedition === 'aerien') {
                         lblStatusDisplay = 'En vol (Aérien)';
                     } else if (lblStatusClass === 'colis-transit') {
