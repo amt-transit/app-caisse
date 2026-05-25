@@ -15,6 +15,7 @@ import { ProfilView } from './profil-view.js';
 // --- PARIS VIEWS (Départ) ---
 import { DashboardView as ParisDashboardView } from './paris/js/views/dashboard.js';
 import { NouvelleFactureView } from './paris/js/views/nouvellefacture.js';
+import { FactureAerienView } from './paris/js/views/facture-aerien.js';
 import { ProductsListView } from './paris/js/views/products-list.js';
 import { NouveauDevisView } from './paris/js/views/nouveaudevis.js';
 import { NouveauRdvView } from './paris/js/views/nouveaurdv.js';
@@ -283,6 +284,10 @@ export const app = {
         );
         this.roleHiddenPages = roleHidden;
 
+        // Mode d'expédition courant : certains items n'existent que dans un mode
+        // (ex. « Facture Aérien (Paris) » en aérien remplace « Nouvelle facture »).
+        const _shipMode = sessionStorage.getItem('shippingMode') || 'maritime';
+
         baseOrder.forEach(key => {
             if (!this.allowedMenus.includes(key)) return;
             // Toutes les catégories partageant cette clé (corrige le bug du doublon :
@@ -307,6 +312,10 @@ export const app = {
                     if (hiddenItems.has(item.dataset.page)) { item.style.display = 'none'; return; }
                     // 1-bis) Module masqué pour CE rôle (par-rôle, prioritaire).
                     if (roleHidden.has(item.dataset.page)) { item.style.display = 'none'; return; }
+                    // 1-ter) Visibilité selon le mode d'expédition (Maritime/Aérien),
+                    // appliquée dans les 2 modes (config autoritaire ou non).
+                    if (item.classList.contains('mode-aerien-only') && _shipMode !== 'aerien') { item.style.display = 'none'; return; }
+                    if (item.classList.contains('mode-maritime-only') && _shipMode !== 'maritime') { item.style.display = 'none'; return; }
                     if (configAuthoritative) {
                         // La config fait foi : on affiche tous les items de la catégorie.
                         item.style.display = '';
@@ -685,6 +694,7 @@ export const app = {
 
             // --- Paris Spécifiques (Départ) ---
             'invoice-new': () => NouvelleFactureView.render(this),
+            'invoice-aerien': () => FactureAerienView.render(this),
             'products-list': () => ProductsListView.render(this),
             'quote-new': () => NouveauDevisView.render(this),
             'appointment-new': () => NouveauRdvView.render(this),
