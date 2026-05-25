@@ -161,17 +161,9 @@ export const ConfigInvoiceView = {
                         </div>
 
                         <div class="form-group" style="margin-bottom: 25px;">
-                            <label style="font-weight: 600; font-size: 13px; color: #475569; margin-bottom: 10px; display: block;">🎨 Couleurs de l'interface (Menu & Fond)</label>
-                            <div style="display: flex; gap: 15px;">
-                                <div style="flex: 1;">
-                                    <label style="font-size: 11px; color: #64748b; margin-bottom: 4px; display: block;">Menu latéral (Haut)</label>
-                                    <input type="color" id="ciSecondaryColor" style="width: 100%; height: 40px; border: 1px solid #cbd5e1; border-radius: 8px; cursor: pointer; background: white;">
-                                </div>
-                                <div style="flex: 1;">
-                                    <label style="font-size: 11px; color: #64748b; margin-bottom: 4px; display: block;">Fond de page</label>
-                                    <input type="color" id="ciBgColor" style="width: 100%; height: 40px; border: 1px solid #cbd5e1; border-radius: 8px; cursor: pointer; background: white;">
-                                </div>
-                            </div>
+                            <label style="font-weight: 600; font-size: 13px; color: #475569; margin-bottom: 10px; display: block;">🎨 Bande d'en-tête du document (Facture / Devis / BL)</label>
+                            <input type="color" id="ciHeaderColor" onchange="window.app.views.configInvoice.updatePreview()" style="width: 100%; height: 40px; border: 1px solid #cbd5e1; border-radius: 8px; cursor: pointer; background: white;">
+                            <div style="font-size: 11px; color: #94a3b8; margin-top: 6px;">Le bandeau foncé qui encadre le nom de l'entreprise en haut du document. (Les couleurs du menu et du fond de l'application se règlent dans « Apparence & menus ».)</div>
                         </div>
 
                         <div class="form-group" style="margin-bottom: 15px;">
@@ -321,8 +313,7 @@ export const ConfigInvoiceView = {
             document.getElementById('ciCompany').value = this.config.companyName || '';
             document.getElementById('ciFooter').value = this.config.footer || '';
             document.getElementById('ciCgv').value = this.config.cgv || '';
-                document.getElementById('ciSecondaryColor').value = this.config.secondaryColorHex || '#1e293b';
-                document.getElementById('ciBgColor').value = this.config.bgColorHex || '#f8fafc';
+                document.getElementById('ciHeaderColor').value = this.config.headerColorHex || '#1e293b';
 
             if (this.config.primaryColor && this.config.primaryColorHex) {
                 this.selectColor(this.config.primaryColorHex, this.config.primaryColor);
@@ -434,6 +425,10 @@ export const ConfigInvoiceView = {
             document.getElementById('previewFinancialRecap').style.display = 'flex';
         }
 
+        // Bande d'en-tête (bandeau foncé du document)
+        const headerColor = (document.getElementById('ciHeaderColor') && document.getElementById('ciHeaderColor').value) || '#1e293b';
+        if (header) header.style.backgroundColor = headerColor;
+
         // Application des textes
         document.getElementById('prevCompany').textContent = company;
         document.getElementById('prevFooter').textContent = footer;
@@ -486,8 +481,7 @@ export const ConfigInvoiceView = {
             // géré dans Gestion des agences → ⚙️ Devise & modèle (par route).
             this.config.primaryColor = document.getElementById('ciPrimaryColor').value;
             this.config.primaryColorHex = document.getElementById('ciHexColor').value;
-            this.config.secondaryColorHex = document.getElementById('ciSecondaryColor').value;
-            this.config.bgColorHex = document.getElementById('ciBgColor').value;
+            this.config.headerColorHex = document.getElementById('ciHeaderColor').value;
             
             await setDoc(this.docRef, this.config, { merge: true });
             this.app.showToast("Modèle de facture enregistré avec succès !", "success");

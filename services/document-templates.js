@@ -33,6 +33,12 @@ export function createDocumentTemplates({ showToast, calculateMagasinageFee }) {
         } catch (e) { return null; }
     }
 
+    // Couleur de la bande d'en-tête (réglée dans Choix Facture). Défaut bleu nuit.
+    function hexToRgb(hex) {
+        const m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(String(hex || ''));
+        return m ? [parseInt(m[1], 16), parseInt(m[2], 16), parseInt(m[3], 16)] : [30, 41, 59];
+    }
+
     // --- Bon de livraison ---
     async function printDeliverySlip(d) {
         if (!d) return;
@@ -69,7 +75,7 @@ export function createDocumentTemplates({ showToast, calculateMagasinageFee }) {
         const pageWidth = doc2.internal.pageSize.getWidth();
 
         // --- En-tête Graphique ---
-        doc2.setFillColor(30, 41, 59);
+        doc2.setFillColor(...(invoiceConfig?.headerColorHex ? hexToRgb(invoiceConfig.headerColorHex) : [30, 41, 59]));
         doc2.rect(0, 0, pageWidth, 35, 'F');
 
         let accentColor = invoiceConfig?.primaryColor ? JSON.parse(invoiceConfig.primaryColor) : [16, 185, 129];
@@ -256,7 +262,7 @@ export function createDocumentTemplates({ showToast, calculateMagasinageFee }) {
         }
 
         // --- En-tête Graphique ---
-        doc2.setFillColor(30, 41, 59);
+        doc2.setFillColor(...(invoiceConfig?.headerColorHex ? hexToRgb(invoiceConfig.headerColorHex) : [30, 41, 59]));
         doc2.rect(0, 0, pageWidth, 35, 'F');
 
         let accentColor = invoiceConfig?.primaryColor ? JSON.parse(invoiceConfig.primaryColor) : [59, 130, 246];
