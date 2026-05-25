@@ -194,6 +194,12 @@ export const SettingsRolesMenusView = {
                 .mn-sub input { width:15px; height:15px; accent-color:#4f46e5; }
                 .mn-sub-n { flex:1; font-weight:600; color:#0f172a; }
                 .mn-sub-s { font-size:10px; font-weight:800; color:#94a3b8; text-transform:uppercase; }
+                .mn-modes { display:inline-flex; gap:2px; }
+                .mn-modes button { border:1px solid #e2e8f0; background:#fff; border-radius:6px; font-size:11px; padding:2px 5px; cursor:pointer; line-height:1; }
+                .mn-modes button.on { background:#eef2ff; border-color:#6366f1; box-shadow:0 0 0 1px #6366f1 inset; }
+                .mn-modes button:not(.on) { opacity:.45; }
+                .mn-aerien-flag { display:flex; align-items:center; gap:10px; padding:12px 14px; background:#eef2ff; border:1px solid #c7d2fe; border-radius:10px; font-size:13px; font-weight:600; color:#3730a3; grid-column:1/-1; }
+                .mn-aerien-flag input { width:18px; height:18px; accent-color:#4f46e5; }
                 .mn-role-grp { margin-bottom:8px; }
                 .mn-role-menus .mn-subs { margin-left:22px; grid-template-columns:repeat(auto-fill,minmax(190px,1fr)); }
                 .mn-row { display:flex; align-items:center; gap:14px; background:white; border:1px solid #e2e8f0; border-radius:14px; padding:14px 16px; transition:.18s; }
@@ -296,7 +302,11 @@ export const SettingsRolesMenusView = {
                                 <input type="checkbox" :checked="isItemVisible(it.page)" @change="toggleItem(it.page)">
                                 <span class="mn-sub-n">{{ it.label }}</span>
                                 <span v-if="scopeBadge(it.scope)" class="mn-scope" :class="'sc-' + it.scope">{{ scopeBadge(it.scope) }}</span>
-                                <span class="mn-sub-s">{{ isItemVisible(it.page) ? 'affiché' : 'masqué' }}</span>
+                                <span class="mn-modes" @click.stop>
+                                    <button type="button" :class="{on: itemModeOf(it.page)==='both'}" @click.prevent="setItemMode(it.page,'both')" title="Maritime et Aérien">⇄</button>
+                                    <button type="button" :class="{on: itemModeOf(it.page)==='maritime'}" @click.prevent="setItemMode(it.page,'maritime')" title="Maritime seulement">🚢</button>
+                                    <button type="button" :class="{on: itemModeOf(it.page)==='aerien'}" @click.prevent="setItemMode(it.page,'aerien')" title="Aérien seulement">✈️</button>
+                                </span>
                             </label>
                         </div>
                     </div>
@@ -352,6 +362,10 @@ export const SettingsRolesMenusView = {
                                 <div class="mn-fld"><label>Nom du rôle *</label><input type="text" v-model="roleForm.name" @input="autoFillId" placeholder="Ex: Comptable"></div>
                                 <div class="mn-fld"><label>Identifiant *</label><input type="text" v-model="roleForm.id" :disabled="isEditing" style="font-family:monospace;" placeholder="comptable"></div>
                                 <div class="mn-fld" style="grid-column:1/-1;"><label>Description</label><textarea v-model="roleForm.description" rows="3" placeholder="Rôle de cet utilisateur ?"></textarea></div>
+                                <label class="mn-aerien-flag" style="grid-column:1/-1;">
+                                    <input type="checkbox" v-model="roleForm.aerien">
+                                    <span>✈️ Ce rôle peut utiliser l'<b>aérien</b> (sinon le bouton ✈️ Aérien lui est masqué)</span>
+                                </label>
                             </div>
                             <div v-show="activeTab==='menus'">
                                 <p style="font-size:13px;color:#475569;background:white;padding:12px;border-radius:8px;border:1px solid #e2e8f0;">Cochez les <b>sections</b> visibles pour ce rôle. Une section cochée se déplie : <b>décochez les pages</b> que ce rôle ne doit pas voir (tout est visible par défaut).</p>
@@ -408,7 +422,7 @@ export const SettingsRolesMenusView = {
                 const agencyName = (AGENCIES[activeAgency] && AGENCIES[activeAgency].name) || activeAgency;
 
                 const roles = ref([]);
-                const menuConfig = reactive({ order: [], roles: {}, visibleMenus: [], hiddenItems: [], roleHiddenItems: {} });
+                const menuConfig = reactive({ order: [], roles: {}, visibleMenus: [], hiddenItems: [], roleHiddenItems: {}, itemModes: {}, roleAerien: {} });
                 const expanded = reactive({});
                 const loadingRoles = ref(true);
                 const loadingMenus = ref(true);
@@ -417,7 +431,7 @@ export const SettingsRolesMenusView = {
                 const isEditing = ref(false);
                 const savingRole = ref(false);
                 const activeTab = ref('info');
-                const roleForm = reactive({ id: '', name: '', description: '', menus: [], permissions: [], hiddenPages: [] });
+                const roleForm = reactive({ id: '', name: '', description: '', menus: [], permissions: [], hiddenPages: [], aerien: true });
                 const draggedIndex = ref(null);
                 let unsubs = [];
 
@@ -453,6 +467,8 @@ export const SettingsRolesMenusView = {
                             menuConfig.roles = rolesMig;
                             menuConfig.hiddenItems = data.hiddenItems || [];
                             menuConfig.roleHiddenItems = data.roleHiddenItems || {};
+                            menuConfig.itemModes = data.itemModes || {};
+                            menuConfig.roleAerien = data.roleAerien || {};
                         }
                         // Garantir que tous les menus connus sont présents dans l'ordre.
                         const seen = new Set(menuConfig.order);
@@ -478,6 +494,13 @@ export const SettingsRolesMenusView = {
                     const i = menuConfig.hiddenItems.indexOf(page);
                     if (i > -1) menuConfig.hiddenItems.splice(i, 1); // ré-affiche
                     else menuConfig.hiddenItems.push(page);          // masque
+                };
+
+                // --- Portée Maritime / Aérien par module ('both' par défaut) ---
+                const itemModeOf = (page) => menuConfig.itemModes[page] || 'both';
+                const setItemMode = (page, mode) => {
+                    if (mode === 'both') delete menuConfig.itemModes[page];
+                    else menuConfig.itemModes[page] = mode;
                 };
 
                 // --- Pages masquées par RÔLE (dans le formulaire de rôle) ---
@@ -518,6 +541,7 @@ export const SettingsRolesMenusView = {
                             order: Array.from(menuConfig.order),
                             visibleMenus: Array.from(menuConfig.visibleMenus),
                             hiddenItems: Array.from(menuConfig.hiddenItems),
+                            itemModes: { ...menuConfig.itemModes },
                         }, { merge: true });
                         globalApp.showToast(
                             menuConfig.visibleMenus.length
@@ -540,6 +564,7 @@ export const SettingsRolesMenusView = {
                 const openRoleForm = () => {
                     roleForm.id = ''; roleForm.name = ''; roleForm.description = '';
                     roleForm.menus = []; roleForm.permissions = []; roleForm.hiddenPages = [];
+                    roleForm.aerien = true;
                     isEditing.value = false; activeTab.value = 'info'; showRoleForm.value = true;
                 };
                 const editRole = (role) => {
@@ -559,6 +584,8 @@ export const SettingsRolesMenusView = {
                     // Pages masquées pour ce rôle (liste noire) chargées depuis la config.
                     roleForm.hiddenPages = (menuConfig.roleHiddenItems && menuConfig.roleHiddenItems[role.id])
                         ? [...menuConfig.roleHiddenItems[role.id]] : [];
+                    // Accès aérien : autorisé par défaut (sauf si explicitement à false).
+                    roleForm.aerien = !(menuConfig.roleAerien && menuConfig.roleAerien[role.id] === false);
                     isEditing.value = true; activeTab.value = 'info'; showRoleForm.value = true;
                 };
                 const saveRole = async () => {
@@ -575,9 +602,12 @@ export const SettingsRolesMenusView = {
                         menuConfig.roles[cleanId] = Array.from(roleForm.menus);
                         if (!menuConfig.roleHiddenItems) menuConfig.roleHiddenItems = {};
                         menuConfig.roleHiddenItems[cleanId] = Array.from(roleForm.hiddenPages);
+                        if (!menuConfig.roleAerien) menuConfig.roleAerien = {};
+                        menuConfig.roleAerien[cleanId] = !!roleForm.aerien;
                         await setDoc(menuDocRef, {
                             roles: menuConfig.roles,
                             roleHiddenItems: menuConfig.roleHiddenItems,
+                            roleAerien: menuConfig.roleAerien,
                         }, { merge: true });
                         globalApp.showToast("Rôle enregistré ✔", "success");
                         if (globalApp.applyMenuConfig) globalApp.applyMenuConfig(menuConfig);
@@ -592,9 +622,11 @@ export const SettingsRolesMenusView = {
                         await deleteDoc(doc(db, "roles", id));
                         delete menuConfig.roles[id];
                         if (menuConfig.roleHiddenItems) delete menuConfig.roleHiddenItems[id];
+                        if (menuConfig.roleAerien) delete menuConfig.roleAerien[id];
                         await setDoc(menuDocRef, {
                             roles: menuConfig.roles,
                             roleHiddenItems: menuConfig.roleHiddenItems || {},
+                            roleAerien: menuConfig.roleAerien || {},
                         }, { merge: true });
                         globalApp.showToast("Rôle supprimé.", "success");
                     } catch (e) { globalApp.showToast("Erreur", "error"); }
@@ -603,7 +635,7 @@ export const SettingsRolesMenusView = {
                 return {
                     MENU_META, agencyName, roles, menuConfig, loadingRoles, loadingMenus,
                     expanded, itemsOf, toggleExpand, isItemVisible, toggleItem, scopeBadge,
-                    rolePageOn, toggleRolePage,
+                    rolePageOn, toggleRolePage, itemModeOf, setItemMode,
                     savingMenus, showRoleForm, isEditing, savingRole, activeTab, roleForm, draggedIndex,
                     groupedPermissions, metaOf, isProtectedRole, isMenuVisible, toggleVisibleMenu,
                     showAll, resetAuto, onDragStart, onDrop, onDragEnd, saveMenus,

@@ -316,6 +316,10 @@ export const app = {
                     // appliquée dans les 2 modes (config autoritaire ou non).
                     if (item.classList.contains('mode-aerien-only') && _shipMode !== 'aerien') { item.style.display = 'none'; return; }
                     if (item.classList.contains('mode-maritime-only') && _shipMode !== 'maritime') { item.style.display = 'none'; return; }
+                    // 1-quater) Portée Maritime/Aérien configurée par module dans
+                    // « Rôles & Menus » (itemModes : 'maritime' | 'aerien' | 'both').
+                    const _im = (config && config.itemModes) ? config.itemModes[item.dataset.page] : null;
+                    if (_im && _im !== 'both' && _im !== _shipMode) { item.style.display = 'none'; return; }
                     if (configAuthoritative) {
                         // La config fait foi : on affiche tous les items de la catégorie.
                         item.style.display = '';
@@ -328,6 +332,21 @@ export const app = {
                 navContainer.appendChild(section);
             });
         });
+
+        // Accès AÉRIEN par rôle : si ce rôle n'a pas l'aérien, on masque le
+        // bouton « ✈️ Aérien » (bascule de mode). super_admin = toujours autorisé.
+        let _ra;
+        if (config && config.roleAerien) {
+            _ra = (config.roleAerien[userRole] !== undefined) ? config.roleAerien[userRole] : config.roleAerien[ur];
+        }
+        const _aerienAllowed = isSuperUser || _ra !== false;
+        const _aerienBtn = document.querySelector('.shipping-mode-toggle [data-mode="aerien"]');
+        if (_aerienBtn) _aerienBtn.style.display = _aerienAllowed ? '' : 'none';
+        if (!_aerienAllowed && _shipMode === 'aerien') {
+            sessionStorage.setItem('shippingMode', 'maritime');
+            location.reload();
+            return;
+        }
 
         // La page courante n'est pas accessible (ex. tableau de bord masqué pour
         // ce rôle) : on bascule vers la PREMIÈRE page réellement accessible.

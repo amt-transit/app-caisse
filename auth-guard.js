@@ -284,7 +284,7 @@ onAuthStateChanged(auth, async (user) => {
         const smBtn = (m, label) => {
             const on = shippingMode === m;
             const onCss = m === 'maritime' ? 'background:#0369a1;color:#fff;' : 'background:#7c3aed;color:#fff;';
-            return `<button type="button" onclick="window.setShippingMode('${m}')" title="Mode ${label}" style="border:none;cursor:pointer;font-size:12px;font-weight:700;padding:5px 9px;border-radius:6px;${on ? onCss : 'background:transparent;color:#475569;'}">${label}</button>`;
+            return `<button type="button" data-mode="${m}" onclick="window.setShippingMode('${m}')" title="Mode ${label}" style="border:none;cursor:pointer;font-size:12px;font-weight:700;padding:5px 9px;border-radius:6px;${on ? onCss : 'background:transparent;color:#475569;'}">${label}</button>`;
         };
         const shippingToggleHtml = `
             <div class="shipping-mode-toggle" title="Mode d'expédition" style="display:flex;gap:4px;background:#f1f5f9;border:1px solid #e2e8f0;border-radius:8px;padding:3px;">
