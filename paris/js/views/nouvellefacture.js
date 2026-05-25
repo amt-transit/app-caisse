@@ -191,14 +191,25 @@ export const NouvelleFactureView = {
                                            style="width:100%; padding:10px; border:1px solid #cbd5e1; border-radius:8px; box-sizing:border-box; text-align:center;">
                                 </div>
                                 <div>
-                                    <!-- AÉRIEN : poids (kg) par ligne -->
+                                    <!-- AÉRIEN : poids (kg) par ligne. Paris : type (poids/forfait) + dimensions (poids volume). -->
                                     <template v-if="shippingMode === 'aerien'">
-                                        <label v-if="idx === 0" style="font-size:11px; color:#64748b;">Poids (kg) U *</label>
-                                        <input type="number" min="0" step="0.1"
+                                        <label v-if="idx === 0" style="font-size:11px; color:#64748b;">{{ isParisAerien ? 'Type / Poids *' : 'Poids (kg) U *' }}</label>
+                                        <select v-if="isParisAerien" v-model="item.type" @change="updateItem(item, 'type')"
+                                                style="width:100%; padding:8px; border:1px solid #cbd5e1; border-radius:8px; box-sizing:border-box; margin-bottom:4px; font-size:12px; background:#fff;">
+                                            <option value="poids">Au poids</option>
+                                            <option value="chaussures">Forfait chaussures</option>
+                                        </select>
+                                        <input v-if="!(isParisAerien && item.type === 'chaussures')" type="number" min="0" step="0.1"
                                                v-model.number="item.poids"
                                                @input="updateItem(item, 'poids')"
                                                placeholder="kg"
                                                style="width:100%; padding:10px; border:1px solid #cbd5e1; border-radius:8px; box-sizing:border-box; text-align:right;">
+                                        <div v-if="isParisAerien && item.type !== 'chaussures'" style="display:flex; gap:4px; margin-top:4px;">
+                                            <input type="number" min="0" v-model.number="item.lng" @input="updateItem(item, 'dim')" placeholder="L" title="Longueur (cm)" style="width:33%; padding:6px; border:1px solid #cbd5e1; border-radius:6px; box-sizing:border-box; text-align:center; font-size:12px;">
+                                            <input type="number" min="0" v-model.number="item.lrg" @input="updateItem(item, 'dim')" placeholder="l" title="Largeur (cm)" style="width:33%; padding:6px; border:1px solid #cbd5e1; border-radius:6px; box-sizing:border-box; text-align:center; font-size:12px;">
+                                            <input type="number" min="0" v-model.number="item.haut" @input="updateItem(item, 'dim')" placeholder="H" title="Hauteur (cm)" style="width:33%; padding:6px; border:1px solid #cbd5e1; border-radius:6px; box-sizing:border-box; text-align:center; font-size:12px;">
+                                        </div>
+                                        <div v-if="isParisAerien && item.type !== 'chaussures' && lineBilledKg(item) > (parseFloat(item.poids) || 0)" style="font-size:10px; color:#c2410c; margin-top:2px; text-align:right;">poids volume : {{ lineBilledKg(item).toFixed(1) }} kg</div>
                                     </template>
                                     <!-- CHINE MARITIME : P.U remplacé par CBM (calcul auto) -->
                                     <template v-else-if="autoPricingActive">
@@ -221,7 +232,7 @@ export const NouvelleFactureView = {
                                 <div class="nf-total-col">
                                     <template v-if="shippingMode === 'aerien'">
                                         <label v-if="idx === 0" style="font-size:11px; color:#64748b;">Total (CFA)</label>
-                                        <input type="text" readonly :value="Math.round((parseFloat(item.poids)||0) * (parseFloat(item.qty)||0) * (form.aerienType==='express' ? tarifs.kgAerienExpress : tarifs.kgAerienNormal)).toLocaleString('fr-FR')"
+                                        <input type="text" readonly :value="lineTotalCfaAerien(item).toLocaleString('fr-FR')"
                                                style="width:100%; padding:10px; border:1px solid #e2e8f0; border-radius:8px; box-sizing:border-box; text-align:right; font-weight:bold; background:#f8fafc;">
                                     </template>
                                     <template v-else-if="autoPricingActive">
@@ -245,6 +256,16 @@ export const NouvelleFactureView = {
                                 </div>
                             </div>
                         </div>
+                    </div>
+                </div>
+
+                <!-- RECONDITIONNEMENT (Paris aérien) : nombre de colis annoncés -->
+                <div v-if="isParisAerien" class="form-card" style="box-shadow: 0 2px 4px rgba(0,0,0,0.02); margin-bottom: 20px;">
+                    <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
+                        <label style="font-weight:600; font-size:13px; color:#475569; margin:0;">📦 Nombre de colis expédiés</label>
+                        <input type="number" min="0" v-model.number="form.nbColisExpedies" :placeholder="totalColisAuto"
+                               style="width:110px; padding:10px; border:1px solid #cbd5e1; border-radius:8px; text-align:center; font-weight:700;">
+                        <span style="font-size:12px; color:#94a3b8;">Vide = {{ totalColisAuto }} (somme des quantités). À renseigner si plusieurs colis sont regroupés dans un carton (reconditionnement).</span>
                     </div>
                 </div>
 
@@ -298,7 +319,10 @@ export const NouvelleFactureView = {
 
                             <div style="font-size:12px; color:#475569; margin-bottom:6px;">
                                 Calcul :
-                                <template v-if="shippingMode === 'aerien'">
+                                <template v-if="shippingMode === 'aerien' && isParisAerien">
+                                    Somme des lignes (poids facturé × tarif + forfaits)
+                                </template>
+                                <template v-else-if="shippingMode === 'aerien'">
                                     {{ (parseFloat(form.poids)||0) }} kg × {{ (form.aerienType==='express' ? tarifs.kgAerienExpress : tarifs.kgAerienNormal).toLocaleString('fr-FR') }} CFA
                                 </template>
                                 <template v-else>
@@ -462,6 +486,7 @@ initVue(globalApp) {
                 parrainId: '',
                 poids: '',            // Aérien : poids en kg
                 aerienType: 'normal', // 'normal' | 'express'
+                nbColisExpedies: '',  // Aérien Paris : nb de colis annoncés (reconditionnement)
                 totalCfa: 0           // Total facturé (CFA) en mode auto, modifiable
             });
 
@@ -489,7 +514,36 @@ initVue(globalApp) {
             // = Poids(kg) × tarif Normal/Express. Sinon : facturation EUR
             // historique inchangée. Le total auto reste MODIFIABLE.
             const shippingMode = sessionStorage.getItem('shippingMode') || 'maritime';
-            const tarifs = reactive({ cbmChine: 250000, kgAerienNormal: 12000, kgAerienExpress: 14000 });
+            const tarifs = reactive({ cbmChine: 250000, kgAerienNormal: 12000, kgAerienExpress: 14000, forfaitChaussuresEur: 23 });
+
+            // Modèle aérien ENRICHI réservé au DÉPART Paris : poids volume +
+            // forfait chaussures. Les autres routes aériennes (chine) restent au
+            // poids réel (inchangé).
+            const activeAgencyNF = sessionStorage.getItem('currentActiveAgency') || 'paris';
+            const isParisAerien = shippingMode === 'aerien' && activeAgencyNF === 'paris';
+            // Poids facturé d'une ligne = max(poids réel, poids volume) ; le poids
+            // volume (L×l×H cm ÷ 5000) n'est pris en compte qu'au départ Paris.
+            const lineBilledKg = (item) => {
+                let kg = parseFloat(item.poids) || 0;
+                if (isParisAerien) {
+                    const vol = ((parseFloat(item.lng) || 0) * (parseFloat(item.lrg) || 0) * (parseFloat(item.haut) || 0)) / 5000;
+                    if (vol > kg) kg = vol;
+                }
+                return kg;
+            };
+            // Total CFA d'une ligne aérienne : forfait chaussures (€→CFA) si la
+            // ligne est de ce type (Paris), sinon poids facturé × tarif/kg.
+            const lineTotalCfaAerien = (item) => {
+                const qty = parseFloat(item.qty) || 0;
+                if (isParisAerien && item.type === 'chaussures') {
+                    return Math.round((tarifs.forfaitChaussuresEur || 0) * CONSTANTS.TAUX_CONVERSION * qty);
+                }
+                const rate = form.aerienType === 'express' ? tarifs.kgAerienExpress : tarifs.kgAerienNormal;
+                return Math.round(lineBilledKg(item) * qty * (rate || 0));
+            };
+            // Lignes d'articles (déclaré AVANT autoTotalCFA qui les agrège, sinon
+            // "Cannot access 'items' before initialization" via le watch immédiat).
+            const items = ref([{ id: Date.now(), desc: '', qty: 1, pu: '', total: 0, vol: '', poids: '', type: 'poids', lng: '', lrg: '', haut: '', showSugg: false }]);
             // Modèle de facturation de l'AGENCE (réglé dans Config Facture).
             // 'paris' = facturation EUR historique ; 'chine' = CBM maritime.
             // Défaut 'paris' (aucun changement pour l'existant). Chargé en
@@ -499,9 +553,10 @@ initVue(globalApp) {
                 shippingMode === 'aerien' || (shippingMode === 'maritime' && factureModel.value === 'chine'));
             const autoTotalCFA = computed(() => {
                 if (shippingMode === 'aerien') {
-                    const kg = parseFloat(form.poids) || 0;
-                    const rate = form.aerienType === 'express' ? tarifs.kgAerienExpress : tarifs.kgAerienNormal;
-                    return Math.round(kg * (rate || 0));
+                    // Somme des totaux par ligne (gère poids volume + forfait
+                    // chaussures côté Paris ; identique au calcul poids×tarif
+                    // pour les autres routes aériennes).
+                    return items.value.reduce((s, i) => s + lineTotalCfaAerien(i), 0);
                 }
                 if (shippingMode === 'maritime' && factureModel.value === 'chine') {
                     const cbm = parseFloat(form.volume) || 0;
@@ -518,9 +573,7 @@ initVue(globalApp) {
                     demarcheurs.value = s.docs.map(d => ({ id: d.id, ...d.data() }));
                 }).catch(e => console.warn('Chargement démarcheurs:', e));
             }
-            
-            const items = ref([{ id: Date.now(), desc: '', qty: 1, pu: '', total: 0, vol: '', poids: '', showSugg: false }]);
-            
+
             // Feedback states
             const expFeedback = ref('');
             const destFeedback = ref('');
@@ -605,6 +658,7 @@ initVue(globalApp) {
                         if (t.cbmChine != null) tarifs.cbmChine = Number(t.cbmChine) || tarifs.cbmChine;
                         if (t.kgAerienNormal != null) tarifs.kgAerienNormal = Number(t.kgAerienNormal) || tarifs.kgAerienNormal;
                         if (t.kgAerienExpress != null) tarifs.kgAerienExpress = Number(t.kgAerienExpress) || tarifs.kgAerienExpress;
+                        if (t.forfaitChaussuresEur != null) tarifs.forfaitChaussuresEur = Number(t.forfaitChaussuresEur) || tarifs.forfaitChaussuresEur;
                     }
                     // Modèle de facturation de l'agence (Paris par défaut).
                     const _ag = sessionStorage.getItem('currentActiveAgency') || 'paris';
@@ -844,7 +898,7 @@ initVue(globalApp) {
                 }
             };
 
-            const addRow = () => items.value.push({ id: Date.now(), desc: '', qty: 1, pu: '', total: 0, vol: '', poids: '', showSugg: false });
+            const addRow = () => items.value.push({ id: Date.now(), desc: '', qty: 1, pu: '', total: 0, vol: '', poids: '', type: 'poids', lng: '', lrg: '', haut: '', showSugg: false });
             const removeRow = (id) => { if (items.value.length > 1) items.value = items.value.filter(i => i.id !== id); };
 
             const updateItem = (item, field) => {
@@ -863,12 +917,19 @@ initVue(globalApp) {
                     // Autres modèles : ne pas écraser une saisie manuelle par 0.
                     form.volume = parseFloat(totalVol.toFixed(2));
                 }
-                // Aérien : poids total = somme (poids par ligne × qté).
-                form.poids = items.value.reduce((sum, i) => sum + ((parseFloat(i.poids) || 0) * (parseFloat(i.qty) || 0)), 0);
+                // Aérien : poids total = somme du poids FACTURÉ (max réel/volume)
+                // par ligne × qté. Les lignes "forfait chaussures" (Paris) ne
+                // comptent pas de poids.
+                form.poids = items.value.reduce((sum, i) => {
+                    if (isParisAerien && i.type === 'chaussures') return sum;
+                    return sum + (lineBilledKg(i) * (parseFloat(i.qty) || 0));
+                }, 0);
             };
 
             const totalFret = computed(() => items.value.reduce((sum, item) => sum + item.total, 0));
             const resteAPayer = computed(() => totalFret.value - (parseFloat(form.montantPaye) || 0));
+            // Nb de colis "par défaut" = somme des quantités (avant reconditionnement).
+            const totalColisAuto = computed(() => items.value.reduce((s, i) => s + (parseInt(i.qty) || 0), 0));
 
             const submitInvoice = async () => {
                 if (!form.expediteur || !form.destinataire || !form.agence || items.value[0].desc === '') {
@@ -1011,6 +1072,8 @@ initVue(globalApp) {
                 }
 
                 const totalColis = items.value.reduce((sum, item) => sum + item.qty, 0);
+                // Reconditionnement : nb de colis annoncés (si saisi), sinon = somme des quantités.
+                const nbColisExp = (parseInt(form.nbColisExpedies) > 0) ? parseInt(form.nbColisExpedies) : totalColis;
                 const generatedLabels = [];
                 const printLabelsData = [];
                 let labelIndex = 1;
@@ -1032,7 +1095,7 @@ initVue(globalApp) {
                     ref: ref, labels: generatedLabels, conteneur: conteneurCode, volumeCBM: volumeCBM,
                     expediteur: finalExpName, destinataire: finalDestName, numero: destPhone, lieuLivraison: lieuLivraison,
                     description: items.value.map(i => `${i.qty}x ${i.desc}`).join(', '),
-                    quantite: totalColis, montant: resteCFA + " CFA", prixOriginal: totalCFA + " CFA",
+                    quantite: totalColis, nbColisExpedies: nbColisExp, montant: resteCFA + " CFA", prixOriginal: totalCFA + " CFA",
                     status: "EN_ATTENTE", containerStatus: "PARIS", agency: activeAgency, dateAjout: new Date(dateIso).toISOString(),
                     modeExpedition: shippingMode,
                     poids: shippingMode === 'aerien' ? (parseFloat(form.poids) || 0) : null,
@@ -1047,7 +1110,7 @@ initVue(globalApp) {
                     adresseDestinataire: lieuLivraison, conteneur: conteneurCode, volumeCBM: volumeCBM, date: dateIso,
                     prix: totalCFA, montantParis: payeCFA, montantAbidjan: 0, reste: -resteCFA,
                     modePaiement: form.modePay, description: items.value.map(i => `${i.qty}x ${i.desc}`).join(', '),
-                    items: items.value, quantite: totalColis, agency: activeAgency, isDeleted: false,
+                    items: items.value, quantite: totalColis, nbColisExpedies: nbColisExp, agency: activeAgency, isDeleted: false,
                     saisiPar: userName,
                     modeExpedition: shippingMode,
                     poids: shippingMode === 'aerien' ? (parseFloat(form.poids) || 0) : null,
@@ -1137,9 +1200,9 @@ initVue(globalApp) {
                     // recharger la page : données déjà chargées conservées.
                     form.expediteur = ''; form.destinataire = ''; form.lieu = '';
                     form.montantPaye = 0; form.comment = ''; form.valeur = '';
-                    form.poids = ''; form.totalCfa = 0; form.parrainId = '';
+                    form.poids = ''; form.totalCfa = 0; form.parrainId = ''; form.nbColisExpedies = '';
                     form.date = new Date().toISOString().split('T')[0];
-                    items.value = [{ id: Date.now(), desc: '', qty: 1, pu: '', total: 0, vol: '', poids: '', showSugg: false }];
+                    items.value = [{ id: Date.now(), desc: '', qty: 1, pu: '', total: 0, vol: '', poids: '', type: 'poids', lng: '', lrg: '', haut: '', showSugg: false }];
                     expFeedback.value = ''; destFeedback.value = '';
                     userTouchedTotal.value = false;
                     showExpSugg.value = false; showDestSugg.value = false; showLieuSugg.value = false;
@@ -1163,6 +1226,7 @@ initVue(globalApp) {
                 destinationAgencies, affiliationActive, demarcheurs,
                 clientModal, openClientModal, closeClientModal, saveClientFromModal,
                 shippingMode, autoPricingActive, autoTotalCFA, userTouchedTotal, resetAutoTotal, tarifs,
+                isParisAerien, lineBilledKg, lineTotalCfaAerien, totalColisAuto,
                 currentAerienLot, groupingCode
             };
         }
