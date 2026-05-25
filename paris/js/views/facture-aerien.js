@@ -98,16 +98,11 @@ export const FactureAerienView = {
                                 Aucune destination configurée pour cette agence. Ajoutez-en une dans « Gestion des agences ».
                             </small>
                         </div>
-                        <div class="form-group">
-                            <label>Mode Facture *</label>
-                            <select v-model="form.factureMode">
-                                <option value="valeur">À la valeur (prix saisi)</option>
-                                <option value="poids">Poids réel ou volume</option>
-                            </select>
-                            <small style="color:#64748b; font-size:11px;">
-                                <template v-if="form.factureMode === 'valeur'">Prix unitaire saisi à la main (téléphones, chaussures, ordinateurs…).</template>
-                                <template v-else>13 €/kg (15 €/kg parfum/alcool) × le plus grand du poids réel ou du poids volume.</template>
-                            </small>
+                        <div class="form-group" style="grid-column: 1 / -1;">
+                            <label>Tarification</label>
+                            <div style="font-size:12px; color:#64748b; padding:10px; background:#f8fafc; border:1px dashed #cbd5e1; border-radius:8px;">
+                                Le mode se choisit <b>par colis</b> dans la liste ci-dessous : « À la valeur » (prix saisi à la main) ou « Poids / volume » (13 €/kg, 15 €/kg parfum/alcool, sur le plus grand du poids réel ou du poids volume). Le <b>poids</b> est à renseigner pour chaque colis, même à la valeur.
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -209,23 +204,25 @@ export const FactureAerienView = {
                                            style="width:100%; padding:10px; border:1px solid #cbd5e1; border-radius:8px; box-sizing:border-box; text-align:center;">
                                 </div>
                                 <div>
-                                    <!-- À LA VALEUR : prix unitaire saisi en € -->
-                                    <template v-if="form.factureMode === 'valeur'">
-                                        <label v-if="idx === 0" style="font-size:11px; color:#64748b;">P.U (€) *</label>
-                                        <input type="number" min="0" step="0.01"
-                                               v-model.number="item.pu"
-                                               @input="updateItem(item, 'pu')"
-                                               placeholder="€"
-                                               style="width:100%; padding:10px; border:1px solid #cbd5e1; border-radius:8px; box-sizing:border-box; text-align:right;">
-                                    </template>
-                                    <!-- POIDS RÉEL OU VOLUME : poids + dimensions + parfum/alcool -->
-                                    <template v-else>
-                                        <label v-if="idx === 0" style="font-size:11px; color:#64748b;">Poids (kg) *</label>
-                                        <input type="number" min="0" step="0.1"
-                                               v-model.number="item.poids"
-                                               @input="updateItem(item, 'poids')"
-                                               placeholder="kg"
-                                               style="width:100%; padding:10px; border:1px solid #cbd5e1; border-radius:8px; box-sizing:border-box; text-align:right;">
+                                    <!-- Mode PAR COLIS : à la valeur (P.U) ou poids/volume. Le poids
+                                         est saisi DANS TOUS LES CAS (pour le magasin/expédition). -->
+                                    <label v-if="idx === 0" style="font-size:11px; color:#64748b;">Mode / Tarif *</label>
+                                    <select v-model="item.mode" @change="updateItem(item, 'mode')"
+                                            style="width:100%; padding:8px; border:1px solid #cbd5e1; border-radius:8px; box-sizing:border-box; margin-bottom:4px; font-size:12px; background:#fff;">
+                                        <option value="valeur">À la valeur</option>
+                                        <option value="poids">Poids / volume</option>
+                                    </select>
+                                    <input v-if="item.mode === 'valeur'" type="number" min="0" step="0.01"
+                                           v-model.number="item.pu"
+                                           @input="updateItem(item, 'pu')"
+                                           placeholder="Prix € (P.U)"
+                                           style="width:100%; padding:10px; border:1px solid #cbd5e1; border-radius:8px; box-sizing:border-box; text-align:right; margin-bottom:4px;">
+                                    <input type="number" min="0" step="0.1"
+                                           v-model.number="item.poids"
+                                           @input="updateItem(item, 'poids')"
+                                           placeholder="Poids (kg)"
+                                           style="width:100%; padding:10px; border:1px solid #cbd5e1; border-radius:8px; box-sizing:border-box; text-align:right;">
+                                    <template v-if="item.mode === 'poids'">
                                         <div style="display:flex; gap:4px; margin-top:4px;">
                                             <input type="number" min="0" v-model.number="item.lng" @input="updateItem(item, 'dim')" placeholder="L" title="Longueur (cm)" style="width:33%; padding:6px; border:1px solid #cbd5e1; border-radius:6px; box-sizing:border-box; text-align:center; font-size:12px;">
                                             <input type="number" min="0" v-model.number="item.lrg" @input="updateItem(item, 'dim')" placeholder="l" title="Largeur (cm)" style="width:33%; padding:6px; border:1px solid #cbd5e1; border-radius:6px; box-sizing:border-box; text-align:center; font-size:12px;">
@@ -238,21 +235,9 @@ export const FactureAerienView = {
                                     </template>
                                 </div>
                                 <div class="nf-total-col">
-                                    <template v-if="shippingMode === 'aerien'">
-                                        <label v-if="idx === 0" style="font-size:11px; color:#64748b;">Total (CFA)</label>
-                                        <input type="text" readonly :value="lineTotalCfaAerien(item).toLocaleString('fr-FR')"
-                                               style="width:100%; padding:10px; border:1px solid #e2e8f0; border-radius:8px; box-sizing:border-box; text-align:right; font-weight:bold; background:#f8fafc;">
-                                    </template>
-                                    <template v-else-if="autoPricingActive">
-                                        <label v-if="idx === 0" style="font-size:11px; color:#64748b;">Total (CFA)</label>
-                                        <input type="text" readonly :value="Math.round((parseFloat(item.vol)||0) * (parseFloat(item.qty)||0) * tarifs.cbmChine).toLocaleString('fr-FR')"
-                                               style="width:100%; padding:10px; border:1px solid #e2e8f0; border-radius:8px; box-sizing:border-box; text-align:right; font-weight:bold; background:#f8fafc;">
-                                    </template>
-                                    <template v-else>
-                                        <label v-if="idx === 0" style="font-size:11px; color:#64748b;">Total (€)</label>
-                                        <input type="text" readonly :value="(item.total || 0).toFixed(2)"
-                                               style="width:100%; padding:10px; border:1px solid #e2e8f0; border-radius:8px; box-sizing:border-box; text-align:right; font-weight:bold; background:#f8fafc;">
-                                    </template>
+                                    <label v-if="idx === 0" style="font-size:11px; color:#64748b;">Total (€)</label>
+                                    <input type="text" readonly :value="lineTotalEur(item).toFixed(2) + ' €'"
+                                           style="width:100%; padding:10px; border:1px solid #e2e8f0; border-radius:8px; box-sizing:border-box; text-align:right; font-weight:bold; background:#f8fafc;">
                                 </div>
                                 <div class="nf-action-col">
                                     <label v-if="idx === 0" style="display:block; height:14px;">&nbsp;</label>
@@ -300,46 +285,12 @@ export const FactureAerienView = {
                                 <input type="number" id="nfValeur" placeholder="Optionnel" v-model="form.valeur">
                             </div>
                             <div class="form-group">
-                                <label>Volume (CBM) <i class="fas fa-info-circle" style="color:#3b82f6;" title="Alimente la jauge globale de l'agence"></i></label>
-                                <input type="number" step="0.01" id="nfVolume" placeholder="Ex: 0.5" v-model.number="form.volume">
+                                <label>Poids total (Kg) <i class="fas fa-info-circle" style="color:#3b82f6;" title="Calculé depuis les colis — alimente la jauge magasin aérien"></i></label>
+                                <input type="text" readonly :value="(parseFloat(form.poids)||0).toFixed(1) + ' kg'" style="background:#f1f5f9; font-weight:700; color:#1e40af;">
                             </div>
                         </div>
 
-                        <!-- CHINE MARITIME / AÉRIEN : calcul automatique, modifiable -->
-                        <div v-if="autoPricingActive" style="background:#eff6ff; padding:15px; border-radius:8px; border:1px solid #bfdbfe; margin-top:15px;">
-                            <div style="font-weight:800; color:#1e40af; font-size:13px; margin-bottom:12px;">
-                                <i class="fas fa-plane"></i>
-                                Expédition AÉRIENNE — Paris ({{ form.factureMode === 'valeur' ? 'à la valeur' : 'poids / volume' }})
-                            </div>
-
-                            <div v-if="form.factureMode !== 'valeur'" style="display:flex; gap:12px; flex-wrap:wrap; margin-bottom:12px;">
-                                <div style="flex:1; min-width:140px;">
-                                    <label style="font-size:12px; color:#475569; font-weight:600;">Poids facturé total (kg)</label>
-                                    <div style="padding:10px; border:1px dashed #cbd5e1; border-radius:8px; background:#fff; font-weight:700; color:#1e40af;">{{ (parseFloat(form.poids)||0).toFixed(1) }} kg</div>
-                                    <div style="font-size:11px; color:#94a3b8; margin-top:3px;">= le plus grand entre poids réel et poids volume, par ligne.</div>
-                                </div>
-                            </div>
-
-                            <div style="font-size:12px; color:#475569; margin-bottom:6px;">
-                                Calcul : somme des lignes
-                                = <strong>{{ autoTotalCFA.toLocaleString('fr-FR') }} CFA</strong>
-                                <a href="#" v-if="userTouchedTotal" @click.prevent="resetAutoTotal()" style="margin-left:8px; color:#2563eb;">↻ recalculer</a>
-                            </div>
-
-                            <label style="font-size:12px; color:#475569; font-weight:600;">Total à facturer (CFA) — modifiable</label>
-                            <input type="number" min="0" v-model.number="form.totalCfa" @input="userTouchedTotal = true" style="width:100%; padding:12px; border:1px solid #93c5fd; border-radius:8px; box-sizing:border-box; font-size:18px; font-weight:800; color:#1e40af;">
-
-                            <div style="display:flex; justify-content:space-between; align-items:center; margin-top:12px; flex-wrap:wrap; gap:10px;">
-                                <span>Montant Payé (CFA) :</span>
-                                <input type="number" min="0" v-model.number="form.montantPaye" style="width:140px; max-width:100%; text-align:right; font-weight:bold; color:#10b981; padding:8px; border:1px solid #cbd5e1; border-radius:8px;">
-                            </div>
-                            <div style="display:flex; justify-content:space-between; align-items:center; font-size:18px; border-top:1px dashed #93c5fd; padding-top:10px; margin-top:10px; flex-wrap:wrap; gap:10px;">
-                                <span>Reste à Payer :</span>
-                                <strong style="color:#ef4444;">{{ ((parseFloat(form.totalCfa)||0) - (parseFloat(form.montantPaye)||0)).toLocaleString('fr-FR') }} CFA</strong>
-                            </div>
-                        </div>
-
-                        <div v-if="!autoPricingActive" style="background: #f8fafc; padding: 15px; border-radius: 8px; border: 1px solid #e2e8f0; margin-top: 15px;">
+                        <div style="background: #f8fafc; padding: 15px; border-radius: 8px; border: 1px solid #e2e8f0; margin-top: 15px;">
                             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; font-size: 16px; flex-wrap: wrap; gap: 10px;">
                                 <span>Total Fret :</span>
                                 <strong id="nfTotalFret">{{ totalFret.toFixed(2) }} €</strong>
@@ -522,40 +473,26 @@ initVue(globalApp) {
                 if (vol > kg) kg = vol;
                 return kg;
             };
-            // Total CFA d'une ligne selon le Mode Facture :
-            //  - « valeur » : prix unitaire (€) saisi × quantité, converti en CFA ;
+            // Total € d'une ligne selon le Mode Facture (Paris = agence en €) :
+            //  - « valeur » : prix unitaire (€) saisi × quantité ;
             //  - « poids »  : poids facturé × tarif/kg (15 € parfum/alcool, sinon 13 €).
-            const lineTotalCfaAerien = (item) => {
+            const lineTotalEur = (item) => {
                 const qty = parseFloat(item.qty) || 0;
-                if (form.factureMode === 'valeur') {
-                    return Math.round((parseFloat(item.pu) || 0) * qty * CONSTANTS.TAUX_CONVERSION);
+                if (item.mode === 'poids') {
+                    const rateEur = item.parfum ? TARIF_KG_PARFUM_EUR : TARIF_KG_STD_EUR;
+                    return lineBilledKg(item) * qty * rateEur;
                 }
-                const rateEur = item.parfum ? TARIF_KG_PARFUM_EUR : TARIF_KG_STD_EUR;
-                return Math.round(lineBilledKg(item) * qty * rateEur * CONSTANTS.TAUX_CONVERSION);
+                // À la valeur : prix unitaire saisi × quantité.
+                return (parseFloat(item.pu) || 0) * qty;
             };
-            // Lignes d'articles (déclaré AVANT autoTotalCFA qui les agrège, sinon
-            // "Cannot access 'items' before initialization" via le watch immédiat).
-            const items = ref([{ id: Date.now(), desc: '', qty: 1, pu: '', total: 0, vol: '', poids: '', type: 'poids', parfum: false, lng: '', lrg: '', haut: '', showSugg: false }]);
-            // Modèle de facturation de l'AGENCE (réglé dans Config Facture).
-            // 'paris' = facturation EUR historique ; 'chine' = CBM maritime.
-            // Défaut 'paris' (aucun changement pour l'existant). Chargé en
-            // onMounted depuis settings/invoice_config_<agence>.
+            // Lignes d'articles.
+            const items = ref([{ id: Date.now(), desc: '', qty: 1, pu: '', total: 0, vol: '', poids: '', type: 'poids', parfum: false, mode: 'valeur', lng: '', lrg: '', haut: '', showSugg: false }]);
             const factureModel = ref('paris');
-            const autoPricingActive = computed(() =>
-                shippingMode === 'aerien' || (shippingMode === 'maritime' && factureModel.value === 'chine'));
-            const autoTotalCFA = computed(() => {
-                if (shippingMode === 'aerien') {
-                    // Somme des totaux par ligne (gère poids volume + forfait
-                    // chaussures côté Paris ; identique au calcul poids×tarif
-                    // pour les autres routes aériennes).
-                    return items.value.reduce((s, i) => s + lineTotalCfaAerien(i), 0);
-                }
-                if (shippingMode === 'maritime' && factureModel.value === 'chine') {
-                    const cbm = parseFloat(form.volume) || 0;
-                    return Math.round(cbm * (tarifs.cbmChine || 0));
-                }
-                return 0;
-            });
+            // Agence de DÉPART (Paris) = facturation EN €. On force le chemin EUR :
+            // saisie et affichage en €, conversion en CFA uniquement à
+            // l'enregistrement (stockage interne en CFA, comme partout).
+            const autoPricingActive = computed(() => false);
+            const autoTotalCFA = computed(() => 0);
             const userTouchedTotal = ref(false);
             const resetAutoTotal = () => { userTouchedTotal.value = false; form.totalCfa = autoTotalCFA.value; };
             watch(autoTotalCFA, (v) => { if (!userTouchedTotal.value) form.totalCfa = v; }, { immediate: true });
@@ -890,7 +827,7 @@ initVue(globalApp) {
                 }
             };
 
-            const addRow = () => items.value.push({ id: Date.now(), desc: '', qty: 1, pu: '', total: 0, vol: '', poids: '', type: 'poids', parfum: false, lng: '', lrg: '', haut: '', showSugg: false });
+            const addRow = () => items.value.push({ id: Date.now(), desc: '', qty: 1, pu: '', total: 0, vol: '', poids: '', type: 'poids', parfum: false, mode: 'valeur', lng: '', lrg: '', haut: '', showSugg: false });
             const removeRow = (id) => { if (items.value.length > 1) items.value = items.value.filter(i => i.id !== id); };
 
             const updateItem = (item, field) => {
@@ -909,13 +846,13 @@ initVue(globalApp) {
                     // Autres modèles : ne pas écraser une saisie manuelle par 0.
                     form.volume = parseFloat(totalVol.toFixed(2));
                 }
-                // Aérien : poids total facturé = somme du poids FACTURÉ (max
-                // réel/volume) par ligne × qté. En mode « valeur », il n'y a pas
-                // de poids saisi -> total 0 (le prix vient du PU).
-                form.poids = items.value.reduce((sum, i) => sum + (lineBilledKg(i) * (parseFloat(i.qty) || 0)), 0);
+                // Poids total physique = somme du poids RÉEL saisi par colis × qté
+                // (tous modes confondus, y compris « à la valeur »). Sert au
+                // magasin/jauge et à l'expédition.
+                form.poids = items.value.reduce((sum, i) => sum + ((parseFloat(i.poids) || 0) * (parseFloat(i.qty) || 0)), 0);
             };
 
-            const totalFret = computed(() => items.value.reduce((sum, item) => sum + item.total, 0));
+            const totalFret = computed(() => items.value.reduce((sum, item) => sum + lineTotalEur(item), 0));
             const resteAPayer = computed(() => totalFret.value - (parseFloat(form.montantPaye) || 0));
             // Nb de colis "par défaut" = somme des quantités (avant reconditionnement).
             const totalColisAuto = computed(() => items.value.reduce((s, i) => s + (parseInt(i.qty) || 0), 0));
@@ -1061,6 +998,10 @@ initVue(globalApp) {
                 }
 
                 const totalColis = items.value.reduce((sum, item) => sum + item.qty, 0);
+                // Mode de facturation par colis : résumé pour le document
+                // ('valeur', 'poids' ou 'mixte' si la facture mélange les deux).
+                const _modes = [...new Set(items.value.map(i => i.mode || 'valeur'))];
+                const factureModeSummary = _modes.length > 1 ? 'mixte' : (_modes[0] || 'valeur');
                 // Reconditionnement : nb de colis annoncés (si saisi), sinon = somme des quantités.
                 const nbColisExp = (parseInt(form.nbColisExpedies) > 0) ? parseInt(form.nbColisExpedies) : totalColis;
                 const generatedLabels = [];
@@ -1088,7 +1029,7 @@ initVue(globalApp) {
                     status: "EN_ATTENTE", containerStatus: "PARIS", agency: activeAgency, dateAjout: new Date(dateIso).toISOString(),
                     modeExpedition: shippingMode,
                     poids: parseFloat(form.poids) || 0,
-                    factureMode: form.factureMode
+                    factureMode: factureModeSummary
                 });
 
                 const transRef = doc(collection(db, getCollectionName("transactions")));
@@ -1103,7 +1044,7 @@ initVue(globalApp) {
                     saisiPar: userName,
                     modeExpedition: shippingMode,
                     poids: parseFloat(form.poids) || 0,
-                    factureMode: form.factureMode,
+                    factureMode: factureModeSummary,
                     paymentHistory: payeCFA > 0 ? [{ date: dateIso, montantParis: payeCFA, montantAbidjan: 0, modePaiement: form.modePay, saisiPar: userName }] : []
                 });
 
@@ -1191,7 +1132,7 @@ initVue(globalApp) {
                     form.montantPaye = 0; form.comment = ''; form.valeur = '';
                     form.poids = ''; form.totalCfa = 0; form.parrainId = ''; form.nbColisExpedies = '';
                     form.date = new Date().toISOString().split('T')[0];
-                    items.value = [{ id: Date.now(), desc: '', qty: 1, pu: '', total: 0, vol: '', poids: '', type: 'poids', parfum: false, lng: '', lrg: '', haut: '', showSugg: false }];
+                    items.value = [{ id: Date.now(), desc: '', qty: 1, pu: '', total: 0, vol: '', poids: '', type: 'poids', parfum: false, mode: 'valeur', lng: '', lrg: '', haut: '', showSugg: false }];
                     expFeedback.value = ''; destFeedback.value = '';
                     userTouchedTotal.value = false;
                     showExpSugg.value = false; showDestSugg.value = false; showLieuSugg.value = false;
@@ -1215,7 +1156,7 @@ initVue(globalApp) {
                 destinationAgencies, affiliationActive, demarcheurs,
                 clientModal, openClientModal, closeClientModal, saveClientFromModal,
                 shippingMode, autoPricingActive, autoTotalCFA, userTouchedTotal, resetAutoTotal, tarifs,
-                isParisAerien, lineBilledKg, lineTotalCfaAerien, totalColisAuto,
+                isParisAerien, lineBilledKg, lineTotalEur, totalColisAuto,
                 currentAerienLot, groupingCode
             };
         }
