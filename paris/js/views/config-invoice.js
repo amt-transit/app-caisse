@@ -32,7 +32,11 @@ export const ConfigInvoiceView = {
         const dummyReste = isParis ? '100,00' : '100 000';
         const locName = isParis ? 'Paris' : 'Abidjan';
         
-        this.docRef = doc(db, "settings", `invoice_config_${activeAgency}`);
+        const _mode = sessionStorage.getItem('shippingMode') || 'maritime';
+        this._activeAgency = activeAgency;
+        this._mode = _mode;
+        // En AÉRIEN, on configure un thème dédié (doc séparé) ; en maritime, le doc de base.
+        this.docRef = doc(db, "settings", `invoice_config_${activeAgency}${_mode === 'aerien' ? '_aerien' : ''}`);
 
         // Palette de couleurs élégantes
         const colorPalette = [
@@ -114,6 +118,10 @@ export const ConfigInvoiceView = {
                     <button class="amt-btn amt-btn-primary" id="saveInvoiceConfigBtn" onclick="window.app.views.configInvoice.saveData()" style="padding: 10px 20px; display: flex; align-items: center; gap: 8px;">
                         <i class="fas fa-save"></i> Enregistrer le modèle
                     </button>
+                </div>
+
+                <div style="margin-bottom:18px; padding:12px 16px; border-radius:12px; font-weight:700; font-size:14px; ${_mode === 'aerien' ? 'background:#ede9fe; color:#5b21b6; border:1px solid #c4b5fd;' : 'background:#e0f2fe; color:#075985; border:1px solid #bae6fd;'}">
+                    ${_mode === 'aerien' ? '✈️ Vous configurez le modèle AÉRIEN (couleur, logo, pied de page et CGV spécifiques à ce mode).' : '🚢 Vous configurez le modèle MARITIME. Passez en mode Aérien (bouton en haut) pour personnaliser le modèle aérien.'}
                 </div>
 
                 <div class="ci-layout">
@@ -301,6 +309,12 @@ export const ConfigInvoiceView = {
             const docSnap = await getDoc(this.docRef);
             if (docSnap.exists()) {
                 this.config = { ...this.config, ...docSnap.data() };
+            } else if (this._mode === 'aerien') {
+                // Pas encore de thème aérien : on démarre depuis le thème maritime.
+                try {
+                    const baseSnap = await getDoc(doc(db, "settings", `invoice_config_${this._activeAgency}`));
+                    if (baseSnap.exists()) this.config = { ...this.config, ...baseSnap.data() };
+                } catch (e) { /* ok */ }
             }
 
             // Remplir les champs

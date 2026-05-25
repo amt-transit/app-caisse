@@ -18,6 +18,21 @@ import { stripPhoneFromName } from './phone.js';
 
 export function createDocumentTemplates({ showToast, calculateMagasinageFee }) {
 
+    // Charge la config "Choix Facture" du MODE actif : en AÉRIEN, le document
+    // utilise le thème dédié `invoice_config_<src>_aerien` (couleur, logo, nom,
+    // pied, CGV) ; repli sur le doc de base s'il n'existe pas encore.
+    async function loadInvoiceConfig(src) {
+        const mode = sessionStorage.getItem('shippingMode') || 'maritime';
+        try {
+            if (mode === 'aerien') {
+                const aSnap = await getDoc(doc(db, "settings", `invoice_config_${src}_aerien`));
+                if (aSnap.exists()) return aSnap.data();
+            }
+            const snap = await getDoc(doc(db, "settings", `invoice_config_${src}`));
+            return snap.exists() ? snap.data() : null;
+        } catch (e) { return null; }
+    }
+
     // --- Bon de livraison ---
     async function printDeliverySlip(d) {
         if (!d) return;
@@ -42,9 +57,8 @@ export function createDocumentTemplates({ showToast, calculateMagasinageFee }) {
                 if (compSnap.data().logoBase64) logoBase64 = compSnap.data().logoBase64;
                 if (compSnap.data().name) companyName = compSnap.data().name;
             }
-            const invConfigSnap = await getDoc(doc(db, "settings", `invoice_config_${getConfigSourceAgency()}`));
-            if (invConfigSnap.exists()) {
-                invoiceConfig = invConfigSnap.data();
+            invoiceConfig = await loadInvoiceConfig(getConfigSourceAgency());
+            if (invoiceConfig) {
                 if (invoiceConfig.companyName) companyName = invoiceConfig.companyName;
                 if (invoiceConfig.logoUrl) logoBase64 = invoiceConfig.logoUrl;
             }
@@ -121,7 +135,12 @@ export function createDocumentTemplates({ showToast, calculateMagasinageFee }) {
         const addrStr = doc2.splitTextToSize(`${d.lieuLivraison || d.commune || transData?.adresseDestinataire || ''}`, 70);
         doc2.text(addrStr, 120, 73);
 
-        const tableColumn = ["Description / Nature du Colis", "Qté", "Statut", "Observations"];
+        // AÉRIEN : colonne Poids (par colis) + ligne poids total.
+        const isAerienDoc = ((transData && transData.modeExpedition === 'aerien') || d.modeExpedition === 'aerien');
+        const _aBilledKg = (it) => { const real = parseFloat(it.poids) || 0; const vol = ((parseFloat(it.lng)||0)*(parseFloat(it.lrg)||0)*(parseFloat(it.haut)||0))/5000; return (it.mode === 'poids') ? Math.max(real, vol) : real; };
+        const tableColumn = isAerienDoc
+            ? ["Description / Nature", "Qté", "Poids", "Statut", "Observations"]
+            : ["Description / Nature du Colis", "Qté", "Statut", "Observations"];
         const tableRows = [];
 
         let statusTxt = 'À LIVRER';
@@ -129,18 +148,22 @@ export function createDocumentTemplates({ showToast, calculateMagasinageFee }) {
         else if (d.status === 'PARTIEL' || d.status === 'LIVRAISON_PARTIELLE') statusTxt = 'PARTIEL';
 
         if (transData && transData.items && Array.isArray(transData.items)) {
+            let _tk = 0;
             transData.items.forEach(item => {
-                tableRows.push([
-                    item.desc,
-                    item.qty.toString(),
-                    statusTxt,
-                    d.info || '-'
-                ]);
+                if (isAerienDoc) {
+                    const kg = _aBilledKg(item); _tk += kg * (parseFloat(item.qty) || 0);
+                    tableRows.push([ item.desc, item.qty.toString(), kg ? kg.toFixed(1) + ' kg' : '-', statusTxt, d.info || '-' ]);
+                } else {
+                    tableRows.push([ item.desc, item.qty.toString(), statusTxt, d.info || '-' ]);
+                }
             });
+            if (isAerienDoc) tableRows.push(['Poids total', '', _tk.toFixed(1) + ' kg', '', '']);
         } else {
             const descSource = d.description || transData?.description || 'Colis divers';
             const qtySource = d.quantite || transData?.quantite || 1;
-            tableRows.push([descSource, qtySource.toString(), statusTxt, d.info || '-']);
+            tableRows.push(isAerienDoc
+                ? [descSource, qtySource.toString(), '-', statusTxt, d.info || '-']
+                : [descSource, qtySource.toString(), statusTxt, d.info || '-']);
         }
 
         doc2.autoTable({
@@ -149,7 +172,9 @@ export function createDocumentTemplates({ showToast, calculateMagasinageFee }) {
             body: tableRows,
             theme: 'grid',
             headStyles: { fillColor: accentColor },
-            columnStyles: { 1: { halign: 'center' }, 2: { halign: 'center' } }
+            columnStyles: isAerienDoc
+                ? { 1: { halign: 'center' }, 2: { halign: 'right' }, 3: { halign: 'center' } }
+                : { 1: { halign: 'center' }, 2: { halign: 'center' } }
         });
 
         const finalY = doc2.lastAutoTable.finalY + 15;
@@ -205,9 +230,8 @@ export function createDocumentTemplates({ showToast, calculateMagasinageFee }) {
                 if (compSnap.data().logoBase64) logoBase64 = compSnap.data().logoBase64;
                 if (compSnap.data().name) companyName = compSnap.data().name;
             }
-            const invConfigSnap = await getDoc(doc(db, "settings", `invoice_config_${getConfigSourceAgency()}`));
-            if (invConfigSnap.exists()) {
-                invoiceConfig = invConfigSnap.data();
+            invoiceConfig = await loadInvoiceConfig(getConfigSourceAgency());
+            if (invoiceConfig) {
                 if (invoiceConfig.companyName) companyName = invoiceConfig.companyName;
                 if (invoiceConfig.logoUrl) logoBase64 = invoiceConfig.logoUrl;
             }
@@ -298,6 +322,32 @@ export function createDocumentTemplates({ showToast, calculateMagasinageFee }) {
         const addrStr = doc2.splitTextToSize(`${d.lieuLivraison || d.commune || transData?.adresseDestinataire || ''}`, 70);
         doc2.text(addrStr, 120, 73);
 
+        // AÉRIEN : tableau articles dédié (mode par colis, poids/volume, parfum/alcool).
+        const isAerienDoc = ((transData && transData.modeExpedition === 'aerien') || d.modeExpedition === 'aerien');
+        const _eur = (v) => new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(v || 0).replace(/[  ]/g, ' ');
+        const _aBilledKg = (it) => { const real = parseFloat(it.poids) || 0; const vol = ((parseFloat(it.lng)||0)*(parseFloat(it.lrg)||0)*(parseFloat(it.haut)||0))/5000; return (it.mode === 'poids') ? Math.max(real, vol) : real; };
+        const _aLineEur = (it) => { const q = parseFloat(it.qty)||0; return (it.mode === 'poids') ? _aBilledKg(it)*q*(it.parfum?15:13) : (parseFloat(it.pu)||0)*q; };
+        let aerienColumns = null, aerienRows = null;
+        if (isAerienDoc && transData && transData.items && Array.isArray(transData.items)) {
+            aerienColumns = ["Description / Nature", "Qté", "Mode", "Poids", "Tarif / P.U", "Total"];
+            aerienRows = [];
+            let _totalKg = 0;
+            transData.items.forEach(item => {
+                const isP = item.mode === 'poids';
+                const kg = _aBilledKg(item);
+                _totalKg += kg * (parseFloat(item.qty) || 0);
+                aerienRows.push([
+                    item.desc,
+                    String(item.qty),
+                    isP ? ('Poids' + (item.parfum ? ' (parfum/alcool)' : '')) : 'Valeur',
+                    kg ? kg.toFixed(1) + ' kg' : '-',
+                    isP ? ((item.parfum ? 15 : 13) + ' €/kg') : _eur(item.pu || 0),
+                    _eur(_aLineEur(item))
+                ]);
+            });
+            aerienRows.push(['Poids total facturé', '', '', _totalKg.toFixed(1) + ' kg', '', '']);
+        }
+
         const tableColumn = ["Description / Nature du Colis", "Qté", "P.U", "Total"];
         const tableRows = [];
         if (transData && transData.items && Array.isArray(transData.items)) {
@@ -317,11 +367,13 @@ export function createDocumentTemplates({ showToast, calculateMagasinageFee }) {
 
         doc2.autoTable({
             startY: 90,
-            head: [tableColumn],
-            body: tableRows,
+            head: [(isAerienDoc && aerienColumns) ? aerienColumns : tableColumn],
+            body: (isAerienDoc && aerienRows) ? aerienRows : tableRows,
             theme: 'grid',
             headStyles: { fillColor: accentColor },
-            columnStyles: { 1: { halign: 'center' }, 2: { halign: 'right' }, 3: { halign: 'right' } }
+            columnStyles: (isAerienDoc && aerienColumns)
+                ? { 1: { halign: 'center' }, 3: { halign: 'right' }, 4: { halign: 'right' }, 5: { halign: 'right' } }
+                : { 1: { halign: 'center' }, 2: { halign: 'right' }, 3: { halign: 'right' } }
         });
 
         // --- Bilan Financier ---
