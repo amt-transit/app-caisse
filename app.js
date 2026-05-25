@@ -374,17 +374,32 @@ export const app = {
             // masque la jauge et on n'ouvre aucun écouteur.
             const gaugeEl = document.getElementById('topBarGauge');
             const mode = sessionStorage.getItem('shippingMode') || 'maritime';
-            if (mode === 'aerien') {
-                if (gaugeEl) gaugeEl.style.display = 'none';
-                if (this.unsubContainerGauge1) this.unsubContainerGauge1();
-                if (this.unsubContainerGauge2) this.unsubContainerGauge2();
-                return;
-            }
+
+            // Nettoyage des écouteurs précédents (changement de mode / d'agence).
+            if (this.unsubContainerGauge1) this.unsubContainerGauge1();
+            if (this.unsubContainerGauge2) this.unsubContainerGauge2();
+            if (this.unsubAerienGauge) this.unsubAerienGauge();
             if (gaugeEl) gaugeEl.style.display = '';
 
             const { db } = await import('./firebase-config.js');
             const { doc, onSnapshot, collection, query, where } = await import('https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js');
             const { getCollectionName, getContainerConfigAgency } = await import('./agencies-config.js');
+
+            // AÉRIEN : jauge en Kg, SANS maximum. Affiche le poids total des colis
+            // « en magasin » = livraisons aériennes au statut PARIS (reçues, pas
+            // encore expédiées). getCollectionName route déjà vers livraisons_..._aerien.
+            if (mode === 'aerien') {
+                this.unsubAerienGauge = onSnapshot(
+                    query(collection(db, getCollectionName("livraisons")), where("containerStatus", "==", "PARIS")),
+                    (snap) => {
+                        let totalKg = 0, n = 0;
+                        snap.forEach(d => { totalKg += parseFloat(d.data().poids) || 0; n++; });
+                        this.updateAerienGaugeUI(totalKg, n);
+                    },
+                    (err) => console.warn("Jauge aérien :", err && err.message)
+                );
+                return;
+            }
             // Conteneur actif : le départ décide, l'arrivée suit -> on lit la
             // config de l'agence de départ de la route (cf. getContainerConfigAgency).
             const configAgency = getContainerConfigAgency();
@@ -420,6 +435,17 @@ export const app = {
         const barEl = document.getElementById('globalContainerGaugeBar');
         if (volEl) volEl.textContent = `${currentCBM.toFixed(2)} / ${maxCBM} CBM`;
         if (barEl) { barEl.style.width = `${percentage}%`; barEl.style.backgroundColor = percentage < 50 ? '#10b981' : (percentage < 85 ? '#f59e0b' : '#ef4444'); }
+    },
+
+    // Jauge AÉRIEN : poids total en magasin, en Kg, sans maximum.
+    updateAerienGaugeUI(totalKg, count) {
+        const nameEl = document.getElementById('globalActiveContainerName');
+        const volEl = document.getElementById('globalContainerVolume');
+        const barEl = document.getElementById('globalContainerGaugeBar');
+        if (nameEl) nameEl.textContent = `✈️ ${count} colis`;
+        if (volEl) volEl.textContent = `${totalKg.toFixed(1)} kg`;
+        // Pas de maximum en aérien : barre pleine en or AMT (simple indicateur visuel).
+        if (barEl) { barEl.style.width = '100%'; barEl.style.backgroundColor = '#F2A312'; }
     },
 
     initSidebarEvents() {

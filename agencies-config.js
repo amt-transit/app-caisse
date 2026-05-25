@@ -28,7 +28,12 @@ try {
     if (!snap.empty) {
         const fetchedAgencies = { ...DEFAULT_AGENCIES };
         snap.forEach(doc => {
-            fetchedAgencies[doc.id] = { id: doc.id, ...doc.data() };
+            const data = doc.data();
+            // Route « en corbeille » (désactivée) : exclue de l'usage actif
+            // (sélecteur d'agence, menus, routage). Le doc reste en base pour
+            // pouvoir la restaurer depuis Gestion des agences.
+            if (data && data.disabled) return;
+            fetchedAgencies[doc.id] = { id: doc.id, ...data };
         });
         AGENCIES = fetchedAgencies;
         localStorage.setItem('amt_agencies_config', JSON.stringify(fetchedAgencies));

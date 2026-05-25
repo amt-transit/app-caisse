@@ -1,6 +1,6 @@
 import { db } from '../../../firebase-config.js';
-import { AGENCIES } from '../../../agencies-config.js';
-import { collection, doc, getDoc, setDoc, deleteDoc, onSnapshot, writeBatch } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
+import { AGENCIES, getCollectionName } from '../../../agencies-config.js';
+import { collection, doc, getDoc, setDoc, deleteDoc, addDoc, onSnapshot, writeBatch } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 import { createApp, ref, reactive, computed, onMounted, onUnmounted } from "https://unpkg.com/vue@3/dist/vue.esm-browser.prod.js";
 
 // ============================================================================
@@ -95,7 +95,7 @@ export const SettingsAgenciesView = {
                         </span>
                         <button class="agx-btn agx-btn--ghost agx-btn--mini" @click="openEdit(r.departure)">✏️ Renommer</button>
                         <button class="agx-btn agx-btn--primary agx-btn--mini" @click="openAddDest(r.departure)">➕ Destination</button>
-                        <button class="agx-btn agx-btn--danger agx-btn--mini" @click="removeDeparture(r)">🗑️</button>
+                        <button class="agx-btn agx-btn--danger agx-btn--mini" @click="openDelete(r.departure, true)" title="Désactiver cette route (corbeille)">🗑️</button>
                     </div>
 
                     <div v-if="r.arrivals.length === 0" class="agx-warn">
@@ -111,7 +111,33 @@ export const SettingsAgenciesView = {
                             </div>
                             <span class="agx-spacer"></span>
                             <button class="agx-btn agx-btn--ghost agx-btn--mini" @click="openEdit(a)">✏️</button>
-                            <button class="agx-btn agx-btn--danger agx-btn--mini" @click="removeAgency(a)">🗑️</button>
+                            <button class="agx-btn agx-btn--danger agx-btn--mini" @click="openDelete(a, false)" title="Désactiver cette destination (corbeille)">🗑️</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- CORBEILLE : routes/agences désactivées (réversible) -->
+                <div v-if="trash.length" class="agx-route" style="border-color:#fecaca;">
+                    <div class="agx-route__dep" style="background:#fef2f2; border-bottom-color:#fecaca;">
+                        <span class="agx-flag">🗑️</span>
+                        <div>
+                            <div class="agx-name">Corbeille <span class="agx-badge" style="background:#fee2e2; color:#b91c1c;">{{ trash.length }}</span></div>
+                            <span class="agx-sub" style="font-size:12px;">Routes désactivées — invisibles dans l'app, récupérables. Les données ne sont pas effacées.</span>
+                        </div>
+                    </div>
+                    <div class="agx-arr-list">
+                        <div v-for="a in trash" :key="a.id" class="agx-arr">
+                            <span class="agx-flag" style="font-size:20px;">{{ a.flag || '🏳️' }}</span>
+                            <div>
+                                <div class="agx-name" style="font-size:14px;">{{ a.name }}
+                                    <span class="agx-badge" :class="a.type==='departure' ? 'agx-badge--dep' : 'agx-badge--arr'">{{ a.type==='departure' ? 'DÉPART' : 'ARRIVÉE' }}</span>
+                                </div>
+                                <span class="agx-id">{{ a.id }}</span>
+                                <span v-if="a.disabledBy" style="font-size:11px; color:#94a3b8; display:block; margin-top:2px;">désactivée par {{ a.disabledBy }}<span v-if="a.disabledAt"> · {{ fmtDate(a.disabledAt) }}</span></span>
+                            </div>
+                            <span class="agx-spacer"></span>
+                            <button class="agx-btn agx-btn--mini" @click="restoreAgency(a)" style="background:#ecfdf5; color:#047857; border:1px solid #a7f3d0;">↩️ Restaurer</button>
+                            <button class="agx-btn agx-btn--danger agx-btn--mini" @click="openPurge(a)">❌ Supprimer définitivement</button>
                         </div>
                     </div>
                 </div>
@@ -268,6 +294,32 @@ export const SettingsAgenciesView = {
                         </div>
                     </div>
                 </div>
+
+                <!-- CONFIRMATION SUPPRESSION : saisie du nom exact (réservé super_admin) -->
+                <div class="agx-overlay" v-if="showDelete">
+                    <div class="agx-modal" style="max-width:480px;">
+                        <div class="agx-modal__h">
+                            <h3 style="margin:0; color:#b91c1c;">{{ del.mode==='purge' ? '❌ Suppression définitive' : '🗑️ Désactiver la route' }}</h3>
+                            <p style="margin:6px 0 0; font-size:13px; color:#64748b;">
+                                <template v-if="del.mode==='purge'">Action <b>irréversible</b> : la fiche de la route est effacée et ne pourra plus être restaurée. (Les données déjà enregistrées restent en base.)</template>
+                                <template v-else>La route sera <b>masquée de l'application</b> mais <b>récupérable</b> depuis la corbeille. Aucune donnée n'est effacée.</template>
+                            </p>
+                        </div>
+                        <div class="agx-modal__b">
+                            <div class="agx-field" style="margin-bottom:0;">
+                                <label class="agx-lab">Pour confirmer, tapez le nom exact : <code style="background:#eef2f7; padding:1px 6px; border-radius:4px;">{{ del.name }}</code></label>
+                                <input class="agx-inp" v-model="del.typed" placeholder="Nom de la route" @keyup.enter="confirmDelete()">
+                            </div>
+                        </div>
+                        <div class="agx-modal__f">
+                            <button class="agx-btn agx-btn--ghost" @click="showDelete=false">Annuler</button>
+                            <button class="agx-btn agx-btn--danger" @click="confirmDelete()" :disabled="saving || del.typed.trim() !== del.name">
+                                <span v-if="del.mode==='purge'">❌ Supprimer définitivement</span>
+                                <span v-else>🗑️ Mettre dans la corbeille</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
             </div>
         `;
 
@@ -287,7 +339,31 @@ export const SettingsAgenciesView = {
                 const showAddDest = ref(false);
                 const showEdit = ref(false);
                 const showCurrencyModel = ref(false);
+                const showDelete = ref(false);
                 let unsub = null;
+
+                // Sécurité : la suppression/désactivation d'une route est réservée
+                // au super administrateur. (Mesure côté navigateur ; le verrou
+                // serveur reste à ajouter plus tard — voir mémoire protection.)
+                const userRole = (sessionStorage.getItem('userRole') || '').toLowerCase();
+                const isSuperAdmin = userRole === 'super_admin';
+                const userName = sessionStorage.getItem('userName') || 'Utilisateur';
+
+                // Modale de confirmation par saisie du nom exact.
+                // mode : 'disable' (corbeille, réversible) | 'purge' (définitif).
+                const del = reactive({ id: '', name: '', typed: '', mode: 'disable' });
+
+                const fmtDate = (iso) => { try { return new Date(iso).toLocaleString('fr-FR'); } catch (e) { return ''; } };
+
+                // Journal d'audit (qui a fait quoi, quand) — même format que le reste de l'app.
+                const audit = (action, details, targetId) => {
+                    try {
+                        addDoc(collection(db, getCollectionName('audit_logs')), {
+                            date: new Date().toISOString(), user: userName, action,
+                            details: details || '', targetId: targetId || ''
+                        });
+                    } catch (e) { console.warn('Audit (agences) :', e && e.message); }
+                };
 
                 const slug = (s) => (s || '')
                     .toString().normalize('NFD').replace(/[̀-ͯ]/g, '')
@@ -317,7 +393,8 @@ export const SettingsAgenciesView = {
                     const byId = {};
                     Object.values(AGENCIES || {}).forEach(a => { if (a && a.id) byId[a.id] = a; });
                     agencies.value.forEach(a => { byId[a.id] = a; });
-                    const list = Object.values(byId);
+                    // On exclut les routes en corbeille (disabled) de l'affichage actif.
+                    const list = Object.values(byId).filter(a => !a.disabled);
                     const deps = list.filter(a => a.type === 'departure');
                     return deps.map(d => ({
                         departure: d,
@@ -325,6 +402,9 @@ export const SettingsAgenciesView = {
                             ((a.id.split('_')[1] === d.id) || (d.id === 'paris' && a.id === 'abidjan')))
                     }));
                 });
+
+                // Corbeille : agences/routes désactivées (récupérables).
+                const trash = computed(() => agencies.value.filter(a => a.disabled));
 
                 onMounted(() => {
                     unsub = onSnapshot(collection(db, "agencies_config"), (snap) => {
@@ -424,11 +504,68 @@ export const SettingsAgenciesView = {
                     finally { saving.value = false; }
                 };
 
-                const removeAgency = async (a) => {
-                    if (a.id === 'paris' || a.id === 'abidjan') return globalApp.showToast("Agence par défaut : suppression interdite.", "error");
-                    if (!confirm(`Supprimer « ${a.name} » ? (les données déjà enregistrées ne sont pas effacées)`)) return;
-                    try { await deleteDoc(doc(db, "agencies_config", a.id)); globalApp.showToast("Supprimé.", "success"); }
-                    catch (e) { globalApp.showToast("Erreur de suppression.", "error"); }
+                // Ouvre la confirmation de DÉSACTIVATION (corbeille, réversible).
+                const openDelete = (a, isDeparture) => {
+                    if (a.id === 'paris' || a.id === 'abidjan')
+                        return globalApp.showToast("Agence par défaut : suppression interdite.", "error");
+                    if (!isSuperAdmin)
+                        return globalApp.showToast("🔒 Réservé au super administrateur.", "error");
+                    if (isDeparture) {
+                        const r = routes.value.find(x => x.departure.id === a.id);
+                        if (r && r.arrivals.length > 0)
+                            return globalApp.showToast("Désactivez d'abord les destinations de cette route.", "error");
+                    }
+                    del.id = a.id; del.name = a.name; del.typed = ''; del.mode = 'disable';
+                    showDelete.value = true;
+                };
+
+                // Ouvre la confirmation de SUPPRESSION DÉFINITIVE (depuis la corbeille).
+                const openPurge = (a) => {
+                    if (!isSuperAdmin)
+                        return globalApp.showToast("🔒 Réservé au super administrateur.", "error");
+                    del.id = a.id; del.name = a.name; del.typed = ''; del.mode = 'purge';
+                    showDelete.value = true;
+                };
+
+                // Confirme l'action après saisie du nom exact.
+                const confirmDelete = async () => {
+                    if (!isSuperAdmin)
+                        return globalApp.showToast("🔒 Réservé au super administrateur.", "error");
+                    if (del.typed.trim() !== del.name)
+                        return globalApp.showToast("Le nom saisi ne correspond pas.", "error");
+                    saving.value = true;
+                    try {
+                        if (del.mode === 'purge') {
+                            await deleteDoc(doc(db, "agencies_config", del.id));
+                            audit("Route supprimée définitivement", `Route « ${del.name} »`, del.id);
+                            globalApp.showToast("Route supprimée définitivement.", "success");
+                        } else {
+                            await setDoc(doc(db, "agencies_config", del.id),
+                                { disabled: true, disabledAt: new Date().toISOString(), disabledBy: userName },
+                                { merge: true });
+                            audit("Route désactivée (corbeille)", `Route « ${del.name} »`, del.id);
+                            globalApp.showToast("Route déplacée dans la corbeille.", "success");
+                        }
+                        showDelete.value = false;
+                    } catch (e) {
+                        console.error(e); globalApp.showToast("Erreur lors de l'opération.", "error");
+                    } finally { saving.value = false; }
+                };
+
+                // Restaure une route depuis la corbeille.
+                const restoreAgency = async (a) => {
+                    if (!isSuperAdmin)
+                        return globalApp.showToast("🔒 Réservé au super administrateur.", "error");
+                    saving.value = true;
+                    try {
+                        await setDoc(doc(db, "agencies_config", a.id),
+                            { disabled: false, restoredAt: new Date().toISOString(), restoredBy: userName },
+                            { merge: true });
+                        audit("Route restaurée", `Route « ${a.name} »`, a.id);
+                        globalApp.showToast("Route restaurée. Rechargez la page pour la réactiver partout.", "success");
+                    } catch (e) {
+                        console.error(e); globalApp.showToast("Erreur de restauration.", "error");
+                    } finally { saving.value = false; }
                 };
 
                 // Ouvre la modale Devise & modèle. Charge le factureModel courant
@@ -481,19 +618,13 @@ export const SettingsAgenciesView = {
                     } finally { saving.value = false; }
                 };
 
-                const removeDeparture = async (r) => {
-                    if (r.departure.id === 'paris') return globalApp.showToast("Agence par défaut : suppression interdite.", "error");
-                    if (r.arrivals.length > 0) return globalApp.showToast("Supprimez d'abord les destinations de cette route.", "error");
-                    await removeAgency(r.departure);
-                };
-
                 return {
-                    agencies, loading, saving, routes, slug, wizPreview,
+                    agencies, loading, saving, routes, trash, slug, wizPreview, fmtDate, isSuperAdmin,
                     showWizard, wiz, openWizard, saveRoute,
                     showAddDest, addDest, openAddDest, saveAddDest,
                     showEdit, edit, openEdit, saveEdit,
                     showCurrencyModel, cm, openCurrencyModel, saveCurrencyModel,
-                    removeAgency, removeDeparture
+                    showDelete, del, openDelete, openPurge, confirmDelete, restoreAgency
                 };
             }
         });
