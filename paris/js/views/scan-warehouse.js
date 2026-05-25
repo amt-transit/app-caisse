@@ -200,6 +200,18 @@ export const ScanWarehouseView = {
                     if (navigator.vibrate) navigator.vibrate(type === 'ok' ? [40] : (type === 'warn' ? [40, 40, 40] : [120]));
                 };
 
+                // Descriptif PAR PIÈCE depuis la description du colis (index _n_).
+                const pieceDescOf = (subRef, description) => {
+                    const map = {}; let idx = 1;
+                    (description || '').split(', ').forEach(seg => {
+                        const m = seg.trim().match(/^(\d+)\s*x\s*(.+)$/i);
+                        if (m) { const q = parseInt(m[1]) || 1; for (let i = 0; i < q; i++) map[idx++] = m[2].trim(); }
+                        else if (seg.trim()) map[idx++] = seg.trim();
+                    });
+                    const idxM = String(subRef).match(/_(\d+)_/);
+                    return (idxM && map[parseInt(idxM[1])]) ? map[parseInt(idxM[1])] : (description || '');
+                };
+
                 const clearSession = () => {
                     if (confirm("Voulez-vous vraiment effacer les données de scan de cette session ?")) {
                         stats.total = 0; stats.success = 0; stats.duplicate = 0; stats.error = 0;
@@ -349,7 +361,7 @@ export const ScanWarehouseView = {
                         if (!snap.empty) {
                             const docId = snap.docs[0].id;
                             const data = snap.docs[0].data();
-                            logData.description = data.description || '';
+                            logData.description = pieceDescOf(text, data.description);
 
                             const isAlreadyScanned = data.scanHistory && data.scanHistory.some(s => s.scanRef === text && s.type === 'ENTREPOT_PARIS');
 

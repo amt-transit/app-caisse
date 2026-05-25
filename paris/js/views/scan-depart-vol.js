@@ -323,6 +323,23 @@ export const ScanDepartVolView = {
                 // « Mise en entrepôt » (ENTREPOT_PARIS) entre dans la population ; son
                 // statut courant vient de son DERNIER scan (DEPART_VOL = en vol,
                 // ENTREPOT_PARIS / DEPART_VOL_RETOUR = en entrepôt).
+                // Reconstruit le descriptif PAR PIÈCE depuis la description du colis
+                // (« 3x Téléphone, 2x Chaussures » -> index 1..3 = Téléphone, 4..5 = Chaussures).
+                const buildDescMap = (description) => {
+                    const map = {}; let idx = 1;
+                    (description || '').split(', ').forEach(seg => {
+                        const m = seg.trim().match(/^(\d+)\s*x\s*(.+)$/i);
+                        if (m) { const q = parseInt(m[1]) || 1; for (let i = 0; i < q; i++) map[idx++] = m[2].trim(); }
+                        else if (seg.trim()) map[idx++] = seg.trim();
+                    });
+                    return map;
+                };
+                const pieceDescOf = (subRef, description) => {
+                    const idxM = String(subRef).match(/_(\d+)_/);
+                    const map = buildDescMap(description);
+                    return (idxM && map[parseInt(idxM[1])]) ? map[parseInt(idxM[1])] : (description || '');
+                };
+
                 const loadPopulation = async () => {
                     loading.value = true;
                     try {
@@ -347,7 +364,7 @@ export const ScanDepartVolView = {
                                     docId: d.id,
                                     ref: data.ref,
                                     client: data.destinataire || data.expediteur || 'Client',
-                                    desc: data.description || '',
+                                    desc: pieceDescOf(subRef, data.description),
                                     status
                                 });
                             });
