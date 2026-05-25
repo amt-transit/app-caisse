@@ -71,6 +71,14 @@ export const ScanDepartVolView = {
                 .scan-line { position: absolute; top: 0; left: 0; right: 0; height: 2px; background: linear-gradient(90deg, transparent, #f59e0b, transparent); animation: scan-anim 2s ease-in-out infinite; border-radius: 1px; box-shadow: 0 0 8px #f59e0b; }
                 @keyframes scan-anim { 0% { top: 5%; opacity: 1; } 50% { top: 90%; opacity: 0.7; } 100% { top: 5%; opacity: 1; } }
 
+                /* Flash visuel du cadre après un scan (vert = OK, rouge = hors liste) */
+                .viewfinder-box { transition: border-color .1s, box-shadow .1s; }
+                .viewfinder-box.flash-ok { border-color: #10b981; box-shadow: 0 0 0 9999px rgba(16,185,129,0.30); }
+                .viewfinder-box.flash-ok::before, .viewfinder-box.flash-ok::after { border-color: #10b981; }
+                .viewfinder-box.flash-warn { border-color: #f59e0b; }
+                .viewfinder-box.flash-err { border-color: #ef4444; box-shadow: 0 0 0 9999px rgba(239,68,68,0.30); }
+                .viewfinder-box.flash-err::before, .viewfinder-box.flash-err::after { border-color: #ef4444; }
+
                 .scan-status { display: flex; align-items: center; gap: 10px; padding: 12px 16px; background: white; border-radius: 12px; border: 1px solid #e2e8f0; font-size: 14px; font-weight: 600; margin-bottom: 20px; color: #1e293b; }
                 .scan-dot { width: 10px; height: 10px; border-radius: 50%; background: #f59e0b; animation: blink 1.2s ease-in-out infinite; flex-shrink: 0; }
                 @keyframes blink { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
@@ -142,7 +150,7 @@ export const ScanDepartVolView = {
                     <div id="sw-reader" ref="qrReader" style="display: none; background: #000;"></div>
                     <video ref="videoPreview" autoplay muted playsinline style="display: none;"></video>
                     <div class="viewfinder-overlay">
-                        <div class="viewfinder-box"><div class="scan-line"></div></div>
+                        <div class="viewfinder-box" :class="flash ? 'flash-' + flash : ''"><div class="scan-line"></div></div>
                     </div>
                 </div>
 
@@ -217,6 +225,7 @@ export const ScanDepartVolView = {
                 const loading = ref(true);
                 const validating = ref(false);
                 const outCount = ref(0);      // scans hors liste (pas dans la population)
+                const flash = ref('');        // '' | 'ok' | 'warn' | 'err' : flash du cadre
                 const recentScans = ref([]);
                 const manualRef = ref('');
                 const scanStatusText = ref('Initialisation de la caméra...');
@@ -251,21 +260,35 @@ export const ScanDepartVolView = {
                 const formatMoney = (amount) => globalApp.formatMoney(amount);
                 const showToast = (message, type) => globalApp.showToast(message, type);
 
-                const playBeep = () => {
+                // Contexte audio unique, débloqué au 1er geste (obligatoire mobile).
+                let audioCtx = null;
+                const ensureAudio = () => {
+                    try {
+                        if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                        if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+                    } catch (e) { /* audio non supporté */ }
+                };
+                const playBeep = (type) => {
                     if (!isSoundEnabled.value) return;
                     try {
-                        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-                        const oscillator = audioCtx.createOscillator();
-                        const gainNode = audioCtx.createGain();
-                        oscillator.connect(gainNode);
-                        gainNode.connect(audioCtx.destination);
-                        oscillator.frequency.value = 800;
-                        gainNode.gain.value = 0.3;
-                        oscillator.start();
-                        gainNode.gain.exponentialRampToValueAtTime(0.00001, audioCtx.currentTime + 0.3);
-                        oscillator.stop(audioCtx.currentTime + 0.3);
-                        setTimeout(() => audioCtx.close(), 350);
-                    } catch(e) { console.log("Audio not supported"); }
+                        ensureAudio();
+                        if (!audioCtx) return;
+                        const osc = audioCtx.createOscillator();
+                        const gain = audioCtx.createGain();
+                        osc.connect(gain); gain.connect(audioCtx.destination);
+                        osc.frequency.value = type === 'ok' ? 950 : (type === 'warn' ? 600 : 300);
+                        gain.gain.value = 0.35;
+                        osc.start();
+                        gain.gain.exponentialRampToValueAtTime(0.00001, audioCtx.currentTime + 0.3);
+                        osc.stop(audioCtx.currentTime + 0.3);
+                    } catch (e) { /* audio non supporté */ }
+                };
+                // Retour combiné son + vibration + flash du cadre.
+                const feedback = (type) => {
+                    flash.value = type;
+                    setTimeout(() => { if (flash.value === type) flash.value = ''; }, 600);
+                    playBeep(type);
+                    if (navigator.vibrate) navigator.vibrate(type === 'ok' ? [40] : (type === 'warn' ? [40, 40, 40] : [120]));
                 };
 
                 const updateKPIs = () => {
@@ -330,20 +353,22 @@ export const ScanDepartVolView = {
                     const baseRefMatch = text.match(/^(.+)_\d+_\d+$/);
                     const baseRef = (baseRefMatch ? baseRefMatch[1] : text).trim();
 
-                    const p = population.value.find(x => x.ref === baseRef);
+                    // Comparaison robuste (casse/espaces) sur la réf de base.
+                    const norm = baseRef.toUpperCase();
+                    const p = population.value.find(x => (x.ref || '').toUpperCase().trim() === norm);
                     if (p) {
-                        if (scanned.value[baseRef]) {
-                            addRecentScan(baseRef, p.client, 'Déjà scanné', 'warn');
-                            if (isSoundEnabled.value && navigator.vibrate) navigator.vibrate([50, 50, 50]);
+                        if (scanned.value[p.ref]) {
+                            addRecentScan(text, p.client, 'Colis déjà scanné', 'warn');
+                            feedback('warn');
                         } else {
-                            scanned.value = { ...scanned.value, [baseRef]: true };
-                            addRecentScan(baseRef, p.client, 'Resté en entrepôt ✓', 'ok');
-                            if (isSoundEnabled.value && navigator.vibrate) navigator.vibrate([30, 20, 30]); else if (isSoundEnabled.value) playBeep();
+                            scanned.value = { ...scanned.value, [p.ref]: true };
+                            addRecentScan(text, p.client, 'Resté en entrepôt ✓', 'ok');
+                            feedback('ok');
                         }
                     } else {
                         outCount.value++;
-                        addRecentScan(baseRef, '—', 'Hors liste entrepôt', 'err');
-                        if (isSoundEnabled.value && navigator.vibrate) navigator.vibrate([100, 50, 100]); else if (isSoundEnabled.value) playBeep();
+                        addRecentScan(text, '—', 'Hors liste entrepôt', 'err');
+                        feedback('err');
                     }
 
                     setTimeout(() => { isScanningPaused.value = false; }, 1200);
@@ -501,6 +526,10 @@ export const ScanDepartVolView = {
                 onMounted(() => {
                     loadPopulation();
                     loadScannerScript();
+                    // Débloque l'audio au 1er contact (politique mobile : pas de
+                    // son tant que l'utilisateur n'a pas interagi avec la page).
+                    document.addEventListener('touchstart', ensureAudio, { once: true });
+                    document.addEventListener('click', ensureAudio, { once: true });
                 });
 
                 onUnmounted(() => {
@@ -509,7 +538,7 @@ export const ScanDepartVolView = {
 
                 return {
                     // États
-                    population, scanned, loading, validating, outCount,
+                    population, scanned, loading, validating, outCount, flash,
                     recentScans, manualRef, scanStatusText, isSoundEnabled,
                     // Computeds
                     enEntrepotCount, scannedCount, toEmbark,
