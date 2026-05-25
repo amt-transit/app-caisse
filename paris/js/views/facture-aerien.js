@@ -285,7 +285,7 @@ export const FactureAerienView = {
                                 <input type="number" id="nfValeur" placeholder="Optionnel" v-model="form.valeur">
                             </div>
                             <div class="form-group">
-                                <label>Poids total (Kg) <i class="fas fa-info-circle" style="color:#3b82f6;" title="Calculé depuis les colis — alimente la jauge magasin aérien"></i></label>
+                                <label>Poids total (Kg) <i class="fas fa-info-circle" style="color:#3b82f6;" title="Poids facturé : le plus grand entre poids réel et poids volume (mode poids/volume). Alimente la jauge magasin aérien."></i></label>
                                 <input type="text" readonly :value="(parseFloat(form.poids)||0).toFixed(1) + ' kg'" style="background:#f1f5f9; font-weight:700; color:#1e40af;">
                             </div>
                         </div>
@@ -846,10 +846,15 @@ initVue(globalApp) {
                     // Autres modèles : ne pas écraser une saisie manuelle par 0.
                     form.volume = parseFloat(totalVol.toFixed(2));
                 }
-                // Poids total physique = somme du poids RÉEL saisi par colis × qté
-                // (tous modes confondus, y compris « à la valeur »). Sert au
-                // magasin/jauge et à l'expédition.
-                form.poids = items.value.reduce((sum, i) => sum + ((parseFloat(i.poids) || 0) * (parseFloat(i.qty) || 0)), 0);
+                // Poids total FACTURÉ = somme du poids RETENU par colis × qté.
+                // En mode « poids / volume », on retient le PLUS GRAND entre le
+                // poids réel et le poids volume (L×l×H÷5000) — c'est ce poids qui
+                // est facturé, alimente la jauge magasin et la base de coût.
+                // « À la valeur » = poids réel saisi.
+                form.poids = items.value.reduce((sum, i) => {
+                    const eff = (i.mode === 'poids') ? lineBilledKg(i) : (parseFloat(i.poids) || 0);
+                    return sum + eff * (parseFloat(i.qty) || 0);
+                }, 0);
             };
 
             const totalFret = computed(() => items.value.reduce((sum, item) => sum + lineTotalEur(item), 0));
