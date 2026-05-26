@@ -93,36 +93,29 @@ export const DashboardView = {
                     </div>
                 </div>
 
-                <!-- Bloc explicatif : Où est passé le bénéfice ? -->
-                <div class="benef-breakdown" style="background: linear-gradient(135deg, #f8fafc, #eef2ff); border:1px solid #e2e8f0; border-radius:14px; padding:16px 18px; margin: 0 0 20px 0;">
+                <!-- Diagnostic : transactions au mode atypique (auto-masqué si liste vide) -->
+                <div id="atypicalModesWrap" style="display:none; background:#ffffff; border:2px solid #fde68a; border-radius:14px; padding:16px 18px; margin: 0 0 20px 0;">
                     <div style="display:flex; align-items:center; gap:10px; margin-bottom:4px;">
-                        <span style="background:#fde68a; padding:6px 10px; border-radius:10px; font-size:16px;">💡</span>
-                        <h3 style="margin:0; font-size:15px; font-weight:800; color:#0f172a;">Où est passé le bénéfice ?</h3>
+                        <span style="background:#fef3c7; color:#92400e; padding:6px 10px; border-radius:10px; font-size:16px;">🔎</span>
+                        <h3 style="margin:0; font-size:15px; font-weight:800; color:#0f172a;">Transactions au mode de paiement atypique</h3>
                     </div>
                     <p style="font-size:12px; color:#64748b; margin:0 0 12px 44px; line-height:1.4;">
-                        Le bénéfice est un cumul (gains − dépenses) sur la période. Il ne se trouve pas en un seul endroit — voici sa répartition aujourd'hui.
+                        <span id="atypicalModesCount" style="color:#b45309; font-weight:800;">0</span> transaction(s) ont un mode <b>non reconnu</b> par le système (ni Espèce/Wave/OM/MM, ni Chèque, ni Virement). Total : <b id="atypicalModesTotal" style="color:#b45309;">0 F CFA</b>. Ce montant alimente la ligne « autres encaissements non-cash » de l'écart. Corrigez les modes (saisie atypique, faute de frappe…) pour faire disparaître l'écart.
                     </p>
-                    <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap:10px;">
-                        <div style="background:#ffffff; border:1px solid #e2e8f0; border-radius:10px; padding:12px;">
-                            <div style="font-size:10px; font-weight:700; color:#94a3b8; text-transform:uppercase; letter-spacing:0.5px;">Bénéfice période</div>
-                            <div id="wpbBenefice" style="font-size:18px; font-weight:900; color:#10b981; margin-top:4px;">0 CFA</div>
-                        </div>
-                        <div style="background:#ffffff; border:1px solid #e2e8f0; border-radius:10px; padding:12px;">
-                            <div style="font-size:10px; font-weight:700; color:#94a3b8; text-transform:uppercase; letter-spacing:0.5px;">🪙 En caisse</div>
-                            <div id="wpbCaisse" style="font-size:16px; font-weight:800; color:#0f172a; margin-top:4px;">0 CFA</div>
-                        </div>
-                        <div style="background:#ffffff; border:1px solid #e2e8f0; border-radius:10px; padding:12px;">
-                            <div style="font-size:10px; font-weight:700; color:#94a3b8; text-transform:uppercase; letter-spacing:0.5px;">💳 En banque</div>
-                            <div id="wpbBanque" style="font-size:16px; font-weight:800; color:#0f172a; margin-top:4px;">0 CFA</div>
-                        </div>
-                        <div style="background:#ffffff; border:1px solid #e2e8f0; border-radius:10px; padding:12px;">
-                            <div style="font-size:10px; font-weight:700; color:#94a3b8; text-transform:uppercase; letter-spacing:0.5px;">⏳ À encaisser (clients)</div>
-                            <div id="wpbCreances" style="font-size:16px; font-weight:800; color:#0f172a; margin-top:4px;">0 CFA</div>
-                        </div>
+                    <div style="overflow-x:auto;">
+                        <table style="width:100%; border-collapse:collapse; font-size:13px;">
+                            <thead>
+                                <tr style="background:#f8fafc; border-bottom:1px solid #e2e8f0;">
+                                    <th style="padding:10px; text-align:left; font-size:11px; color:#64748b; text-transform:uppercase; letter-spacing:0.5px;">Date</th>
+                                    <th style="padding:10px; text-align:left; font-size:11px; color:#64748b; text-transform:uppercase; letter-spacing:0.5px;">Référence</th>
+                                    <th style="padding:10px; text-align:left; font-size:11px; color:#64748b; text-transform:uppercase; letter-spacing:0.5px;">Client</th>
+                                    <th style="padding:10px; text-align:left; font-size:11px; color:#64748b; text-transform:uppercase; letter-spacing:0.5px;">Mode saisi</th>
+                                    <th style="padding:10px; text-align:right; font-size:11px; color:#64748b; text-transform:uppercase; letter-spacing:0.5px;">Montant Abidjan</th>
+                                </tr>
+                            </thead>
+                            <tbody id="atypicalModesBody"></tbody>
+                        </table>
                     </div>
-                    <p style="font-size:11px; color:#64748b; margin:10px 0 0 0; line-height:1.4; font-style:italic;">
-                        ⚠️ Ce ne sont pas des morceaux égaux : caisse + banque + créances ≠ bénéfice. Le bénéfice est un <b>flux</b> sur la période ; les soldes sont des <b>photos</b> à l'instant T. La différence vient de ce qui a déjà été redistribué ou reporté.
-                    </p>
                 </div>
 
                 <!-- Mobile : bouton pour déplier le détail (trésorerie, tableaux, graphiques).
@@ -574,10 +567,6 @@ export const DashboardView = {
             sortiesBreakdownDepenses: document.getElementById('sortiesBreakdownDepenses'),
             sortiesBreakdownDepots: document.getElementById('sortiesBreakdownDepots'),
             percuBreakdownCash: document.getElementById('percuBreakdownCash'),
-            wpbBenefice: document.getElementById('wpbBenefice'),
-            wpbCaisse: document.getElementById('wpbCaisse'),
-            wpbBanque: document.getElementById('wpbBanque'),
-            wpbCreances: document.getElementById('wpbCreances'),
             percuBreakdownCheques: document.getElementById('percuBreakdownCheques'),
             percuBreakdownVirements: document.getElementById('percuBreakdownVirements')
         };
@@ -656,11 +645,16 @@ export const DashboardView = {
 
         function calculateTotals(transactions, expenses, incomes, bank) {
             let totalAbidjan = 0, totalParis = 0, totalCheques = 0, totalVirements = 0;
-            let totalVentesCash = 0; 
-            let abidjanCheques = 0, abidjanVirements = 0; 
+            let totalVentesCash = 0;
+            let abidjanCheques = 0, abidjanVirements = 0;
+            // Liste des paiements ayant un mode NON RECONNU et contribuant au
+            // totalAbidjan : utilisee par le bloc diagnostic « modes atypiques »
+            // pour expliquer les ecarts du tableau de bord.
+            const atypicalPayments = [];
+            const STANDARD_MODES = ['Espèce', 'Wave', 'OM', 'Mobile Money', 'Chèque', 'Virement'];
 
             transactions.forEach(t => {
-                const payments = t.paymentHistory || [{ ...t, date: t.date }]; 
+                const payments = t.paymentHistory || [{ ...t, date: t.date }];
                 payments.forEach(p => {
                     if (p.sessionId && !validatedSessions.has(p.sessionId)) return;
 
@@ -679,6 +673,18 @@ export const DashboardView = {
                         if (mode === 'Virement') {
                             totalVirements += ((p.montantAbidjan || 0) + (p.montantParis || 0));
                             abidjanVirements += (p.montantAbidjan || 0);
+                        }
+                        // Mode atypique (non standard) avec un encaissement Abidjan -> on garde la trace
+                        // pour le bloc diagnostic. C'est ce qui crée les écarts du tableau.
+                        const montantAbjOnly = (p.montantAbidjan || 0);
+                        if (montantAbjOnly !== 0 && !STANDARD_MODES.includes(mode)) {
+                            atypicalPayments.push({
+                                date: p.date || t.date || '',
+                                reference: t.reference || t.ref || '-',
+                                client: t.nomDestinataire || t.nom || t.destinataire || t.expediteur || '-',
+                                mode: mode || '(vide)',
+                                montant: montantAbjOnly
+                            });
                         }
                     }
                 });
@@ -728,19 +734,41 @@ export const DashboardView = {
             if(els.retraits) els.retraits.textContent = formatCFA(retraitsEspeces);
             if(els.count) els.count.textContent = transactions.length;
             if(els.reste) els.reste.textContent = formatCFA(resteTotal);
-            // Bloc "Où est passé le bénéfice ?" : 4 indicateurs côte à côte.
-            // « À encaisser » = dette nette restante (vue positive). Convention :
-            // t.reste = payé - facturé -> resteTotal < 0 = clients doivent. On
-            // affiche |resteTotal| dans ce cas pour parler en "montant à recevoir".
-            const creancesEncaissables = (resteTotal < 0) ? -resteTotal : 0;
-            if(els.wpbBenefice) els.wpbBenefice.textContent = formatCFA(benefice);
-            if(els.wpbCaisse) els.wpbCaisse.textContent = formatCFA(soldeCaisse);
-            if(els.wpbBanque) els.wpbBanque.textContent = formatCFA(soldeBanque);
-            if(els.wpbCreances) els.wpbCreances.textContent = formatCFA(creancesEncaissables);
             if(els.depContainer) els.depContainer.textContent = `Conteneurs: ${formatCFA(depConteneur)}`;
             if(els.depMensuelle) els.depMensuelle.textContent = `Mensuelles: ${formatCFA(depMensuelle)}`;
             if(els.depBreakdownCash) els.depBreakdownCash.textContent = formatCFA(totalDepCash);
             if(els.depBreakdownBanque) els.depBreakdownBanque.textContent = formatCFA(totalDepBanque);
+
+            // Diagnostic : transactions au mode non standard (créent l'écart « modes non standard »).
+            renderAtypicalModes(atypicalPayments);
+        }
+
+        function renderAtypicalModes(list) {
+            const wrap = document.getElementById('atypicalModesWrap');
+            const tbody = document.getElementById('atypicalModesBody');
+            const totalEl = document.getElementById('atypicalModesTotal');
+            const countEl = document.getElementById('atypicalModesCount');
+            if (!wrap || !tbody) return;
+            if (!list || list.length === 0) {
+                wrap.style.display = 'none';
+                return;
+            }
+            wrap.style.display = 'block';
+            // Tri date descendante
+            list.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+            const total = list.reduce((s, x) => s + (x.montant || 0), 0);
+            if (totalEl) totalEl.textContent = formatCFA(total);
+            if (countEl) countEl.textContent = list.length;
+            tbody.innerHTML = list.map(x => {
+                const d = x.date ? new Date(x.date).toLocaleDateString('fr-FR') : '-';
+                return `<tr>
+                    <td style="padding:8px 10px; font-size:12px; color:#475569;">${d}</td>
+                    <td style="padding:8px 10px; font-size:12px; font-family:monospace; color:#0f172a;">${x.reference}</td>
+                    <td style="padding:8px 10px; font-size:12px; color:#1e293b;">${x.client}</td>
+                    <td style="padding:8px 10px; font-size:12px;"><span style="background:#fef3c7; color:#92400e; padding:2px 8px; border-radius:6px; font-weight:700;">${x.mode}</span></td>
+                    <td style="padding:8px 10px; font-size:12px; text-align:right; font-weight:700; color:#b45309;">${formatCFA(x.montant)}</td>
+                </tr>`;
+            }).join('');
         }
 
         function isInDateRange(dateStr) {
