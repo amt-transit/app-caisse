@@ -244,6 +244,14 @@ onAuthStateChanged(auth, async (user) => {
         sessionStorage.setItem('userPermissions', JSON.stringify(userPermissions));
         sessionStorage.setItem('userName', userName || 'Utilisateur');
         sessionStorage.setItem('userAgency', userData.agency || 'abidjan');
+        // Initiale saisie manuellement dans la fiche agent (ex: "J", "FM").
+        // Utilisée comme préfixe des références facture (ex: J-003-AER1).
+        // Si absente, les vues facture retombent sur les premières lettres du nom.
+        if (userData.initials) {
+            sessionStorage.setItem('userInitials', String(userData.initials).toUpperCase());
+        } else {
+            sessionStorage.removeItem('userInitials');
+        }
         // Mode d'expédition autorisé pour CET agent : 'both' (défaut) | 'maritime' | 'aerien'.
         // Restreint en plus du roleAerien (intersection).
         sessionStorage.setItem('userAllowedMode', userData.allowedMode || 'both');

@@ -140,7 +140,12 @@ export const Autocomplete = {
             try { this.vueApps[inputId].unmount(); } catch (e) { /* déjà démonté */ }
             this.vueApps[inputId] = null;
         }
-        
+
+        // On lit la valeur DÉJÀ présente dans l'input (ex: pré-remplissage par
+        // « Modifier la facture ») avant de remplacer le wrapper, sinon Vue
+        // monte un input neuf avec searchQuery='' et écrase la valeur saisie.
+        const initialValue = document.getElementById(inputId)?.value || '';
+
         const html = `
             <div id="${inputId}-custom-wrapper" data-vue-autocomplete-custom style="position: relative;">
                 <input type="text" id="${inputId}" v-model="searchQuery" @input="onInput" @keydown="onKeydown" @blur="onBlur" style="width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 8px;">
@@ -152,7 +157,7 @@ export const Autocomplete = {
                 </div>
             </div>
         `;
-        
+
         const wrapper = document.getElementById(inputId)?.parentElement;
         if (wrapper) {
             const tempDiv = document.createElement('div');
@@ -160,11 +165,11 @@ export const Autocomplete = {
             const newWrapper = tempDiv.firstElementChild;
             wrapper.parentNode?.replaceChild(newWrapper, wrapper);
         }
-        
-        this.initVueCustom(inputId, suggestionsId, searchCallback, renderItemCallback, onSelectCallback, options);
+
+        this.initVueCustom(inputId, suggestionsId, searchCallback, renderItemCallback, onSelectCallback, options, initialValue);
     },
-    
-    initVueCustom(inputId, suggestionsId, searchCallback, renderItemCallback, onSelectCallback, options) {
+
+    initVueCustom(inputId, suggestionsId, searchCallback, renderItemCallback, onSelectCallback, options, initialValue = '') {
         if (this.vueApps[inputId]) {
             try { this.vueApps[inputId].unmount(); } catch (e) { /* déjà démonté */ }
         }
@@ -174,7 +179,7 @@ export const Autocomplete = {
 
         const _app = createApp({
             setup() {
-                const searchQuery = ref('');
+                const searchQuery = ref(initialValue || '');
                 const suggestions = ref([]);
                 const selectedIndex = ref(-1);
                 const showSuggestions = ref(false);
