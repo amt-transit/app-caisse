@@ -408,8 +408,14 @@ export const app = {
         // Restriction supplémentaire PAR AGENT : 'both' (défaut) | 'maritime' | 'aerien'.
         // Permet de limiter un agent à un seul mode dans sa route, indépendamment du rôle.
         const _userAllowedMode = sessionStorage.getItem('userAllowedMode') || 'both';
-        const _aerienAllowed = (isSuperUser || _ra !== false) && _userAllowedMode !== 'maritime';
-        const _maritimeAllowed = _userAllowedMode !== 'aerien';
+        // Restriction PAR AGENCE / ROUTE (réglée dans Gestion des agences) :
+        // si la route est marquée « Maritime seul » ou « Aérien seul », le bouton
+        // de l'autre mode disparaît pour TOUS les agents de cette route.
+        const _agencyModes = (AGENCIES[activeAgency] && AGENCIES[activeAgency].modesSupported) || 'both';
+        // Intersection : un mode est autorisé seulement si TOUS les paliers le permettent
+        // (rôle ✓, agent ✓, agence ✓).
+        const _aerienAllowed = (isSuperUser || _ra !== false) && _userAllowedMode !== 'maritime' && _agencyModes !== 'maritime';
+        const _maritimeAllowed = _userAllowedMode !== 'aerien' && _agencyModes !== 'aerien';
         const _aerienBtn = document.querySelector('.shipping-mode-toggle [data-mode="aerien"]');
         if (_aerienBtn) _aerienBtn.style.display = _aerienAllowed ? '' : 'none';
         const _maritimeBtn = document.querySelector('.shipping-mode-toggle [data-mode="maritime"]');

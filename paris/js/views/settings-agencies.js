@@ -93,6 +93,11 @@ export const SettingsAgenciesView = {
                               :title="'Modifier la devise et le modèle de facturation'">
                             💱 {{ (r.departure.currency === 'EUR') ? '€ EUR' : 'F CFA' }}
                         </span>
+                        <span class="agx-chip" style="cursor:pointer; background:#eef2ff; color:#4338ca; border:1px solid #c7d2fe;"
+                              @click="cycleModes(r.departure)"
+                              :title="'Modes d\\'expédition autorisés sur cette route (cliquez pour cycler).'">
+                            {{ (r.departure.modesSupported === 'maritime') ? '🚢 Maritime seul' : ((r.departure.modesSupported === 'aerien') ? '✈️ Aérien seul' : '🚢 + ✈️ Les deux') }}
+                        </span>
                         <button class="agx-btn agx-btn--ghost agx-btn--mini" @click="openEdit(r.departure)">✏️ Renommer</button>
                         <button class="agx-btn agx-btn--primary agx-btn--mini" @click="openAddDest(r.departure)">➕ Destination</button>
                         <button class="agx-btn agx-btn--danger agx-btn--mini" @click="openDelete(r.departure, true)" title="Désactiver cette route (corbeille)">🗑️</button>
@@ -618,12 +623,48 @@ export const SettingsAgenciesView = {
                     } finally { saving.value = false; }
                 };
 
+                // Cycle les modes d'expédition autorisés sur la route (Les deux ->
+                // Maritime seul -> Aérien seul -> Les deux). Propage à la fois sur
+                // l'agence de DÉPART et ses ARRIVÉES pour que tout agent lié à la
+                // route applique la même restriction directement.
+                const cycleModes = async (dep) => {
+                    if (saving.value) return;
+                    const nextOf = { 'both': 'maritime', 'maritime': 'aerien', 'aerien': 'both' };
+                    const cur = dep.modesSupported || 'both';
+                    const newMode = nextOf[cur] || 'both';
+                    saving.value = true;
+                    try {
+                        const payload = { modesSupported: newMode, updatedAt: new Date().toISOString() };
+                        await setDoc(doc(db, 'agencies_config', dep.id), payload, { merge: true });
+                        // Propage aux arrivées de la route.
+                        const r = routes.value.find(x => x.departure.id === dep.id);
+                        if (r) {
+                            for (const a of r.arrivals) {
+                                await setDoc(doc(db, 'agencies_config', a.id), payload, { merge: true });
+                            }
+                        }
+                        // Met à jour le cache local AGENCIES pour réactivité immédiate.
+                        try {
+                            const cache = JSON.parse(localStorage.getItem('amt_agencies_config') || '{}');
+                            if (cache[dep.id]) cache[dep.id].modesSupported = newMode;
+                            if (r) r.arrivals.forEach(a => { if (cache[a.id]) cache[a.id].modesSupported = newMode; });
+                            localStorage.setItem('amt_agencies_config', JSON.stringify(cache));
+                        } catch (e) { /* cache illisible : ok */ }
+                        const lbl = newMode === 'both' ? 'Les deux' : (newMode === 'maritime' ? 'Maritime seul' : 'Aérien seul');
+                        globalApp.showToast(`Modes de la route mis à jour : ${lbl}`, "success");
+                    } catch (e) {
+                        console.error(e);
+                        globalApp.showToast("Erreur lors de la mise à jour des modes.", "error");
+                    } finally { saving.value = false; }
+                };
+
                 return {
                     agencies, loading, saving, routes, trash, slug, wizPreview, fmtDate, isSuperAdmin,
                     showWizard, wiz, openWizard, saveRoute,
                     showAddDest, addDest, openAddDest, saveAddDest,
                     showEdit, edit, openEdit, saveEdit,
                     showCurrencyModel, cm, openCurrencyModel, saveCurrencyModel,
+                    cycleModes,
                     showDelete, del, openDelete, openPurge, confirmDelete, restoreAgency
                 };
             }
