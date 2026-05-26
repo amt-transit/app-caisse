@@ -1,7 +1,8 @@
 import { db } from '../../../firebase-config.js';
 import { collection, doc, writeBatch, getDocs, query, where, limit, addDoc, updateDoc } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 import { CONSTANTS } from '../../../constants.js';
-import { createApp, ref, reactive, computed, onMounted, watch } from "https://unpkg.com/vue@3/dist/vue.esm-browser.prod.js";
+import { createApp, ref, reactive, computed, onMounted, watch, nextTick } from "https://unpkg.com/vue@3/dist/vue.esm-browser.prod.js";
+import { Autocomplete } from './autocomplete.js';
 import { getCollectionName, AGENCIES } from '../../../agencies-config.js';
 import { isAffiliationActive } from '../../../affiliation-config.js';
 import { getAffiliation, ensureAffiliation, creerCommissionParrainage } from '../../../affiliations.js';
@@ -349,7 +350,10 @@ export const FactureAerienView = {
                             </div>
                             <div class="form-group">
                                 <label style="display:block; margin-bottom:5px; font-weight:600; font-size:13px; color:#1e293b;">Adresse</label>
-                                <input type="text" v-model="clientModal.adresse" placeholder="Adresse complète" style="width:100%; padding:10px; border:1px solid #cbd5e1; border-radius:8px; box-sizing:border-box; font-size:14px;">
+                                <div style="position:relative;">
+                                    <input id="faClientAdresse" type="text" v-model="clientModal.adresse" placeholder="Adresse complète" autocomplete="off" style="width:100%; padding:10px; border:1px solid #cbd5e1; border-radius:8px; box-sizing:border-box; font-size:14px;">
+                                    <ul id="faClientAdresseSuggestions" style="margin:0; padding:0; list-style:none; display:none;"></ul>
+                                </div>
                             </div>
                         </div>
                         <div style="display:flex; justify-content:flex-end; gap:10px; padding:15px 20px; border-top:1px solid #e2e8f0;">
@@ -775,6 +779,15 @@ initVue(globalApp) {
                 clientModal.nom = ''; clientModal.prenom = ''; clientModal.telephone = '';
                 clientModal.email = ''; clientModal.adresse = '';
                 clientModal.saving = false; clientModal.show = true;
+                // Autocomplete BAN sur l'adresse expéditeur (France) uniquement.
+                if (target === 'exp') {
+                    const _ag = sessionStorage.getItem('currentActiveAgency') || 'paris';
+                    const _agObj = AGENCIES[_ag];
+                    const _french = (_ag === 'paris') || (_agObj && _agObj.currency === 'EUR');
+                    if (_french) {
+                        nextTick(() => Autocomplete.initAddress('faClientAdresse', 'faClientAdresseSuggestions'));
+                    }
+                }
             };
             const closeClientModal = () => { clientModal.show = false; };
             const saveClientFromModal = async () => {

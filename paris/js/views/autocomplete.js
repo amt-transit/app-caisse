@@ -20,42 +20,48 @@ export const Autocomplete = {
         if (input.dataset.autocompleteAddrInit === '1') return;
         input.dataset.autocompleteAddrInit = '1';
 
-        // Style par défaut sur la liste de suggestions (sans casser un CSS existant).
-        sugg.style.position = 'absolute';
-        sugg.style.top = '100%';
-        sugg.style.left = '0';
-        sugg.style.right = '0';
+        // position FIXED : ancrée à la fenêtre, donc PAS clippée par les overflow
+        // des ancêtres (utile dans les modales qui ont overflow:auto/hidden).
+        sugg.style.position = 'fixed';
         sugg.style.background = '#ffffff';
         sugg.style.border = '1px solid #e2e8f0';
         sugg.style.borderRadius = '8px';
         sugg.style.maxHeight = '220px';
         sugg.style.overflowY = 'auto';
-        sugg.style.zIndex = '1000';
+        sugg.style.zIndex = '20000'; // au-dessus de toute modale
         sugg.style.boxShadow = '0 6px 16px rgba(0,0,0,0.10)';
-        sugg.style.margin = '4px 0 0 0';
+        sugg.style.margin = '0';
         sugg.style.padding = '0';
         sugg.style.listStyle = 'none';
         sugg.style.display = 'none';
-        // Le wrapper parent doit être positionné pour que la liste se cale dessous.
-        const wrapper = input.parentElement;
-        if (wrapper && getComputedStyle(wrapper).position === 'static') wrapper.style.position = 'relative';
+        // Déplace le <ul> directement sur <body> pour échapper à toute clipping
+        // mask créé par 'transform' ou 'will-change' sur un ancêtre (cas connu).
+        if (sugg.parentElement !== document.body) document.body.appendChild(sugg);
+        // Recalage de la position sous le champ à chaque ouverture (et au scroll).
+        const positionList = () => {
+            const r = input.getBoundingClientRect();
+            sugg.style.top = (r.bottom + 4) + 'px';
+            sugg.style.left = r.left + 'px';
+            sugg.style.width = r.width + 'px';
+        };
 
         let items = [];
         let timer = null;
         let lastSelected = '';
 
         const closeList = () => { sugg.style.display = 'none'; };
+        const openList = () => { positionList(); sugg.style.display = 'block'; };
         const renderItems = (data) => {
             items = data || [];
             if (items.length === 0) {
                 sugg.innerHTML = '<li style="padding:10px; color:#64748b; font-size:13px;">Aucune adresse trouvée</li>';
-                sugg.style.display = 'block';
+                openList();
                 return;
             }
             sugg.innerHTML = items.map((it, i) =>
                 `<li data-i="${i}" style="padding:10px 12px; cursor:pointer; border-bottom:1px solid #f1f5f9; font-size:13px; color:#1e293b;">${(it.properties && it.properties.label) || ''}</li>`
             ).join('');
-            sugg.style.display = 'block';
+            openList();
             // mousedown pour devancer le blur de l'input
             sugg.querySelectorAll('li[data-i]').forEach(li => {
                 li.addEventListener('mousedown', (e) => {
@@ -68,6 +74,9 @@ export const Autocomplete = {
                     lastSelected = label;
                     closeList();
                     if (typeof onSelectCallback === 'function') onSelectCallback(chosen, input);
+                    // 'input' AVANT 'change' pour que les v-model Vue voient la
+                    // nouvelle valeur (Vue ecoute l'evenement 'input').
+                    input.dispatchEvent(new Event('input', { bubbles: true }));
                     input.dispatchEvent(new Event('change', { bubbles: true }));
                 });
                 li.addEventListener('mouseenter', () => { li.style.background = '#f1f5f9'; });
@@ -102,8 +111,12 @@ export const Autocomplete = {
         input.addEventListener('blur', () => { setTimeout(closeList, 180); });
         input.addEventListener('focus', () => {
             const q = (input.value || '').trim();
-            if (q.length >= 3 && items.length > 0) sugg.style.display = 'block';
+            if (q.length >= 3 && items.length > 0) openList();
         });
+        // Recalage si la fenêtre bouge (scroll/resize) pendant que la liste est ouverte.
+        const onReposition = () => { if (sugg.style.display === 'block') positionList(); };
+        window.addEventListener('scroll', onReposition, true);
+        window.addEventListener('resize', onReposition);
         // Navigation clavier : flèches + Entrée + Échap.
         let hoverIdx = -1;
         const highlight = (i) => {

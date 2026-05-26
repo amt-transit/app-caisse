@@ -1,5 +1,7 @@
 import { db } from '../../../firebase-config.js';
 import { doc, getDoc, setDoc, updateDoc } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
+import { AGENCIES } from '../../../agencies-config.js';
+import { Autocomplete } from './autocomplete.js';
 
 export const SettingsCompanyView = {
     docRef: null,
@@ -135,7 +137,10 @@ export const SettingsCompanyView = {
                             <div class="sc-param-icon">📍</div>
                             <div class="sc-param-label">Adresse</div>
                         </div>
-                        <textarea id="compAddress" class="sc-input sc-textarea" rows="3" placeholder="Adresse complète"></textarea>
+                        <div style="position:relative;">
+                            <textarea id="compAddress" class="sc-input sc-textarea" rows="3" placeholder="Adresse complète" autocomplete="off"></textarea>
+                            <ul id="compAddressSuggestions" style="margin:0; padding:0; list-style:none; display:none;"></ul>
+                        </div>
                         <button class="sc-btn sc-btn--save" onclick="window.app.views.settingsCompany.saveField('address', 'compAddress', this)">✅ Enregistrer</button>
                     </div>
 
@@ -216,6 +221,14 @@ export const SettingsCompanyView = {
 
         document.getElementById('contentContainer').innerHTML = html;
         this.loadData();
+
+        // Autocomplete BAN sur l'adresse du siège (route France).
+        const _ag = sessionStorage.getItem('currentActiveAgency') || 'paris';
+        const _agObj = AGENCIES[_ag];
+        const _french = (_ag === 'paris') || (_agObj && _agObj.currency === 'EUR');
+        if (_french) {
+            Autocomplete.initAddress('compAddress', 'compAddressSuggestions');
+        }
     },
 
     async loadData() {

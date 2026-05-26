@@ -1,7 +1,8 @@
 import { db } from '../../../firebase-config.js';
-import { getCollectionName } from '../../../agencies-config.js';
+import { getCollectionName, AGENCIES } from '../../../agencies-config.js';
 import { collection, query, where, onSnapshot, doc, updateDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 import { createApp, ref, computed, reactive, onMounted, onUnmounted, nextTick } from "https://unpkg.com/vue@3/dist/vue.esm-browser.prod.js";
+import { Autocomplete } from './autocomplete.js';
 
 export const TousLesRdvView = {
     vueApp: null,
@@ -319,7 +320,10 @@ export const TousLesRdvView = {
                                     <div class="em-card__body">
                                         <label class="em-field">
                                             <span class="em-field__label">Adresse exacte</span>
-                                            <input type="text" v-model="editForm.adresse" class="em-field__input" placeholder="Adresse complète">
+                                            <div style="position:relative;">
+                                                <input id="tlrEditAdresse" type="text" v-model="editForm.adresse" class="em-field__input" placeholder="Adresse complète" autocomplete="off">
+                                                <ul id="tlrEditAdresseSuggestions" style="margin:0; padding:0; list-style:none; display:none;"></ul>
+                                            </div>
                                         </label>
                                         <label class="em-field">
                                             <span class="em-field__label">Téléphone de contact</span>
@@ -464,6 +468,13 @@ export const TousLesRdvView = {
                 const openEditModal = (rdv) => {
                     Object.assign(editForm, rdv);
                     showEditModal.value = true;
+                    // Autocomplete BAN sur l'adresse (route France).
+                    const _ag = sessionStorage.getItem('currentActiveAgency') || 'paris';
+                    const _agObj = AGENCIES[_ag];
+                    const _french = (_ag === 'paris') || (_agObj && _agObj.currency === 'EUR');
+                    if (_french) {
+                        nextTick(() => Autocomplete.initAddress('tlrEditAdresse', 'tlrEditAdresseSuggestions'));
+                    }
                 };
 
                 const closeEditModal = () => {

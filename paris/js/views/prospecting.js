@@ -1,6 +1,7 @@
 import { db } from '../../../firebase-config.js';
 import { collection, query, where, onSnapshot, doc, setDoc, addDoc, updateDoc, arrayUnion, getDocs, writeBatch, deleteField } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
-import { getCollectionName } from '../../../agencies-config.js';
+import { getCollectionName, AGENCIES } from '../../../agencies-config.js';
+import { Autocomplete } from './autocomplete.js';
 
 export const ProspectingView = {
     unsub: null,
@@ -237,7 +238,10 @@ export const ProspectingView = {
                             </div>
                             <div class="form-group form-group--full">
                                 <label>Adresse</label>
-                                <input type="text" id="npmAdresse" class="form-input">
+                                <div style="position:relative;">
+                                    <input type="text" id="npmAdresse" class="form-input" autocomplete="off">
+                                    <ul id="npmAdresseSuggestions" style="margin:0; padding:0; list-style:none; display:none;"></ul>
+                                </div>
                             </div>
                             <div class="form-group form-group--full" id="npmStatusGroup" style="display:none;">
                                 <label>Statut</label>
@@ -506,6 +510,14 @@ export const ProspectingView = {
         }
 
         document.getElementById('newProspectModal').classList.add('active');
+
+        // Autocomplete BAN sur l'adresse (route France).
+        const _ag = sessionStorage.getItem('currentActiveAgency') || 'paris';
+        const _agObj = AGENCIES[_ag];
+        const _french = (_ag === 'paris') || (_agObj && _agObj.currency === 'EUR');
+        if (_french) {
+            Autocomplete.initAddress('npmAdresse', 'npmAdresseSuggestions');
+        }
     },
 
     closeNewModal() {
