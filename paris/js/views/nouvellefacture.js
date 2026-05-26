@@ -664,11 +664,20 @@ initVue(globalApp) {
                         if (t.kgAerienExpress != null) tarifs.kgAerienExpress = Number(t.kgAerienExpress) || tarifs.kgAerienExpress;
                         if (t.forfaitChaussuresEur != null) tarifs.forfaitChaussuresEur = Number(t.forfaitChaussuresEur) || tarifs.forfaitChaussuresEur;
                     }
-                    // Modèle de facturation de l'agence (Paris par défaut).
+                    // Modele de facturation + tarifs aerien PAR ROUTE
+                    // (settings/invoice_config_<dep>). Les valeurs saisies dans
+                    // Gestion des agences ecrasent les defauts et l'eventuel
+                    // parametres/tarifs global.
                     const _ag = sessionStorage.getItem('currentActiveAgency') || 'paris';
                     const icSnap = await getDoc(fsDoc(db, 'settings', `invoice_config_${_ag}`));
-                    if (icSnap.exists() && icSnap.data().factureModel) {
-                        factureModel.value = icSnap.data().factureModel;
+                    if (icSnap.exists()) {
+                        const ic = icSnap.data();
+                        if (ic.factureModel) factureModel.value = ic.factureModel;
+                        if (typeof ic.kgStdEur === 'number') tarifs.kgStdEur = ic.kgStdEur;
+                        if (typeof ic.kgParfumEur === 'number') tarifs.kgParfumEur = ic.kgParfumEur;
+                        if (typeof ic.forfaitChaussuresEur === 'number') tarifs.forfaitChaussuresEur = ic.forfaitChaussuresEur;
+                        if (typeof ic.kgAerienNormal === 'number') tarifs.kgAerienNormal = ic.kgAerienNormal;
+                        if (typeof ic.kgAerienExpress === 'number') tarifs.kgAerienExpress = ic.kgAerienExpress;
                     }
                     if (!userTouchedTotal.value) form.totalCfa = autoTotalCFA.value;
                 } catch (e) { console.warn('Tarifs/modèle (lecture):', e && e.message); }

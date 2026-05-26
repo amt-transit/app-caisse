@@ -464,9 +464,17 @@ initVue(globalApp) {
             // historique inchangée. Le total auto reste MODIFIABLE.
             const shippingMode = sessionStorage.getItem('shippingMode') || 'maritime';
             // Tarifs aérien Paris, au kg, en € : standard 13 €, parfum/alcool 15 €.
-            const TARIF_KG_STD_EUR = 13;
-            const TARIF_KG_PARFUM_EUR = 15;
-            const tarifs = reactive({ cbmChine: 250000, kgAerienNormal: 12000, kgAerienExpress: 14000, forfaitChaussuresEur: 23 });
+            // Tarifs aerien Paris au kg : valeurs par defaut surchargees au
+            // onMounted par settings/invoice_config_<dep> (modifiable depuis
+            // Gestion des agences > Devise & modele de facturation).
+            const tarifs = reactive({
+                cbmChine: 250000,
+                kgAerienNormal: 12000,
+                kgAerienExpress: 14000,
+                forfaitChaussuresEur: 23,
+                kgStdEur: 13,
+                kgParfumEur: 15
+            });
 
             const activeAgencyNF = sessionStorage.getItem('currentActiveAgency') || 'paris';
             const isParisAerien = true; // page dédiée : toujours le modèle aérien Paris
@@ -483,7 +491,7 @@ initVue(globalApp) {
             const lineTotalEur = (item) => {
                 const qty = parseFloat(item.qty) || 0;
                 if (item.mode === 'poids') {
-                    const rateEur = item.parfum ? TARIF_KG_PARFUM_EUR : TARIF_KG_STD_EUR;
+                    const rateEur = item.parfum ? tarifs.kgParfumEur : tarifs.kgStdEur;
                     return lineBilledKg(item) * qty * rateEur;
                 }
                 // À la valeur : prix unitaire saisi × quantité.
@@ -593,11 +601,20 @@ initVue(globalApp) {
                         if (t.kgAerienExpress != null) tarifs.kgAerienExpress = Number(t.kgAerienExpress) || tarifs.kgAerienExpress;
                         if (t.forfaitChaussuresEur != null) tarifs.forfaitChaussuresEur = Number(t.forfaitChaussuresEur) || tarifs.forfaitChaussuresEur;
                     }
-                    // Modèle de facturation de l'agence (Paris par défaut).
+                    // Modele de facturation + tarifs aerien PAR ROUTE
+                    // (settings/invoice_config_<dep>). Si la route a saisi ses
+                    // propres valeurs dans Gestion des agences, elles ecrasent
+                    // les defauts et l'eventuel parametres/tarifs global.
                     const _ag = sessionStorage.getItem('currentActiveAgency') || 'paris';
                     const icSnap = await getDoc(fsDoc(db, 'settings', `invoice_config_${_ag}`));
-                    if (icSnap.exists() && icSnap.data().factureModel) {
-                        factureModel.value = icSnap.data().factureModel;
+                    if (icSnap.exists()) {
+                        const ic = icSnap.data();
+                        if (ic.factureModel) factureModel.value = ic.factureModel;
+                        if (typeof ic.kgStdEur === 'number') tarifs.kgStdEur = ic.kgStdEur;
+                        if (typeof ic.kgParfumEur === 'number') tarifs.kgParfumEur = ic.kgParfumEur;
+                        if (typeof ic.forfaitChaussuresEur === 'number') tarifs.forfaitChaussuresEur = ic.forfaitChaussuresEur;
+                        if (typeof ic.kgAerienNormal === 'number') tarifs.kgAerienNormal = ic.kgAerienNormal;
+                        if (typeof ic.kgAerienExpress === 'number') tarifs.kgAerienExpress = ic.kgAerienExpress;
                     }
                     if (!userTouchedTotal.value) form.totalCfa = autoTotalCFA.value;
                 } catch (e) { console.warn('Tarifs/modèle (lecture):', e && e.message); }
@@ -879,6 +896,38 @@ initVue(globalApp) {
                 if (!form.expediteur || !form.destinataire || !form.agence || items.value[0].desc === '') {
                     globalApp.showToast("Veuillez remplir l'Expéditeur, le Destinataire, l'Agence destination et au moins une Description d'article.", "error");
                     return;
+                }
+
+                // Validation du Nombre de colis expedies (Paris aerien) :
+                //  - vide -> on utilise la somme des quantites (cas normal)
+                //  - rempli & > somme des quantites -> impossible (on bloque)
+                //  - rempli & < 1 -> invalide (on bloque)
+                //  - rempli & < somme -> reconditionnement valide, on confirme
+                if (isParisAerien) {
+                    const raw = String(form.nbColisExpedies || '').trim();
+                    if (raw !== '') {
+                        const nb = parseInt(raw, 10);
+                        const sumQty = totalColisAuto.value;
+                        if (isNaN(nb) || nb < 1) {
+                            globalApp.showToast("Nombre de colis expédiés invalide (minimum 1, ou laisser vide pour " + sumQty + ").", "error");
+                            return;
+                        }
+                        if (nb > sumQty) {
+                            globalApp.showToast(`Nombre de colis expédiés (${nb}) supérieur à la somme des quantités (${sumQty}). Corrigez les quantités par ligne, ou laissez vide.`, "error");
+                            return;
+                        }
+                        if (nb < sumQty) {
+                            const ok = await (window.AppModal?.confirm
+                                ? window.AppModal.confirm({
+                                    title: 'Reconditionnement',
+                                    message: `Vous annoncez ${nb} colis expédié(s) pour ${sumQty} article(s) au total. Confirmez le regroupement ?`,
+                                    okLabel: 'Oui, confirmer',
+                                    cancelLabel: 'Annuler'
+                                })
+                                : Promise.resolve(window.confirm(`Vous annoncez ${nb} colis pour ${sumQty} articles. Confirmer ?`)));
+                            if (!ok) return;
+                        }
+                    }
                 }
 
                 // ── CHEMIN DEVIS (isolé) ─────────────────────────────────────

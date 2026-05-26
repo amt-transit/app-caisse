@@ -257,9 +257,41 @@ export const SettingsAgenciesView = {
                                         <option value="chine">Modèle Chine — Maritime calculé automatiquement (Volume × tarif CBM)</option>
                                     </select>
                                     <p style="margin:6px 0 0; font-size:12px; color:#64748b;">
-                                        L'Aérien (Poids × tarif) est identique pour les deux modèles.
-                                        Le modèle Chine est recommandé pour les routes en F CFA où l'on facture au volume.
+                                        L'Aérien suit la même devise que le modèle choisi (Paris = € / kg, Chine = F CFA / kg).
                                     </p>
+                                </div>
+
+                                <!-- Tarifs aérien : modifiables par route, dépendent du modèle. -->
+                                <div class="agx-field" v-if="cm.factureModel === 'paris'" style="background:#fef9c3; padding:12px; border-radius:8px; border:1px solid #fde68a;">
+                                    <label class="agx-lab" style="display:flex; align-items:center; gap:6px;">✈️ Tarifs aérien — Modèle Paris (€)</label>
+                                    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; margin-top:8px;">
+                                        <div>
+                                            <label style="font-size:12px; color:#475569; display:block; margin-bottom:4px;">Poids standard (€/kg)</label>
+                                            <input type="number" class="agx-inp" v-model.number="cm.kgStdEur" min="0" step="0.5">
+                                        </div>
+                                        <div>
+                                            <label style="font-size:12px; color:#475569; display:block; margin-bottom:4px;">Parfum / Alcool (€/kg)</label>
+                                            <input type="number" class="agx-inp" v-model.number="cm.kgParfumEur" min="0" step="0.5">
+                                        </div>
+                                        <div style="grid-column: 1 / -1;">
+                                            <label style="font-size:12px; color:#475569; display:block; margin-bottom:4px;">Forfait chaussures (€/paire)</label>
+                                            <input type="number" class="agx-inp" v-model.number="cm.forfaitChaussuresEur" min="0" step="0.5">
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="agx-field" v-if="cm.factureModel === 'chine'" style="background:#fef9c3; padding:12px; border-radius:8px; border:1px solid #fde68a;">
+                                    <label class="agx-lab" style="display:flex; align-items:center; gap:6px;">✈️ Tarifs aérien — Modèle Chine (F CFA)</label>
+                                    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; margin-top:8px;">
+                                        <div>
+                                            <label style="font-size:12px; color:#475569; display:block; margin-bottom:4px;">Aérien Normal (FCFA/kg)</label>
+                                            <input type="number" class="agx-inp" v-model.number="cm.kgAerienNormal" min="0" step="100">
+                                        </div>
+                                        <div>
+                                            <label style="font-size:12px; color:#475569; display:block; margin-bottom:4px;">Aérien Express (FCFA/kg)</label>
+                                            <input type="number" class="agx-inp" v-model.number="cm.kgAerienExpress" min="0" step="100">
+                                        </div>
+                                    </div>
                                 </div>
 
                                 <div class="agx-adv">
@@ -377,7 +409,16 @@ export const SettingsAgenciesView = {
                 const wiz = reactive({ depName: '', depFlag: '', depCurrency: 'EUR', arrivals: [{ name: '', flag: '' }] });
                 const addDest = reactive({ depId: '', depName: '', name: '', flag: '' });
                 const edit = reactive({ id: '', name: '', flag: '' });
-                const cm = reactive({ depId: '', depName: '', currency: 'EUR', factureModel: 'paris', loading: false });
+                const cm = reactive({
+                    depId: '', depName: '', currency: 'EUR', factureModel: 'paris', loading: false,
+                    // Tarifs aerien par route (chargés depuis settings/invoice_config_<dep>).
+                    // Valeurs par defaut alignees sur l'historique du code.
+                    kgStdEur: 13,
+                    kgParfumEur: 15,
+                    forfaitChaussuresEur: 23,
+                    kgAerienNormal: 12000,
+                    kgAerienExpress: 14000
+                });
 
                 const wizPreview = computed(() => {
                     const dep = slug(wiz.depName);
@@ -583,12 +624,24 @@ export const SettingsAgenciesView = {
                     cm.depName = dep.name;
                     cm.currency = dep.currency || (dep.id === 'paris' ? 'EUR' : 'XOF');
                     cm.factureModel = cm.currency === 'EUR' ? 'paris' : 'chine';
+                    // Defaults tarifs aerien : valeurs historiques de l'app.
+                    cm.kgStdEur = 13;
+                    cm.kgParfumEur = 15;
+                    cm.forfaitChaussuresEur = 23;
+                    cm.kgAerienNormal = 12000;
+                    cm.kgAerienExpress = 14000;
                     cm.loading = true;
                     showCurrencyModel.value = true;
                     try {
                         const snap = await getDoc(doc(db, 'settings', `invoice_config_${dep.id}`));
-                        if (snap.exists() && snap.data().factureModel) {
-                            cm.factureModel = snap.data().factureModel;
+                        if (snap.exists()) {
+                            const d = snap.data();
+                            if (d.factureModel) cm.factureModel = d.factureModel;
+                            if (typeof d.kgStdEur === 'number') cm.kgStdEur = d.kgStdEur;
+                            if (typeof d.kgParfumEur === 'number') cm.kgParfumEur = d.kgParfumEur;
+                            if (typeof d.forfaitChaussuresEur === 'number') cm.forfaitChaussuresEur = d.forfaitChaussuresEur;
+                            if (typeof d.kgAerienNormal === 'number') cm.kgAerienNormal = d.kgAerienNormal;
+                            if (typeof d.kgAerienExpress === 'number') cm.kgAerienExpress = d.kgAerienExpress;
                         }
                     } catch (e) { console.warn('Lecture invoice_config :', e && e.message); }
                     finally { cm.loading = false; }
@@ -604,9 +657,20 @@ export const SettingsAgenciesView = {
                         await setDoc(doc(db, 'agencies_config', cm.depId),
                             { currency: cm.currency, updatedAt: new Date().toISOString() },
                             { merge: true });
-                        // 2) Modèle de facturation -> settings/invoice_config_<depId>.factureModel
+                        // 2) Modèle de facturation + tarifs aerien par route
+                        //    -> settings/invoice_config_<depId>. Les pages Facture
+                        //    Aerien et Nouvelle facture lisent ces champs pour
+                        //    appliquer les tarifs par route (sinon defaults).
                         await setDoc(doc(db, 'settings', `invoice_config_${cm.depId}`),
-                            { factureModel: cm.factureModel, updatedAt: new Date().toISOString() },
+                            {
+                                factureModel: cm.factureModel,
+                                kgStdEur: Number(cm.kgStdEur) || 13,
+                                kgParfumEur: Number(cm.kgParfumEur) || 15,
+                                forfaitChaussuresEur: Number(cm.forfaitChaussuresEur) || 23,
+                                kgAerienNormal: Number(cm.kgAerienNormal) || 12000,
+                                kgAerienExpress: Number(cm.kgAerienExpress) || 14000,
+                                updatedAt: new Date().toISOString()
+                            },
                             { merge: true });
                         // Met à jour le cache local pour que les écrans qui lisent
                         // AGENCIES (formatMoneyLocal, isEurAgency) voient le bon
