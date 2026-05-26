@@ -1526,9 +1526,28 @@ export const ToutesLesFacturesView = {
         const reste = total - paye;
 
         this.currentEditInvoice = inv;
-        this.editItems = inv.items && Array.isArray(inv.items) && inv.items.length > 0 
-            ? JSON.parse(JSON.stringify(inv.items)) 
+        // Detection facture aerien : si oui, on bascule la grille des articles
+        // sur la meme grille que « Facture Aerien - Paris » (mode valeur/poids,
+        // dimensions, parfum/alcool, poids volume).
+        this.isEditAerien = (inv.modeExpedition === 'aerien');
+        this.editItems = inv.items && Array.isArray(inv.items) && inv.items.length > 0
+            ? JSON.parse(JSON.stringify(inv.items))
             : [{ id: Date.now(), desc: inv.description || '', qty: 1, pu: total * (isEur ? 1 : TAUX), total: total * (isEur ? 1 : TAUX), vol: inv.volumeCBM || 0 }];
+
+        // Pour les factures aerien : on garantit la presence des champs
+        // (mode, poids, dimensions, parfum) pour les anciennes factures qui
+        // n'avaient que { desc, qty, pu, total }.
+        if (this.isEditAerien) {
+            this.editItems.forEach(it => {
+                if (typeof it.mode !== 'string') it.mode = (it.pu ? 'valeur' : 'poids');
+                if (it.poids == null) it.poids = '';
+                if (it.lng == null) it.lng = '';
+                if (it.lrg == null) it.lrg = '';
+                if (it.haut == null) it.haut = '';
+                if (typeof it.parfum !== 'boolean') it.parfum = false;
+                if (it.pu == null) it.pu = '';
+            });
+        }
 
         // Note : On gère l'affichage en CFA si on est à Abidjan pour le Edit, donc this.editItems est en CFA pour abidjan, EUR pour Paris
 
@@ -1752,41 +1771,101 @@ export const ToutesLesFacturesView = {
     renderEditItems() {
         const container = document.getElementById('tlfEditItemsContainer');
         if (!container) return;
-        
+
         const isEur = isEurAgency();
         const deviseStr = isEur ? '€' : 'CFA';
         const stepStr = isEur ? '0.01' : '1';
 
-        container.innerHTML = this.editItems.map((item, index) => `
-            <div class="form-grid" style="display: grid; grid-template-columns: 2fr 0.5fr 1fr 1fr auto; gap: 10px; align-items: end; background: #f8fafc; padding: 12px; border-radius: 8px; margin-bottom: 10px; border: 1px solid #e2e8f0;">
-                <div>
-                    <label style="font-size: 11px; font-weight: 600; color: #475569; display: block; margin-bottom: 4px;">Description</label>
-                    <div style="position: relative;">
-                        <input type="text" class="edit-item-desc" id="tlfEditItem_${item.id}" data-id="${item.id}" value="${item.desc}" autocomplete="off" style="width: 100%; padding: 8px; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box; outline: none;">
-                        <ul id="tlfEditItemSuggestions_${item.id}" class="autocomplete-suggestions"></ul>
+        if (this.isEditAerien) {
+            container.innerHTML = this.editItems.map((item) => {
+                const billedKg = this._lineBilledKgEdit(item);
+                const showVolHint = item.mode === 'poids' && billedKg > (parseFloat(item.poids) || 0);
+                return `
+                <div class="form-grid" style="display: grid; grid-template-columns: 2fr 0.5fr 1.6fr 1fr auto; gap: 10px; align-items: start; background: #f8fafc; padding: 12px; border-radius: 8px; margin-bottom: 10px; border: 1px solid #e2e8f0;">
+                    <div>
+                        <label style="font-size: 11px; font-weight: 600; color: #475569; display: block; margin-bottom: 4px;">Description</label>
+                        <div style="position: relative;">
+                            <input type="text" class="edit-item-desc" id="tlfEditItem_${item.id}" data-id="${item.id}" value="${item.desc}" autocomplete="off" style="width: 100%; padding: 8px; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box; outline: none;">
+                            <ul id="tlfEditItemSuggestions_${item.id}" class="autocomplete-suggestions"></ul>
+                        </div>
                     </div>
-                </div>
-                <div>
-                    <label style="font-size: 11px; font-weight: 600; color: #475569; display: block; margin-bottom: 4px;">Qté</label>
-                    <input type="number" class="edit-item-qty" data-id="${item.id}" value="${item.qty}" min="1" style="width: 100%; padding: 8px; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box; text-align: center; outline: none;">
-                </div>
-                <div>
-                    <label style="font-size: 11px; font-weight: 600; color: #475569; display: block; margin-bottom: 4px;">P.U (${deviseStr})</label>
-                    <input type="number" class="edit-item-pu" data-id="${item.id}" value="${item.pu}" min="0" step="${stepStr}" style="width: 100%; padding: 8px; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box; text-align: right; outline: none;">
-                </div>
-                <div>
-                    <label style="font-size: 11px; font-weight: 600; color: #475569; display: block; margin-bottom: 4px;">Total</label>
-                    <input type="text" value="${this.formatMoneyLocal(item.total)}" readonly style="width: 100%; padding: 8px; border: 1px solid #e2e8f0; border-radius: 6px; box-sizing: border-box; text-align: right; background: #e2e8f0; font-weight: bold; outline: none; color: #0f172a;">
-                </div>
-                <button class="btn btn-outline" onclick="window.app.views.toutesLesFactures.removeEditItemRow(${item.id})" style="padding: 8px 12px; border-color: #fecaca; color: #ef4444; background: white; border-radius: 6px; cursor: pointer;" title="Supprimer" ${this.editItems.length <= 1 ? 'disabled' : ''}>
-                    <i class="fas fa-trash"></i>
-                </button>
-            </div>
-        `).join('');
+                    <div>
+                        <label style="font-size: 11px; font-weight: 600; color: #475569; display: block; margin-bottom: 4px;">Qté</label>
+                        <input type="number" class="edit-item-qty" data-id="${item.id}" value="${item.qty}" min="1" style="width: 100%; padding: 8px; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box; text-align: center; outline: none;">
+                    </div>
+                    <div>
+                        <label style="font-size: 11px; font-weight: 600; color: #475569; display: block; margin-bottom: 4px;">Mode / Tarif *</label>
+                        <select class="edit-item-mode" data-id="${item.id}" style="width: 100%; padding: 7px; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box; font-size: 12px; background: #fff; margin-bottom: 4px;">
+                            <option value="valeur" ${item.mode === 'valeur' ? 'selected' : ''}>À la valeur</option>
+                            <option value="poids" ${item.mode === 'poids' ? 'selected' : ''}>Poids / volume</option>
+                        </select>
+                        ${item.mode === 'valeur' ? `
+                        <input type="number" class="edit-item-pu" data-id="${item.id}" value="${item.pu}" min="0" step="0.01" placeholder="Prix € (P.U)" style="width: 100%; padding: 8px; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box; text-align: right; outline: none; margin-bottom: 4px;">
+                        ` : ''}
+                        <input type="number" class="edit-item-poids" data-id="${item.id}" value="${item.poids}" min="0" step="0.1" placeholder="Poids (kg)" style="width: 100%; padding: 8px; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box; text-align: right; outline: none;">
+                        ${item.mode === 'poids' ? `
+                        <div style="display:flex; gap:4px; margin-top:4px;">
+                            <input type="number" class="edit-item-lng" data-id="${item.id}" value="${item.lng}" min="0" placeholder="L" title="Longueur (cm)" style="width:33%; padding:6px; border:1px solid #cbd5e1; border-radius:6px; box-sizing:border-box; text-align:center; font-size:12px;">
+                            <input type="number" class="edit-item-lrg" data-id="${item.id}" value="${item.lrg}" min="0" placeholder="l" title="Largeur (cm)" style="width:33%; padding:6px; border:1px solid #cbd5e1; border-radius:6px; box-sizing:border-box; text-align:center; font-size:12px;">
+                            <input type="number" class="edit-item-haut" data-id="${item.id}" value="${item.haut}" min="0" placeholder="H" title="Hauteur (cm)" style="width:33%; padding:6px; border:1px solid #cbd5e1; border-radius:6px; box-sizing:border-box; text-align:center; font-size:12px;">
+                        </div>
+                        <label style="display:flex; align-items:center; gap:5px; margin-top:4px; font-size:11px; color:#475569; cursor:pointer;">
+                            <input type="checkbox" class="edit-item-parfum" data-id="${item.id}" ${item.parfum ? 'checked' : ''} style="width:auto; margin:0;"> Parfum / Alcool (15 €/kg)
+                        </label>
+                        ${showVolHint ? `<div style="font-size:10px; color:#c2410c; margin-top:2px; text-align:right;">poids volume : ${billedKg.toFixed(1)} kg</div>` : ''}
+                        ` : ''}
+                    </div>
+                    <div>
+                        <label style="font-size: 11px; font-weight: 600; color: #475569; display: block; margin-bottom: 4px;">Total (€)</label>
+                        <input type="text" value="${(item.total || 0).toFixed(2)} €" readonly style="width: 100%; padding: 8px; border: 1px solid #e2e8f0; border-radius: 6px; box-sizing: border-box; text-align: right; background: #e2e8f0; font-weight: bold; outline: none; color: #0f172a;">
+                    </div>
+                    <button class="btn btn-outline" onclick="window.app.views.toutesLesFactures.removeEditItemRow(${item.id})" style="padding: 8px 12px; border-color: #fecaca; color: #ef4444; background: white; border-radius: 6px; cursor: pointer; align-self: start; margin-top: 22px;" title="Supprimer" ${this.editItems.length <= 1 ? 'disabled' : ''}>
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </div>`;
+            }).join('');
 
-        document.querySelectorAll('.edit-item-desc').forEach(el => el.addEventListener('input', (e) => this.updateEditItem(e, 'desc')));
-        document.querySelectorAll('.edit-item-qty').forEach(el => el.addEventListener('input', (e) => this.updateEditItem(e, 'qty')));
-        document.querySelectorAll('.edit-item-pu').forEach(el => el.addEventListener('input', (e) => this.updateEditItem(e, 'pu')));
+            document.querySelectorAll('.edit-item-desc').forEach(el => el.addEventListener('input', (e) => this.updateEditItem(e, 'desc')));
+            document.querySelectorAll('.edit-item-qty').forEach(el => el.addEventListener('input', (e) => this.updateEditItem(e, 'qty')));
+            document.querySelectorAll('.edit-item-mode').forEach(el => el.addEventListener('change', (e) => this.updateEditItem(e, 'mode')));
+            document.querySelectorAll('.edit-item-pu').forEach(el => el.addEventListener('input', (e) => this.updateEditItem(e, 'pu')));
+            document.querySelectorAll('.edit-item-poids').forEach(el => el.addEventListener('input', (e) => this.updateEditItem(e, 'poids')));
+            document.querySelectorAll('.edit-item-lng').forEach(el => el.addEventListener('input', (e) => this.updateEditItem(e, 'lng')));
+            document.querySelectorAll('.edit-item-lrg').forEach(el => el.addEventListener('input', (e) => this.updateEditItem(e, 'lrg')));
+            document.querySelectorAll('.edit-item-haut').forEach(el => el.addEventListener('input', (e) => this.updateEditItem(e, 'haut')));
+            document.querySelectorAll('.edit-item-parfum').forEach(el => el.addEventListener('change', (e) => this.updateEditItem(e, 'parfum')));
+        } else {
+            container.innerHTML = this.editItems.map((item, index) => `
+                <div class="form-grid" style="display: grid; grid-template-columns: 2fr 0.5fr 1fr 1fr auto; gap: 10px; align-items: end; background: #f8fafc; padding: 12px; border-radius: 8px; margin-bottom: 10px; border: 1px solid #e2e8f0;">
+                    <div>
+                        <label style="font-size: 11px; font-weight: 600; color: #475569; display: block; margin-bottom: 4px;">Description</label>
+                        <div style="position: relative;">
+                            <input type="text" class="edit-item-desc" id="tlfEditItem_${item.id}" data-id="${item.id}" value="${item.desc}" autocomplete="off" style="width: 100%; padding: 8px; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box; outline: none;">
+                            <ul id="tlfEditItemSuggestions_${item.id}" class="autocomplete-suggestions"></ul>
+                        </div>
+                    </div>
+                    <div>
+                        <label style="font-size: 11px; font-weight: 600; color: #475569; display: block; margin-bottom: 4px;">Qté</label>
+                        <input type="number" class="edit-item-qty" data-id="${item.id}" value="${item.qty}" min="1" style="width: 100%; padding: 8px; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box; text-align: center; outline: none;">
+                    </div>
+                    <div>
+                        <label style="font-size: 11px; font-weight: 600; color: #475569; display: block; margin-bottom: 4px;">P.U (${deviseStr})</label>
+                        <input type="number" class="edit-item-pu" data-id="${item.id}" value="${item.pu}" min="0" step="${stepStr}" style="width: 100%; padding: 8px; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box; text-align: right; outline: none;">
+                    </div>
+                    <div>
+                        <label style="font-size: 11px; font-weight: 600; color: #475569; display: block; margin-bottom: 4px;">Total</label>
+                        <input type="text" value="${this.formatMoneyLocal(item.total)}" readonly style="width: 100%; padding: 8px; border: 1px solid #e2e8f0; border-radius: 6px; box-sizing: border-box; text-align: right; background: #e2e8f0; font-weight: bold; outline: none; color: #0f172a;">
+                    </div>
+                    <button class="btn btn-outline" onclick="window.app.views.toutesLesFactures.removeEditItemRow(${item.id})" style="padding: 8px 12px; border-color: #fecaca; color: #ef4444; background: white; border-radius: 6px; cursor: pointer;" title="Supprimer" ${this.editItems.length <= 1 ? 'disabled' : ''}>
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </div>
+            `).join('');
+
+            document.querySelectorAll('.edit-item-desc').forEach(el => el.addEventListener('input', (e) => this.updateEditItem(e, 'desc')));
+            document.querySelectorAll('.edit-item-qty').forEach(el => el.addEventListener('input', (e) => this.updateEditItem(e, 'qty')));
+            document.querySelectorAll('.edit-item-pu').forEach(el => el.addEventListener('input', (e) => this.updateEditItem(e, 'pu')));
+        }
         
         this.editItems.forEach(item => {
             Autocomplete.initCustom(`tlfEditItem_${item.id}`, `tlfEditItemSuggestions_${item.id}`,
@@ -1803,8 +1882,28 @@ export const ToutesLesFacturesView = {
         });
     },
 
+    // Helpers facture aerien (memes formules que paris/js/views/facture-aerien.js).
+    _lineBilledKgEdit(item) {
+        let kg = parseFloat(item.poids) || 0;
+        const vol = ((parseFloat(item.lng) || 0) * (parseFloat(item.lrg) || 0) * (parseFloat(item.haut) || 0)) / 5000;
+        if (vol > kg) kg = vol;
+        return kg;
+    },
+    _lineTotalEurEdit(item) {
+        const qty = parseFloat(item.qty) || 0;
+        if (item.mode === 'poids') {
+            const rate = item.parfum ? 15 : 13;
+            return this._lineBilledKgEdit(item) * qty * rate;
+        }
+        return (parseFloat(item.pu) || 0) * qty;
+    },
+
     addEditItemRow() {
-        this.editItems.push({ id: Date.now(), desc: '', qty: 1, pu: 0, total: 0, vol: 0 });
+        if (this.isEditAerien) {
+            this.editItems.push({ id: Date.now(), desc: '', qty: 1, pu: '', total: 0, vol: 0, poids: '', mode: 'valeur', lng: '', lrg: '', haut: '', parfum: false });
+        } else {
+            this.editItems.push({ id: Date.now(), desc: '', qty: 1, pu: 0, total: 0, vol: 0 });
+        }
         this.renderEditItems();
     },
 
@@ -1819,32 +1918,74 @@ export const ToutesLesFacturesView = {
     updateEditItem(e, field) {
         const id = parseInt(e.target.dataset.id);
         const item = this.editItems.find(i => i.id === id);
-        if (item) {
-            if (field === 'desc') {
-                item.desc = e.target.value;
-                if (this.productsData && this.productsData.has(item.desc)) {
-                    const prod = this.productsData.get(item.desc);
-                    item.pu = parseFloat(prod.price) || 0;
-                    const row = e.target.closest('.form-grid');
-                    if (row) {
-                        const puInput = row.querySelector('.edit-item-pu');
-                        if (puInput) puInput.value = item.pu;
-                    }
+        if (!item) return;
+
+        if (field === 'desc') {
+            item.desc = e.target.value;
+            if (this.productsData && this.productsData.has(item.desc)) {
+                const prod = this.productsData.get(item.desc);
+                item.pu = parseFloat(prod.price) || 0;
+                const row = e.target.closest('.form-grid');
+                if (row) {
+                    const puInput = row.querySelector('.edit-item-pu');
+                    if (puInput) puInput.value = item.pu;
                 }
             }
-            if (field === 'qty') item.qty = parseInt(e.target.value) || 0;
-            if (field === 'pu') item.pu = parseFloat(e.target.value) || 0;
-            
-            item.total = item.qty * item.pu;
-            
+        }
+        if (field === 'qty') item.qty = parseInt(e.target.value) || 0;
+        if (field === 'pu') item.pu = parseFloat(e.target.value) || 0;
+
+        // Aerien : champs supplementaires + ajout/retrait dynamique des inputs
+        // (P.U apparait en mode 'valeur', dimensions en mode 'poids').
+        if (this.isEditAerien) {
+            if (field === 'mode') {
+                item.mode = e.target.value;
+                this.renderEditItems();
+                this.calculateEditTotals();
+                return;
+            }
+            if (field === 'poids') item.poids = parseFloat(e.target.value) || 0;
+            if (field === 'lng') item.lng = parseFloat(e.target.value) || 0;
+            if (field === 'lrg') item.lrg = parseFloat(e.target.value) || 0;
+            if (field === 'haut') item.haut = parseFloat(e.target.value) || 0;
+            if (field === 'parfum') item.parfum = !!e.target.checked;
+
+            item.total = this._lineTotalEurEdit(item);
+
             const row = e.target.closest('.form-grid');
             if (row) {
                 const totalInput = row.querySelector('input[readonly]');
-                if (totalInput) totalInput.value = this.formatMoneyLocal(item.total);
+                if (totalInput) totalInput.value = (item.total || 0).toFixed(2) + ' €';
+                // Indicateur poids volume.
+                const billed = this._lineBilledKgEdit(item);
+                const showHint = item.mode === 'poids' && billed > (parseFloat(item.poids) || 0);
+                let hintEl = row.querySelector('.tlf-aer-volhint');
+                if (showHint) {
+                    if (!hintEl) {
+                        hintEl = document.createElement('div');
+                        hintEl.className = 'tlf-aer-volhint';
+                        hintEl.style.cssText = 'font-size:10px; color:#c2410c; margin-top:2px; text-align:right;';
+                        const parfumLabel = row.querySelector('.edit-item-parfum')?.closest('label');
+                        if (parfumLabel) parfumLabel.parentNode.insertBefore(hintEl, parfumLabel.nextSibling);
+                    }
+                    hintEl.textContent = `poids volume : ${billed.toFixed(1)} kg`;
+                } else if (hintEl) {
+                    hintEl.remove();
+                }
             }
-            
             this.calculateEditTotals();
+            return;
         }
+
+        item.total = item.qty * item.pu;
+
+        const row = e.target.closest('.form-grid');
+        if (row) {
+            const totalInput = row.querySelector('input[readonly]');
+            if (totalInput) totalInput.value = this.formatMoneyLocal(item.total);
+        }
+
+        this.calculateEditTotals();
     },
 
     calculateEditTotals() {
