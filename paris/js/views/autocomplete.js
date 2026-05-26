@@ -149,7 +149,7 @@ export const Autocomplete = {
         const html = `
             <div id="${inputId}-custom-wrapper" data-vue-autocomplete-custom style="position: relative;">
                 <input type="text" id="${inputId}" v-model="searchQuery" @input="onInput" @keydown="onKeydown" @blur="onBlur" style="width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 8px;">
-                <div id="${suggestionsId}" v-show="showSuggestions" class="autocomplete-suggestions custom-suggestions" style="position: absolute; top: 100%; left: 0; right: 0; background: white; border: 1px solid #e2e8f0; border-radius: 8px; max-height: 200px; overflow-y: auto; z-index: 1000; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);">
+                <div id="${suggestionsId}" v-show="showSuggestions" class="custom-suggestions" style="position: absolute; top: 100%; left: 0; right: 0; background: white; border: 1px solid #e2e8f0; border-radius: 8px; max-height: 200px; overflow-y: auto; z-index: 1000; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);">
                     <div v-if="loading" class="loading" style="padding: 10px; text-align: center; color: #64748b;"><i class="fas fa-spinner fa-spin"></i> Recherche en cours...</div>
                     <div v-else-if="suggestions.length === 0" class="no-results" style="padding: 10px; text-align: center; color: #64748b;">Aucun résultat trouvé</div>
                     <div v-else v-for="(item, idx) in suggestions" :key="idx" class="suggestion-item" :class="{ highlighted: idx === selectedIndex }" @click="selectSuggestion(item)" @mouseenter="selectedIndex = idx" v-html="renderItem(item)" style="padding: 10px; cursor: pointer; border-bottom: 1px solid #f1f5f9;">
@@ -236,9 +236,14 @@ export const Autocomplete = {
                 };
                 
                 const selectSuggestion = (item) => {
-                    lastSelectedValue = searchQuery.value;
                     showSuggestions.value = false;
                     if (onSelectCallback) onSelectCallback(item, document.getElementById(inputId));
+                    // Le callback pose `input.value = ...` directement dans le DOM ;
+                    // on resynchronise le v-model Vue, sinon le prochain rendu
+                    // l'écrase avec l'ancienne valeur (vide) et le choix disparait.
+                    const dom = document.getElementById(inputId);
+                    if (dom) searchQuery.value = dom.value;
+                    lastSelectedValue = searchQuery.value;
                     selectedIndex.value = -1;
                 };
                 
