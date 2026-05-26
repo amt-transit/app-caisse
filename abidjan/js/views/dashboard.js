@@ -93,6 +93,38 @@ export const DashboardView = {
                     </div>
                 </div>
 
+                <!-- Bloc explicatif : Où est passé le bénéfice ? -->
+                <div class="benef-breakdown" style="background: linear-gradient(135deg, #f8fafc, #eef2ff); border:1px solid #e2e8f0; border-radius:14px; padding:16px 18px; margin: 0 0 20px 0;">
+                    <div style="display:flex; align-items:center; gap:10px; margin-bottom:4px;">
+                        <span style="background:#fde68a; padding:6px 10px; border-radius:10px; font-size:16px;">💡</span>
+                        <h3 style="margin:0; font-size:15px; font-weight:800; color:#0f172a;">Où est passé le bénéfice ?</h3>
+                    </div>
+                    <p style="font-size:12px; color:#64748b; margin:0 0 12px 44px; line-height:1.4;">
+                        Le bénéfice est un cumul (gains − dépenses) sur la période. Il ne se trouve pas en un seul endroit — voici sa répartition aujourd'hui.
+                    </p>
+                    <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap:10px;">
+                        <div style="background:#ffffff; border:1px solid #e2e8f0; border-radius:10px; padding:12px;">
+                            <div style="font-size:10px; font-weight:700; color:#94a3b8; text-transform:uppercase; letter-spacing:0.5px;">Bénéfice période</div>
+                            <div id="wpbBenefice" style="font-size:18px; font-weight:900; color:#10b981; margin-top:4px;">0 CFA</div>
+                        </div>
+                        <div style="background:#ffffff; border:1px solid #e2e8f0; border-radius:10px; padding:12px;">
+                            <div style="font-size:10px; font-weight:700; color:#94a3b8; text-transform:uppercase; letter-spacing:0.5px;">🪙 En caisse</div>
+                            <div id="wpbCaisse" style="font-size:16px; font-weight:800; color:#0f172a; margin-top:4px;">0 CFA</div>
+                        </div>
+                        <div style="background:#ffffff; border:1px solid #e2e8f0; border-radius:10px; padding:12px;">
+                            <div style="font-size:10px; font-weight:700; color:#94a3b8; text-transform:uppercase; letter-spacing:0.5px;">💳 En banque</div>
+                            <div id="wpbBanque" style="font-size:16px; font-weight:800; color:#0f172a; margin-top:4px;">0 CFA</div>
+                        </div>
+                        <div style="background:#ffffff; border:1px solid #e2e8f0; border-radius:10px; padding:12px;">
+                            <div style="font-size:10px; font-weight:700; color:#94a3b8; text-transform:uppercase; letter-spacing:0.5px;">⏳ À encaisser (clients)</div>
+                            <div id="wpbCreances" style="font-size:16px; font-weight:800; color:#0f172a; margin-top:4px;">0 CFA</div>
+                        </div>
+                    </div>
+                    <p style="font-size:11px; color:#64748b; margin:10px 0 0 0; line-height:1.4; font-style:italic;">
+                        ⚠️ Ce ne sont pas des morceaux égaux : caisse + banque + créances ≠ bénéfice. Le bénéfice est un <b>flux</b> sur la période ; les soldes sont des <b>photos</b> à l'instant T. La différence vient de ce qui a déjà été redistribué ou reporté.
+                    </p>
+                </div>
+
                 <!-- Mobile : bouton pour déplier le détail (trésorerie, tableaux, graphiques).
                      Masqué sur ordinateur (tout est affiché). -->
                 <button type="button" class="dash-more-btn" onclick="document.body.classList.toggle('dash-show-details'); this.classList.toggle('on'); this.textContent = document.body.classList.contains('dash-show-details') ? '▴ Masquer le détail' : '▾ Afficher le détail complet'; setTimeout(function(){ window.dispatchEvent(new Event('resize')); }, 60);">▾ Afficher le détail complet</button>
@@ -542,6 +574,10 @@ export const DashboardView = {
             sortiesBreakdownDepenses: document.getElementById('sortiesBreakdownDepenses'),
             sortiesBreakdownDepots: document.getElementById('sortiesBreakdownDepots'),
             percuBreakdownCash: document.getElementById('percuBreakdownCash'),
+            wpbBenefice: document.getElementById('wpbBenefice'),
+            wpbCaisse: document.getElementById('wpbCaisse'),
+            wpbBanque: document.getElementById('wpbBanque'),
+            wpbCreances: document.getElementById('wpbCreances'),
             percuBreakdownCheques: document.getElementById('percuBreakdownCheques'),
             percuBreakdownVirements: document.getElementById('percuBreakdownVirements')
         };
@@ -692,6 +728,15 @@ export const DashboardView = {
             if(els.retraits) els.retraits.textContent = formatCFA(retraitsEspeces);
             if(els.count) els.count.textContent = transactions.length;
             if(els.reste) els.reste.textContent = formatCFA(resteTotal);
+            // Bloc "Où est passé le bénéfice ?" : 4 indicateurs côte à côte.
+            // « À encaisser » = dette nette restante (vue positive). Convention :
+            // t.reste = payé - facturé -> resteTotal < 0 = clients doivent. On
+            // affiche |resteTotal| dans ce cas pour parler en "montant à recevoir".
+            const creancesEncaissables = (resteTotal < 0) ? -resteTotal : 0;
+            if(els.wpbBenefice) els.wpbBenefice.textContent = formatCFA(benefice);
+            if(els.wpbCaisse) els.wpbCaisse.textContent = formatCFA(soldeCaisse);
+            if(els.wpbBanque) els.wpbBanque.textContent = formatCFA(soldeBanque);
+            if(els.wpbCreances) els.wpbCreances.textContent = formatCFA(creancesEncaissables);
             if(els.depContainer) els.depContainer.textContent = `Conteneurs: ${formatCFA(depConteneur)}`;
             if(els.depMensuelle) els.depMensuelle.textContent = `Mensuelles: ${formatCFA(depMensuelle)}`;
             if(els.depBreakdownCash) els.depBreakdownCash.textContent = formatCFA(totalDepCash);
