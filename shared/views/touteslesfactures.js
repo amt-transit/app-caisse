@@ -144,7 +144,7 @@ export const ToutesLesFacturesView = {
                             <h1 class="factures-header__title">Toutes les factures</h1>
                             <p class="factures-header__subtitle">Gestion des factures et colis envoyés</p>
                         </div>
-                        <button class="amt-btn amt-btn-primary" onclick="app.renderPage('invoice-new')">
+                        <button class="amt-btn amt-btn-primary" onclick="app.renderPage(sessionStorage.getItem('shippingMode') === 'aerien' ? 'invoice-aerien' : 'invoice-new')">
                             <i class="fas fa-plus"></i> Nouvelle facture
                         </button>
                     </div>
@@ -2002,8 +2002,9 @@ export const ToutesLesFacturesView = {
         if (!inv) return;
         
         sessionStorage.setItem('reuseExpediteur', inv.nom || '');
-        
-        this.app.renderPage('invoice-new');
+
+        const target = sessionStorage.getItem('shippingMode') === 'aerien' ? 'invoice-aerien' : 'invoice-new';
+        this.app.renderPage(target);
         this.app.showToast(`Pré-remplissage avec les informations de ${inv.nom}...`, "info");
     },
 
