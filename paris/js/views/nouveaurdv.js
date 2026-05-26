@@ -1,7 +1,7 @@
 import { db } from '../../../firebase-config.js';
 import { collection, addDoc, getDocs, query, where, limit, onSnapshot, orderBy, doc, updateDoc } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 import { Autocomplete } from './autocomplete.js';
-import { getCollectionName } from '../../../agencies-config.js';
+import { getCollectionName, AGENCIES } from '../../../agencies-config.js';
 import { getShippingMode } from '../../../shipping-mode.js';
 
 export const NouveauRdvView = {
@@ -320,11 +320,13 @@ export const NouveauRdvView = {
         }
 
         // Auto-complétion des adresses via l'API gouvernementale française (BAN).
-        // Pertinent uniquement quand on opère depuis la France (route Paris) :
-        // sur les autres routes SaaS départ (ex. Chine), les adresses ne sont
-        // pas françaises -> on garde le champ texte simple.
+        // Activée pour les routes opérant depuis la France : Paris historique
+        // OU toute route à devise EUR (ex. route SaaS basée en France). Les
+        // routes hors € (ex. Chine) gardent un champ texte simple.
         const _activeAgency = sessionStorage.getItem('currentActiveAgency') || 'paris';
-        if (_activeAgency === 'paris') {
+        const _agency = AGENCIES[_activeAgency];
+        const _isFrenchRoute = (_activeAgency === 'paris') || (_agency && _agency.currency === 'EUR');
+        if (_isFrenchRoute) {
             Autocomplete.initAddress('newClientAdresse', 'newClientAdresseSuggestions');
             Autocomplete.initAddress('rdvAdresse', 'rdvAdresseSuggestions');
         }
