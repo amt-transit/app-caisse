@@ -319,9 +319,15 @@ export const NouveauRdvView = {
             _rdvClientInput.addEventListener('focus', (e) => this.searchClients(e.target.value));
         }
 
-        // Initialiser l'auto-complétion des adresses via l'API Gouvernementale
-        Autocomplete.initAddress('newClientAdresse', 'newClientAdresseSuggestions');
-        Autocomplete.initAddress('rdvAdresse', 'rdvAdresseSuggestions');
+        // Auto-complétion des adresses via l'API gouvernementale française (BAN).
+        // Pertinent uniquement quand on opère depuis la France (route Paris) :
+        // sur les autres routes SaaS départ (ex. Chine), les adresses ne sont
+        // pas françaises -> on garde le champ texte simple.
+        const _activeAgency = sessionStorage.getItem('currentActiveAgency') || 'paris';
+        if (_activeAgency === 'paris') {
+            Autocomplete.initAddress('newClientAdresse', 'newClientAdresseSuggestions');
+            Autocomplete.initAddress('rdvAdresse', 'rdvAdresseSuggestions');
+        }
     },
 
     openModal() {
