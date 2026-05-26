@@ -146,7 +146,8 @@ export function createDocumentTemplates({ showToast, calculateMagasinageFee }) {
 
         // AÉRIEN : colonne Poids (par colis) + ligne poids total.
         const isAerienDoc = ((transData && transData.modeExpedition === 'aerien') || d.modeExpedition === 'aerien');
-        const _aBilledKg = (it) => { const real = parseFloat(it.poids) || 0; const vol = ((parseFloat(it.lng)||0)*(parseFloat(it.lrg)||0)*(parseFloat(it.haut)||0))/5000; return (it.mode === 'poids') ? Math.max(real, vol) : real; };
+        // Colis « A la valeur » : poids masque sur le bordereau client.
+        const _aBilledKg = (it) => { if (it.mode !== 'poids') return 0; const real = parseFloat(it.poids) || 0; const vol = ((parseFloat(it.lng)||0)*(parseFloat(it.lrg)||0)*(parseFloat(it.haut)||0))/5000; return Math.max(real, vol); };
         const tableColumn = isAerienDoc
             ? ["Description / Nature", "Qté", "Poids", "Statut", "Observations"]
             : ["Description / Nature du Colis", "Qté", "Statut", "Observations"];
@@ -334,7 +335,8 @@ export function createDocumentTemplates({ showToast, calculateMagasinageFee }) {
         // AÉRIEN : tableau articles dédié (mode par colis, poids/volume, parfum/alcool).
         const isAerienDoc = ((transData && transData.modeExpedition === 'aerien') || d.modeExpedition === 'aerien');
         const _eur = (v) => new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(v || 0).replace(/[  ]/g, ' ');
-        const _aBilledKg = (it) => { const real = parseFloat(it.poids) || 0; const vol = ((parseFloat(it.lng)||0)*(parseFloat(it.lrg)||0)*(parseFloat(it.haut)||0))/5000; return (it.mode === 'poids') ? Math.max(real, vol) : real; };
+        // Colis « A la valeur » : poids masque sur la facture client.
+        const _aBilledKg = (it) => { if (it.mode !== 'poids') return 0; const real = parseFloat(it.poids) || 0; const vol = ((parseFloat(it.lng)||0)*(parseFloat(it.lrg)||0)*(parseFloat(it.haut)||0))/5000; return Math.max(real, vol); };
         const _aLineEur = (it) => { const q = parseFloat(it.qty)||0; return (it.mode === 'poids') ? _aBilledKg(it)*q*(it.parfum?15:13) : (parseFloat(it.pu)||0)*q; };
         let aerienColumns = null, aerienRows = null;
         if (isAerienDoc && transData && transData.items && Array.isArray(transData.items)) {

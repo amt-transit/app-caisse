@@ -761,9 +761,12 @@ export const ToutesLesFacturesView = {
         const isAerienInv = invoice.modeExpedition === 'aerien';
         const A_STD = 13, A_PARFUM = 15; // €/kg
         const aBilledKg = (it) => {
+            // Colis facture « A la valeur » : on masque le poids sur la facture
+            // client (evite la confusion entre poids note et tarification).
+            if (it.mode !== 'poids') return 0;
             const real = parseFloat(it.poids) || 0;
             const vol = ((parseFloat(it.lng) || 0) * (parseFloat(it.lrg) || 0) * (parseFloat(it.haut) || 0)) / 5000;
-            return (it.mode === 'poids') ? Math.max(real, vol) : real;
+            return Math.max(real, vol);
         };
         const aLineEur = (it) => {
             const qty = parseFloat(it.qty) || 0;
@@ -2409,7 +2412,8 @@ export const ToutesLesFacturesView = {
         const isEur = isEurAgency();
         const TAUX = isEur ? CONSTANTS.TAUX_CONVERSION : 1;
         const isAerienDoc = invoice.modeExpedition === 'aerien';
-        const _aBilledKg = (it) => { const real = parseFloat(it.poids) || 0; const vol = ((parseFloat(it.lng)||0)*(parseFloat(it.lrg)||0)*(parseFloat(it.haut)||0))/5000; return (it.mode === 'poids') ? Math.max(real, vol) : real; };
+        // Colis « A la valeur » : poids masque sur la facture/BL client.
+        const _aBilledKg = (it) => { if (it.mode !== 'poids') return 0; const real = parseFloat(it.poids) || 0; const vol = ((parseFloat(it.lng)||0)*(parseFloat(it.lrg)||0)*(parseFloat(it.haut)||0))/5000; return Math.max(real, vol); };
         const _aMoney = (eur) => this.formatMoneyLocal(isEur ? eur : eur * TAUX);
         const _aLineEur = (it) => { const q = parseFloat(it.qty)||0; return (it.mode === 'poids') ? _aBilledKg(it)*q*(it.parfum?15:13) : (parseFloat(it.pu)||0)*q; };
 
