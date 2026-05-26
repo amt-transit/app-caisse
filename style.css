@@ -206,15 +206,18 @@ h2 { text-align: center; color: var(--text-main); margin: 15px 0 10px 0; font-si
     align-items: flex-end; /* Aligne les champs en bas pour compenser les labels Paris/Abidjan */
 }
 input, select {
-    width: 100%; 
+    width: 100%;
     padding: 6px 10px;
     border: 1px solid var(--border-color);
     background: var(--input-bg);
     color: var(--text-main);
-    border-radius: 8px; 
-    font-size: 13px; 
+    border-radius: 8px;
+    font-size: 13px;
     box-sizing: border-box;
-    height: 36px;
+    /* min-height au lieu de height fixe : les selects/inputs au padding plus
+       grand (ex. padding:12px dans des modales) peuvent désormais grandir et
+       afficher leur libellé en entier au lieu de le rogner verticalement. */
+    min-height: 36px;
     transition: border-color 0.3s, box-shadow 0.3s;
 }
 input:focus, select:focus {

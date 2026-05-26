@@ -153,10 +153,21 @@ export const SettingsAgentsView = {
 
             <!-- MODAL D'ÉDITION -->
             <div id="agentModal" class="modal" style="display:none; position:fixed; z-index:2000; left:0; top:0; width:100%; height:100%; background:rgba(15,23,42,0.6); align-items:center; justify-content:center; backdrop-filter: blur(4px);">
-                <div class="modal-content" style="background:#fff; padding:25px; width:90%; max-width:500px; border-radius:16px; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25);">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 1px solid #e2e8f0; padding-bottom: 15px;">
-                        <h3 id="agentModalTitle" style="margin: 0; font-size: 18px; color: #0f172a; font-weight: 800;">Nouvel Agent</h3>
-                        <span class="close-modal" onclick="window.app.views.settingsAgents.closeModal()" style="cursor:pointer; font-size:24px; color:#64748b;">&times;</span>
+                <style>
+                    .ag-section-title { display:flex; align-items:center; gap:8px; margin: 18px 0 10px 0; font-size:12px; font-weight:800; color:#64748b; text-transform:uppercase; letter-spacing:0.5px; }
+                    .ag-section-title::after { content:''; flex:1; height:1px; background:#e2e8f0; }
+                    /* Selects : taille fixe + ligne aérée -> le libellé n'est plus rogné. */
+                    #agentModal select { height: 44px; padding: 0 12px; font-size: 14px; line-height: 1.4; box-sizing: border-box; background: #fff; }
+                    #agentModal input[type="text"], #agentModal input[type="number"], #agentModal input[type="email"], #agentModal input[type="password"] { box-sizing: border-box; height: 44px; padding: 0 12px; font-size: 14px; }
+                    .ag-mode-toggle { display:flex; gap:6px; background:#f1f5f9; padding:4px; border-radius:10px; }
+                    .ag-mode-btn { flex:1; border:none; cursor:pointer; padding:10px 8px; border-radius:8px; font-weight:700; font-size:12px; background:transparent; color:#475569; transition:0.2s; }
+                    .ag-mode-btn:hover { background:#e2e8f0; }
+                    .ag-mode-btn.active { background:#1e293b; color:#fff; box-shadow:0 2px 6px rgba(15,23,42,0.15); }
+                </style>
+                <div class="modal-content" style="background:#fff; padding:25px; width:92%; max-width:560px; border-radius:16px; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25); max-height:92vh; overflow-y:auto;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px; border-bottom: 1px solid #e2e8f0; padding-bottom: 14px;">
+                        <h3 id="agentModalTitle" style="margin: 0; font-size: 18px; color: #0f172a; font-weight: 800; display:flex; align-items:center; gap:10px;"><span style="display:inline-flex; width:34px; height:34px; align-items:center; justify-content:center; background:linear-gradient(135deg,#1e293b,#3b82f6); color:#fff; border-radius:10px; font-size:16px;">👤</span>Nouvel Agent</h3>
+                        <span class="close-modal" onclick="window.app.views.settingsAgents.closeModal()" style="cursor:pointer; font-size:24px; color:#64748b; line-height:1;">&times;</span>
                     </div>
                     
                     <input type="hidden" id="agentId">
@@ -183,43 +194,59 @@ export const SettingsAgentsView = {
                         </div>
                     </div>
 
+                    <div class="ag-section-title"><span>🧑</span> Identité</div>
+
                     <div class="form-group" style="margin-bottom: 15px;">
                         <label style="font-weight: 600; color: #1e293b; margin-bottom: 6px; display: block;">Nom complet *</label>
                         <input type="text" id="agentName" style="width: 100%; padding: 12px; border: 1px solid #cbd5e1; border-radius: 8px;" placeholder="Ex: Mouhamad Fofana">
                     </div>
                     
                     <div class="form-group" style="margin-bottom: 15px;">
+                        <label style="font-weight: 600; color: #1e293b; margin-bottom: 6px; display: block;">Initiale</label>
+                        <input type="text" id="agentInitials" style="width: 100%; padding: 12px; border: 1px solid #cbd5e1; border-radius: 8px;" placeholder="Ex: FM" maxlength="4">
+                    </div>
+
+                    <div class="ag-section-title"><span>🔐</span> Connexion</div>
+
+                    <div class="form-group" style="margin-bottom: 15px;">
                         <label style="font-weight: 600; color: #1e293b; margin-bottom: 6px; display: block;">Identifiant de connexion *</label>
                         <input type="text" id="agentEmail" style="width: 100%; padding: 12px; border: 1px solid #cbd5e1; border-radius: 8px;" placeholder="Ex: mouhamad">
                         <small style="color: #64748b; font-size: 11px; margin-top: 4px; display: block;">Le suffixe @amt.com sera ajouté automatiquement (tapez juste le nom).</small>
                     </div>
 
+                    <div class="form-group" style="margin-bottom: 15px;">
+                        <label style="font-weight: 600; color: #1e293b; margin-bottom: 6px; display: block;">Mot de passe *</label>
+                        <input type="text" id="agentPassword" style="width: 100%; padding: 12px; border: 1px solid #cbd5e1; border-radius: 8px;" placeholder="Mot de passe">
+                    </div>
+
+                    <div class="ag-section-title"><span>📍</span> Affectation</div>
+
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 15px;">
-                        <div class="form-group">
-                            <label style="font-weight: 600; color: #1e293b; margin-bottom: 6px; display: block;">Mot de passe *</label>
-                            <input type="text" id="agentPassword" style="width: 100%; padding: 12px; border: 1px solid #cbd5e1; border-radius: 8px;" placeholder="Mot de passe">
-                        </div>
                         <div class="form-group">
                             <label style="font-weight: 600; color: #1e293b; margin-bottom: 6px; display: block;">Rôle *</label>
                             <select id="agentRole" style="width: 100%; padding: 12px; border: 1px solid #cbd5e1; border-radius: 8px;">
                             <!-- Les rôles sont chargés dynamiquement depuis Firebase -->
                             </select>
                         </div>
-                    </div>
-
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 25px;">
                         <div class="form-group">
-                            <label style="font-weight: 600; color: #1e293b; margin-bottom: 6px; display: block;">Initiale</label>
-                            <input type="text" id="agentInitials" style="width: 100%; padding: 12px; border: 1px solid #cbd5e1; border-radius: 8px;" placeholder="Ex: FM" maxlength="4">
-                        </div>
-                        <div class="form-group">
-                            <label style="font-weight: 600; color: #1e293b; margin-bottom: 6px; display: block;">Agence *</label>
+                            <label style="font-weight: 600; color: #1e293b; margin-bottom: 6px; display: block;">Agence / Route *</label>
                             <select id="agentAgency" style="width: 100%; padding: 12px; border: 1px solid #cbd5e1; border-radius: 8px;">
                             ${agencyOptionsHtml}
                             </select>
                         </div>
                     </div>
-                    
+
+                    <div class="form-group" style="margin-bottom: 25px;">
+                        <label style="font-weight: 600; color: #1e293b; margin-bottom: 6px; display: block;">Mode d'expédition autorisé *</label>
+                        <div class="ag-mode-toggle">
+                            <button type="button" class="ag-mode-btn active" data-mode-val="both" onclick="window.app.views.settingsAgents.setAllowedMode('both')">🚢 + ✈️ Les deux</button>
+                            <button type="button" class="ag-mode-btn" data-mode-val="maritime" onclick="window.app.views.settingsAgents.setAllowedMode('maritime')">🚢 Maritime seul</button>
+                            <button type="button" class="ag-mode-btn" data-mode-val="aerien" onclick="window.app.views.settingsAgents.setAllowedMode('aerien')">✈️ Aérien seul</button>
+                        </div>
+                        <input type="hidden" id="agentAllowedMode" value="both">
+                        <small style="color:#64748b; font-size:11px; margin-top:6px; display:block;">Limite l'accès de l'agent à un mode dans sa route. « Les deux » par défaut.</small>
+                    </div>
+
                     <div style="display: flex; justify-content: flex-end; gap: 10px;">
                         <button class="amt-btn amt-btn-outline" style="padding: 10px 15px;" onclick="window.app.views.settingsAgents.closeModal()">Annuler</button>
                         <button class="amt-btn amt-btn-primary" id="saveAgentBtn" style="padding: 10px 20px;" onclick="window.app.views.settingsAgents.saveAgent()"><i class="fas fa-save"></i> Enregistrer</button>
@@ -472,16 +499,18 @@ export const SettingsAgentsView = {
             document.getElementById('agentInitials').value = agent.initials || '';
             document.getElementById('agentRole').value = agent.role || 'agent';
             document.getElementById('agentAgency').value = agent.agency || 'paris';
+            this.setAllowedMode(agent.allowedMode || 'both');
         } else {
             preview.style.backgroundImage = '';
             placeholder.style.display = 'block';
-            
+
             document.getElementById('agentName').value = '';
             document.getElementById('agentEmail').value = '';
             document.getElementById('agentPassword').value = '';
             document.getElementById('agentInitials').value = '';
             document.getElementById('agentRole').value = 'agent';
             document.getElementById('agentAgency').value = 'paris';
+            this.setAllowedMode('both');
         }
         
         document.getElementById('agentModal').style.display = 'flex';
@@ -489,6 +518,17 @@ export const SettingsAgentsView = {
 
     closeModal() {
         document.getElementById('agentModal').style.display = 'none';
+    },
+
+    // Mode d'expédition autorisé pour CET agent (en plus du roleAerien) :
+    // 'both' (défaut) | 'maritime' | 'aerien'. Limite la bascule de mode + le menu.
+    setAllowedMode(mode) {
+        const valid = ['both', 'maritime', 'aerien'].includes(mode) ? mode : 'both';
+        const hidden = document.getElementById('agentAllowedMode');
+        if (hidden) hidden.value = valid;
+        document.querySelectorAll('#agentModal .ag-mode-btn').forEach(b => {
+            b.classList.toggle('active', b.dataset.modeVal === valid);
+        });
     },
 
     handlePhotoSelect(event) {
@@ -554,6 +594,7 @@ export const SettingsAgentsView = {
         const initials = document.getElementById('agentInitials').value.trim().toUpperCase();
         const role = document.getElementById('agentRole').value;
         const agency = document.getElementById('agentAgency').value;
+        const allowedMode = document.getElementById('agentAllowedMode')?.value || 'both';
 
         if (!name || !rawUsername || !password) {
             return this.app.showToast("Veuillez remplir le nom, l'identifiant et le mot de passe.", "error");
@@ -586,6 +627,7 @@ export const SettingsAgentsView = {
                 initials: initials,
                 role: role,
                 agency: agency,
+                allowedMode: allowedMode,
                 updatedAt: new Date().toISOString()
             };
 

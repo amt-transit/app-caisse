@@ -244,6 +244,9 @@ onAuthStateChanged(auth, async (user) => {
         sessionStorage.setItem('userPermissions', JSON.stringify(userPermissions));
         sessionStorage.setItem('userName', userName || 'Utilisateur');
         sessionStorage.setItem('userAgency', userData.agency || 'abidjan');
+        // Mode d'expédition autorisé pour CET agent : 'both' (défaut) | 'maritime' | 'aerien'.
+        // Restreint en plus du roleAerien (intersection).
+        sessionStorage.setItem('userAllowedMode', userData.allowedMode || 'both');
 
         // Détermination de l'agence actuellement "Active".
         // app.js (au démarrage, DOMContentLoaded) construit le menu en lisant

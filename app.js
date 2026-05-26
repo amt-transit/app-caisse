@@ -405,11 +405,23 @@ export const app = {
         if (config && config.roleAerien) {
             _ra = (config.roleAerien[userRole] !== undefined) ? config.roleAerien[userRole] : config.roleAerien[ur];
         }
-        const _aerienAllowed = isSuperUser || _ra !== false;
+        // Restriction supplémentaire PAR AGENT : 'both' (défaut) | 'maritime' | 'aerien'.
+        // Permet de limiter un agent à un seul mode dans sa route, indépendamment du rôle.
+        const _userAllowedMode = sessionStorage.getItem('userAllowedMode') || 'both';
+        const _aerienAllowed = (isSuperUser || _ra !== false) && _userAllowedMode !== 'maritime';
+        const _maritimeAllowed = _userAllowedMode !== 'aerien';
         const _aerienBtn = document.querySelector('.shipping-mode-toggle [data-mode="aerien"]');
         if (_aerienBtn) _aerienBtn.style.display = _aerienAllowed ? '' : 'none';
+        const _maritimeBtn = document.querySelector('.shipping-mode-toggle [data-mode="maritime"]');
+        if (_maritimeBtn) _maritimeBtn.style.display = _maritimeAllowed ? '' : 'none';
+        // Bascule forcée si l'agent est sur un mode interdit.
         if (!_aerienAllowed && _shipMode === 'aerien') {
             sessionStorage.setItem('shippingMode', 'maritime');
+            location.reload();
+            return;
+        }
+        if (!_maritimeAllowed && _shipMode === 'maritime') {
+            sessionStorage.setItem('shippingMode', 'aerien');
             location.reload();
             return;
         }
