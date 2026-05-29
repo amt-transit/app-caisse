@@ -3,7 +3,7 @@
 // ({ data, auth, app, ... }). L'ancienne signature v1 (data, context) ne
 // recevait pas l'identité ici -> "Vous devez être connecté" malgré une
 // session valide. On s'aligne donc sur l'API v2.
-const { onCall, HttpsError } = require("firebase-functions/v2/https");
+const { onCall, onRequest, HttpsError } = require("firebase-functions/v2/https");
 const { onDocumentCreated } = require("firebase-functions/v2/firestore");
 const admin = require("firebase-admin");
 admin.initializeApp();
@@ -11,6 +11,66 @@ admin.initializeApp();
 // Région alignée sur l'URL appelée par l'app web (us-central1) : ne pas
 // changer sans mettre à jour les appels côté client.
 const REGION = "us-central1";
+
+// VÉRIFICATION PUBLIQUE D'UNE FACTURE (anti-falsification).
+// Le QR code d'une facture PDF pointe vers verify.html, qui appelle cette
+// fonction. Elle lit la transaction via l'Admin SDK (source de vérité) et
+// renvoie UNIQUEMENT des champs sûrs + le statut de paiement RÉEL et À JOUR.
+// Pas d'authentification (le destinataire d'une facture n'est pas connecté),
+// mais on n'expose que le minimum et l'id de doc est non devinable.
+const TAUX_EUR = 655.957;
+exports.verifyInvoice = onRequest({ region: REGION, invoker: "public", cors: true }, async (req, res) => {
+    try {
+        const c = String((req.query && req.query.c) || "");
+        const id = String((req.query && req.query.id) || "");
+        // c doit être une collection de transactions (route-aware) : on
+        // n'autorise QUE ce motif pour empêcher la lecture d'autres données.
+        if (!/^transactions(_[a-z0-9_]+)?$/.test(c) || !id) {
+            res.status(400).json({ ok: false, error: "Paramètres invalides." });
+            return;
+        }
+        const snap = await admin.firestore().collection(c).doc(id).get();
+        if (!snap.exists) { res.json({ ok: true, found: false }); return; }
+        const t = snap.data() || {};
+        if (t.isDeleted) { res.json({ ok: true, found: false, deleted: true }); return; }
+
+        // Devise d'affichage de la route.
+        let currency = (t.agency === "paris") ? "EUR" : "XOF";
+        if (currency !== "EUR" && t.agency && t.agency !== "abidjan" && t.agency !== "all") {
+            try {
+                const ac = await admin.firestore().collection("agencies_config").doc(t.agency).get();
+                if (ac.exists && ac.data().currency === "EUR") currency = "EUR";
+            } catch (e) { /* défaut XOF */ }
+        }
+        const factor = currency === "EUR" ? TAUX_EUR : 1;
+
+        const total = parseFloat(t.prix) || 0;
+        const paid = (parseFloat(t.montantParis) || 0) + (parseFloat(t.montantAbidjan) || 0);
+        let remaining = total - paid;
+        if (Math.abs(remaining) < 1) remaining = 0;
+        let status = "IMPAYE";
+        if (total > 0 && remaining <= 0) status = "PAYE";
+        else if (paid > 0) status = "PARTIEL";
+
+        res.json({
+            ok: true,
+            found: true,
+            reference: t.reference || "",
+            client: t.nom || "",
+            destinataire: t.nomDestinataire || "",
+            date: t.date || "",
+            currency,
+            total: total / factor,
+            paid: paid / factor,
+            remaining: remaining / factor,
+            status,
+            checkedAt: new Date().toISOString()
+        });
+    } catch (e) {
+        console.error("verifyInvoice:", e);
+        res.status(500).json({ ok: false, error: "Erreur serveur." });
+    }
+});
 
 // SÉCURITÉ : vérifie que l'appelant est connecté ET possède un rôle
 // admin/super_admin. On relit sa fiche Firestore avec l'Admin SDK

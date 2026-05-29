@@ -5,6 +5,7 @@ import { CONSTANTS, DEFAULT_CGV, DEFAULT_COMPANY_FOOTER } from '../../constants.
 import { createApp, ref, computed, reactive, onMounted, onUnmounted } from "https://unpkg.com/vue@3/dist/vue.esm-browser.prod.js";
 import { getCollectionName, AGENCIES, getConfigSourceAgency } from '../../agencies-config.js';
 import { loadJsPdf } from '../../services/pdf-common.js';
+import { applyInvoiceSecurity } from '../../services/invoice-security.js';
 import { extractPhone, stripPhoneFromName } from '../../services/phone.js';
 import { filterByShippingMode } from '../../shipping-mode.js';
 import { normalizePhone } from '../../affiliations.js';
@@ -2578,6 +2579,21 @@ export const ToutesLesFacturesView = {
         doc.setTextColor(100, 116, 139);
         const footerText = invoiceConfig?.footer || DEFAULT_COMPANY_FOOTER;
         doc.text(footerText, pageWidth / 2, doc.internal.pageSize.getHeight() - 10, { align: 'center' });
+
+        // Sécurité anti-falsification (FACTURE / REÇU) : tampon de statut +
+        // filigrane reste dû + QR de vérification en ligne (statut réel).
+        if (docType === 'FACTURE' || docType === 'RECU') {
+            try {
+                await applyInvoiceSecurity(doc, {
+                    trans: invoice,
+                    collectionName: getCollectionName('transactions'),
+                    docId: invoice.id,
+                    // computeInvoiceStatus renvoie le reste en CFA brut ; on
+                    // convertit en devise d'affichage de la route (÷ TAUX).
+                    formatMoney: (v) => this.formatMoneyLocal(v / TAUX)
+                });
+            } catch (e) { console.warn('Sécurité facture :', e && e.message); }
+        }
 
         doc.save(`${titleText.replace(/ /g, '_')}_${invoice.reference}.pdf`);
     }

@@ -13,8 +13,10 @@
 import { db } from '../firebase-config.js';
 import { getDoc, getDocs, doc, collection, query, where, limit } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 import { getCollectionName, getConfigSourceAgency } from '../agencies-config.js';
-import { DEFAULT_CGV, DEFAULT_COMPANY_FOOTER } from '../constants.js';
+import { DEFAULT_CGV, DEFAULT_COMPANY_FOOTER, CONSTANTS } from '../constants.js';
 import { stripPhoneFromName } from './phone.js';
+import { applyInvoiceSecurity } from './invoice-security.js';
+import { isEurAgency } from './format.js';
 
 export function createDocumentTemplates({ showToast, calculateMagasinageFee }) {
 
@@ -224,9 +226,11 @@ export function createDocumentTemplates({ showToast, calculateMagasinageFee }) {
 
         // 1. Récupération des données financières exactes depuis la Caisse
         let transData = null;
+        let transDocId = null;
+        const transCollection = getCollectionName('transactions');
         try {
-            const qTrans = await getDocs(query(collection(db, getCollectionName('transactions')), where('reference', '==', d.ref), limit(1)));
-            if (!qTrans.empty) transData = qTrans.docs[0].data();
+            const qTrans = await getDocs(query(collection(db, transCollection), where('reference', '==', d.ref), limit(1)));
+            if (!qTrans.empty) { transData = qTrans.docs[0].data(); transDocId = qTrans.docs[0].id; }
         } catch (e) {
             console.error("Erreur récupération transaction :", e);
         }
@@ -494,6 +498,26 @@ export function createDocumentTemplates({ showToast, calculateMagasinageFee }) {
         doc2.setTextColor(100, 116, 139);
         const footerText = invoiceConfig?.footer || DEFAULT_COMPANY_FOOTER;
         doc2.text(footerText, pageWidth / 2, doc2.internal.pageSize.getHeight() - 10, { align: 'center' });
+
+        // Sécurité anti-falsification : tampon statut + filigrane reste dû + QR
+        // de vérification en ligne (statut réel). Non bloquant si la
+        // transaction n'a pas été retrouvée.
+        if (transData && transDocId) {
+            try {
+                const TAUX = (CONSTANTS && CONSTANTS.TAUX_CONVERSION) || 655.957;
+                await applyInvoiceSecurity(doc2, {
+                    trans: transData,
+                    collectionName: transCollection,
+                    docId: transDocId,
+                    formatMoney: (v) => {
+                        const disp = isEurAgency() ? (v / TAUX) : v;
+                        try {
+                            return new Intl.NumberFormat(isEurAgency() ? 'fr-FR' : 'fr-CI', { style: 'currency', currency: isEurAgency() ? 'EUR' : 'XOF' }).format(disp || 0).replace(/[  ]/g, ' ');
+                        } catch (e) { return String(Math.round(disp)); }
+                    }
+                });
+            } catch (e) { console.warn('Sécurité facture (module) :', e && e.message); }
+        }
 
         doc2.save(`Facture_${d.ref}.pdf`);
     }

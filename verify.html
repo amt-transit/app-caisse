@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex">
+<title>Vérification de facture — AMT Trans'it</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Comfortaa:wght@500;700&family=Jost:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --amt-blue:#1A3553; --amt-blue-d:#13283f; --amt-red:#E51F21; --amt-gold:#F2A312;
+    --green:#16a34a; --ink:#0f172a; --muted:#566273; --line:#e6ebf1;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; min-height:100vh; font-family:'Jost',system-ui,sans-serif; color:var(--ink);
+    background:
+      radial-gradient(1200px 500px at 50% -10%, rgba(26,53,83,.10), transparent),
+      linear-gradient(180deg,#eef2f7,#e3e9f1);
+    display:flex; align-items:flex-start; justify-content:center; padding:24px 16px 60px;
+  }
+  .card{
+    width:100%; max-width:480px; background:#fff; border-radius:20px; overflow:hidden;
+    border:1px solid var(--line); box-shadow:0 24px 50px -18px rgba(26,53,83,.35);
+  }
+  .card__top{ background:var(--amt-blue); border-bottom:3px solid var(--amt-gold); padding:22px 24px; color:#fff; display:flex; align-items:center; gap:14px; }
+  .logo{ width:46px; height:46px; border-radius:12px; background:rgba(255,255,255,.12); display:flex; align-items:center; justify-content:center; font-size:24px; border:1px solid rgba(255,255,255,.25); }
+  .brand{ font-family:'Comfortaa',sans-serif; font-weight:700; font-size:18px; letter-spacing:.3px; }
+  .brand small{ display:block; font-family:'Jost',sans-serif; font-weight:400; font-size:11.5px; opacity:.8; letter-spacing:.5px; text-transform:uppercase; }
+  .body{ padding:24px; }
+  .loading,.error{ text-align:center; color:var(--muted); padding:30px 10px; font-size:15px; }
+  .spinner{ width:34px;height:34px;border:3px solid #d6deea;border-top-color:var(--amt-blue);border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 14px;}
+  @keyframes spin{to{transform:rotate(360deg);}}
+  .stamp{ text-align:center; margin-bottom:18px; }
+  .stamp__badge{ display:inline-block; padding:10px 28px; border-radius:14px; font-family:'Comfortaa',sans-serif; font-weight:700; font-size:26px; letter-spacing:1px; color:#fff; box-shadow:0 8px 18px rgba(0,0,0,.12); }
+  .b-paye{ background:var(--green); }
+  .b-partiel{ background:var(--amt-gold); }
+  .b-impaye{ background:var(--amt-red); }
+  .stamp__sub{ margin-top:10px; font-size:13px; color:var(--muted); }
+  .rows{ border:1px solid var(--line); border-radius:14px; overflow:hidden; }
+  .row{ display:flex; justify-content:space-between; gap:12px; padding:12px 15px; border-bottom:1px solid var(--line); font-size:14px; }
+  .row:last-child{ border-bottom:none; }
+  .row .k{ color:var(--muted); font-weight:500; }
+  .row .v{ font-weight:600; color:var(--ink); text-align:right; }
+  .amount-block{ margin-top:16px; display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  .amt{ border:1px solid var(--line); border-radius:12px; padding:12px; text-align:center; }
+  .amt .lbl{ font-size:11px; text-transform:uppercase; letter-spacing:.4px; color:var(--muted); font-weight:600; }
+  .amt .val{ font-family:'Comfortaa',sans-serif; font-weight:700; font-size:18px; margin-top:4px; }
+  .amt--rest{ grid-column:1 / -1; }
+  .amt--rest .val{ color:var(--amt-red); font-size:22px; }
+  .amt--rest.paid .val{ color:var(--green); }
+  .foot{ margin-top:18px; text-align:center; font-size:11.5px; color:var(--muted); line-height:1.6; }
+  .foot b{ color:var(--amt-blue); }
+  .ref-pill{ display:inline-block; background:#eef2f7; color:var(--amt-blue); font-weight:700; padding:3px 10px; border-radius:8px; font-family:'Comfortaa',sans-serif; }
+</style>
+</head>
+<body>
+  <div class="card">
+    <div class="card__top">
+      <div class="logo">📦</div>
+      <div class="brand">AMT Trans'it<small>Vérification de facture</small></div>
+    </div>
+    <div class="body" id="content">
+      <div class="loading"><div class="spinner"></div>Vérification en cours…</div>
+    </div>
+  </div>
+
+<script>
+  // URL de la fonction Cloud publique (projet caisse-amt-perso, us-central1).
+  const FN_URL = "https://us-central1-caisse-amt-perso.cloudfunctions.net/verifyInvoice";
+
+  const params = new URLSearchParams(location.search);
+  const c = params.get('c');
+  const id = params.get('id');
+  const content = document.getElementById('content');
+
+  function money(v, currency){
+    try {
+      return new Intl.NumberFormat(currency === 'EUR' ? 'fr-FR' : 'fr-CI', { style:'currency', currency: currency || 'XOF' })
+        .format(v || 0).replace(/[  ]/g,' ');
+    } catch(e){ return (Math.round(v||0)).toLocaleString('fr-FR') + (currency === 'EUR' ? ' €' : ' F'); }
+  }
+  function fmtDate(d){ if(!d) return '—'; try{ return new Date(d).toLocaleDateString('fr-FR'); }catch(e){ return d; } }
+  function esc(s){ return String(s||'').replace(/[<>&"]/g, m => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[m])); }
+
+  function showError(msg){
+    content.innerHTML = '<div class="error">⚠️ ' + esc(msg) + '</div>';
+  }
+
+  async function run(){
+    if(!c || !id){ showError("Lien invalide : informations de facture manquantes."); return; }
+    try {
+      const resp = await fetch(`${FN_URL}?c=${encodeURIComponent(c)}&id=${encodeURIComponent(id)}`);
+      const data = await resp.json();
+      if(!data || !data.ok){ showError("Vérification impossible pour le moment."); return; }
+      if(!data.found){ showError("Aucune facture ne correspond à ce code. Document non reconnu."); return; }
+
+      const map = {
+        PAYE:    { cls:'b-paye',    label:'PAYÉ',    sub:'Cette facture est intégralement réglée.' },
+        PARTIEL: { cls:'b-partiel', label:'PARTIEL', sub:'Cette facture est partiellement réglée — un solde reste dû.' },
+        IMPAYE:  { cls:'b-impaye',  label:'IMPAYÉ',  sub:'Cette facture n\'a pas encore été réglée.' }
+      };
+      const s = map[data.status] || map.IMPAYE;
+      const restPaid = data.status === 'PAYE';
+
+      content.innerHTML = `
+        <div class="stamp">
+          <span class="stamp__badge ${s.cls}">${s.label}</span>
+          <div class="stamp__sub">${s.sub}</div>
+        </div>
+        <div class="rows">
+          <div class="row"><span class="k">Référence</span><span class="v"><span class="ref-pill">${esc(data.reference) || '—'}</span></span></div>
+          <div class="row"><span class="k">Client</span><span class="v">${esc(data.client) || '—'}</span></div>
+          ${data.destinataire ? `<div class="row"><span class="k">Destinataire</span><span class="v">${esc(data.destinataire)}</span></div>` : ''}
+          <div class="row"><span class="k">Date</span><span class="v">${fmtDate(data.date)}</span></div>
+        </div>
+        <div class="amount-block">
+          <div class="amt"><div class="lbl">Total facturé</div><div class="val">${money(data.total, data.currency)}</div></div>
+          <div class="amt"><div class="lbl">Déjà payé</div><div class="val" style="color:var(--green);">${money(data.paid, data.currency)}</div></div>
+          <div class="amt amt--rest ${restPaid ? 'paid' : ''}"><div class="lbl">Reste à payer</div><div class="val">${money(data.remaining, data.currency)}</div></div>
+        </div>
+        <div class="foot">
+          Statut réel lu sur le système <b>AMT Trans'it</b> le ${fmtDate(data.checkedAt)}.<br>
+          Si le document papier indique un statut différent, fiez-vous à cette page.
+        </div>`;
+    } catch(e){
+      showError("Connexion impossible. Vérifiez votre réseau et réessayez.");
+    }
+  }
+  run();
+</script>
+</body>
+</html>
