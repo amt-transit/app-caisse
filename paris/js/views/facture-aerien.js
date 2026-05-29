@@ -6,6 +6,7 @@ import { Autocomplete } from './autocomplete.js';
 import { getCollectionName, AGENCIES } from '../../../agencies-config.js';
 import { isAffiliationActive } from '../../../affiliation-config.js';
 import { getAffiliation, ensureAffiliation, creerCommissionParrainage } from '../../../affiliations.js';
+import { toE164Intl, toE164Detect, phoneTail, routePhoneCountries } from '../../../services/phone.js';
 
 export const FactureAerienView = {
     vueApp: null,
@@ -1099,11 +1100,20 @@ initVue(globalApp) {
                     factureMode: factureModeSummary
                 });
 
+                // App AMT Clients : liaison client<->factures par phoneTail (les
+                // 9 derniers chiffres, insensible au pays). E.164 = affichage.
+                const _pc = routePhoneCountries(activeAgency);
+                const expPhoneE164 = _pc.exp ? toE164Intl(expPhone, _pc.exp) : toE164Detect(expPhone);
+                const destPhoneE164 = _pc.dest ? toE164Intl(destPhone, _pc.dest) : toE164Detect(destPhone);
+                const expPhoneTail = phoneTail(expPhone);
+                const destPhoneTail = phoneTail(destPhone);
+
                 const transRef = doc(collection(db, getCollectionName("transactions")));
                 batch.set(transRef, {
                     demarcheurId: affiliationDemarcheurId,
                     appointmentId: _appointmentId || null,
                     reference: ref, nom: finalExpName, nomDestinataire: finalDestName, numero: destPhone, tel: expPhone,
+                    expPhoneE164, destPhoneE164, expPhoneTail, destPhoneTail,
                     adresseDestinataire: lieuLivraison, conteneur: conteneurCode, volumeCBM: volumeCBM, date: dateIso,
                     prix: totalCFA, montantParis: payeCFA, montantAbidjan: 0, reste: -resteCFA,
                     modePaiement: form.modePay, description: items.value.map(i => `${i.qty}x ${i.desc}`).join(', '),
