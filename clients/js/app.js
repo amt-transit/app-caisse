@@ -24,6 +24,38 @@ const DEMO_INVOICES = [
 ];
 
 const STATUS_LABEL = { PAYE: 'Payé', PARTIEL: 'Partiel', IMPAYE: 'Impayé' };
+
+// Étapes de suivi d'un colis (du départ à la livraison).
+const STAGES = [
+  { l: 'Entrepôt', ic: '📥' },
+  { l: 'Conteneur', ic: '📦' },
+  { l: 'Arrivé', ic: '🛬' },
+  { l: 'Livré', ic: '✅' }
+];
+// Colis de démonstration : stage = index de l'étape ACTUELLE (0..3).
+const DEMO_PARCELS = [
+  { label: 'JB-014-AER1-01', ref: 'JB-014-AER1', desc: '1 carton moyen', stage: 3, date: '2026-05-24' },
+  { label: 'JB-011-CTN7-01', ref: 'JB-011-CTN7', desc: '2 grands cartons', stage: 2, date: '2026-05-20' },
+  { label: 'JB-011-CTN7-02', ref: 'JB-011-CTN7', desc: '1 barrique', stage: 1, date: '2026-05-20' },
+  { label: 'AB-208-CTN7-01', ref: 'AB-208-CTN7', desc: '1 carton', stage: 0, date: '2026-05-15' },
+  { label: 'JB-007-AER1-01', ref: 'JB-007-AER1', desc: '1 colis', stage: 3, date: '2026-05-11' },
+];
+let trackFilter = -1; // -1 = tous, sinon index d'étape
+let selectedInvoiceRef = null;
+
+// Notifications de suivi (démo) — liées aux changements d'étape des colis.
+let NOTIFS = [
+  { id: 1, ic: '✅', txt: 'Votre colis JB-014-AER1-01 a été livré au destinataire.', date: '2026-05-24', read: false },
+  { id: 2, ic: '🛬', txt: 'Le colis JB-011-CTN7-01 est arrivé à destination.', date: '2026-05-20', read: false },
+  { id: 3, ic: '📦', txt: 'Les colis de la facture JB-011-CTN7 ont été chargés dans le conteneur.', date: '2026-05-19', read: true },
+  { id: 4, ic: '📥', txt: 'Le colis AB-208-CTN7-01 a été reçu en entrepôt.', date: '2026-05-15', read: true },
+];
+function unreadCount() { return NOTIFS.filter(n => !n.read).length; }
+function updateNotifBadge() {
+  const b = $('#notifBadge'); if (!b) return;
+  const n = unreadCount();
+  b.textContent = n; b.hidden = (n === 0);
+}
 const money = (v) => new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(v || 0).replace(/[  ]/g, ' ');
 const fdate = (d) => { try { return new Date(d).toLocaleDateString('fr-FR'); } catch (e) { return d; } };
 
@@ -102,14 +134,18 @@ function enterApp() {
   const ph = localStorage.getItem(LS.phone) || '';
   const init = (localStorage.getItem(LS.name) || 'Client').trim().slice(0, 2).toUpperCase() || (ph.replace(/\D/g, '').slice(-2));
   $('#avatarInit').textContent = init || '👤';
+  updateNotifBadge();
   renderView('dashboard');
 }
 
 // ======================= NAVIGATION =======================
 const VIEW_TITLES = {
   dashboard: 'Tableau de bord', requests: 'Dépôt / Récupération', quotes: 'Devis',
-  stats: 'Statistiques', chat: 'Messagerie', profile: 'Profil'
+  stats: 'Statistiques', chat: 'Messagerie', profile: 'Profil', tracking: 'Suivi des colis',
+  notifications: 'Notifications', invoice: 'Détail de la facture'
 };
+// Vues présentes dans la barre du bas (les autres : profil, notifs, détail).
+const TAB_VIEWS = ['dashboard', 'tracking', 'requests', 'quotes', 'stats', 'chat'];
 
 function setActiveTab(view) {
   $$('.tab').forEach(t => t.classList.toggle('active', t.dataset.view === view));
@@ -118,7 +154,7 @@ function setActiveTab(view) {
 function renderView(view) {
   const c = $('#content');
   $('#topTitle').textContent = VIEW_TITLES[view] || 'AMT Clients';
-  if (view !== 'profile') setActiveTab(view);
+  if (TAB_VIEWS.includes(view)) setActiveTab(view);
   else $$('.tab').forEach(t => t.classList.remove('active'));
   c.scrollTop = 0;
   c.innerHTML = (VIEWS[view] || VIEWS.dashboard)();
@@ -127,24 +163,109 @@ function renderView(view) {
 
 $$('.tab').forEach(t => t.addEventListener('click', () => renderView(t.dataset.view)));
 $('#btnProfile').addEventListener('click', () => renderView('profile'));
-$('#btnNotif').addEventListener('click', () => renderView('dashboard'));
+$('#btnNotif').addEventListener('click', () => {
+  NOTIFS.forEach(n => n.read = true); // ouvrir = tout marquer lu
+  updateNotifBadge();
+  renderView('notifications');
+});
 
-// Délégation : raccourcis du tableau de bord
+// Délégation : raccourcis (data-go) + filtre suivi (data-track)
+// + ouverture facture (data-inv) + téléchargement PDF (data-pdf)
 document.addEventListener('click', (e) => {
   const go = e.target.closest('[data-go]');
-  if (go) renderView(go.dataset.go);
+  if (go) { renderView(go.dataset.go); return; }
+  const iv = e.target.closest('[data-inv]');
+  if (iv) { selectedInvoiceRef = iv.dataset.inv; renderView('invoice'); return; }
+  const pf = e.target.closest('[data-pdf]');
+  if (pf) { exportClientInvoicePDF(pf.dataset.pdf); return; }
+  const tr = e.target.closest('[data-track]');
+  if (tr) { trackFilter = parseInt(tr.dataset.track, 10); renderView('tracking'); }
 });
+
+// Génère un PDF client simple (réutilise les chargeurs jsPDF + QR partagés).
+async function exportClientInvoicePDF(ref) {
+  const inv = DEMO_INVOICES.find(i => i.ref === ref);
+  if (!inv) return;
+  try {
+    const { loadJsPdf } = await import('../../services/pdf-common.js');
+    const { makeQrDataUrl } = await import('../../services/qr-common.js');
+    const { jsPDF } = await loadJsPdf();
+    const doc = new jsPDF('p', 'mm', 'a4');
+
+    doc.setFillColor(26, 53, 83); doc.rect(0, 0, 210, 28, 'F');
+    doc.setFillColor(242, 163, 18); doc.rect(0, 28, 210, 1.5, 'F');
+    doc.setTextColor(255, 255, 255); doc.setFontSize(16);
+    doc.text("AMT Trans'it — Facture", 14, 16);
+    doc.setFontSize(9); doc.setTextColor(214, 222, 232);
+    doc.text(`Réf. ${inv.ref}  ·  ${fdate(inv.date)}`, 14, 23);
+
+    doc.setTextColor(0, 0, 0); doc.setFontSize(11);
+    doc.text(`Rôle : ${inv.role}`, 14, 42);
+    doc.text(`Destinataire : ${inv.dest}`, 14, 49);
+
+    const colis = DEMO_PARCELS.filter(p => p.ref === inv.ref);
+    const body = colis.length ? colis.map(p => [p.label, p.desc, STAGES[p.stage].l]) : [['—', inv.dest, '—']];
+    doc.autoTable({
+      startY: 56, head: [['Colis', 'Description', 'Étape']], body, theme: 'grid',
+      headStyles: { fillColor: [26, 53, 83] }, styles: { fontSize: 9 }, margin: { left: 14, right: 14 }
+    });
+
+    let y = doc.lastAutoTable.finalY + 12;
+    doc.setFontSize(11);
+    doc.text(`Total : ${money(inv.total)}`, 14, y); y += 7;
+    doc.text(`Payé : ${money(inv.paid)}`, 14, y); y += 7;
+    doc.setFont('helvetica', 'bold');
+    doc.text(`Reste à payer : ${money(inv.total - inv.paid)}`, 14, y);
+    doc.setFont('helvetica', 'normal');
+
+    const url = `${location.origin}/verify.html?c=transactions&id=${encodeURIComponent(inv.ref)}`;
+    const qr = await makeQrDataUrl(url, { width: 240 });
+    if (qr) {
+      doc.addImage(qr, 'PNG', 14, 250, 28, 28);
+      doc.setFontSize(8); doc.setTextColor(90, 90, 90);
+      doc.text("Scannez pour vérifier le statut réel de la facture", 46, 263);
+    }
+    doc.save(`Facture_${inv.ref}.pdf`);
+  } catch (e) {
+    console.warn('PDF client :', e && e.message);
+    alert("Génération du PDF impossible pour le moment.");
+  }
+}
 
 // ======================= VUES (démo) =======================
 function invRow(i) {
   const cls = i.status === 'PAYE' ? 'paye' : i.status === 'PARTIEL' ? 'partiel' : 'impaye';
-  return `<div class="inv">
+  return `<div class="inv" data-inv="${i.ref}" style="cursor:pointer">
     <div class="inv__main">
       <div class="inv__ref">${i.ref} <span class="tagp tagp--${cls}">${STATUS_LABEL[i.status]}</span></div>
       <div class="inv__sub">${i.role} · ${i.dest} · ${fdate(i.date)}</div>
     </div>
-    <div class="inv__amt">${money(i.total)}</div>
+    <div class="inv__amt">${money(i.total)} <span style="color:#c2cedd;font-weight:700;">›</span></div>
   </div>`;
+}
+
+// Récap par étape (nombre de colis à chaque étape). clickable=true -> filtre.
+function pipeSummary(clickable) {
+  return `<div class="pipe">` + STAGES.map((s, idx) => {
+    const n = DEMO_PARCELS.filter(p => p.stage === idx).length;
+    const act = (!clickable && trackFilter === idx) ? ' active' : '';
+    const attr = clickable ? `data-go="tracking"` : `data-track="${idx}"`;
+    return `<button class="p${act}" ${attr}>
+      <div class="p__ic">${s.ic}</div><div class="p__v">${n}</div><div class="p__l">${s.l}</div>
+    </button>`;
+  }).join('') + `</div>`;
+}
+
+// Barre d'étapes d'un colis (0..3).
+function stepper(stage) {
+  return `<div class="stepper">` + STAGES.map((s, idx) => {
+    const cls = idx < stage ? 'done' : (idx === stage ? 'current' : '');
+    return `<div class="step ${cls}">
+      <div class="step__bar"></div>
+      <div class="step__dot">${idx <= stage ? s.ic : (idx + 1)}</div>
+      <div class="step__lb">${s.l}</div>
+    </div>`;
+  }).join('') + `</div>`;
 }
 
 const VIEWS = {
@@ -158,12 +279,17 @@ const VIEWS = {
       </div>
 
       <div class="shortcuts">
+        <button class="shortcut" data-go="tracking"><span class="shortcut__ic">🚚</span><span class="shortcut__tx">Suivre mes colis</span></button>
         <button class="shortcut" data-go="requests"><span class="shortcut__ic">📦</span><span class="shortcut__tx">Demander un dépôt</span></button>
         <button class="shortcut" data-go="requests"><span class="shortcut__ic">🔄</span><span class="shortcut__tx">Faire récupérer</span></button>
         <button class="shortcut" data-go="quotes"><span class="shortcut__ic">🧾</span><span class="shortcut__tx">Faire un devis</span></button>
-        <button class="shortcut" data-go="stats"><span class="shortcut__ic">📊</span><span class="shortcut__tx">Mes statistiques</span></button>
-        <button class="shortcut" data-go="dashboard"><span class="shortcut__ic">🔔</span><span class="shortcut__tx">Notifications</span></button>
+        <button class="shortcut" data-go="notifications"><span class="shortcut__ic">🔔</span><span class="shortcut__tx">Notifications</span></button>
         <button class="shortcut" data-go="dashboard"><span class="shortcut__ic">🚢</span><span class="shortcut__tx">Prochains départs</span></button>
+      </div>
+
+      <div class="card">
+        <div class="section-title">Où sont mes colis ? <span class="link" data-go="tracking">Détail →</span></div>
+        ${pipeSummary(true)}
       </div>
 
       <div class="card">
@@ -260,6 +386,89 @@ const VIEWS = {
   chat() {
     return `
       <div class="card"><div class="placeholder"><span class="ph-ic">💬</span>Échangez avec AMT Trans'it. Vos messages seront dirigés vers votre agence (départ ou arrivée) selon votre profil.</div></div>
+    `;
+  },
+
+  notifications() {
+    if (!NOTIFS.length) {
+      return `<div class="card"><div class="placeholder"><span class="ph-ic">🔔</span>Aucune notification pour le moment.</div></div>`;
+    }
+    const items = NOTIFS.map(n => `
+      <div class="inv">
+        <div style="font-size:20px;margin-right:4px;">${n.ic}</div>
+        <div class="inv__main">
+          <div class="inv__ref" style="font-weight:600;color:var(--ink);font-size:13.5px;">${n.txt}</div>
+          <div class="inv__sub">${fdate(n.date)}</div>
+        </div>
+      </div>`).join('');
+    return `<div class="card"><div class="section-title">Mes notifications</div>${items}</div>
+      <p class="placeholder" style="padding:6px;">Vous serez prévenu à chaque étape : entrepôt, conteneur, arrivée, livraison. (démo)</p>`;
+  },
+
+  invoice() {
+    const inv = DEMO_INVOICES.find(i => i.ref === selectedInvoiceRef) || DEMO_INVOICES[0];
+    const reste = inv.total - inv.paid;
+    const cls = inv.status === 'PAYE' ? 'paye' : inv.status === 'PARTIEL' ? 'partiel' : 'impaye';
+    const colis = DEMO_PARCELS.filter(p => p.ref === inv.ref);
+    const colisHtml = colis.length ? colis.map(p => `
+      <div class="inv">
+        <div class="inv__main">
+          <div class="inv__ref" style="font-size:13.5px;">${p.label}</div>
+          <div class="inv__sub">${p.desc}</div>
+        </div>
+        <div class="inv__amt" style="font-size:12px;color:var(--amt-blue);">${STAGES[p.stage].ic} ${STAGES[p.stage].l}</div>
+      </div>`).join('') : `<div class="placeholder" style="padding:14px;">Détail des colis non disponible (démo).</div>`;
+
+    return `
+      <button class="btn btn--ghost" data-go="dashboard" style="text-align:left;margin:0 0 8px;">← Retour</button>
+      <div class="card">
+        <div class="section-title">${inv.ref} <span class="tagp tagp--${cls}">${STATUS_LABEL[inv.status]}</span></div>
+        <div class="inv"><div class="inv__main"><div class="inv__sub">Rôle</div><div class="inv__ref">${inv.role}</div></div></div>
+        <div class="inv"><div class="inv__main"><div class="inv__sub">Destinataire</div><div class="inv__ref">${inv.dest}</div></div></div>
+        <div class="inv"><div class="inv__main"><div class="inv__sub">Date</div><div class="inv__ref">${fdate(inv.date)}</div></div></div>
+      </div>
+
+      <div class="card">
+        <div class="section-title">Colis</div>
+        ${colisHtml}
+      </div>
+
+      <div class="card">
+        <div class="section-title">Montants</div>
+        <div class="inv"><div class="inv__main"><div class="inv__ref">Total facturé</div></div><div class="inv__amt">${money(inv.total)}</div></div>
+        <div class="inv"><div class="inv__main"><div class="inv__ref">Déjà payé</div></div><div class="inv__amt" style="color:var(--green);">${money(inv.paid)}</div></div>
+        <div class="inv"><div class="inv__main"><div class="inv__ref">Reste à payer</div></div><div class="inv__amt" style="color:${reste > 0 ? 'var(--amt-red)' : 'var(--green)'};">${money(reste)}</div></div>
+      </div>
+
+      <button class="btn btn--primary" data-pdf="${inv.ref}">📄 Télécharger le PDF</button>
+      <p class="placeholder" style="padding:6px;">Le PDF inclut un QR de vérification du statut réel.</p>
+    `;
+  },
+
+  tracking() {
+    const list = DEMO_PARCELS
+      .filter(p => trackFilter < 0 || p.stage === trackFilter)
+      .map(p => `
+        <div class="track-item">
+          <div class="track-head">
+            <div>
+              <div class="track-ref">${p.ref}</div>
+              <div class="track-desc">${p.label} · ${p.desc}</div>
+            </div>
+            <div class="track-date">${fdate(p.date)}</div>
+          </div>
+          ${stepper(p.stage)}
+        </div>`).join('');
+
+    const empty = `<div class="card"><div class="placeholder"><span class="ph-ic">🔍</span>Aucun colis à cette étape.</div></div>`;
+    const filterNote = trackFilter >= 0
+      ? `<button class="btn btn--ghost" data-track="-1">↺ Voir tous les colis</button>` : '';
+
+    return `
+      ${pipeSummary(false)}
+      ${filterNote}
+      ${list || empty}
+      <p class="placeholder" style="padding:6px;">Données de démonstration — le suivi réel sera relié aux scans (mise en entrepôt, chargement, déchargement, livraison).</p>
     `;
   },
 

@@ -129,6 +129,31 @@ button{font-family:inherit;cursor:pointer;}
 .bars6 .b__v{font-size:11px;font-weight:800;color:var(--amt-blue);}
 .bars6 .b__l{font-size:10px;color:var(--muted);text-transform:uppercase;}
 
+/* Suivi colis — pipeline (récap par étape) */
+.pipe{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:16px;}
+.pipe .p{background:#fff;border:1px solid var(--line);border-radius:14px;padding:11px 5px;text-align:center;border-top:3px solid var(--amt-gold);box-shadow:0 2px 8px rgba(26,53,83,.05);}
+.pipe .p.active{border-color:var(--amt-blue);border-top-color:var(--amt-blue);background:#f4f8fd;}
+.pipe .p__ic{font-size:17px;}
+.pipe .p__v{font-family:'Comfortaa',sans-serif;font-weight:700;font-size:19px;color:var(--amt-blue);line-height:1.1;}
+.pipe .p__l{font-size:9.5px;color:var(--muted);margin-top:3px;font-weight:600;}
+
+/* Suivi colis — fiche + barre d'étapes */
+.track-item{background:#fff;border:1px solid var(--line);border-radius:14px;padding:14px;margin-bottom:12px;box-shadow:0 2px 8px rgba(26,53,83,.05);}
+.track-head{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:16px;}
+.track-ref{font-weight:700;color:var(--amt-blue);font-size:14px;}
+.track-desc{font-size:12px;color:var(--muted);margin-top:2px;}
+.track-date{font-size:11px;color:var(--muted);white-space:nowrap;}
+.stepper{display:flex;align-items:flex-start;}
+.step{flex:1;display:flex;flex-direction:column;align-items:center;position:relative;}
+.step__dot{width:28px;height:28px;border-radius:50%;background:#eef2f7;color:#9aa7b8;display:flex;align-items:center;justify-content:center;font-size:13px;z-index:2;border:2px solid #eef2f7;}
+.step.done .step__dot{background:var(--amt-blue);color:#fff;border-color:var(--amt-blue);}
+.step.current .step__dot{background:var(--amt-gold);color:var(--amt-blue);border-color:var(--amt-gold);box-shadow:0 0 0 4px rgba(242,163,18,.22);}
+.step__lb{font-size:9.5px;margin-top:6px;color:var(--muted);font-weight:600;text-align:center;line-height:1.2;}
+.step.done .step__lb,.step.current .step__lb{color:var(--amt-blue);}
+.step__bar{position:absolute;top:13px;left:50%;width:100%;height:3px;background:#eef2f7;z-index:1;}
+.step.done .step__bar{background:var(--amt-blue);}
+.step:last-child .step__bar{display:none;}
+
 /* Sous-onglets (Tous/Dépôts/Récups) */
 .subtabs{display:flex;gap:6px;background:#fff;border:1px solid var(--line);border-radius:12px;padding:4px;margin-bottom:14px;}
 .subtab{flex:1;border:none;background:none;padding:9px;border-radius:9px;font-weight:700;font-size:13px;color:var(--muted);}
