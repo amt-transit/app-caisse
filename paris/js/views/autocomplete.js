@@ -86,6 +86,11 @@ export const Autocomplete = {
 
         input.addEventListener('input', () => {
             const q = (input.value || '').trim();
+            // Valeur identique a la suggestion qu'on vient de choisir : c'est
+            // l'evenement 'input' redeclenche apres selection (sync Vue). On
+            // ne relance PAS de recherche, sinon des suggestions reapparaissent
+            // juste apres le choix de l'utilisateur.
+            if (lastSelected && q === lastSelected) { closeList(); return; }
             if (lastSelected && q !== lastSelected) {
                 lastSelected = '';
                 if (options && Array.isArray(options.clearOnMismatch)) {

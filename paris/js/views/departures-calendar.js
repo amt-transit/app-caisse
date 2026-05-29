@@ -13,17 +13,17 @@ export const DeparturesCalendarView = {
         const html = `
             <style>
                 [v-cloak] { display: none; }
-                .departures-page { max-width: 1200px; margin: 0 auto; animation: fadeIn 0.3s ease; }
-                .departures-header { background: white; border-radius: 16px; padding: 20px 25px; margin-bottom: 24px; border: 1px solid #e2e8f0; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); }
+                .departures-page { --amt-blue:#1A3553; --amt-blue-d:#13283f; --amt-red:#E51F21; --amt-gold:#F2A312; --ink:#0f172a; --muted:#566273; --line:#e6ebf1; --soft:#f3f6fa; font-family:'Jost','Comfortaa',system-ui,sans-serif; max-width: 1200px; margin: 0 auto; animation: fadeIn 0.3s ease; }
+                .departures-header { background: white; border-radius: 16px; padding: 20px 25px; margin-bottom: 24px; border: 1px solid var(--line); border-left: 5px solid var(--amt-blue); box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); }
                 .departures-header__content { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 15px; }
                 .departures-header__left { display: flex; align-items: center; gap: 15px; }
-                .departures-header__icon { background: linear-gradient(135deg, #10b981, #059669); color: white; width: 56px; height: 56px; display: flex; align-items: center; justify-content: center; border-radius: 14px; font-size: 28px; box-shadow: 0 4px 10px rgba(16, 185, 129, 0.3); }
-                .departures-header__title { margin: 0; font-size: 22px; font-weight: 800; color: #0f172a; }
+                .departures-header__icon { background: var(--amt-blue); color: white; width: 56px; height: 56px; display: flex; align-items: center; justify-content: center; border-radius: 14px; font-size: 28px; box-shadow: 0 4px 10px rgba(26, 53, 83, 0.3); }
+                .departures-header__title { margin: 0; font-size: 22px; font-weight: 800; color: var(--amt-blue); font-family: 'Comfortaa','Jost',sans-serif; }
                 .departures-header__subtitle { margin: 4px 0 0 0; font-size: 13px; color: #64748b; }
                 .departures-header__actions { display: flex; gap: 10px; }
                 
-                .btn-new { background: linear-gradient(135deg, #3b82f6, #1d4ed8); color: white; border: none; padding: 10px 16px; border-radius: 8px; font-weight: 600; cursor: pointer; transition: 0.2s; display: flex; align-items: center; gap: 8px; box-shadow: 0 2px 4px rgba(59, 130, 246, 0.3); }
-                .btn-new:hover { transform: translateY(-1px); box-shadow: 0 4px 8px rgba(59, 130, 246, 0.4); }
+                .btn-new { background: var(--amt-blue); color: #fff; border: none; padding: 10px 16px; border-radius: 8px; font-weight: 600; cursor: pointer; transition: 0.2s; display: flex; align-items: center; gap: 8px; box-shadow: 0 2px 4px rgba(26, 53, 83, 0.3); }
+                .btn-new:hover { background: var(--amt-blue-d); transform: translateY(-1px); box-shadow: 0 4px 8px rgba(26, 53, 83, 0.4); }
                 .btn-refresh { background: white; border: 1px solid #cbd5e1; color: #475569; padding: 10px 16px; border-radius: 8px; font-weight: 600; cursor: pointer; transition: 0.2s; display: flex; align-items: center; gap: 8px; }
                 .btn-refresh:hover { background: #f1f5f9; color: #0f172a; }
 
@@ -31,22 +31,22 @@ export const DeparturesCalendarView = {
                 .filter-group { flex: 1; min-width: 150px; display: flex; flex-direction: column; gap: 6px; }
                 .filter-label { font-size: 11px; font-weight: 600; color: #475569; text-transform: uppercase; }
                 .filter-input, .filter-select { width: 100%; padding: 10px 12px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 14px; outline: none; transition: 0.2s; background: #f8fafc; }
-                .filter-input:focus, .filter-select:focus { border-color: #3b82f6; background: white; box-shadow: 0 0 0 3px rgba(59,130,246,0.1); }
+                .filter-input:focus, .filter-select:focus { border-color: var(--amt-blue); background: white; box-shadow: 0 0 0 3px rgba(26, 53, 83, 0.1); }
                 
                 .filter-actions { display: flex; align-items: flex-end; gap: 10px; }
                 .btn-filter { background: #0f172a; color: white; border: none; padding: 10px 16px; border-radius: 8px; font-weight: 600; cursor: pointer; transition: 0.2s; height: 40px; display: flex; align-items: center; gap: 8px;}
                 .btn-filter:hover { background: #1e293b; }
-                .btn-reset { background: #f1f5f9; color: #475569; border: none; padding: 10px 16px; border-radius: 8px; font-weight: 600; cursor: pointer; transition: 0.2s; height: 40px; display: flex; align-items: center; gap: 8px;}
-                .btn-reset:hover { background: #e2e8f0; color: #0f172a; }
+                .btn-reset { background: #fff; color: var(--muted); border: 1px solid var(--line); padding: 10px 16px; border-radius: 8px; font-weight: 600; cursor: pointer; transition: 0.2s; height: 40px; display: flex; align-items: center; gap: 8px;}
+                .btn-reset:hover { background: var(--soft); color: var(--ink); }
 
                 .departures-empty { background: white; border: 1px dashed #cbd5e1; border-radius: 16px; padding: 60px 20px; text-align: center; color: #64748b; }
                 .empty-icon { font-size: 48px; margin-bottom: 15px; opacity: 0.5; }
 
                 .departures-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 20px; }
-                .departure-card { background: white; border-radius: 16px; border: 1px solid #e2e8f0; box-shadow: 0 2px 4px rgba(0,0,0,0.02); overflow: hidden; display: flex; flex-direction: column; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
-                .departure-card:hover { transform: translateY(-5px); box-shadow: 0 15px 25px -5px rgba(0,0,0,0.1); border-color: var(--primary); }
+                .departure-card { background: white; border-radius: 16px; border: 1px solid var(--line); border-left: 4px solid var(--amt-gold); box-shadow: 0 2px 4px rgba(0,0,0,0.02); overflow: hidden; display: flex; flex-direction: column; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
+                .departure-card:hover { transform: translateY(-5px); box-shadow: 0 15px 25px -5px rgba(0,0,0,0.1); border-color: var(--amt-blue); border-left-color: var(--amt-gold); }
                 .dc-header { padding: 15px 20px; border-bottom: 1px solid #f1f5f9; display: flex; justify-content: space-between; align-items: center; background: #f8fafc; }
-                .dc-date { font-size: 16px; font-weight: 800; color: #0f172a; }
+                .dc-date { font-size: 16px; font-weight: 800; color: var(--amt-blue); }
                 .dc-badge { font-size: 11px; padding: 4px 8px; border-radius: 6px; font-weight: 700; text-transform: uppercase; }
                 .dc-badge--active { background: #dcfce7; color: #166534; border: 1px solid #bbf7d0; }
                 .dc-badge--past { background: #f1f5f9; color: #475569; border: 1px solid #cbd5e1; }
@@ -67,8 +67,8 @@ export const DeparturesCalendarView = {
                 .dep-modal { display:none; position:fixed; z-index:9999; left:0; top:0; width:100%; height:100%; background:rgba(15, 23, 42, 0.6); backdrop-filter: blur(4px); align-items:center; justify-content:center; }
                 .dep-modal.active { display:flex; animation: fadeIn 0.2s; }
                 .dep-modal-box { background: white; border-radius: 16px; display: flex; flex-direction: column; width: 90%; max-width: 500px; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25); overflow: hidden; }
-                .dep-modal-header { padding: 20px 25px; border-bottom: 1px solid #e2e8f0; background: #f8fafc; display: flex; justify-content: space-between; align-items: center; }
-                .dep-modal-title { margin: 0; font-size: 18px; font-weight: 800; color: #0f172a; }
+                .dep-modal-header { padding: 20px 25px; border-bottom: 1px solid var(--amt-blue-d); background: var(--amt-blue); display: flex; justify-content: space-between; align-items: center; }
+                .dep-modal-title { margin: 0; font-size: 18px; font-weight: 800; color: #fff; font-family: 'Comfortaa','Jost',sans-serif; }
                 .dep-modal-body { padding: 25px; }
                 .dep-modal-footer { padding: 15px 25px; border-top: 1px solid #e2e8f0; display: flex; justify-content: flex-end; gap: 10px; background: #f8fafc; }
             </style>
@@ -147,7 +147,7 @@ export const DeparturesCalendarView = {
                 <div class="dep-modal-box">
                     <div class="dep-modal-header">
                         <h2 class="dep-modal-title">{{ form.id ? 'Modifier date de départ' : 'Nouvelle date de départ' }}</h2>
-                        <button class="icon-btn" @click="closeModal" style="background:none; border:none; font-size:24px; cursor:pointer; color:#64748b;">&times;</button>
+                        <button class="icon-btn" @click="closeModal" style="background:none; border:none; font-size:24px; cursor:pointer; color:#fff;">&times;</button>
                     </div>
                     <div class="dep-modal-body">
                         <div class="form-group" style="margin-bottom: 15px;">
@@ -181,7 +181,7 @@ export const DeparturesCalendarView = {
                     </div>
                     <div class="dep-modal-footer">
                         <button class="amt-btn amt-btn-outline" style="padding: 8px 16px; border-radius: 8px;" @click="closeModal">Annuler</button>
-                        <button class="amt-btn amt-btn-primary" style="padding: 8px 16px; border-radius: 8px; background: #3b82f6; color: white; border: none;" :disabled="saving" @click="saveDeparture">
+                        <button class="amt-btn amt-btn-primary" style="padding: 8px 16px; border-radius: 8px; background: var(--amt-blue); color: white; border: none;" :disabled="saving" @click="saveDeparture">
                             <span v-if="saving"><i class="fas fa-spinner fa-spin"></i></span>
                             <span v-else><i class="fas fa-save"></i> Enregistrer</span>
                         </button>

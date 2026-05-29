@@ -3,6 +3,7 @@ import { getCollectionName } from '../../../agencies-config.js';
 import { collection, query, where, onSnapshot, getDocs } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 import { CONSTANTS } from '../../../constants.js';
 import { isEurAgency } from '../../../agency-money.js';
+import { loadJsPdf } from '../../../services/pdf-common.js';
 
 export const ChauffeursListView = {
     unsubAppts: null,
@@ -23,29 +24,29 @@ export const ChauffeursListView = {
 
         const html = `
             <style>
-                .chauffeurs-page { max-width: 1200px; margin: 0 auto; animation: fadeIn 0.3s ease-in-out; }
-                .chauffeurs-header { background: white; border-radius: 16px; padding: 20px 25px; margin-bottom: 24px; border: 1px solid #e2e8f0; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); }
+                .chauffeurs-page { --amt-blue:#1A3553; --amt-blue-d:#13283f; --amt-red:#E51F21; --amt-gold:#F2A312; --ink:#0f172a; --muted:#566273; --line:#e6ebf1; --soft:#f3f6fa; font-family:'Jost','Comfortaa',system-ui,sans-serif; max-width: 1200px; margin: 0 auto; animation: fadeIn 0.3s ease-in-out; }
+                .chauffeurs-header { background: white; border-radius: 16px; padding: 20px 25px; margin-bottom: 24px; border: 1px solid #e2e8f0; border-left: 5px solid var(--amt-blue); box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); }
                 .chauffeurs-header__content { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 15px; }
                 .chauffeurs-header__left { display: flex; align-items: center; gap: 15px; }
-                .chauffeurs-header__icon { background: #eff6ff; color: #3b82f6; width: 56px; height: 56px; display: flex; align-items: center; justify-content: center; border-radius: 14px; font-size: 28px; }
-                .chauffeurs-header__title { margin: 0; font-size: 22px; font-weight: 800; color: #0f172a; }
+                .chauffeurs-header__icon { background: var(--amt-blue); color: #fff; width: 56px; height: 56px; display: flex; align-items: center; justify-content: center; border-radius: 14px; font-size: 28px; }
+                .chauffeurs-header__title { margin: 0; font-size: 22px; font-weight: 800; color: var(--amt-blue); font-family: 'Comfortaa','Jost',sans-serif; }
                 .chauffeurs-header__subtitle { margin: 4px 0 0 0; font-size: 13px; color: #64748b; }
                 .status-badge span { background: #dcfce7; color: #166534; padding: 6px 12px; border-radius: 20px; font-size: 13px; font-weight: 700; border: 1px solid #bbf7d0; }
 
                 .chauffeurs-filters { display: flex; flex-wrap: wrap; gap: 15px; background: white; padding: 20px; border-radius: 16px; border: 1px solid #e2e8f0; margin-bottom: 24px; box-shadow: 0 2px 4px rgba(0,0,0,0.02); }
                 .chauffeurs-table-card { background: white; border-radius: 16px; border: 1px solid #e2e8f0; overflow: hidden; box-shadow: 0 2px 4px rgba(0,0,0,0.02); }
-                .chauffeurs-table-header { padding: 15px 20px; border-bottom: 1px solid #e2e8f0; background: #f8fafc; display: flex; align-items: center; gap: 10px; }
-                .chauffeurs-table-title { margin: 0; font-size: 16px; font-weight: 700; color: #1e293b; display: flex; align-items: center; gap: 8px; }
-                .chauffeurs-table-count { background: #e2e8f0; color: #475569; padding: 2px 8px; border-radius: 12px; font-size: 12px; }
+                .chauffeurs-table-header { padding: 15px 20px; border-bottom: 2px solid var(--amt-gold); background: var(--amt-blue); display: flex; align-items: center; gap: 10px; }
+                .chauffeurs-table-title { margin: 0; font-size: 16px; font-weight: 700; color: #fff; display: flex; align-items: center; gap: 8px; }
+                .chauffeurs-table-count { background: var(--amt-gold); color: var(--amt-blue); padding: 2px 8px; border-radius: 12px; font-size: 12px; font-weight: 800; }
 
                 .chauffeurs-table { width: 100%; border-collapse: collapse; }
-                .chauffeurs-table th { text-align: left; padding: 16px 20px; background: white; font-size: 12px; font-weight: 700; color: #64748b; text-transform: uppercase; border-bottom: 1px solid #e2e8f0; }
+                .chauffeurs-table th { text-align: left; padding: 16px 20px; background: #eef2f7; font-size: 12px; font-weight: 800; color: var(--amt-blue); text-transform: uppercase; border-bottom: 1px solid #e2e8f0; }
                 .chauffeurs-table td { padding: 16px 20px; border-bottom: 1px solid #f1f5f9; vertical-align: middle; }
                 .chauffeurs-table tbody tr { cursor: pointer; transition: background 0.2s; }
                 .chauffeurs-table tbody tr:hover td { background: #f1f5f9; }
 
                 .driver-cell { display: flex; align-items: center; gap: 12px; }
-                .driver-avatar { width: 44px; height: 44px; border-radius: 50%; background: linear-gradient(135deg, #3b82f6, #1d4ed8); color: white; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 15px; }
+                .driver-avatar { width: 44px; height: 44px; border-radius: 50%; background: linear-gradient(135deg, var(--amt-blue), #2d567f); color: white; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 15px; box-shadow: 0 0 0 2px var(--amt-gold), 0 3px 8px rgba(26,53,83,.3); border: 2px solid #fff; }
                 .driver-name { font-weight: 800; color: #0f172a; font-size: 14px; text-transform: uppercase; margin-bottom: 2px; }
                 .driver-id { font-size: 11px; color: #64748b; font-family: monospace; }
 
@@ -65,7 +66,7 @@ export const ChauffeursListView = {
                 .money-label { font-size: 11px; color: #64748b; font-weight: 600; text-transform: uppercase; }
 
                 /* --- MODALE DÉTAIL CHAUFFEUR --- */
-                .cd-modal { display: none; position: fixed; inset: 0; z-index: 9999; align-items: center; justify-content: center; }
+                .cd-modal { --amt-blue:#1A3553; --amt-blue-d:#13283f; --amt-red:#E51F21; --amt-gold:#F2A312; --ink:#0f172a; --muted:#566273; --line:#e6ebf1; --soft:#f3f6fa; font-family:'Jost','Comfortaa',system-ui,sans-serif; display: none; position: fixed; inset: 0; z-index: 9999; align-items: center; justify-content: center; }
                 .cd-modal.active { display: flex; animation: fadeIn 0.2s; }
                 .cd-modal__overlay { position: absolute; inset: 0; background: rgba(15,23,42,0.6); backdrop-filter: blur(4px); }
                 .cd-modal__panel { position: relative; background: white; width: 95%; max-width: 800px; max-height: 90vh; border-radius: 16px; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25); z-index: 10000; }
@@ -76,14 +77,14 @@ export const ChauffeursListView = {
                 .modal__body { padding: 25px; overflow-y: auto; flex: 1; }
                 
                 .detailTop { display: flex; gap: 15px; align-items: center; margin-bottom: 25px; }
-                .avatar--lg { width: 56px; height: 56px; border-radius: 50%; font-size: 20px; background: linear-gradient(135deg, #3b82f6, #1d4ed8); color: white; display: flex; align-items: center; justify-content: center; font-weight: 800; }
+                .avatar--lg { width: 56px; height: 56px; border-radius: 50%; font-size: 20px; background: linear-gradient(135deg, var(--amt-blue), #2d567f); color: white; display: flex; align-items: center; justify-content: center; font-weight: 800; box-shadow: 0 0 0 2px var(--amt-gold), 0 3px 8px rgba(26,53,83,.3); border: 2px solid #fff; }
                 .detailName { font-size: 18px; font-weight: 800; color: #1e293b; margin-bottom: 4px; }
                 .mono { font-family: monospace; }
 
                 .detailGrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-bottom: 25px; }
                 .dcard { background: #f8fafc; border: 1px solid #e2e8f0; padding: 15px; border-radius: 12px; }
                 .dcard__k { font-size: 11px; font-weight: 600; color: #64748b; text-transform: uppercase; margin-bottom: 6px; }
-                .dcard__v { font-size: 20px; font-weight: 800; color: #0f172a; }
+                .dcard__v { font-size: 20px; font-weight: 800; color: var(--amt-blue); font-family: 'Comfortaa','Jost',sans-serif; }
 
                 .detailBlocks { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 25px; }
                 @media (max-width: 768px) { .detailBlocks { grid-template-columns: 1fr; } }
@@ -95,11 +96,11 @@ export const ChauffeursListView = {
                 .barRow__bars { flex: 1; height: 10px; background: #f1f5f9; border-radius: 5px; position: relative; overflow: hidden; }
                 .barFill { height: 100%; border-radius: 5px; position: absolute; left: 0; top: 0; }
                 .barFill--slate { background: #cbd5e1; }
-                .barFill--blue { background: #3b82f6; }
+                .barFill--blue { background: var(--amt-blue); }
                 .pill { padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: bold; }
-                .pill--slate { background: #f1f5f9; color: #475569; }
-                .pill--blue { background: #eff6ff; color: #1d4ed8; }
-                .pill--amber { background: #fffbeb; color: #d97706; }
+                .pill--slate { background: #e9eef5; color: var(--amt-blue); }
+                .pill--blue { background: #e9eef5; color: var(--amt-blue); }
+                .pill--amber { background: #fff4e0; color: #b9790c; }
                 .pill--green { background: #f0fdf4; color: #16a34a; }
             </style>
             <div class="chauffeurs-page">
@@ -416,6 +417,12 @@ export const ChauffeursListView = {
 
         const driverId = this.driversData.find(d => d.name === driverName)?.id.substring(0,4).toUpperCase() || '----';
         const initials = driverName.substring(0, 2).toUpperCase();
+
+        // Memorise le detail courant pour l'export PDF.
+        this._lastDriverDetail = {
+            driverName, driverId, startDate, endDate,
+            totalRdv, totalValid, perf, totalCa, totalEnc, reste, tmTotal, tmValid, sortedDates
+        };
         
         const driverObj = this.driversData.find(d => d.name === driverName);
         const avatarHtml = driverObj && driverObj.photoURL
@@ -430,7 +437,7 @@ export const ChauffeursListView = {
                     <div class="modal__sub">Période: ${startDate || '-'} → ${endDate || '-'}</div>
                 </div>
                 <div class="modal__actions">
-                    <button class="btn btn--outline" type="button" style="background:white; border:1px solid #cbd5e1; padding:8px 12px; border-radius:8px; font-weight:600; cursor:pointer; font-size:12px;">📄 Exporter PDF</button>
+                    <button class="btn btn--outline" type="button" onclick="window.app.views.chauffeursList.exportDriverPDF()" style="background:white; color:var(--amt-blue); border:1px solid var(--line); padding:8px 12px; border-radius:8px; font-weight:600; cursor:pointer; font-size:12px;">📄 Exporter PDF</button>
                     <button class="btn" type="button" aria-label="Fermer" title="Fermer" onclick="window.app.views.chauffeursList.closeDriverDetail()" style="background:none; border:none; font-size:24px; cursor:pointer; color:#64748b;">&times;</button>
                 </div>
             </div>
@@ -471,8 +478,8 @@ export const ChauffeursListView = {
                         <div style="position:relative; height:160px; background:#f8fafc; border-radius:8px; padding:10px;">
                             <svg viewBox="0 0 560 160" preserveAspectRatio="none" style="width:100%; height:100%;">
                                 <defs>
-                                    <linearGradient id="gCa2" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="rgba(245,158,11,.95)"></stop><stop offset="1" stop-color="rgba(99,102,241,.85)"></stop></linearGradient>
-                                    <linearGradient id="gEnc2" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="rgba(16,185,129,.95)"></stop><stop offset="1" stop-color="rgba(37,99,235,.85)"></stop></linearGradient>
+                                    <linearGradient id="gCa2" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="rgba(242,163,18,.95)"></stop><stop offset="1" stop-color="rgba(26,53,83,.95)"></stop></linearGradient>
+                                    <linearGradient id="gEnc2" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="rgba(16,185,129,.95)"></stop><stop offset="1" stop-color="rgba(26,53,83,.85)"></stop></linearGradient>
                                 </defs>
                                 <polyline points="${pointsCa.join(' ')}" fill="none" stroke="url(#gCa2)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"></polyline>
                                 <polyline points="${pointsEnc.join(' ')}" fill="none" stroke="url(#gEnc2)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"></polyline>
@@ -491,5 +498,67 @@ export const ChauffeursListView = {
 
     closeDriverDetail() {
         document.getElementById('driverDetailModal').classList.remove('active');
+    },
+
+    async exportDriverPDF() {
+        const d = this._lastDriverDetail;
+        if (!d) { this.app.showToast("Ouvrez d'abord la fiche d'un chauffeur.", "error"); return; }
+        try {
+            const { jsPDF } = await loadJsPdf();
+            const docp = new jsPDF('p', 'mm', 'a4');
+            const fmt = (v) => this.app.formatMoney(v);
+
+            // En-tete AMT (Bleu de Prusse + filet Or).
+            docp.setFillColor(26, 53, 83);
+            docp.rect(0, 0, 210, 26, 'F');
+            docp.setFillColor(242, 163, 18);
+            docp.rect(0, 26, 210, 1.5, 'F');
+            docp.setTextColor(255, 255, 255);
+            docp.setFontSize(15);
+            docp.text(`Fiche chauffeur — ${d.driverName}`, 14, 13);
+            docp.setFontSize(9);
+            docp.setTextColor(214, 222, 232);
+            docp.text(`ID ${d.driverId}  ·  Periode : ${d.startDate || '—'}  ->  ${d.endDate || '—'}`, 14, 20);
+
+            // Tableau des indicateurs.
+            docp.autoTable({
+                startY: 34,
+                head: [['Indicateur', 'Valeur']],
+                body: [
+                    ['RDV total', String(d.totalRdv)],
+                    ['RDV validés', String(d.totalValid)],
+                    ['Performance', `${d.perf} %`],
+                    ['CA facturé', fmt(d.totalCa)],
+                    ['Encaissé', fmt(d.totalEnc)],
+                    ['Reste à encaisser', fmt(d.reste)],
+                    ['Ticket moyen (CA / RDV)', fmt(d.tmTotal)],
+                    ['Ticket moyen (CA / Validés)', fmt(d.tmValid)]
+                ],
+                theme: 'grid',
+                styles: { fontSize: 10, cellPadding: 3 },
+                headStyles: { fillColor: [26, 53, 83], textColor: 255, fontStyle: 'bold' },
+                columnStyles: { 1: { halign: 'right', fontStyle: 'bold' } },
+                margin: { left: 14, right: 14 }
+            });
+
+            // Détail par jour (RDV / validés / CA / encaissé).
+            if (d.sortedDates && d.sortedDates.length) {
+                docp.autoTable({
+                    startY: docp.lastAutoTable.finalY + 8,
+                    head: [['Date', 'RDV', 'Validés', 'CA', 'Encaissé']],
+                    body: d.sortedDates.map(x => [x.date, String(x.rdv), String(x.valid), fmt(x.ca), fmt(x.encaisse)]),
+                    theme: 'striped',
+                    styles: { fontSize: 9, cellPadding: 2.5 },
+                    headStyles: { fillColor: [36, 72, 111], textColor: 255 },
+                    columnStyles: { 1: { halign: 'center' }, 2: { halign: 'center' }, 3: { halign: 'right' }, 4: { halign: 'right' } },
+                    margin: { left: 14, right: 14 }
+                });
+            }
+
+            docp.save(`Fiche_chauffeur_${d.driverName.replace(/\s+/g, '_')}_${d.startDate || 'periode'}.pdf`);
+        } catch (e) {
+            console.error('Export PDF chauffeur :', e);
+            this.app.showToast("Erreur lors de la génération du PDF.", "error");
+        }
     }
 };

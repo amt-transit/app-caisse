@@ -2,6 +2,92 @@ import { db } from '../../../firebase-config.js';
 import { getCollectionName } from '../../../agencies-config.js';
 import { collection, query, where, onSnapshot, doc, updateDoc, writeBatch, getDocs } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 import { createApp, ref, computed, reactive, onMounted, onUnmounted, watch } from "https://unpkg.com/vue@3/dist/vue.esm-browser.prod.js";
+import { loadJsPdf } from '../../../services/pdf-common.js';
+
+// Dépôt AMT : point de DÉPART et d'ARRIVÉE de chaque tournée chauffeur.
+// (Modifiable ici si l'entrepôt déménage.)
+const DEPOT_ADDRESS = "81 AVENUE ARISTIDE BRIAND 93240 STAINS";
+
+// Cache de géocodage (adresse -> {lat, lon}) partagé pour toute la session.
+const _geoCache = new Map();
+
+async function geocodeAddress(address) {
+    const key = (address || '').trim().toLowerCase();
+    if (!key) return null;
+    if (_geoCache.has(key)) return _geoCache.get(key);
+    try {
+        const resp = await fetch(`https://api-adresse.data.gouv.fr/search/?q=${encodeURIComponent(address)}&limit=1`);
+        const data = await resp.json();
+        const f = data && data.features && data.features[0];
+        const coord = f ? { lon: f.geometry.coordinates[0], lat: f.geometry.coordinates[1] } : null;
+        _geoCache.set(key, coord);
+        return coord;
+    } catch (e) {
+        console.warn('Géocodage échoué :', address, e && e.message);
+        return null;
+    }
+}
+
+// Distance à vol d'oiseau (km) — utilisée pour le repli plus-proche-voisin.
+function haversineKm(a, b) {
+    if (!a || !b) return Infinity;
+    const R = 6371;
+    const dLat = (b.lat - a.lat) * Math.PI / 180;
+    const dLon = (b.lon - a.lon) * Math.PI / 180;
+    const la1 = a.lat * Math.PI / 180, la2 = b.lat * Math.PI / 180;
+    const h = Math.sin(dLat / 2) ** 2 + Math.cos(la1) * Math.cos(la2) * Math.sin(dLon / 2) ** 2;
+    return 2 * R * Math.asin(Math.sqrt(h));
+}
+
+// Ordre « plus proche voisin » depuis le dépôt (repli si OSRM indisponible).
+function nearestNeighborOrder(depot, stops) {
+    const remaining = stops.filter(s => s.coord);
+    const ordered = [];
+    let current = depot;
+    while (remaining.length) {
+        let bestIdx = 0, best = Infinity;
+        remaining.forEach((s, i) => { const d = haversineKm(current, s.coord); if (d < best) { best = d; bestIdx = i; } });
+        const next = remaining.splice(bestIdx, 1)[0];
+        ordered.push(next);
+        current = next.coord;
+    }
+    return ordered;
+}
+
+// Optimise une tournée (problème du voyageur de commerce) DÉPART+ARRIVÉE au
+// dépôt. Essaie OSRM (vrai routier) puis se replie sur le plus-proche-voisin.
+async function optimizeRoute(depotCoord, stops) {
+    const valid = stops.filter(s => s.coord);
+    const invalid = stops.filter(s => !s.coord);
+    if (!depotCoord || valid.length === 0) {
+        return { ordered: valid, invalid, totalKm: 0, totalMin: 0, legs: [], engine: 'Aucun' };
+    }
+    // 1) OSRM trip (aller-retour au dépôt = source first + roundtrip).
+    try {
+        const coords = [depotCoord, ...valid.map(s => s.coord)].map(c => `${c.lon},${c.lat}`).join(';');
+        const url = `https://router.project-osrm.org/trip/v1/driving/${coords}?source=first&roundtrip=true&overview=false`;
+        const resp = await fetch(url);
+        const data = await resp.json();
+        if (data.code === 'Ok' && data.trips && data.trips[0] && data.waypoints) {
+            const ordered = valid
+                .map((s, i) => ({ s, wp: data.waypoints[i + 1] ? data.waypoints[i + 1].waypoint_index : 999 }))
+                .sort((a, b) => a.wp - b.wp)
+                .map(x => x.s);
+            const trip = data.trips[0];
+            const legs = (trip.legs || []).map(l => ({ km: l.distance / 1000, min: l.duration / 60 }));
+            return { ordered, invalid, totalKm: trip.distance / 1000, totalMin: trip.duration / 60, legs, engine: 'OSRM (routier)' };
+        }
+    } catch (e) {
+        console.warn('OSRM indisponible, repli plus-proche-voisin :', e && e.message);
+    }
+    // 2) Repli plus-proche-voisin (vol d'oiseau, ~24 km/h en ville).
+    const ordered = nearestNeighborOrder(depotCoord, valid);
+    let totalKm = 0, prev = depotCoord;
+    const legs = [];
+    ordered.forEach(s => { const km = haversineKm(prev, s.coord); legs.push({ km, min: km * 2.5 }); totalKm += km; prev = s.coord; });
+    totalKm += haversineKm(prev, depotCoord);
+    return { ordered, invalid, totalKm, totalMin: totalKm * 2.5, legs, engine: 'Approx. (vol d\'oiseau)' };
+}
 
 export const NouveauProgrammeView = {
     vueApp: null,
@@ -14,26 +100,31 @@ export const NouveauProgrammeView = {
         const html = `
             <style>
                 [v-cloak] { display: none; }
-                .programmes-page { max-width: 1400px; margin: 0 auto; animation: fadeIn 0.3s ease; }
-                .prog-header { background: white; border-radius: 16px; padding: 20px; display: flex; justify-content: space-between; align-items: center; border: 1px solid #e2e8f0; margin-bottom: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.02); flex-wrap: wrap; gap: 15px; }
-                .prog-header__content { display: flex; align-items: center; gap: 15px; }
-                .prog-header__icon { font-size: 28px; background: #f8fafc; width: 50px; height: 50px; display: flex; align-items: center; justify-content: center; border-radius: 12px; }
-                .prog-header__title { margin: 0; font-size: 20px; font-weight: 800; color: #0f172a; }
-                .prog-header__subtitle { margin: 2px 0 0 0; font-size: 13px; color: #64748b; }
-                .btn-add-chauffeur { background: #3b82f6; color: white; border: none; padding: 10px 16px; border-radius: 8px; font-weight: 600; cursor: pointer; transition: 0.2s; display: flex; align-items: center; gap: 8px; }
-                .btn-add-chauffeur:hover { background: #2563eb; }
+                .programmes-page {
+                    --amt-blue:#1A3553; --amt-blue-d:#13283f; --amt-red:#E51F21; --amt-gold:#F2A312;
+                    --ink:#0f172a; --muted:#566273; --line:#e6ebf1; --soft:#f3f6fa;
+                    max-width: 1400px; margin: 0 auto; animation: fadeIn 0.3s ease;
+                    font-family: 'Jost','Comfortaa',system-ui,-apple-system,sans-serif;
+                }
+                .prog-header { background: linear-gradient(115deg,#ffffff 55%,#f6f9ff); border-radius: 16px; padding: 20px 22px; display: flex; justify-content: space-between; align-items: center; border: 1px solid var(--line); border-left: 5px solid var(--amt-blue); margin-bottom: 20px; box-shadow: 0 6px 18px rgba(26,53,83,0.07); flex-wrap: wrap; gap: 15px; }
+                .prog-header__content { display: flex; align-items: center; gap: 16px; }
+                .prog-header__icon { font-size: 26px; background: var(--amt-blue); color:#fff; width: 54px; height: 54px; display: flex; align-items: center; justify-content: center; border-radius: 14px; box-shadow: 0 6px 14px rgba(26,53,83,0.28); }
+                .prog-header__title { margin: 0; font-size: 22px; font-weight: 800; color: var(--amt-blue); font-family: 'Comfortaa','Jost',sans-serif; letter-spacing: -0.3px; }
+                .prog-header__subtitle { margin: 3px 0 0 0; font-size: 13px; color: var(--muted); font-weight: 500; }
+                .btn-add-chauffeur { background: var(--amt-blue); color: white; border: none; padding: 11px 18px; border-radius: 10px; font-weight: 700; cursor: pointer; transition: 0.2s; display: flex; align-items: center; gap: 8px; box-shadow: 0 4px 10px rgba(26,53,83,0.2); }
+                .btn-add-chauffeur:hover { background: var(--amt-blue-d); transform: translateY(-1px); box-shadow: 0 6px 14px rgba(26,53,83,0.28); }
 
                 .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 20px; }
-                .kpi-card { background: white; border-radius: 12px; padding: 20px; display: flex; align-items: center; gap: 15px; border: 1px solid #e2e8f0; box-shadow: 0 1px 3px rgba(0,0,0,0.02); transition: 0.2s; }
+                .kpi-card { background: white; border-radius: 14px; padding: 18px 20px; display: flex; align-items: center; gap: 15px; border: 1px solid var(--line); box-shadow: 0 2px 8px rgba(26,53,83,0.04); transition: 0.2s; }
                 .kpi-card--clickable { cursor: pointer; }
-                .kpi-card--clickable:hover { border-color: #3b82f6; box-shadow: 0 4px 6px rgba(59,130,246,0.1); transform: translateY(-2px); }
-                .kpi-card__icon { font-size: 28px; width: 50px; height: 50px; display: flex; align-items: center; justify-content: center; border-radius: 12px; }
-                .kpi-card--purple .kpi-card__icon { background: #faf5ff; color: #9333ea; }
-                .kpi-card--blue .kpi-card__icon { background: #eff6ff; color: #3b82f6; }
+                .kpi-card--clickable:hover { border-color: var(--amt-gold); box-shadow: 0 8px 18px rgba(242,163,18,0.18); transform: translateY(-2px); }
+                .kpi-card__icon { font-size: 26px; width: 52px; height: 52px; display: flex; align-items: center; justify-content: center; border-radius: 14px; }
+                .kpi-card--purple .kpi-card__icon { background: #fff4e0; color: #c47f10; }
+                .kpi-card--blue .kpi-card__icon { background: #e9eef5; color: var(--amt-blue); }
                 .kpi-card--orange .kpi-card__icon { background: #fff7ed; color: #ea580c; }
                 .kpi-card--green .kpi-card__icon { background: #f0fdf4; color: #16a34a; }
-                .kpi-card__value { font-size: 24px; font-weight: 800; color: #0f172a; line-height: 1; margin-bottom: 4px; }
-                .kpi-card__label { font-size: 12px; font-weight: 600; color: #64748b; text-transform: uppercase; }
+                .kpi-card__value { font-size: 26px; font-weight: 800; color: var(--amt-blue); line-height: 1; margin-bottom: 4px; font-family: 'Comfortaa','Jost',sans-serif; }
+                .kpi-card__label { font-size: 11.5px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.4px; }
 
                 .prog-filters { display: flex; flex-wrap: wrap; gap: 12px; background: white; padding: 15px; border-radius: 12px; border: 1px solid #e2e8f0; margin-bottom: 20px; }
                 .filter-group { flex: 1; min-width: 150px; display: flex; flex-direction: column; gap: 6px; }
@@ -47,51 +138,53 @@ export const NouveauProgrammeView = {
                 .chauffeurs-sidebar { width: 320px; flex-shrink: 0; display: flex; flex-direction: column; gap: 15px; }
                 @media (max-width: 992px) { .chauffeurs-sidebar { width: 100%; } }
                 
-                .sidebar-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px; }
-                .sidebar-title { font-size: 16px; font-weight: 800; margin: 0; display: flex; align-items: center; gap: 8px; color: #0f172a; }
-                .sidebar-count { background: #e2e8f0; color: #475569; padding: 2px 8px; border-radius: 12px; font-size: 12px; }
-                
-                .chauffeurs-list { display: flex; flex-direction: column; gap: 12px; max-height: 800px; overflow-y: auto; padding-right: 5px; }
-                .chauffeurs-list::-webkit-scrollbar { width: 4px; }
-                .chauffeurs-list::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+                .sidebar-header { display: flex; justify-content: space-between; align-items: center; padding: 13px 16px; background: var(--amt-blue); border-radius: 13px; box-shadow: 0 6px 16px rgba(26,53,83,0.2); }
+                .sidebar-title { font-size: 14px; font-weight: 800; margin: 0; display: flex; align-items: center; gap: 9px; color: #fff; font-family: 'Comfortaa','Jost',sans-serif; letter-spacing: 0.5px; text-transform: uppercase; }
+                .sidebar-count { background: var(--amt-gold); color: var(--amt-blue); padding: 3px 11px; border-radius: 20px; font-size: 13px; font-weight: 800; box-shadow: 0 2px 5px rgba(242,163,18,0.4); }
 
-                .chauffeur-card { background: white; border: 1px solid #e2e8f0; border-radius: 12px; padding: 15px; box-shadow: 0 1px 3px rgba(0,0,0,0.02); transition: 0.2s; cursor: pointer; }
-                .chauffeur-card:hover { border-color: #cbd5e1; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
-                .chauffeur-card.active { border-color: #3b82f6; box-shadow: 0 0 0 2px rgba(59,130,246,0.1); background: #f8fafc; }
-                .chauffeur-card__header { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; pointer-events: none; }
-                .chauffeur-avatar { width: 40px; height: 40px; border-radius: 50%; background: linear-gradient(135deg, #3b82f6, #1d4ed8); color: white; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 16px; flex-shrink: 0; }
-                .chauffeur-name { font-weight: 700; color: #0f172a; font-size: 14px; margin-bottom: 2px; }
-                .chauffeur-meta { font-size: 11px; color: #64748b; }
+                .chauffeurs-list { display: flex; flex-direction: column; gap: 12px; max-height: 800px; overflow-y: auto; padding-right: 5px; }
+                .chauffeurs-list::-webkit-scrollbar { width: 5px; }
+                .chauffeurs-list::-webkit-scrollbar-thumb { background: #c2cedd; border-radius: 4px; }
+
+                .chauffeur-card { background: white; border: 1px solid var(--line); border-left: 4px solid transparent; border-radius: 14px; padding: 15px 16px; box-shadow: 0 2px 8px rgba(26,53,83,0.05); transition: 0.2s; cursor: pointer; }
+                .chauffeur-card:hover { border-color: #d4dde8; border-left-color: var(--amt-gold); box-shadow: 0 7px 16px rgba(26,53,83,0.1); transform: translateY(-1px); }
+                .chauffeur-card.active { border-left-color: var(--amt-blue); background: linear-gradient(115deg,#ffffff,#f4f8fd); box-shadow: 0 8px 20px rgba(26,53,83,0.14); }
+                .chauffeur-card__header { display: flex; align-items: center; gap: 13px; margin-bottom: 13px; pointer-events: none; }
+                .chauffeur-avatar { width: 46px; height: 46px; border-radius: 50%; background: linear-gradient(135deg, var(--amt-blue), #2d567f); color: white; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 17px; flex-shrink: 0; border: 2px solid #fff; box-shadow: 0 0 0 2px var(--amt-gold), 0 3px 8px rgba(26,53,83,0.3); font-family: 'Comfortaa','Jost',sans-serif; }
+                .chauffeur-name { font-weight: 800; color: var(--amt-blue); font-size: 15.5px; margin-bottom: 3px; font-family: 'Comfortaa','Jost',sans-serif; line-height: 1.2; }
+                .chauffeur-meta { font-size: 12.5px; color: #475569; font-weight: 600; }
+                .chauffeur-meta .mono { font-variant-numeric: tabular-nums; letter-spacing: 0.3px; }
+
+                .chauffeur-stats { display: flex; gap: 10px; margin-bottom: 14px; padding: 10px 13px; background: var(--soft); border: 1px solid var(--line); border-radius: 10px; pointer-events: none; }
+                .chauffeur-stat { display: flex; align-items: center; gap: 7px; font-size: 12.5px; font-weight: 600; color: var(--muted); }
+                .stat-value { color: var(--amt-blue); font-weight: 800; font-size: 15px; font-family: 'Comfortaa','Jost',sans-serif; }
+
+                .chauffeur-actions { display: flex; gap: 7px; }
+                .btn-action { flex: 1; padding: 9px 8px; border-radius: 10px; font-size: 12.5px; font-weight: 700; cursor: pointer; border: 1px solid transparent; background: white; transition: 0.18s; display: flex; align-items: center; justify-content: center; gap: 5px; }
+                .btn-action--add { background: var(--amt-blue); color: #fff; box-shadow: 0 3px 8px rgba(26,53,83,0.18); }
+                .btn-action--add:hover { background: var(--amt-blue-d); transform: translateY(-1px); }
+                .btn-action--edit, .btn-action--print, .btn-action--delete { flex: 0 0 40px; border-color: #dce3ec; color: var(--muted); }
+                .btn-action--edit:hover { background: #fff7e8; color: #c47f10; border-color: var(--amt-gold); }
+                .btn-action--print:hover { background: #eef2f7; color: var(--amt-blue); border-color: var(--amt-blue); }
+                .btn-action--delete:hover { border-color: var(--amt-red); color: var(--amt-red); background: #fdecec; }
                 
-                .chauffeur-stats { display: flex; gap: 10px; margin-bottom: 15px; padding: 10px; background: #f8fafc; border-radius: 8px; pointer-events: none; }
-                .chauffeur-stat { display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; color: #475569; }
-                .stat-value { color: #0f172a; font-weight: 800; }
-                
-                .chauffeur-actions { display: flex; gap: 6px; }
-                .btn-action { flex: 1; padding: 8px; border-radius: 8px; font-size: 12px; font-weight: 600; cursor: pointer; border: 1px solid transparent; background: white; transition: 0.2s; display: flex; align-items: center; justify-content: center; gap: 4px; }
-                .btn-action--add { border-color: #cbd5e1; color: #0f172a; }
-                .btn-action--add:hover { background: #f1f5f9; }
-                .btn-action--edit, .btn-action--print, .btn-action--delete { flex: 0 0 36px; border-color: #cbd5e1; color: #475569; }
-                .btn-action--edit:hover, .btn-action--print:hover { background: #f1f5f9; color: #3b82f6; border-color: #3b82f6; }
-                .btn-action--delete:hover { border-color: #ef4444; color: #ef4444; background: #fef2f2; }
-                
-                .rdv-table-card { flex: 1; background: white; border-radius: 12px; border: 1px solid #e2e8f0; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.02); }
-                .rdv-table-header { padding: 15px 20px; border-bottom: 1px solid #e2e8f0; background: #f8fafc; display: flex; justify-content: space-between; align-items: center; }
-                .rdv-table-title { margin: 0; font-size: 16px; font-weight: 700; color: #1e293b; display: flex; align-items: center; gap: 10px; }
-                .rdv-table-count { background: #cbd5e1; color: #0f172a; padding: 2px 8px; border-radius: 12px; font-size: 12px; }
-                
+                .rdv-table-card { flex: 1; background: white; border-radius: 14px; border: 1px solid var(--line); overflow: hidden; box-shadow: 0 2px 8px rgba(26,53,83,0.05); }
+                .rdv-table-header { padding: 15px 20px; border-bottom: 2px solid var(--amt-gold); background: var(--amt-blue); display: flex; justify-content: space-between; align-items: center; }
+                .rdv-table-title { margin: 0; font-size: 15px; font-weight: 800; color: #fff; display: flex; align-items: center; gap: 10px; font-family: 'Comfortaa','Jost',sans-serif; letter-spacing: 0.3px; }
+                .rdv-table-count { background: var(--amt-gold); color: var(--amt-blue); padding: 3px 11px; border-radius: 20px; font-size: 13px; font-weight: 800; }
+
                 .table-wrap { overflow-x: auto; }
                 .rdv-table { width: 100%; border-collapse: collapse; }
-                .rdv-table th { text-align: left; padding: 12px 15px; background: white; font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase; border-bottom: 1px solid #e2e8f0; }
-                .rdv-table td { padding: 12px 15px; border-bottom: 1px solid #f1f5f9; font-size: 13px; color: #334155; vertical-align: middle; }
-                .rdv-table tr:hover td { background: #f8fafc; }
-                
-                .type-badge { padding: 4px 8px; border-radius: 6px; font-size: 10px; font-weight: 800; letter-spacing: 0.5px; display: inline-block; white-space: nowrap; }
-                .badge--depot { background: #e0f2fe; color: #0284c7; border: 1px solid #bae6fd; }
-                .badge--recup { background: #f3e8ff; color: #7e22ce; border: 1px solid #e9d5ff; }
-                
-                .client-cell__name { font-weight: 700; color: #0f172a; }
-                .client-cell__phone { font-size: 11px; color: #64748b; margin-top: 2px; }
+                .rdv-table th { text-align: left; padding: 12px 15px; background: #eef2f7; font-size: 11px; font-weight: 800; color: var(--amt-blue); text-transform: uppercase; letter-spacing: 0.4px; border-bottom: 1px solid var(--line); }
+                .rdv-table td { padding: 12px 15px; border-bottom: 1px solid #eef2f7; font-size: 13px; color: #334155; vertical-align: middle; }
+                .rdv-table tr:hover td { background: #f7faff; }
+
+                .type-badge { padding: 4px 9px; border-radius: 7px; font-size: 10px; font-weight: 800; letter-spacing: 0.5px; display: inline-block; white-space: nowrap; }
+                .badge--depot { background: #e9eef5; color: var(--amt-blue); border: 1px solid #c7d4e3; }
+                .badge--recup { background: #fff4e0; color: #b9790c; border: 1px solid #f6d9a0; }
+
+                .client-cell__name { font-weight: 700; color: var(--ink); }
+                .client-cell__phone { font-size: 11.5px; color: var(--muted); margin-top: 2px; font-variant-numeric: tabular-nums; }
                 .address-cell { max-width: 200px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 600; color: #1e293b; }
                 .description-cell { max-width: 200px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 12px; color: #64748b; }
                 
@@ -283,7 +376,8 @@ export const NouveauProgrammeView = {
                                         <td class="address-cell" :title="r.adresse || ''">{{ r.adresse || '-' }}</td>
                                         <td class="description-cell" :title="r.notes || ''">{{ r.notes || '-' }}</td>
                                         <td>
-                                            <div class="actions-cell" style="justify-content: flex-end;">
+                                            <div class="actions-cell" style="justify-content: flex-end; align-items: center;">
+                                                <input v-if="filters.driver" type="number" min="1" :max="driverRdvCount" :value="driverRank(r)" @change="setManualOrder(r.id, $event.target.value)" class="rank-input" title="Saisir le rang (1, 2, 3…) pour déplacer ce RDV" style="width:46px; padding:5px; border:1px solid #cbd5e1; border-radius:6px; text-align:center; font-weight:700; color:#0f172a;">
                                                 <button v-if="filters.driver" class="btn-order" @click="moveOrder(r.id, -1)" :disabled="index === 0" :style="index === 0 ? 'opacity:0.3;' : ''" title="Monter">↑</button>
                                                 <button v-if="filters.driver" class="btn-order" @click="moveOrder(r.id, 1)" :disabled="index === filteredRdvs.length - 1" :style="index === filteredRdvs.length - 1 ? 'opacity:0.3;' : ''" title="Descendre">↓</button>
                                                 <button class="btn-remove" @click="removeRdv(r.id)" title="Retirer ce RDV du programme">❌</button>
@@ -354,36 +448,62 @@ export const NouveauProgrammeView = {
                     <button class="icon-btn" @click="closeOptimizationPanel" style="background:none; border:none; font-size:20px; color:#64748b; cursor:pointer;">✕</button>
                 </div>
                 <div class="opti-body">
-                    <div class="opti-kpi-grid">
-                        <div class="opti-kpi opti-kpi--purple"><div class="opti-kpi__icon">📍</div><div class="opti-kpi__value">{{ currentOptimizedOrder.length }}</div><div class="opti-kpi__label">Arrêts</div></div>
-                        <div class="opti-kpi opti-kpi--blue"><div class="opti-kpi__icon">🛣️</div><div class="opti-kpi__value">{{ (currentOptimizedOrder.length * 4.2).toFixed(1) }} km</div><div class="opti-kpi__label">Distance</div></div>
-                        <div class="opti-kpi opti-kpi--orange"><div class="opti-kpi__icon">⏱️</div><div class="opti-kpi__value">{{ Math.floor((currentOptimizedOrder.length * 15) / 60) }}h {{ (currentOptimizedOrder.length * 15) % 60 }}m</div><div class="opti-kpi__label">Durée Est.</div></div>
-                        <div class="opti-kpi opti-kpi--green"><div class="opti-kpi__icon">🔄</div><div class="opti-kpi__value">{{ currentOptimizedOrder.length }}</div><div class="opti-kpi__label">Optimisés</div></div>
+                    <div v-if="optiLoading" style="text-align:center; padding:40px; color:#64748b;">
+                        <i class="fas fa-spinner fa-spin fa-2x"></i><br><br>Calcul de l'itinéraire optimal…
                     </div>
-                    <div class="opti-avg-row">
-                        <div class="opti-avg"><span class="opti-avg__label">⚡ Moteur</span><span class="opti-avg__value">OSRM+BAN</span></div>
-                        <div class="opti-avg"><span class="opti-avg__label">📐 Moy. / arrêt</span><span class="opti-avg__value">4,2 km</span></div>
-                        <div class="opti-avg"><span class="opti-avg__label">⏳ Moy. / arrêt</span><span class="opti-avg__value">15 min</span></div>
-                    </div>
-                    <div class="opti-section-title">🗺️ Ordre recommandé</div>
-                    <div class="opti-timeline">
-                        <div v-for="(r, idx) in currentOptimizedOrder" :key="r.id" class="opti-stop">
-                            <div class="opti-stop__line"><div class="opti-stop__number">{{ idx + 1 }}</div><div class="opti-stop__connector"></div></div>
-                            <div class="opti-stop__card">
-                                <div class="opti-stop__top"><div class="opti-stop__client">{{ r.client }}</div><span :class="['type-badge', r.rdvType === 'DEPOT' ? 'badge--depot' : 'badge--recup']">{{ r.rdvType === 'DEPOT' ? 'DÉPÔT' : 'RÉCUPÉRER' }}</span></div>
-                                <div class="opti-stop__address">{{ r.adresse || 'Adresse non spécifiée' }}</div>
-                                <div class="opti-stop__meta">
-                                    <span class="opti-stop__tag"><span class="opti-stop__tag-label">Avant</span>#{{ getOldIndex(r.id) + 1 }}</span>
-                                    <span class="opti-stop__tag opti-stop__tag--blue">{{ (Math.random() * 5 + 1).toFixed(1) }} km</span>
-                                    <span class="opti-stop__tag opti-stop__tag--orange">{{ Math.floor(Math.random() * 15 + 5) }} min</span>
-                                    <span class="opti-stop__tag opti-stop__tag--green">🕐 {{ r.time || '10:00 - 12:00' }}</span>
+                    <template v-else>
+                        <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:10px; padding:10px 12px; margin-bottom:15px; font-size:12px; color:#475569;">
+                            🏁 <b>Départ &amp; arrivée :</b> {{ DEPOT_ADDRESS }}
+                            <div v-if="!optiResult.depotOk" style="color:#b45309; margin-top:4px;">⚠️ Adresse du dépôt introuvable — itinéraire approximatif.</div>
+                        </div>
+                        <div class="opti-kpi-grid">
+                            <div class="opti-kpi opti-kpi--purple"><div class="opti-kpi__icon">📍</div><div class="opti-kpi__value">{{ currentOptimizedOrder.length }}</div><div class="opti-kpi__label">Arrêts</div></div>
+                            <div class="opti-kpi opti-kpi--blue"><div class="opti-kpi__icon">🛣️</div><div class="opti-kpi__value">{{ optiResult.totalKm.toFixed(1) }} km</div><div class="opti-kpi__label">Distance (A/R)</div></div>
+                            <div class="opti-kpi opti-kpi--orange"><div class="opti-kpi__icon">⏱️</div><div class="opti-kpi__value">{{ Math.floor(optiResult.totalMin / 60) }}h {{ Math.round(optiResult.totalMin % 60) }}m</div><div class="opti-kpi__label">Durée conduite</div></div>
+                            <div class="opti-kpi opti-kpi--green"><div class="opti-kpi__icon">🚫</div><div class="opti-kpi__value">{{ optiSkipped.length }}</div><div class="opti-kpi__label">Ratés / ignorés</div></div>
+                        </div>
+                        <div class="opti-avg-row">
+                            <div class="opti-avg"><span class="opti-avg__label">⚡ Moteur</span><span class="opti-avg__value">{{ optiResult.engine }}</span></div>
+                            <div v-if="optiResult.invalidCount > 0" class="opti-avg opti-avg--warn"><span class="opti-avg__label">⚠️ Adresses non localisées</span><span class="opti-avg__value">{{ optiResult.invalidCount }}</span></div>
+                            <button class="opti-avg" @click="computeOptimization" style="cursor:pointer; border:none; background:#eff6ff; color:#1d4ed8; font-weight:700;">🔄 Recalculer</button>
+                        </div>
+
+                        <div class="opti-section-title">🗺️ Ordre recommandé</div>
+                        <div class="opti-timeline">
+                            <div class="opti-stop">
+                                <div class="opti-stop__line"><div class="opti-stop__number" style="background:#1A3553;">🏁</div><div class="opti-stop__connector"></div></div>
+                                <div class="opti-stop__card" style="background:#f8fafc;"><div class="opti-stop__client">Départ — Dépôt AMT</div><div class="opti-stop__address">{{ DEPOT_ADDRESS }}</div></div>
+                            </div>
+                            <div v-for="(r, idx) in currentOptimizedOrder" :key="r.id" class="opti-stop">
+                                <div class="opti-stop__line"><div class="opti-stop__number">{{ idx + 1 }}</div><div class="opti-stop__connector"></div></div>
+                                <div class="opti-stop__card">
+                                    <div class="opti-stop__top"><div class="opti-stop__client">{{ r.client }}</div><span :class="['type-badge', r.rdvType === 'DEPOT' ? 'badge--depot' : 'badge--recup']">{{ r.rdvType === 'DEPOT' ? 'DÉPÔT' : 'RÉCUPÉRER' }}</span></div>
+                                    <div class="opti-stop__address">{{ r.adresse || 'Adresse non spécifiée' }}</div>
+                                    <div class="opti-stop__meta">
+                                        <span class="opti-stop__tag"><span class="opti-stop__tag-label">Avant</span>#{{ getOldIndex(r.id) + 1 }}</span>
+                                        <span class="opti-stop__tag opti-stop__tag--blue">{{ legFor(idx).km.toFixed(1) }} km</span>
+                                        <span class="opti-stop__tag opti-stop__tag--orange">{{ Math.round(legFor(idx).min) }} min</span>
+                                        <button class="opti-stop__tag" @click="skipStop(r.id)" style="cursor:pointer; border:none; background:#fef2f2; color:#dc2626;" title="Le chauffeur a raté ce point — recalculer sans lui">🚫 Passer</button>
+                                    </div>
                                 </div>
                             </div>
+                            <div class="opti-stop">
+                                <div class="opti-stop__line"><div class="opti-stop__number" style="background:#1A3553;">🏁</div></div>
+                                <div class="opti-stop__card" style="background:#f8fafc;"><div class="opti-stop__client">Retour — Dépôt AMT</div><div class="opti-stop__address">{{ DEPOT_ADDRESS }}</div></div>
+                            </div>
                         </div>
-                    </div>
+
+                        <div v-if="skippedRdvs.length > 0">
+                            <div class="opti-section-title">🚫 Points ratés / ignorés</div>
+                            <div v-for="r in skippedRdvs" :key="r.id" style="display:flex; justify-content:space-between; align-items:center; padding:8px 12px; background:#fef2f2; border:1px solid #fecaca; border-radius:8px; margin-bottom:8px;">
+                                <div><div style="font-weight:700; color:#0f172a;">{{ r.client }}</div><div style="font-size:11px; color:#64748b;">{{ r.adresse }}</div></div>
+                                <button @click="unskipStop(r.id)" style="cursor:pointer; border:1px solid #cbd5e1; background:white; border-radius:6px; padding:5px 10px; font-size:12px; font-weight:600;">↩️ Réintégrer</button>
+                            </div>
+                        </div>
+                    </template>
                 </div>
                 <div class="opti-footer">
-                    <button class="btn btn--ghost" style="padding: 10px 15px; border-radius: 8px; border: 1px solid #cbd5e1; background: white; font-weight: 600; cursor: pointer;">📄 Exporter PDF</button>
+                    <button class="btn btn--ghost" @click="printRoadmap(optiDriver)" style="padding: 10px 15px; border-radius: 8px; border: 1px solid #cbd5e1; background: white; font-weight: 600; cursor: pointer;">📄 Feuille de route</button>
                     <button class="btn btn--primary" @click="applyOptimization" :disabled="savingOpti" style="padding: 10px 20px; border-radius: 8px; background: #10b981; border: none; color: white; font-weight: 600; cursor: pointer;">
                         <span v-if="savingOpti"><i class="fas fa-spinner fa-spin"></i> Application...</span>
                         <span v-else>✅ Valider et appliquer</span>
@@ -454,6 +574,9 @@ export const NouveauProgrammeView = {
                 
                 const driverToAssign = ref('');
                 const currentOptimizedOrder = ref([]);
+                const optiLoading = ref(false);
+                const optiResult = ref({ totalKm: 0, totalMin: 0, legs: [], engine: '', invalidCount: 0, depotOk: true });
+                const optiSkipped = ref([]); // ids des RDV ratés / ignorés -> exclus du calcul
                 
                 const assignSelectedIds = ref([]);
                 
@@ -658,40 +781,83 @@ export const NouveauProgrammeView = {
                 };
                 
                 const optiDriver = ref('');
-                
-                const openOptimizationPanel = (driverName) => {
+
+                // Calcule (ou recalcule) le meilleur trajet pour le chauffeur
+                // courant, en excluant les RDV ratés/ignorés (optiSkipped).
+                // Départ ET arrivée au dépôt AMT.
+                const computeOptimization = async () => {
+                    optiLoading.value = true;
+                    try {
+                        const depotCoord = await geocodeAddress(DEPOT_ADDRESS);
+                        const driverRdvs = rdvs.value
+                            .filter(r => r.livreur === optiDriver.value && !optiSkipped.value.includes(r.id));
+                        // Géocodage en parallèle (BAN).
+                        const stops = await Promise.all(driverRdvs.map(async r => ({ rdv: r, coord: await geocodeAddress(r.adresse) })));
+                        const result = await optimizeRoute(depotCoord, stops);
+                        currentOptimizedOrder.value = result.ordered.map(s => s.rdv);
+                        optiResult.value = {
+                            totalKm: result.totalKm,
+                            totalMin: result.totalMin,
+                            legs: result.legs,
+                            engine: result.engine,
+                            invalidCount: result.invalid.length,
+                            depotOk: !!depotCoord
+                        };
+                    } catch (e) {
+                        globalApp.showToast("Erreur lors du calcul de l'itinéraire.", "error");
+                    } finally {
+                        optiLoading.value = false;
+                    }
+                };
+
+                const openOptimizationPanel = async (driverName) => {
                     const driverRdvs = rdvs.value.filter(r => r.livreur === driverName);
                     if (driverRdvs.length === 0) {
                         globalApp.showToast("Aucun RDV assigné à ce chauffeur pour calculer le trajet.", "error");
                         return;
                     }
-
-                    const optimizedRdvs = [...driverRdvs];
-                    optimizedRdvs.sort((a,b) => {
-                        const extractCP = str => (str.match(/\b\d{5}\b/) || [''])[0];
-                        return extractCP(a.adresse || '').localeCompare(extractCP(b.adresse || ''));
-                    });
-                    
-                    currentOptimizedOrder.value = optimizedRdvs;
                     optiDriver.value = driverName;
+                    optiSkipped.value = [];
+                    currentOptimizedOrder.value = [];
                     showOptiModal.value = true;
+                    await computeOptimization();
                 };
-                
+
+                // Marque un point comme raté/ignoré et recalcule le meilleur
+                // trajet sur les points restants (départ/arrivée au dépôt).
+                const skipStop = async (id) => {
+                    if (!optiSkipped.value.includes(id)) optiSkipped.value.push(id);
+                    await computeOptimization();
+                };
+                const unskipStop = async (id) => {
+                    optiSkipped.value = optiSkipped.value.filter(x => x !== id);
+                    await computeOptimization();
+                };
+                const skippedRdvs = computed(() =>
+                    rdvs.value.filter(r => r.livreur === optiDriver.value && optiSkipped.value.includes(r.id))
+                );
+
                 const closeOptimizationPanel = () => {
                     showOptiModal.value = false;
                 };
-                
+
                 const applyOptimization = async () => {
-                    if (currentOptimizedOrder.value.length === 0) return;
+                    if (currentOptimizedOrder.value.length === 0 && optiSkipped.value.length === 0) return;
                     savingOpti.value = true;
 
                     try {
                         const batch = writeBatch(db);
-                        currentOptimizedOrder.value.forEach((r, idx) => {
-                            batch.update(doc(db, getCollectionName("appointments"), r.id), { orderInRoute: idx });
+                        let idx = 0;
+                        // 1) Points optimisés dans l'ordre.
+                        currentOptimizedOrder.value.forEach((r) => {
+                            batch.update(doc(db, getCollectionName("appointments"), r.id), { orderInRoute: idx++ });
+                        });
+                        // 2) Points ratés/ignorés -> placés en fin de tournée.
+                        optiSkipped.value.forEach((id) => {
+                            batch.update(doc(db, getCollectionName("appointments"), id), { orderInRoute: idx++ });
                         });
                         await batch.commit();
-                        
+
                         globalApp.showToast("Nouvel ordre optimisé appliqué avec succès !", "success");
                         closeOptimizationPanel();
                     } catch(e) {
@@ -700,10 +866,15 @@ export const NouveauProgrammeView = {
                         savingOpti.value = false;
                     }
                 };
-                
+
                 const getOldIndex = (id) => {
                     const driverRdvs = rdvs.value.filter(r => r.livreur === optiDriver.value);
                     return driverRdvs.findIndex(orig => orig.id === id);
+                };
+                // Distance/durée d'approche d'un arrêt (leg correspondant).
+                const legFor = (idx) => {
+                    const l = optiResult.value.legs && optiResult.value.legs[idx];
+                    return l ? l : { km: 0, min: 0 };
                 };
                 
                 const openAddDriverModal = async () => {
@@ -775,8 +946,77 @@ export const NouveauProgrammeView = {
                     }
                 };
                 
-                const printRoadmap = (driverName) => {
-                    globalApp.showToast("L'impression de la feuille de route sera bientôt disponible.", "info");
+                // Rang (1..N) d'un RDV dans la tournée du chauffeur courant.
+                const driverRank = (r) => {
+                    const list = rdvs.value.filter(x => x.livreur === filters.driver)
+                        .sort((a, b) => (a.orderInRoute || 0) - (b.orderInRoute || 0));
+                    return list.findIndex(x => x.id === r.id) + 1;
+                };
+                const driverRdvCount = computed(() =>
+                    filters.driver ? rdvs.value.filter(x => x.livreur === filters.driver).length : 0
+                );
+
+                // Saisie manuelle du rang : on déplace le RDV à la position
+                // demandée et on renumérote toute la tournée du chauffeur.
+                const setManualOrder = async (id, rawValue) => {
+                    if (!filters.driver) return;
+                    const list = rdvs.value.filter(x => x.livreur === filters.driver)
+                        .sort((a, b) => (a.orderInRoute || 0) - (b.orderInRoute || 0));
+                    const newRank = parseInt(rawValue);
+                    const curIdx = list.findIndex(x => x.id === id);
+                    if (curIdx === -1) return;
+                    if (isNaN(newRank) || newRank < 1 || newRank > list.length || newRank - 1 === curIdx) {
+                        rdvs.value = [...rdvs.value]; // valeur invalide -> on rerend (annule la saisie)
+                        return;
+                    }
+                    const [moved] = list.splice(curIdx, 1);
+                    list.splice(newRank - 1, 0, moved);
+                    try {
+                        const batch = writeBatch(db);
+                        list.forEach((r, idx) => { r.orderInRoute = idx; batch.update(doc(db, getCollectionName("appointments"), r.id), { orderInRoute: idx }); });
+                        await batch.commit();
+                        globalApp.showToast("Ordre mis à jour.", "success");
+                    } catch (e) {
+                        globalApp.showToast("Erreur lors de la réorganisation.", "error");
+                    }
+                };
+
+                const printRoadmap = async (driverName) => {
+                    const driverRdvs = rdvs.value.filter(r => r.livreur === driverName)
+                        .sort((a, b) => (a.orderInRoute || 0) - (b.orderInRoute || 0));
+                    if (driverRdvs.length === 0) {
+                        globalApp.showToast("Aucun RDV assigné à ce chauffeur.", "error");
+                        return;
+                    }
+                    try {
+                        const { jsPDF } = await loadJsPdf();
+                        const docp = new jsPDF('p', 'mm', 'a4');
+                        docp.setFontSize(16); docp.setTextColor(26, 53, 83);
+                        docp.text(`Feuille de route — ${driverName}`, 14, 18);
+                        docp.setFontSize(9); docp.setTextColor(100);
+                        docp.text(`Date : ${formattedDate.value}`, 14, 25);
+                        docp.text(`Départ / Arrivée : ${DEPOT_ADDRESS}`, 14, 30);
+                        const body = driverRdvs.map((r, i) => [
+                            i + 1,
+                            r.rdvType === 'DEPOT' ? 'DÉPÔT' : 'RÉCUP',
+                            r.client || '',
+                            r.tel || '',
+                            r.adresse || '',
+                            (r.notes || '').replace(/\s+/g, ' ').trim()
+                        ]);
+                        docp.autoTable({
+                            startY: 36,
+                            head: [['#', 'Type', 'Client', 'Téléphone', 'Adresse', 'Description']],
+                            body,
+                            theme: 'grid',
+                            styles: { fontSize: 8, cellPadding: 2, overflow: 'linebreak' },
+                            headStyles: { fillColor: [26, 53, 83], textColor: 255, fontStyle: 'bold' },
+                            columnStyles: { 0: { cellWidth: 8, halign: 'center' }, 1: { cellWidth: 16 }, 3: { cellWidth: 26 }, 4: { cellWidth: 48 } }
+                        });
+                        docp.save(`Feuille_route_${driverName}_${filters.date}.pdf`);
+                    } catch (e) {
+                        globalApp.showToast("Erreur lors de la génération du PDF.", "error");
+                    }
                 };
                 return {
                     rdvs, drivers, loading, filters, formattedDate, filteredRdvs, kpis,
@@ -785,7 +1025,9 @@ export const NouveauProgrammeView = {
                     formDriver, availableAgentsForDropdown, optiDriver,
                     getDriverRdvsCount, openAssignModal, closeAssignModal, confirmAssign, removeRdv, moveOrder,
                     openOptimizationPanel, closeOptimizationPanel, applyOptimization, getOldIndex,
-                    openAddDriverModal, closeAddDriverModal, saveDriverPhone, printRoadmap
+                    openAddDriverModal, closeAddDriverModal, saveDriverPhone, printRoadmap,
+                    optiLoading, optiResult, optiSkipped, computeOptimization, skipStop, unskipStop, skippedRdvs, legFor,
+                    setManualOrder, driverRank, driverRdvCount, DEPOT_ADDRESS
                 };
             }
         });

@@ -14,50 +14,50 @@ export const HistoriqueProgrammesView = {
 
         const html = `
             <style>
-                .history-page { max-width: 1200px; margin: 0 auto; animation: fadeIn 0.3s ease; }
-                .history-header { background: white; border-radius: 16px; padding: 20px 25px; display: flex; justify-content: space-between; align-items: center; border: 1px solid #e2e8f0; margin-bottom: 24px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); }
+                .history-page { --amt-blue:#1A3553; --amt-blue-d:#13283f; --amt-red:#E51F21; --amt-gold:#F2A312; --ink:#0f172a; --muted:#566273; --line:#e6ebf1; --soft:#f3f6fa; font-family:'Jost','Comfortaa',system-ui,sans-serif; max-width: 1200px; margin: 0 auto; animation: fadeIn 0.3s ease; }
+                .history-header { background: white; border-radius: 16px; padding: 20px 25px; display: flex; justify-content: space-between; align-items: center; border: 1px solid var(--line); border-left: 5px solid var(--amt-blue); margin-bottom: 24px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); }
                 .history-header__content { display: flex; align-items: center; gap: 15px; }
-                .history-header__icon { background: #f8fafc; font-size: 28px; width: 56px; height: 56px; display: flex; align-items: center; justify-content: center; border-radius: 14px; }
-                .history-header__title { margin: 0; font-size: 22px; font-weight: 800; color: #0f172a; }
-                .history-header__subtitle { margin: 4px 0 0 0; font-size: 13px; color: #64748b; }
-                
-                .history-filters { display: flex; flex-wrap: wrap; gap: 15px; background: white; padding: 20px; border-radius: 16px; border: 1px solid #e2e8f0; margin-bottom: 24px; }
+                .history-header__icon { background: var(--amt-blue); color: #fff; font-size: 28px; width: 56px; height: 56px; display: flex; align-items: center; justify-content: center; border-radius: 14px; }
+                .history-header__title { margin: 0; font-size: 22px; font-weight: 800; color: var(--amt-blue); font-family: 'Comfortaa','Jost',sans-serif; }
+                .history-header__subtitle { margin: 4px 0 0 0; font-size: 13px; color: var(--muted); }
+
+                .history-filters { display: flex; flex-wrap: wrap; gap: 15px; background: white; padding: 20px; border-radius: 16px; border: 1px solid var(--line); margin-bottom: 24px; }
                 .filter-group { flex: 1; min-width: 150px; display: flex; flex-direction: column; gap: 6px; }
-                .filter-label { font-size: 11px; font-weight: 600; color: #475569; text-transform: uppercase; }
+                .filter-label { font-size: 11px; font-weight: 600; color: var(--muted); text-transform: uppercase; }
                 .filter-input { width: 100%; padding: 10px 12px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 14px; outline: none; transition: 0.2s; box-sizing:border-box; }
-                .filter-input:focus { border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59,130,246,0.1); }
-                
-                .history-table-card { background: white; border-radius: 16px; border: 1px solid #e2e8f0; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.02); }
-                .history-table-header { padding: 15px 20px; border-bottom: 1px solid #e2e8f0; background: #f8fafc; display: flex; justify-content: space-between; align-items: center; }
-                .history-table-title { margin: 0; font-size: 16px; font-weight: 700; color: #1e293b; display: flex; align-items: center; gap: 10px; }
-                .history-table-count { background: #e2e8f0; color: #475569; padding: 2px 8px; border-radius: 12px; font-size: 12px; }
-                
+                .filter-input:focus { border-color: var(--amt-blue); box-shadow: 0 0 0 3px rgba(26,53,83,0.1); }
+
+                .history-table-card { background: white; border-radius: 16px; border: 1px solid var(--line); overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.02); }
+                .history-table-header { padding: 15px 20px; border-bottom: 2px solid var(--amt-gold); background: var(--amt-blue); display: flex; justify-content: space-between; align-items: center; }
+                .history-table-title { margin: 0; font-size: 16px; font-weight: 700; color: #fff; display: flex; align-items: center; gap: 10px; }
+                .history-table-count { background: var(--amt-gold); color: var(--amt-blue); padding: 2px 8px; border-radius: 12px; font-size: 12px; font-weight: 700; }
+
                 .table-wrap { overflow-x: auto; }
                 .history-table { width: 100%; border-collapse: collapse; }
-                .history-table th { text-align: left; padding: 12px 15px; background: white; font-size: 12px; font-weight: 700; color: #64748b; text-transform: uppercase; border-bottom: 1px solid #e2e8f0; }
+                .history-table th { text-align: left; padding: 12px 15px; background: #eef2f7; font-size: 12px; font-weight: 800; color: var(--amt-blue); text-transform: uppercase; border-bottom: 1px solid var(--line); }
                 .history-table td { padding: 15px; border-bottom: 1px solid #f1f5f9; font-size: 13px; color: #334155; vertical-align: middle; }
-                .history-table tr:hover td { background: #f8fafc; }
-                
-                .date-cell { font-weight: 600; color: #0f172a; }
-                .chauffeur-cell { font-weight: 700; color: #1e293b; }
-                .phone-cell { color: #64748b; font-weight: 600; }
-                
-                .stat-value { font-size: 16px; font-weight: 800; color: #0f172a; }
+                .history-table tr:hover td { background: var(--soft); }
+
+                .date-cell { font-weight: 600; color: var(--ink); }
+                .chauffeur-cell { font-weight: 700; color: var(--amt-blue); }
+                .phone-cell { color: var(--muted); font-weight: 600; }
+
+                .stat-value { font-size: 16px; font-weight: 800; color: var(--ink); }
                 .stat-badge { padding: 4px 10px; border-radius: 12px; font-size: 12px; font-weight: 700; }
-                .stat-badge--depot { background: #e0f2fe; color: #0284c7; }
-                .stat-badge--recup { background: #f3e8ff; color: #7e22ce; }
-                
+                .stat-badge--depot { background: #e9eef5; color: var(--amt-blue); }
+                .stat-badge--recup { background: #fff4e0; color: #b9790c; }
+
                 .actions-cell { display: flex; gap: 8px; }
-                .btn-voir { background: white; border: 1px solid #cbd5e1; padding: 6px 12px; border-radius: 8px; font-weight: 600; color: #475569; cursor: pointer; transition: 0.2s; display: flex; align-items: center; gap: 6px; }
-                .btn-voir:hover { background: #f1f5f9; color: #0f172a; }
-                .btn-print { background: white; border: 1px solid #cbd5e1; width: 32px; height: 32px; border-radius: 8px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: 0.2s; color: #475569; }
-                .btn-print:hover { background: #f1f5f9; color: #0f172a; }
+                .btn-voir { background: var(--amt-blue); border: 1px solid var(--amt-blue); padding: 6px 12px; border-radius: 8px; font-weight: 600; color: #fff; cursor: pointer; transition: 0.2s; display: flex; align-items: center; gap: 6px; }
+                .btn-voir:hover { background: var(--amt-blue-d); border-color: var(--amt-blue-d); color: #fff; }
+                .btn-print { background: white; border: 1px solid var(--line); width: 32px; height: 32px; border-radius: 8px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: 0.2s; color: var(--muted); }
+                .btn-print:hover { border-color: var(--amt-blue); color: var(--amt-blue); }
 
                 /* Modal Details */
-                .hp-modal { display:none; position:fixed; z-index:9999; left:0; top:0; width:100%; height:100%; background:rgba(15, 23, 42, 0.6); backdrop-filter: blur(4px); align-items:center; justify-content:center; }
+                .hp-modal { --amt-blue:#1A3553; --amt-blue-d:#13283f; --amt-gold:#F2A312; --line:#e6ebf1; display:none; position:fixed; z-index:9999; left:0; top:0; width:100%; height:100%; background:rgba(15, 23, 42, 0.6); backdrop-filter: blur(4px); align-items:center; justify-content:center; }
                 .hp-modal.active { display:flex; }
                 .hp-modal-box { background: white; border-radius: 16px; display: flex; flex-direction: column; max-height: 90vh; width: 90%; max-width: 900px; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25); overflow: hidden; }
-                .hp-modal-header { padding: 20px 25px; border-bottom: 1px solid #e2e8f0; background: #f8fafc; display: flex; justify-content: space-between; align-items: center; }
+                .hp-modal-header { padding: 20px 25px; border-bottom: 2px solid var(--amt-gold); background: var(--amt-blue); display: flex; justify-content: space-between; align-items: center; }
                 .hp-modal-body { padding: 0; overflow-y: auto; flex: 1; }
             </style>
 
@@ -112,10 +112,10 @@ export const HistoriqueProgrammesView = {
                 <div class="hp-modal-box">
                     <div class="hp-modal-header">
                         <div>
-                            <h2 style="margin:0; font-size:18px; color:#0f172a;" id="hpModalTitle">Détails du programme</h2>
-                            <div style="font-size:13px; color:#64748b; margin-top:4px;" id="hpModalSubtitle"></div>
+                            <h2 style="margin:0; font-size:18px; color:#fff; font-family:'Comfortaa','Jost',sans-serif; font-weight:800;" id="hpModalTitle">Détails du programme</h2>
+                            <div style="font-size:13px; color:#cfd8e3; margin-top:4px;" id="hpModalSubtitle"></div>
                         </div>
-                        <button onclick="document.getElementById('hpDetailsModal').classList.remove('active')" style="background:none; border:none; font-size:24px; cursor:pointer; color:#64748b;">&times;</button>
+                        <button onclick="document.getElementById('hpDetailsModal').classList.remove('active')" style="background:none; border:none; font-size:24px; cursor:pointer; color:#fff;">&times;</button>
                     </div>
                     <div class="hp-modal-body">
                         <table class="history-table" style="margin:0; border-bottom:none;">
@@ -245,13 +245,13 @@ export const HistoriqueProgrammesView = {
             let statusColor = '#64748b';
             let statusText = 'En attente';
             if (r.status === 'réalisé' || r.status === 'confirmé') { statusColor = '#10b981'; statusText = 'Confirmé/Réalisé'; }
-            else if (r.status === 'en_cours') { statusColor = '#3b82f6'; statusText = 'En cours'; }
-            else if (r.status === 'annulé') { statusColor = '#ef4444'; statusText = 'Annulé'; }
+            else if (r.status === 'en_cours') { statusColor = '#1A3553'; statusText = 'En cours'; }
+            else if (r.status === 'annulé') { statusColor = '#E51F21'; statusText = 'Annulé'; }
 
             return `
                 <tr>
                     <td style="text-align:center; font-weight:bold; color:#94a3b8;">${index + 1}</td>
-                    <td><span style="padding: 4px 8px; border-radius: 6px; font-size: 10px; font-weight: 800; border: 1px solid #e2e8f0; ${isDepot ? 'background:#e0f2fe;color:#0284c7;' : 'background:#f3e8ff;color:#7e22ce;'}">${typeLabel}</span></td>
+                    <td><span style="padding: 4px 8px; border-radius: 6px; font-size: 10px; font-weight: 800; border: 1px solid #e6ebf1; ${isDepot ? 'background:#e9eef5;color:#1A3553;' : 'background:#fff4e0;color:#b9790c;'}">${typeLabel}</span></td>
                     <td>
                         <div style="font-weight:700; color:#1e293b;">${r.client}</div>
                         <div style="font-size:11px; color:#64748b;">📞 ${r.tel || '—'}</div>
@@ -295,7 +295,7 @@ export const HistoriqueProgrammesView = {
             startY: 30,
             theme: 'grid',
             styles: { fontSize: 8 },
-            headStyles: { fillColor: [59, 130, 246] }
+            headStyles: { fillColor: [26, 53, 83] }
         });
 
         doc.save(`Feuille_de_route_${livreur.replace(/\s+/g, '_')}_${date}.pdf`);
