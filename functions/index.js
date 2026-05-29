@@ -72,6 +72,106 @@ exports.verifyInvoice = onRequest({ region: REGION, invoker: "public", cors: tru
     }
 });
 
+// ===========================================================================
+//  getMyInvoices — app AMT Clients : factures du client connecté
+// ---------------------------------------------------------------------------
+//  Le client se connecte par SMS (Firebase Phone Auth) -> son numéro vérifié
+//  est dans le token. On le réduit aux 9 derniers chiffres (phoneTail), puis
+//  on interroge TOUTES les collections transactions* par destPhoneTail ET
+//  expPhoneTail. Résultat : ses factures, toutes routes/origines confondues,
+//  qu'il soit expéditeur OU destinataire. Sécurité : il ne peut voir que les
+//  factures portant SON numéro (le token n'est pas falsifiable).
+// ===========================================================================
+const _currencyCache = {};
+async function currencyForAgency(agency) {
+    if (agency === "paris") return "EUR";
+    if (!agency || agency === "abidjan" || agency === "all") return "XOF";
+    if (_currencyCache[agency]) return _currencyCache[agency];
+    let cur = "XOF";
+    try {
+        const ac = await admin.firestore().collection("agencies_config").doc(agency).get();
+        if (ac.exists && ac.data().currency === "EUR") cur = "EUR";
+    } catch (e) { /* défaut XOF */ }
+    _currencyCache[agency] = cur;
+    return cur;
+}
+
+exports.getMyInvoices = onCall({ region: REGION, invoker: "public" }, async (request) => {
+    const auth = request.auth;
+    const phone = auth && auth.token && auth.token.phone_number;
+    if (!phone) throw new HttpsError("unauthenticated", "Connexion par téléphone requise.");
+
+    const digits = String(phone).replace(/\D/g, "");
+    const tail = digits.length >= 9 ? digits.slice(-9) : digits;
+    if (tail.length < 8) return { invoices: [], loyalty: { sentAsSender: 0, freeCartons: 0, toNext: 10 } };
+
+    const db = admin.firestore();
+    // Toutes les collections de factures (route-aware) : transactions,
+    // transactions_aerien, transactions_<route>, ...
+    const cols = await db.listCollections();
+    const txCols = cols.map((c) => c.id).filter((id) => /^transactions(_[a-z0-9_]+)?$/.test(id));
+
+    const TAUX = 655.957;
+    const byKey = new Map(); // évite les doublons (même doc via exp ET dest)
+    let sentAsSender = 0;
+
+    for (const colName of txCols) {
+        const col = db.collection(colName);
+        let destSnap, expSnap;
+        try {
+            [destSnap, expSnap] = await Promise.all([
+                col.where("destPhoneTail", "==", tail).limit(500).get(),
+                col.where("expPhoneTail", "==", tail).limit(500).get(),
+            ]);
+        } catch (e) { continue; }
+
+        const add = async (doc, role) => {
+            const key = colName + "/" + doc.id;
+            const t = doc.data() || {};
+            if (t.isDeleted) return;
+            const existing = byKey.get(key);
+            if (existing) { if (existing.role !== role) existing.role = "both"; return; }
+
+            const currency = await currencyForAgency(t.agency);
+            const factor = currency === "EUR" ? TAUX : 1;
+            const total = (parseFloat(t.prix) || 0) / factor;
+            const paid = ((parseFloat(t.montantParis) || 0) + (parseFloat(t.montantAbidjan) || 0)) / factor;
+            let remaining = total - paid;
+            if (Math.abs(remaining) < 0.01) remaining = 0;
+            let status = "IMPAYE";
+            if (total > 0 && remaining <= 0) status = "PAYE";
+            else if (paid > 0) status = "PARTIEL";
+
+            // Fidélité : compter les envois en tant qu'EXPÉDITEUR (≠ AMT).
+            const expName = String(t.nom || "");
+            if (role === "exp" && !/amt/i.test(expName)) sentAsSender++;
+
+            byKey.set(key, {
+                id: doc.id,
+                collection: colName,
+                reference: t.reference || "",
+                role, // 'exp' | 'dest' | 'both'
+                counterpart: role === "exp" ? (t.nomDestinataire || "") : (t.nom || ""),
+                date: t.date || t.dateAjout || "",
+                total, paid, remaining, status, currency,
+                agency: t.agency || "",
+            });
+        };
+
+        for (const d of destSnap.docs) await add(d, "dest");
+        for (const d of expSnap.docs) await add(d, "exp");
+    }
+
+    const invoices = Array.from(byKey.values())
+        .sort((a, b) => String(b.date).localeCompare(String(a.date)));
+
+    // Carton moyen offert toutes les 10 factures envoyées (expéditeur ≠ AMT).
+    const freeCartons = Math.floor(sentAsSender / 10);
+    const toNext = sentAsSender === 0 ? 10 : (10 - (sentAsSender % 10)) % 10 || 10;
+
+    return { invoices, loyalty: { sentAsSender, freeCartons, toNext } };
+});
+
 // SÉCURITÉ : vérifie que l'appelant est connecté ET possède un rôle
 // admin/super_admin. On relit sa fiche Firestore avec l'Admin SDK
 // (source de vérité non falsifiable côté client).
