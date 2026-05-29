@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#1A3553">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>AMT Clients</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="../LOGOAMT.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Comfortaa:wght@500;600;700&family=Jost:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<!-- ÉCRAN DE CONNEXION -->
+<div id="auth" class="auth">
+  <div class="auth__bg"></div>
+  <div class="auth__card">
+    <div class="auth__brand">
+      <img src="../LOGOAMT.png" alt="AMT Trans'it" class="auth__logo" onerror="this.style.display='none'">
+      <div class="auth__brandtxt">AMT <span>Clients</span></div>
+      <div class="auth__tag">Votre espace expéditeur &amp; destinataire</div>
+    </div>
+
+    <!-- Étape 1 : téléphone -->
+    <div class="auth__step" data-step="phone">
+      <label class="auth__label">Votre numéro de téléphone</label>
+      <div class="phone-row">
+        <select id="dialCode" class="phone-cc">
+          <option value="+33">🇫🇷 +33</option>
+          <option value="+225">🇨🇮 +225</option>
+        </select>
+        <input id="phoneInput" class="phone-num" type="tel" inputmode="numeric" placeholder="6 12 34 56 78" autocomplete="tel">
+      </div>
+      <button id="btnSendCode" class="btn btn--primary">Recevoir le code par SMS</button>
+      <p class="auth__hint">Un code à 6 chiffres vous sera envoyé par SMS.</p>
+    </div>
+
+    <!-- Étape 2 : code SMS -->
+    <div class="auth__step" data-step="code" hidden>
+      <button class="auth__back" data-goto="phone">← Modifier le numéro</button>
+      <label class="auth__label">Code reçu par SMS</label>
+      <div class="auth__sentto" id="sentTo"></div>
+      <input id="codeInput" class="pin-field" type="tel" inputmode="numeric" maxlength="6" placeholder="••••••">
+      <button id="btnVerifyCode" class="btn btn--primary">Valider</button>
+      <p class="auth__hint" id="demoHint">Mode démo : entrez n'importe quel code (ex. 000000).</p>
+    </div>
+
+    <!-- Étape 3 : création du PIN -->
+    <div class="auth__step" data-step="setpin" hidden>
+      <label class="auth__label">Créez votre code PIN (4 chiffres)</label>
+      <p class="auth__hint" style="margin-top:0">Il remplacera le SMS aux prochaines connexions.</p>
+      <input id="pinSet1" class="pin-field" type="tel" inputmode="numeric" maxlength="4" placeholder="••••">
+      <label class="auth__label">Confirmez le code PIN</label>
+      <input id="pinSet2" class="pin-field" type="tel" inputmode="numeric" maxlength="4" placeholder="••••">
+      <button id="btnSavePin" class="btn btn--primary">Enregistrer</button>
+    </div>
+
+    <!-- Étape 4 : saisie du PIN (retours suivants) -->
+    <div class="auth__step" data-step="pin" hidden>
+      <div class="auth__welcome" id="pinWelcome">Bon retour 👋</div>
+      <label class="auth__label">Entrez votre code PIN</label>
+      <input id="pinInput" class="pin-field" type="tel" inputmode="numeric" maxlength="4" placeholder="••••">
+      <button id="btnPin" class="btn btn--primary">Déverrouiller</button>
+      <button id="btnForgotPin" class="btn btn--ghost">J'ai oublié mon code (recevoir un SMS)</button>
+    </div>
+
+    <div id="authError" class="auth__error" hidden></div>
+  </div>
+  <div class="auth__foot">AMT Trans'it · Démo</div>
+</div>
+
+<!-- APPLICATION -->
+<div id="appShell" class="app" hidden>
+  <header class="topbar">
+    <div class="topbar__left">
+      <img src="../LOGOAMT.png" alt="" class="topbar__logo" onerror="this.style.display='none'">
+      <div class="topbar__title" id="topTitle">Tableau de bord</div>
+    </div>
+    <div class="topbar__right">
+      <button class="iconbtn" id="btnNotif" title="Notifications">🔔<span class="badge" id="notifBadge" hidden>0</span></button>
+      <button class="avatar" id="btnProfile" title="Profil"><span id="avatarInit">?</span></button>
+    </div>
+  </header>
+
+  <main class="content" id="content"><!-- vues injectées ici --></main>
+
+  <nav class="tabbar">
+    <button class="tab active" data-view="dashboard"><span class="tab__ic">🏠</span><span class="tab__lb">Accueil</span></button>
+    <button class="tab" data-view="requests"><span class="tab__ic">📦</span><span class="tab__lb">Dépôt/Récup</span></button>
+    <button class="tab" data-view="quotes"><span class="tab__ic">🧾</span><span class="tab__lb">Devis</span></button>
+    <button class="tab" data-view="stats"><span class="tab__ic">📊</span><span class="tab__lb">Stats</span></button>
+    <button class="tab" data-view="chat"><span class="tab__ic">💬</span><span class="tab__lb">Chat</span></button>
+  </nav>
+</div>
+
+<script src="js/app.js" type="module"></script>
+</body>
+</html>
