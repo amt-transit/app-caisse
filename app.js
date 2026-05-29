@@ -501,29 +501,22 @@ export const app = {
             // « en magasin » = livraisons aériennes au statut PARIS (reçues, pas
             // encore expédiées). getCollectionName route déjà vers livraisons_..._aerien.
             if (mode === 'aerien') {
-                // Jauge = colis PHYSIQUEMENT en magasin, comptés PAR SOUS-COLIS.
-                // Règle IDENTIQUE à « Voir facture » : une pièce est « en magasin »
-                // si son DERNIER scan est « Mise en entrepôt » (ENTREPOT_PARIS) ou
-                // « Retour entrepôt » (DEPART_VOL_RETOUR). On NE filtre PAS sur
-                // containerStatus (sinon un dossier au statut inattendu serait exclu
-                // de la jauge alors que ses colis sont visibles en entrepôt -> jauge
-                // à zéro à tort). Poids réparti au prorata des pièces (indicateur).
+                // Jauge = colis EN ATTENTE DE DÉPART (statut conteneur PARIS),
+                // comptés PAR SOUS-COLIS (labels), dès la création de la facture
+                // — sans attendre le scan d'entrepôt. Quand un colis part (statut
+                // != PARIS après chargement/vol), il quitte la jauge. Poids =
+                // somme du poids des livraisons concernées (on ne compte pas les
+                // factures mais bien le nombre de sous-colis).
                 this.unsubAerienGauge = onSnapshot(
-                    query(collection(db, getCollectionName("livraisons"))),
+                    query(collection(db, getCollectionName("livraisons")), where("containerStatus", "==", "PARIS")),
                     (snap) => {
                         let totalKg = 0, pieces = 0;
                         snap.forEach(d => {
                             const liv = d.data();
                             if (liv.isDeleted) return;
                             const labels = (liv.labels && liv.labels.length) ? liv.labels : [liv.ref];
-                            const totalPieces = labels.length || 1;
-                            const perPiece = (parseFloat(liv.poids) || 0) / totalPieces;
-                            const hist = Array.isArray(liv.scanHistory) ? liv.scanHistory : [];
-                            labels.forEach(lbl => {
-                                const scans = hist.filter(s => s.scanRef === lbl).sort((a, b) => new Date(b.date) - new Date(a.date));
-                                const inWarehouse = scans.length > 0 && (scans[0].type === 'ENTREPOT_PARIS' || scans[0].type === 'DEPART_VOL_RETOUR');
-                                if (inWarehouse) { totalKg += perPiece; pieces++; }
-                            });
+                            pieces += labels.length || 1;
+                            totalKg += parseFloat(liv.poids) || 0;
                         });
                         this.updateAerienGaugeUI(totalKg, pieces);
                     },

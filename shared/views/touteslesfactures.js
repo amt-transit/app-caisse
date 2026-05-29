@@ -442,6 +442,13 @@ export const ToutesLesFacturesView = {
         const isEur = isEurAgency();
         const TAUX = isEur ? CONSTANTS.TAUX_CONVERSION : 1;
 
+        // Colonne Téléphone : au DÉPART on montre le numéro de l'expéditeur
+        // (inv.tel), à l'ARRIVÉE celui du destinataire (inv.numero) car c'est
+        // lui que l'agence d'arrivée contacte pour la livraison.
+        const _activeAgency = sessionStorage.getItem('currentActiveAgency') || 'paris';
+        const isArrivalView = _activeAgency === 'all'
+            || (AGENCIES[_activeAgency] && AGENCIES[_activeAgency].type === 'arrival');
+
         // Droit de supprimer une facture : aucune restriction historique, donc
         // les rôles intégrés gardent l'accès ; un rôle personnalisé doit avoir
         // la permission "delete_invoice" cochée dans Rôles & Menus.
@@ -501,7 +508,7 @@ export const ToutesLesFacturesView = {
                     <td data-label="Date">${dateStr}</td>
                     <td data-label="Client"><strong>${inv.nom || '-'}</strong></td>
                     <td data-label="Adresse"><span class="tooltip" title="${address.replace(/"/g, '&quot;')}">${shortAddress}</span></td>
-                    <td data-label="Téléphone">${inv.tel || '-'}</td>
+                    <td data-label="Téléphone">${(isArrivalView ? (inv.numero || inv.tel) : (inv.tel || inv.numero)) || '-'}</td>
                     <td data-label="Destinataire">${inv.nomDestinataire || '-'}${parrainBadge}</td>
                     <td data-label="Reste à payer" class="cell--amount"><button class="amount-link" onclick="window.app.views.toutesLesFactures.quickPay('${inv.id}')">${this.formatMoneyLocal(resteDisplay)}</button></td>
                     <td data-label="Nb colis" style="text-align: right; font-weight: bold;">${nbColis}</td>
