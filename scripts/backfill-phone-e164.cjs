@@ -94,6 +94,10 @@ function phoneTail(raw) {
   if (d.length >= 9) return d.slice(-9);
   return d.length >= 8 ? d.slice(-8) : '';
 }
+// Clé de rapprochement par NOM (insensible casse/accents/espaces).
+function nameKey(s) {
+  return String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\s+/g, ' ').trim();
+}
 
 admin.initializeApp({
   credential: admin.credential.applicationDefault(),
@@ -103,14 +107,59 @@ const db = admin.firestore();
 
 const isMissing = (v) => v === undefined || v === null || v === '';
 
-function buildUpdate(data, cfg) {
+// Charge le fichier clients (nom -> tel) pour retrouver le numéro de
+// l'EXPÉDITEUR (absent des factures, mais présent dans `clients`).
+// SÛRETÉ HOMONYMES : si un même nom correspond à PLUSIEURS numéros
+// différents, on l'EXCLUT (on ne devine pas) pour ne jamais attribuer un
+// mauvais numéro. Renvoie { map (noms uniques -> tel), ambiguous (nb exclus) }.
+async function loadClientsMap(colName) {
+  const tailsByName = new Map(); // nameKey -> Set(tails distincts)
+  const telByName = new Map();   // nameKey -> 1er tel rencontré
+  let last = null;
+  // eslint-disable-next-line no-constant-condition
+  while (true) {
+    let q = db.collection(colName).orderBy(admin.firestore.FieldPath.documentId()).limit(PAGE_SIZE);
+    if (last) q = q.startAfter(last);
+    let snap;
+    try { snap = await q.get(); }
+    catch (e) { break; }
+    if (snap.empty) break;
+    for (const d of snap.docs) {
+      const x = d.data() || {};
+      const tel = x.tel || x.numero || x.telephone || x.phone || '';
+      const k = nameKey(x.nom);
+      const tail = phoneTail(tel);
+      if (!k || !tail) continue;
+      if (!tailsByName.has(k)) { tailsByName.set(k, new Set()); telByName.set(k, tel); }
+      tailsByName.get(k).add(tail);
+    }
+    last = snap.docs[snap.docs.length - 1];
+    if (snap.size < PAGE_SIZE) break;
+  }
+  const map = new Map();
+  let ambiguous = 0;
+  for (const [k, set] of tailsByName) {
+    if (set.size === 1) map.set(k, telByName.get(k)); // nom unique -> sûr
+    else ambiguous++;                                  // homonymes -> on s'abstient
+  }
+  return { map, ambiguous };
+}
+
+function buildUpdate(data, cfg, clientsMap) {
   const upd = {};
+  // Numéro expéditeur : sur la facture (`tel`) sinon via le fichier clients
+  // (rapprochement par le nom de l'expéditeur).
+  let expRaw = data.tel;
+  if (isMissing(phoneTail(expRaw)) && clientsMap && data.nom) {
+    const fromClient = clientsMap.get(nameKey(data.nom));
+    if (fromClient) expRaw = fromClient;
+  }
   // Tails (clé de liaison) : toujours, dès qu'absents et calculables.
-  if (isMissing(data.expPhoneTail)) { const t = phoneTail(data.tel); if (t) upd.expPhoneTail = t; }
+  if (isMissing(data.expPhoneTail)) { const t = phoneTail(expRaw); if (t) upd.expPhoneTail = t; }
   if (isMissing(data.destPhoneTail)) { const t = phoneTail(data.numero); if (t) upd.destPhoneTail = t; }
   // E.164 (affichage) : exp via pays de route ou détection ; dest détection seule.
   if (isMissing(data.expPhoneE164)) {
-    const v = cfg.exp ? toE164Intl(data.tel, cfg.exp) : toE164Detect(data.tel);
+    const v = cfg.exp ? toE164Intl(expRaw, cfg.exp) : toE164Detect(expRaw);
     if (v) upd.expPhoneE164 = v;
   }
   if (isMissing(data.destPhoneE164)) {
@@ -120,7 +169,7 @@ function buildUpdate(data, cfg) {
   return upd;
 }
 
-async function processCollection(name, cfg) {
+async function processCollection(name, cfg, clientsMap) {
   const col = db.collection(name);
   let last = null, scanned = 0, toFix = 0, exp = 0, dest = 0, written = 0;
   // eslint-disable-next-line no-constant-condition
@@ -135,7 +184,7 @@ async function processCollection(name, cfg) {
     let batch = db.batch(), batchCount = 0;
     for (const doc of snap.docs) {
       scanned++;
-      const upd = buildUpdate(doc.data(), cfg);
+      const upd = buildUpdate(doc.data(), cfg, clientsMap);
       if (Object.keys(upd).length) {
         toFix++;
         if ('expPhoneTail' in upd) exp++;
@@ -156,9 +205,13 @@ async function processCollection(name, cfg) {
 (async () => {
   console.log(`\n=== Backfill téléphone E.164 — mode: ${APPLY ? 'APPLY (écriture réelle)' : 'DRY-RUN (aucune écriture)'} ===`);
   console.log('Collections :', JSON.stringify(COLLECTIONS), '\n');
+  // Fichier clients (pour retrouver les numéros d'expéditeurs).
+  process.stdout.write('Chargement du fichier clients ... ');
+  const { map: clientsMap, ambiguous } = await loadClientsMap('clients');
+  console.log(`${clientsMap.size} noms UNIQUES (nom->tel) ; ${ambiguous} noms homonymes EXCLUS (sécurité).\n`);
   for (const [name, cfg] of Object.entries(COLLECTIONS)) {
     process.stdout.write(`-> ${name} (exp=${cfg.exp || '—'}, dest=${cfg.dest || '—'}) ... `);
-    const r = await processCollection(name, cfg);
+    const r = await processCollection(name, cfg, clientsMap);
     console.log(`scannés=${r.scanned}  à corriger=${r.toFix} (tails exp=${r.exp}, dest=${r.dest})  ${APPLY ? `écrits=${r.written}` : '(dry-run)'}`);
   }
   console.log(`\n${APPLY ? '✅ Terminé (écriture réelle).' : 'ℹ️  DRY-RUN : relancez avec APPLY=1 pour écrire.'}\n`);
