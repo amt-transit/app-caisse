@@ -45,6 +45,7 @@ let requestFormType = 'depot'; // type en cours de saisie
 // rôle des factures (rôle exp/both) + repli sur l'indicatif France (+33 = départ).
 let isExpediteur = true;       // par défaut on n'masque rien tant qu'on ne sait pas
 let clientSelfName = '';       // nom de l'expéditeur (préremplissage du formulaire)
+let clientSelfAddress = '';    // adresse de l'expéditeur (préremplissage)
 
 // Notifications réelles : Phase 3.
 let NOTIFS = [];
@@ -231,10 +232,12 @@ async function loadInvoices() {
     const phoneDigits = ((auth.currentUser && auth.currentUser.phoneNumber) || '').replace(/\D/g, '');
     const hasSenderInvoice = INVOICES.some(i => i.role === 'Expéditeur' || i.role === 'Exp./Dest.');
     isExpediteur = hasSenderInvoice || phoneDigits.startsWith('33') || (LOYALTY.sentAsSender || 0) > 0;
-    // Nom de l'expéditeur : sur une facture où il est destinataire, la contrepartie
-    // est l'expéditeur ; mais quand LUI est expéditeur, son propre nom n'est pas
-    // renvoyé. On garde le nom mémorisé localement s'il existe.
-    clientSelfName = (localStorage.getItem(LS.name) || '').trim();
+    // Profil renvoyé par le serveur (nom/tél/adresse de l'expéditeur) : sert à
+    // préremplir le formulaire Dépôt/Récup. Repli sur le nom mémorisé en local.
+    const prof = data.profile || {};
+    clientSelfName = (prof.name || localStorage.getItem(LS.name) || '').trim();
+    clientSelfAddress = (prof.address || '').trim();
+    if (clientSelfName) { try { localStorage.setItem(LS.name, clientSelfName); } catch (_) {} }
     invoicesLoaded = true;
     applyRoleVisibility();
   } catch (e) {
@@ -552,7 +555,7 @@ const VIEWS = {
         <label class="auth__label">Commune / Ville</label>
         <input id="reqCommune" class="filter-input" type="text" placeholder="Ex : Cocody, Paris…" style="width:100%;box-sizing:border-box;margin-bottom:10px;">
         <label class="auth__label">Adresse précise</label>
-        <input id="reqAddress" class="filter-input" type="text" placeholder="Quartier, rue, point de repère" style="width:100%;box-sizing:border-box;margin-bottom:10px;">
+        <input id="reqAddress" class="filter-input" type="text" placeholder="Quartier, rue, point de repère" value="${(clientSelfAddress || '').replace(/"/g, '&quot;')}" style="width:100%;box-sizing:border-box;margin-bottom:10px;">
         <label class="auth__label">Date souhaitée</label>
         <input id="reqDate" class="filter-input" type="date" style="width:100%;box-sizing:border-box;margin-bottom:10px;">
         <label class="auth__label">Description du colis</label>

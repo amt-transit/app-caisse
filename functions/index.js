@@ -114,6 +114,9 @@ exports.getMyInvoices = onCall({ region: REGION, invoker: "public" }, async (req
     const TAUX = 655.957;
     const byKey = new Map(); // évite les doublons (même doc via exp ET dest)
     let sentAsSender = 0;
+    // Profil du client connecté (pour préremplir l'app : Dépôt/Récup, etc.).
+    // Quand il est EXPÉDITEUR, son nom = `nom` et son tél = `tel` de la facture.
+    const self = { name: "", tel: "", address: "", commune: "" };
 
     for (const colName of txCols) {
         const col = db.collection(colName);
@@ -145,6 +148,14 @@ exports.getMyInvoices = onCall({ region: REGION, invoker: "public" }, async (req
             // Fidélité : compter les envois en tant qu'EXPÉDITEUR (≠ AMT).
             const expName = String(t.nom || "");
             if (role === "exp" && !/amt/i.test(expName)) sentAsSender++;
+            // Profil : si le client est l'EXPÉDITEUR, mémoriser son nom/tél.
+            if (role === "exp") {
+                if (!self.name && expName && !/amt/i.test(expName)) self.name = expName;
+                if (!self.tel && t.tel) self.tel = String(t.tel);
+            } else if (role === "dest") {
+                // Repli : s'il est destinataire, son nom = nomDestinataire (au cas où).
+                if (!self.name && t.nomDestinataire) self.name = String(t.nomDestinataire);
+            }
 
             byKey.set(key, {
                 id: doc.id,
@@ -214,6 +225,10 @@ exports.getMyInvoices = onCall({ region: REGION, invoker: "public" }, async (req
         for (const inv of invoices) {
             const base = livBaseFor(inv.collection);
             const liv = livByKey.get(base + "|" + String(inv.reference).toUpperCase());
+            // Profil : adresse de l'EXPÉDITEUR depuis la livraison (nouveau format).
+            if (liv && (inv.role === "exp" || inv.role === "both")) {
+                if (!self.address && liv.adresseExpediteur) self.address = String(liv.adresseExpediteur);
+            }
             let feeFcfa = 0;
             if (inv._adjType === "augmentation" && inv._adjVal > 0) {
                 feeFcfa = inv._adjVal;
@@ -267,6 +282,19 @@ exports.getMyInvoices = onCall({ region: REGION, invoker: "public" }, async (req
         }
     } catch (e) { /* non bloquant : on garde le reste sans magasinage */ }
 
+    // Profil : adresse/tél de l'expéditeur depuis sa FICHE CLIENT (source que
+    // le staff affiche), si on n'a pas déjà trouvé via la livraison.
+    if (self.name && (!self.address || !self.tel)) {
+        try {
+            const cSnap = await db.collection("clients").where("nom", "==", self.name).limit(1).get();
+            if (!cSnap.empty) {
+                const c = cSnap.docs[0].data() || {};
+                if (!self.address && c.adresse) self.address = String(c.adresse);
+                if (!self.tel && (c.tel || c.numero)) self.tel = String(c.tel || c.numero);
+            }
+        } catch (e) { /* non bloquant */ }
+    }
+
     // Nettoyage des champs internes (préfixe _) avant envoi au client.
     invoices.forEach((inv) => { Object.keys(inv).forEach((k) => { if (k[0] === "_") delete inv[k]; }); });
     invoices.sort((a, b) => String(b.date).localeCompare(String(a.date)));
@@ -276,7 +304,7 @@ exports.getMyInvoices = onCall({ region: REGION, invoker: "public" }, async (req
     const toNext = sentAsSender === 0 ? 10 : (10 - (sentAsSender % 10)) % 10 || 10;
 
     parcels.sort((a, b) => String(b.date).localeCompare(String(a.date)));
-    return { invoices, parcels, loyalty: { sentAsSender, freeCartons, toNext } };
+    return { invoices, parcels, profile: self, loyalty: { sentAsSender, freeCartons, toNext } };
 });
 
 // ===========================================================================
