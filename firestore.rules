@@ -103,6 +103,14 @@ service cloud.firestore {
     match /bank_movements/{document=**} {
       allow read, write: if isAuthenticated() && (hasGlobalAccess() || getUserData().agency in ['paris', 'abidjan']);
     }
+    // Demandes client (dépôt / récupération) émises depuis l'app AMT Clients.
+    // Création/lecture côté client passent par des Cloud Functions (Admin SDK),
+    // donc PAS besoin d'autoriser le client ici. Cette règle ouvre l'accès au
+    // PERSONNEL (paris/abidjan + global) pour consulter et traiter les demandes.
+    match /client_requests/{document=**} {
+      allow read, write: if isAuthenticated() && (hasGlobalAccess() || getUserData().agency in ['paris', 'abidjan']);
+    }
+
     // Flotte automobile (Gestion Véhicule) : collections NON suffixées par route,
     // partagées par le personnel logistique paris/abidjan. Sans cette règle,
     // seuls les comptes globaux (super admin / agency 'all') pouvaient charger

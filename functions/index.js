@@ -405,6 +405,85 @@ exports.getMyInvoiceDetail = onCall({ region: REGION, invoker: "public" }, async
     };
 });
 
+// ===========================================================================
+//  DEMANDES CLIENT (dépôt / récupération) — app AMT Clients
+// ---------------------------------------------------------------------------
+//  Le client (connecté par téléphone) crée une demande d'enlèvement (dépôt)
+//  ou de livraison/récupération (récup). Stockage : collection partagée
+//  `client_requests`. Lecture : seulement SES demandes (par phoneTail du token).
+//  Admin SDK -> aucune règle Firestore à modifier. Le traitement côté staff
+//  (validation) sera branché plus tard ; ici on gère la création + le suivi.
+// ===========================================================================
+exports.createClientRequest = onCall({ region: REGION, invoker: "public" }, async (request) => {
+    const auth = request.auth;
+    const phone = auth && auth.token && auth.token.phone_number;
+    if (!phone) throw new HttpsError("unauthenticated", "Connexion par téléphone requise.");
+
+    const data = request.data || {};
+    const type = (data.type === "recup") ? "recup" : "depot";
+    const clean = (s, max) => String(s == null ? "" : s).trim().slice(0, max || 200);
+    const fullName = clean(data.fullName, 120);
+    const address = clean(data.address, 300);
+    const commune = clean(data.commune, 120);
+    const wantedDate = clean(data.date, 30);
+    const description = clean(data.description, 1000);
+    if (!address && !commune) throw new HttpsError("invalid-argument", "Adresse requise.");
+
+    const digits = String(phone).replace(/\D/g, "");
+    const tail = digits.length >= 9 ? digits.slice(-9) : digits;
+
+    // POSITION DU CLIENT -> agence de rattachement (par défaut).
+    //  +33 (France)        = agence de DÉPART  -> 'paris'
+    //  +225 (Côte d'Ivoire)= agence d'ARRIVÉE  -> 'abidjan'
+    //  autre indicatif     = repli sur l'arrivée (la majorité des destinataires).
+    let agency, position;
+    if (digits.startsWith("33")) { agency = "paris"; position = "depart"; }
+    else if (digits.startsWith("225")) { agency = "abidjan"; position = "arrivee"; }
+    else { agency = "abidjan"; position = "arrivee"; }
+
+    const db = admin.firestore();
+    const ref = db.collection("client_requests").doc();
+    const now = new Date().toISOString();
+    await ref.set({
+        type,                         // 'depot' | 'recup'
+        status: "en_attente",         // en_attente | validee | refusee | traitee
+        agency,                       // agence qui traite (selon la position du client)
+        position,                     // 'depart' | 'arrivee'
+        phoneE164: phone,
+        phoneTail: tail,
+        fullName, address, commune, wantedDate, description,
+        createdAt: now,
+        updatedAt: now,
+        source: "app_client",
+    });
+    return { id: ref.id, ok: true, agency };
+});
+
+exports.getMyRequests = onCall({ region: REGION, invoker: "public" }, async (request) => {
+    const auth = request.auth;
+    const phone = auth && auth.token && auth.token.phone_number;
+    if (!phone) throw new HttpsError("unauthenticated", "Connexion par téléphone requise.");
+    const digits = String(phone).replace(/\D/g, "");
+    const tail = digits.length >= 9 ? digits.slice(-9) : digits;
+    if (tail.length < 8) return { requests: [] };
+
+    const db = admin.firestore();
+    let snap;
+    try {
+        snap = await db.collection("client_requests").where("phoneTail", "==", tail).limit(200).get();
+    } catch (e) { return { requests: [] }; }
+    const requests = snap.docs.map((d) => {
+        const x = d.data() || {};
+        return {
+            id: d.id, type: x.type || "depot", status: x.status || "en_attente",
+            fullName: x.fullName || "", address: x.address || "", commune: x.commune || "",
+            wantedDate: x.wantedDate || "", description: x.description || "",
+            createdAt: x.createdAt || "",
+        };
+    }).sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
+    return { requests };
+});
+
 // SÉCURITÉ : vérifie que l'appelant est connecté ET possède un rôle
 // admin/super_admin. On relit sa fiche Firestore avec l'Admin SDK
 // (source de vérité non falsifiable côté client).

@@ -37,6 +37,10 @@ let trackFilter = -1; // -1 = tous, sinon index d'étape
 let selectedInvoiceRef = null;
 let currentView = 'dashboard';
 let detailCache = {};   // ref -> { colis:[{label,ref,desc,stage}], loaded:true }
+let REQUESTS = [];      // demandes dépôt/récup du client
+let requestsLoaded = false;
+let requestsSubtab = 'tous'; // 'tous' | 'depot' | 'recup'
+let requestFormType = 'depot'; // type en cours de saisie
 
 // Notifications réelles : Phase 3.
 let NOTIFS = [];
@@ -234,7 +238,8 @@ async function loadInvoices() {
 const VIEW_TITLES = {
   dashboard: 'Tableau de bord', requests: 'Dépôt / Récupération', quotes: 'Devis',
   stats: 'Statistiques', chat: 'Messagerie', profile: 'Profil', tracking: 'Suivi des colis',
-  notifications: 'Notifications', invoice: 'Détail de la facture'
+  notifications: 'Notifications', invoice: 'Détail de la facture',
+  requestForm: 'Nouvelle demande'
 };
 // Vues présentes dans la barre du bas (les autres : profil, notifs, détail).
 const TAB_VIEWS = ['dashboard', 'tracking', 'requests', 'quotes', 'stats', 'chat'];
@@ -272,8 +277,61 @@ document.addEventListener('click', (e) => {
   const pf = e.target.closest('[data-pdf]');
   if (pf) { exportClientInvoicePDF(pf.dataset.pdf); return; }
   const tr = e.target.closest('[data-track]');
-  if (tr) { trackFilter = parseInt(tr.dataset.track, 10); renderView('tracking'); }
+  if (tr) { trackFilter = parseInt(tr.dataset.track, 10); renderView('tracking'); return; }
+  const rs = e.target.closest('[data-reqsub]');
+  if (rs) { requestsSubtab = rs.dataset.reqsub; renderView('requests'); return; }
+  const rn = e.target.closest('[data-reqnew]');
+  if (rn) { openRequestForm(rn.dataset.reqnew); return; }
+  const rsub = e.target.closest('[data-reqsubmit]');
+  if (rsub) { submitRequest(); return; }
 });
+
+// --- Demandes dépôt / récupération ---
+async function loadRequests() {
+  if (requestsLoaded) return;
+  try {
+    const u = auth.currentUser;
+    if (u) { try { await u.getIdToken(true); } catch (_) {} }
+    const res = await httpsCallable(functions, 'getMyRequests')();
+    REQUESTS = (res && res.data && res.data.requests) || [];
+  } catch (e) {
+    console.warn('getMyRequests:', e && e.code, e && e.message);
+    REQUESTS = [];
+  }
+  requestsLoaded = true;
+  if (currentView === 'requests') renderView('requests');
+}
+
+function openRequestForm(type) {
+  requestFormType = (type === 'recup') ? 'recup' : 'depot';
+  renderView('requestForm');
+}
+
+async function submitRequest() {
+  const err = (m) => { const e = $('#reqError'); if (e) { e.textContent = m; e.hidden = false; } };
+  const payload = {
+    type: requestFormType,
+    fullName: ($('#reqName')?.value || '').trim(),
+    commune: ($('#reqCommune')?.value || '').trim(),
+    address: ($('#reqAddress')?.value || '').trim(),
+    date: ($('#reqDate')?.value || '').trim(),
+    description: ($('#reqDesc')?.value || '').trim(),
+  };
+  if (!payload.commune && !payload.address) { err('Indiquez au moins une commune ou une adresse.'); return; }
+  const btn = $('[data-reqsubmit]'); if (btn) { btn.disabled = true; btn.textContent = 'Envoi…'; }
+  try {
+    const u = auth.currentUser;
+    if (u) { try { await u.getIdToken(true); } catch (_) {} }
+    await httpsCallable(functions, 'createClientRequest')(payload);
+    requestsLoaded = false;          // forcer le rechargement de la liste
+    requestsSubtab = payload.type;   // afficher l'onglet correspondant
+    renderView('requests');
+  } catch (e) {
+    console.warn('createClientRequest:', e && e.code, e && e.message);
+    err(e && e.code === 'unauthenticated' ? 'Session expirée, reconnectez-vous.' : "Envoi impossible. Réessayez.");
+    if (btn) { btn.disabled = false; btn.textContent = 'Envoyer la demande'; }
+  }
+}
 
 // Génère le PDF OFFICIEL (identique au staff) : la fonction Cloud renvoie
 // config + transaction + colis + magasinage de SA facture, puis on dessine
@@ -407,14 +465,70 @@ const VIEWS = {
   },
 
   requests() {
+    const sub = (k, lbl) => `<button class="subtab${requestsSubtab === k ? ' active' : ''}" data-reqsub="${k}">${lbl}</button>`;
+    let body;
+    if (!requestsLoaded) {
+      body = `<div class="card"><div class="placeholder"><span class="ph-ic">⏳</span>Chargement de vos demandes…</div></div>`;
+      loadRequests();
+    } else {
+      const filtered = REQUESTS.filter(r => requestsSubtab === 'tous' || r.type === requestsSubtab);
+      const statusMap = {
+        en_attente: { l: 'En attente', c: '#b45309', bg: '#fef3c7' },
+        validee:    { l: 'Validée',    c: '#166534', bg: '#dcfce7' },
+        refusee:    { l: 'Refusée',    c: '#991b1b', bg: '#fee2e2' },
+        traitee:    { l: 'Traitée',    c: '#1e40af', bg: '#dbeafe' },
+      };
+      body = filtered.length ? filtered.map(r => {
+        const st = statusMap[r.status] || statusMap.en_attente;
+        const typeLbl = r.type === 'recup' ? '🔄 Récupération' : '📦 Dépôt';
+        const where = [r.commune, r.address].filter(Boolean).join(' · ');
+        return `<div class="card" style="margin-bottom:10px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
+            <strong>${typeLbl}</strong>
+            <span style="background:${st.bg};color:${st.c};padding:3px 10px;border-radius:12px;font-size:11px;font-weight:700;">${st.l}</span>
+          </div>
+          ${where ? `<div class="inv__sub" style="margin-top:6px;">📍 ${where}</div>` : ''}
+          ${r.wantedDate ? `<div class="inv__sub">🗓️ Souhaité : ${fdate(r.wantedDate)}</div>` : ''}
+          ${r.description ? `<div class="inv__sub">📝 ${r.description}</div>` : ''}
+          <div class="inv__sub" style="color:#94a3b8;">Demandé le ${fdate(r.createdAt)}</div>
+        </div>`;
+      }).join('') : `<div class="card"><div class="placeholder"><span class="ph-ic">📦</span>Aucune demande pour le moment.</div></div>`;
+    }
     return `
-      <div class="subtabs">
-        <button class="subtab active">Tous</button>
-        <button class="subtab">Dépôts</button>
-        <button class="subtab">Récups</button>
+      <div class="subtabs">${sub('tous', 'Tous')}${sub('depot', 'Dépôts')}${sub('recup', 'Récups')}</div>
+      <div style="display:flex;gap:10px;margin-bottom:14px;">
+        <button class="btn btn--primary" style="flex:1;" data-reqnew="depot">📦 Demander un dépôt</button>
+        <button class="btn btn--primary" style="flex:1;" data-reqnew="recup">🔄 Faire récupérer</button>
       </div>
-      <button class="btn btn--primary" style="margin-bottom:14px;">+ Nouvelle demande</button>
-      <div class="card"><div class="placeholder"><span class="ph-ic">📦</span>Vos demandes de dépôt et de récupération apparaîtront ici, avec leur statut (en attente / validée).</div></div>
+      ${body}
+    `;
+  },
+
+  // Formulaire de nouvelle demande (dépôt ou récup). Vue dédiée 'requestForm'.
+  requestForm() {
+    const isRecup = requestFormType === 'recup';
+    const title = isRecup ? 'Demande de récupération' : 'Demande de dépôt';
+    const hint = isRecup
+      ? "Indiquez où récupérer/livrer le colis et quand."
+      : "Indiquez où enlever votre colis (adresse de départ) et quand.";
+    return `
+      <button class="btn btn--ghost" data-go="requests" style="text-align:left;margin:0 0 8px;">← Retour</button>
+      <div class="card">
+        <div class="section-title">${title}</div>
+        <p class="muted" style="margin:0 0 12px;font-size:13px;">${hint}</p>
+        <label class="auth__label">Nom complet</label>
+        <input id="reqName" class="filter-input" type="text" placeholder="Votre nom" style="width:100%;box-sizing:border-box;margin-bottom:10px;">
+        <label class="auth__label">Commune / Ville</label>
+        <input id="reqCommune" class="filter-input" type="text" placeholder="Ex : Cocody, Paris…" style="width:100%;box-sizing:border-box;margin-bottom:10px;">
+        <label class="auth__label">Adresse précise</label>
+        <input id="reqAddress" class="filter-input" type="text" placeholder="Quartier, rue, point de repère" style="width:100%;box-sizing:border-box;margin-bottom:10px;">
+        <label class="auth__label">Date souhaitée</label>
+        <input id="reqDate" class="filter-input" type="date" style="width:100%;box-sizing:border-box;margin-bottom:10px;">
+        <label class="auth__label">Description du colis</label>
+        <textarea id="reqDesc" class="filter-input" rows="3" placeholder="Ex : 2 cartons, 1 valise…" style="width:100%;box-sizing:border-box;margin-bottom:14px;"></textarea>
+        <div id="reqError" class="auth__error" hidden style="margin-bottom:10px;"></div>
+        <button class="btn btn--primary" style="width:100%;" data-reqsubmit="1">Envoyer la demande</button>
+      </div>
     `;
   },
 
