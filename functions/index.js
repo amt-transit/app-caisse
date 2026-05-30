@@ -507,9 +507,43 @@ exports.getMyRequests = onCall({ region: REGION, invoker: "public" }, async (req
             fullName: x.fullName || "", address: x.address || "", commune: x.commune || "",
             wantedDate: x.wantedDate || "", description: x.description || "",
             createdAt: x.createdAt || "",
+            // Proposition du staff (visible par le client quand status === 'modifiee').
+            staffDate: x.staffDate || "", staffTime: x.staffTime || "", staffNote: x.staffNote || "",
         };
     }).sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
     return { requests };
+});
+
+// Réponse du CLIENT à une proposition du staff (date/créneau modifiés).
+// action: 'accept' -> status 'confirmee' (le staff pourra créer le RDV) ;
+//         'refuse' -> status 'refusee'. SÉCURITÉ : le client ne peut agir que
+// sur SA demande (phoneTail du token) ET seulement si elle est 'modifiee'.
+exports.respondClientRequest = onCall({ region: REGION, invoker: "public" }, async (request) => {
+    const auth = request.auth;
+    const phone = auth && auth.token && auth.token.phone_number;
+    if (!phone) throw new HttpsError("unauthenticated", "Connexion par téléphone requise.");
+    const data = request.data || {};
+    const id = data.id;
+    const action = data.action === "refuse" ? "refuse" : "accept";
+    if (!id) throw new HttpsError("invalid-argument", "Demande manquante.");
+
+    const digits = String(phone).replace(/\D/g, "");
+    const tail = digits.length >= 9 ? digits.slice(-9) : digits;
+
+    const db = admin.firestore();
+    const ref = db.collection("client_requests").doc(id);
+    const snap = await ref.get();
+    if (!snap.exists) throw new HttpsError("not-found", "Demande introuvable.");
+    const r = snap.data() || {};
+    if (r.phoneTail !== tail) throw new HttpsError("permission-denied", "Demande non autorisée.");
+    if (r.status !== "modifiee") throw new HttpsError("failed-precondition", "Aucune modification à confirmer.");
+
+    await ref.update({
+        status: action === "accept" ? "confirmee" : "refusee",
+        clientRespondedAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+    });
+    return { ok: true, status: action === "accept" ? "confirmee" : "refusee" };
 });
 
 // SÉCURITÉ : vérifie que l'appelant est connecté ET possède un rôle

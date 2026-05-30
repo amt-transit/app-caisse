@@ -314,6 +314,10 @@ document.addEventListener('click', (e) => {
   if (rn) { openRequestForm(rn.dataset.reqnew); return; }
   const rsub = e.target.closest('[data-reqsubmit]');
   if (rsub) { submitRequest(); return; }
+  const ra = e.target.closest('[data-reqaccept]');
+  if (ra) { respondRequest(ra.dataset.reqaccept, 'accept'); return; }
+  const rr = e.target.closest('[data-reqrefuse]');
+  if (rr) { respondRequest(rr.dataset.reqrefuse, 'refuse'); return; }
 });
 
 // --- Demandes dépôt / récupération ---
@@ -323,7 +327,7 @@ async function loadRequests() {
     const u = auth.currentUser;
     if (u) { try { await u.getIdToken(true); } catch (_) {} }
     const res = await httpsCallable(functions, 'getMyRequests')();
-    REQUESTS = (res && res.data && res.data.requests) || [];
+    REQUESTS = ((res && res.data && res.data.requests) || []);
   } catch (e) {
     console.warn('getMyRequests:', e && e.code, e && e.message);
     REQUESTS = [];
@@ -362,6 +366,20 @@ async function submitRequest() {
     console.warn('createClientRequest:', e && e.code, e && e.message);
     err(e && e.code === 'unauthenticated' ? 'Session expirée, reconnectez-vous.' : "Envoi impossible. Réessayez.");
     if (btn) { btn.disabled = false; btn.textContent = 'Envoyer la demande'; }
+  }
+}
+
+// Réponse du client à une proposition de l'agence (date modifiée) : accept/refuse.
+async function respondRequest(id, action) {
+  try {
+    const u = auth.currentUser;
+    if (u) { try { await u.getIdToken(true); } catch (_) {} }
+    await httpsCallable(functions, 'respondClientRequest')({ id, action });
+    requestsLoaded = false; // recharge la liste avec le nouveau statut
+    renderView('requests');
+  } catch (e) {
+    console.warn('respondClientRequest:', e && e.code, e && e.message);
+    alert("Action impossible pour le moment. Réessayez.");
   }
 }
 
@@ -506,14 +524,26 @@ const VIEWS = {
       const filtered = REQUESTS.filter(r => requestsSubtab === 'tous' || r.type === requestsSubtab);
       const statusMap = {
         en_attente: { l: 'En attente', c: '#b45309', bg: '#fef3c7' },
-        validee:    { l: 'Validée',    c: '#166534', bg: '#dcfce7' },
+        modifiee:   { l: 'À confirmer', c: '#1e40af', bg: '#dbeafe' },
+        confirmee:  { l: 'Confirmée',  c: '#166534', bg: '#dcfce7' },
         refusee:    { l: 'Refusée',    c: '#991b1b', bg: '#fee2e2' },
-        traitee:    { l: 'Traitée',    c: '#1e40af', bg: '#dbeafe' },
+        traitee:    { l: 'RDV fixé',   c: '#166534', bg: '#dcfce7' },
       };
       body = filtered.length ? filtered.map(r => {
         const st = statusMap[r.status] || statusMap.en_attente;
         const typeLbl = r.type === 'recup' ? '🔄 Récupération' : '📦 Dépôt';
         const where = [r.commune, r.address].filter(Boolean).join(' · ');
+        // Proposition du staff à confirmer par le client.
+        const proposal = (r.status === 'modifiee') ? `
+          <div style="margin-top:10px;padding:10px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;">
+            <div style="font-weight:700;color:#1e40af;margin-bottom:4px;">📅 Proposition de l'agence</div>
+            <div class="inv__sub">Date : <b>${fdate(r.staffDate)}</b>${r.staffTime ? ' · ' + r.staffTime : ''}</div>
+            ${r.staffNote ? `<div class="inv__sub">💬 ${r.staffNote}</div>` : ''}
+            <div style="display:flex;gap:8px;margin-top:10px;">
+              <button class="btn btn--primary" style="flex:1;" data-reqaccept="${r.id}">✅ Accepter</button>
+              <button class="btn btn--ghost" style="flex:1;" data-reqrefuse="${r.id}">✕ Refuser</button>
+            </div>
+          </div>` : '';
         return `<div class="card" style="margin-bottom:10px;">
           <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
             <strong>${typeLbl}</strong>
@@ -521,8 +551,10 @@ const VIEWS = {
           </div>
           ${where ? `<div class="inv__sub" style="margin-top:6px;">📍 ${where}</div>` : ''}
           ${r.wantedDate ? `<div class="inv__sub">🗓️ Souhaité : ${fdate(r.wantedDate)}</div>` : ''}
+          ${(r.status === 'confirmee' || r.status === 'traitee') && r.staffDate ? `<div class="inv__sub">✅ Date retenue : <b>${fdate(r.staffDate)}</b>${r.staffTime ? ' · ' + r.staffTime : ''}</div>` : ''}
           ${r.description ? `<div class="inv__sub">📝 ${r.description}</div>` : ''}
           <div class="inv__sub" style="color:#94a3b8;">Demandé le ${fdate(r.createdAt)}</div>
+          ${proposal}
         </div>`;
       }).join('') : `<div class="card"><div class="placeholder"><span class="ph-ic">📦</span>Aucune demande pour le moment.</div></div>`;
     }

@@ -152,7 +152,14 @@ export const DemandesClientView = {
     const status = r.status || 'en_attente';
     const where = [r.commune, r.address].filter(Boolean).join(' · ');
     const isEditing = this.editing === r.id;
-    const canAct = status === 'en_attente' || status === 'modifiee' || status === 'confirmee';
+    // Actions selon le statut :
+    //  en_attente : valider direct | modifier | refuser
+    //  modifiee   : en attente de la réponse du client (pas de validation possible)
+    //  confirmee  : le client a accepté la modif -> valider (créer le RDV)
+    const canValidate = status === 'en_attente' || status === 'confirmee';
+    const canEdit = status === 'en_attente' || status === 'modifiee';
+    const canRefuse = status === 'en_attente' || status === 'modifiee' || status === 'confirmee';
+    const waitingClient = status === 'modifiee';
 
     const editPanel = isEditing ? `
       <div class="dc-edit">
@@ -182,11 +189,12 @@ export const DemandesClientView = {
         <div class="dc-row">🗓️ Souhaité : <b>${this.fdate(r.wantedDate)}</b>${r.staffDate ? ` → Proposé : <b>${this.fdate(r.staffDate)}</b> ${r.staffTime ? '('+r.staffTime+')' : ''}` : ''}</div>
         ${r.description ? `<div class="dc-row">📝 ${r.description}</div>` : ''}
         <div class="dc-row" style="color:#94a3b8;">Reçue le ${this.fdate(r.createdAt)}</div>
-        ${canAct ? `
+        ${waitingClient ? `<div class="dc-row" style="color:#1e40af;">⏳ En attente de la confirmation du client (date proposée).</div>` : ''}
+        ${(canValidate || canEdit || canRefuse) ? `
           <div class="dc-actions">
-            <button class="dc-btn dc-btn--ok" onclick="window.app.views.demandesClient.validate('${r.id}')">✅ Valider → créer le RDV</button>
-            <button class="dc-btn dc-btn--mod" onclick="window.app.views.demandesClient.startEdit('${r.id}')">✏️ Modifier</button>
-            <button class="dc-btn dc-btn--ko" onclick="window.app.views.demandesClient.refuse('${r.id}')">❌ Refuser</button>
+            ${canValidate ? `<button class="dc-btn dc-btn--ok" onclick="window.app.views.demandesClient.validate('${r.id}')">✅ Valider → créer le RDV</button>` : ''}
+            ${canEdit ? `<button class="dc-btn dc-btn--mod" onclick="window.app.views.demandesClient.startEdit('${r.id}')">✏️ Modifier${status==='modifiee'?' à nouveau':''}</button>` : ''}
+            ${canRefuse ? `<button class="dc-btn dc-btn--ko" onclick="window.app.views.demandesClient.refuse('${r.id}')">❌ Refuser</button>` : ''}
           </div>` : ''}
         ${editPanel}
       </div>`;
