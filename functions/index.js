@@ -647,11 +647,33 @@ exports.getQuoteConfig = onCall({ region: REGION, invoker: "public" }, async (re
     } catch (e) {}
     if (!routes.length) routes.push({ id: "paris", name: "PARIS (AMT TRANSIT)", flag: "🇫🇷" });
 
-    // Tarifs + modèle pour chaque route.
+    // Nom de la collection produits pour une route + un mode (route-aware).
+    const productsCol = (route, mode) => {
+        const base = (route === "paris") ? "products" : `products_${route}`;
+        return mode === "aerien" ? `${base}_aerien` : base;
+    };
+    const loadProducts = async (route, mode) => {
+        const items = [];
+        try {
+            const snap = await db.collection(productsCol(route, mode)).get();
+            snap.forEach((d) => {
+                const p = d.data() || {};
+                if (!p.desc) return;
+                if (p.category === "REMISES") return; // pas un colis facturable
+                items.push({ desc: p.desc, price: Number(p.price) || 0, dim: Number(p.dim) || 0, category: p.category || "COLIS" });
+            });
+        } catch (e) {}
+        items.sort((a, b) => String(a.desc).localeCompare(String(b.desc)));
+        return items;
+    };
+
+    // Tarifs + modèle + catalogue produits (maritime ET aérien) pour chaque route.
     const out = [];
     for (const r of routes) {
         const { tarifs, model } = await loadTarifsForRoute(db, r.id);
-        out.push({ id: r.id, name: r.name, flag: r.flag, model, tarifs });
+        const productsMaritime = await loadProducts(r.id, "maritime");
+        const productsAerien = await loadProducts(r.id, "aerien");
+        out.push({ id: r.id, name: r.name, flag: r.flag, model, tarifs, productsMaritime, productsAerien });
     }
     return { routes: out, taux: TAUX_EUR };
 });
@@ -669,36 +691,46 @@ exports.computeQuote = onCall({ region: REGION, invoker: "public" }, async (requ
     const { tarifs, model } = await loadTarifsForRoute(db, route);
     const num = (v) => parseFloat(v) || 0;
 
+    // Catalogue produits de la route+mode : le PRIX (€) et le VOLUME (CBM) du
+    // produit viennent du catalogue (comme la facture staff), pas du client.
+    const prodCol = ((route === "paris") ? "products" : `products_${route}`) + (mode === "aerien" ? "_aerien" : "");
+    const catalog = new Map();
+    try {
+        const snap = await db.collection(prodCol).get();
+        snap.forEach((d) => { const p = d.data() || {}; if (p.desc) catalog.set(String(p.desc).trim(), p); });
+    } catch (e) {}
+    const prodOf = (desc) => catalog.get(String(desc || "").trim()) || {};
+
     let currency = "XOF";   // devise du résultat
     let totalEur = 0, totalCfa = 0;
     const lines = [];
 
     if (mode === "maritime") {
         if (model === "chine") {
-            // Maritime Chine : CBM × tarif CFA/m³.
+            // Maritime Chine : CBM (catalogue) × tarif CFA/m³.
             currency = "XOF";
             for (const it of items) {
                 const qty = num(it.qty) || 1;
-                const cbm = num(it.vol);                 // m³ par unité
+                const cbm = num(prodOf(it.desc).dim);    // m³ par unité (catalogue)
                 const lineCfa = Math.round(cbm * qty * tarifs.cbmChine);
                 totalCfa += lineCfa;
                 lines.push({ desc: it.desc || "", qty, detail: `${cbm} m³ × ${qty} × ${tarifs.cbmChine} FCFA/m³`, amount: lineCfa, currency: "XOF" });
             }
         } else {
-            // Maritime Paris (historique) : prix unitaire € saisi × qté.
+            // Maritime Paris : prix unitaire € (catalogue) × qté.
             currency = "EUR";
             for (const it of items) {
                 const qty = num(it.qty) || 1;
-                const pu = num(it.pu);
+                const pu = num(prodOf(it.desc).price);   // prix catalogue
                 const lineEur = pu * qty;
                 totalEur += lineEur;
                 lines.push({ desc: it.desc || "", qty, detail: `${qty} × ${pu} €`, amount: lineEur, currency: "EUR" });
             }
         }
     } else {
-        // AÉRIEN.
+        // AÉRIEN : le poids n'est pas au catalogue -> saisi par le client (réel +
+        // dimensions). Le tarif €/kg ou CFA/kg vient des réglages.
         if (model === "chine") {
-            // Aérien Chine : poids facturé × tarif CFA/kg (normal/express).
             currency = "XOF";
             const rate = (data.aerienType === "express") ? tarifs.kgAerienExpress : tarifs.kgAerienNormal;
             for (const it of items) {
@@ -711,23 +743,16 @@ exports.computeQuote = onCall({ region: REGION, invoker: "public" }, async (requ
                 lines.push({ desc: it.desc || "", qty, detail: `${kg.toFixed(1)} kg × ${qty} × ${rate} FCFA/kg`, amount: lineCfa, currency: "XOF" });
             }
         } else {
-            // Aérien Paris : € — mode 'poids' (max réel/volume × tarif) ou 'valeur' (P.U).
             currency = "EUR";
             for (const it of items) {
                 const qty = num(it.qty) || 1;
-                if (it.mode === "valeur") {
-                    const lineEur = num(it.pu) * qty;
-                    totalEur += lineEur;
-                    lines.push({ desc: it.desc || "", qty, detail: `${qty} × ${num(it.pu)} € (à la valeur)`, amount: lineEur, currency: "EUR" });
-                } else {
-                    const real = num(it.poids);
-                    const vol = (num(it.lng) * num(it.lrg) * num(it.haut)) / tarifs.volDiviseur;
-                    const kg = Math.max(real, vol);
-                    const rateEur = it.parfum ? tarifs.kgParfumEur : tarifs.kgStdEur;
-                    const lineEur = kg * qty * rateEur;
-                    totalEur += lineEur;
-                    lines.push({ desc: it.desc || "", qty, detail: `${kg.toFixed(1)} kg × ${qty} × ${rateEur} €/kg${it.parfum ? " (parfum/alcool)" : ""}`, amount: lineEur, currency: "EUR" });
-                }
+                const real = num(it.poids);
+                const vol = (num(it.lng) * num(it.lrg) * num(it.haut)) / tarifs.volDiviseur;
+                const kg = Math.max(real, vol);
+                const rateEur = it.parfum ? tarifs.kgParfumEur : tarifs.kgStdEur;
+                const lineEur = kg * qty * rateEur;
+                totalEur += lineEur;
+                lines.push({ desc: it.desc || "", qty, detail: `${kg.toFixed(1)} kg × ${qty} × ${rateEur} €/kg${it.parfum ? " (parfum/alcool)" : ""}`, amount: lineEur, currency: "EUR" });
             }
         }
     }

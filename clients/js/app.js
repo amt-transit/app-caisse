@@ -79,6 +79,9 @@ const money = (v, currency = 'XOF') => {
 };
 // Convertit en FCFA pour additionner des factures de devises différentes.
 const toFcfa = (v, currency) => (currency === 'EUR' ? (v || 0) * TAUX : (v || 0));
+// Raccourcis d'affichage par devise (utilisés par le simulateur de devis).
+const eur = (v) => money(v, 'EUR');
+const fcfa = (v) => money(v, 'XOF');
 const fdate = (d) => { try { return new Date(d).toLocaleDateString('fr-FR'); } catch (e) { return d; } };
 
 // ======================= CONNEXION (Firebase Phone Auth) =======================
@@ -362,7 +365,11 @@ document.addEventListener('click', (e) => {
 // Changement de la route de départ (select) dans le simulateur de devis.
 document.addEventListener('change', (e) => {
   const qr = e.target.closest('[data-qroute]');
-  if (qr) { keepQuoteDraft(); quoteRoute = qr.value; quoteResult = null; renderView('quotes'); }
+  if (qr) { keepQuoteDraft(); quoteRoute = qr.value; quoteResult = null; renderView('quotes'); return; }
+  // Un champ d'article (produit/qté/poids/dims) a changé : on garde le brouillon
+  // pour ne pas perdre les saisies au prochain rendu.
+  const qi = e.target.closest('[data-qi]');
+  if (qi) { keepQuoteDraft(); }
 });
 
 // --- Demandes dépôt / récupération ---
@@ -933,47 +940,47 @@ const VIEWS = {
     const routeOpt = (r) => `<option value="${r.id}"${r.id === quoteRoute ? ' selected' : ''}>${r.flag || ''} ${r.name}</option>`;
     const modeBtn = (k, lbl) => `<button type="button" class="rf-type__opt${quoteMode === k ? ' active' : ''}" data-qmode="${k}">${lbl}</button>`;
 
+    // Catalogue de produits de la route + mode (prix/CBM déjà connus).
+    const catalog = (quoteMode === 'aerien' ? route.productsAerien : route.productsMaritime) || [];
+    const isAerien = quoteMode === 'aerien';
+
     // En-tête tarif (transparence) selon contexte.
     let tarifNote = '';
-    if (quoteMode === 'maritime' && isChine) tarifNote = `Maritime : ${route.tarifs.cbmChine.toLocaleString('fr-FR')} FCFA / m³`;
-    else if (quoteMode === 'maritime') tarifNote = `Maritime : prix par article (en €)`;
-    else if (quoteMode === 'aerien' && isChine) tarifNote = `Aérien : ${route.tarifs.kgAerienNormal.toLocaleString('fr-FR')} FCFA/kg (normal) · ${route.tarifs.kgAerienExpress.toLocaleString('fr-FR')} FCFA/kg (express)`;
+    if (!isAerien && isChine) tarifNote = `Maritime : ${route.tarifs.cbmChine.toLocaleString('fr-FR')} FCFA / m³`;
+    else if (!isAerien) tarifNote = `Maritime : prix catalogue par article (€)`;
+    else if (isChine) tarifNote = `Aérien : ${route.tarifs.kgAerienNormal.toLocaleString('fr-FR')} FCFA/kg (normal) · ${route.tarifs.kgAerienExpress.toLocaleString('fr-FR')} FCFA/kg (express)`;
     else tarifNote = `Aérien : ${route.tarifs.kgStdEur} €/kg · ${route.tarifs.kgParfumEur} €/kg (parfum/alcool)`;
 
-    // Lignes d'articles : les champs varient selon le contexte.
+    if (!isAerien && catalog.length === 0) {
+      tarifNote += ` — aucun produit au catalogue de cette route pour ce mode.`;
+    }
+
+    // Lignes : on CHOISIT un produit du catalogue (prix/CBM connus). Le client
+    // saisit la quantité ; en aérien, il saisit aussi poids + dimensions.
+    const prodOptions = (sel) => `<option value="">— Choisir un produit —</option>` +
+      catalog.map(p => {
+        const tag = isAerien ? '' : (isChine ? (p.dim ? ` (${p.dim} m³)` : '') : (p.price ? ` (${p.price} €)` : ''));
+        return `<option value="${esc(p.desc)}"${p.desc === sel ? ' selected' : ''}>${esc(p.desc)}${tag}</option>`;
+      }).join('');
+
     const itemsHtml = quoteItems.map((it, i) => {
-      let fields = '';
-      if (quoteMode === 'maritime' && isChine) {
-        fields = `
-          <div class="rf-field"><span class="rf-label">Volume (m³ / unité)</span><input class="rf-input" type="number" step="0.01" min="0" data-qi="${i}" data-qf="vol" value="${esc(it.vol)}"></div>
-          <div class="rf-field"><span class="rf-label">Quantité</span><input class="rf-input" type="number" min="1" data-qi="${i}" data-qf="qty" value="${esc(it.qty)}"></div>`;
-      } else if (quoteMode === 'maritime') {
-        fields = `
-          <div class="rf-field"><span class="rf-label">Prix unitaire (€)</span><input class="rf-input" type="number" step="0.01" min="0" data-qi="${i}" data-qf="pu" value="${esc(it.pu)}"></div>
-          <div class="rf-field"><span class="rf-label">Quantité</span><input class="rf-input" type="number" min="1" data-qi="${i}" data-qf="qty" value="${esc(it.qty)}"></div>`;
-      } else if (quoteMode === 'aerien' && !isChine && it.mode === 'valeur') {
-        fields = `
-          <div class="rf-field"><span class="rf-label">Prix unitaire (€)</span><input class="rf-input" type="number" step="0.01" min="0" data-qi="${i}" data-qf="pu" value="${esc(it.pu)}"></div>
-          <div class="rf-field"><span class="rf-label">Quantité</span><input class="rf-input" type="number" min="1" data-qi="${i}" data-qf="qty" value="${esc(it.qty)}"></div>`;
-      } else {
-        // aérien au poids (chine ou paris) : poids + dimensions + qté
-        fields = `
+      // En maritime, le produit doit venir du catalogue (prix/CBM). En aérien,
+      // le produit est optionnel (le tarif dépend du poids, pas du produit).
+      const prodField = `<div class="rf-field rf-field--full"><span class="rf-label">Produit${isAerien ? ' (optionnel)' : ''}</span>
+        <select class="rf-select" data-qi="${i}" data-qf="desc">${prodOptions(it.desc)}</select></div>`;
+      let fields = `<div class="rf-field"><span class="rf-label">Quantité</span><input class="rf-input" type="number" min="1" data-qi="${i}" data-qf="qty" value="${esc(it.qty)}"></div>`;
+      if (isAerien) {
+        fields += `
           <div class="rf-field"><span class="rf-label">Poids réel (kg)</span><input class="rf-input" type="number" step="0.1" min="0" data-qi="${i}" data-qf="poids" value="${esc(it.poids)}"></div>
-          <div class="rf-field"><span class="rf-label">Quantité</span><input class="rf-input" type="number" min="1" data-qi="${i}" data-qf="qty" value="${esc(it.qty)}"></div>
           <div class="rf-field"><span class="rf-label">Long. (cm)</span><input class="rf-input" type="number" min="0" data-qi="${i}" data-qf="lng" value="${esc(it.lng)}"></div>
           <div class="rf-field"><span class="rf-label">Larg. (cm)</span><input class="rf-input" type="number" min="0" data-qi="${i}" data-qf="lrg" value="${esc(it.lrg)}"></div>
           <div class="rf-field"><span class="rf-label">Haut. (cm)</span><input class="rf-input" type="number" min="0" data-qi="${i}" data-qf="haut" value="${esc(it.haut)}"></div>`;
       }
-      // Option parfum/alcool (aérien Paris au poids).
-      const parfum = (quoteMode === 'aerien' && !isChine && it.mode !== 'valeur')
+      const parfum = (isAerien && !isChine)
         ? `<label class="rf-field rf-field--full" style="flex-direction:row;align-items:center;gap:8px;"><input type="checkbox" data-qi="${i}" data-qf="parfum" ${it.parfum ? 'checked' : ''}> <span class="rf-label" style="margin:0;">Parfum / alcool (tarif majoré)</span></label>` : '';
-      // Bascule mode valeur/poids (aérien Paris uniquement).
-      const modeToggle = (quoteMode === 'aerien' && !isChine)
-        ? `<div class="rf-slots" style="margin-bottom:8px;"><button type="button" class="rf-slot${it.mode!=='valeur'?' active':''}" data-qimode="${i}|poids">Au poids</button><button type="button" class="rf-slot${it.mode==='valeur'?' active':''}" data-qimode="${i}|valeur">À la valeur</button></div>` : '';
       const delBtn = quoteItems.length > 1 ? `<button type="button" class="btn btn--ghost" style="font-size:12px;padding:4px 10px;" data-qdel="${i}">🗑 Retirer</button>` : '';
       return `<div class="rf-card" style="margin-bottom:10px;"><div class="rf-card__body">
-        <div class="rf-field rf-field--full"><span class="rf-label">Description</span><input class="rf-input" type="text" placeholder="Ex : carton, valise…" data-qi="${i}" data-qf="desc" value="${esc(it.desc)}"></div>
-        ${modeToggle}
+        ${prodField}
         <div class="rf-grid">${fields}</div>
         ${parfum}
         <div style="text-align:right;margin-top:6px;">${delBtn}</div>

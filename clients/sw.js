@@ -1,6 +1,6 @@
 // Service worker minimal : coquille hors-ligne (cache-first sur les fichiers
 // statiques de l'app). On NE met PAS en cache les appels Firebase/données.
-const CACHE = 'amtc-shell-v18';
+const CACHE = 'amtc-shell-v19';
 const SHELL = [
   './',
   './index.html',
