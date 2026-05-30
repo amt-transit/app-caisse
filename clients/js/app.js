@@ -49,6 +49,7 @@ let clientSelfAddress = '';    // adresse de l'expéditeur (préremplissage)
 
 // Notifications réelles : Phase 3.
 let NOTIFS = [];
+let notifsLoaded = false;
 function unreadCount() { return NOTIFS.filter(n => !n.read).length; }
 function updateNotifBadge() {
   const b = $('#notifBadge'); if (!b) return;
@@ -193,6 +194,7 @@ async function enterApp() {
   updateNotifBadge();
   renderView('dashboard');
   await loadInvoices();
+  loadNotifications();
 }
 
 // Charge les VRAIES factures du client connecté (Cloud Function sécurisée).
@@ -292,9 +294,8 @@ function renderView(view) {
 $$('.tab').forEach(t => t.addEventListener('click', () => renderView(t.dataset.view)));
 $('#btnProfile').addEventListener('click', () => renderView('profile'));
 $('#btnNotif').addEventListener('click', () => {
-  NOTIFS.forEach(n => n.read = true); // ouvrir = tout marquer lu
-  updateNotifBadge();
   renderView('notifications');
+  markAllNotifsRead(); // ouvrir = tout marquer lu (serveur + local)
 });
 
 // Délégation : raccourcis (data-go) + filtre suivi (data-track)
@@ -369,6 +370,35 @@ async function submitRequest() {
   }
 }
 
+// Charge les notifications du client (cloche 🔔) + met à jour le badge.
+async function loadNotifications() {
+  try {
+    const u = auth.currentUser;
+    if (!u || !u.phoneNumber) return;
+    try { await u.getIdToken(true); } catch (_) {}
+    const res = await httpsCallable(functions, 'getMyNotifications')();
+    NOTIFS = ((res && res.data && res.data.notifications) || []).map(n => ({
+      id: n.id, ic: n.icon || '🔔', title: n.title || '', txt: n.body || n.title || '',
+      date: n.createdAt || '', read: !!n.read
+    }));
+    notifsLoaded = true;
+    updateNotifBadge();
+    if (currentView === 'notifications') renderView('notifications');
+  } catch (e) {
+    console.warn('getMyNotifications:', e && e.code, e && e.message);
+    notifsLoaded = true;
+  }
+}
+
+// Marque toutes les notifs lues (serveur + local).
+async function markAllNotifsRead() {
+  const unread = NOTIFS.filter(n => !n.read);
+  if (!unread.length) return;
+  NOTIFS.forEach(n => n.read = true);
+  updateNotifBadge();
+  try { await httpsCallable(functions, 'markNotificationsRead')({}); } catch (_) {}
+}
+
 // Réponse du client à une proposition de l'agence (date modifiée) : accept/refuse.
 async function respondRequest(id, action) {
   try {
@@ -377,6 +407,7 @@ async function respondRequest(id, action) {
     await httpsCallable(functions, 'respondClientRequest')({ id, action });
     requestsLoaded = false; // recharge la liste avec le nouveau statut
     renderView('requests');
+    setTimeout(loadNotifications, 1500); // le RDV confirmé peut générer une notif
   } catch (e) {
     console.warn('respondClientRequest:', e && e.code, e && e.message);
     alert("Action impossible pour le moment. Réessayez.");
@@ -690,19 +721,24 @@ const VIEWS = {
   },
 
   notifications() {
+    if (!notifsLoaded && !NOTIFS.length) {
+      loadNotifications();
+      return `<div class="card"><div class="placeholder"><span class="ph-ic">⏳</span>Chargement…</div></div>`;
+    }
     if (!NOTIFS.length) {
       return `<div class="card"><div class="placeholder"><span class="ph-ic">🔔</span>Aucune notification pour le moment.</div></div>`;
     }
     const items = NOTIFS.map(n => `
-      <div class="inv">
+      <div class="inv" style="${n.read ? '' : 'background:#eff6ff;'}">
         <div style="font-size:20px;margin-right:4px;">${n.ic}</div>
         <div class="inv__main">
-          <div class="inv__ref" style="font-weight:600;color:var(--ink);font-size:13.5px;">${n.txt}</div>
-          <div class="inv__sub">${fdate(n.date)}</div>
+          ${n.title ? `<div class="inv__ref" style="font-weight:700;color:var(--ink);font-size:13.5px;">${n.title}</div>` : ''}
+          <div class="inv__sub" style="color:#475569;">${n.txt}</div>
+          <div class="inv__sub" style="color:#94a3b8;">${fdate(n.date)}</div>
         </div>
+        ${n.read ? '' : '<span style="width:9px;height:9px;border-radius:50%;background:#3b82f6;align-self:center;"></span>'}
       </div>`).join('');
-    return `<div class="card"><div class="section-title">Mes notifications</div>${items}</div>
-      <p class="placeholder" style="padding:6px;">Vous serez prévenu à chaque étape : entrepôt, conteneur, arrivée, livraison.</p>`;
+    return `<div class="card"><div class="section-title">Mes notifications</div>${items}</div>`;
   },
 
   invoice() {

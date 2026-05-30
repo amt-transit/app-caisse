@@ -4,7 +4,7 @@
 // recevait pas l'identité ici -> "Vous devez être connecté" malgré une
 // session valide. On s'aligne donc sur l'API v2.
 const { onCall, onRequest, HttpsError } = require("firebase-functions/v2/https");
-const { onDocumentCreated } = require("firebase-functions/v2/firestore");
+const { onDocumentCreated, onDocumentUpdated } = require("firebase-functions/v2/firestore");
 const admin = require("firebase-admin");
 admin.initializeApp();
 
@@ -544,6 +544,80 @@ exports.respondClientRequest = onCall({ region: REGION, invoker: "public" }, asy
         updatedAt: new Date().toISOString(),
     });
     return { ok: true, status: action === "accept" ? "confirmee" : "refusee" };
+});
+
+// ===========================================================================
+//  NOTIFICATIONS CLIENT (app AMT Clients)
+// ---------------------------------------------------------------------------
+//  Fondation réutilisable : chaque notification est un document Firestore
+//  (collection `client_notifications`) ciblé par phoneTail. L'app web les lit
+//  via la cloche 🔔. Plus tard (app native React), on ajoutera l'envoi push
+//  Expo À PARTIR DE CES MÊMES documents (même modèle que parrainage), sans rien
+//  changer ici. createClientNotif() est appelé côté serveur quand un événement
+//  concerne le client (proposition de date, RDV confirmé…).
+// ---------------------------------------------------------------------------
+async function createClientNotif(db, tail, notif) {
+    if (!tail) return;
+    try {
+        await db.collection("client_notifications").add({
+            phoneTail: tail,
+            title: notif.title || "Notification",
+            body: notif.body || "",
+            icon: notif.icon || "🔔",
+            type: notif.type || "info",
+            refId: notif.refId || "",
+            read: false,
+            createdAt: new Date().toISOString(),
+        });
+    } catch (e) { /* non bloquant : une notif ratée ne casse pas l'action */ }
+}
+
+exports.getMyNotifications = onCall({ region: REGION, invoker: "public" }, async (request) => {
+    const auth = request.auth;
+    const phone = auth && auth.token && auth.token.phone_number;
+    if (!phone) throw new HttpsError("unauthenticated", "Connexion par téléphone requise.");
+    const digits = String(phone).replace(/\D/g, "");
+    const tail = digits.length >= 9 ? digits.slice(-9) : digits;
+    if (tail.length < 8) return { notifications: [] };
+
+    const db = admin.firestore();
+    let snap;
+    try {
+        snap = await db.collection("client_notifications").where("phoneTail", "==", tail).limit(100).get();
+    } catch (e) { return { notifications: [] }; }
+    const notifications = snap.docs.map((d) => {
+        const x = d.data() || {};
+        return {
+            id: d.id, title: x.title || "", body: x.body || "", icon: x.icon || "🔔",
+            type: x.type || "info", read: !!x.read, createdAt: x.createdAt || "",
+        };
+    }).sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
+    return { notifications };
+});
+
+// Marque des notifications comme lues (ids fournis, ou toutes si vide).
+exports.markNotificationsRead = onCall({ region: REGION, invoker: "public" }, async (request) => {
+    const auth = request.auth;
+    const phone = auth && auth.token && auth.token.phone_number;
+    if (!phone) throw new HttpsError("unauthenticated", "Connexion par téléphone requise.");
+    const digits = String(phone).replace(/\D/g, "");
+    const tail = digits.length >= 9 ? digits.slice(-9) : digits;
+    const ids = Array.isArray(request.data && request.data.ids) ? request.data.ids : null;
+
+    const db = admin.firestore();
+    let docs = [];
+    try {
+        const snap = await db.collection("client_notifications").where("phoneTail", "==", tail).where("read", "==", false).limit(200).get();
+        docs = snap.docs;
+    } catch (e) { return { ok: true, updated: 0 }; }
+    let batch = db.batch(), n = 0, updated = 0;
+    for (const d of docs) {
+        if (ids && !ids.includes(d.id)) continue;
+        batch.update(d.ref, { read: true });
+        if (++n >= 400) { await batch.commit(); updated += n; batch = db.batch(); n = 0; }
+    }
+    if (n > 0) { await batch.commit(); updated += n; }
+    return { ok: true, updated };
 });
 
 // SÉCURITÉ : vérifie que l'appelant est connecté ET possède un rôle
@@ -1119,6 +1193,46 @@ async function handleCommissionCreated(snap, agency) {
 }
 
 // Trigger pour la collection HISTORIQUE (paris / abidjan).
+// ── Trigger demande client : notifier le CLIENT à chaque changement de statut ─
+// Quand le staff modifie/valide/refuse une demande (client_requests), on crée
+// une notification dans `client_notifications` (lue par la cloche 🔔 de l'app).
+// Fondation réutilisable : l'envoi push Expo (app native) se branchera ici.
+exports.notifyClientRequestChange = onDocumentUpdated(
+    { region: REGION, document: "client_requests/{id}" },
+    async (event) => {
+        const before = event.data && event.data.before && event.data.before.data();
+        const after = event.data && event.data.after && event.data.after.data();
+        if (!before || !after) return;
+        if (before.status === after.status) return; // seul le changement de statut nous intéresse
+        const tail = after.phoneTail;
+        if (!tail) return;
+        const db = admin.firestore();
+        const typeLbl = after.type === "recup" ? "récupération" : "dépôt";
+        const fdate = (d) => { try { return d ? new Date(d).toLocaleDateString("fr-FR") : ""; } catch (e) { return d || ""; } };
+        let notif = null;
+        if (after.status === "modifiee") {
+            notif = {
+                icon: "📅", type: "request_modified", refId: event.params.id,
+                title: "Nouvelle date proposée",
+                body: `Votre demande de ${typeLbl} : l'agence propose le ${fdate(after.staffDate)}${after.staffTime ? " (" + after.staffTime + ")" : ""}. Ouvrez l'onglet Dépôt pour accepter.`,
+            };
+        } else if (after.status === "traitee") {
+            notif = {
+                icon: "✅", type: "request_done", refId: event.params.id,
+                title: "Rendez-vous confirmé",
+                body: `Votre ${typeLbl} est planifié pour le ${fdate(after.staffDate || after.wantedDate)}${after.staffTime ? " (" + after.staffTime + ")" : ""}.`,
+            };
+        } else if (after.status === "refusee") {
+            notif = {
+                icon: "❌", type: "request_refused", refId: event.params.id,
+                title: "Demande non retenue",
+                body: `Votre demande de ${typeLbl} n'a pas pu être retenue. Contactez l'agence pour plus d'informations.`,
+            };
+        }
+        if (notif) await createClientNotif(db, tail, notif);
+    },
+);
+
 exports.notifyCommissionPushGlobal = onDocumentCreated(
     { region: REGION, document: "commissions/{id}" },
     async (event) => handleCommissionCreated(event.data, "paris"),
