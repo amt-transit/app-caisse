@@ -158,3 +158,26 @@ button{font-family:inherit;cursor:pointer;}
 .subtabs{display:flex;gap:6px;background:#fff;border:1px solid var(--line);border-radius:12px;padding:4px;margin-bottom:14px;}
 .subtab{flex:1;border:none;background:none;padding:9px;border-radius:9px;font-weight:700;font-size:13px;color:var(--muted);}
 .subtab.active{background:var(--amt-blue);color:#fff;}
+
+/* ---------- Formulaire de demande (Dépôt/Récup) — style "Détails du RDV" ---------- */
+.rf-card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;margin-bottom:14px;box-shadow:0 2px 6px rgba(15,23,42,.04);}
+.rf-card__head{display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid var(--line);font-family:'Comfortaa',sans-serif;font-weight:700;color:var(--amt-blue);font-size:15px;}
+.rf-card__head .rf-ic{width:34px;height:34px;display:flex;align-items:center;justify-content:center;border-radius:10px;background:#eef4fb;font-size:17px;}
+.rf-card__body{padding:16px;}
+.rf-id{display:flex;align-items:center;gap:12px;background:#f6f9fc;border:1px solid var(--line);border-radius:14px;padding:12px 14px;margin-bottom:14px;}
+.rf-id__av{width:40px;height:40px;border-radius:50%;background:linear-gradient(135deg,var(--amt-blue-l),var(--amt-blue));color:#fff;display:flex;align-items:center;justify-content:center;font-weight:800;font-family:'Comfortaa',sans-serif;}
+.rf-id__name{font-weight:800;color:var(--ink);font-size:14px;}
+.rf-id__sub{font-size:12px;color:var(--muted);margin-top:2px;}
+.rf-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+.rf-field{display:flex;flex-direction:column;gap:6px;}
+.rf-field--full{grid-column:1 / -1;}
+.rf-label{font-size:12px;font-weight:700;color:var(--muted);}
+.rf-input{width:100%;box-sizing:border-box;padding:12px 13px;border:1px solid var(--line);border-radius:11px;font-size:14px;font-family:inherit;background:#fff;outline:none;transition:.15s;}
+.rf-input:focus{border-color:var(--amt-blue);box-shadow:0 0 0 3px rgba(26,53,83,.10);}
+textarea.rf-input{resize:vertical;min-height:74px;}
+.rf-type{display:flex;gap:10px;}
+.rf-type__opt{flex:1;padding:12px;border:1.5px solid var(--line);border-radius:12px;background:#fff;color:var(--muted);font-weight:700;font-size:13.5px;display:flex;align-items:center;justify-content:center;gap:7px;transition:.15s;}
+.rf-type__opt.active{border-color:var(--amt-blue);background:#eef4fb;color:var(--amt-blue);}
+.rf-slots{display:flex;gap:10px;}
+.rf-slot{flex:1;padding:12px;border:1.5px solid var(--line);border-radius:12px;background:#fff;color:var(--muted);font-weight:700;font-size:13px;transition:.15s;}
+.rf-slot.active{border-color:var(--amt-gold);background:#fff8ec;color:var(--amt-gold-d);}

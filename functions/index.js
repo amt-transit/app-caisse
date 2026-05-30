@@ -454,6 +454,7 @@ exports.createClientRequest = onCall({ region: REGION, invoker: "public" }, asyn
     const address = clean(data.address, 300);
     const commune = clean(data.commune, 120);
     const wantedDate = clean(data.date, 30);
+    const wantedTime = clean(data.time, 40);
     const description = clean(data.description, 1000);
     if (!address && !commune) throw new HttpsError("invalid-argument", "Adresse requise.");
 
@@ -497,7 +498,9 @@ exports.createClientRequest = onCall({ region: REGION, invoker: "public" }, asyn
         position,                     // 'depart' | 'arrivee'
         phoneE164: phone,
         phoneTail: tail,
-        fullName, address, commune, wantedDate, description,
+        fullName, address, commune, wantedDate, wantedTime, description,
+        // Le créneau souhaité par le client sert de proposition par défaut au staff.
+        staffTime: wantedTime || "",
         createdAt: now,
         updatedAt: now,
         source: "app_client",
@@ -537,7 +540,7 @@ exports.getMyRequests = onCall({ region: REGION, invoker: "public" }, async (req
         return {
             id: d.id, type: x.type || "depot", status: x.status || "en_attente",
             fullName: x.fullName || "", address: x.address || "", commune: x.commune || "",
-            wantedDate: x.wantedDate || "", description: x.description || "",
+            wantedDate: x.wantedDate || "", wantedTime: x.wantedTime || "", description: x.description || "",
             createdAt: x.createdAt || "",
             // Proposition du staff (visible par le client quand status === 'modifiee').
             staffDate: x.staffDate || "", staffTime: x.staffTime || "", staffNote: x.staffNote || "",

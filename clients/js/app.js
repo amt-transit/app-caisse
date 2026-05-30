@@ -41,6 +41,8 @@ let REQUESTS = [];      // demandes dépôt/récup du client
 let requestsLoaded = false;
 let requestsSubtab = 'tous'; // 'tous' | 'depot' | 'recup'
 let requestFormType = 'depot'; // type en cours de saisie
+let requestFormSlot = 'Matin (10H-12H)'; // créneau souhaité par le client
+let requestDraft = {};  // brouillon des champs (conservé quand on change type/créneau)
 // Le service Dépôt/Récupération ne concerne QUE les expéditeurs. On déduit le
 // rôle des factures (rôle exp/both) + repli sur l'indicatif France (+33 = départ).
 let isExpediteur = true;       // par défaut on n'masque rien tant qu'on ne sait pas
@@ -313,6 +315,10 @@ document.addEventListener('click', (e) => {
   if (rs) { requestsSubtab = rs.dataset.reqsub; renderView('requests'); return; }
   const rn = e.target.closest('[data-reqnew]');
   if (rn) { openRequestForm(rn.dataset.reqnew); return; }
+  const rtype = e.target.closest('[data-reqtype]');
+  if (rtype) { keepFormDraft(); requestFormType = rtype.dataset.reqtype; renderView('requestForm'); return; }
+  const rslot = e.target.closest('[data-reqslot]');
+  if (rslot) { keepFormDraft(); requestFormSlot = rslot.dataset.reqslot; renderView('requestForm'); return; }
   const rsub = e.target.closest('[data-reqsubmit]');
   if (rsub) { submitRequest(); return; }
   const ra = e.target.closest('[data-reqaccept]');
@@ -341,7 +347,20 @@ async function loadRequests() {
 
 function openRequestForm(type) {
   requestFormType = (type === 'recup') ? 'recup' : 'depot';
+  requestFormSlot = 'Matin (10H-12H)';
+  requestDraft = {}; // nouveau formulaire : brouillon vierge
   renderView('requestForm');
+}
+
+// Mémorise les champs saisis avant un re-render (changement de type/créneau).
+function keepFormDraft() {
+  requestDraft = {
+    fullName: $('#reqName')?.value ?? requestDraft.fullName,
+    commune: $('#reqCommune')?.value ?? requestDraft.commune,
+    address: $('#reqAddress')?.value ?? requestDraft.address,
+    date: $('#reqDate')?.value ?? requestDraft.date,
+    description: $('#reqDesc')?.value ?? requestDraft.description,
+  };
 }
 
 async function submitRequest() {
@@ -352,6 +371,7 @@ async function submitRequest() {
     commune: ($('#reqCommune')?.value || '').trim(),
     address: ($('#reqAddress')?.value || '').trim(),
     date: ($('#reqDate')?.value || '').trim(),
+    time: requestFormSlot,
     description: ($('#reqDesc')?.value || '').trim(),
   };
   if (!payload.commune && !payload.address) { err('Indiquez au moins une commune ou une adresse.'); return; }
@@ -362,6 +382,7 @@ async function submitRequest() {
     const u = auth.currentUser;
     if (u) { try { await u.getIdToken(true); } catch (_) {} }
     await httpsCallable(functions, 'createClientRequest')(payload);
+    requestDraft = {};               // brouillon consommé
     requestsLoaded = false;          // forcer le rechargement de la liste
     requestsSubtab = payload.type;   // afficher l'onglet correspondant
     renderView('requests');
@@ -625,30 +646,68 @@ const VIEWS = {
   // Formulaire de nouvelle demande (dépôt ou récup). Vue dédiée 'requestForm'.
   requestForm() {
     const isRecup = requestFormType === 'recup';
-    const title = isRecup ? 'Demande de récupération' : 'Demande de dépôt';
-    const hint = isRecup
-      ? "Indiquez où récupérer/livrer le colis et quand."
-      : "Indiquez où enlever votre colis (adresse de départ) et quand.";
+    const initials = (clientSelfName || '').trim().slice(0, 2).toUpperCase() || '👤';
     const myPhone = (auth.currentUser && auth.currentUser.phoneNumber) || localStorage.getItem(LS.phone) || '';
     const todayISO = new Date().toISOString().slice(0, 10); // date min = aujourd'hui
+    const opt = (k, ic, lbl) => `<button type="button" class="rf-type__opt${requestFormType === k ? ' active' : ''}" data-reqtype="${k}">${ic} ${lbl}</button>`;
+    const slot = (v, lbl) => `<button type="button" class="rf-slot${requestFormSlot === v ? ' active' : ''}" data-reqslot="${v}">${lbl}</button>`;
+    const adrLabel = isRecup ? 'Adresse de livraison / récupération' : "Adresse d'enlèvement (départ)";
+    const esc = (s) => String(s == null ? '' : s).replace(/"/g, '&quot;');
+    // Valeurs préremplies : brouillon en cours, sinon profil expéditeur.
+    const vName = esc(requestDraft.fullName ?? clientSelfName);
+    const vCommune = esc(requestDraft.commune ?? '');
+    const vAddress = esc(requestDraft.address ?? clientSelfAddress);
+    const vDate = esc(requestDraft.date ?? '');
+    const vDesc = String(requestDraft.description ?? '').replace(/</g, '&lt;');
     return `
-      <button class="btn btn--ghost" data-go="requests" style="text-align:left;margin:0 0 8px;">← Retour</button>
-      <div class="card">
-        <div class="section-title">${title}</div>
-        <p class="muted" style="margin:0 0 12px;font-size:13px;">${hint}</p>
-        <div class="placeholder" style="padding:8px 10px;margin-bottom:12px;">👤 Expéditeur : <b>${clientSelfName || 'à compléter'}</b> · 📞 ${myPhone}</div>
-        <label class="auth__label">Nom complet</label>
-        <input id="reqName" class="filter-input" type="text" placeholder="Votre nom" value="${(clientSelfName || '').replace(/"/g, '&quot;')}" style="width:100%;box-sizing:border-box;margin-bottom:10px;">
-        <label class="auth__label">Commune / Ville</label>
-        <input id="reqCommune" class="filter-input" type="text" placeholder="Ex : Cocody, Paris…" style="width:100%;box-sizing:border-box;margin-bottom:10px;">
-        <label class="auth__label">Adresse précise</label>
-        <input id="reqAddress" class="filter-input" type="text" placeholder="Quartier, rue, point de repère" value="${(clientSelfAddress || '').replace(/"/g, '&quot;')}" style="width:100%;box-sizing:border-box;margin-bottom:10px;">
-        <label class="auth__label">Date souhaitée</label>
-        <input id="reqDate" class="filter-input" type="date" min="${todayISO}" style="width:100%;box-sizing:border-box;margin-bottom:10px;">
-        <label class="auth__label">Description du colis</label>
-        <textarea id="reqDesc" class="filter-input" rows="3" placeholder="Ex : 2 cartons, 1 valise…" style="width:100%;box-sizing:border-box;margin-bottom:14px;"></textarea>
-        <div id="reqError" class="auth__error" hidden style="margin-bottom:10px;"></div>
-        <button class="btn btn--primary" style="width:100%;" data-reqsubmit="1">Envoyer la demande</button>
+      <button class="btn btn--ghost" data-go="requests" style="text-align:left;margin:0 0 6px;">← Retour</button>
+
+      <div class="rf-card">
+        <div class="rf-card__head"><span class="rf-ic">📦</span> Nouvelle demande</div>
+        <div class="rf-card__body">
+          <div class="rf-id">
+            <div class="rf-id__av">${initials}</div>
+            <div><div class="rf-id__name">${clientSelfName || 'Expéditeur'}</div><div class="rf-id__sub">📞 ${myPhone}</div></div>
+          </div>
+          <div class="rf-field rf-field--full">
+            <span class="rf-label">Type de demande</span>
+            <div class="rf-type">${opt('depot', '📦', 'Dépôt')}${opt('recup', '🔄', 'Récupération')}</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="rf-card">
+        <div class="rf-card__head"><span class="rf-ic">📋</span> Détails de la demande</div>
+        <div class="rf-card__body">
+          <div class="rf-grid">
+            <div class="rf-field rf-field--full">
+              <span class="rf-label">Nom complet</span>
+              <input id="reqName" class="rf-input" type="text" placeholder="Votre nom" value="${vName}">
+            </div>
+            <div class="rf-field">
+              <span class="rf-label">Commune / Ville</span>
+              <input id="reqCommune" class="rf-input" type="text" placeholder="Ex : Cocody, Paris…" value="${vCommune}">
+            </div>
+            <div class="rf-field">
+              <span class="rf-label">Date souhaitée</span>
+              <input id="reqDate" class="rf-input" type="date" min="${todayISO}" value="${vDate}">
+            </div>
+            <div class="rf-field rf-field--full">
+              <span class="rf-label">${adrLabel}</span>
+              <input id="reqAddress" class="rf-input" type="text" placeholder="Quartier, rue, point de repère" value="${vAddress}">
+            </div>
+            <div class="rf-field rf-field--full">
+              <span class="rf-label">Créneau souhaité</span>
+              <div class="rf-slots">${slot('Matin (10H-12H)', 'Matin (10H-12H)')}${slot('Après-midi (12H-18H)', 'Après-midi (12H-18H)')}</div>
+            </div>
+            <div class="rf-field rf-field--full">
+              <span class="rf-label">Description du colis</span>
+              <textarea id="reqDesc" class="rf-input" rows="3" placeholder="Ex : 2 cartons, 1 valise…">${vDesc}</textarea>
+            </div>
+          </div>
+          <div id="reqError" class="auth__error" hidden style="margin:12px 0 0;"></div>
+          <button class="btn btn--primary" style="width:100%;margin-top:14px;" data-reqsubmit="1">Envoyer la demande</button>
+        </div>
       </div>
     `;
   },
