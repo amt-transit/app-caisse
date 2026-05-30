@@ -11,6 +11,7 @@ import { SettingsAgentsView } from './shared/views/settings-agents.js';
 import { SettingsRolesMenusView } from './shared/views/settings-roles-menus.js';
 import { ParrainageView } from './shared/views/parrainage.js';
 import { ProfilView } from './profil-view.js';
+import { DemandesClientView } from './shared/views/demandes-client.js';
 
 // --- PARIS VIEWS (Départ) ---
 import { DashboardView as ParisDashboardView } from './paris/js/views/dashboard.js';
@@ -671,6 +672,17 @@ export const app = {
             const snapRdv = await getDocs(qRdv);
             const pendingBadge = document.getElementById('pendingAppointmentsBadge');
             if (pendingBadge) pendingBadge.textContent = snapRdv.size;
+
+            // Demandes clients (dépôt/récup) en attente de traitement.
+            try {
+                const qReq = query(collection(cfg.db, "client_requests"), where("agency", "==", activeAgency), where("status", "==", "en_attente"));
+                const snapReq = await getDocs(qReq);
+                const n = snapReq.size;
+                const sideBadge = document.getElementById('clientRequestsBadgeSide');
+                if (sideBadge) sideBadge.textContent = n;
+                const topBadge = document.getElementById('clientRequestsBadge');
+                if (topBadge) { topBadge.textContent = n; topBadge.style.display = n > 0 ? 'inline-block' : 'none'; }
+            } catch (e) { /* collection vide / absente */ }
         });
     },
 
@@ -807,6 +819,7 @@ export const app = {
             'settings-roles': () => SettingsRolesMenusView.render(this, container),
             'parrainage': () => ParrainageView.render(this, container),
             'settings-profile': () => ProfilView.render(this, container),
+            'demandes-client': () => DemandesClientView.render(this, container),
             
             // --- Conditional / Dual (Selon l'agence) ---
             'dashboard': () => isArrival ? AbidjanDashboardView.render(this, container) : ParisDashboardView.render(this),

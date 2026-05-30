@@ -308,6 +308,7 @@
                 <div class="sidebar-item" data-page="appointment-new"><i class="fas fa-calendar-plus"></i><span>Nouveau RDV</span></div>
                 <div class="sidebar-item" data-page="appointments-list"><i class="fas fa-list-ul"></i><span>Tous les RDV</span></div>
                 <div class="sidebar-item" data-page="appointments-pending"><i class="fas fa-clock"></i><span>À valider <span class="badge" id="pendingAppointmentsBadge">0</span></span></div>
+                <div class="sidebar-item" data-page="demandes-client"><i class="fas fa-inbox"></i><span>Demandes clients <span class="badge" id="clientRequestsBadgeSide">0</span></span></div>
                 <div class="sidebar-item" data-page="appointments-calendar"><i class="fas fa-calendar-alt"></i><span>Calendrier RDV</span></div>
             </div>
 
@@ -449,6 +450,13 @@
                 </div>
             </div>
 
+            <!-- Demandes clients (dépôt/récup) émises depuis l'app client -->
+            <button class="topbar-bell" id="clientRequestsBtn" title="Demandes clients (dépôt / récupération)"
+                    onclick="window.app && window.app.renderPage('demandes-client')"
+                    style="position:relative; margin-left:auto; background:none; border:none; cursor:pointer; font-size:20px; padding:6px 10px;">
+                📥
+                <span id="clientRequestsBadge" class="badge" style="position:absolute; top:0; right:2px; background:#ef4444; color:#fff; border-radius:10px; font-size:10px; font-weight:700; padding:1px 5px; display:none;">0</span>
+            </button>
             <!-- Bloc Utilisateur & Sélecteur injecté par auth-guard.js -->
         </div>
 
