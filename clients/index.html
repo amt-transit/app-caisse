@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no">
 <meta name="theme-color" content="#1A3553">
+<meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <title>AMT Clients</title>
@@ -46,7 +47,7 @@
       <div class="auth__sentto" id="sentTo"></div>
       <input id="codeInput" class="pin-field" type="tel" inputmode="numeric" maxlength="6" placeholder="••••••">
       <button id="btnVerifyCode" class="btn btn--primary">Valider</button>
-      <p class="auth__hint" id="demoHint">Mode démo : entrez n'importe quel code (ex. 000000).</p>
+      <p class="auth__hint" id="demoHint">Saisissez le code à 6 chiffres reçu par SMS.</p>
     </div>
 
     <!-- Étape 3 : création du PIN -->
@@ -69,8 +70,10 @@
     </div>
 
     <div id="authError" class="auth__error" hidden></div>
+    <!-- reCAPTCHA invisible requis par Firebase Phone Auth -->
+    <div id="recaptcha-container"></div>
   </div>
-  <div class="auth__foot">AMT Trans'it · Démo</div>
+  <div class="auth__foot">AMT Trans'it</div>
 </div>
 
 <!-- APPLICATION -->

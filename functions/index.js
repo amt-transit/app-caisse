@@ -155,6 +155,11 @@ exports.getMyInvoices = onCall({ region: REGION, invoker: "public" }, async (req
                 date: t.date || t.dateAjout || "",
                 total, paid, remaining, status, currency,
                 agency: t.agency || "",
+                _factor: factor,
+                _desc: t.description || "",
+                _adjType: t.adjustmentType || "",
+                _adjVal: parseFloat(t.adjustmentVal) || 0,
+                _waived: !!t.storageFeeWaived,
             });
         };
 
@@ -162,14 +167,209 @@ exports.getMyInvoices = onCall({ region: REGION, invoker: "public" }, async (req
         for (const d of expSnap.docs) await add(d, "exp");
     }
 
-    const invoices = Array.from(byKey.values())
-        .sort((a, b) => String(b.date).localeCompare(String(a.date)));
+    const invoices = Array.from(byKey.values());
+
+    // --- MAGASINAGE : aligne le "reste à payer" du tableau de bord sur le
+    // détail/PDF officiel. On lit la livraison (active ou archivée) liée à
+    // chaque facture pour calculer les frais selon le barème officiel. ---
+    try {
+        // Référence -> base de collection livraisons (route-aware).
+        const livBaseFor = (colName) => {
+            const aerien = /_aerien$/.test(colName);
+            const route = configSourceForCollection(colName);
+            const suffix = (route === "paris" ? "" : "_" + route) + (aerien ? "_aerien" : "");
+            return "livraisons" + suffix;
+        };
+        // Regrouper les références par base de livraisons.
+        const refsByBase = new Map(); // base -> Set(refs)
+        for (const inv of invoices) {
+            const base = livBaseFor(inv.collection);
+            if (!refsByBase.has(base)) refsByBase.set(base, new Set());
+            refsByBase.get(base).add(String(inv.reference).toUpperCase());
+        }
+        // Charger les livraisons concernées (active + archives), par paquets de 10.
+        const livByKey = new Map(); // base + "|" + ref -> livraison "la plus pertinente"
+        for (const [base, refSet] of refsByBase) {
+            const refs = Array.from(refSet);
+            for (const colL of [base, base + "_archives"]) {
+                for (let i = 0; i < refs.length; i += 10) {
+                    const chunk = refs.slice(i, i + 10);
+                    let snap;
+                    try { snap = await db.collection(colL).where("ref", "in", chunk).get(); }
+                    catch (e) { continue; }
+                    snap.forEach((d) => {
+                        const l = d.data() || {};
+                        const k = base + "|" + String(l.ref || "").toUpperCase();
+                        const prev = livByKey.get(k);
+                        // Priorité à la livraison EN_COURS (celle qui porte le magasinage).
+                        if (!prev || (l.containerStatus === "EN_COURS" && prev.containerStatus !== "EN_COURS")) {
+                            livByKey.set(k, l);
+                        }
+                    });
+                }
+            }
+        }
+        const now = new Date();
+        for (const inv of invoices) {
+            const base = livBaseFor(inv.collection);
+            const liv = livByKey.get(base + "|" + String(inv.reference).toUpperCase());
+            let feeFcfa = 0;
+            if (inv._adjType === "augmentation" && inv._adjVal > 0) {
+                feeFcfa = inv._adjVal;
+            } else if (liv && !inv._waived && liv.dateAjout
+                && liv.status !== "LIVRE" && liv.status !== "ABANDONNE") {
+                const qte = (liv.quantiteRestante !== undefined && liv.quantiteRestante !== null)
+                    ? parseInt(liv.quantiteRestante) : (parseInt(liv.quantite) || 1);
+                const desc = [liv.description, inv._desc].filter(Boolean).join(" ").toLowerCase();
+                feeFcfa = storageFeeServer(liv.dateAjout, qte, desc.includes("palette"), now).fee;
+            }
+            const reductionFcfa = (inv._adjType === "reduction" && inv._adjVal > 0) ? inv._adjVal : 0;
+            // Conversion vers la devise d'affichage de la facture (EUR pour Paris).
+            const magDisp = feeFcfa / inv._factor;
+            const redDisp = reductionFcfa / inv._factor;
+            inv.magasinage = magDisp;
+            let rem = inv.total - inv.paid - redDisp + magDisp;
+            if (rem < 0.01) rem = 0;
+            inv.remaining = rem;
+            inv.status = rem <= 0 ? "PAYE" : (inv.paid > 0 ? "PARTIEL" : "IMPAYE");
+        }
+    } catch (e) { /* non bloquant : on garde le reste sans magasinage */ }
+
+    // Nettoyage des champs internes (préfixe _) avant envoi au client.
+    invoices.forEach((inv) => { Object.keys(inv).forEach((k) => { if (k[0] === "_") delete inv[k]; }); });
+    invoices.sort((a, b) => String(b.date).localeCompare(String(a.date)));
 
     // Carton moyen offert toutes les 10 factures envoyées (expéditeur ≠ AMT).
     const freeCartons = Math.floor(sentAsSender / 10);
     const toNext = sentAsSender === 0 ? 10 : (10 - (sentAsSender % 10)) % 10 || 10;
 
     return { invoices, loyalty: { sentAsSender, freeCartons, toNext } };
+});
+
+// ===========================================================================
+//  getMyInvoiceDetail — détail complet d'UNE facture (app AMT Clients)
+// ---------------------------------------------------------------------------
+//  Renvoie tout ce qu'il faut pour : (a) générer le PDF OFFICIEL côté client
+//  (config société/CGV de l'agence de départ + transaction + magasinage) et
+//  (b) afficher le suivi colis-par-colis (livraisons + scanHistory).
+//  SÉCURITÉ : seul le propriétaire (son phoneTail == exp/destPhoneTail de la
+//  facture) peut lire. Admin SDK -> aucune règle Firestore à modifier.
+// ===========================================================================
+
+// Barème magasinage (miroir de services/storageFee.js) — FCFA.
+function storageFeeServer(dateString, qte, isPalette, now) {
+    if (!dateString) return { days: 0, fee: 0 };
+    const arrival = new Date(dateString);
+    const diff = now - arrival;
+    if (isNaN(diff) || diff < 0) return { days: 0, fee: 0 };
+    const days = Math.ceil(diff / (1000 * 60 * 60 * 24));
+    if (days <= 7) return { days, fee: 0 };
+    const q = (!qte || isNaN(qte)) ? 1 : qte;
+    if (days <= 14) return { days, fee: 10000 * q };
+    return { days, fee: (10000 + (days - 14) * (isPalette ? 3000 : 1000)) * q };
+}
+// Agence source de config (logo/CGV) = agence de DÉPART de la route.
+function configSourceForCollection(colName) {
+    if (colName === "transactions" || colName === "transactions_aerien") return "paris";
+    const r = colName.replace(/^transactions_/, "").replace(/_aerien$/, "");
+    return r || "paris";
+}
+function pick(obj, keys) {
+    const out = {};
+    if (!obj) return out;
+    for (const k of keys) if (obj[k] !== undefined) out[k] = obj[k];
+    return out;
+}
+
+exports.getMyInvoiceDetail = onCall({ region: REGION, invoker: "public" }, async (request) => {
+    const auth = request.auth;
+    const phone = auth && auth.token && auth.token.phone_number;
+    if (!phone) throw new HttpsError("unauthenticated", "Connexion par téléphone requise.");
+    const reference = request.data && request.data.reference;
+    if (!reference) throw new HttpsError("invalid-argument", "Référence manquante.");
+
+    const digits = String(phone).replace(/\D/g, "");
+    const tail = digits.length >= 9 ? digits.slice(-9) : digits;
+    if (tail.length < 8) throw new HttpsError("permission-denied", "Numéro non reconnu.");
+
+    const db = admin.firestore();
+    const ref = String(reference).toUpperCase().trim();
+
+    // 1. Retrouver la facture (toutes collections transactions*) + VÉRIFIER la propriété.
+    const cols = await db.listCollections();
+    const txCols = cols.map((c) => c.id).filter((id) => /^transactions(_[a-z0-9_]+)?$/.test(id));
+    let trans = null, transDocId = null, transCol = null;
+    for (const colName of txCols) {
+        let snap;
+        try { snap = await db.collection(colName).where("reference", "==", ref).limit(10).get(); }
+        catch (e) { continue; }
+        for (const d of snap.docs) {
+            const t = d.data() || {};
+            if (t.isDeleted) continue;
+            if (t.expPhoneTail === tail || t.destPhoneTail === tail) { trans = t; transDocId = d.id; transCol = colName; break; }
+        }
+        if (trans) break;
+    }
+    if (!trans) throw new HttpsError("permission-denied", "Facture introuvable ou non autorisée.");
+
+    // 2. Livraisons (colis + scanHistory) par référence — actives + archives.
+    const aerien = /_aerien$/.test(transCol);
+    const route = configSourceForCollection(transCol); // 'paris' (historique) ou route SaaS
+    const suffix = (route === "paris" ? "" : "_" + route) + (aerien ? "_aerien" : "");
+    const livCols = [`livraisons${suffix}`, `livraisons${suffix}_archives`];
+    const LIV_KEYS = ["ref", "labels", "conteneur", "expediteur", "destinataire", "numero",
+        "lieuLivraison", "commune", "description", "quantite", "quantiteRestante", "dateAjout",
+        "status", "containerStatus", "scanHistory", "departureDate", "arrivalDate",
+        "modeExpedition", "telExpediteur", "adresseExpediteur", "montant", "prixOriginal"];
+    const livraisons = [];
+    for (const lc of livCols) {
+        try {
+            const ls = await db.collection(lc).where("ref", "==", ref).get();
+            ls.forEach((d) => livraisons.push(pick(d.data(), LIV_KEYS)));
+        } catch (e) { /* collection absente */ }
+    }
+
+    // 3. Config (société + facture) de l'agence de DÉPART.
+    let company = null, invoiceConfig = null;
+    try { const c = await db.collection("settings").doc(`company_${route}`).get(); if (c.exists) company = pick(c.data(), ["name", "logoBase64"]); } catch (e) {}
+    try {
+        const ic = await db.collection("settings").doc(`invoice_config_${route}`).get();
+        if (ic.exists) invoiceConfig = ic.data();
+        if (aerien) { const ica = await db.collection("settings").doc(`invoice_config_${route}_aerien`).get(); if (ica.exists) invoiceConfig = Object.assign({}, invoiceConfig || {}, ica.data()); }
+    } catch (e) {}
+
+    // 4. Magasinage (même règle que le PDF staff) : livraison la plus pertinente.
+    const livForFee = livraisons.find((l) => l.containerStatus === "EN_COURS") || livraisons[0] || null;
+    let magasinageFee = 0;
+    if (trans.adjustmentType === "augmentation" && trans.adjustmentVal > 0) {
+        magasinageFee = trans.adjustmentVal;
+    } else if (livForFee && !trans.storageFeeWaived && livForFee.dateAjout
+        && livForFee.status !== "LIVRE" && livForFee.status !== "ABANDONNE") {
+        const qte = (livForFee.quantiteRestante !== undefined && livForFee.quantiteRestante !== null)
+            ? parseInt(livForFee.quantiteRestante) : (parseInt(livForFee.quantite) || 1);
+        const desc = [livForFee.description, trans.description].filter(Boolean).join(" ").toLowerCase();
+        magasinageFee = storageFeeServer(livForFee.dateAjout, qte, desc.includes("palette"), new Date()).fee;
+    }
+    const reduction = (trans.adjustmentType === "reduction" && trans.adjustmentVal > 0) ? trans.adjustmentVal : 0;
+
+    const TX_KEYS = ["reference", "nom", "nomDestinataire", "numero", "tel", "conteneur",
+        "adresseDestinataire", "items", "prix", "montantParis", "montantAbidjan", "reste",
+        "date", "modeExpedition", "description", "quantite", "agency",
+        "adjustmentType", "adjustmentVal", "storageFeeWaived"];
+
+    return {
+        reference: ref,
+        collection: transCol,
+        transDocId,
+        transaction: pick(trans, TX_KEYS),
+        livraison: livForFee,           // livraison de référence pour le PDF
+        livraisons,                     // toutes (suivi colis-par-colis)
+        company,
+        invoiceConfig: invoiceConfig || null,
+        magasinageFee,
+        reduction,
+        configSource: route,
+    };
 });
 
 // SÉCURITÉ : vérifie que l'appelant est connecté ET possède un rôle

@@ -369,7 +369,12 @@ export const ToutesLesFacturesView = {
     },
 
     applyFilters() {
-        const searchTerm = (document.getElementById('searchInput')?.value || '').toLowerCase().trim();
+        const rawSearch = (document.getElementById('searchInput')?.value || '').trim();
+        // Recherche TOLÉRANTE : insensible à la casse ET aux accents.
+        const norm = (s) => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+        const searchTerm = norm(rawSearch);
+        // Téléphone : on compare uniquement les chiffres (espaces/points/indicatifs ignorés).
+        const searchDigits = rawSearch.replace(/\D/g, '');
         const status = document.getElementById('statusFilter')?.value || '';
         const container = document.getElementById('containerFilter')?.value || '';
         const dateFrom = document.getElementById('dateFrom')?.value;
@@ -382,11 +387,17 @@ export const ToutesLesFacturesView = {
         filtered = filterByShippingMode(filtered);
 
         if (searchTerm) {
-            filtered = filtered.filter(inv => 
-                (inv.reference || '').toLowerCase().includes(searchTerm) ||
-                (inv.nom || '').toLowerCase().includes(searchTerm) ||
-                (inv.tel || '').includes(searchTerm)
-            );
+            filtered = filtered.filter(inv => {
+                // Texte : référence + nom expéditeur + nom destinataire (insensible casse/accents).
+                const haystack = norm(`${inv.reference || ''} ${inv.nom || ''} ${inv.nomDestinataire || ''}`);
+                if (haystack.includes(searchTerm)) return true;
+                // Téléphone : chiffre-à-chiffre sur exp. ET destinataire.
+                if (searchDigits.length >= 3) {
+                    const phones = `${inv.tel || ''} ${inv.numero || ''}`.replace(/\D/g, '');
+                    if (phones.includes(searchDigits)) return true;
+                }
+                return false;
+            });
         }
 
         if (status) {

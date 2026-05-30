@@ -4,7 +4,7 @@ import { getCollectionName, getConfigSourceAgency } from '../../../agencies-conf
 import { matchesShippingMode, getShippingMode } from '../../../shipping-mode.js';
 import { calculateStorageFee } from '../../../services/storageFee.js';
 import { createDocumentTemplates } from '../../../services/document-templates.js';
-import { CI_PHONE_REGEX, extractPhone, toE164, stripPhoneFromName } from '../../../services/phone.js';
+import { CI_PHONE_REGEX, extractPhone, toE164, stripPhoneFromName, phoneTail, toE164Intl, toE164Detect } from '../../../services/phone.js';
 
 import { formatMoney } from '../../../services/format.js';
 
@@ -316,6 +316,13 @@ export const LivraisonView = {
                                 <span id="importConteneurRequired" style="color:#ef4444; display:none;"> *obligatoire pour EN COURS</span>
                             </label>
                             <input type="text" id="importConteneur" placeholder="Ex: E14">
+                        </div>
+                        <div class="form-group full-width" style="background:#fff7ed;border:1px solid #fdba74;border-radius:8px;padding:10px;">
+                            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:600;color:#9a3412;margin:0;">
+                                <input type="checkbox" id="importConvertEur" style="width:18px;height:18px;cursor:pointer;">
+                                💱 Les montants du fichier sont en EUROS → convertir en FCFA (×655,957)
+                            </label>
+                            <small style="color:#9a3412;display:block;margin-top:4px;">Cochez si votre fichier indique les prix en € (Paris). Laissez décoché s'ils sont déjà en FCFA.</small>
                         </div>
                     </div>
                     <p id="previewCount"></p>
@@ -1333,21 +1340,50 @@ export const LivraisonView = {
                            imported = jsonData.map((row, i) => {
                                const r = {};
                                Object.keys(row).forEach(k => r[cleanString(k).toUpperCase()] = row[k]);
-       
+                               // Clés normalisées (sans accents ni espaces/ponctuation) pour repérer
+                               // de façon robuste les colonnes (TELEPHONE vs TELEPHONE2, ADRESSE...).
+                               const rn = {};
+                               Object.keys(row).forEach(k => {
+                                   const nk = String(k).normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+                                   if (!(nk in rn) || String(rn[nk] || '').trim() === '') rn[nk] = row[k];
+                               });
+
                                    const dateRaw = r.DATE || r['DATE AJOUT'] || r['DATE ARRIVEE'] || r['DATE DU TRANSFERT'] || '';
                                    const parsedDate = parseImportDate(dateRaw) || new Date().toISOString();
+
+                               // NOUVEAU FORMAT = 2 colonnes téléphone (TELEPHONE = EXPÉDITEUR,
+                               // TELEPHONE2 = DESTINATAIRE) + ADRESSE = adresse EXPÉDITEUR, LIVRE = livraison.
+                               // ANCIEN FORMAT = 1 seule colonne téléphone (= destinataire) ; ADRESSE servait
+                               // de lieu de livraison (repli). On détecte par la présence de TELEPHONE2.
+                               const _tel2 = rn['TELEPHONE2'] || rn['TEL2'] || rn['TELEPHONEDESTINATAIRE'] || rn['TELDESTINATAIRE'] || '';
+                               const _hasTel2 = String(_tel2).trim() !== '';
+                               const _tel1 = rn['TELEPHONE'] || rn['TEL'] || rn['TELEPHONEEXPEDITEUR'] || rn['TELEXPEDITEUR'] || rn['NUMERO'] || rn['CONTACT'] || '';
+                               const telExpediteur = _hasTel2
+                                   ? cleanString(String(_tel1))
+                                   : cleanString(String(rn['TELEXPEDITEUR'] || rn['TELEPHONEEXPEDITEUR'] || ''));
+                               const numero = _hasTel2
+                                   ? cleanString(String(_tel2))
+                                   : cleanString(String(rn['NUMERO'] || rn['TEL'] || rn['TELEPHONE'] || rn['CONTACT'] || ''));
+
+                               const _livre = rn['LIVRE'] || rn['LIEU'] || rn['LIEUDELIVRAISON'] || rn['COMMUNE'] || '';
+                               const _adresse = rn['ADRESSE'] || rn['ADRESSES'] || rn['ADRESSEEXPEDITEUR'] || '';
+                               const adresseExpediteur = _hasTel2 ? cleanString(fixEncoding(String(_adresse))) : '';
+                               const lieuLivraison = cleanString(fixEncoding(String(_livre || (_hasTel2 ? '' : _adresse))));
+
                                return {
                                    id: Date.now() + i,
                                    ref: cleanString(r.REF || r.REFERENCE || r.CODE || r['N° COLIS'] || r['NUMERO COLIS'] || r.TRACKING || r['N°'] || '').toUpperCase(), // Force Majuscule pour correspondance
                                    prixOriginal: cleanString(r.PRIX || r.VALEUR || r['PRIX TOTAL'] || r['MONTANT TOTAL'] || ''), // Capture du Prix Total pour calcul
                                    montant: cleanString(r.RESTANT || r.MONTANT || r.PRIX || r['RESTANT A PAYER'] || r['RENSTANT A PAYER'] || r['MONTANT A PAYER'] || r.COLONNE3 || ''),
                                    expediteur: cleanString(fixEncoding(String(r.EXPEDITEUR || r['EXPÉDITEUR'] || r.EXP || ''))),
-                                   commune: detectCommune(cleanString(fixEncoding(String(r.LIVRE || r.LIEU || r.COMMUNE || r['LIEU DE LIVRAISON'] || r.ADRESSE || r.ADRESSES || '')))),
-                                   lieuLivraison: cleanString(fixEncoding(String(r.LIVRE || r.LIEU || r['LIEU DE LIVRAISON'] || r.ADRESSE || r.ADRESSES || ''))),
+                                   telExpediteur: telExpediteur,         // NOUVEAU : n° expéditeur (colonne TELEPHONE)
+                                   adresseExpediteur: adresseExpediteur, // NOUVEAU : adresse expéditeur (colonne ADRESSE)
+                                   commune: detectCommune(lieuLivraison),
+                                   lieuLivraison: lieuLivraison,
                                    destinataire: cleanString(fixEncoding(String(r.DESTINATAIRE || r.CLIENT || r.DESTINATEUR || r.COLONNE2 || ''))),
                                    description: cleanString(fixEncoding(String(r.DESCRIPTION || r.NATURE || r['TYPE COLIS'] || ''))),
                                    info: cleanString(fixEncoding(String(r.INFO || r.INFORMATION || r.COMMENTAIRE || ''))),
-                                   numero: cleanString(r.NUMERO || r.TEL || r.TELEPHONE || r.CONTACT || ''),
+                                   numero: numero,                       // n° destinataire (TELEPHONE2 en nouveau format)
                                        quantite: parseInt(r.QTE || r.QUANTITE || r.QUANTITÉ || r['NOMBRE COLIS'] || 1), // Récupération Quantité
                                    status: 'EN_ATTENTE',
                                        dateAjout: parsedDate
@@ -1389,6 +1425,10 @@ export const LivraisonView = {
                                // Pour le montant, on garde la valeur importée (même 0) si elle existe
                                item.montant = (item.montant && item.montant.trim() !== '') ? item.montant : parentItem.montant;
                                item.numero = item.numero || parentItem.numero;
+                               // Nouveau format : propage aussi le n°/adresse expéditeur depuis le parent
+                               // (même logique que le lieu de livraison), s'ils manquent sur l'import.
+                               item.telExpediteur = item.telExpediteur || parentItem.telExpediteur || '';
+                               item.adresseExpediteur = item.adresseExpediteur || parentItem.adresseExpediteur || '';
                                // Optionnel : Ajouter le type de carton lu par le scan à la description
                                if (!item.description && parentItem.description) {
                                    item.description = parentItem.description;
@@ -1487,6 +1527,9 @@ export const LivraisonView = {
        
        // Aperçu modal
        function showPreviewModal(data) {
+           // Réinitialise la case « convertir € -> FCFA » à chaque import (décochée).
+           const convChk = document.getElementById('importConvertEur');
+           if (convChk) convChk.checked = false;
            // Pré-remplir le conteneur avec le conteneur actif de l'onglet courant
            const importConteneurInput = document.getElementById('importConteneur');
            if (importConteneurInput && currentContainerName && currentContainerName !== 'Aucun' && currentContainerName !== 'SANS_CONTENEUR') {
@@ -1637,7 +1680,23 @@ export const LivraisonView = {
                }
            }
            const finalImportList = Array.from(uniqueImports.values());
-       
+
+           // CONVERSION € -> FCFA (case cochée dans l'aperçu) : on multiplie le
+           // montant et le prix d'origine par 655,957 AVANT toute écriture, pour
+           // éviter l'erreur classique « montants laissés en euros ».
+           const convertEur = !!document.getElementById('importConvertEur')?.checked;
+           if (convertEur) {
+               const TAUX_EUR = 655.957;
+               const toFcfa = (v) => {
+                   const n = parseFloat(String(v == null ? '' : v).replace(/[^\d.,-]/g, '').replace(',', '.')) || 0;
+                   return n > 0 ? String(Math.round(n * TAUX_EUR)) : (v || '');
+               };
+               for (const it of finalImportList) {
+                   it.montant = toFcfa(it.montant);
+                   if (it.prixOriginal) it.prixOriginal = toFcfa(it.prixOriginal);
+               }
+           }
+
            // --- NOUVEAU : RAPPROCHEMENT / DÉPOTAGE ---
            let missingExpectedItems = [];
            if (containerStatus === 'EN_COURS' && conteneur) {
@@ -1684,7 +1743,7 @@ export const LivraisonView = {
            }
        
            // Préparation des opérations par lots (Batch Chunking)
-           const operations = []; 
+           const operations = [];
            let createdCount = 0;
            let updatedCount = 0;
            let ignoredArchivedCount = 0;
@@ -1707,6 +1766,25 @@ export const LivraisonView = {
                
                transSnapshots.forEach(snap => snap.forEach(doc => existingTransRefs.add(doc.data().reference)));
                archiveSnapshots.forEach(snap => snap.forEach(doc => archivedItemsMap.set(doc.data().ref.toUpperCase(), { id: doc.id, data: doc.data() })));
+           }
+
+           // Pré-chargement clients ALLÉGÉ (ne JAMAIS figer l'import) : on NE lit PAS
+           // l'annuaire complet (7600+ fiches). Le n° de l'expéditeur vient désormais
+           // du FICHIER importé (nouveau format) ou de la livraison « À venir » déjà
+           // en base (pipeline Paris→À venir→En cours). Seule lecture : les fiches
+           // destinataires de l'agence d'arrivée (requête ciblée, quasi vide), pour
+           // le dédoublonnage / la complétion.
+           const nameKeyLocal = (s) => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\s+/g, ' ').trim();
+           const existingDestByName = new Map();   // nameKey -> {id, tel} : fiches destinataires existantes
+           if (finalImportList.length > 0) {
+               try {
+                   const dSnap = await getDocs(query(collection(db, getCollectionName('clients')), where('agency', '==', window.activeAgency)));
+                   dSnap.forEach(d => {
+                       const x = d.data() || {};
+                       const k = nameKeyLocal(x.nom);
+                       if (k && !existingDestByName.has(k)) existingDestByName.set(k, { id: d.id, tel: x.tel || x.numero || '' });
+                   });
+               } catch (e) { console.warn('Pré-chargement destinataires (import) :', e); }
            }
        
            for (let i = 0; i < finalImportList.length; i++) {
@@ -1803,11 +1881,11 @@ export const LivraisonView = {
                            updates.quantite = existingItem.quantite;
                        }
                        
-                       // Concaténation fractionnée des conteneurs (ex: "E14 / E15")
+                       // REMPLACEMENT du conteneur par celui du dernier scan (choix
+                       // utilisateur) : un colis n'affiche que SON conteneur d'arrivée
+                       // réel, pas une concaténation des scans précédents.
                        const targetCont = conteneur || importItem.conteneur || '';
-                       if (targetCont && !(existingItem.conteneur || '').includes(targetCont)) {
-                           updates.conteneur = existingItem.conteneur ? `${existingItem.conteneur} / ${targetCont}` : targetCont;
-                       }
+                       if (targetCont) updates.conteneur = targetCont;
        
                        if (existingItem.containerStatus === 'PARIS') {
                            updates.directFromParis = true; // ALERTE : A sauté l'étape "À Venir" (Client non prévenu)
@@ -1834,6 +1912,9 @@ export const LivraisonView = {
                        updates.destinataire = pickBest(existingItem.destinataire, importItem.destinataire);
                        updates.lieuLivraison = pickBest(existingItem.lieuLivraison, importItem.lieuLivraison);
                        updates.numero = pickBest(existingItem.numero, importItem.numero);
+                       // Récupère le n°/adresse de l'expéditeur (nouveau format) s'ils manquaient.
+                       if (importItem.telExpediteur && !existingItem.telExpediteur) updates.telExpediteur = importItem.telExpediteur;
+                       if (importItem.adresseExpediteur && !existingItem.adresseExpediteur) updates.adresseExpediteur = importItem.adresseExpediteur;
                        if (importItem.quantite && importItem.quantite !== existingItem.quantite) updates.quantite = importItem.quantite;
                        if (updates.lieuLivraison !== existingItem.lieuLivraison) updates.commune = detectCommune(updates.lieuLivraison);
                        if (conteneur) updates.conteneur = conteneur;
@@ -1860,10 +1941,10 @@ export const LivraisonView = {
                    const newScans = importItem.scanHistory ? importItem.scanHistory.filter(s => !currentScans.includes(s.scanRef)) : [];
                    
                    if (newScans.length > 0) {
+                       // REMPLACEMENT (choix utilisateur) : le conteneur du dernier scan
+                       // remplace l'ancien, pas de concaténation.
                        const targetCont = conteneur || importItem.conteneur || '';
-                       const combinedConteneur = targetCont && !(oldData.conteneur || '').includes(targetCont) 
-                           ? (oldData.conteneur ? `${oldData.conteneur} / ${targetCont}` : targetCont) 
-                           : oldData.conteneur;
+                       const combinedConteneur = targetCont || oldData.conteneur;
        
                        const restoredData = {
                            ...oldData,
@@ -1957,11 +2038,24 @@ export const LivraisonView = {
                        }
        
                        const transRef = doc(collection(db, getCollectionName('transactions')));
-                       
+
+                       // FACTURE COMPLÈTE DÈS L'IMPORT (≠ ancien comportement) :
+                       //  - nom = EXPÉDITEUR (et non le destinataire) ; nomDestinataire = destinataire ;
+                       //  - n° expéditeur retrouvé via le fichier clients (par le nom) ;
+                       //  - phoneTail expéditeur + destinataire = clé de liaison app/Clients.
+                       // Ne devine pas l'argent : la logique prix/restant est inchangée.
+                       const _expName = stripPhoneFromName(importItem.expediteur || '');
+                       const _destName = importItem.destinataire || '';
+                       const _destPhone = importItem.numero || extractPhone(_destName) || '';
+                       // N° expéditeur : depuis le FICHIER importé (nouveau format) ou la
+                       // livraison « À venir » déjà en base (pipeline). Plus d'annuaire (gel).
+                       const _expPhone = importItem.telExpediteur || (existingItem && existingItem.telExpediteur) || '';
+                       const _e164cap = (e) => (e && e.replace(/\D/g, '').length <= 13) ? e : '';
+
                        operations.push({ type: 'set', ref: transRef, data: {
                            date: importDateStr,
                            reference: importItem.ref,
-                           nom: importItem.destinataire || importItem.expediteur || 'Client', // Client principal
+                           nom: _expName || _destName || 'Client', // Client principal = EXPÉDITEUR
                            conteneur: conteneur || importItem.conteneur || '',
                            prix: totalPrix, // CORRECTION : Utilisation de la bonne variable
                            montantParis: mParis,
@@ -1971,17 +2065,117 @@ export const LivraisonView = {
                            isDeleted: false,
                            description: importItem.description || '',
                            adresseDestinataire: importItem.lieuLivraison || '',
-                           nomDestinataire: importItem.destinataire || '',
-                           numero: importItem.numero || '', // Nouveau champ Numéro
+                           nomDestinataire: _destName,
+                           numero: _destPhone, // Numéro destinataire
+                           tel: _expPhone, // Numéro expéditeur (via fichier clients)
+                           expPhoneTail: phoneTail(_expPhone),
+                           destPhoneTail: phoneTail(_destPhone),
+                           expPhoneE164: _e164cap(toE164Intl(_expPhone, 'FR')),
+                           destPhoneE164: toE164Detect(_destPhone),
                            saisiPar: sessionStorage.getItem('userName') || 'Import Livraison',
                            quantite: importItem.quantite || 1, // IMPORTANT : Pour le calcul magasinage
                            paymentHistory: paymentHistory,
-                           agency: targetAgency
+                           // Agence = arrivée (ex. 'abidjan') → devise FCFA dans l'app, cohérent
+                           // avec les factures importées existantes. (On retire l'ancien doublon
+                           // `agency: targetAgency` qui pouvait forcer 'paris' = affichage EUR.)
+                           agency: window.activeAgency
                        }});
                    }
                }
            }
        
+           // --- ENRICHISSEMENT FICHES CLIENTS (DESTINATAIRES de l'agence d'arrivée) ---
+           // Demande utilisateur : à chaque import, créer la fiche du destinataire
+           // si elle n'existe pas, ou compléter SON NUMÉRO s'il manque (le nom et le
+           // numéro du destinataire sont des infos fiables du fichier importé). On ne
+           // touche JAMAIS une fiche dont le numéro est déjà renseigné, et on évite
+           // les doublons (par nom, au sein de l'agence d'arrivée + dans cet import).
+           let clientsCrees = 0, clientsCompletes = 0;
+           for (const it of finalImportList) {
+               const destName = stripPhoneFromName(it.destinataire || '');
+               if (!destName) continue;
+               const key = nameKeyLocal(destName);
+               if (!key) continue;
+               const destPhone = it.numero || extractPhone(it.destinataire) || '';
+               const existing = existingDestByName.get(key);
+               if (existing) {
+                   // Fiche présente : on complète le numéro UNIQUEMENT s'il est vide.
+                   if (destPhone && (!existing.tel || String(existing.tel).trim() === '')) {
+                       operations.push({ type: 'update', ref: doc(db, getCollectionName('clients'), existing.id), data: { tel: destPhone } });
+                       existing.tel = destPhone; // évite une 2e MAJ pour le même nom dans cet import
+                       clientsCompletes++;
+                   }
+               } else {
+                   // Fiche absente : on la crée (destinataire de l'agence d'arrivée).
+                   const newRef = doc(collection(db, getCollectionName('clients')));
+                   operations.push({ type: 'set', ref: newRef, data: {
+                       nom: destName, tel: destPhone || '', agency: window.activeAgency, type: 'destinataire',
+                       dateAjout: new Date().toISOString(), risque: 'low', segment: 'nouveau', taille: 'petit',
+                       ca: 0, factures: 0, isDeleted: false, source: 'import'
+                   }});
+                   existingDestByName.set(key, { id: newRef.id, tel: destPhone || '' });
+                   clientsCrees++;
+               }
+           }
+           if (clientsCrees || clientsCompletes) console.log(`[import] Fiches destinataires : ${clientsCrees} créées, ${clientsCompletes} complétées.`);
+
+           // --- ENRICHISSEMENT FICHES EXPÉDITEURS (agence de départ, ex. Paris) ---
+           // Nouveau format : on capte le n° + l'adresse de l'expéditeur → on crée la
+           // fiche si absente, ou on complète son n°/adresse s'ils manquent (jamais
+           // d'écrasement). MÉTHODE LÉGÈRE : recherche ciblée par nom (chunks `in`),
+           // surtout PAS de lecture de tout l'annuaire (ce qui figeait l'import).
+           let expCrees = 0, expCompletes = 0;
+           const depAgency = window.activeAgency.includes('_') ? window.activeAgency.split('_')[1] : 'paris';
+           const expInfos = new Map(); // nameKey -> {nom, tel, adresse}
+           for (const it of finalImportList) {
+               const nom = stripPhoneFromName(it.expediteur || '');
+               const tel = it.telExpediteur || '';
+               const adresse = it.adresseExpediteur || '';
+               if (!nom || (!tel && !adresse)) continue; // rien de nouveau à apporter
+               const k = nameKeyLocal(nom);
+               if (!k) continue;
+               if (!expInfos.has(k)) expInfos.set(k, { nom, tel, adresse });
+               else { const e = expInfos.get(k); if (!e.tel && tel) e.tel = tel; if (!e.adresse && adresse) e.adresse = adresse; }
+           }
+           if (expInfos.size > 0) {
+               const existExpByKey = new Map(); // nameKey -> {id, tel, adresse}
+               const names = Array.from(expInfos.values()).map(e => e.nom);
+               const chunks = [];
+               for (let i = 0; i < names.length; i += 10) chunks.push(names.slice(i, i + 10));
+               try {
+                   const snaps = await Promise.all(chunks.map(c =>
+                       getDocs(query(collection(db, getCollectionName('clients')), where('nom', 'in', c)))
+                   ));
+                   snaps.forEach(s => s.forEach(d => {
+                       const x = d.data() || {};
+                       if (x.type === 'destinataire') return;              // pas un homonyme destinataire
+                       if (x.agency && x.agency !== depAgency) return;       // fiche d'une autre agence
+                       const k = nameKeyLocal(x.nom);
+                       if (k && !existExpByKey.has(k)) existExpByKey.set(k, { id: d.id, tel: x.tel || '', adresse: x.adresse || '' });
+                   }));
+               } catch (e) { console.warn('Recherche expéditeurs (import) :', e); }
+
+               for (const [k, info] of expInfos) {
+                   const existing = existExpByKey.get(k);
+                   if (existing) {
+                       const upd = {};
+                       if (info.tel && (!existing.tel || String(existing.tel).trim() === '')) upd.tel = info.tel;
+                       if (info.adresse && (!existing.adresse || String(existing.adresse).trim() === '')) upd.adresse = info.adresse;
+                       if (Object.keys(upd).length) { operations.push({ type: 'update', ref: doc(db, getCollectionName('clients'), existing.id), data: upd }); expCompletes++; }
+                   } else {
+                       const newRef = doc(collection(db, getCollectionName('clients')));
+                       operations.push({ type: 'set', ref: newRef, data: {
+                           nom: info.nom, tel: info.tel || '', adresse: info.adresse || '', agency: depAgency, type: 'expediteur',
+                           dateAjout: new Date().toISOString(), risque: 'low', segment: 'nouveau', taille: 'petit',
+                           ca: 0, factures: 0, isDeleted: false, source: 'import'
+                       }});
+                       existExpByKey.set(k, { id: newRef.id, tel: info.tel || '', adresse: info.adresse || '' });
+                       expCrees++;
+                   }
+               }
+           }
+           if (expCrees || expCompletes) console.log(`[import] Fiches expéditeurs : ${expCrees} créées, ${expCompletes} complétées.`);
+
            // --- NOUVEAU : MARQUER LES COLIS MANQUANTS EN INCIDENT ---
            if (missingExpectedItems && missingExpectedItems.length > 0) {
                for (const item of missingExpectedItems) {
@@ -2420,7 +2614,10 @@ export const LivraisonView = {
                // Gestion Couleur Montant (Vert = Payé, Orange = Reste)
                const montantVal = parseFloat((d.montant || '0').replace(/[^\d]/g, '')) || 0;
                let montantStyle = "width: 100%;";
-               let displayMontant = (d.montant || '').replace(/"/g, '&quot;');
+               // Affichage UNIFORME en FCFA quel que soit le format stocké (nombre nu,
+               // "x CFA", "x FCFA"…). Le champ reste éditable (la saisie est re-nettoyée
+               // par updateDeliveryAmount). Le cas « soldé » (0) en EN_COURS est géré plus bas.
+               let displayMontant = montantVal + ' FCFA';
                
                if (montantVal === 0) {
                    montantStyle += " background-color: #dcfce7; color: #166534; font-weight: bold;"; // Vert (Payé)
@@ -2554,8 +2751,9 @@ export const LivraisonView = {
            container.innerHTML = list.map(d => {
                // Montant à jour depuis la caisse si disponible
                const t = d.ref ? transactionsMap.get(d.ref.toUpperCase().trim()) : null;
-               const montantStr = (t && t.montant) ? t.montant : (d.montant || '0 CFA');
-               const montantVal = parseFloat(String(montantStr).replace(/[^\d]/g, '')) || 0;
+               const _montantRaw = (t && t.montant) ? t.montant : (d.montant || '0 CFA');
+               const montantVal = parseFloat(String(_montantRaw).replace(/[^\d]/g, '')) || 0;
+               const montantStr = montantVal + ' FCFA'; // affichage uniforme en FCFA (fiches)
                const paye = montantVal === 0;
 
                // Téléphone + nom propre
@@ -3711,8 +3909,11 @@ export const LivraisonView = {
                let matchContainer = true;
                if (['EN_COURS', 'A_VENIR'].includes(currentTab) && isContainerFilterActive) {
                    if (currentContainerName && currentContainerName !== 'Aucun' && currentContainerName !== 'SANS_CONTENEUR') {
-                       // Filtre classique sur un vrai conteneur
-                       matchContainer = (d.conteneur && d.conteneur.trim() === currentContainerName);
+                       // Un colis peut appartenir à PLUSIEURS conteneurs (arrivage en
+                       // plusieurs fois) : le champ est alors concaténé "E17-18 / E18".
+                       // On filtre par APPARTENANCE (et non égalité stricte) pour qu'un
+                       // colis "E17-18 / E18" apparaisse aussi bien sous "E18" que "E17-18".
+                       matchContainer = !!d.conteneur && d.conteneur.split('/').map(c => c.trim()).includes(currentContainerName.trim());
                    } else if (currentContainerName === 'SANS_CONTENEUR') {
                        // NOUVEAU : Filtre pour retrouver les colis sans conteneur
                        matchContainer = (!d.conteneur || d.conteneur.trim() === '');

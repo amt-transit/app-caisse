@@ -4,7 +4,7 @@ import { Autocomplete } from '../../paris/js/views/autocomplete.js';
 import { CONSTANTS } from '../../constants.js';
 import { getCollectionName, AGENCIES } from '../../agencies-config.js';
 import { normalizePhone } from '../../affiliations.js';
-import { CI_PHONE_REGEX } from '../../services/phone.js';
+import { CI_PHONE_REGEX, phoneTail } from '../../services/phone.js';
 import { getShippingMode, filterByShippingMode } from '../../shipping-mode.js';
 
 import { formatMoney, isEurAgency } from '../../services/format.js';
@@ -12,10 +12,17 @@ import { formatMoney, isEurAgency } from '../../services/format.js';
 export const ClientsView = {
     unsubClients: null,
     unsubLivraisons: null,
+    unsubTransactions: null,
     clients: [],
     filteredClients: [],
     rawClients: null,
     rawLivraisons: null,
+    rawTransactions: null,
+
+    // Clé de rapprochement par NOM (insensible casse/accents/espaces).
+    nameKey(s) {
+        return String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\s+/g, ' ').trim();
+    },
 
     // Correcteur automatique pour les accents cassés
     fixEncoding(str) {
@@ -289,8 +296,10 @@ export const ClientsView = {
     loadData() {
         if (this.unsubClients) this.unsubClients();
         if (this.unsubLivraisons) this.unsubLivraisons();
-        
+        if (this.unsubTransactions) this.unsubTransactions();
+
         const activeAgency = sessionStorage.getItem('currentActiveAgency') || 'paris';
+        const isArrivalAgency = AGENCIES[activeAgency] && AGENCIES[activeAgency].type === 'arrival';
 
         // 1. Clients
         const qClients = query(collection(db, getCollectionName("clients")), where("agency", "==", activeAgency));
@@ -309,6 +318,21 @@ export const ClientsView = {
         }, (error) => {
             console.error("Erreur Livraisons :", error);
         });
+
+        // 2-bis. Factures (transactions) — DÉPART uniquement : on compte par
+        // EXPÉDITEUR. Les factures importées sont étiquetées « Abidjan », donc on
+        // lit TOUTE la collection (la règle Firestore l'autorise pour paris) et
+        // on relie chaque facture au bon client par le téléphone (9 derniers
+        // chiffres = phoneTail), ou à défaut par le nom de l'expéditeur.
+        if (!isArrivalAgency) {
+            const qTrans = query(collection(db, getCollectionName("transactions")), where("isDeleted", "==", false));
+            this.unsubTransactions = onSnapshot(qTrans, (snapshot) => {
+                this.rawTransactions = snapshot.docs.map(d => d.data());
+                this.computeClientStats();
+            }, (error) => {
+                console.error("Erreur Factures (clients) :", error);
+            });
+        }
 
         // 3. Affiliations clients (phone -> demarcheurId) + démarcheurs (id -> nom)
         // pour afficher le badge « Parrain » sous le nom du client. Lookup
@@ -344,10 +368,15 @@ export const ClientsView = {
     },
 
     computeClientStats() {
-        if (!this.rawClients || !this.rawLivraisons) return;
+        if (!this.rawClients) return;
 
         const activeAgency = sessionStorage.getItem('currentActiveAgency') || 'paris';
         const isArrival = AGENCIES[activeAgency] && AGENCIES[activeAgency].type === 'arrival';
+
+        // Source des stats : ARRIVÉE = livraisons (destinataire) ; DÉPART =
+        // factures (expéditeur), pour inclure les factures importées (Abidjan).
+        if (isArrival && !this.rawLivraisons) return;
+        if (!isArrival && !this.rawTransactions) return;
 
         // Isolation Maritime/Aerien gérée « par construction » : en mode aérien,
         // getCollectionName('clients') et ('livraisons') pointent sur les
@@ -377,13 +406,44 @@ export const ClientsView = {
             });
         });
 
-        // Agréger depuis les livraisons (déjà filtrées par mode ci-dessus)
-        livraisonsForMode.forEach(liv => {
-            // DIFFÉRENCE CLÉ :
-            // Si c'est l'arrivée (Abidjan), le client est le Destinataire en priorité.
-            // Si c'est le départ (Paris), le client est toujours l'Expéditeur.
-            const rawName = isArrival ? (liv.destinataire || liv.expediteur) : liv.expediteur;
-            
+        // ===== DÉPART (Paris) : agréger depuis les FACTURES, par EXPÉDITEUR =====
+        // On relie une facture à un client par le téléphone (phoneTail = 9
+        // derniers chiffres, insensible au pays), sinon par le nom. On NE crée
+        // PAS de fiche « fantôme » : seuls les clients enregistrés sont comptés.
+        if (!isArrival) {
+            const tailToKey = new Map();  // phoneTail(client) -> nomUpper
+            const nameToKey = new Map();  // nameKey(client)   -> nomUpper
+            for (const [nomUpper, p] of clientProfiles) {
+                const tl = phoneTail(p.tel);
+                if (tl && !tailToKey.has(tl)) tailToKey.set(tl, nomUpper);
+                const nk = this.nameKey(p.nom);
+                if (nk && !nameToKey.has(nk)) nameToKey.set(nk, nomUpper);
+            }
+            const isEur = isEurAgency();
+            (this.rawTransactions || []).forEach(t => {
+                if (t.isDeleted) return;
+                const senderTail = t.expPhoneTail || phoneTail(t.tel);
+                const key = (senderTail && tailToKey.get(senderTail)) || nameToKey.get(this.nameKey(t.nom));
+                if (!key) return; // expéditeur non enregistré -> on n'invente rien
+                if (!statsMap.has(key)) statsMap.set(key, { ca: 0, factures: 0, lastDate: null });
+                const st = statsMap.get(key);
+                st.factures += 1;
+                let amountCFA = parseFloat(t.prix) || 0;
+                if (isEur) amountCFA = amountCFA / CONSTANTS.TAUX_CONVERSION;
+                st.ca += amountCFA;
+                if (t.date) {
+                    const d = new Date(t.date);
+                    if (!st.lastDate || d > st.lastDate) st.lastDate = d;
+                }
+            });
+        }
+
+        // ===== ARRIVÉE (Abidjan) : agréger depuis les livraisons, par DESTINATAIRE =====
+        const livForArrival = isArrival ? livraisonsForMode : [];
+        livForArrival.forEach(liv => {
+            // À l'arrivée (Abidjan), le client est le Destinataire en priorité.
+            const rawName = (liv.destinataire || liv.expediteur);
+
             if (rawName && rawName.trim() !== '') {
                 const nomFixed = this.fixEncoding(rawName.trim());
                 const nomUpper = nomFixed.toUpperCase();

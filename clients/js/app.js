@@ -1,27 +1,26 @@
-// AMT Clients — squelette PWA (Phase 1, étape 1 : démo, sans SMS réel).
-// La connexion par SMS Firebase + le vrai chargement des factures seront
-// branchés à l'étape suivante. Ici : flux de connexion simulé + navigation.
+// AMT Clients — PWA Phase 1 : connexion RÉELLE (Firebase Phone Auth + verrou PIN
+// local) et VRAIES factures via la Cloud Function getMyInvoices (reliées au
+// numéro vérifié par les 9 derniers chiffres, côté serveur).
+import { auth, functions } from './firebase.js';
+import { RecaptchaVerifier, signInWithPhoneNumber, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-auth.js";
+import { httpsCallable } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-functions.js";
 
 const LS = {
   registered: 'amtc_registered',
   phone: 'amtc_phone',
-  pin: 'amtc_pin',          // démo uniquement (sera remplacé par Firebase)
+  pin: 'amtc_pin',          // verrou LOCAL d'ouverture (la vraie sécurité = jeton Firebase)
   name: 'amtc_name'
 };
 
-// --- Outils démo ---
-const demoHash = (s) => btoa(unescape(encodeURIComponent('amtc:' + s))); // obfuscation démo, NON sécurisé
+// Obfuscation locale du PIN (verrou d'ouverture ; NON cryptographique).
+const pinHash = (s) => btoa(unescape(encodeURIComponent('amtc:' + s)));
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
 
-// Données de démonstration (remplacées par les vraies factures à l'étape 2)
-const DEMO_INVOICES = [
-  { ref: 'JB-014-AER1', role: 'Expéditeur', dest: 'KONE Awa', date: '2026-05-22', total: 145, paid: 145, status: 'PAYE' },
-  { ref: 'JB-011-CTN7', role: 'Expéditeur', dest: 'TRAORE M.', date: '2026-05-18', total: 320, paid: 150, status: 'PARTIEL' },
-  { ref: 'AB-208-CTN7', role: 'Destinataire', dest: 'Vous', date: '2026-05-15', total: 90, paid: 0, status: 'IMPAYE' },
-  { ref: 'JB-007-AER1', role: 'Expéditeur', dest: 'DIALLO S.', date: '2026-05-09', total: 60, paid: 60, status: 'PAYE' },
-  { ref: 'JB-004-CTN6', role: 'Expéditeur', dest: 'YAO K.', date: '2026-05-02', total: 210, paid: 210, status: 'PAYE' },
-];
+// Données réelles, chargées après connexion via getMyInvoices.
+let INVOICES = [];
+let LOYALTY = { sentAsSender: 0, freeCartons: 0, toNext: 10 };
+let invoicesLoaded = false;
 
 const STATUS_LABEL = { PAYE: 'Payé', PARTIEL: 'Partiel', IMPAYE: 'Impayé' };
 
@@ -32,37 +31,38 @@ const STAGES = [
   { l: 'Arrivé', ic: '🛬' },
   { l: 'Livré', ic: '✅' }
 ];
-// Colis de démonstration : stage = index de l'étape ACTUELLE (0..3).
-const DEMO_PARCELS = [
-  { label: 'JB-014-AER1-01', ref: 'JB-014-AER1', desc: '1 carton moyen', stage: 3, date: '2026-05-24' },
-  { label: 'JB-011-CTN7-01', ref: 'JB-011-CTN7', desc: '2 grands cartons', stage: 2, date: '2026-05-20' },
-  { label: 'JB-011-CTN7-02', ref: 'JB-011-CTN7', desc: '1 barrique', stage: 1, date: '2026-05-20' },
-  { label: 'AB-208-CTN7-01', ref: 'AB-208-CTN7', desc: '1 carton', stage: 0, date: '2026-05-15' },
-  { label: 'JB-007-AER1-01', ref: 'JB-007-AER1', desc: '1 colis', stage: 3, date: '2026-05-11' },
-];
+// Suivi colis-par-colis : pas encore renvoyé par getMyInvoices -> branché plus tard.
+let PARCELS = [];
 let trackFilter = -1; // -1 = tous, sinon index d'étape
 let selectedInvoiceRef = null;
+let currentView = 'dashboard';
+let detailCache = {};   // ref -> { colis:[{label,ref,desc,stage}], loaded:true }
 
-// Notifications de suivi (démo) — liées aux changements d'étape des colis.
-let NOTIFS = [
-  { id: 1, ic: '✅', txt: 'Votre colis JB-014-AER1-01 a été livré au destinataire.', date: '2026-05-24', read: false },
-  { id: 2, ic: '🛬', txt: 'Le colis JB-011-CTN7-01 est arrivé à destination.', date: '2026-05-20', read: false },
-  { id: 3, ic: '📦', txt: 'Les colis de la facture JB-011-CTN7 ont été chargés dans le conteneur.', date: '2026-05-19', read: true },
-  { id: 4, ic: '📥', txt: 'Le colis AB-208-CTN7-01 a été reçu en entrepôt.', date: '2026-05-15', read: true },
-];
+// Notifications réelles : Phase 3.
+let NOTIFS = [];
 function unreadCount() { return NOTIFS.filter(n => !n.read).length; }
 function updateNotifBadge() {
   const b = $('#notifBadge'); if (!b) return;
   const n = unreadCount();
   b.textContent = n; b.hidden = (n === 0);
 }
-const money = (v) => new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(v || 0).replace(/[  ]/g, ' ');
+const TAUX = 655.957; // EUR -> FCFA
+// Format selon la devise de la facture : 'EUR' (Paris) ou 'XOF'/FCFA (sinon).
+const money = (v, currency = 'XOF') => {
+  const c = currency === 'EUR' ? 'EUR' : 'XOF';
+  try {
+    return new Intl.NumberFormat('fr-FR', { style: 'currency', currency: c, maximumFractionDigits: c === 'XOF' ? 0 : 2 }).format(v || 0).replace(/[  ]/g, ' ');
+  } catch (e) { return Math.round(v || 0) + (c === 'EUR' ? ' €' : ' FCFA'); }
+};
+// Convertit en FCFA pour additionner des factures de devises différentes.
+const toFcfa = (v, currency) => (currency === 'EUR' ? (v || 0) * TAUX : (v || 0));
 const fdate = (d) => { try { return new Date(d).toLocaleDateString('fr-FR'); } catch (e) { return d; } };
 
-// ======================= CONNEXION (démo) =======================
+// ======================= CONNEXION (Firebase Phone Auth) =======================
 const authEl = $('#auth');
 const appEl = $('#appShell');
-let pendingPhone = '';
+let confirmationResult = null;   // résultat de l'envoi SMS
+let recaptchaVerifier = null;    // reCAPTCHA invisible (requis par Firebase)
 
 function showStep(step) {
   $$('.auth__step').forEach(s => s.hidden = (s.dataset.step !== step));
@@ -73,69 +73,156 @@ function showStep(step) {
 function authError(msg) { const e = $('#authError'); e.textContent = msg; e.hidden = false; }
 function hideAuthError() { $('#authError').hidden = true; }
 
-function initAuth() {
-  if (localStorage.getItem(LS.registered) === '1') {
-    const ph = localStorage.getItem(LS.phone) || '';
-    $('#pinWelcome').textContent = ph ? `Bon retour 👋  (${ph})` : 'Bon retour 👋';
-    showStep('pin');
-  } else {
-    showStep('phone');
+function ensureRecaptcha() {
+  if (!recaptchaVerifier) {
+    // Firebase 9.22.0 : signature (container, params, auth) — l'ordre "auth en
+    // premier" n'existe que dans les versions plus récentes du SDK.
+    recaptchaVerifier = new RecaptchaVerifier('recaptcha-container', { size: 'invisible' }, auth);
   }
+  return recaptchaVerifier;
+}
+function resetRecaptcha() {
+  try { recaptchaVerifier && recaptchaVerifier.clear(); } catch (_) {}
+  recaptchaVerifier = null;
 }
 
-// Étape 1 -> envoi du code (démo : pas de vrai SMS)
-$('#btnSendCode').addEventListener('click', () => {
-  const cc = $('#dialCode').value;
-  const num = ($('#phoneInput').value || '').replace(/[^0-9]/g, '');
-  if (num.length < 6) { authError('Numéro invalide.'); return; }
-  pendingPhone = cc + ' ' + num;
-  $('#sentTo').textContent = 'Envoyé au ' + pendingPhone;
-  showStep('code');
+// Numéro saisi -> format international E.164 (+33… / +225…).
+function buildE164() {
+  const cc = $('#dialCode').value;                       // '+33' | '+225'
+  let num = ($('#phoneInput').value || '').replace(/[^0-9]/g, '');
+  if (cc === '+33' && num.startsWith('0')) num = num.slice(1); // France : on retire le 0
+  return cc + num;
+}
+function smsError(e) {
+  const code = (e && e.code) || '';
+  if (code.includes('invalid-phone-number')) return 'Numéro invalide.';
+  if (code.includes('too-many-requests')) return 'Trop de tentatives. Réessayez plus tard.';
+  if (code.includes('quota')) return "Quota de SMS atteint pour aujourd'hui.";
+  if (code.includes('captcha')) return 'Échec de la vérification anti-robot. Réessayez.';
+  return "Envoi du SMS impossible. Vérifiez le numéro et réessayez.";
+}
+
+// Étape 1 -> envoi du vrai code SMS
+$('#btnSendCode').addEventListener('click', async () => {
+  const e164 = buildE164();
+  if (e164.replace(/\D/g, '').length < 8) { authError('Numéro invalide.'); return; }
+  const btn = $('#btnSendCode'); btn.disabled = true; btn.textContent = 'Envoi…';
+  try {
+    confirmationResult = await signInWithPhoneNumber(auth, e164, ensureRecaptcha());
+    localStorage.setItem(LS.phone, e164);
+    $('#sentTo').textContent = 'Envoyé au ' + e164;
+    showStep('code');
+  } catch (e) {
+    console.warn('SMS:', e && e.code, e && e.message);
+    authError(smsError(e));
+    resetRecaptcha();
+  } finally { btn.disabled = false; btn.textContent = 'Recevoir le code par SMS'; }
 });
 
 // Retour modifier numéro
 $$('.auth__back').forEach(b => b.addEventListener('click', () => showStep(b.dataset.goto)));
 
-// Étape 2 -> vérifier le code (démo : accepte tout code de 4+ chiffres)
-$('#btnVerifyCode').addEventListener('click', () => {
+// Étape 2 -> vérifier le vrai code reçu
+$('#btnVerifyCode').addEventListener('click', async () => {
   const code = ($('#codeInput').value || '').replace(/[^0-9]/g, '');
-  if (code.length < 4) { authError('Entrez le code reçu (mode démo : 000000).'); return; }
-  localStorage.setItem(LS.phone, pendingPhone);
-  if (localStorage.getItem(LS.registered) === '1') enterApp();
-  else showStep('setpin');
+  if (code.length < 6) { authError('Entrez le code à 6 chiffres reçu par SMS.'); return; }
+  if (!confirmationResult) { authError("Renvoyez d'abord un code."); showStep('phone'); return; }
+  const btn = $('#btnVerifyCode'); btn.disabled = true; btn.textContent = 'Vérification…';
+  try {
+    await confirmationResult.confirm(code); // -> connecté (jeton avec phone_number)
+    if (localStorage.getItem(LS.registered) === '1') enterApp();
+    else showStep('setpin');
+  } catch (e) {
+    authError('Code incorrect. Réessayez.');
+  } finally { btn.disabled = false; btn.textContent = 'Valider'; }
 });
 
-// Étape 3 -> enregistrer le PIN
+// Étape 3 -> enregistrer le PIN (verrou local des prochaines ouvertures)
 $('#btnSavePin').addEventListener('click', () => {
   const p1 = ($('#pinSet1').value || '').replace(/[^0-9]/g, '');
   const p2 = ($('#pinSet2').value || '').replace(/[^0-9]/g, '');
   if (p1.length !== 4) { authError('Le code PIN doit faire 4 chiffres.'); return; }
   if (p1 !== p2) { authError('Les deux codes ne correspondent pas.'); return; }
-  localStorage.setItem(LS.pin, demoHash(p1));
+  localStorage.setItem(LS.pin, pinHash(p1));
   localStorage.setItem(LS.registered, '1');
   enterApp();
 });
 
-// Étape 4 -> déverrouiller par PIN
+// Étape 4 -> déverrouiller par PIN (la session Firebase persiste déjà)
 $('#btnPin').addEventListener('click', () => {
   const p = ($('#pinInput').value || '').replace(/[^0-9]/g, '');
-  if (demoHash(p) !== localStorage.getItem(LS.pin)) { authError('Code PIN incorrect.'); return; }
+  if (pinHash(p) !== localStorage.getItem(LS.pin)) { authError('Code PIN incorrect.'); return; }
+  if (!auth.currentUser) { authError('Session expirée — reconnexion par SMS.'); showStep('phone'); return; }
   enterApp();
 });
-$('#btnForgotPin').addEventListener('click', () => {
+$('#btnForgotPin').addEventListener('click', async () => {
   localStorage.removeItem(LS.registered);
   localStorage.removeItem(LS.pin);
+  try { await signOut(auth); } catch (_) {}
   showStep('phone');
 });
 
-function enterApp() {
+// Démarrage : on s'aligne sur la session Firebase + le PIN enregistré.
+onAuthStateChanged(auth, (user) => {
+  if (user && localStorage.getItem(LS.registered) === '1') {
+    const ph = localStorage.getItem(LS.phone) || user.phoneNumber || '';
+    $('#pinWelcome').textContent = ph ? `Bon retour 👋  (${ph})` : 'Bon retour 👋';
+    showStep('pin');
+  } else if (user) {
+    showStep('setpin'); // connecté mais pas encore de PIN
+  } else {
+    showStep('phone');
+  }
+});
+
+async function enterApp() {
   authEl.hidden = true;
   appEl.hidden = false;
-  const ph = localStorage.getItem(LS.phone) || '';
-  const init = (localStorage.getItem(LS.name) || 'Client').trim().slice(0, 2).toUpperCase() || (ph.replace(/\D/g, '').slice(-2));
+  const ph = (auth.currentUser && auth.currentUser.phoneNumber) || localStorage.getItem(LS.phone) || '';
+  const init = (localStorage.getItem(LS.name) || '').trim().slice(0, 2).toUpperCase() || ph.replace(/\D/g, '').slice(-2);
   $('#avatarInit').textContent = init || '👤';
   updateNotifBadge();
   renderView('dashboard');
+  await loadInvoices();
+}
+
+// Charge les VRAIES factures du client connecté (Cloud Function sécurisée).
+async function loadInvoices() {
+  invoicesLoaded = false;
+  if (currentView === 'dashboard') renderView('dashboard');
+  try {
+    // S'assurer qu'on a bien une session Firebase AVEC numéro vérifié, et
+    // rafraîchir le jeton (sinon la fonction répond "unauthenticated").
+    const u = auth.currentUser;
+    console.log('[AMTC] currentUser:', u ? u.phoneNumber : 'AUCUN');
+    if (!u || !u.phoneNumber) {
+      invoicesLoaded = true; INVOICES = [];
+      window.__invoicesError = 'Session expirée. Reconnectez-vous par SMS.';
+      renderView(currentView || 'dashboard');
+      return;
+    }
+    try { await u.getIdToken(true); } catch (_) {}
+    const res = await httpsCallable(functions, 'getMyInvoices')();
+    const data = (res && res.data) || {};
+    const roleLabel = { exp: 'Expéditeur', dest: 'Destinataire', both: 'Exp./Dest.' };
+    INVOICES = (data.invoices || []).map(i => ({
+      ref: i.reference, role: roleLabel[i.role] || '—', dest: i.counterpart || '—',
+      date: i.date, total: i.total, paid: i.paid, status: i.status,
+      // remaining inclut le magasinage (aligné sur le détail/PDF) ; fallback total-paid.
+      remaining: (i.remaining !== undefined ? i.remaining : (i.total - i.paid)),
+      magasinage: i.magasinage || 0,
+      currency: i.currency || 'XOF', agency: i.agency || ''
+    }));
+    LOYALTY = data.loyalty || LOYALTY;
+    invoicesLoaded = true;
+  } catch (e) {
+    console.warn('getMyInvoices:', e && e.code, e && e.message);
+    invoicesLoaded = true;
+    INVOICES = [];
+    window.__invoicesError = (e && e.code === 'unauthenticated')
+      ? 'Session expirée. Reconnectez-vous.' : "Impossible de charger vos factures pour le moment.";
+  }
+  renderView(currentView || 'dashboard');
 }
 
 // ======================= NAVIGATION =======================
@@ -152,6 +239,7 @@ function setActiveTab(view) {
 }
 
 function renderView(view) {
+  currentView = view;
   const c = $('#content');
   $('#topTitle').textContent = VIEW_TITLES[view] || 'AMT Clients';
   if (TAB_VIEWS.includes(view)) setActiveTab(view);
@@ -175,79 +263,91 @@ document.addEventListener('click', (e) => {
   const go = e.target.closest('[data-go]');
   if (go) { renderView(go.dataset.go); return; }
   const iv = e.target.closest('[data-inv]');
-  if (iv) { selectedInvoiceRef = iv.dataset.inv; renderView('invoice'); return; }
+  if (iv) { selectedInvoiceRef = iv.dataset.inv; renderView('invoice'); loadInvoiceDetail(iv.dataset.inv); return; }
   const pf = e.target.closest('[data-pdf]');
   if (pf) { exportClientInvoicePDF(pf.dataset.pdf); return; }
   const tr = e.target.closest('[data-track]');
   if (tr) { trackFilter = parseInt(tr.dataset.track, 10); renderView('tracking'); }
 });
 
-// Génère un PDF client simple (réutilise les chargeurs jsPDF + QR partagés).
+// Génère le PDF OFFICIEL (identique au staff) : la fonction Cloud renvoie
+// config + transaction + colis + magasinage de SA facture, puis on dessine
+// avec le renderer partagé services/invoice-pdf-render.js.
 async function exportClientInvoicePDF(ref) {
-  const inv = DEMO_INVOICES.find(i => i.ref === ref);
-  if (!inv) return;
   try {
+    const detail = (await httpsCallable(functions, 'getMyInvoiceDetail')({ reference: ref })).data;
+    if (!detail || !detail.transaction) { alert("Facture introuvable."); return; }
     const { loadJsPdf } = await import('../../services/pdf-common.js');
-    const { makeQrDataUrl } = await import('../../services/qr-common.js');
+    const { renderOfficialInvoice } = await import('../../services/invoice-pdf-render.js');
     const { jsPDF } = await loadJsPdf();
     const doc = new jsPDF('p', 'mm', 'a4');
-
-    doc.setFillColor(26, 53, 83); doc.rect(0, 0, 210, 28, 'F');
-    doc.setFillColor(242, 163, 18); doc.rect(0, 28, 210, 1.5, 'F');
-    doc.setTextColor(255, 255, 255); doc.setFontSize(16);
-    doc.text("AMT Trans'it — Facture", 14, 16);
-    doc.setFontSize(9); doc.setTextColor(214, 222, 232);
-    doc.text(`Réf. ${inv.ref}  ·  ${fdate(inv.date)}`, 14, 23);
-
-    doc.setTextColor(0, 0, 0); doc.setFontSize(11);
-    doc.text(`Rôle : ${inv.role}`, 14, 42);
-    doc.text(`Destinataire : ${inv.dest}`, 14, 49);
-
-    const colis = DEMO_PARCELS.filter(p => p.ref === inv.ref);
-    const body = colis.length ? colis.map(p => [p.label, p.desc, STAGES[p.stage].l]) : [['—', inv.dest, '—']];
-    doc.autoTable({
-      startY: 56, head: [['Colis', 'Description', 'Étape']], body, theme: 'grid',
-      headStyles: { fillColor: [26, 53, 83] }, styles: { fontSize: 9 }, margin: { left: 14, right: 14 }
+    const t = detail.transaction;
+    const d = detail.livraison || {
+      ref: t.reference, conteneur: t.conteneur, expediteur: t.nom, numero: t.numero,
+      lieuLivraison: t.adresseDestinataire, description: t.description,
+      quantite: t.quantite, dateAjout: t.date, modeExpedition: t.modeExpedition
+    };
+    await renderOfficialInvoice(doc, {
+      d, transData: t, transDocId: detail.transDocId, transCollection: detail.collection,
+      companyName: detail.company && detail.company.name,
+      logoBase64: detail.company && detail.company.logoBase64,
+      invoiceConfig: detail.invoiceConfig,
+      magasinageFee: detail.magasinageFee || 0,
+      reduction: detail.reduction || 0,
+      securityIsEur: (t.agency === 'paris')
     });
-
-    let y = doc.lastAutoTable.finalY + 12;
-    doc.setFontSize(11);
-    doc.text(`Total : ${money(inv.total)}`, 14, y); y += 7;
-    doc.text(`Payé : ${money(inv.paid)}`, 14, y); y += 7;
-    doc.setFont('helvetica', 'bold');
-    doc.text(`Reste à payer : ${money(inv.total - inv.paid)}`, 14, y);
-    doc.setFont('helvetica', 'normal');
-
-    const url = `${location.origin}/verify.html?c=transactions&id=${encodeURIComponent(inv.ref)}`;
-    const qr = await makeQrDataUrl(url, { width: 240 });
-    if (qr) {
-      doc.addImage(qr, 'PNG', 14, 250, 28, 28);
-      doc.setFontSize(8); doc.setTextColor(90, 90, 90);
-      doc.text("Scannez pour vérifier le statut réel de la facture", 46, 263);
-    }
-    doc.save(`Facture_${inv.ref}.pdf`);
+    doc.save(`Facture_${ref}.pdf`);
   } catch (e) {
-    console.warn('PDF client :', e && e.message);
-    alert("Génération du PDF impossible pour le moment.");
+    console.warn('PDF client :', e && e.code, e && e.message);
+    alert(e && e.code === 'permission-denied' ? "Facture non autorisée." : "Génération du PDF impossible pour le moment.");
   }
 }
 
-// ======================= VUES (démo) =======================
+// Étape d'un colis (0..3) déduite du statut logistique de sa livraison.
+function stageOf(liv) {
+  if (!liv) return 0;
+  if (liv.status === 'LIVRE') return 3;
+  if (liv.containerStatus === 'EN_COURS') return 2;   // arrivé à destination
+  if (liv.containerStatus === 'A_VENIR') return 1;    // en conteneur / transit
+  return 0;                                            // entrepôt (Paris)
+}
+
+// Charge le détail (colis + étapes) d'UNE facture via la fonction Cloud, puis
+// ré-affiche la vue détail si elle est ouverte.
+async function loadInvoiceDetail(ref) {
+  if (detailCache[ref]) { if (currentView === 'invoice') renderView('invoice'); return; }
+  try {
+    const detail = (await httpsCallable(functions, 'getMyInvoiceDetail')({ reference: ref })).data || {};
+    const colis = [];
+    (detail.livraisons || []).forEach(liv => {
+      const stage = stageOf(liv);
+      const labels = (liv.labels && liv.labels.length) ? liv.labels : [liv.ref || ref];
+      labels.forEach(lbl => colis.push({ label: lbl, ref: liv.ref || ref, desc: liv.description || '', stage }));
+    });
+    detailCache[ref] = { colis, loaded: true };
+  } catch (e) {
+    console.warn('détail facture :', e && e.code, e && e.message);
+    detailCache[ref] = { colis: [], loaded: true, error: true };
+  }
+  if (currentView === 'invoice') renderView('invoice');
+}
+
+// ======================= VUES =======================
 function invRow(i) {
   const cls = i.status === 'PAYE' ? 'paye' : i.status === 'PARTIEL' ? 'partiel' : 'impaye';
   return `<div class="inv" data-inv="${i.ref}" style="cursor:pointer">
     <div class="inv__main">
       <div class="inv__ref">${i.ref} <span class="tagp tagp--${cls}">${STATUS_LABEL[i.status]}</span></div>
-      <div class="inv__sub">${i.role} · ${i.dest} · ${fdate(i.date)}</div>
+      <div class="inv__sub">${i.role === 'Destinataire' ? 'Expéditeur' : (i.role === 'Expéditeur' ? 'Destinataire' : 'Autre partie')} : ${i.dest} · ${fdate(i.date)}</div>
     </div>
-    <div class="inv__amt">${money(i.total)} <span style="color:#c2cedd;font-weight:700;">›</span></div>
+    <div class="inv__amt">${money(i.total, i.currency)} <span style="color:#c2cedd;font-weight:700;">›</span></div>
   </div>`;
 }
 
 // Récap par étape (nombre de colis à chaque étape). clickable=true -> filtre.
 function pipeSummary(clickable) {
   return `<div class="pipe">` + STAGES.map((s, idx) => {
-    const n = DEMO_PARCELS.filter(p => p.stage === idx).length;
+    const n = PARCELS.filter(p => p.stage === idx).length;
     const act = (!clickable && trackFilter === idx) ? ' active' : '';
     const attr = clickable ? `data-go="tracking"` : `data-track="${idx}"`;
     return `<button class="p${act}" ${attr}>
@@ -270,12 +370,18 @@ function stepper(stage) {
 
 const VIEWS = {
   dashboard() {
-    const last5 = DEMO_INVOICES.slice(0, 5).map(invRow).join('');
-    const totalDu = DEMO_INVOICES.reduce((s, i) => s + (i.total - i.paid), 0);
+    if (!invoicesLoaded) {
+      return `<div class="card"><div class="placeholder"><span class="ph-ic">⏳</span>Chargement de vos factures…</div></div>`;
+    }
+    const errMsg = window.__invoicesError;
+    const last5 = INVOICES.slice(0, 5).map(invRow).join('') ||
+      `<div class="placeholder" style="padding:10px;">${errMsg || "Aucune facture reliée à votre numéro pour le moment."}</div>`;
+    // Reste à payer (magasinage inclus) : devises mixtes -> converti en FCFA.
+    const totalDuFcfa = INVOICES.reduce((s, i) => s + toFcfa(i.remaining, i.currency), 0);
     return `
       <div class="kpi-grid">
-        <div class="kpi"><div class="kpi__v">${DEMO_INVOICES.length}</div><div class="kpi__l">Mes factures</div></div>
-        <div class="kpi"><div class="kpi__v">${money(totalDu)}</div><div class="kpi__l">Reste à payer</div></div>
+        <div class="kpi"><div class="kpi__v">${INVOICES.length}</div><div class="kpi__l">Mes factures</div></div>
+        <div class="kpi"><div class="kpi__v">${money(totalDuFcfa, 'XOF')}</div><div class="kpi__l">Reste à payer</div></div>
       </div>
 
       <div class="shortcuts">
@@ -288,15 +394,10 @@ const VIEWS = {
       </div>
 
       <div class="card">
-        <div class="section-title">Où sont mes colis ? <span class="link" data-go="tracking">Détail →</span></div>
-        ${pipeSummary(true)}
-      </div>
-
-      <div class="card">
         <div class="section-title">5 dernières factures <span class="link" data-go="dashboard">Tout voir →</span></div>
         ${last5}
       </div>
-      <p class="placeholder" style="padding:6px;">Données de démonstration — les vraies factures seront reliées à votre numéro à l'étape suivante.</p>
+      <p class="placeholder" style="padding:6px;">Le suivi colis par colis (entrepôt, conteneur, arrivée, livraison) sera relié prochainement.</p>
     `;
   },
 
@@ -320,8 +421,13 @@ const VIEWS = {
   },
 
   stats() {
-    const nb = DEMO_INVOICES.length;
-    const colis = 9, paye = 565, impaye = 260, total = paye + impaye;
+    if (!invoicesLoaded) return `<div class="card"><div class="placeholder"><span class="ph-ic">⏳</span>Chargement…</div></div>`;
+    const nb = INVOICES.length;
+    // Montants agrégés en FCFA (factures de devises mixtes -> conversion).
+    const paye = INVOICES.reduce((s, i) => s + toFcfa(i.paid, i.currency), 0);
+    const total = INVOICES.reduce((s, i) => s + toFcfa(i.total, i.currency), 0);
+    const impaye = Math.max(0, total - paye);
+    const envois = LOYALTY.sentAsSender || 0;
     const paidPct = total > 0 ? Math.round(paye / total * 100) : 0;
     const unpaidPct = 100 - paidPct;
 
@@ -338,11 +444,16 @@ const VIEWS = {
         <text x="21" y="26" class="donut-c2">PAYÉ</text>
       </svg>`;
 
-    // Histogramme : nombre de factures par mois (6 derniers mois, démo).
-    const months = [
-      { l: 'Déc', v: 1 }, { l: 'Jan', v: 0 }, { l: 'Fév', v: 2 },
-      { l: 'Mar', v: 1 }, { l: 'Avr', v: 1 }, { l: 'Mai', v: 2 }
-    ];
+    // Histogramme : nombre de factures par mois (6 derniers mois réels).
+    const now = new Date();
+    const months = [];
+    for (let k = 5; k >= 0; k--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - k, 1);
+      const ym = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      const l = d.toLocaleDateString('fr-FR', { month: 'short' }).replace('.', '');
+      const v = INVOICES.filter(i => String(i.date || '').slice(0, 7) === ym).length;
+      months.push({ l, v });
+    }
     const maxV = Math.max(1, ...months.map(m => m.v));
     const bars = months.map(m => {
       const h = Math.round((m.v / maxV) * 100);
@@ -357,7 +468,7 @@ const VIEWS = {
     return `
       <div class="kpi-grid">
         <div class="kpi"><div class="kpi__v">${nb}</div><div class="kpi__l">Factures</div></div>
-        <div class="kpi"><div class="kpi__v">${colis}</div><div class="kpi__l">Colis envoyés</div></div>
+        <div class="kpi"><div class="kpi__v">${envois}</div><div class="kpi__l">Envois (expéditeur)</div></div>
         <div class="kpi"><div class="kpi__v" style="color:var(--green);">${money(paye)}</div><div class="kpi__l">Total payé</div></div>
         <div class="kpi"><div class="kpi__v" style="color:var(--amt-red);">${money(impaye)}</div><div class="kpi__l">Total impayé</div></div>
       </div>
@@ -379,7 +490,11 @@ const VIEWS = {
       </div>
 
       <div class="card"><div class="section-title">Total facturé</div><div class="kpi__v" style="font-size:30px;">${money(total)}</div></div>
-      <p class="placeholder" style="padding:6px;">Chiffres de démonstration.</p>
+
+      <div class="card">
+        <div class="section-title">Fidélité</div>
+        <div class="placeholder" style="padding:6px;">🎁 ${envois} envoi(s) comme expéditeur · ${LOYALTY.freeCartons || 0} carton(s) offert(s) · plus que ${LOYALTY.toNext ?? 10} avant le prochain.</div>
+      </div>
     `;
   },
 
@@ -402,14 +517,18 @@ const VIEWS = {
         </div>
       </div>`).join('');
     return `<div class="card"><div class="section-title">Mes notifications</div>${items}</div>
-      <p class="placeholder" style="padding:6px;">Vous serez prévenu à chaque étape : entrepôt, conteneur, arrivée, livraison. (démo)</p>`;
+      <p class="placeholder" style="padding:6px;">Vous serez prévenu à chaque étape : entrepôt, conteneur, arrivée, livraison.</p>`;
   },
 
   invoice() {
-    const inv = DEMO_INVOICES.find(i => i.ref === selectedInvoiceRef) || DEMO_INVOICES[0];
-    const reste = inv.total - inv.paid;
+    const inv = INVOICES.find(i => i.ref === selectedInvoiceRef) || INVOICES[0];
+    if (!inv) return `<button class="btn btn--ghost" data-go="dashboard">← Retour</button><div class="card"><div class="placeholder">Facture introuvable.</div></div>`;
+    const cur = inv.currency || 'XOF';
+    const reste = (inv.remaining !== undefined ? inv.remaining : (inv.total - inv.paid));
+    const mag = inv.magasinage || 0;
     const cls = inv.status === 'PAYE' ? 'paye' : inv.status === 'PARTIEL' ? 'partiel' : 'impaye';
-    const colis = DEMO_PARCELS.filter(p => p.ref === inv.ref);
+    const det = detailCache[inv.ref];
+    const colis = det ? det.colis : [];
     const colisHtml = colis.length ? colis.map(p => `
       <div class="inv">
         <div class="inv__main">
@@ -417,14 +536,14 @@ const VIEWS = {
           <div class="inv__sub">${p.desc}</div>
         </div>
         <div class="inv__amt" style="font-size:12px;color:var(--amt-blue);">${STAGES[p.stage].ic} ${STAGES[p.stage].l}</div>
-      </div>`).join('') : `<div class="placeholder" style="padding:14px;">Détail des colis non disponible (démo).</div>`;
+      </div>`).join('') : `<div class="placeholder" style="padding:14px;">${det ? 'Aucun colis rattaché à cette facture.' : '⏳ Chargement du suivi…'}</div>`;
 
     return `
       <button class="btn btn--ghost" data-go="dashboard" style="text-align:left;margin:0 0 8px;">← Retour</button>
       <div class="card">
         <div class="section-title">${inv.ref} <span class="tagp tagp--${cls}">${STATUS_LABEL[inv.status]}</span></div>
-        <div class="inv"><div class="inv__main"><div class="inv__sub">Rôle</div><div class="inv__ref">${inv.role}</div></div></div>
-        <div class="inv"><div class="inv__main"><div class="inv__sub">Destinataire</div><div class="inv__ref">${inv.dest}</div></div></div>
+        <div class="inv"><div class="inv__main"><div class="inv__sub">Votre rôle</div><div class="inv__ref">${inv.role}</div></div></div>
+        <div class="inv"><div class="inv__main"><div class="inv__sub">${inv.role === 'Destinataire' ? 'Expéditeur' : (inv.role === 'Expéditeur' ? 'Destinataire' : 'Autre partie')}</div><div class="inv__ref">${inv.dest}</div></div></div>
         <div class="inv"><div class="inv__main"><div class="inv__sub">Date</div><div class="inv__ref">${fdate(inv.date)}</div></div></div>
       </div>
 
@@ -435,9 +554,10 @@ const VIEWS = {
 
       <div class="card">
         <div class="section-title">Montants</div>
-        <div class="inv"><div class="inv__main"><div class="inv__ref">Total facturé</div></div><div class="inv__amt">${money(inv.total)}</div></div>
-        <div class="inv"><div class="inv__main"><div class="inv__ref">Déjà payé</div></div><div class="inv__amt" style="color:var(--green);">${money(inv.paid)}</div></div>
-        <div class="inv"><div class="inv__main"><div class="inv__ref">Reste à payer</div></div><div class="inv__amt" style="color:${reste > 0 ? 'var(--amt-red)' : 'var(--green)'};">${money(reste)}</div></div>
+        <div class="inv"><div class="inv__main"><div class="inv__ref">Total facturé</div></div><div class="inv__amt">${money(inv.total, cur)}</div></div>
+        <div class="inv"><div class="inv__main"><div class="inv__ref">Déjà payé</div></div><div class="inv__amt" style="color:var(--green);">${money(inv.paid, cur)}</div></div>
+        ${mag > 0 ? `<div class="inv"><div class="inv__main"><div class="inv__ref">Frais de magasinage</div></div><div class="inv__amt" style="color:#c2410c;">${money(mag, cur)}</div></div>` : ''}
+        <div class="inv"><div class="inv__main"><div class="inv__ref">Reste à payer</div></div><div class="inv__amt" style="color:${reste > 0 ? 'var(--amt-red)' : 'var(--green)'};">${money(reste, cur)}</div></div>
       </div>
 
       <button class="btn btn--primary" data-pdf="${inv.ref}">📄 Télécharger le PDF</button>
@@ -446,7 +566,7 @@ const VIEWS = {
   },
 
   tracking() {
-    const list = DEMO_PARCELS
+    const list = PARCELS
       .filter(p => trackFilter < 0 || p.stage === trackFilter)
       .map(p => `
         <div class="track-item">
@@ -468,13 +588,14 @@ const VIEWS = {
       ${pipeSummary(false)}
       ${filterNote}
       ${list || empty}
-      <p class="placeholder" style="padding:6px;">Données de démonstration — le suivi réel sera relié aux scans (mise en entrepôt, chargement, déchargement, livraison).</p>
+      <p class="placeholder" style="padding:6px;">Le suivi colis par colis (entrepôt, chargement, déchargement, livraison) sera relié prochainement aux scans.</p>
     `;
   },
 
   profile() {
-    const ph = localStorage.getItem(LS.phone) || '—';
-    const sent = 6, need = 10; // démo : 6/10 factures vers carton gratuit
+    const ph = (auth.currentUser && auth.currentUser.phoneNumber) || localStorage.getItem(LS.phone) || '—';
+    const need = 10;
+    const sent = (LOYALTY.sentAsSender || 0) % need; // progression dans le cycle courant
     const pct = Math.min(100, Math.round(sent / need * 100));
     return `
       <div class="card">
@@ -503,12 +624,16 @@ const VIEWS = {
   }
 };
 
-// Déconnexion (délégation car bouton recréé à chaque rendu)
+// Verrouillage (le bouton "btnLogout" verrouille l'app ; la session Firebase
+// est conservée -> retour par PIN sans renvoyer de SMS).
 document.addEventListener('click', (e) => {
   if (e.target && e.target.id === 'btnLogout') {
     appEl.hidden = true; authEl.hidden = false;
-    // On garde l'enregistrement -> retour par PIN.
-    initAuth();
+    if (localStorage.getItem(LS.registered) === '1' && auth.currentUser) {
+      const ph = localStorage.getItem(LS.phone) || (auth.currentUser.phoneNumber || '');
+      $('#pinWelcome').textContent = ph ? `Bon retour 👋  (${ph})` : 'Bon retour 👋';
+      showStep('pin');
+    } else { showStep('phone'); }
   }
 });
 
@@ -519,5 +644,4 @@ if ('serviceWorker' in navigator) {
   });
 }
 
-// Démarrage
-initAuth();
+// Démarrage : géré par onAuthStateChanged (selon la session Firebase + le PIN).
