@@ -456,6 +456,10 @@ exports.createClientRequest = onCall({ region: REGION, invoker: "public" }, asyn
     const wantedDate = clean(data.date, 30);
     const wantedTime = clean(data.time, 40);
     const description = clean(data.description, 1000);
+    const etage = clean(data.etage, 120);
+    const acces = clean(data.acces, 60);
+    const codeAcces = clean(data.codeAcces, 120);
+    const contactTel = clean(data.contactTel, 40); // téléphone de contact sur place
     if (!address && !commune) throw new HttpsError("invalid-argument", "Adresse requise.");
 
     const digits = String(phone).replace(/\D/g, "");
@@ -499,8 +503,12 @@ exports.createClientRequest = onCall({ region: REGION, invoker: "public" }, asyn
         phoneE164: phone,
         phoneTail: tail,
         fullName, address, commune, wantedDate, wantedTime, description,
+        etage, acces, codeAcces, contactTel,
         // Le créneau souhaité par le client sert de proposition par défaut au staff.
         staffTime: wantedTime || "",
+        // La date souhaitée sert aussi de proposition par défaut (le client a
+        // choisi un jour réellement disponible sur le calendrier).
+        staffDate: wantedDate || "",
         createdAt: now,
         updatedAt: now,
         source: "app_client",
@@ -520,6 +528,63 @@ exports.createClientRequest = onCall({ region: REGION, invoker: "public" }, asyn
     } catch (e) { /* non bloquant */ }
 
     return { id: ref.id, ok: true, agency };
+});
+
+// Disponibilités RDV pour un mois (app client) : places restantes par jour,
+// même barème que le staff (settings/appointments_<agence> : trucks×rdv, offDays)
+// moins les RDV déjà pris (appointments, hors 'annulé') et les demandes client
+// déjà planifiées. agency déduite du numéro si non fournie.
+exports.getRdvAvailability = onCall({ region: REGION, invoker: "public" }, async (request) => {
+    const auth = request.auth;
+    const phone = auth && auth.token && auth.token.phone_number;
+    if (!phone) throw new HttpsError("unauthenticated", "Connexion par téléphone requise.");
+    const data = request.data || {};
+    const digits = String(phone).replace(/\D/g, "");
+    let agency = data.agency;
+    if (agency !== "paris" && agency !== "abidjan") {
+        agency = digits.startsWith("33") ? "paris" : "abidjan";
+    }
+    const now = new Date();
+    const year = parseInt(data.year) || now.getUTCFullYear();
+    const month = (data.month == null) ? now.getUTCMonth() : parseInt(data.month); // 0-11
+
+    const db = admin.firestore();
+    // Config capacité.
+    let trucks = 4, perTruck = 20, offDays = [0];
+    try {
+        const cfg = await db.collection("settings").doc(`appointments_${agency}`).get();
+        if (cfg.exists) {
+            const c = cfg.data() || {};
+            if (c.trucksPerDay) trucks = parseInt(c.trucksPerDay) || trucks;
+            if (c.rdvPerTruck) perTruck = parseInt(c.rdvPerTruck) || perTruck;
+            if (Array.isArray(c.offDays)) offDays = c.offDays;
+        }
+    } catch (e) { /* défauts */ }
+    const capacity = trucks * perTruck;
+
+    // Compte les RDV existants par date (sur le mois ± marge). appointments
+    // n'a pas d'index par mois -> on lit l'agence et on filtre en mémoire.
+    const counts = {};
+    const ym = `${year}-${String(month + 1).padStart(2, "0")}`;
+    try {
+        const snap = await db.collection("appointments").where("agency", "==", agency).limit(5000).get();
+        snap.forEach((d) => {
+            const a = d.data() || {};
+            if (a.status === "annulé") return;
+            const dt = String(a.date || "");
+            if (dt.startsWith(ym)) counts[dt] = (counts[dt] || 0) + 1;
+        });
+    } catch (e) { /* pas bloquant */ }
+
+    const days = {};
+    const daysInMonth = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
+    for (let d = 1; d <= daysInMonth; d++) {
+        const ds = `${ym}-${String(d).padStart(2, "0")}`;
+        const dow = new Date(Date.UTC(year, month, d)).getUTCDay(); // 0=dim
+        const off = offDays.includes(dow);
+        days[ds] = off ? -1 : Math.max(0, capacity - (counts[ds] || 0)); // -1 = jour off
+    }
+    return { agency, year, month, capacity, offDays, days };
 });
 
 exports.getMyRequests = onCall({ region: REGION, invoker: "public" }, async (request) => {

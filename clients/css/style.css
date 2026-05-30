@@ -181,3 +181,21 @@ textarea.rf-input{resize:vertical;min-height:74px;}
 .rf-slots{display:flex;gap:10px;}
 .rf-slot{flex:1;padding:12px;border:1.5px solid var(--line);border-radius:12px;background:#fff;color:var(--muted);font-weight:700;font-size:13px;transition:.15s;}
 .rf-slot.active{border-color:var(--amt-gold);background:#fff8ec;color:var(--amt-gold-d);}
+.rf-select{width:100%;box-sizing:border-box;padding:12px 13px;border:1px solid var(--line);border-radius:11px;font-size:14px;font-family:inherit;background:#fff;outline:none;}
+.rf-select:focus{border-color:var(--amt-blue);box-shadow:0 0 0 3px rgba(26,53,83,.10);}
+/* Calendrier des places disponibles (comme la modale Nouveau RDV) */
+.cal-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;}
+.cal-nav{border:1px solid var(--line);background:#fff;border-radius:8px;width:32px;height:32px;font-size:17px;color:var(--amt-blue);}
+.cal-month{font-weight:700;color:var(--ink);text-transform:capitalize;font-size:14px;}
+.cal-dow{display:grid;grid-template-columns:repeat(7,1fr);text-align:center;font-size:10px;font-weight:700;color:var(--muted);margin-bottom:4px;}
+.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;}
+.cal-day{border:1px solid var(--line);border-radius:8px;min-height:42px;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#fff;}
+.cal-day--empty{border:none;background:transparent;}
+.cal-day--off,.cal-day--past{opacity:.4;background:#f5f7fa;}
+.cal-day--ok{border-color:var(--green);color:var(--green);cursor:pointer;}
+.cal-day--ok:active{background:#ecfdf5;}
+.cal-day--sel{background:var(--green);color:#fff;border-color:var(--green);}
+.cal-day--sel .cal-day__n{color:#fff;}
+.cal-day__n{font-weight:700;font-size:14px;}
+.cal-day__p{font-size:8px;margin-top:1px;}
+.cal-foot{margin-top:8px;padding:9px 11px;background:#f6f9fc;border:1px solid var(--line);border-radius:10px;font-size:12px;display:flex;justify-content:space-between;flex-wrap:wrap;gap:6px;}

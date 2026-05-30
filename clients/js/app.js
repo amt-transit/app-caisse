@@ -43,6 +43,10 @@ let requestsSubtab = 'tous'; // 'tous' | 'depot' | 'recup'
 let requestFormType = 'depot'; // type en cours de saisie
 let requestFormSlot = 'Matin (10H-12H)'; // créneau souhaité par le client
 let requestDraft = {};  // brouillon des champs (conservé quand on change type/créneau)
+let calMonth = null;    // 1er du mois affiché par le calendrier
+let calAvail = {};      // { 'YYYY-MM-DD': placesRestantes (-1 = jour off) }
+let calSelected = '';   // date choisie 'YYYY-MM-DD'
+let calCapacity = 80;
 // Le service Dépôt/Récupération ne concerne QUE les expéditeurs. On déduit le
 // rôle des factures (rôle exp/both) + repli sur l'indicatif France (+33 = départ).
 let isExpediteur = true;       // par défaut on n'masque rien tant qu'on ne sait pas
@@ -291,6 +295,8 @@ function renderView(view) {
   c.scrollTop = 0;
   c.innerHTML = (VIEWS[view] || VIEWS.dashboard)();
   window.scrollTo(0, 0);
+  // Hook post-rendu : le formulaire de demande monte son calendrier + l'adresse.
+  if (view === 'requestForm') initRequestForm();
 }
 
 $$('.tab').forEach(t => t.addEventListener('click', () => renderView(t.dataset.view)));
@@ -319,6 +325,10 @@ document.addEventListener('click', (e) => {
   if (rtype) { keepFormDraft(); requestFormType = rtype.dataset.reqtype; renderView('requestForm'); return; }
   const rslot = e.target.closest('[data-reqslot]');
   if (rslot) { keepFormDraft(); requestFormSlot = rslot.dataset.reqslot; renderView('requestForm'); return; }
+  const cnav = e.target.closest('[data-calnav]');
+  if (cnav) { calNav(parseInt(cnav.dataset.calnav, 10)); return; }
+  const cpick = e.target.closest('[data-calpick]');
+  if (cpick) { calPick(cpick.dataset.calpick); return; }
   const rsub = e.target.closest('[data-reqsubmit]');
   if (rsub) { submitRequest(); return; }
   const ra = e.target.closest('[data-reqaccept]');
@@ -349,17 +359,107 @@ function openRequestForm(type) {
   requestFormType = (type === 'recup') ? 'recup' : 'depot';
   requestFormSlot = 'Matin (10H-12H)';
   requestDraft = {}; // nouveau formulaire : brouillon vierge
+  calSelected = '';
+  calMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+  calAvail = {};
   renderView('requestForm');
+}
+
+// Monté après le rendu du formulaire : calendrier des dispos + saisie adresse.
+function initRequestForm() {
+  if (!calMonth) calMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+  // Champ accès -> affiche/masque le code (sans perdre les autres champs).
+  const acc = document.getElementById('reqAcces');
+  if (acc) acc.addEventListener('change', () => {
+    const need = acc.value === 'Interphone' || acc.value === 'Code';
+    const w = document.getElementById('reqCodeWrap');
+    if (w) w.style.display = need ? '' : 'none';
+    requestDraft.acces = acc.value;
+  });
+  // Saisie intelligente d'adresse (API gouv) — chargée à la demande.
+  import('../../paris/js/views/autocomplete.js').then(({ Autocomplete }) => {
+    try { Autocomplete.initAddress('reqAddress', 'reqAddressSugg'); } catch (_) {}
+  }).catch(() => {});
+  loadAvailability();
+}
+
+// Charge les places disponibles du mois affiché via la fonction Cloud.
+async function loadAvailability() {
+  renderCalendar(); // affiche d'abord la grille (état chargement implicite)
+  try {
+    const u = auth.currentUser;
+    if (u) { try { await u.getIdToken(true); } catch (_) {} }
+    const res = await httpsCallable(functions, 'getRdvAvailability')({
+      year: calMonth.getFullYear(), month: calMonth.getMonth()
+    });
+    const d = (res && res.data) || {};
+    calAvail = d.days || {};
+    calCapacity = d.capacity || 80;
+  } catch (e) {
+    console.warn('getRdvAvailability:', e && e.code, e && e.message);
+    calAvail = {};
+  }
+  renderCalendar();
+}
+
+function renderCalendar() {
+  const grid = document.getElementById('calGrid');
+  const label = document.getElementById('calMonth');
+  if (!grid || !calMonth) return;
+  const year = calMonth.getFullYear(), month = calMonth.getMonth();
+  if (label) label.textContent = calMonth.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
+  const todayStr = new Date().toISOString().slice(0, 10);
+  let firstDow = new Date(year, month, 1).getDay(); firstDow = firstDow === 0 ? 6 : firstDow - 1; // Lun en tête
+  const nbDays = new Date(year, month + 1, 0).getDate();
+  let html = '';
+  for (let i = 0; i < firstDow; i++) html += '<div class="cal-day cal-day--empty"></div>';
+  for (let day = 1; day <= nbDays; day++) {
+    const ds = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    const dispo = calAvail[ds];          // -1 = off ; undefined = pas encore chargé
+    const isPast = ds < todayStr;
+    const isOff = dispo === -1;
+    const isFull = typeof dispo === 'number' && dispo === 0;
+    const cls = ['cal-day'];
+    let attr = '';
+    if (isPast || isOff || isFull) { cls.push(isPast ? 'cal-day--past' : 'cal-day--off'); }
+    else { cls.push('cal-day--ok'); attr = `data-calpick="${ds}"`; }
+    if (ds === calSelected && !isPast && !isOff && !isFull) cls.push('cal-day--sel');
+    const meta = isOff ? '✕' : (typeof dispo === 'number' ? dispo : '…');
+    html += `<div class="${cls.join(' ')}" ${attr}><div class="cal-day__n">${day}</div><div class="cal-day__p">${meta}</div></div>`;
+  }
+  grid.innerHTML = html;
+  const foot = document.getElementById('calFoot');
+  if (foot) {
+    if (!calSelected) foot.innerHTML = '<span>Sélectionnez une date verte (chiffre = places restantes)</span>';
+    else {
+      const dispo = calAvail[calSelected];
+      foot.innerHTML = `<span>📅 <b>${new Date(calSelected).toLocaleDateString('fr-FR')}</b></span><span>Places restantes : <b>${typeof dispo === 'number' ? dispo : '—'}</b></span>`;
+    }
+  }
+}
+
+function calNav(delta) {
+  keepFormDraft();
+  calMonth = new Date(calMonth.getFullYear(), calMonth.getMonth() + delta, 1);
+  loadAvailability();
+}
+function calPick(ds) {
+  calSelected = ds;
+  renderCalendar();
 }
 
 // Mémorise les champs saisis avant un re-render (changement de type/créneau).
 function keepFormDraft() {
+  const g = (id, k) => (document.getElementById(id) ? document.getElementById(id).value : requestDraft[k]);
   requestDraft = {
-    fullName: $('#reqName')?.value ?? requestDraft.fullName,
-    commune: $('#reqCommune')?.value ?? requestDraft.commune,
-    address: $('#reqAddress')?.value ?? requestDraft.address,
-    date: $('#reqDate')?.value ?? requestDraft.date,
-    description: $('#reqDesc')?.value ?? requestDraft.description,
+    fullName: g('reqName', 'fullName'),
+    commune: g('reqCommune', 'commune'),
+    address: g('reqAddress', 'address'),
+    etage: g('reqEtage', 'etage'),
+    contactTel: g('reqTel', 'contactTel'),
+    acces: g('reqAcces', 'acces'),
+    codeAcces: g('reqCode', 'codeAcces'),
+    description: g('reqDesc', 'description'),
   };
 }
 
@@ -370,11 +470,18 @@ async function submitRequest() {
     fullName: ($('#reqName')?.value || '').trim(),
     commune: ($('#reqCommune')?.value || '').trim(),
     address: ($('#reqAddress')?.value || '').trim(),
-    date: ($('#reqDate')?.value || '').trim(),
+    date: calSelected,
     time: requestFormSlot,
+    etage: ($('#reqEtage')?.value || '').trim(),
+    acces: ($('#reqAcces')?.value || '').trim(),
+    codeAcces: ($('#reqCode')?.value || '').trim(),
+    contactTel: ($('#reqTel')?.value || '').trim(),
     description: ($('#reqDesc')?.value || '').trim(),
   };
-  if (!payload.commune && !payload.address) { err('Indiquez au moins une commune ou une adresse.'); return; }
+  if (!calSelected) { err('Choisissez une date disponible sur le calendrier.'); return; }
+  if (!payload.fullName) { err('Indiquez votre nom.'); return; }
+  if (!payload.contactTel) { err('Indiquez un téléphone de contact.'); return; }
+  if (!payload.address) { err("Indiquez l'adresse."); return; }
   // Mémorise le nom de l'expéditeur pour préremplir les prochaines demandes.
   if (payload.fullName) { try { localStorage.setItem(LS.name, payload.fullName); clientSelfName = payload.fullName; } catch (_) {} }
   const btn = $('[data-reqsubmit]'); if (btn) { btn.disabled = true; btn.textContent = 'Envoi…'; }
@@ -643,22 +750,24 @@ const VIEWS = {
     `;
   },
 
-  // Formulaire de nouvelle demande (dépôt ou récup). Vue dédiée 'requestForm'.
+  // Formulaire de nouvelle demande (dépôt ou récup) avec calendrier de places.
   requestForm() {
     const isRecup = requestFormType === 'recup';
     const initials = (clientSelfName || '').trim().slice(0, 2).toUpperCase() || '👤';
     const myPhone = (auth.currentUser && auth.currentUser.phoneNumber) || localStorage.getItem(LS.phone) || '';
-    const todayISO = new Date().toISOString().slice(0, 10); // date min = aujourd'hui
     const opt = (k, ic, lbl) => `<button type="button" class="rf-type__opt${requestFormType === k ? ' active' : ''}" data-reqtype="${k}">${ic} ${lbl}</button>`;
     const slot = (v, lbl) => `<button type="button" class="rf-slot${requestFormSlot === v ? ' active' : ''}" data-reqslot="${v}">${lbl}</button>`;
+    const accOpt = (v, lbl) => `<option value="${v}"${requestDraft.acces === v ? ' selected' : ''}>${lbl}</option>`;
     const adrLabel = isRecup ? 'Adresse de livraison / récupération' : "Adresse d'enlèvement (départ)";
     const esc = (s) => String(s == null ? '' : s).replace(/"/g, '&quot;');
-    // Valeurs préremplies : brouillon en cours, sinon profil expéditeur.
     const vName = esc(requestDraft.fullName ?? clientSelfName);
     const vCommune = esc(requestDraft.commune ?? '');
     const vAddress = esc(requestDraft.address ?? clientSelfAddress);
-    const vDate = esc(requestDraft.date ?? '');
+    const vEtage = esc(requestDraft.etage ?? '');
+    const vTel = esc(requestDraft.contactTel ?? myPhone);
+    const vCode = esc(requestDraft.codeAcces ?? '');
     const vDesc = String(requestDraft.description ?? '').replace(/</g, '&lt;');
+    const needCode = (requestDraft.acces === 'Interphone' || requestDraft.acces === 'Code');
     return `
       <button class="btn btn--ghost" data-go="requests" style="text-align:left;margin:0 0 6px;">← Retour</button>
 
@@ -677,31 +786,63 @@ const VIEWS = {
       </div>
 
       <div class="rf-card">
-        <div class="rf-card__head"><span class="rf-ic">📋</span> Détails de la demande</div>
+        <div class="rf-card__head"><span class="rf-ic">📅</span> Choisissez une date</div>
+        <div class="rf-card__body">
+          <div class="cal-head">
+            <button class="cal-nav" type="button" data-calnav="-1">‹</button>
+            <div class="cal-month" id="calMonth">…</div>
+            <button class="cal-nav" type="button" data-calnav="1">›</button>
+          </div>
+          <div class="cal-dow"><span>Lun</span><span>Mar</span><span>Mer</span><span>Jeu</span><span>Ven</span><span>Sam</span><span>Dim</span></div>
+          <div class="cal-grid" id="calGrid"><div style="grid-column:1/-1;text-align:center;padding:18px;color:var(--muted);">Chargement…</div></div>
+          <div class="cal-foot" id="calFoot"><span>Sélectionnez une date verte</span></div>
+        </div>
+      </div>
+
+      <div class="rf-card">
+        <div class="rf-card__head"><span class="rf-ic">📋</span> Détails</div>
         <div class="rf-card__body">
           <div class="rf-grid">
             <div class="rf-field rf-field--full">
-              <span class="rf-label">Nom complet</span>
+              <span class="rf-label">Nom complet *</span>
               <input id="reqName" class="rf-input" type="text" placeholder="Votre nom" value="${vName}">
+            </div>
+            <div class="rf-field">
+              <span class="rf-label">Étage / Bâtiment</span>
+              <input id="reqEtage" class="rf-input" type="text" placeholder="Ex : 3e étage, Porte 12" value="${vEtage}">
+            </div>
+            <div class="rf-field">
+              <span class="rf-label">Téléphone *</span>
+              <input id="reqTel" class="rf-input" type="tel" placeholder="Contact sur place" value="${vTel}">
+            </div>
+            <div class="rf-field rf-field--full">
+              <span class="rf-label">Créneau souhaité</span>
+              <div class="rf-slots">${slot('Matin (10H-12H)', 'Matin (10H-12H)')}${slot('Après-midi (12H-18H)', 'Après-midi (12H-18H)')}</div>
             </div>
             <div class="rf-field">
               <span class="rf-label">Commune / Ville</span>
               <input id="reqCommune" class="rf-input" type="text" placeholder="Ex : Cocody, Paris…" value="${vCommune}">
             </div>
             <div class="rf-field">
-              <span class="rf-label">Date souhaitée</span>
-              <input id="reqDate" class="rf-input" type="date" min="${todayISO}" value="${vDate}">
+              <span class="rf-label">Accès au bâtiment</span>
+              <select id="reqAcces" class="rf-select" data-reqacces>
+                <option value="">Sélectionner…</option>
+                ${accOpt('Interphone', 'Interphone')}${accOpt('Code', 'Code / Digicode')}${accOpt('Aucun', 'Aucun / Accès libre')}
+              </select>
             </div>
             <div class="rf-field rf-field--full">
-              <span class="rf-label">${adrLabel}</span>
-              <input id="reqAddress" class="rf-input" type="text" placeholder="Quartier, rue, point de repère" value="${vAddress}">
+              <span class="rf-label">${adrLabel} *</span>
+              <div style="position:relative;">
+                <input id="reqAddress" class="rf-input" type="text" placeholder="Quartier, rue, point de repère" autocomplete="off" value="${vAddress}">
+                <ul id="reqAddressSugg" style="display:none;"></ul>
+              </div>
+            </div>
+            <div class="rf-field rf-field--full" id="reqCodeWrap" style="${needCode ? '' : 'display:none;'}">
+              <span class="rf-label">Code / Nom à l'interphone</span>
+              <input id="reqCode" class="rf-input" type="text" placeholder="Ex : B1234 ou DUPONT" value="${vCode}">
             </div>
             <div class="rf-field rf-field--full">
-              <span class="rf-label">Créneau souhaité</span>
-              <div class="rf-slots">${slot('Matin (10H-12H)', 'Matin (10H-12H)')}${slot('Après-midi (12H-18H)', 'Après-midi (12H-18H)')}</div>
-            </div>
-            <div class="rf-field rf-field--full">
-              <span class="rf-label">Description du colis</span>
+              <span class="rf-label">Commentaire</span>
               <textarea id="reqDesc" class="rf-input" rows="3" placeholder="Ex : 2 cartons, 1 valise…">${vDesc}</textarea>
             </div>
           </div>

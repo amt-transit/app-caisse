@@ -185,8 +185,10 @@ export const DemandesClientView = {
           ${this.statusBadge(status)}
         </div>
         <div class="dc-row"><b>${r.fullName || 'Client'}</b> · 📞 ${r.phoneE164 || '—'}</div>
-        ${where ? `<div class="dc-row">📍 ${where}</div>` : ''}
-        <div class="dc-row">🗓️ Souhaité : <b>${this.fdate(r.wantedDate)}</b>${r.staffDate ? ` → Proposé : <b>${this.fdate(r.staffDate)}</b> ${r.staffTime ? '('+r.staffTime+')' : ''}` : ''}</div>
+        ${where ? `<div class="dc-row">📍 ${where}${r.etage ? ' — 🏢 ' + r.etage : ''}</div>` : ''}
+        ${(r.acces && r.acces !== 'Aucun') ? `<div class="dc-row">🔑 ${r.acces}${r.codeAcces ? ' : ' + r.codeAcces : ''}</div>` : ''}
+        ${r.contactTel ? `<div class="dc-row">📞 Contact sur place : ${r.contactTel}</div>` : ''}
+        <div class="dc-row">🗓️ Souhaité : <b>${this.fdate(r.wantedDate)}</b>${r.wantedTime ? ' ('+r.wantedTime+')' : ''}${(r.staffDate && r.staffDate !== r.wantedDate) ? ` → Proposé : <b>${this.fdate(r.staffDate)}</b> ${r.staffTime ? '('+r.staffTime+')' : ''}` : ''}</div>
         ${r.description ? `<div class="dc-row">📝 ${r.description}</div>` : ''}
         <div class="dc-row" style="color:#94a3b8;">Reçue le ${this.fdate(r.createdAt)}</div>
         ${waitingClient ? `<div class="dc-row" style="color:#1e40af;">⏳ En attente de la confirmation du client (date proposée).</div>` : ''}
@@ -239,13 +241,13 @@ export const DemandesClientView = {
     if (!rdvDate) { this.app.showToast("Aucune date : modifiez d'abord la demande pour fixer une date.", "error"); return; }
     const rdvData = {
       client: r.fullName || 'Client',
-      tel: r.phoneE164 || '',
+      tel: r.contactTel || r.phoneE164 || '',
       adresse: r.address || '',
-      etage: '',
-      acces: 'Aucun',
-      codeAcces: '',
+      etage: r.etage || '',
+      acces: r.acces || 'Aucun',
+      codeAcces: r.codeAcces || '',
       date: rdvDate,
-      time: r.staffTime || 'Matin (10H-12H)',
+      time: r.staffTime || r.wantedTime || 'Matin (10H-12H)',
       notes: [r.description, r.staffNote].filter(Boolean).join(' — '),
       rdvType: r.type === 'recup' ? 'RECUPERATION' : 'DEPOT',
       status: 'confirmé',
