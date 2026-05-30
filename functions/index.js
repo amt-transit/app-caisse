@@ -168,6 +168,7 @@ exports.getMyInvoices = onCall({ region: REGION, invoker: "public" }, async (req
     }
 
     const invoices = Array.from(byKey.values());
+    const parcels = []; // suivi colis (rempli avec le magasinage ci-dessous)
 
     // --- MAGASINAGE : aligne le "reste à payer" du tableau de bord sur le
     // détail/PDF officiel. On lit la livraison (active ou archivée) liée à
@@ -232,6 +233,37 @@ exports.getMyInvoices = onCall({ region: REGION, invoker: "public" }, async (req
             if (rem < 0.01) rem = 0;
             inv.remaining = rem;
             inv.status = rem <= 0 ? "PAYE" : (inv.paid > 0 ? "PARTIEL" : "IMPAYE");
+
+            // --- SUIVI COLIS : un colis par sous-référence (label), avec son
+            // étape (0 Entrepôt, 1 Conteneur, 2 Arrivé, 3 Livré). On affine PAR
+            // LABEL via scanHistory si présent, sinon repli sur le statut global. ---
+            if (liv) {
+                const baseStage = liv.status === "LIVRE" ? 3
+                    : liv.containerStatus === "EN_COURS" ? 2
+                    : liv.containerStatus === "A_VENIR" ? 1 : 0;
+                const labels = (Array.isArray(liv.labels) && liv.labels.length) ? liv.labels : [String(liv.ref || inv.reference)];
+                const scans = Array.isArray(liv.scanHistory) ? liv.scanHistory : [];
+                const stageFromScan = (lbl) => {
+                    const mine = scans.filter((s) => s.scanRef === lbl).sort((a, b) => String(b.date).localeCompare(String(a.date)));
+                    if (!mine.length) return null;
+                    const tp = mine[0].type;
+                    if (tp === "REMISE_CLIENT") return 3;
+                    if (tp === "DECHARGEMENT_ABIDJAN") return 2;
+                    if (tp === "CONTENEUR_CHARGEMENT" || tp === "DEPART_VOL" || tp === "DEPART_VOL_RETOUR") return 1;
+                    if (tp === "ENTREPOT_PARIS") return 0;
+                    return null;
+                };
+                labels.forEach((lbl) => {
+                    const st = stageFromScan(lbl);
+                    parcels.push({
+                        ref: inv.reference,
+                        label: lbl,
+                        desc: liv.description || inv._desc || "Colis",
+                        stage: (st === null ? baseStage : st),
+                        date: liv.dateAjout || inv.date || "",
+                    });
+                });
+            }
         }
     } catch (e) { /* non bloquant : on garde le reste sans magasinage */ }
 
@@ -243,7 +275,8 @@ exports.getMyInvoices = onCall({ region: REGION, invoker: "public" }, async (req
     const freeCartons = Math.floor(sentAsSender / 10);
     const toNext = sentAsSender === 0 ? 10 : (10 - (sentAsSender % 10)) % 10 || 10;
 
-    return { invoices, loyalty: { sentAsSender, freeCartons, toNext } };
+    parcels.sort((a, b) => String(b.date).localeCompare(String(a.date)));
+    return { invoices, parcels, loyalty: { sentAsSender, freeCartons, toNext } };
 });
 
 // ===========================================================================

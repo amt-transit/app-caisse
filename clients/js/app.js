@@ -213,6 +213,11 @@ async function loadInvoices() {
       magasinage: i.magasinage || 0,
       currency: i.currency || 'XOF', agency: i.agency || ''
     }));
+    // Suivi colis (renvoyé par la fonction) : {ref, label, desc, stage, date}.
+    PARCELS = (data.parcels || []).map(p => ({
+      ref: p.ref, label: p.label, desc: p.desc || 'Colis',
+      stage: (typeof p.stage === 'number' ? p.stage : 0), date: p.date || ''
+    }));
     LOYALTY = data.loyalty || LOYALTY;
     invoicesLoaded = true;
   } catch (e) {
@@ -566,21 +571,26 @@ const VIEWS = {
   },
 
   tracking() {
+    if (!invoicesLoaded) {
+      return `<div class="card"><div class="placeholder"><span class="ph-ic">⏳</span>Chargement de vos colis…</div></div>`;
+    }
     const list = PARCELS
       .filter(p => trackFilter < 0 || p.stage === trackFilter)
       .map(p => `
         <div class="track-item">
           <div class="track-head">
             <div>
-              <div class="track-ref">${p.ref}</div>
-              <div class="track-desc">${p.label} · ${p.desc}</div>
+              <div class="track-ref">${p.label}</div>
+              <div class="track-desc">${p.ref} · ${p.desc}</div>
             </div>
-            <div class="track-date">${fdate(p.date)}</div>
+            <div class="track-date">${p.date ? fdate(p.date) : ''}</div>
           </div>
           ${stepper(p.stage)}
         </div>`).join('');
 
-    const empty = `<div class="card"><div class="placeholder"><span class="ph-ic">🔍</span>Aucun colis à cette étape.</div></div>`;
+    const empty = PARCELS.length === 0
+      ? `<div class="card"><div class="placeholder"><span class="ph-ic">📦</span>Aucun colis rattaché à votre numéro pour le moment.</div></div>`
+      : `<div class="card"><div class="placeholder"><span class="ph-ic">🔍</span>Aucun colis à cette étape.</div></div>`;
     const filterNote = trackFilter >= 0
       ? `<button class="btn btn--ghost" data-track="-1">↺ Voir tous les colis</button>` : '';
 
@@ -588,7 +598,6 @@ const VIEWS = {
       ${pipeSummary(false)}
       ${filterNote}
       ${list || empty}
-      <p class="placeholder" style="padding:6px;">Le suivi colis par colis (entrepôt, chargement, déchargement, livraison) sera relié prochainement aux scans.</p>
     `;
   },
 
