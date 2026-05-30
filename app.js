@@ -12,6 +12,7 @@ import { SettingsRolesMenusView } from './shared/views/settings-roles-menus.js';
 import { ParrainageView } from './shared/views/parrainage.js';
 import { ProfilView } from './profil-view.js';
 import { DemandesClientView } from './shared/views/demandes-client.js';
+import { ChatClientsView } from './shared/views/chat-clients.js';
 
 // --- PARIS VIEWS (Départ) ---
 import { DashboardView as ParisDashboardView } from './paris/js/views/dashboard.js';
@@ -683,6 +684,14 @@ export const app = {
                 const topBadge = document.getElementById('clientRequestsBadge');
                 if (topBadge) { topBadge.textContent = n; topBadge.style.display = n > 0 ? 'inline-block' : 'none'; }
             } catch (e) { /* collection vide / absente */ }
+
+            // Messages clients non lus (Messagerie clients).
+            try {
+                const qMsg = query(collection(cfg.db, "client_messages"), where("agency", "==", activeAgency), where("sender", "==", "client"), where("readByStaff", "==", false));
+                const snapMsg = await getDocs(qMsg);
+                const cb = document.getElementById('clientChatBadge');
+                if (cb) cb.textContent = snapMsg.size;
+            } catch (e) { /* collection vide / absente */ }
         });
     },
 
@@ -820,6 +829,7 @@ export const app = {
             'parrainage': () => ParrainageView.render(this, container),
             'settings-profile': () => ProfilView.render(this, container),
             'demandes-client': () => DemandesClientView.render(this, container),
+            'chat-clients': () => ChatClientsView.render(this, container),
             
             // --- Conditional / Dual (Selon l'agence) ---
             'dashboard': () => isArrival ? AbidjanDashboardView.render(this, container) : ParisDashboardView.render(this),

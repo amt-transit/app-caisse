@@ -118,6 +118,13 @@ service cloud.firestore {
       allow read: if isAuthenticated() && (hasGlobalAccess() || getUserData().agency in ['paris', 'abidjan']);
     }
 
+    // Messagerie client (app AMT Clients). Le client crée/lit ses messages via
+    // Cloud Functions (Admin SDK). Côté STAFF : lecture + écriture (répondre)
+    // pour le personnel paris/abidjan + accès global.
+    match /client_messages/{document=**} {
+      allow read, write: if isAuthenticated() && (hasGlobalAccess() || getUserData().agency in ['paris', 'abidjan']);
+    }
+
     // Flotte automobile (Gestion Véhicule) : collections NON suffixées par route,
     // partagées par le personnel logistique paris/abidjan. Sans cette règle,
     // seuls les comptes globaux (super admin / agency 'all') pouvaient charger

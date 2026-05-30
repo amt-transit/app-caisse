@@ -54,6 +54,11 @@ let quoteMode = 'maritime';    // 'maritime' | 'aerien'
 let quoteAerienType = 'normal';// 'normal' | 'express' (aérien chine)
 let quoteItems = [{ desc:'', qty:1, pu:'', vol:'', poids:'', lng:'', lrg:'', haut:'', mode:'poids', parfum:false }];
 let quoteResult = null;        // dernier résultat de computeQuote
+// --- Chat ---
+let chatLoaded = false;
+let chatConversations = [];    // [{agency,name,role,unread}]
+let chatMessages = [];         // [{id,agency,text,sender,senderName,createdAt}]
+let chatAgency = null;         // agence (conversation) ouverte
 // Le service Dépôt/Récupération ne concerne QUE les expéditeurs. On déduit le
 // rôle des factures (rôle exp/both) + repli sur l'indicatif France (+33 = départ).
 let isExpediteur = true;       // par défaut on n'masque rien tant qu'on ne sait pas
@@ -309,7 +314,13 @@ function renderView(view) {
   if (view === 'requestForm') initRequestForm();
 }
 
-$$('.tab').forEach(t => t.addEventListener('click', () => renderView(t.dataset.view)));
+$$('.tab').forEach(t => t.addEventListener('click', () => {
+  const v = t.dataset.view;
+  // À chaque ouverture de l'onglet Chat, on recharge (nouveaux messages) et on
+  // repart de la liste des conversations s'il y en a plusieurs.
+  if (v === 'chat') { chatLoaded = false; chatAgency = null; }
+  renderView(v);
+}));
 $('#btnProfile').addEventListener('click', () => renderView('profile'));
 $('#btnNotif').addEventListener('click', () => {
   renderView('notifications');
@@ -360,6 +371,13 @@ document.addEventListener('click', (e) => {
   if (rr) { respondRequest(rr.dataset.reqrefuse, 'refuse'); return; }
   const rcancel = e.target.closest('[data-reqcancel]');
   if (rcancel) { cancelRequest(rcancel.dataset.reqcancel); return; }
+  // --- Chat ---
+  const copen = e.target.closest('[data-chatopen]');
+  if (copen) { openChatAgency(copen.dataset.chatopen); return; }
+  const cback = e.target.closest('[data-chatback]');
+  if (cback) { chatAgency = null; renderView('chat'); return; }
+  const csend = e.target.closest('[data-chatsend]');
+  if (csend) { sendChatMessage(); return; }
 });
 
 // Changement de la route de départ (select) dans le simulateur de devis.
@@ -563,6 +581,59 @@ async function markAllNotifsRead() {
   NOTIFS.forEach(n => n.read = true);
   updateNotifBadge();
   try { await httpsCallable(functions, 'markNotificationsRead')({}); } catch (_) {}
+}
+
+// --- Chat client ---
+async function loadChat() {
+  try {
+    const u = auth.currentUser;
+    if (u) { try { await u.getIdToken(true); } catch (_) {} }
+    const res = await httpsCallable(functions, 'getMyChat')();
+    const d = (res && res.data) || {};
+    chatConversations = d.conversations || [];
+    chatMessages = d.messages || [];
+  } catch (e) {
+    console.warn('getMyChat:', e && e.code, e && e.message);
+    chatConversations = []; chatMessages = [];
+  }
+  chatLoaded = true;
+  if (currentView === 'chat') { renderView('chat'); scrollChatBottom(); }
+}
+
+function scrollChatBottom() {
+  const el = document.getElementById('chatScroll');
+  if (el) el.scrollTop = el.scrollHeight;
+}
+
+function openChatAgency(ag) {
+  chatAgency = ag;
+  renderView('chat');
+  scrollChatBottom();
+  // Marque lus les messages staff de cette agence (serveur + local).
+  const had = chatMessages.some(m => m.agency === ag && m.sender === 'staff' && !m.readByClient);
+  chatMessages.forEach(m => { if (m.agency === ag && m.sender === 'staff') m.readByClient = true; });
+  const c = chatConversations.find(x => x.agency === ag); if (c) c.unread = 0;
+  if (had) { httpsCallable(functions, 'markChatRead')({ agency: ag }).catch(() => {}); }
+}
+
+async function sendChatMessage() {
+  const ta = document.getElementById('chatText');
+  const text = (ta?.value || '').trim();
+  if (!text || !chatAgency) return;
+  // Affichage optimiste.
+  const now = new Date().toISOString();
+  chatMessages.push({ id: 'tmp_' + now, agency: chatAgency, text, sender: 'client', senderName: 'Vous', createdAt: now, readByClient: true });
+  if (ta) ta.value = '';
+  renderView('chat'); scrollChatBottom();
+  try {
+    const u = auth.currentUser;
+    if (u) { try { await u.getIdToken(true); } catch (_) {} }
+    await httpsCallable(functions, 'sendClientMessage')({ text, agency: chatAgency, fromName: clientSelfName || '' });
+    chatLoaded = false; await loadChat(); // recharge l'état réel
+  } catch (e) {
+    console.warn('sendClientMessage:', e && e.code, e && e.message);
+    alert("Envoi impossible pour le moment.");
+  }
 }
 
 // --- Devis (simulateur) ---
@@ -1111,9 +1182,49 @@ const VIEWS = {
   },
 
   chat() {
+    if (!chatLoaded) { loadChat(); return `<div class="card"><div class="placeholder"><span class="ph-ic">⏳</span>Chargement de votre messagerie…</div></div>`; }
+    if (!chatConversations.length) {
+      return `<div class="card"><div class="placeholder"><span class="ph-ic">💬</span>Aucune agence rattachée à votre numéro pour le moment. Vos conversations apparaîtront ici dès votre première facture.</div></div>`;
+    }
+    // Conversation à ouvrir : choisie, sinon l'unique, sinon liste.
+    if (!chatAgency && chatConversations.length === 1) chatAgency = chatConversations[0].agency;
+
+    // Vue LISTE des conversations (plusieurs agences, aucune ouverte).
+    if (!chatAgency) {
+      const items = chatConversations.map(c => {
+        const roleLbl = c.role === 'exp' ? 'vos envois' : c.role === 'dest' ? 'vos réceptions' : 'expéditions & réceptions';
+        return `<div class="inv" style="cursor:pointer;" data-chatopen="${c.agency}">
+          <div class="inv__main"><div class="inv__ref">${c.name}</div><div class="inv__sub">${roleLbl}</div></div>
+          <div class="inv__amt">${c.unread ? `<span class="badge" style="position:static;">${c.unread}</span>` : ''} ›</div>
+        </div>`;
+      }).join('');
+      return `<div class="section-title">Vos conversations</div><div class="card">${items}</div>
+        <p class="placeholder" style="padding:8px;">Choisissez l'agence à qui écrire.</p>`;
+    }
+
+    // Vue CONVERSATION ouverte.
+    const conv = chatConversations.find(c => c.agency === chatAgency) || { name: chatAgency };
+    const msgs = chatMessages.filter(m => m.agency === chatAgency);
+    const fdt = (d) => { try { return new Date(d).toLocaleString('fr-FR'); } catch (e) { return ''; } };
+    const bubbles = msgs.length ? msgs.map(m => `
+      <div style="display:flex;${m.sender === 'client' ? 'justify-content:flex-end;' : ''}margin-bottom:8px;">
+        <div style="max-width:78%;padding:9px 13px;border-radius:14px;font-size:14px;line-height:1.4;${m.sender === 'client' ? 'background:var(--amt-blue);color:#fff;border-bottom-right-radius:4px;' : 'background:#fff;border:1px solid var(--line);border-bottom-left-radius:4px;'}">
+          <div style="font-size:10px;opacity:.7;margin-bottom:2px;">${m.sender === 'client' ? 'Vous' : (m.senderName || conv.name)} · ${fdt(m.createdAt)}</div>
+          ${(m.text || '').replace(/</g, '&lt;')}
+        </div>
+      </div>`).join('') : `<div class="placeholder" style="padding:20px;">Démarrez la conversation avec ${conv.name}.</div>`;
+
+    const backBtn = chatConversations.length > 1
+      ? `<button class="btn btn--ghost" data-chatback="1" style="text-align:left;margin:0 0 6px;">← Mes conversations</button>` : '';
+
     return `
-      <div class="card"><div class="placeholder"><span class="ph-ic">💬</span>Échangez avec AMT Trans'it. Vos messages seront dirigés vers votre agence (départ ou arrivée) selon votre profil.</div></div>
-    `;
+      ${backBtn}
+      <div class="rf-card" style="margin-bottom:10px;"><div class="rf-card__head"><span class="rf-ic">💬</span> ${conv.name}</div></div>
+      <div class="card" id="chatScroll" style="max-height:55vh;overflow-y:auto;">${bubbles}</div>
+      <div style="display:flex;gap:8px;margin-top:10px;">
+        <textarea id="chatText" class="rf-input" rows="2" placeholder="Votre message…" style="flex:1;"></textarea>
+        <button class="btn btn--primary" style="width:auto;padding:0 18px;" data-chatsend="1">Envoyer</button>
+      </div>`;
   },
 
   notifications() {

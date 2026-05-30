@@ -630,6 +630,145 @@ async function loadTarifsForRoute(db, route) {
     return { tarifs: t, model };
 }
 
+// ===========================================================================
+//  CHAT CLIENT (app AMT Clients) — conversations par agence
+// ---------------------------------------------------------------------------
+//  Collection `client_messages` : 1 doc par message
+//  { phoneTail, agency, text, sender:'client'|'staff', senderName,
+//    createdAt, readByClient, readByStaff }. Le client dialogue avec UNE
+//  agence à la fois (conversation). Les agences auxquelles son numéro est
+//  rattaché sont déduites de ses factures (exp -> agence départ ; dest ->
+//  agence arrivée). Staff lit/écrit via le web (firestore.rules) ; le client
+//  passe par ces fonctions (Admin SDK).
+// ---------------------------------------------------------------------------
+
+// Renvoie les agences rattachées au numéro (depuis les factures) + leur libellé.
+async function clientAgenciesFor(db, tail) {
+    const found = new Map(); // agency -> {role exp/dest/both}
+    const cols = await db.listCollections();
+    const txCols = cols.map((c) => c.id).filter((id) => /^transactions(_[a-z0-9_]+)?$/.test(id));
+    for (const colName of txCols) {
+        let destSnap, expSnap;
+        try {
+            [destSnap, expSnap] = await Promise.all([
+                db.collection(colName).where("destPhoneTail", "==", tail).limit(1).get(),
+                db.collection(colName).where("expPhoneTail", "==", tail).limit(1).get(),
+            ]);
+        } catch (e) { continue; }
+        const note = (snap, role) => snap.forEach((d) => {
+            const ag = (d.data() || {}).agency || "";
+            if (!ag) return;
+            const cur = found.get(ag) || "";
+            found.set(ag, cur && cur !== role ? "both" : role);
+        });
+        note(destSnap, "dest"); note(expSnap, "exp");
+    }
+    return found; // Map agency -> role
+}
+
+exports.getMyChat = onCall({ region: REGION, invoker: "public" }, async (request) => {
+    const auth = request.auth;
+    const phone = auth && auth.token && auth.token.phone_number;
+    if (!phone) throw new HttpsError("unauthenticated", "Connexion par téléphone requise.");
+    const digits = String(phone).replace(/\D/g, "");
+    const tail = digits.length >= 9 ? digits.slice(-9) : digits;
+    if (tail.length < 8) return { conversations: [], messages: [] };
+
+    const db = admin.firestore();
+    // 1. Agences rattachées (conversations possibles).
+    let agenciesMap = new Map();
+    try { agenciesMap = await clientAgenciesFor(db, tail); } catch (e) {}
+
+    // 2. Messages existants du client (toutes agences).
+    let msgs = [];
+    try {
+        const snap = await db.collection("client_messages").where("phoneTail", "==", tail).limit(500).get();
+        msgs = snap.docs.map((d) => { const x = d.data() || {}; return {
+            id: d.id, agency: x.agency || "", text: x.text || "", sender: x.sender || "client",
+            senderName: x.senderName || "", createdAt: x.createdAt || "", readByClient: !!x.readByClient,
+        }; });
+    } catch (e) {}
+    // S'assurer que toute agence ayant des messages apparaît aussi en conversation.
+    msgs.forEach((m) => { if (m.agency && !agenciesMap.has(m.agency)) agenciesMap.set(m.agency, "other"); });
+
+    // 3. Libellés d'agence (settings/company_<agence> sinon id).
+    const labelCache = {};
+    const labelFor = async (ag) => {
+        if (labelCache[ag] !== undefined) return labelCache[ag];
+        let name = ag;
+        try { const c = await db.collection("settings").doc(`company_${ag}`).get(); if (c.exists && c.data().name) name = c.data().name; } catch (e) {}
+        labelCache[ag] = name; return name;
+    };
+    const conversations = [];
+    for (const [ag, role] of agenciesMap) {
+        const unread = msgs.filter((m) => m.agency === ag && m.sender === "staff" && !m.readByClient).length;
+        conversations.push({ agency: ag, name: await labelFor(ag), role, unread });
+    }
+    conversations.sort((a, b) => String(a.name).localeCompare(String(b.name)));
+
+    msgs.sort((a, b) => String(a.createdAt).localeCompare(String(b.createdAt)));
+    return { conversations, messages: msgs };
+});
+
+exports.sendClientMessage = onCall({ region: REGION, invoker: "public" }, async (request) => {
+    const auth = request.auth;
+    const phone = auth && auth.token && auth.token.phone_number;
+    if (!phone) throw new HttpsError("unauthenticated", "Connexion par téléphone requise.");
+    const data = request.data || {};
+    const text = String(data.text == null ? "" : data.text).trim().slice(0, 2000);
+    let agency = String(data.agency || "").trim();
+    if (!text) throw new HttpsError("invalid-argument", "Message vide.");
+
+    const digits = String(phone).replace(/\D/g, "");
+    const tail = digits.length >= 9 ? digits.slice(-9) : digits;
+
+    const db = admin.firestore();
+    // Sécurité : l'agence cible doit faire partie des agences rattachées au
+    // numéro (sinon repli sur la 1re trouvée, ou refus si aucune).
+    let agenciesMap = new Map();
+    try { agenciesMap = await clientAgenciesFor(db, tail); } catch (e) {}
+    if (!agency || !agenciesMap.has(agency)) {
+        if (agenciesMap.size === 1) agency = Array.from(agenciesMap.keys())[0];
+        else if (agenciesMap.size === 0) agency = digits.startsWith("33") ? "paris" : "abidjan";
+        else throw new HttpsError("failed-precondition", "Précisez l'agence destinataire.");
+    }
+    const now = new Date().toISOString();
+    const ref = await db.collection("client_messages").add({
+        phoneTail: tail, phoneE164: phone, agency,
+        text, sender: "client", senderName: data.fromName || "",
+        createdAt: now, readByClient: true, readByStaff: false,
+    });
+    // Notifier le staff (page Notifications, temps réel).
+    try {
+        await db.collection("notifications").add({
+            title: "💬 Nouveau message client",
+            message: `${data.fromName || phone} : ${text.slice(0, 80)}`,
+            agency, type: "client_chat", refId: ref.id,
+            createdAt: now, readBy: [],
+        });
+    } catch (e) {}
+    return { ok: true, id: ref.id, agency };
+});
+
+// Marque comme lus (côté client) les messages du staff d'une agence.
+exports.markChatRead = onCall({ region: REGION, invoker: "public" }, async (request) => {
+    const auth = request.auth;
+    const phone = auth && auth.token && auth.token.phone_number;
+    if (!phone) throw new HttpsError("unauthenticated", "Connexion requise.");
+    const digits = String(phone).replace(/\D/g, "");
+    const tail = digits.length >= 9 ? digits.slice(-9) : digits;
+    const agency = String((request.data || {}).agency || "").trim();
+    const db = admin.firestore();
+    try {
+        let q = db.collection("client_messages").where("phoneTail", "==", tail).where("sender", "==", "staff").where("readByClient", "==", false).limit(300);
+        const snap = await q.get();
+        let batch = db.batch(), n = 0;
+        snap.forEach((d) => { if (!agency || (d.data() || {}).agency === agency) { batch.update(d.ref, { readByClient: true }); n++; } });
+        if (n > 0) await batch.commit();
+        return { ok: true, updated: n };
+    } catch (e) { return { ok: true, updated: 0 }; }
+});
+
 exports.getQuoteConfig = onCall({ region: REGION, invoker: "public" }, async (request) => {
     if (!request.auth || !request.auth.token || !request.auth.token.phone_number) {
         throw new HttpsError("unauthenticated", "Connexion par téléphone requise.");

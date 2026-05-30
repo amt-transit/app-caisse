@@ -1,0 +1,171 @@
+// Chat Clients (côté STAFF) — messages venus de l'app AMT Clients.
+// Collection `client_messages` (un doc par message, voir functions/index.js).
+// On affiche la liste des clients ayant écrit à l'agence active, et la
+// conversation du client sélectionné ; le staff peut répondre (sender:'staff').
+import { db } from '../../firebase-config.js';
+import { collection, query, where, onSnapshot, addDoc, doc, updateDoc, writeBatch, getDocs, limit } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
+
+export const ChatClientsView = {
+  unsub: null,
+  messages: [],
+  selectedTail: null,
+
+  render(app, container) {
+    this.app = app;
+    window.app.views = window.app.views || {};
+    window.app.views.chatClients = this;
+
+    const html = `
+      <style>
+        .cc-page{max-width:1100px;margin:0 auto;animation:fadeIn .3s ease;}
+        .cc-head{background:#fff;border:1px solid #e2e8f0;border-radius:16px;padding:18px 22px;margin-bottom:16px;display:flex;align-items:center;gap:14px;}
+        .cc-head__ic{font-size:24px;background:#e0e7ff;color:#4f46e5;width:48px;height:48px;display:flex;align-items:center;justify-content:center;border-radius:12px;}
+        .cc-head__t{margin:0;font-size:18px;font-weight:800;color:#0f172a;}
+        .cc-head__s{margin:2px 0 0;font-size:12px;color:#64748b;}
+        .cc-layout{display:grid;grid-template-columns:300px 1fr;gap:16px;}
+        @media(max-width:760px){.cc-layout{grid-template-columns:1fr;}}
+        .cc-list{background:#fff;border:1px solid #e2e8f0;border-radius:14px;overflow:hidden;max-height:70vh;overflow-y:auto;}
+        .cc-conv{padding:12px 14px;border-bottom:1px solid #f1f5f9;cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:8px;}
+        .cc-conv:hover{background:#f8fafc;}
+        .cc-conv.active{background:#eef4fb;}
+        .cc-conv__n{font-weight:700;color:#1e293b;font-size:14px;}
+        .cc-conv__last{font-size:12px;color:#94a3b8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:170px;}
+        .cc-badge{background:#ef4444;color:#fff;border-radius:10px;font-size:11px;font-weight:700;padding:1px 7px;}
+        .cc-panel{background:#fff;border:1px solid #e2e8f0;border-radius:14px;display:flex;flex-direction:column;height:70vh;}
+        .cc-msgs{flex:1;padding:18px;overflow-y:auto;display:flex;flex-direction:column;gap:10px;background:#f8fafc;}
+        .cc-msg{max-width:75%;padding:10px 14px;border-radius:14px;font-size:14px;line-height:1.45;}
+        .cc-msg--client{align-self:flex-start;background:#fff;border:1px solid #e2e8f0;border-bottom-left-radius:4px;}
+        .cc-msg--staff{align-self:flex-end;background:#3b82f6;color:#fff;border-bottom-right-radius:4px;}
+        .cc-msg__meta{font-size:10px;opacity:.7;margin-bottom:3px;}
+        .cc-input{display:flex;gap:10px;padding:14px;border-top:1px solid #e2e8f0;}
+        .cc-input textarea{flex:1;border:1px solid #cbd5e1;border-radius:10px;padding:11px;font-family:inherit;font-size:14px;resize:none;outline:none;}
+        .cc-send{background:#3b82f6;color:#fff;border:none;border-radius:10px;padding:0 18px;font-weight:700;cursor:pointer;}
+        .cc-empty{padding:40px;text-align:center;color:#64748b;}
+      </style>
+      <div class="cc-page">
+        <div class="cc-head">
+          <div class="cc-head__ic">💬</div>
+          <div><h1 class="cc-head__t">Messagerie clients</h1><p class="cc-head__s">Messages envoyés depuis l'application client à votre agence.</p></div>
+        </div>
+        <div class="cc-layout">
+          <div class="cc-list" id="ccList"><div class="cc-empty">Chargement…</div></div>
+          <div class="cc-panel">
+            <div class="cc-msgs" id="ccMsgs"><div class="cc-empty">Sélectionnez une conversation.</div></div>
+            <div class="cc-input">
+              <textarea id="ccText" rows="2" placeholder="Votre réponse au client…"></textarea>
+              <button class="cc-send" onclick="window.app.views.chatClients.send()">Envoyer</button>
+            </div>
+          </div>
+        </div>
+      </div>`;
+    const target = container || document.getElementById('contentContainer');
+    if (target) target.innerHTML = html;
+    this.loadData();
+  },
+
+  loadData() {
+    if (this.unsub) this.unsub();
+    const activeAgency = sessionStorage.getItem('currentActiveAgency') || 'paris';
+    const q = query(collection(db, 'client_messages'), where('agency', '==', activeAgency), limit(1000));
+    this.unsub = onSnapshot(q, (snap) => {
+      this.messages = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+        .sort((a, b) => String(a.createdAt).localeCompare(String(b.createdAt)));
+      this.renderList();
+      if (this.selectedTail) this.renderConversation();
+      if (this.app && typeof this.app.updateBadges === 'function') this.app.updateBadges();
+    }, (err) => {
+      console.error('Chat clients:', err);
+      const l = document.getElementById('ccList'); if (l) l.innerHTML = '<div class="cc-empty">Erreur de chargement.</div>';
+    });
+  },
+
+  // Regroupe les messages par client (phoneTail).
+  conversations() {
+    const map = new Map(); // tail -> {tail, name, phone, last, lastDate, unread}
+    for (const m of this.messages) {
+      const t = m.phoneTail || '?';
+      const c = map.get(t) || { tail: t, name: '', phone: m.phoneE164 || '', last: '', lastDate: '', unread: 0 };
+      if (m.sender === 'client' && m.senderName && !c.name) c.name = m.senderName;
+      if (m.phoneE164 && !c.phone) c.phone = m.phoneE164;
+      c.last = m.text || ''; c.lastDate = m.createdAt || '';
+      if (m.sender === 'client' && !m.readByStaff) c.unread++;
+      map.set(t, c);
+    }
+    return Array.from(map.values()).sort((a, b) => String(b.lastDate).localeCompare(String(a.lastDate)));
+  },
+
+  renderList() {
+    const el = document.getElementById('ccList');
+    if (!el) return;
+    const convs = this.conversations();
+    if (!convs.length) { el.innerHTML = '<div class="cc-empty">Aucun message client pour le moment.</div>'; return; }
+    el.innerHTML = convs.map(c => `
+      <div class="cc-conv ${c.tail === this.selectedTail ? 'active' : ''}" onclick="window.app.views.chatClients.select('${c.tail}')">
+        <div style="min-width:0;">
+          <div class="cc-conv__n">${c.name || c.phone || ('…' + c.tail)}</div>
+          <div class="cc-conv__last">${(c.last || '').slice(0, 38)}</div>
+        </div>
+        ${c.unread ? `<span class="cc-badge">${c.unread}</span>` : ''}
+      </div>`).join('');
+  },
+
+  select(tail) {
+    this.selectedTail = tail;
+    this.renderList();
+    this.renderConversation();
+    this.markRead(tail);
+  },
+
+  renderConversation() {
+    const el = document.getElementById('ccMsgs');
+    if (!el) return;
+    const conv = this.messages.filter(m => m.phoneTail === this.selectedTail);
+    if (!conv.length) { el.innerHTML = '<div class="cc-empty">Aucun message.</div>'; return; }
+    const fdate = (d) => { try { return new Date(d).toLocaleString('fr-FR'); } catch (e) { return ''; } };
+    el.innerHTML = conv.map(m => `
+      <div class="cc-msg cc-msg--${m.sender === 'staff' ? 'staff' : 'client'}">
+        <div class="cc-msg__meta">${m.sender === 'staff' ? (m.senderName || 'Agence') : (m.senderName || 'Client')} · ${fdate(m.createdAt)}</div>
+        <div>${(m.text || '').replace(/</g, '&lt;')}</div>
+      </div>`).join('');
+    el.scrollTop = el.scrollHeight;
+  },
+
+  async markRead(tail) {
+    const unread = this.messages.filter(m => m.phoneTail === tail && m.sender === 'client' && !m.readByStaff);
+    if (!unread.length) return;
+    try {
+      const batch = writeBatch(db);
+      unread.forEach(m => batch.update(doc(db, 'client_messages', m.id), { readByStaff: true }));
+      await batch.commit();
+    } catch (e) { /* non bloquant */ }
+  },
+
+  async send() {
+    if (!this.selectedTail) { this.app.showToast("Sélectionnez une conversation.", "error"); return; }
+    const ta = document.getElementById('ccText');
+    const text = (ta?.value || '').trim();
+    if (!text) return;
+    const activeAgency = sessionStorage.getItem('currentActiveAgency') || 'paris';
+    // On retrouve le numéro complet du client pour le rattachement.
+    const any = this.messages.find(m => m.phoneTail === this.selectedTail);
+    try {
+      await addDoc(collection(db, 'client_messages'), {
+        phoneTail: this.selectedTail,
+        phoneE164: (any && any.phoneE164) || '',
+        agency: activeAgency,
+        text,
+        sender: 'staff',
+        senderName: sessionStorage.getItem('userName') || 'Agence',
+        createdAt: new Date().toISOString(),
+        readByClient: false,
+        readByStaff: true,
+      });
+      if (ta) ta.value = '';
+    } catch (e) {
+      console.error('Envoi réponse client:', e);
+      this.app.showToast("Erreur d'envoi.", "error");
+    }
+  },
+
+  destroy() { if (this.unsub) { try { this.unsub(); } catch (e) {} this.unsub = null; } }
+};
