@@ -111,6 +111,13 @@ service cloud.firestore {
       allow read, write: if isAuthenticated() && (hasGlobalAccess() || getUserData().agency in ['paris', 'abidjan']);
     }
 
+    // Notifications de l'app AMT Clients (cloche 🔔). Créées/lues par les Cloud
+    // Functions (Admin SDK) côté client ; côté STAFF, lecture seule autorisée
+    // pour diagnostic. Aucun accès en écriture direct n'est nécessaire ici.
+    match /client_notifications/{document=**} {
+      allow read: if isAuthenticated() && (hasGlobalAccess() || getUserData().agency in ['paris', 'abidjan']);
+    }
+
     // Flotte automobile (Gestion Véhicule) : collections NON suffixées par route,
     // partagées par le personnel logistique paris/abidjan. Sans cette règle,
     // seuls les comptes globaux (super admin / agency 'all') pouvaient charger

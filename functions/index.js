@@ -470,6 +470,24 @@ exports.createClientRequest = onCall({ region: REGION, invoker: "public" }, asyn
     else { agency = "abidjan"; position = "arrivee"; }
 
     const db = admin.firestore();
+
+    // ANTI-DOUBLON : on refuse une nouvelle demande du même type tant qu'une est
+    // encore EN COURS (en_attente / modifiee / confirmee) pour ce client.
+    try {
+        const dupSnap = await db.collection("client_requests")
+            .where("phoneTail", "==", tail).where("type", "==", type).limit(20).get();
+        const hasActive = dupSnap.docs.some((d) => {
+            const s = (d.data() || {}).status;
+            return s === "en_attente" || s === "modifiee" || s === "confirmee";
+        });
+        if (hasActive) {
+            throw new HttpsError("already-exists", "Vous avez déjà une demande de ce type en cours. Attendez son traitement ou annulez-la.");
+        }
+    } catch (e) {
+        if (e instanceof HttpsError) throw e; // propage l'erreur métier
+        /* lecture impossible : on n'empêche pas la création */
+    }
+
     const ref = db.collection("client_requests").doc();
     const now = new Date().toISOString();
     await ref.set({
@@ -484,6 +502,20 @@ exports.createClientRequest = onCall({ region: REGION, invoker: "public" }, asyn
         updatedAt: now,
         source: "app_client",
     });
+    // Notification STAFF : nouvelle demande à traiter.
+    try {
+        const typeLbl = type === "recup" ? "récupération" : "dépôt";
+        await db.collection("notifications").add({
+            title: "📥 Nouvelle demande client",
+            message: `${fullName || phone} demande un ${typeLbl}${commune ? " à " + commune : ""}${wantedDate ? " pour le " + wantedDate : ""}.`,
+            agency,
+            type: "client_request",
+            refId: ref.id,
+            createdAt: now,
+            readBy: [],
+        });
+    } catch (e) { /* non bloquant */ }
+
     return { id: ref.id, ok: true, agency };
 });
 
@@ -512,6 +544,40 @@ exports.getMyRequests = onCall({ region: REGION, invoker: "public" }, async (req
         };
     }).sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
     return { requests };
+});
+
+// Annulation par le CLIENT de SA demande, tant qu'elle n'est pas « traitee »
+// (RDV déjà créé) ni « refusee ». Sécurité : phoneTail du token.
+exports.cancelClientRequest = onCall({ region: REGION, invoker: "public" }, async (request) => {
+    const auth = request.auth;
+    const phone = auth && auth.token && auth.token.phone_number;
+    if (!phone) throw new HttpsError("unauthenticated", "Connexion par téléphone requise.");
+    const id = request.data && request.data.id;
+    if (!id) throw new HttpsError("invalid-argument", "Demande manquante.");
+    const digits = String(phone).replace(/\D/g, "");
+    const tail = digits.length >= 9 ? digits.slice(-9) : digits;
+
+    const db = admin.firestore();
+    const ref = db.collection("client_requests").doc(id);
+    const snap = await ref.get();
+    if (!snap.exists) throw new HttpsError("not-found", "Demande introuvable.");
+    const r = snap.data() || {};
+    if (r.phoneTail !== tail) throw new HttpsError("permission-denied", "Demande non autorisée.");
+    if (r.status === "traitee") throw new HttpsError("failed-precondition", "Le rendez-vous est déjà fixé. Contactez l'agence.");
+    if (r.status === "annulee" || r.status === "refusee") return { ok: true, status: r.status };
+
+    await ref.update({ status: "annulee", updatedAt: new Date().toISOString() });
+    // Prévenir le staff (la demande disparaît de leur file de traitement).
+    try {
+        const typeLbl = r.type === "recup" ? "récupération" : "dépôt";
+        await db.collection("notifications").add({
+            title: "🚫 Demande annulée par le client",
+            message: `${r.fullName || r.phoneE164 || "Un client"} a annulé sa demande de ${typeLbl}.`,
+            agency: r.agency || "paris", type: "client_request", refId: id,
+            createdAt: new Date().toISOString(), readBy: [],
+        });
+    } catch (e) { /* non bloquant */ }
+    return { ok: true, status: "annulee" };
 });
 
 // Réponse du CLIENT à une proposition du staff (date/créneau modifiés).
@@ -543,6 +609,25 @@ exports.respondClientRequest = onCall({ region: REGION, invoker: "public" }, asy
         clientRespondedAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
     });
+
+    // Notification STAFF (collection partagée `notifications`, temps réel côté
+    // web) pour prévenir l'agence de la réponse du client.
+    try {
+        const typeLbl = r.type === "recup" ? "récupération" : "dépôt";
+        const who = r.fullName || r.phoneE164 || "Un client";
+        await db.collection("notifications").add({
+            title: action === "accept" ? "✅ Demande confirmée par le client" : "❌ Modification refusée par le client",
+            message: action === "accept"
+                ? `${who} a accepté la date proposée pour sa ${typeLbl}. Vous pouvez valider et créer le RDV.`
+                : `${who} a refusé la date proposée pour sa ${typeLbl}.`,
+            agency: r.agency || "paris",
+            type: "client_request",
+            refId: id,
+            createdAt: new Date().toISOString(),
+            readBy: [],
+        });
+    } catch (e) { /* non bloquant */ }
+
     return { ok: true, status: action === "accept" ? "confirmee" : "refusee" };
 });
 

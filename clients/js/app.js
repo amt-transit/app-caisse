@@ -319,6 +319,8 @@ document.addEventListener('click', (e) => {
   if (ra) { respondRequest(ra.dataset.reqaccept, 'accept'); return; }
   const rr = e.target.closest('[data-reqrefuse]');
   if (rr) { respondRequest(rr.dataset.reqrefuse, 'refuse'); return; }
+  const rcancel = e.target.closest('[data-reqcancel]');
+  if (rcancel) { cancelRequest(rcancel.dataset.reqcancel); return; }
 });
 
 // --- Demandes dépôt / récupération ---
@@ -365,7 +367,10 @@ async function submitRequest() {
     renderView('requests');
   } catch (e) {
     console.warn('createClientRequest:', e && e.code, e && e.message);
-    err(e && e.code === 'unauthenticated' ? 'Session expirée, reconnectez-vous.' : "Envoi impossible. Réessayez.");
+    const msg = (e && e.code === 'unauthenticated') ? 'Session expirée, reconnectez-vous.'
+      : (e && e.code === 'already-exists') ? (e.message || "Vous avez déjà une demande de ce type en cours.")
+      : "Envoi impossible. Réessayez.";
+    err(msg);
     if (btn) { btn.disabled = false; btn.textContent = 'Envoyer la demande'; }
   }
 }
@@ -397,6 +402,22 @@ async function markAllNotifsRead() {
   NOTIFS.forEach(n => n.read = true);
   updateNotifBadge();
   try { await httpsCallable(functions, 'markNotificationsRead')({}); } catch (_) {}
+}
+
+// Annulation par le client de SA demande (tant qu'aucun RDV n'est fixé).
+async function cancelRequest(id) {
+  const ok = confirm("Annuler cette demande ?");
+  if (!ok) return;
+  try {
+    const u = auth.currentUser;
+    if (u) { try { await u.getIdToken(true); } catch (_) {} }
+    await httpsCallable(functions, 'cancelClientRequest')({ id });
+    requestsLoaded = false;
+    renderView('requests');
+  } catch (e) {
+    console.warn('cancelClientRequest:', e && e.code, e && e.message);
+    alert(e && e.code === 'failed-precondition' ? "Le rendez-vous est déjà fixé. Contactez l'agence." : "Annulation impossible pour le moment.");
+  }
 }
 
 // Réponse du client à une proposition de l'agence (date modifiée) : accept/refuse.
@@ -558,6 +579,7 @@ const VIEWS = {
         modifiee:   { l: 'À confirmer', c: '#1e40af', bg: '#dbeafe' },
         confirmee:  { l: 'Confirmée',  c: '#166534', bg: '#dcfce7' },
         refusee:    { l: 'Refusée',    c: '#991b1b', bg: '#fee2e2' },
+        annulee:    { l: 'Annulée',    c: '#64748b', bg: '#f1f5f9' },
         traitee:    { l: 'RDV fixé',   c: '#166534', bg: '#dcfce7' },
       };
       body = filtered.length ? filtered.map(r => {
@@ -586,6 +608,7 @@ const VIEWS = {
           ${r.description ? `<div class="inv__sub">📝 ${r.description}</div>` : ''}
           <div class="inv__sub" style="color:#94a3b8;">Demandé le ${fdate(r.createdAt)}</div>
           ${proposal}
+          ${['en_attente','modifiee','confirmee'].includes(r.status) ? `<div style="margin-top:10px;text-align:right;"><button class="btn btn--ghost" style="font-size:12px;padding:6px 12px;" data-reqcancel="${r.id}">🚫 Annuler ma demande</button></div>` : ''}
         </div>`;
       }).join('') : `<div class="card"><div class="placeholder"><span class="ph-ic">📦</span>Aucune demande pour le moment.</div></div>`;
     }
@@ -607,6 +630,7 @@ const VIEWS = {
       ? "Indiquez où récupérer/livrer le colis et quand."
       : "Indiquez où enlever votre colis (adresse de départ) et quand.";
     const myPhone = (auth.currentUser && auth.currentUser.phoneNumber) || localStorage.getItem(LS.phone) || '';
+    const todayISO = new Date().toISOString().slice(0, 10); // date min = aujourd'hui
     return `
       <button class="btn btn--ghost" data-go="requests" style="text-align:left;margin:0 0 8px;">← Retour</button>
       <div class="card">
@@ -620,7 +644,7 @@ const VIEWS = {
         <label class="auth__label">Adresse précise</label>
         <input id="reqAddress" class="filter-input" type="text" placeholder="Quartier, rue, point de repère" value="${(clientSelfAddress || '').replace(/"/g, '&quot;')}" style="width:100%;box-sizing:border-box;margin-bottom:10px;">
         <label class="auth__label">Date souhaitée</label>
-        <input id="reqDate" class="filter-input" type="date" style="width:100%;box-sizing:border-box;margin-bottom:10px;">
+        <input id="reqDate" class="filter-input" type="date" min="${todayISO}" style="width:100%;box-sizing:border-box;margin-bottom:10px;">
         <label class="auth__label">Description du colis</label>
         <textarea id="reqDesc" class="filter-input" rows="3" placeholder="Ex : 2 cartons, 1 valise…" style="width:100%;box-sizing:border-box;margin-bottom:14px;"></textarea>
         <div id="reqError" class="auth__error" hidden style="margin-bottom:10px;"></div>
