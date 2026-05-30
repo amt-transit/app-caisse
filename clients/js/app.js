@@ -41,6 +41,10 @@ let REQUESTS = [];      // demandes dépôt/récup du client
 let requestsLoaded = false;
 let requestsSubtab = 'tous'; // 'tous' | 'depot' | 'recup'
 let requestFormType = 'depot'; // type en cours de saisie
+// Le service Dépôt/Récupération ne concerne QUE les expéditeurs. On déduit le
+// rôle des factures (rôle exp/both) + repli sur l'indicatif France (+33 = départ).
+let isExpediteur = true;       // par défaut on n'masque rien tant qu'on ne sait pas
+let clientSelfName = '';       // nom de l'expéditeur (préremplissage du formulaire)
 
 // Notifications réelles : Phase 3.
 let NOTIFS = [];
@@ -223,7 +227,16 @@ async function loadInvoices() {
       stage: (typeof p.stage === 'number' ? p.stage : 0), date: p.date || ''
     }));
     LOYALTY = data.loyalty || LOYALTY;
+    // Rôle : expéditeur si au moins une facture en envoi, ou n° français (+33).
+    const phoneDigits = ((auth.currentUser && auth.currentUser.phoneNumber) || '').replace(/\D/g, '');
+    const hasSenderInvoice = INVOICES.some(i => i.role === 'Expéditeur' || i.role === 'Exp./Dest.');
+    isExpediteur = hasSenderInvoice || phoneDigits.startsWith('33') || (LOYALTY.sentAsSender || 0) > 0;
+    // Nom de l'expéditeur : sur une facture où il est destinataire, la contrepartie
+    // est l'expéditeur ; mais quand LUI est expéditeur, son propre nom n'est pas
+    // renvoyé. On garde le nom mémorisé localement s'il existe.
+    clientSelfName = (localStorage.getItem(LS.name) || '').trim();
     invoicesLoaded = true;
+    applyRoleVisibility();
   } catch (e) {
     console.warn('getMyInvoices:', e && e.code, e && e.message);
     invoicesLoaded = true;
@@ -248,7 +261,21 @@ function setActiveTab(view) {
   $$('.tab').forEach(t => t.classList.toggle('active', t.dataset.view === view));
 }
 
+// Masque l'onglet « Dépôt » (et les raccourcis dépôt/récup du tableau de bord)
+// pour les clients destinataires : ce service ne concerne que les expéditeurs.
+function applyRoleVisibility() {
+  const reqTab = document.querySelector('.tab[data-view="requests"]');
+  if (reqTab) reqTab.style.display = isExpediteur ? '' : 'none';
+  document.querySelectorAll('[data-go="requests"]').forEach(el => {
+    el.style.display = isExpediteur ? '' : 'none';
+  });
+  // Si un destinataire était sur la vue Dépôt, on le renvoie à l'accueil.
+  if (!isExpediteur && currentView === 'requests') renderView('dashboard');
+}
+
 function renderView(view) {
+  // Garde : un destinataire ne peut pas ouvrir le Dépôt/Récup (service expéditeur).
+  if ((view === 'requests' || view === 'requestForm') && !isExpediteur) view = 'dashboard';
   currentView = view;
   const c = $('#content');
   $('#topTitle').textContent = VIEW_TITLES[view] || 'AMT Clients';
@@ -318,6 +345,8 @@ async function submitRequest() {
     description: ($('#reqDesc')?.value || '').trim(),
   };
   if (!payload.commune && !payload.address) { err('Indiquez au moins une commune ou une adresse.'); return; }
+  // Mémorise le nom de l'expéditeur pour préremplir les prochaines demandes.
+  if (payload.fullName) { try { localStorage.setItem(LS.name, payload.fullName); clientSelfName = payload.fullName; } catch (_) {} }
   const btn = $('[data-reqsubmit]'); if (btn) { btn.disabled = true; btn.textContent = 'Envoi…'; }
   try {
     const u = auth.currentUser;
@@ -511,13 +540,15 @@ const VIEWS = {
     const hint = isRecup
       ? "Indiquez où récupérer/livrer le colis et quand."
       : "Indiquez où enlever votre colis (adresse de départ) et quand.";
+    const myPhone = (auth.currentUser && auth.currentUser.phoneNumber) || localStorage.getItem(LS.phone) || '';
     return `
       <button class="btn btn--ghost" data-go="requests" style="text-align:left;margin:0 0 8px;">← Retour</button>
       <div class="card">
         <div class="section-title">${title}</div>
         <p class="muted" style="margin:0 0 12px;font-size:13px;">${hint}</p>
+        <div class="placeholder" style="padding:8px 10px;margin-bottom:12px;">👤 Expéditeur : <b>${clientSelfName || 'à compléter'}</b> · 📞 ${myPhone}</div>
         <label class="auth__label">Nom complet</label>
-        <input id="reqName" class="filter-input" type="text" placeholder="Votre nom" style="width:100%;box-sizing:border-box;margin-bottom:10px;">
+        <input id="reqName" class="filter-input" type="text" placeholder="Votre nom" value="${(clientSelfName || '').replace(/"/g, '&quot;')}" style="width:100%;box-sizing:border-box;margin-bottom:10px;">
         <label class="auth__label">Commune / Ville</label>
         <input id="reqCommune" class="filter-input" type="text" placeholder="Ex : Cocody, Paris…" style="width:100%;box-sizing:border-box;margin-bottom:10px;">
         <label class="auth__label">Adresse précise</label>
