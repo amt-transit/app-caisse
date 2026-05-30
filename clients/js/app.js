@@ -47,6 +47,13 @@ let calMonth = null;    // 1er du mois affiché par le calendrier
 let calAvail = {};      // { 'YYYY-MM-DD': placesRestantes (-1 = jour off) }
 let calSelected = '';   // date choisie 'YYYY-MM-DD'
 let calCapacity = 80;
+// --- Devis (simulateur) ---
+let quoteRoutes = null;        // [{id,name,flag,model,tarifs}] chargé une fois
+let quoteRoute = '';           // route choisie
+let quoteMode = 'maritime';    // 'maritime' | 'aerien'
+let quoteAerienType = 'normal';// 'normal' | 'express' (aérien chine)
+let quoteItems = [{ desc:'', qty:1, pu:'', vol:'', poids:'', lng:'', lrg:'', haut:'', mode:'poids', parfum:false }];
+let quoteResult = null;        // dernier résultat de computeQuote
 // Le service Dépôt/Récupération ne concerne QUE les expéditeurs. On déduit le
 // rôle des factures (rôle exp/both) + repli sur l'indicatif France (+33 = départ).
 let isExpediteur = true;       // par défaut on n'masque rien tant qu'on ne sait pas
@@ -329,6 +336,19 @@ document.addEventListener('click', (e) => {
   if (cnav) { calNav(parseInt(cnav.dataset.calnav, 10)); return; }
   const cpick = e.target.closest('[data-calpick]');
   if (cpick) { calPick(cpick.dataset.calpick); return; }
+  // --- Devis ---
+  const qmode = e.target.closest('[data-qmode]');
+  if (qmode) { keepQuoteDraft(); quoteMode = qmode.dataset.qmode; quoteResult = null; renderView('quotes'); return; }
+  const qaer = e.target.closest('[data-qaer]');
+  if (qaer) { keepQuoteDraft(); quoteAerienType = qaer.dataset.qaer; renderView('quotes'); return; }
+  const qimode = e.target.closest('[data-qimode]');
+  if (qimode) { keepQuoteDraft(); const [i, m] = qimode.dataset.qimode.split('|'); if (quoteItems[i]) quoteItems[i].mode = m; renderView('quotes'); return; }
+  const qadd = e.target.closest('[data-qadd]');
+  if (qadd) { keepQuoteDraft(); quoteItems.push({ desc:'', qty:1, pu:'', vol:'', poids:'', lng:'', lrg:'', haut:'', mode:'poids', parfum:false }); renderView('quotes'); return; }
+  const qdel = e.target.closest('[data-qdel]');
+  if (qdel) { keepQuoteDraft(); quoteItems.splice(parseInt(qdel.dataset.qdel, 10), 1); renderView('quotes'); return; }
+  const qcalc = e.target.closest('[data-qcalc]');
+  if (qcalc) { computeQuoteNow(); return; }
   const rsub = e.target.closest('[data-reqsubmit]');
   if (rsub) { submitRequest(); return; }
   const ra = e.target.closest('[data-reqaccept]');
@@ -337,6 +357,12 @@ document.addEventListener('click', (e) => {
   if (rr) { respondRequest(rr.dataset.reqrefuse, 'refuse'); return; }
   const rcancel = e.target.closest('[data-reqcancel]');
   if (rcancel) { cancelRequest(rcancel.dataset.reqcancel); return; }
+});
+
+// Changement de la route de départ (select) dans le simulateur de devis.
+document.addEventListener('change', (e) => {
+  const qr = e.target.closest('[data-qroute]');
+  if (qr) { keepQuoteDraft(); quoteRoute = qr.value; quoteResult = null; renderView('quotes'); }
 });
 
 // --- Demandes dépôt / récupération ---
@@ -530,6 +556,47 @@ async function markAllNotifsRead() {
   NOTIFS.forEach(n => n.read = true);
   updateNotifBadge();
   try { await httpsCallable(functions, 'markNotificationsRead')({}); } catch (_) {}
+}
+
+// --- Devis (simulateur) ---
+async function loadQuoteConfig() {
+  try {
+    const u = auth.currentUser;
+    if (u) { try { await u.getIdToken(true); } catch (_) {} }
+    const res = await httpsCallable(functions, 'getQuoteConfig')();
+    quoteRoutes = (res && res.data && res.data.routes) || [];
+  } catch (e) {
+    console.warn('getQuoteConfig:', e && e.code, e && e.message);
+    quoteRoutes = [];
+  }
+  if (currentView === 'quotes') renderView('quotes');
+}
+
+// Sauvegarde les valeurs des champs articles avant un re-render.
+function keepQuoteDraft() {
+  document.querySelectorAll('[data-qi]').forEach(el => {
+    const i = parseInt(el.dataset.qi, 10); const f = el.dataset.qf;
+    if (!quoteItems[i]) return;
+    quoteItems[i][f] = (el.type === 'checkbox') ? el.checked : el.value;
+  });
+}
+
+async function computeQuoteNow() {
+  keepQuoteDraft();
+  const btn = document.querySelector('[data-qcalc]');
+  if (btn) { btn.disabled = true; btn.textContent = 'Calcul…'; }
+  try {
+    const u = auth.currentUser;
+    if (u) { try { await u.getIdToken(true); } catch (_) {} }
+    const res = await httpsCallable(functions, 'computeQuote')({
+      route: quoteRoute, mode: quoteMode, aerienType: quoteAerienType, items: quoteItems
+    });
+    quoteResult = res && res.data;
+  } catch (e) {
+    console.warn('computeQuote:', e && e.code, e && e.message);
+    alert("Calcul impossible pour le moment.");
+  }
+  renderView('quotes');
 }
 
 // Annulation par le client de SA demande (tant qu'aucun RDV n'est fixé).
@@ -854,9 +921,107 @@ const VIEWS = {
   },
 
   quotes() {
+    if (quoteRoutes === null) { loadQuoteConfig(); return `<div class="card"><div class="placeholder"><span class="ph-ic">⏳</span>Chargement du simulateur…</div></div>`; }
+    if (!quoteRoutes.length) return `<div class="card"><div class="placeholder"><span class="ph-ic">🧾</span>Tarification indisponible pour le moment.</div></div>`;
+    if (!quoteRoute) quoteRoute = quoteRoutes[0].id;
+    const route = quoteRoutes.find(r => r.id === quoteRoute) || quoteRoutes[0];
+    const model = route.model; // 'paris' | 'chine'
+    // Le détail des champs dépend de la combinaison route(model) + mode.
+    const isChine = model === 'chine';
+    const esc = (s) => String(s == null ? '' : s).replace(/"/g, '&quot;');
+
+    const routeOpt = (r) => `<option value="${r.id}"${r.id === quoteRoute ? ' selected' : ''}>${r.flag || ''} ${r.name}</option>`;
+    const modeBtn = (k, lbl) => `<button type="button" class="rf-type__opt${quoteMode === k ? ' active' : ''}" data-qmode="${k}">${lbl}</button>`;
+
+    // En-tête tarif (transparence) selon contexte.
+    let tarifNote = '';
+    if (quoteMode === 'maritime' && isChine) tarifNote = `Maritime : ${route.tarifs.cbmChine.toLocaleString('fr-FR')} FCFA / m³`;
+    else if (quoteMode === 'maritime') tarifNote = `Maritime : prix par article (en €)`;
+    else if (quoteMode === 'aerien' && isChine) tarifNote = `Aérien : ${route.tarifs.kgAerienNormal.toLocaleString('fr-FR')} FCFA/kg (normal) · ${route.tarifs.kgAerienExpress.toLocaleString('fr-FR')} FCFA/kg (express)`;
+    else tarifNote = `Aérien : ${route.tarifs.kgStdEur} €/kg · ${route.tarifs.kgParfumEur} €/kg (parfum/alcool)`;
+
+    // Lignes d'articles : les champs varient selon le contexte.
+    const itemsHtml = quoteItems.map((it, i) => {
+      let fields = '';
+      if (quoteMode === 'maritime' && isChine) {
+        fields = `
+          <div class="rf-field"><span class="rf-label">Volume (m³ / unité)</span><input class="rf-input" type="number" step="0.01" min="0" data-qi="${i}" data-qf="vol" value="${esc(it.vol)}"></div>
+          <div class="rf-field"><span class="rf-label">Quantité</span><input class="rf-input" type="number" min="1" data-qi="${i}" data-qf="qty" value="${esc(it.qty)}"></div>`;
+      } else if (quoteMode === 'maritime') {
+        fields = `
+          <div class="rf-field"><span class="rf-label">Prix unitaire (€)</span><input class="rf-input" type="number" step="0.01" min="0" data-qi="${i}" data-qf="pu" value="${esc(it.pu)}"></div>
+          <div class="rf-field"><span class="rf-label">Quantité</span><input class="rf-input" type="number" min="1" data-qi="${i}" data-qf="qty" value="${esc(it.qty)}"></div>`;
+      } else if (quoteMode === 'aerien' && !isChine && it.mode === 'valeur') {
+        fields = `
+          <div class="rf-field"><span class="rf-label">Prix unitaire (€)</span><input class="rf-input" type="number" step="0.01" min="0" data-qi="${i}" data-qf="pu" value="${esc(it.pu)}"></div>
+          <div class="rf-field"><span class="rf-label">Quantité</span><input class="rf-input" type="number" min="1" data-qi="${i}" data-qf="qty" value="${esc(it.qty)}"></div>`;
+      } else {
+        // aérien au poids (chine ou paris) : poids + dimensions + qté
+        fields = `
+          <div class="rf-field"><span class="rf-label">Poids réel (kg)</span><input class="rf-input" type="number" step="0.1" min="0" data-qi="${i}" data-qf="poids" value="${esc(it.poids)}"></div>
+          <div class="rf-field"><span class="rf-label">Quantité</span><input class="rf-input" type="number" min="1" data-qi="${i}" data-qf="qty" value="${esc(it.qty)}"></div>
+          <div class="rf-field"><span class="rf-label">Long. (cm)</span><input class="rf-input" type="number" min="0" data-qi="${i}" data-qf="lng" value="${esc(it.lng)}"></div>
+          <div class="rf-field"><span class="rf-label">Larg. (cm)</span><input class="rf-input" type="number" min="0" data-qi="${i}" data-qf="lrg" value="${esc(it.lrg)}"></div>
+          <div class="rf-field"><span class="rf-label">Haut. (cm)</span><input class="rf-input" type="number" min="0" data-qi="${i}" data-qf="haut" value="${esc(it.haut)}"></div>`;
+      }
+      // Option parfum/alcool (aérien Paris au poids).
+      const parfum = (quoteMode === 'aerien' && !isChine && it.mode !== 'valeur')
+        ? `<label class="rf-field rf-field--full" style="flex-direction:row;align-items:center;gap:8px;"><input type="checkbox" data-qi="${i}" data-qf="parfum" ${it.parfum ? 'checked' : ''}> <span class="rf-label" style="margin:0;">Parfum / alcool (tarif majoré)</span></label>` : '';
+      // Bascule mode valeur/poids (aérien Paris uniquement).
+      const modeToggle = (quoteMode === 'aerien' && !isChine)
+        ? `<div class="rf-slots" style="margin-bottom:8px;"><button type="button" class="rf-slot${it.mode!=='valeur'?' active':''}" data-qimode="${i}|poids">Au poids</button><button type="button" class="rf-slot${it.mode==='valeur'?' active':''}" data-qimode="${i}|valeur">À la valeur</button></div>` : '';
+      const delBtn = quoteItems.length > 1 ? `<button type="button" class="btn btn--ghost" style="font-size:12px;padding:4px 10px;" data-qdel="${i}">🗑 Retirer</button>` : '';
+      return `<div class="rf-card" style="margin-bottom:10px;"><div class="rf-card__body">
+        <div class="rf-field rf-field--full"><span class="rf-label">Description</span><input class="rf-input" type="text" placeholder="Ex : carton, valise…" data-qi="${i}" data-qf="desc" value="${esc(it.desc)}"></div>
+        ${modeToggle}
+        <div class="rf-grid">${fields}</div>
+        ${parfum}
+        <div style="text-align:right;margin-top:6px;">${delBtn}</div>
+      </div></div>`;
+    }).join('');
+
+    // Résultat.
+    let resultHtml = '';
+    if (quoteResult) {
+      const r = quoteResult;
+      const main = r.currency === 'EUR'
+        ? `${eur(r.totalEur)}  <span style="color:var(--muted);font-weight:600;font-size:13px;">(${fcfa(r.totalCfa)})</span>`
+        : `${fcfa(r.totalCfa)}`;
+      resultHtml = `
+        <div class="rf-card">
+          <div class="rf-card__head"><span class="rf-ic">💰</span> Estimation</div>
+          <div class="rf-card__body">
+            <div style="font-family:'Comfortaa',sans-serif;font-weight:700;font-size:24px;color:var(--amt-blue);">${main}</div>
+            <div style="margin-top:10px;display:flex;flex-direction:column;gap:6px;">
+              ${r.lines.map(l => `<div class="inv__sub">• ${l.desc || 'Article'} — ${l.detail} = <b>${l.currency==='EUR'?eur(l.amount):fcfa(l.amount)}</b></div>`).join('')}
+            </div>
+            <p class="placeholder" style="padding:8px;">Estimation indicative, hors frais éventuels (magasinage, options). Tarifs identiques à la facturation.</p>
+          </div>
+        </div>`;
+    }
+
     return `
-      <button class="btn btn--primary" style="margin-bottom:14px;">+ Nouveau devis</button>
-      <div class="card"><div class="placeholder"><span class="ph-ic">🧾</span>Créez et retrouvez vos devis ici. Vous pourrez les transformer en demande d'envoi.</div></div>
+      <div class="rf-card">
+        <div class="rf-card__head"><span class="rf-ic">🧾</span> Simulateur de devis</div>
+        <div class="rf-card__body">
+          <div class="rf-grid">
+            <div class="rf-field"><span class="rf-label">Pays / route de départ</span>
+              <select class="rf-select" data-qroute>${quoteRoutes.map(routeOpt).join('')}</select>
+            </div>
+            <div class="rf-field"><span class="rf-label">Mode d'expédition</span>
+              <div class="rf-type">${modeBtn('maritime', '🚢 Maritime')}${modeBtn('aerien', '✈️ Aérien')}</div>
+            </div>
+          </div>
+          ${(quoteMode === 'aerien' && isChine) ? `<div class="rf-field rf-field--full" style="margin-top:10px;"><span class="rf-label">Type aérien</span><div class="rf-slots"><button type="button" class="rf-slot${quoteAerienType!=='express'?' active':''}" data-qaer="normal">Normal</button><button type="button" class="rf-slot${quoteAerienType==='express'?' active':''}" data-qaer="express">Express</button></div></div>` : ''}
+          <p class="placeholder" style="padding:8px;">${tarifNote}</p>
+        </div>
+      </div>
+
+      <div class="section-title">Articles</div>
+      ${itemsHtml}
+      <button type="button" class="btn btn--ghost" data-qadd="1" style="margin-bottom:12px;">+ Ajouter un article</button>
+      <button type="button" class="btn btn--primary" data-qcalc="1">Calculer l'estimation</button>
+      ${resultHtml}
     `;
   },
 

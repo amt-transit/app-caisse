@@ -587,6 +587,163 @@ exports.getRdvAvailability = onCall({ region: REGION, invoker: "public" }, async
     return { agency, year, month, capacity, offDays, days };
 });
 
+// ===========================================================================
+//  DEVIS (simulateur de tarif) — app AMT Clients
+// ---------------------------------------------------------------------------
+//  Source UNIQUE de vérité : on lit les MÊMES tarifs que la facture
+//  (parametres/tarifs global + settings/invoice_config_<route>) et on applique
+//  les MÊMES formules que nouvellefacture.js / facture-aerien.js. Ainsi le
+//  devis ne peut pas diverger de la facture réelle.
+//  - getQuoteConfig : routes de départ actives + tarifs + modèle par route.
+//  - computeQuote   : calcule le prix selon route + mode + articles.
+// ---------------------------------------------------------------------------
+const TARIF_DEFAULTS = {
+    cbmChine: 250000,        // CFA/m³ (maritime modèle chine)
+    kgAerienNormal: 12000,   // CFA/kg (aérien modèle chine - normal)
+    kgAerienExpress: 14000,  // CFA/kg (aérien modèle chine - express)
+    kgStdEur: 13,            // €/kg (aérien Paris standard)
+    kgParfumEur: 15,         // €/kg (aérien Paris parfum/alcool)
+    forfaitChaussuresEur: 23,// € (forfait chaussures aérien Paris)
+    volDiviseur: 5000,       // diviseur volumétrique (L×l×H cm / 5000 = kg)
+};
+
+async function loadTarifsForRoute(db, route) {
+    const t = Object.assign({}, TARIF_DEFAULTS);
+    // 1) Tarifs globaux.
+    try {
+        const g = await db.collection("parametres").doc("tarifs").get();
+        if (g.exists) {
+            const x = g.data() || {};
+            ["cbmChine", "kgAerienNormal", "kgAerienExpress"].forEach((k) => { if (x[k] != null) t[k] = Number(x[k]); });
+        }
+    } catch (e) {}
+    // 2) Config par route (écrase). + modèle de facture.
+    let model = (route === "paris") ? "paris" : (route === "chine" ? "chine" : "paris");
+    try {
+        const c = await db.collection("settings").doc(`invoice_config_${route}`).get();
+        if (c.exists) {
+            const x = c.data() || {};
+            ["kgStdEur", "kgParfumEur", "forfaitChaussuresEur", "kgAerienNormal", "kgAerienExpress", "cbmChine"].forEach((k) => { if (x[k] != null) t[k] = Number(x[k]); });
+            if (x.factureModel) model = x.factureModel;
+        }
+    } catch (e) {}
+    return { tarifs: t, model };
+}
+
+exports.getQuoteConfig = onCall({ region: REGION, invoker: "public" }, async (request) => {
+    if (!request.auth || !request.auth.token || !request.auth.token.phone_number) {
+        throw new HttpsError("unauthenticated", "Connexion par téléphone requise.");
+    }
+    const db = admin.firestore();
+    // Routes de DÉPART actives (agencies_config type=departure, non désactivées).
+    const routes = [];
+    try {
+        const snap = await db.collection("agencies_config").get();
+        snap.forEach((d) => {
+            const a = d.data() || {};
+            if (a.disabled) return;
+            if (a.type === "departure") routes.push({ id: d.id, name: a.name || d.id, flag: a.flag || "" });
+        });
+    } catch (e) {}
+    if (!routes.length) routes.push({ id: "paris", name: "PARIS (AMT TRANSIT)", flag: "🇫🇷" });
+
+    // Tarifs + modèle pour chaque route.
+    const out = [];
+    for (const r of routes) {
+        const { tarifs, model } = await loadTarifsForRoute(db, r.id);
+        out.push({ id: r.id, name: r.name, flag: r.flag, model, tarifs });
+    }
+    return { routes: out, taux: TAUX_EUR };
+});
+
+exports.computeQuote = onCall({ region: REGION, invoker: "public" }, async (request) => {
+    if (!request.auth || !request.auth.token || !request.auth.token.phone_number) {
+        throw new HttpsError("unauthenticated", "Connexion par téléphone requise.");
+    }
+    const data = request.data || {};
+    const route = String(data.route || "paris");
+    const mode = (data.mode === "aerien") ? "aerien" : "maritime";
+    const items = Array.isArray(data.items) ? data.items : [];
+
+    const db = admin.firestore();
+    const { tarifs, model } = await loadTarifsForRoute(db, route);
+    const num = (v) => parseFloat(v) || 0;
+
+    let currency = "XOF";   // devise du résultat
+    let totalEur = 0, totalCfa = 0;
+    const lines = [];
+
+    if (mode === "maritime") {
+        if (model === "chine") {
+            // Maritime Chine : CBM × tarif CFA/m³.
+            currency = "XOF";
+            for (const it of items) {
+                const qty = num(it.qty) || 1;
+                const cbm = num(it.vol);                 // m³ par unité
+                const lineCfa = Math.round(cbm * qty * tarifs.cbmChine);
+                totalCfa += lineCfa;
+                lines.push({ desc: it.desc || "", qty, detail: `${cbm} m³ × ${qty} × ${tarifs.cbmChine} FCFA/m³`, amount: lineCfa, currency: "XOF" });
+            }
+        } else {
+            // Maritime Paris (historique) : prix unitaire € saisi × qté.
+            currency = "EUR";
+            for (const it of items) {
+                const qty = num(it.qty) || 1;
+                const pu = num(it.pu);
+                const lineEur = pu * qty;
+                totalEur += lineEur;
+                lines.push({ desc: it.desc || "", qty, detail: `${qty} × ${pu} €`, amount: lineEur, currency: "EUR" });
+            }
+        }
+    } else {
+        // AÉRIEN.
+        if (model === "chine") {
+            // Aérien Chine : poids facturé × tarif CFA/kg (normal/express).
+            currency = "XOF";
+            const rate = (data.aerienType === "express") ? tarifs.kgAerienExpress : tarifs.kgAerienNormal;
+            for (const it of items) {
+                const qty = num(it.qty) || 1;
+                const real = num(it.poids);
+                const vol = (num(it.lng) * num(it.lrg) * num(it.haut)) / tarifs.volDiviseur;
+                const kg = Math.max(real, vol);
+                const lineCfa = Math.round(kg * qty * rate);
+                totalCfa += lineCfa;
+                lines.push({ desc: it.desc || "", qty, detail: `${kg.toFixed(1)} kg × ${qty} × ${rate} FCFA/kg`, amount: lineCfa, currency: "XOF" });
+            }
+        } else {
+            // Aérien Paris : € — mode 'poids' (max réel/volume × tarif) ou 'valeur' (P.U).
+            currency = "EUR";
+            for (const it of items) {
+                const qty = num(it.qty) || 1;
+                if (it.mode === "valeur") {
+                    const lineEur = num(it.pu) * qty;
+                    totalEur += lineEur;
+                    lines.push({ desc: it.desc || "", qty, detail: `${qty} × ${num(it.pu)} € (à la valeur)`, amount: lineEur, currency: "EUR" });
+                } else {
+                    const real = num(it.poids);
+                    const vol = (num(it.lng) * num(it.lrg) * num(it.haut)) / tarifs.volDiviseur;
+                    const kg = Math.max(real, vol);
+                    const rateEur = it.parfum ? tarifs.kgParfumEur : tarifs.kgStdEur;
+                    const lineEur = kg * qty * rateEur;
+                    totalEur += lineEur;
+                    lines.push({ desc: it.desc || "", qty, detail: `${kg.toFixed(1)} kg × ${qty} × ${rateEur} €/kg${it.parfum ? " (parfum/alcool)" : ""}`, amount: lineEur, currency: "EUR" });
+                }
+            }
+        }
+    }
+
+    // Totaux dans les deux devises (pour affichage clair).
+    if (currency === "EUR") { totalCfa = Math.round(totalEur * TAUX_EUR); }
+    else { totalEur = totalCfa / TAUX_EUR; }
+
+    return {
+        route, mode, model, currency,
+        totalEur: Math.round(totalEur * 100) / 100,
+        totalCfa: Math.round(totalCfa),
+        lines,
+    };
+});
+
 exports.getMyRequests = onCall({ region: REGION, invoker: "public" }, async (request) => {
     const auth = request.auth;
     const phone = auth && auth.token && auth.token.phone_number;
