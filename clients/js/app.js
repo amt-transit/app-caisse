@@ -260,7 +260,10 @@ async function loadInvoices() {
     const prof = data.profile || {};
     clientSelfName = (prof.name || localStorage.getItem(LS.name) || '').trim();
     clientSelfAddress = (prof.address || '').trim();
-    if (clientSelfName) { try { localStorage.setItem(LS.name, clientSelfName); } catch (_) {} }
+    if (clientSelfName) {
+      try { localStorage.setItem(LS.name, clientSelfName); } catch (_) {}
+      const av = $('#avatarInit'); if (av) av.textContent = clientSelfName.slice(0, 2).toUpperCase();
+    }
     invoicesLoaded = true;
     applyRoleVisibility();
   } catch (e) {
@@ -278,7 +281,7 @@ const VIEW_TITLES = {
   dashboard: 'Tableau de bord', requests: 'Dépôt / Récupération', quotes: 'Devis',
   stats: 'Statistiques', chat: 'Messagerie', profile: 'Profil', tracking: 'Suivi des colis',
   notifications: 'Notifications', invoice: 'Détail de la facture',
-  requestForm: 'Nouvelle demande'
+  requestForm: 'Nouvelle demande', 'profile-edit': 'Modifier mon nom', 'profile-pin': 'Changer mon code PIN'
 };
 // Vues présentes dans la barre du bas (les autres : profil, notifs, détail).
 const TAB_VIEWS = ['dashboard', 'tracking', 'requests', 'quotes', 'stats', 'chat'];
@@ -1326,46 +1329,172 @@ const VIEWS = {
 
   profile() {
     const ph = (auth.currentUser && auth.currentUser.phoneNumber) || localStorage.getItem(LS.phone) || '—';
+    const name = (clientSelfName || localStorage.getItem(LS.name) || '').trim();
+    const initials = name ? name.slice(0, 2).toUpperCase() : (ph.replace(/\D/g, '').slice(-2) || '👤');
+    const roleLbl = isExpediteur ? 'Expéditeur' : 'Destinataire';
+
+    // Stats réelles depuis les factures déjà chargées.
+    const nbFactures = INVOICES.length;
+    const totalDuFcfa = INVOICES.reduce((s, i) => s + toFcfa(i.remaining, i.currency), 0);
+    const envois = LOYALTY.sentAsSender || 0;
     const need = 10;
-    const sent = (LOYALTY.sentAsSender || 0) % need; // progression dans le cycle courant
-    const pct = Math.min(100, Math.round(sent / need * 100));
+    const inCycle = envois % need;
+    const pct = Math.min(100, Math.round(inCycle / need * 100));
+    const toNext = LOYALTY.toNext != null ? LOYALTY.toNext : (need - inCycle);
+
     return `
-      <div class="card">
-        <div class="section-title">Informations</div>
-        <div class="inv"><div class="inv__main"><div class="inv__sub">Téléphone</div><div class="inv__ref">${ph}</div></div></div>
-        <div class="inv"><div class="inv__main"><div class="inv__sub">Nom</div><div class="inv__ref">Client AMT</div></div></div>
-      </div>
-
-      <div class="card">
-        <div class="section-title">Points de fidélité 🎁</div>
-        <p class="muted" style="margin:0 0 10px;font-size:13px;">À ${need} factures envoyées (en tant qu'expéditeur), 1 carton moyen vous est offert en fret.</p>
-        <div style="height:12px;background:#eef2f7;border-radius:8px;overflow:hidden;">
-          <div style="height:100%;width:${pct}%;background:var(--amt-gold);"></div>
+      <div class="pf-hero">
+        <div class="pf-hero__av">${initials}</div>
+        <div style="min-width:0;">
+          <div class="pf-hero__name">${name || 'Client AMT'}</div>
+          <div class="pf-hero__sub">📞 ${ph}</div>
+          <span class="pf-hero__chip">${roleLbl}</span>
         </div>
-        <div style="text-align:right;font-weight:700;color:var(--amt-blue);margin-top:6px;font-size:13px;">${sent} / ${need} factures</div>
+      </div>
+
+      <div class="pf-stats">
+        <div class="pf-stat"><div class="pf-stat__v">${nbFactures}</div><div class="pf-stat__l">Factures</div></div>
+        <div class="pf-stat"><div class="pf-stat__v">${envois}</div><div class="pf-stat__l">Envois</div></div>
+        <div class="pf-stat"><div class="pf-stat__v" style="${totalDuFcfa > 0 ? 'color:var(--amt-red);' : 'color:var(--green);'}">${money(totalDuFcfa, 'XOF')}</div><div class="pf-stat__l">Reste à payer</div></div>
       </div>
 
       <div class="card">
-        <div class="section-title">Préférences</div>
-        <div class="inv"><div class="inv__main"><div class="inv__ref">Langue</div></div><div class="inv__amt" style="font-weight:600;color:var(--muted);">Français</div></div>
-        <div class="inv"><div class="inv__main"><div class="inv__ref">À propos</div></div><div class="inv__amt" style="font-weight:600;color:var(--muted);">AMT Trans'it</div></div>
+        <div class="section-title">Fidélité 🎁</div>
+        <p class="muted" style="margin:0 0 10px;font-size:13px;">À ${need} envois (en tant qu'expéditeur), 1 carton moyen offert. ${LOYALTY.freeCartons ? `Déjà <b>${LOYALTY.freeCartons}</b> carton(s) gagné(s).` : ''}</p>
+        <div class="pf-fid__bar"><div class="pf-fid__fill" style="width:${pct}%;"></div></div>
+        <div style="display:flex;justify-content:space-between;margin-top:6px;font-size:13px;">
+          <span style="color:var(--muted);">${inCycle} / ${need}</span>
+          <span style="font-weight:700;color:var(--amt-blue);">Plus que ${toNext} 🎁</span>
+        </div>
       </div>
 
-      <button class="btn btn--ghost" id="btnLogout">Se déconnecter</button>
+      <div class="card">
+        <div class="section-title">Mon compte</div>
+        <button class="pf-row" data-go="profile-edit">
+          <span class="pf-row__ic">✏️</span>
+          <span class="pf-row__main"><span class="pf-row__t">Modifier mon nom</span><span class="pf-row__s">${name || 'Non renseigné'}</span></span>
+          <span class="pf-row__chev">›</span>
+        </button>
+        <button class="pf-row" data-go="profile-pin">
+          <span class="pf-row__ic">🔒</span>
+          <span class="pf-row__main"><span class="pf-row__t">Changer mon code PIN</span><span class="pf-row__s">Code de déverrouillage de l'app</span></span>
+          <span class="pf-row__chev">›</span>
+        </button>
+      </div>
+
+      <div class="card">
+        <div class="section-title">Aide & infos</div>
+        <button class="pf-row" data-go="chat">
+          <span class="pf-row__ic">💬</span>
+          <span class="pf-row__main"><span class="pf-row__t">Contacter AMT Trans'it</span><span class="pf-row__s">Via la messagerie de l'app</span></span>
+          <span class="pf-row__chev">›</span>
+        </button>
+        <div class="pf-row">
+          <span class="pf-row__ic">🌐</span>
+          <span class="pf-row__main"><span class="pf-row__t">Langue</span><span class="pf-row__s">Français</span></span>
+        </div>
+        <div class="pf-row">
+          <span class="pf-row__ic">ℹ️</span>
+          <span class="pf-row__main"><span class="pf-row__t">À propos</span><span class="pf-row__s">AMT Trans'it — espace client</span></span>
+        </div>
+      </div>
+
+      <button class="btn btn--ghost" id="btnLock" style="color:var(--amt-blue);">🔒 Verrouiller l'application</button>
+      <button class="btn btn--ghost" id="btnLogout" style="color:var(--amt-red);">Se déconnecter</button>
+      <div class="pf-version">AMT Clients · v1.0</div>
     `;
+  },
+
+  // Écran : modifier le nom du client.
+  'profile-edit'() {
+    const name = (clientSelfName || localStorage.getItem(LS.name) || '').trim();
+    return `
+      <button class="btn btn--ghost" data-go="profile" style="text-align:left;margin:0 0 8px;">← Profil</button>
+      <div class="rf-card"><div class="rf-card__head"><span class="rf-ic">✏️</span> Modifier mon nom</div>
+        <div class="rf-card__body">
+          <div class="rf-field rf-field--full">
+            <span class="rf-label">Nom complet</span>
+            <input id="pfName" class="rf-input" type="text" placeholder="Votre nom" value="${name.replace(/"/g, '&quot;')}">
+          </div>
+          <p class="placeholder" style="padding:8px;">Ce nom apparaît sur vos demandes de dépôt/récupération et vos messages.</p>
+          <div id="pfMsg" class="auth__error" hidden style="margin-bottom:10px;"></div>
+          <button class="btn btn--primary" data-pfsavename="1">Enregistrer</button>
+        </div>
+      </div>`;
+  },
+
+  // Écran : changer le code PIN.
+  'profile-pin'() {
+    return `
+      <button class="btn btn--ghost" data-go="profile" style="text-align:left;margin:0 0 8px;">← Profil</button>
+      <div class="rf-card"><div class="rf-card__head"><span class="rf-ic">🔒</span> Changer mon code PIN</div>
+        <div class="rf-card__body">
+          <div class="rf-field rf-field--full"><span class="rf-label">Code PIN actuel</span>
+            <input id="pfPinOld" class="rf-input" type="tel" inputmode="numeric" maxlength="4" placeholder="••••"></div>
+          <div class="rf-field rf-field--full"><span class="rf-label">Nouveau code (4 chiffres)</span>
+            <input id="pfPin1" class="rf-input" type="tel" inputmode="numeric" maxlength="4" placeholder="••••"></div>
+          <div class="rf-field rf-field--full"><span class="rf-label">Confirmer le nouveau code</span>
+            <input id="pfPin2" class="rf-input" type="tel" inputmode="numeric" maxlength="4" placeholder="••••"></div>
+          <div id="pfMsg" class="auth__error" hidden style="margin:10px 0;"></div>
+          <button class="btn btn--primary" data-pfsavepin="1">Enregistrer</button>
+        </div>
+      </div>`;
   }
 };
 
-// Verrouillage (le bouton "btnLogout" verrouille l'app ; la session Firebase
-// est conservée -> retour par PIN sans renvoyer de SMS).
-document.addEventListener('click', (e) => {
-  if (e.target && e.target.id === 'btnLogout') {
+// Profil : verrouiller, se déconnecter, modifier nom, changer PIN.
+document.addEventListener('click', async (e) => {
+  // VERROUILLER : garde la session Firebase ; retour par code PIN.
+  if (e.target && e.target.closest('#btnLock')) {
     appEl.hidden = true; authEl.hidden = false;
     if (localStorage.getItem(LS.registered) === '1' && auth.currentUser) {
       const ph = localStorage.getItem(LS.phone) || (auth.currentUser.phoneNumber || '');
       $('#pinWelcome').textContent = ph ? `Bon retour 👋  (${ph})` : 'Bon retour 👋';
       showStep('pin');
     } else { showStep('phone'); }
+    return;
+  }
+  // SE DÉCONNECTER : ferme la session Firebase + oublie le PIN -> reconnexion SMS.
+  if (e.target && e.target.closest('#btnLogout')) {
+    const ok = confirm("Se déconnecter ? Vous devrez vous reconnecter par SMS.");
+    if (!ok) return;
+    try { await signOut(auth); } catch (_) {}
+    localStorage.removeItem(LS.registered);
+    localStorage.removeItem(LS.pin);
+    // Réinitialise l'état local pour ne rien laisser fuiter à la prochaine session.
+    INVOICES = []; PARCELS = []; NOTIFS = []; REQUESTS = []; chatMessages = []; chatConversations = [];
+    invoicesLoaded = false; notifsLoaded = false; requestsLoaded = false; chatLoaded = false;
+    clientSelfName = ''; clientSelfAddress = '';
+    appEl.hidden = true; authEl.hidden = false;
+    showStep('phone');
+    return;
+  }
+  // Enregistrer le nouveau nom.
+  if (e.target && e.target.closest('[data-pfsavename]')) {
+    const v = ($('#pfName')?.value || '').trim();
+    const msg = $('#pfMsg');
+    if (v.length < 2) { if (msg) { msg.textContent = 'Entrez votre nom.'; msg.hidden = false; } return; }
+    clientSelfName = v;
+    try { localStorage.setItem(LS.name, v); } catch (_) {}
+    const init = v.slice(0, 2).toUpperCase();
+    const av = $('#avatarInit'); if (av) av.textContent = init;
+    renderView('profile');
+    return;
+  }
+  // Enregistrer le nouveau PIN.
+  if (e.target && e.target.closest('[data-pfsavepin]')) {
+    const msg = $('#pfMsg');
+    const showMsg = (m) => { if (msg) { msg.textContent = m; msg.hidden = false; } };
+    const old = ($('#pfPinOld')?.value || '').replace(/\D/g, '');
+    const p1 = ($('#pfPin1')?.value || '').replace(/\D/g, '');
+    const p2 = ($('#pfPin2')?.value || '').replace(/\D/g, '');
+    if (pinHash(old) !== localStorage.getItem(LS.pin)) { showMsg('Code PIN actuel incorrect.'); return; }
+    if (p1.length !== 4) { showMsg('Le nouveau code doit faire 4 chiffres.'); return; }
+    if (p1 !== p2) { showMsg('Les deux nouveaux codes ne correspondent pas.'); return; }
+    try { localStorage.setItem(LS.pin, pinHash(p1)); } catch (_) {}
+    alert('✅ Code PIN mis à jour.');
+    renderView('profile');
+    return;
   }
 });
 
