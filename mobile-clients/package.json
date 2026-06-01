@@ -24,5 +24,13 @@
     "react-native": "0.76.9",
     "react-native-webview": "13.12.5"
   },
+  "expo": {
+    "doctor": {
+      "reactNativeDirectoryCheck": {
+        "exclude": ["expo-av", "firebase"],
+        "listUnknownPackages": false
+      }
+    }
+  },
   "private": true
 }

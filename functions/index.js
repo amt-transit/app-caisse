@@ -926,6 +926,23 @@ exports.saveMyProfile = onCall({ region: REGION, invoker: "public" }, async (req
     return { ok: true };
 });
 
+// Enregistre le token Expo Push du client (notifications même app fermée).
+// Stocké sur sa fiche client_profiles. Appelé au démarrage de l'app native.
+exports.saveMyPushToken = onCall({ region: REGION, invoker: "public" }, async (request) => {
+    const auth = request.auth;
+    const phone = auth && auth.token && auth.token.phone_number;
+    if (!phone) throw new HttpsError("unauthenticated", "Connexion par téléphone requise.");
+    const token = String((request.data || {}).token || "").trim();
+    if (!token || !/^ExponentPushToken\[/.test(token)) throw new HttpsError("invalid-argument", "Token invalide.");
+    const digits = String(phone).replace(/\D/g, "");
+    const tail = digits.length >= 9 ? digits.slice(-9) : digits;
+    const db = admin.firestore();
+    await db.collection("client_profiles").doc(tail).set({
+        pushToken: token, phoneE164: phone, pushUpdatedAt: new Date().toISOString(),
+    }, { merge: true });
+    return { ok: true };
+});
+
 exports.getQuoteConfig = onCall({ region: REGION, invoker: "public" }, async (request) => {
     if (!request.auth || !request.auth.token || !request.auth.token.phone_number) {
         throw new HttpsError("unauthenticated", "Connexion par téléphone requise.");
@@ -1201,6 +1218,18 @@ async function createClientNotif(db, tail, notif) {
             createdAt: new Date().toISOString(),
         });
     } catch (e) { /* non bloquant : une notif ratée ne casse pas l'action */ }
+    // PUSH Expo (app native, même fermée) si le client a enregistré un token.
+    try {
+        const prof = await db.collection("client_profiles").doc(tail).get();
+        const token = prof.exists ? (prof.data() || {}).pushToken : null;
+        if (token) {
+            await sendExpoPush(token, {
+                title: `${notif.icon || "🔔"} ${notif.title || "AMT Trans'it"}`,
+                body: notif.body || "",
+                data: { type: notif.type || "info", refId: notif.refId || "" },
+            });
+        }
+    } catch (e) { /* push best-effort */ }
 }
 
 exports.getMyNotifications = onCall({ region: REGION, invoker: "public" }, async (request) => {

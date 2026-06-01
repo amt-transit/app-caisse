@@ -9,6 +9,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { auth } from './src/firebase';
 import { api } from './src/api';
 import { colors } from './src/theme';
+import { registerPushToken } from './src/push';
 import LoginScreen from './src/screens/LoginScreen';
 import HomeScreen from './src/screens/HomeScreen';
 import TrackingScreen from './src/screens/TrackingScreen';
@@ -41,7 +42,7 @@ export default function App() {
     finally { setLoading(false); }
   }, []);
 
-  useEffect(() => { if (authed) load(); }, [authed, load]);
+  useEffect(() => { if (authed) { load(); registerPushToken(); } }, [authed, load]);
 
   const logout = async () => {
     try { await signOut(auth); } catch (_) {}

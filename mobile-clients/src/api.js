@@ -16,6 +16,7 @@ export const api = {
   getMyInvoiceDetail: (reference) => call('getMyInvoiceDetail', { reference }),
   getMyProfile: () => call('getMyProfile'),
   saveMyProfile: (data) => call('saveMyProfile', data),
+  saveMyPushToken: (token) => call('saveMyPushToken', { token }),
   // Dépôt / récup
   getMyRequests: () => call('getMyRequests'),
   createClientRequest: (data) => call('createClientRequest', data),
