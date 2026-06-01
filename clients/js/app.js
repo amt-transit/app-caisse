@@ -47,6 +47,11 @@ let calMonth = null;    // 1er du mois affiché par le calendrier
 let calAvail = {};      // { 'YYYY-MM-DD': placesRestantes (-1 = jour off) }
 let calSelected = '';   // date choisie 'YYYY-MM-DD'
 let calCapacity = 80;
+// --- Profil client ---
+let clientProfile = { prenom: '', nom: '', photoUrl: '', lang: 'fr' };
+let clientAbout = null;        // infos société agence de départ (À propos)
+let profileLoaded = false;
+let profilePhotoDraft = null;  // photo en attente d'enregistrement (dataURL)
 // --- Devis (simulateur) ---
 let quoteRoutes = null;        // [{id,name,flag,model,tarifs}] chargé une fois
 let quoteRoute = '';           // route choisie
@@ -217,6 +222,38 @@ async function enterApp() {
   renderView('dashboard');
   await loadInvoices();
   loadNotifications();
+  loadProfile();
+}
+
+// Charge la fiche profil (nom/prénom/photo/langue) + infos « À propos ».
+async function loadProfile() {
+  try {
+    const u = auth.currentUser;
+    if (!u) return;
+    try { await u.getIdToken(true); } catch (_) {}
+    const res = await httpsCallable(functions, 'getMyProfile')();
+    const d = (res && res.data) || {};
+    clientProfile = Object.assign({ prenom: '', nom: '', photoUrl: '', lang: 'fr' }, d.profile || {});
+    clientAbout = d.about || null;
+    profileLoaded = true;
+    // Nom complet pour préremplissages + avatar de l'en-tête.
+    const full = `${clientProfile.prenom} ${clientProfile.nom}`.trim();
+    if (full) { clientSelfName = full; try { localStorage.setItem(LS.name, full); } catch (_) {} }
+    applyHeaderAvatar();
+    if (currentView === 'profile') renderView('profile');
+  } catch (e) { console.warn('getMyProfile:', e && e.code, e && e.message); profileLoaded = true; }
+}
+
+// Met l'avatar de l'en-tête : photo si dispo, sinon initiales.
+function applyHeaderAvatar() {
+  const av = $('#avatarInit');
+  if (!av) return;
+  if (clientProfile.photoUrl) {
+    av.innerHTML = `<img src="${clientProfile.photoUrl}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">`;
+  } else {
+    const full = `${clientProfile.prenom} ${clientProfile.nom}`.trim() || clientSelfName || '';
+    av.textContent = full ? full.slice(0, 2).toUpperCase() : '👤';
+  }
 }
 
 // Charge les VRAIES factures du client connecté (Cloud Function sécurisée).
@@ -283,7 +320,7 @@ const VIEW_TITLES = {
   dashboard: 'Tableau de bord', requests: 'Dépôt / Récupération', quotes: 'Devis',
   stats: 'Statistiques', chat: 'Messagerie', profile: 'Profil', tracking: 'Suivi des colis',
   notifications: 'Notifications', invoice: 'Détail de la facture',
-  requestForm: 'Nouvelle demande', 'profile-edit': 'Modifier mon nom', 'profile-pin': 'Changer mon code PIN'
+  requestForm: 'Nouvelle demande', 'profile-edit': 'Mes informations', 'profile-pin': 'Changer mon code PIN', 'profile-about': 'À propos'
 };
 // Vues présentes dans la barre du bas (les autres : profil, notifs, détail).
 const TAB_VIEWS = ['dashboard', 'tracking', 'requests', 'quotes', 'stats', 'chat'];
@@ -659,6 +696,30 @@ function compressChatImage(file) {
         canvas.width = w; canvas.height = h;
         canvas.getContext('2d').drawImage(img, 0, 0, w, h);
         resolve(canvas.toDataURL('image/jpeg', 0.6));
+      };
+      img.onerror = reject;
+      img.src = e.target.result;
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+// Compresse une photo de PROFIL : recadrage carré centré, max 256px, JPEG q0.8.
+// Avatar léger (~quelques dizaines de Ko), bien sous la limite serveur (600 Ko).
+function compressProfilePhoto(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        const SIZE = 256;
+        const side = Math.min(img.width, img.height);
+        const sx = (img.width - side) / 2, sy = (img.height - side) / 2;
+        const canvas = document.createElement('canvas');
+        canvas.width = SIZE; canvas.height = SIZE;
+        canvas.getContext('2d').drawImage(img, sx, sy, side, side, 0, 0, SIZE, SIZE);
+        resolve(canvas.toDataURL('image/jpeg', 0.8));
       };
       img.onerror = reject;
       img.src = e.target.result;
@@ -1380,6 +1441,9 @@ const VIEWS = {
     const ph = (auth.currentUser && auth.currentUser.phoneNumber) || localStorage.getItem(LS.phone) || '—';
     const name = (clientSelfName || localStorage.getItem(LS.name) || '').trim();
     const initials = name ? name.slice(0, 2).toUpperCase() : (ph.replace(/\D/g, '').slice(-2) || '👤');
+    const heroAv = clientProfile.photoUrl
+      ? `<img src="${clientProfile.photoUrl}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">`
+      : initials;
     const roleLbl = isExpediteur ? 'Expéditeur' : 'Destinataire';
 
     // Stats réelles depuis les factures déjà chargées.
@@ -1393,7 +1457,7 @@ const VIEWS = {
 
     return `
       <div class="pf-hero">
-        <div class="pf-hero__av">${initials}</div>
+        <div class="pf-hero__av">${heroAv}</div>
         <div style="min-width:0;">
           <div class="pf-hero__name">${name || 'Client AMT'}</div>
           <div class="pf-hero__sub">📞 ${ph}</div>
@@ -1436,7 +1500,7 @@ const VIEWS = {
         <div class="section-title">Mon compte</div>
         <button class="pf-row" data-go="profile-edit">
           <span class="pf-row__ic">✏️</span>
-          <span class="pf-row__main"><span class="pf-row__t">Modifier mon nom</span><span class="pf-row__s">${name || 'Non renseigné'}</span></span>
+          <span class="pf-row__main"><span class="pf-row__t">Modifier mes informations</span><span class="pf-row__s">Photo, prénom, nom</span></span>
           <span class="pf-row__chev">›</span>
         </button>
         <button class="pf-row" data-go="profile-pin">
@@ -1453,14 +1517,16 @@ const VIEWS = {
           <span class="pf-row__main"><span class="pf-row__t">Contacter AMT Trans'it</span><span class="pf-row__s">Via la messagerie de l'app</span></span>
           <span class="pf-row__chev">›</span>
         </button>
-        <div class="pf-row">
+        <button class="pf-row" data-pflang="1">
           <span class="pf-row__ic">🌐</span>
-          <span class="pf-row__main"><span class="pf-row__t">Langue</span><span class="pf-row__s">Français</span></span>
-        </div>
-        <div class="pf-row">
+          <span class="pf-row__main"><span class="pf-row__t">Langue</span><span class="pf-row__s">${clientProfile.lang === 'en' ? 'English' : 'Français'} · appuyer pour changer</span></span>
+          <span class="pf-row__chev">⇄</span>
+        </button>
+        <button class="pf-row" data-go="profile-about">
           <span class="pf-row__ic">ℹ️</span>
-          <span class="pf-row__main"><span class="pf-row__t">À propos</span><span class="pf-row__s">AMT Trans'it — espace client</span></span>
-        </div>
+          <span class="pf-row__main"><span class="pf-row__t">À propos</span><span class="pf-row__s">${clientAbout ? (clientAbout.name || "AMT Trans'it") : "AMT Trans'it"}</span></span>
+          <span class="pf-row__chev">›</span>
+        </button>
       </div>
 
       <button class="btn btn--ghost" id="btnLock" style="color:var(--amt-blue);">🔒 Verrouiller l'application</button>
@@ -1469,20 +1535,54 @@ const VIEWS = {
     `;
   },
 
-  // Écran : modifier le nom du client.
+  // Écran : modifier mes informations (photo + prénom + nom).
   'profile-edit'() {
-    const name = (clientSelfName || localStorage.getItem(LS.name) || '').trim();
+    const esc = (s) => String(s == null ? '' : s).replace(/"/g, '&quot;');
+    const photo = profilePhotoDraft !== null ? profilePhotoDraft : (clientProfile.photoUrl || '');
+    const avatarInner = photo
+      ? `<img src="${photo}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">`
+      : `<span style="font-size:30px;">👤</span>`;
     return `
       <button class="btn btn--ghost" data-go="profile" style="text-align:left;margin:0 0 8px;">← Profil</button>
-      <div class="rf-card"><div class="rf-card__head"><span class="rf-ic">✏️</span> Modifier mon nom</div>
+      <div class="rf-card"><div class="rf-card__head"><span class="rf-ic">✏️</span> Mes informations</div>
         <div class="rf-card__body">
-          <div class="rf-field rf-field--full">
-            <span class="rf-label">Nom complet</span>
-            <input id="pfName" class="rf-input" type="text" placeholder="Votre nom" value="${name.replace(/"/g, '&quot;')}">
+          <div style="display:flex;flex-direction:column;align-items:center;gap:10px;margin-bottom:14px;">
+            <div style="width:90px;height:90px;border-radius:50%;border:2.5px solid var(--amt-gold);background:#eef4fb;display:flex;align-items:center;justify-content:center;overflow:hidden;">${avatarInner}</div>
+            <input type="file" id="pfPhotoInput" accept="image/*" style="display:none;">
+            <div style="display:flex;gap:8px;">
+              <button class="btn btn--ghost" style="width:auto;padding:6px 14px;" data-pfphoto="1">📷 Choisir une photo</button>
+              ${photo ? `<button class="btn btn--ghost" style="width:auto;padding:6px 14px;color:var(--amt-red);" data-pfphotodel="1">Retirer</button>` : ''}
+            </div>
           </div>
-          <p class="placeholder" style="padding:8px;">Ce nom apparaît sur vos demandes de dépôt/récupération et vos messages.</p>
+          <div class="rf-field rf-field--full"><span class="rf-label">Prénom</span>
+            <input id="pfPrenom" class="rf-input" type="text" placeholder="Votre prénom" value="${esc(clientProfile.prenom)}"></div>
+          <div class="rf-field rf-field--full"><span class="rf-label">Nom</span>
+            <input id="pfNom" class="rf-input" type="text" placeholder="Votre nom" value="${esc(clientProfile.nom)}"></div>
+          <p class="placeholder" style="padding:8px;">Ces informations apparaissent sur vos demandes, vos messages et sont visibles par l'agence.</p>
           <div id="pfMsg" class="auth__error" hidden style="margin-bottom:10px;"></div>
-          <button class="btn btn--primary" data-pfsavename="1">Enregistrer</button>
+          <button class="btn btn--primary" data-pfsaveinfo="1">Enregistrer</button>
+        </div>
+      </div>`;
+  },
+
+  // Écran : À propos (infos société de l'agence de départ).
+  'profile-about'() {
+    const a = clientAbout;
+    const row = (ic, t, v) => v ? `<div class="pf-row"><span class="pf-row__ic">${ic}</span><span class="pf-row__main"><span class="pf-row__t">${t}</span><span class="pf-row__s">${String(v).replace(/</g,'&lt;')}</span></span></div>` : '';
+    const body = a ? `
+        <div style="text-align:center;margin-bottom:10px;">
+          <div style="font-family:'Comfortaa',sans-serif;font-weight:700;font-size:18px;color:var(--amt-blue);">${(a.name||"AMT TRANS'IT").replace(/</g,'&lt;')}</div>
+        </div>
+        ${row('📍','Adresse',a.address)}
+        ${row('📞','Téléphone',a.phone)}
+        ${row('✉️','Email',a.email)}
+        ${row('🌐','Site web',a.website)}
+      ` : `<div class="placeholder" style="padding:20px;">Informations de l'agence indisponibles.</div>`;
+    return `
+      <button class="btn btn--ghost" data-go="profile" style="text-align:left;margin:0 0 8px;">← Profil</button>
+      <div class="rf-card"><div class="rf-card__head"><span class="rf-ic">ℹ️</span> À propos</div>
+        <div class="rf-card__body">${body}
+          <div class="pf-version" style="margin-top:14px;">AMT Clients · v1.0</div>
         </div>
       </div>`;
   },
@@ -1529,20 +1629,65 @@ document.addEventListener('click', async (e) => {
     INVOICES = []; PARCELS = []; NOTIFS = []; REQUESTS = []; chatMessages = []; chatConversations = [];
     invoicesLoaded = false; notifsLoaded = false; requestsLoaded = false; chatLoaded = false;
     clientSelfName = ''; clientSelfAddress = ''; clientAgencies = [];
+    clientProfile = { prenom: '', nom: '', photoUrl: '', lang: 'fr' }; clientAbout = null; profileLoaded = false; profilePhotoDraft = null;
     appEl.hidden = true; authEl.hidden = false;
     showStep('phone');
     return;
   }
-  // Enregistrer le nouveau nom.
-  if (e.target && e.target.closest('[data-pfsavename]')) {
-    const v = ($('#pfName')?.value || '').trim();
+  // Choisir une photo de profil (compression -> brouillon).
+  if (e.target && e.target.closest('[data-pfphoto]')) {
+    const input = $('#pfPhotoInput');
+    if (!input) return;
+    input.onchange = async (ev) => {
+      const file = ev.target.files && ev.target.files[0]; ev.target.value = '';
+      if (!file) return;
+      try { profilePhotoDraft = await compressProfilePhoto(file); renderView('profile-edit'); }
+      catch (_) { alert("Image illisible."); }
+    };
+    input.click();
+    return;
+  }
+  // Retirer la photo (brouillon vide = suppression à l'enregistrement).
+  if (e.target && e.target.closest('[data-pfphotodel]')) {
+    profilePhotoDraft = ''; renderView('profile-edit'); return;
+  }
+  // Enregistrer mes informations (prénom + nom + éventuelle photo).
+  if (e.target && e.target.closest('[data-pfsaveinfo]')) {
     const msg = $('#pfMsg');
-    if (v.length < 2) { if (msg) { msg.textContent = 'Entrez votre nom.'; msg.hidden = false; } return; }
-    clientSelfName = v;
-    try { localStorage.setItem(LS.name, v); } catch (_) {}
-    const init = v.slice(0, 2).toUpperCase();
-    const av = $('#avatarInit'); if (av) av.textContent = init;
+    const showMsg = (m) => { if (msg) { msg.textContent = m; msg.hidden = false; } };
+    const prenom = ($('#pfPrenom')?.value || '').trim();
+    const nom = ($('#pfNom')?.value || '').trim();
+    if (!prenom && !nom) { showMsg('Entrez au moins un prénom ou un nom.'); return; }
+    const btn = e.target.closest('[data-pfsaveinfo]'); if (btn) { btn.disabled = true; btn.textContent = 'Enregistrement…'; }
+    const payload = { prenom, nom };
+    if (profilePhotoDraft !== null) payload.photoUrl = profilePhotoDraft; // '' = retirer
+    try {
+      const u = auth.currentUser; if (u) { try { await u.getIdToken(true); } catch (_) {} }
+      await httpsCallable(functions, 'saveMyProfile')(payload);
+      clientProfile.prenom = prenom; clientProfile.nom = nom;
+      if (profilePhotoDraft !== null) clientProfile.photoUrl = profilePhotoDraft;
+      profilePhotoDraft = null;
+      clientSelfName = `${prenom} ${nom}`.trim();
+      try { localStorage.setItem(LS.name, clientSelfName); } catch (_) {}
+      applyHeaderAvatar();
+      renderView('profile');
+    } catch (err) {
+      console.warn('saveMyProfile:', err && err.code, err && err.message);
+      showMsg(err && err.code === 'invalid-argument' ? 'Photo trop lourde, choisissez-en une autre.' : "Enregistrement impossible.");
+      if (btn) { btn.disabled = false; btn.textContent = 'Enregistrer'; }
+    }
+    return;
+  }
+  // Changer la langue (FR <-> EN) : préférence enregistrée (app reste en FR pour l'instant).
+  if (e.target && e.target.closest('[data-pflang]')) {
+    const newLang = clientProfile.lang === 'en' ? 'fr' : 'en';
+    clientProfile.lang = newLang;
     renderView('profile');
+    try {
+      const u = auth.currentUser; if (u) { try { await u.getIdToken(true); } catch (_) {} }
+      await httpsCallable(functions, 'saveMyProfile')({ lang: newLang });
+    } catch (_) {}
+    if (newLang === 'en') alert("Language preference saved. Full English translation is coming soon.");
     return;
   }
   // Enregistrer le nouveau PIN.

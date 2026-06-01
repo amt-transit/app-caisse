@@ -820,6 +820,74 @@ exports.markChatRead = onCall({ region: REGION, invoker: "public" }, async (requ
     } catch (e) { return { ok: true, updated: 0 }; }
 });
 
+// ===========================================================================
+//  PROFIL CLIENT (app AMT Clients) — fiche par numéro
+// ---------------------------------------------------------------------------
+//  Collection `client_profiles`, doc = phoneTail. { prenom, nom, photoUrl
+//  (dataURL JPEG compressée), lang, phoneE164, updatedAt }. Le staff peut la
+//  lire (firestore.rules). « À propos » = infos company_<agence de départ>.
+// ===========================================================================
+exports.getMyProfile = onCall({ region: REGION, invoker: "public" }, async (request) => {
+    const auth = request.auth;
+    const phone = auth && auth.token && auth.token.phone_number;
+    if (!phone) throw new HttpsError("unauthenticated", "Connexion par téléphone requise.");
+    const digits = String(phone).replace(/\D/g, "");
+    const tail = digits.length >= 9 ? digits.slice(-9) : digits;
+    const db = admin.firestore();
+
+    let profile = { prenom: "", nom: "", photoUrl: "", lang: "fr" };
+    try {
+        const d = await db.collection("client_profiles").doc(tail).get();
+        if (d.exists) { const x = d.data() || {}; profile = { prenom: x.prenom || "", nom: x.nom || "", photoUrl: x.photoUrl || "", lang: x.lang || "fr" }; }
+    } catch (e) {}
+
+    // « À propos » : société de l'agence de DÉPART rattachée (où le client expédie),
+    // sinon la 1re agence rattachée, sinon paris.
+    let about = null;
+    try {
+        const attached = await clientAgenciesFor(db, tail);
+        let srcAgency = "paris";
+        const exp = [...attached.entries()].find(([, r]) => r === "exp" || r === "both");
+        if (exp) srcAgency = exp[0];
+        else if (attached.size) {
+            // si arrivée (abidjan / abidjan_x), remonter à l'agence de départ source
+            const first = [...attached.keys()][0];
+            srcAgency = first === "abidjan" ? "paris" : (first.startsWith("abidjan_") ? first.split("_")[1] : first);
+        }
+        const c = await db.collection("settings").doc(`company_${srcAgency}`).get();
+        if (c.exists) {
+            const x = c.data() || {};
+            about = { name: x.name || "AMT TRANS'IT", address: x.address || "", phone: x.phone || x.tel || "", email: x.email || "", website: x.website || "", agency: srcAgency };
+        }
+    } catch (e) {}
+
+    return { profile, about };
+});
+
+exports.saveMyProfile = onCall({ region: REGION, invoker: "public" }, async (request) => {
+    const auth = request.auth;
+    const phone = auth && auth.token && auth.token.phone_number;
+    if (!phone) throw new HttpsError("unauthenticated", "Connexion par téléphone requise.");
+    const data = request.data || {};
+    const digits = String(phone).replace(/\D/g, "");
+    const tail = digits.length >= 9 ? digits.slice(-9) : digits;
+
+    const clip = (s, n) => String(s == null ? "" : s).trim().slice(0, n);
+    const upd = { phoneE164: phone, updatedAt: new Date().toISOString() };
+    if (data.prenom !== undefined) upd.prenom = clip(data.prenom, 60);
+    if (data.nom !== undefined) upd.nom = clip(data.nom, 60);
+    if (data.lang !== undefined) upd.lang = (data.lang === "en") ? "en" : "fr";
+    if (data.photoUrl !== undefined) {
+        let img = String(data.photoUrl || "");
+        if (img && !/^data:image\/(jpeg|png|webp);base64,/.test(img)) throw new HttpsError("invalid-argument", "Photo invalide.");
+        if (img.length > 600000) throw new HttpsError("invalid-argument", "Photo trop lourde.");
+        upd.photoUrl = img; // "" = suppression
+    }
+    const db = admin.firestore();
+    await db.collection("client_profiles").doc(tail).set(upd, { merge: true });
+    return { ok: true };
+});
+
 exports.getQuoteConfig = onCall({ region: REGION, invoker: "public" }, async (request) => {
     if (!request.auth || !request.auth.token || !request.auth.token.phone_number) {
         throw new HttpsError("unauthenticated", "Connexion par téléphone requise.");
