@@ -5,6 +5,7 @@ import { View, Text, ScrollView, TextInput, TouchableOpacity, StyleSheet, Image,
 import { Card, SectionTitle, Btn, Loading } from '../components/ui';
 import { colors, fcfa } from '../theme';
 import { api } from '../api';
+import { pickChatImage } from '../media';
 
 const TAUX = 655.957;
 const toFcfa = (v, cur) => (cur === 'EUR' ? (v || 0) * TAUX : (v || 0));
@@ -52,6 +53,23 @@ export default function ProfileScreen({ data, phone, onLogout }) {
     finally { setSaving(false); }
   };
 
+  // Changer la photo de profil (galerie -> base64 compressé -> fiche).
+  const changePhoto = async () => {
+    try {
+      const dataUrl = await pickChatImage();
+      if (!dataUrl) return;
+      if (dataUrl.length > 600000) { Alert.alert('Photo', 'Photo trop lourde, choisissez-en une plus petite.'); return; }
+      setProfile({ ...profile, photoUrl: dataUrl }); // aperçu immédiat
+      await api.saveMyProfile({ photoUrl: dataUrl });
+    } catch (e) { Alert.alert('Photo', e.message || 'Impossible.'); }
+  };
+
+  // Changer la langue (préférence enregistrée ; l'app reste en FR pour l'instant).
+  const changeLang = async (lang) => {
+    setProfile({ ...profile, lang });
+    try { await api.saveMyProfile({ lang }); } catch (e) {}
+  };
+
   const confirmLogout = () => {
     Alert.alert('Se déconnecter', 'Vous devrez vous reconnecter par SMS.', [
       { text: 'Annuler', style: 'cancel' },
@@ -61,10 +79,13 @@ export default function ProfileScreen({ data, phone, onLogout }) {
 
   return (
     <ScrollView contentContainerStyle={{ padding: 16 }}>
-      {/* Hero */}
+      {/* Hero (toucher l'avatar = changer la photo) */}
       <View style={s.hero}>
-        {profile.photoUrl ? <Image source={{ uri: profile.photoUrl }} style={s.heroAv} /> :
-          <View style={s.heroAvInit}><Text style={s.heroAvTxt}>{initials || '👤'}</Text></View>}
+        <TouchableOpacity onPress={changePhoto} activeOpacity={0.8}>
+          {profile.photoUrl ? <Image source={{ uri: profile.photoUrl }} style={s.heroAv} /> :
+            <View style={s.heroAvInit}><Text style={s.heroAvTxt}>{initials || '👤'}</Text></View>}
+          <View style={s.camBadge}><Text style={{ fontSize: 11 }}>📷</Text></View>
+        </TouchableOpacity>
         <View style={{ flex: 1, minWidth: 0 }}>
           <Text style={s.heroName}>{fullName || 'Client AMT'}</Text>
           <Text style={s.heroSub}>📞 {phone || '—'}</Text>
@@ -126,6 +147,20 @@ export default function ProfileScreen({ data, phone, onLogout }) {
         )}
       </Card>
 
+      {/* Langue (préférence ; l'app reste en français pour l'instant) */}
+      <Card>
+        <SectionTitle>Langue</SectionTitle>
+        <View style={{ flexDirection: 'row', gap: 10 }}>
+          {[['fr', '🇫🇷 Français'], ['en', '🇬🇧 English']].map(([code, lbl]) => (
+            <TouchableOpacity key={code} onPress={() => changeLang(code)} activeOpacity={0.7}
+              style={[s.langChip, (profile.lang || 'fr') === code && s.langChipOn]}>
+              <Text style={[s.langTxt, (profile.lang || 'fr') === code && { color: colors.blue }]}>{lbl}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+        {(profile.lang || 'fr') === 'en' && <Text style={s.muted}>La traduction complète arrivera prochainement.</Text>}
+      </Card>
+
       {/* À propos */}
       {about && (
         <Card>
@@ -148,6 +183,10 @@ const s = StyleSheet.create({
   hero: { flexDirection: 'row', alignItems: 'center', gap: 14, backgroundColor: colors.blue, borderRadius: 18, padding: 18, marginBottom: 14 },
   heroAv: { width: 62, height: 62, borderRadius: 31, borderWidth: 2, borderColor: colors.gold },
   heroAvInit: { width: 62, height: 62, borderRadius: 31, borderWidth: 2, borderColor: colors.gold, backgroundColor: 'rgba(255,255,255,0.12)', alignItems: 'center', justifyContent: 'center' },
+  camBadge: { position: 'absolute', right: -2, bottom: -2, backgroundColor: '#fff', borderRadius: 11, width: 22, height: 22, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: colors.line },
+  langChip: { flex: 1, paddingVertical: 12, borderRadius: 12, borderWidth: 1.5, borderColor: colors.line, alignItems: 'center', backgroundColor: '#fff' },
+  langChipOn: { borderColor: colors.blue, backgroundColor: '#eef4fb' },
+  langTxt: { fontWeight: '700', color: colors.muted, fontSize: 14 },
   heroAvTxt: { color: '#fff', fontSize: 22, fontWeight: '800' },
   heroName: { color: '#fff', fontSize: 19, fontWeight: '800' },
   heroSub: { color: 'rgba(255,255,255,0.85)', fontSize: 13, marginTop: 3 },
