@@ -67,8 +67,19 @@ const RecaptchaModal = forwardRef(function RecaptchaModal(_props, ref) {
     setVisible(true);
   });
 
-  // Objet conforme à l'interface ApplicationVerifier de Firebase.
-  const makeVerifier = () => ({ type: 'recaptcha', verify });
+  // Objet conforme à l'interface ApplicationVerifier de Firebase. Le SDK
+  // appelle aussi des méthodes internes (_reset, clear, render) sur le
+  // vérificateur : on les fournit (no-op / promesse) sinon il plante avec
+  // « verifier._reset is not a function ».
+  const makeVerifier = () => ({
+    type: 'recaptcha',
+    verify,
+    render: () => Promise.resolve('amtc-recaptcha'), // widgetId factice
+    _reset: () => {},
+    clear: () => {},
+    reset: () => {},
+    _isInvisible: false,
+  });
 
   useImperativeHandle(ref, () => ({ makeVerifier, verify }));
 
