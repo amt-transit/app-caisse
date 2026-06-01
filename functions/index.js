@@ -744,7 +744,7 @@ exports.getMyChat = onCall({ region: REGION, invoker: "public" }, async (request
         msgs = snap.docs.map((d) => { const x = d.data() || {}; return {
             id: d.id, agency: x.agency || "", text: x.text || "", sender: x.sender || "client",
             senderName: x.senderName || "", createdAt: x.createdAt || "", readByClient: !!x.readByClient,
-            imageUrl: x.imageUrl || "",
+            imageUrl: x.imageUrl || "", audioUrl: x.audioUrl || "",
         }; });
     } catch (e) {}
     // S'assurer que toute agence ayant des messages apparaît aussi en conversation.
@@ -780,8 +780,12 @@ exports.sendClientMessage = onCall({ region: REGION, invoker: "public" }, async 
     let imageUrl = String(data.imageUrl || "");
     if (imageUrl && !/^data:image\/(jpeg|png|webp);base64,/.test(imageUrl)) imageUrl = "";
     if (imageUrl.length > 950000) throw new HttpsError("invalid-argument", "Image trop lourde.");
+    // Audio : URL Firebase Storage (le fichier est uploadé côté client dans
+    // client_chat/). On ne stocke que l'URL (légère), pas le binaire.
+    let audioUrl = String(data.audioUrl || "");
+    if (audioUrl && !/^https:\/\/(firebasestorage\.googleapis\.com|storage\.googleapis\.com)\//.test(audioUrl)) audioUrl = "";
     let agency = String(data.agency || "").trim();
-    if (!text && !imageUrl) throw new HttpsError("invalid-argument", "Message vide.");
+    if (!text && !imageUrl && !audioUrl) throw new HttpsError("invalid-argument", "Message vide.");
 
     const digits = String(phone).replace(/\D/g, "");
     const tail = digits.length >= 9 ? digits.slice(-9) : digits;
@@ -799,14 +803,15 @@ exports.sendClientMessage = onCall({ region: REGION, invoker: "public" }, async 
     const now = new Date().toISOString();
     const ref = await db.collection("client_messages").add({
         phoneTail: tail, phoneE164: phone, agency,
-        text, imageUrl, sender: "client", senderName: data.fromName || "",
+        text, imageUrl, audioUrl, sender: "client", senderName: data.fromName || "",
         createdAt: now, readByClient: true, readByStaff: false,
     });
     // Notifier le staff (page Notifications, temps réel).
     try {
+        const apercu = audioUrl && !text ? "🎤 Message vocal" : (imageUrl && !text ? "📷 Photo" : text.slice(0, 80));
         await db.collection("notifications").add({
             title: "💬 Nouveau message client",
-            message: `${data.fromName || phone} : ${imageUrl && !text ? "📷 Photo" : text.slice(0, 80)}`,
+            message: `${data.fromName || phone} : ${apercu}`,
             agency, type: "client_chat", refId: ref.id,
             createdAt: now, readBy: [],
         });

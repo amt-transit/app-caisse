@@ -1,0 +1,31 @@
+rules_version = '2';
+
+// Règles Firebase Storage — reprises À L'IDENTIQUE de la console (logos +
+// règle par défaut « utilisateur connecté »), avec un bloc dédié au chat
+// client AJOUTÉ (vocaux / images). Versionné ici pour être traçable et
+// déployable (firebase deploy --only storage).
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    // Logos de facture : lecture publique (PDF / aperçus), écriture connectée.
+    match /invoice_logos/{imageId} {
+      allow read: if true;
+      allow write: if request.auth != null;
+    }
+
+    // Vocaux & pièces jointes du chat client (app AMT Clients). Tout utilisateur
+    // connecté (client par SMS OU staff). Limite type/taille pour éviter les abus.
+    match /client_chat/{allPaths=**} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null
+                   && request.resource.size < 10 * 1024 * 1024
+                   && request.resource.contentType.matches('audio/.*|image/.*');
+    }
+
+    // Règle par défaut (inchangée) : tout utilisateur connecté.
+    match /{allPaths=**} {
+      allow read, write: if request.auth != null;
+    }
+
+  }
+}

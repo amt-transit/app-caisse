@@ -5,6 +5,7 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { initializeAuth, getReactNativePersistence } from 'firebase/auth';
 import { getFunctions } from 'firebase/functions';
+import { getStorage } from 'firebase/storage';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const firebaseConfig = {
@@ -25,6 +26,9 @@ export const auth = initializeAuth(app, {
 
 // Région alignée sur les Cloud Functions (us-central1, cf. functions/index.js).
 export const functions = getFunctions(app, 'us-central1');
+
+// Storage : vocaux & pièces jointes du chat (dossier client_chat/).
+export const storage = getStorage(app);
 
 export { firebaseConfig };
 export default app;

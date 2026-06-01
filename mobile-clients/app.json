@@ -13,10 +13,20 @@
     ],
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.amttransit.clients"
+      "bundleIdentifier": "com.amttransit.clients",
+      "infoPlist": {
+        "NSMicrophoneUsageDescription": "Pour enregistrer des messages vocaux dans le chat.",
+        "NSPhotoLibraryUsageDescription": "Pour joindre des photos dans le chat."
+      }
     },
     "android": {
-      "package": "com.amttransit.clients"
-    }
+      "package": "com.amttransit.clients",
+      "permissions": ["RECORD_AUDIO"]
+    },
+    "plugins": [
+      "expo-asset",
+      ["expo-image-picker", { "photosPermission": "Pour joindre des photos dans le chat." }],
+      ["expo-av", { "microphonePermission": "Pour enregistrer des messages vocaux dans le chat." }]
+    ]
   }
 }

@@ -165,10 +165,11 @@ export const ChatClientsView = {
     const clientNm = this.clientName(this.selectedTail, conv.find(m => m.senderName)?.senderName, conv[0] && conv[0].phoneE164);
     const bubbles = conv.map(m => {
       const img = m.imageUrl ? `<img src="${m.imageUrl}" onclick="window.open(this.src,'_blank')" style="max-width:100%;max-height:240px;border-radius:8px;margin-top:${m.text ? '6px' : '0'};cursor:pointer;display:block;">` : '';
+      const audio = m.audioUrl ? `<audio controls src="${m.audioUrl}" style="margin-top:6px;max-width:240px;height:38px;display:block;"></audio>` : '';
       return `
       <div class="cc-msg cc-msg--${m.sender === 'staff' ? 'staff' : 'client'}">
         <div class="cc-msg__meta">${m.sender === 'staff' ? (m.senderName || 'Agence') : clientNm} · ${fdate(m.createdAt)}</div>
-        <div>${(m.text || '').replace(/</g, '&lt;')}</div>${img}
+        <div>${(m.text || '').replace(/</g, '&lt;')}</div>${img}${audio}
       </div>`; }).join('');
     // Bandeau en-tête : avatar + nom + téléphone du client.
     const ph = (conv.find(m => m.phoneE164) || {}).phoneE164 || '';

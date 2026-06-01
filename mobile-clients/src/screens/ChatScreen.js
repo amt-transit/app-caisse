@@ -1,10 +1,12 @@
-// Onglet CHAT : conversations par agence (1 seule → ouverte direct ; plusieurs
-// → liste). Messages + envoi texte. (Photos : ajoutées dans une étape suivante.)
+// Onglet CHAT : conversations par agence. Messages texte + PHOTO (base64) +
+// VOCAL (uploadé sur Storage, URL stockée). Lecteur audio intégré.
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, ScrollView, TextInput, TouchableOpacity, StyleSheet, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, Text, ScrollView, TextInput, TouchableOpacity, StyleSheet, KeyboardAvoidingView, Platform, Image, Alert } from 'react-native';
+import { Audio } from 'expo-av';
 import { Card, Empty, Loading } from '../components/ui';
 import { colors } from '../theme';
 import { api } from '../api';
+import { pickChatImage, uploadChatAudio } from '../media';
 
 const fdt = (d) => { try { return new Date(d).toLocaleString('fr-FR'); } catch (e) { return ''; } };
 
@@ -15,7 +17,10 @@ export default function ChatScreen({ selfName }) {
   const [agency, setAgency] = useState(null);
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
+  const [recording, setRecording] = useState(null);   // objet Audio.Recording en cours
+  const [playingId, setPlayingId] = useState(null);
   const scrollRef = useRef(null);
+  const soundRef = useRef(null);
 
   const load = async () => {
     try {
@@ -26,9 +31,8 @@ export default function ChatScreen({ selfName }) {
     finally { setLoading(false); }
   };
   useEffect(() => { load(); }, []);
-
-  // Si une seule conversation : on l'ouvre directement.
   useEffect(() => { if (!agency && convs.length === 1) setAgency(convs[0].agency); }, [convs]);
+  useEffect(() => () => { if (soundRef.current) soundRef.current.unloadAsync().catch(() => {}); }, []);
 
   const openAgency = (ag) => {
     setAgency(ag);
@@ -36,24 +40,78 @@ export default function ChatScreen({ selfName }) {
     if (had) { api.markChatRead(ag).catch(() => {}); setMessages(ms => ms.map(m => m.agency === ag && m.sender === 'staff' ? { ...m, readByClient: true } : m)); }
   };
 
-  const send = async () => {
+  // Envoi générique (texte / image / audio).
+  const sendPayload = async (payload, optimistic) => {
+    const now = new Date().toISOString();
+    setMessages(ms => [...ms, { id: 'tmp' + now, agency, sender: 'client', senderName: 'Vous', createdAt: now, ...optimistic }]);
+    setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 50);
+    try { await api.sendClientMessage({ agency, fromName: selfName || '', ...payload }); await load(); }
+    catch (e) { Alert.alert('Chat', "Envoi impossible."); }
+  };
+
+  const sendText = async () => {
     const t = text.trim();
     if (!t || !agency) return;
-    const now = new Date().toISOString();
-    setMessages(ms => [...ms, { id: 'tmp' + now, agency, text: t, sender: 'client', senderName: 'Vous', createdAt: now }]);
     setText(''); setSending(true);
-    setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 50);
+    await sendPayload({ text: t }, { text: t });
+    setSending(false);
+  };
+
+  const sendPhoto = async () => {
+    if (!agency) return;
     try {
-      await api.sendClientMessage({ text: t, agency, fromName: selfName || '' });
-      await load();
-    } catch (e) { /* le message optimiste reste affiché */ }
+      const dataUrl = await pickChatImage();
+      if (!dataUrl) return;
+      setSending(true);
+      await sendPayload({ imageUrl: dataUrl }, { imageUrl: dataUrl });
+    } catch (e) { Alert.alert('Photo', e.message || 'Impossible.'); }
     finally { setSending(false); }
+  };
+
+  // --- Enregistrement vocal (expo-av) ---
+  const startRec = async () => {
+    try {
+      const perm = await Audio.requestPermissionsAsync();
+      if (!perm.granted) { Alert.alert('Micro', 'Autorisation micro refusée.'); return; }
+      await Audio.setAudioModeAsync({ allowsRecordingIOS: true, playsInSilentModeIOS: true });
+      const { recording } = await Audio.Recording.createAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
+      setRecording(recording);
+    } catch (e) { Alert.alert('Micro', "Impossible de démarrer l'enregistrement."); }
+  };
+  const cancelRec = async () => {
+    if (!recording) return;
+    try { await recording.stopAndUnloadAsync(); } catch (e) {}
+    setRecording(null);
+  };
+  const stopAndSend = async () => {
+    if (!recording) return;
+    setSending(true);
+    try {
+      await recording.stopAndUnloadAsync();
+      const uri = recording.getURI();
+      setRecording(null);
+      const url = await uploadChatAudio(uri, 'audio/m4a');
+      await sendPayload({ audioUrl: url }, { audioUrl: url });
+    } catch (e) { Alert.alert('Vocal', "Envoi du vocal impossible."); }
+    finally { setSending(false); }
+  };
+
+  // --- Lecture d'un vocal ---
+  const playAudio = async (id, url) => {
+    try {
+      if (soundRef.current) { await soundRef.current.unloadAsync(); soundRef.current = null; }
+      if (playingId === id) { setPlayingId(null); return; } // re-tap = stop
+      const { sound } = await Audio.Sound.createAsync({ uri: url }, { shouldPlay: true });
+      soundRef.current = sound;
+      setPlayingId(id);
+      sound.setOnPlaybackStatusUpdate((st) => { if (st.didJustFinish) { setPlayingId(null); sound.unloadAsync().catch(() => {}); soundRef.current = null; } });
+    } catch (e) { Alert.alert('Lecture', "Lecture impossible."); setPlayingId(null); }
   };
 
   if (loading) return <Loading text="Chargement de votre messagerie…" />;
   if (convs.length === 0) return <Empty icon="💬" text="Aucune agence rattachée à votre numéro. Vos conversations apparaîtront ici dès votre première facture." />;
 
-  // Liste des conversations (plusieurs agences, aucune ouverte).
+  // Liste des conversations.
   if (!agency) {
     return (
       <ScrollView contentContainerStyle={{ padding: 16 }}>
@@ -74,7 +132,6 @@ export default function ChatScreen({ selfName }) {
     );
   }
 
-  // Conversation ouverte.
   const conv = convs.find(c => c.agency === agency) || { name: agency };
   const msgs = messages.filter(m => m.agency === agency);
   return (
@@ -85,19 +142,41 @@ export default function ChatScreen({ selfName }) {
       </View>
       <ScrollView ref={scrollRef} contentContainerStyle={{ padding: 14 }} onContentSizeChange={() => scrollRef.current?.scrollToEnd({ animated: false })}>
         {msgs.length === 0 ? <Text style={s.startTxt}>Démarrez la conversation avec {conv.name}.</Text> :
-          msgs.map((m, i) => (
-            <View key={i} style={[s.bubbleRow, m.sender === 'client' && { justifyContent: 'flex-end' }]}>
-              <View style={[s.bubble, m.sender === 'client' ? s.bubbleMe : s.bubbleOther]}>
-                <Text style={[s.bMeta, m.sender === 'client' && { color: 'rgba(255,255,255,0.7)' }]}>{m.sender === 'client' ? 'Vous' : (m.senderName || conv.name)} · {fdt(m.createdAt)}</Text>
-                {!!m.text && <Text style={[s.bTxt, m.sender === 'client' && { color: '#fff' }]}>{m.text}</Text>}
+          msgs.map((m, i) => {
+            const mine = m.sender === 'client';
+            return (
+              <View key={i} style={[s.bubbleRow, mine && { justifyContent: 'flex-end' }]}>
+                <View style={[s.bubble, mine ? s.bubbleMe : s.bubbleOther]}>
+                  <Text style={[s.bMeta, mine && { color: 'rgba(255,255,255,0.7)' }]}>{mine ? 'Vous' : (m.senderName || conv.name)} · {fdt(m.createdAt)}</Text>
+                  {!!m.text && <Text style={[s.bTxt, mine && { color: '#fff' }]}>{m.text}</Text>}
+                  {!!m.imageUrl && <Image source={{ uri: m.imageUrl }} style={s.img} resizeMode="cover" />}
+                  {!!m.audioUrl && (
+                    <TouchableOpacity style={[s.audio, mine ? s.audioMe : s.audioOther]} onPress={() => playAudio(m.id || i, m.audioUrl)}>
+                      <Text style={{ fontSize: 18 }}>{playingId === (m.id || i) ? '⏸️' : '▶️'}</Text>
+                      <Text style={[s.audioTxt, mine && { color: '#fff' }]}>Message vocal</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
               </View>
-            </View>
-          ))}
+            );
+          })}
       </ScrollView>
-      <View style={s.inputBar}>
-        <TextInput style={s.input} value={text} onChangeText={setText} placeholder="Votre message…" placeholderTextColor={colors.muted} multiline />
-        <TouchableOpacity style={[s.sendBtn, sending && { opacity: 0.6 }]} onPress={send} disabled={sending}><Text style={s.sendTxt}>➤</Text></TouchableOpacity>
-      </View>
+
+      {recording ? (
+        <View style={s.recBar}>
+          <View style={s.recDot} />
+          <Text style={s.recTxt}>Enregistrement…</Text>
+          <TouchableOpacity style={s.recCancel} onPress={cancelRec}><Text style={s.recCancelTxt}>Annuler</Text></TouchableOpacity>
+          <TouchableOpacity style={[s.sendBtn, sending && { opacity: 0.6 }]} onPress={stopAndSend} disabled={sending}><Text style={s.sendTxt}>➤</Text></TouchableOpacity>
+        </View>
+      ) : (
+        <View style={s.inputBar}>
+          <TouchableOpacity style={s.iconBtn} onPress={sendPhoto} disabled={sending}><Text style={s.icon}>📷</Text></TouchableOpacity>
+          <TouchableOpacity style={s.iconBtn} onPress={startRec} disabled={sending}><Text style={s.icon}>🎤</Text></TouchableOpacity>
+          <TextInput style={s.input} value={text} onChangeText={setText} placeholder="Votre message…" placeholderTextColor={colors.muted} multiline />
+          <TouchableOpacity style={[s.sendBtn, sending && { opacity: 0.6 }]} onPress={sendText} disabled={sending}><Text style={s.sendTxt}>➤</Text></TouchableOpacity>
+        </View>
+      )}
     </KeyboardAvoidingView>
   );
 }
@@ -115,13 +194,25 @@ const s = StyleSheet.create({
   cHeadT: { fontSize: 16, fontWeight: '800', color: colors.blue },
   startTxt: { textAlign: 'center', color: colors.muted, padding: 24 },
   bubbleRow: { flexDirection: 'row', marginBottom: 8 },
-  bubble: { maxWidth: '80%', padding: 10, borderRadius: 14 },
+  bubble: { maxWidth: '82%', padding: 10, borderRadius: 14 },
   bubbleMe: { backgroundColor: colors.blue, borderBottomRightRadius: 4 },
   bubbleOther: { backgroundColor: '#fff', borderWidth: 1, borderColor: colors.line, borderBottomLeftRadius: 4 },
   bMeta: { fontSize: 10, color: colors.muted, marginBottom: 2 },
   bTxt: { fontSize: 14, color: colors.ink, lineHeight: 19 },
-  inputBar: { flexDirection: 'row', alignItems: 'flex-end', gap: 8, padding: 10, backgroundColor: '#fff', borderTopWidth: 1, borderTopColor: colors.line },
+  img: { width: 200, height: 200, borderRadius: 10, marginTop: 6 },
+  audio: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 6, paddingVertical: 6, paddingHorizontal: 10, borderRadius: 20 },
+  audioMe: { backgroundColor: 'rgba(255,255,255,0.18)' },
+  audioOther: { backgroundColor: '#eef4fb' },
+  audioTxt: { fontSize: 13, color: colors.ink, fontWeight: '600' },
+  inputBar: { flexDirection: 'row', alignItems: 'flex-end', gap: 6, padding: 10, backgroundColor: '#fff', borderTopWidth: 1, borderTopColor: colors.line },
+  iconBtn: { width: 40, height: 44, alignItems: 'center', justifyContent: 'center' },
+  icon: { fontSize: 22 },
   input: { flex: 1, borderWidth: 1, borderColor: colors.line, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 9, fontSize: 14, color: colors.ink, maxHeight: 100 },
   sendBtn: { backgroundColor: colors.blue, width: 44, height: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
   sendTxt: { color: '#fff', fontSize: 18 },
+  recBar: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 12, backgroundColor: '#fff', borderTopWidth: 1, borderTopColor: colors.line },
+  recDot: { width: 12, height: 12, borderRadius: 6, backgroundColor: colors.red },
+  recTxt: { flex: 1, color: colors.ink, fontWeight: '600' },
+  recCancel: { paddingHorizontal: 10, paddingVertical: 8 },
+  recCancelTxt: { color: colors.muted, fontWeight: '700' },
 });
