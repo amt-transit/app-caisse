@@ -1,0 +1,35 @@
+// Appels aux Cloud Functions (mêmes que la PWA /clients/). Aucun accès
+// Firestore direct côté client. On rafraîchit le jeton avant chaque appel
+// pour éviter les "unauthenticated" après une longue inactivité.
+import { httpsCallable } from 'firebase/functions';
+import { auth, functions } from './firebase';
+
+async function call(name, payload) {
+  const u = auth.currentUser;
+  if (u) { try { await u.getIdToken(true); } catch (_) {} }
+  const res = await httpsCallable(functions, name)(payload || {});
+  return (res && res.data) || {};
+}
+
+export const api = {
+  getMyInvoices: () => call('getMyInvoices'),
+  getMyInvoiceDetail: (reference) => call('getMyInvoiceDetail', { reference }),
+  getMyProfile: () => call('getMyProfile'),
+  saveMyProfile: (data) => call('saveMyProfile', data),
+  // Dépôt / récup
+  getMyRequests: () => call('getMyRequests'),
+  createClientRequest: (data) => call('createClientRequest', data),
+  respondClientRequest: (id, action) => call('respondClientRequest', { id, action }),
+  cancelClientRequest: (id) => call('cancelClientRequest', { id }),
+  getRdvAvailability: (year, month, agency) => call('getRdvAvailability', { year, month, agency }),
+  // Devis
+  getQuoteConfig: () => call('getQuoteConfig'),
+  computeQuote: (data) => call('computeQuote', data),
+  // Chat
+  getMyChat: () => call('getMyChat'),
+  sendClientMessage: (data) => call('sendClientMessage', data),
+  markChatRead: (agency) => call('markChatRead', { agency }),
+  // Notifications
+  getMyNotifications: () => call('getMyNotifications'),
+  markNotificationsRead: (ids) => call('markNotificationsRead', { ids }),
+};
