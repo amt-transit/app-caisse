@@ -3,12 +3,13 @@
 // On affiche la liste des clients ayant écrit à l'agence active, et la
 // conversation du client sélectionné ; le staff peut répondre (sender:'staff').
 import { db } from '../../firebase-config.js';
-import { collection, query, where, onSnapshot, addDoc, doc, updateDoc, writeBatch, getDocs, limit } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
+import { collection, query, where, onSnapshot, addDoc, doc, getDoc, updateDoc, writeBatch, getDocs, limit } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 
 export const ChatClientsView = {
   unsub: null,
   messages: [],
   selectedTail: null,
+  profiles: {},   // phoneTail -> { prenom, nom, photoUrl } (fiche client_profiles)
 
   render(app, container) {
     this.app = app;
@@ -72,6 +73,7 @@ export const ChatClientsView = {
     this.unsub = onSnapshot(q, (snap) => {
       this.messages = snap.docs.map(d => ({ id: d.id, ...d.data() }))
         .sort((a, b) => String(a.createdAt).localeCompare(String(b.createdAt)));
+      this.loadProfiles();   // charge photo + nom des clients (fiche client_profiles)
       this.renderList();
       if (this.selectedTail) this.renderConversation();
       if (this.app && typeof this.app.updateBadges === 'function') this.app.updateBadges();
@@ -79,6 +81,39 @@ export const ChatClientsView = {
       console.error('Chat clients:', err);
       const l = document.getElementById('ccList'); if (l) l.innerHTML = '<div class="cc-empty">Erreur de chargement.</div>';
     });
+  },
+
+  // Charge les fiches profil (photo + nom) des clients présents, une seule fois
+  // chacune. Rafraîchit la liste quand de nouveaux profils arrivent.
+  async loadProfiles() {
+    const tails = [...new Set(this.messages.map(m => m.phoneTail).filter(Boolean))];
+    const missing = tails.filter(t => this.profiles[t] === undefined);
+    if (!missing.length) return;
+    missing.forEach(t => { this.profiles[t] = null; }); // marque « en cours » (évite double fetch)
+    let changed = false;
+    await Promise.all(missing.map(async (t) => {
+      try {
+        const d = await getDoc(doc(db, 'client_profiles', t));
+        if (d.exists()) { const x = d.data() || {}; this.profiles[t] = { prenom: x.prenom || '', nom: x.nom || '', photoUrl: x.photoUrl || '' }; changed = true; }
+      } catch (e) { /* fiche inaccessible : on garde null */ }
+    }));
+    if (changed) { this.renderList(); if (this.selectedTail) this.renderConversation(); }
+  },
+
+  // Nom affichable d'un client : fiche profil > nom du message > téléphone.
+  clientName(tail, fallbackName, fallbackPhone) {
+    const p = this.profiles[tail];
+    const full = p ? `${p.prenom} ${p.nom}`.trim() : '';
+    return full || fallbackName || fallbackPhone || ('…' + tail);
+  },
+
+  // Avatar HTML (photo de profil ronde, sinon initiales).
+  avatarHtml(tail, name) {
+    const p = this.profiles[tail];
+    const base = 'width:38px;height:38px;border-radius:50%;flex-shrink:0;object-fit:cover;';
+    if (p && p.photoUrl) return `<img src="${p.photoUrl}" style="${base}">`;
+    const init = (name || '').trim().slice(0, 2).toUpperCase() || '👤';
+    return `<div style="${base}display:flex;align-items:center;justify-content:center;background:#e0e7ff;color:#4f46e5;font-weight:800;font-size:13px;">${init}</div>`;
   },
 
   // Regroupe les messages par client (phoneTail).
@@ -101,14 +136,17 @@ export const ChatClientsView = {
     if (!el) return;
     const convs = this.conversations();
     if (!convs.length) { el.innerHTML = '<div class="cc-empty">Aucun message client pour le moment.</div>'; return; }
-    el.innerHTML = convs.map(c => `
-      <div class="cc-conv ${c.tail === this.selectedTail ? 'active' : ''}" onclick="window.app.views.chatClients.select('${c.tail}')">
-        <div style="min-width:0;">
-          <div class="cc-conv__n">${c.name || c.phone || ('…' + c.tail)}</div>
-          <div class="cc-conv__last">${(c.last || '').slice(0, 38)}</div>
+    el.innerHTML = convs.map(c => {
+      const nm = this.clientName(c.tail, c.name, c.phone);
+      return `
+      <div class="cc-conv ${c.tail === this.selectedTail ? 'active' : ''}" onclick="window.app.views.chatClients.select('${c.tail}')" style="display:flex;align-items:center;gap:10px;">
+        ${this.avatarHtml(c.tail, nm)}
+        <div style="min-width:0;flex:1;">
+          <div class="cc-conv__n">${nm}</div>
+          <div class="cc-conv__last">${(c.last || '').slice(0, 34)}</div>
         </div>
         ${c.unread ? `<span class="cc-badge">${c.unread}</span>` : ''}
-      </div>`).join('');
+      </div>`; }).join('');
   },
 
   select(tail) {
@@ -124,13 +162,21 @@ export const ChatClientsView = {
     const conv = this.messages.filter(m => m.phoneTail === this.selectedTail);
     if (!conv.length) { el.innerHTML = '<div class="cc-empty">Aucun message.</div>'; return; }
     const fdate = (d) => { try { return new Date(d).toLocaleString('fr-FR'); } catch (e) { return ''; } };
-    el.innerHTML = conv.map(m => {
+    const clientNm = this.clientName(this.selectedTail, conv.find(m => m.senderName)?.senderName, conv[0] && conv[0].phoneE164);
+    const bubbles = conv.map(m => {
       const img = m.imageUrl ? `<img src="${m.imageUrl}" onclick="window.open(this.src,'_blank')" style="max-width:100%;max-height:240px;border-radius:8px;margin-top:${m.text ? '6px' : '0'};cursor:pointer;display:block;">` : '';
       return `
       <div class="cc-msg cc-msg--${m.sender === 'staff' ? 'staff' : 'client'}">
-        <div class="cc-msg__meta">${m.sender === 'staff' ? (m.senderName || 'Agence') : (m.senderName || 'Client')} · ${fdate(m.createdAt)}</div>
+        <div class="cc-msg__meta">${m.sender === 'staff' ? (m.senderName || 'Agence') : clientNm} · ${fdate(m.createdAt)}</div>
         <div>${(m.text || '').replace(/</g, '&lt;')}</div>${img}
       </div>`; }).join('');
+    // Bandeau en-tête : avatar + nom + téléphone du client.
+    const ph = (conv.find(m => m.phoneE164) || {}).phoneE164 || '';
+    const header = `<div style="position:sticky;top:0;background:#fff;border-bottom:1px solid #e2e8f0;padding:10px 14px;display:flex;align-items:center;gap:10px;margin:-18px -18px 14px;z-index:1;">
+        ${this.avatarHtml(this.selectedTail, clientNm)}
+        <div><div style="font-weight:800;color:#0f172a;font-size:14px;">${clientNm}</div>${ph ? `<div style="font-size:12px;color:#64748b;">📞 ${ph}</div>` : ''}</div>
+      </div>`;
+    el.innerHTML = header + bubbles;
     el.scrollTop = el.scrollHeight;
   },
 
