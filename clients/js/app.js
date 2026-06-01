@@ -64,6 +64,7 @@ let chatAgency = null;         // agence (conversation) ouverte
 let isExpediteur = true;       // par défaut on n'masque rien tant qu'on ne sait pas
 let clientSelfName = '';       // nom de l'expéditeur (préremplissage du formulaire)
 let clientSelfAddress = '';    // adresse de l'expéditeur (préremplissage)
+let clientAgencies = [];       // [{agency,name,role}] agences rattachées au numéro
 
 // Notifications réelles : Phase 3.
 let NOTIFS = [];
@@ -260,6 +261,7 @@ async function loadInvoices() {
     const prof = data.profile || {};
     clientSelfName = (prof.name || localStorage.getItem(LS.name) || '').trim();
     clientSelfAddress = (prof.address || '').trim();
+    clientAgencies = data.agencies || []; // [{agency,name,role}] rattachées au numéro
     if (clientSelfName) {
       try { localStorage.setItem(LS.name, clientSelfName); } catch (_) {}
       const av = $('#avatarInit'); if (av) av.textContent = clientSelfName.slice(0, 2).toUpperCase();
@@ -1358,6 +1360,21 @@ const VIEWS = {
         <div class="pf-stat"><div class="pf-stat__v" style="${totalDuFcfa > 0 ? 'color:var(--amt-red);' : 'color:var(--green);'}">${money(totalDuFcfa, 'XOF')}</div><div class="pf-stat__l">Reste à payer</div></div>
       </div>
 
+      ${clientAgencies.length ? `
+      <div class="card">
+        <div class="section-title">Mes agences AMT</div>
+        <p class="muted" style="margin:0 0 8px;font-size:12.5px;">Agences rattachées à votre numéro (selon vos colis).</p>
+        ${clientAgencies.map(a => {
+          const r = a.role === 'exp' ? 'Vous expédiez via cette agence'
+            : a.role === 'dest' ? 'Vous recevez via cette agence'
+            : 'Expéditions & réceptions';
+          return `<div class="pf-row" style="cursor:default;">
+            <span class="pf-row__ic">🏢</span>
+            <span class="pf-row__main"><span class="pf-row__t">${a.name}</span><span class="pf-row__s">${r}</span></span>
+          </div>`;
+        }).join('')}
+      </div>` : ''}
+
       <div class="card">
         <div class="section-title">Fidélité 🎁</div>
         <p class="muted" style="margin:0 0 10px;font-size:13px;">À ${need} envois (en tant qu'expéditeur), 1 carton moyen offert. ${LOYALTY.freeCartons ? `Déjà <b>${LOYALTY.freeCartons}</b> carton(s) gagné(s).` : ''}</p>
@@ -1464,7 +1481,7 @@ document.addEventListener('click', async (e) => {
     // Réinitialise l'état local pour ne rien laisser fuiter à la prochaine session.
     INVOICES = []; PARCELS = []; NOTIFS = []; REQUESTS = []; chatMessages = []; chatConversations = [];
     invoicesLoaded = false; notifsLoaded = false; requestsLoaded = false; chatLoaded = false;
-    clientSelfName = ''; clientSelfAddress = '';
+    clientSelfName = ''; clientSelfAddress = ''; clientAgencies = [];
     appEl.hidden = true; authEl.hidden = false;
     showStep('phone');
     return;

@@ -303,8 +303,34 @@ exports.getMyInvoices = onCall({ region: REGION, invoker: "public" }, async (req
     const freeCartons = Math.floor(sentAsSender / 10);
     const toNext = sentAsSender === 0 ? 10 : (10 - (sentAsSender % 10)) % 10 || 10;
 
+    // AGENCES rattachées au client (logique UNIQUE, même mapping que dépôt/chat) :
+    // exp -> agence de DÉPART (= invoice.agency) ; dest -> agence d'ARRIVÉE.
+    const agencyRoles = new Map();
+    for (const inv of invoices) {
+        if (!inv.agency) continue;
+        if (inv.role === "exp" || inv.role === "both") {
+            const cur = agencyRoles.get(inv.agency) || "";
+            agencyRoles.set(inv.agency, cur === "dest" || cur === "both" ? "both" : "exp");
+        }
+        if (inv.role === "dest" || inv.role === "both") {
+            const arr = (inv.agency === "paris" || inv.agency.startsWith("abidjan")) ? (inv.agency === "paris" ? "abidjan" : inv.agency) : "abidjan_" + inv.agency;
+            const cur = agencyRoles.get(arr) || "";
+            agencyRoles.set(arr, cur === "exp" || cur === "both" ? "both" : "dest");
+        }
+    }
+    const labelCacheA = {};
+    const labelA = async (ag) => {
+        if (labelCacheA[ag] !== undefined) return labelCacheA[ag];
+        let nm = ag;
+        try { const c = await db.collection("settings").doc(`company_${ag}`).get(); if (c.exists && c.data().name) nm = c.data().name; } catch (e) {}
+        labelCacheA[ag] = nm; return nm;
+    };
+    const agencies = [];
+    for (const [ag, role] of agencyRoles) agencies.push({ agency: ag, name: await labelA(ag), role });
+    agencies.sort((a, b) => String(a.name).localeCompare(String(b.name)));
+
     parcels.sort((a, b) => String(b.date).localeCompare(String(a.date)));
-    return { invoices, parcels, profile: self, loyalty: { sentAsSender, freeCartons, toNext } };
+    return { invoices, parcels, profile: self, agencies, loyalty: { sentAsSender, freeCartons, toNext } };
 });
 
 // ===========================================================================
@@ -464,17 +490,22 @@ exports.createClientRequest = onCall({ region: REGION, invoker: "public" }, asyn
 
     const digits = String(phone).replace(/\D/g, "");
     const tail = digits.length >= 9 ? digits.slice(-9) : digits;
-
-    // POSITION DU CLIENT -> agence de rattachement (par défaut).
-    //  +33 (France)        = agence de DÉPART  -> 'paris'
-    //  +225 (Côte d'Ivoire)= agence d'ARRIVÉE  -> 'abidjan'
-    //  autre indicatif     = repli sur l'arrivée (la majorité des destinataires).
-    let agency, position;
-    if (digits.startsWith("33")) { agency = "paris"; position = "depart"; }
-    else if (digits.startsWith("225")) { agency = "abidjan"; position = "arrivee"; }
-    else { agency = "abidjan"; position = "arrivee"; }
-
     const db = admin.firestore();
+
+    // AGENCE CIBLE = déduite des FACTURES (logique unique, voir clientAgenciesFor).
+    // Dépôt/récup : on vise l'agence où le client est EXPÉDITEUR (= agence de
+    // DÉPART qui collecte ses colis). Priorité : agence demandée par le client si
+    // valide -> sinon agence « exp » -> sinon 1re rattachée -> repli indicatif.
+    let agency, position;
+    let attached = new Map();
+    try { attached = await clientAgenciesFor(db, tail); } catch (e) {}
+    const requested = String(data.agency || "").trim();
+    const expAgency = [...attached.entries()].find(([, r]) => r === "exp" || r === "both");
+    if (requested && attached.has(requested)) agency = requested;
+    else if (expAgency) agency = expAgency[0];
+    else if (attached.size) agency = [...attached.keys()][0];
+    else agency = digits.startsWith("33") ? "paris" : "abidjan"; // repli si aucune facture
+    position = (agency === "paris" || !agency.startsWith("abidjan")) ? "depart" : "arrivee";
 
     // ANTI-DOUBLON : on refuse une nouvelle demande du même type tant qu'une est
     // encore EN COURS (en_attente / modifiee / confirmee) pour ce client.
@@ -642,9 +673,27 @@ async function loadTarifsForRoute(db, route) {
 //  passe par ces fonctions (Admin SDK).
 // ---------------------------------------------------------------------------
 
-// Renvoie les agences rattachées au numéro (depuis les factures) + leur libellé.
+// Agence d'ARRIVÉE correspondant à une agence de DÉPART.
+//   paris -> abidjan ; <route SaaS> (ex. chine) -> abidjan_<route>.
+function arrivalAgencyOf(departureAgency) {
+    if (!departureAgency || departureAgency === "paris") return "abidjan";
+    if (departureAgency.startsWith("abidjan")) return departureAgency; // déjà une arrivée
+    return "abidjan_" + departureAgency;
+}
+
+// SOURCE UNIQUE du rattachement client -> agence(s). Sur une facture, `agency`
+// = l'agence de DÉPART. L'agence de CONTACT du client dépend de son rôle :
+//   - EXPÉDITEUR (exp)    -> agence de DÉPART  (qui collecte/expédie ses colis)
+//   - DESTINATAIRE (dest) -> agence d'ARRIVÉE  (qui réceptionne/livre)
+// Renvoie Map<agenceContact, role 'exp'|'dest'|'both'>. Utilisé PARTOUT
+// (dépôt/récup, devis, chat) pour une logique cohérente.
 async function clientAgenciesFor(db, tail) {
-    const found = new Map(); // agency -> {role exp/dest/both}
+    const found = new Map(); // agenceContact -> role
+    const add = (ag, role) => {
+        if (!ag) return;
+        const cur = found.get(ag) || "";
+        found.set(ag, cur && cur !== role ? "both" : role);
+    };
     const cols = await db.listCollections();
     const txCols = cols.map((c) => c.id).filter((id) => /^transactions(_[a-z0-9_]+)?$/.test(id));
     for (const colName of txCols) {
@@ -655,15 +704,11 @@ async function clientAgenciesFor(db, tail) {
                 db.collection(colName).where("expPhoneTail", "==", tail).limit(1).get(),
             ]);
         } catch (e) { continue; }
-        const note = (snap, role) => snap.forEach((d) => {
-            const ag = (d.data() || {}).agency || "";
-            if (!ag) return;
-            const cur = found.get(ag) || "";
-            found.set(ag, cur && cur !== role ? "both" : role);
-        });
-        note(destSnap, "dest"); note(expSnap, "exp");
+        // Destinataire -> agence d'ARRIVÉE de la route ; Expéditeur -> départ.
+        destSnap.forEach((d) => add(arrivalAgencyOf((d.data() || {}).agency || ""), "dest"));
+        expSnap.forEach((d) => add((d.data() || {}).agency || "", "exp"));
     }
-    return found; // Map agency -> role
+    return found; // Map agenceContact -> role
 }
 
 exports.getMyChat = onCall({ region: REGION, invoker: "public" }, async (request) => {
