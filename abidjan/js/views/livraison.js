@@ -2051,10 +2051,16 @@ export const LivraisonView = {
                        // livraison « À venir » déjà en base (pipeline). Plus d'annuaire (gel).
                        const _expPhone = importItem.telExpediteur || (existingItem && existingItem.telExpediteur) || '';
                        const _e164cap = (e) => (e && e.replace(/\D/g, '').length <= 13) ? e : '';
+                       // Agence de DÉPART réelle (paris pour la route historique, sinon
+                       // la route SaaS). `agency` reste l'arrivée (devise FCFA + page
+                       // Toutes les factures), mais `departureAgency` permet à l'app
+                       // Clients de rattacher l'EXPÉDITEUR à sa bonne agence.
+                       const _depAgency = window.activeAgency.includes('_') ? window.activeAgency.split('_')[1] : 'paris';
 
                        operations.push({ type: 'set', ref: transRef, data: {
                            date: importDateStr,
                            reference: importItem.ref,
+                           departureAgency: _depAgency,
                            nom: _expName || _destName || 'Client', // Client principal = EXPÉDITEUR
                            conteneur: conteneur || importItem.conteneur || '',
                            prix: totalPrix, // CORRECTION : Utilisation de la bonne variable

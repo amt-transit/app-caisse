@@ -1139,6 +1139,7 @@ initVue(globalApp) {
                     demarcheurId: affiliationDemarcheurId,
                     appointmentId: _appointmentId || null,
                     reference: ref, nom: finalExpName, nomDestinataire: finalDestName, numero: destPhone, tel: expPhone,
+                    departureAgency: activeAgency, // agence de DÉPART (= ici l'agence active) pour l'app Clients
                     expPhoneE164, destPhoneE164, expPhoneTail, destPhoneTail,
                     adresseDestinataire: lieuLivraison, conteneur: conteneurCode, volumeCBM: volumeCBM, date: dateIso,
                     prix: totalCFA, montantParis: payeCFA, montantAbidjan: 0, reste: -resteCFA,

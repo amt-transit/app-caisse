@@ -96,6 +96,11 @@ async function currencyForAgency(agency) {
     return cur;
 }
 
+// Nettoie un nom : retire un numéro de téléphone éventuellement collé + espaces.
+function stripName(s) {
+    return String(s || "").replace(/(\+?\d[\d\s.\-]{6,}\d)/g, "").replace(/[\s\-_/]+$/, "").trim();
+}
+
 exports.getMyInvoices = onCall({ region: REGION, invoker: "public" }, async (request) => {
     const auth = request.auth;
     const phone = auth && auth.token && auth.token.phone_number;
@@ -148,13 +153,15 @@ exports.getMyInvoices = onCall({ region: REGION, invoker: "public" }, async (req
             // Fidélité : compter les envois en tant qu'EXPÉDITEUR (≠ AMT).
             const expName = String(t.nom || "");
             if (role === "exp" && !/amt/i.test(expName)) sentAsSender++;
-            // Profil : si le client est l'EXPÉDITEUR, mémoriser son nom/tél.
+            // Profil : nom/tél du client selon son rôle sur la facture.
+            // EXPÉDITEUR prioritaire (son nom = `nom`), sinon DESTINATAIRE
+            // (`nomDestinataire`). On nettoie un éventuel n° collé au nom.
             if (role === "exp") {
-                if (!self.name && expName && !/amt/i.test(expName)) self.name = expName;
+                if (expName && !/amt/i.test(expName)) self.name = stripName(expName);
                 if (!self.tel && t.tel) self.tel = String(t.tel);
             } else if (role === "dest") {
-                // Repli : s'il est destinataire, son nom = nomDestinataire (au cas où).
-                if (!self.name && t.nomDestinataire) self.name = String(t.nomDestinataire);
+                if (!self.name && t.nomDestinataire) self.name = stripName(String(t.nomDestinataire));
+                if (!self.tel && t.numero) self.tel = String(t.numero);
             }
 
             byKey.set(key, {
@@ -166,6 +173,9 @@ exports.getMyInvoices = onCall({ region: REGION, invoker: "public" }, async (req
                 date: t.date || t.dateAjout || "",
                 total, paid, remaining, status, currency,
                 agency: t.agency || "",
+                // Agence de DÉPART réelle (officiel = agency ; import = departureAgency
+                // car l'import tague agency='abidjan' pour la devise FCFA).
+                departureAgency: t.departureAgency || t.agency || "",
                 _factor: factor,
                 _desc: t.description || "",
                 _adjType: t.adjustmentType || "",
@@ -303,20 +313,20 @@ exports.getMyInvoices = onCall({ region: REGION, invoker: "public" }, async (req
     const freeCartons = Math.floor(sentAsSender / 10);
     const toNext = sentAsSender === 0 ? 10 : (10 - (sentAsSender % 10)) % 10 || 10;
 
-    // AGENCES rattachées au client (logique UNIQUE, même mapping que dépôt/chat) :
-    // exp -> agence de DÉPART (= invoice.agency) ; dest -> agence d'ARRIVÉE.
+    // AGENCES rattachées au client (logique UNIQUE, même mapping que dépôt/chat).
+    // On part de l'agence de DÉPART réelle (departureAgency, fiable même pour les
+    // imports tagués agency='abidjan'). exp -> départ ; dest -> arrivée déduite.
     const agencyRoles = new Map();
+    const mark = (ag, role) => {
+        if (!ag) return;
+        const cur = agencyRoles.get(ag) || "";
+        agencyRoles.set(ag, (cur && cur !== role) ? "both" : role);
+    };
     for (const inv of invoices) {
-        if (!inv.agency) continue;
-        if (inv.role === "exp" || inv.role === "both") {
-            const cur = agencyRoles.get(inv.agency) || "";
-            agencyRoles.set(inv.agency, cur === "dest" || cur === "both" ? "both" : "exp");
-        }
-        if (inv.role === "dest" || inv.role === "both") {
-            const arr = (inv.agency === "paris" || inv.agency.startsWith("abidjan")) ? (inv.agency === "paris" ? "abidjan" : inv.agency) : "abidjan_" + inv.agency;
-            const cur = agencyRoles.get(arr) || "";
-            agencyRoles.set(arr, cur === "exp" || cur === "both" ? "both" : "dest");
-        }
+        const dep = inv.departureAgency || inv.agency;
+        if (!dep) continue;
+        if (inv.role === "exp" || inv.role === "both") mark(dep, "exp");
+        if (inv.role === "dest" || inv.role === "both") mark(arrivalAgencyOf(dep), "dest");
     }
     const labelCacheA = {};
     const labelA = async (ag) => {
@@ -840,6 +850,26 @@ exports.getMyProfile = onCall({ region: REGION, invoker: "public" }, async (requ
         const d = await db.collection("client_profiles").doc(tail).get();
         if (d.exists) { const x = d.data() || {}; profile = { prenom: x.prenom || "", nom: x.nom || "", photoUrl: x.photoUrl || "", lang: x.lang || "fr" }; }
     } catch (e) {}
+
+    // Repli : si la fiche profil n'a aucun nom, on déduit le nom du client depuis
+    // ses factures (exp -> `nom`, dest -> `nomDestinataire`), comme getMyInvoices.
+    if (!profile.prenom && !profile.nom) {
+        try {
+            const cols = await db.listCollections();
+            const txCols = cols.map((c) => c.id).filter((id) => /^transactions(_[a-z0-9_]+)?$/.test(id));
+            let found = "";
+            for (const colName of txCols) {
+                if (found) break;
+                const [ds, es] = await Promise.all([
+                    db.collection(colName).where("destPhoneTail", "==", tail).limit(1).get(),
+                    db.collection(colName).where("expPhoneTail", "==", tail).limit(1).get(),
+                ]);
+                if (!es.empty) found = stripName(String((es.docs[0].data() || {}).nom || ""));
+                else if (!ds.empty) found = stripName(String((ds.docs[0].data() || {}).nomDestinataire || ""));
+            }
+            if (found && !/amt/i.test(found)) profile.nom = found; // on met tout dans `nom` (pas de split prénom/nom fiable)
+        } catch (e) {}
+    }
 
     // « À propos » : société de l'agence de DÉPART rattachée (où le client expédie),
     // sinon la 1re agence rattachée, sinon paris.
