@@ -6,6 +6,7 @@ import { View, Text, ScrollView, TextInput, TouchableOpacity, StyleSheet, Alert 
 import { Card, SectionTitle, Btn, Empty, Loading, Badge } from '../components/ui';
 import { colors, fdate } from '../theme';
 import { api } from '../api';
+import AvailabilityCalendar from '../components/AvailabilityCalendar';
 
 const STATUS = {
   en_attente: ['En attente', 'wait'], modifiee: ['Nouvelle date proposée', 'info'],
@@ -71,8 +72,9 @@ export default function RequestsScreen({ selfName, selfAddress }) {
           <TextInput style={s.in} value={commune} onChangeText={setCommune} placeholder="Ex : Cocody, Paris…" placeholderTextColor={colors.muted} />
           <L>{type === 'recup' ? 'Adresse de livraison / récupération' : "Adresse d'enlèvement"}</L>
           <TextInput style={s.in} value={address} onChangeText={setAddress} placeholder="Quartier, rue, repère" placeholderTextColor={colors.muted} />
-          <L>Date souhaitée (JJ/MM/AAAA)</L>
-          <TextInput style={s.in} value={date} onChangeText={setDate} placeholder="ex : 2026-06-15" placeholderTextColor={colors.muted} />
+          <L>Date souhaitée</L>
+          {date ? <Text style={s.dateSel}>📅 {fdate(date)}</Text> : <Text style={s.muted}>Choisissez un jour disponible ci-dessous.</Text>}
+          <AvailabilityCalendar selected={date} onSelect={setDate} />
           <L>Créneau souhaité</L>
           <View style={s.chips}>
             <Pick active={slot.startsWith('Matin')} label="Matin (10H-12H)" onPress={() => setSlot('Matin (10H-12H)')} />
@@ -137,6 +139,8 @@ const s = StyleSheet.create({
   back: { color: colors.muted, fontWeight: '600', marginBottom: 8 },
   lbl: { fontSize: 12, fontWeight: '700', color: colors.muted, marginTop: 10, marginBottom: 5 },
   in: { borderWidth: 1, borderColor: colors.line, borderRadius: 11, padding: 11, fontSize: 14, color: colors.ink },
+  muted: { color: colors.muted, fontSize: 12.5, marginBottom: 4 },
+  dateSel: { color: colors.blue, fontWeight: '700', fontSize: 14, marginBottom: 4 },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 4 },
   pick: { flex: 1, paddingVertical: 11, borderRadius: 12, borderWidth: 1.5, borderColor: colors.line, alignItems: 'center', backgroundColor: '#fff' },
   pickOn: { borderColor: colors.blue, backgroundColor: '#eef4fb' },
