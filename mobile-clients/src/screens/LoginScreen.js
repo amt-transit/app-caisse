@@ -4,11 +4,11 @@
 // Étape 1 du portage RN : on valide CE circuit avant de porter le reste.
 import React, { useRef, useState, useEffect } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, KeyboardAvoidingView, Platform } from 'react-native';
-import { FirebaseRecaptchaVerifierModal } from 'expo-firebase-recaptcha';
 import { PhoneAuthProvider, signInWithCredential, signOut } from 'firebase/auth';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { auth, firebaseConfig } from '../firebase';
-import { colors, radius, spacing } from '../theme';
+import { auth } from '../firebase';
+import { colors } from '../theme';
+import RecaptchaModal from '../components/RecaptchaModal';
 
 const LS = { registered: 'amtc_registered', phone: 'amtc_phone', pin: 'amtc_pin' };
 // Obfuscation locale du PIN (verrou d'ouverture, NON cryptographique).
@@ -50,7 +50,8 @@ export default function LoginScreen({ onAuthed }) {
     setBusy(true);
     try {
       const provider = new PhoneAuthProvider(auth);
-      const id = await provider.verifyPhoneNumber(e164, recaptchaRef.current);
+      const verifier = recaptchaRef.current.makeVerifier();
+      const id = await provider.verifyPhoneNumber(e164, verifier);
       setVerifId(id);
       await AsyncStorage.setItem(LS.phone, e164);
       setSavedPhone(e164);
@@ -113,7 +114,7 @@ export default function LoginScreen({ onAuthed }) {
   return (
     <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
       <ScrollView contentContainerStyle={st.wrap} keyboardShouldPersistTaps="handled">
-        <FirebaseRecaptchaVerifierModal ref={recaptchaRef} firebaseConfig={firebaseConfig} attemptInvisibleVerification={false} />
+        <RecaptchaModal ref={recaptchaRef} />
 
         <View style={st.card}>
           <Text style={st.brand}>AMT <Text style={{ color: colors.gold }}>TRANS'IT</Text></Text>
