@@ -16,6 +16,7 @@ import RequestsScreen from './src/screens/RequestsScreen';
 import QuoteScreen from './src/screens/QuoteScreen';
 import ChatScreen from './src/screens/ChatScreen';
 import ProfileScreen from './src/screens/ProfileScreen';
+import InvoiceDetailScreen from './src/screens/InvoiceDetailScreen';
 
 const TABS = [
   { key: 'home', icon: '🏠', label: 'Accueil' },
@@ -31,6 +32,7 @@ export default function App() {
   const [tab, setTab] = useState('home');
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [openInvoice, setOpenInvoice] = useState(null); // référence facture ouverte (détail)
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -49,6 +51,11 @@ export default function App() {
 
   if (!authed) {
     return (<><StatusBar style="light" /><LoginScreen onAuthed={() => setAuthed(true)} /></>);
+  }
+
+  // Détail facture (par-dessus les onglets) si une référence est ouverte.
+  if (openInvoice) {
+    return (<><StatusBar style="light" /><InvoiceDetailScreen reference={openInvoice} onBack={() => setOpenInvoice(null)} /></>);
   }
 
   const phone = auth.currentUser?.phoneNumber || '';
@@ -73,7 +80,7 @@ export default function App() {
       </View>
 
       <View style={{ flex: 1 }}>
-        {activeTab === 'home' && <HomeScreen data={data} loading={loading} onRefresh={load} onOpenInvoice={() => {}} />}
+        {activeTab === 'home' && <HomeScreen data={data} loading={loading} onRefresh={load} onOpenInvoice={(ref) => setOpenInvoice(ref)} />}
         {activeTab === 'tracking' && <TrackingScreen data={data} loading={loading} onRefresh={load} />}
         {activeTab === 'requests' && <RequestsScreen selfName={selfName} selfAddress={profile.address || ''} />}
         {activeTab === 'quotes' && <QuoteScreen />}
