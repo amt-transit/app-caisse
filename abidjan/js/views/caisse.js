@@ -917,17 +917,24 @@ export const CaisseView = {
                                 batch.update(docRef, updates);
                                 touchedTransIds.push(docRef.id);
                             } else {
+                                // FILET DE SÉCURITÉ : aucune facture pour cette référence.
+                                // Normalement TOUTE facture naît dans « Nouvelle facture ».
+                                // On crée donc une transaction « de secours » (encaissement
+                                // d'un colis sans facture) MARQUÉE source:'caisse_secours'
+                                // pour pouvoir la repérer/auditer. (Cas voué à disparaître
+                                // quand l'agence de départ créera toutes les factures.)
                                 const docRef = doc(collection(db, getCollectionName("transactions")));
                                 let effective = baseT.prix;
                                 if (baseT.adjustmentType === 'reduction') effective -= baseT.adjustmentVal;
-                                
+
                                 batch.set(docRef, {
                                     date: dateStr, reference: ref, nom: baseT.nom || 'Client', conteneur: baseT.conteneur || '',
                                     prix: baseT.prix, montantParis: gParis, montantAbidjan: gAbidjan, reste: gParis + gAbidjan - effective,
                                     agency: activeAgency, agent: isMob ? currentUserName : [...new Set(group.map(t=>t.agent).join(',').split(',').map(a=>a.trim()).filter(Boolean))].join(', '),
                                     isDeleted: false, saisiPar: currentUserName, modePaiement: isMob ? baseT.mode : baseT.modePaiement,
                                     agentMobileMoney: isMob ? baseT.agentRecepteur : baseT.agentMobileMoney, paymentHistory: newPayments, lastPaymentDate: dateStr,
-                                    storageFeeWaived: group.some(t => t.waiveStorageFee)
+                                    storageFeeWaived: group.some(t => t.waiveStorageFee),
+                                    source: 'caisse_secours'
                                 });
                                 touchedTransIds.push(docRef.id);
                             }
