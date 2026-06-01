@@ -714,9 +714,12 @@ async function clientAgenciesFor(db, tail) {
                 db.collection(colName).where("expPhoneTail", "==", tail).limit(1).get(),
             ]);
         } catch (e) { continue; }
-        // Destinataire -> agence d'ARRIVÉE de la route ; Expéditeur -> départ.
-        destSnap.forEach((d) => add(arrivalAgencyOf((d.data() || {}).agency || ""), "dest"));
-        expSnap.forEach((d) => add((d.data() || {}).agency || "", "exp"));
+        // Agence de DÉPART réelle = departureAgency (repli sur agency). Indispensable
+        // pour les imports tagués agency='abidjan' : sinon l'expéditeur était
+        // rattaché à l'arrivée (bug chat/dépôt). Destinataire -> arrivée de la route.
+        const depOf = (x) => (x.departureAgency || x.agency || "");
+        destSnap.forEach((d) => add(arrivalAgencyOf(depOf(d.data() || {})), "dest"));
+        expSnap.forEach((d) => add(depOf(d.data() || {}), "exp"));
     }
     return found; // Map agenceContact -> role
 }
