@@ -52,6 +52,8 @@ export const ChatClientsView = {
           <div class="cc-panel">
             <div class="cc-msgs" id="ccMsgs"><div class="cc-empty">Sélectionnez une conversation.</div></div>
             <div class="cc-input">
+              <input type="file" id="ccImgInput" accept="image/*" style="display:none;" onchange="window.app.views.chatClients.handleImage(event)">
+              <button class="cc-send" style="background:#f1f5f9;color:#475569;padding:0 14px;" onclick="document.getElementById('ccImgInput').click()" title="Joindre une photo">📷</button>
               <textarea id="ccText" rows="2" placeholder="Votre réponse au client…"></textarea>
               <button class="cc-send" onclick="window.app.views.chatClients.send()">Envoyer</button>
             </div>
@@ -122,11 +124,13 @@ export const ChatClientsView = {
     const conv = this.messages.filter(m => m.phoneTail === this.selectedTail);
     if (!conv.length) { el.innerHTML = '<div class="cc-empty">Aucun message.</div>'; return; }
     const fdate = (d) => { try { return new Date(d).toLocaleString('fr-FR'); } catch (e) { return ''; } };
-    el.innerHTML = conv.map(m => `
+    el.innerHTML = conv.map(m => {
+      const img = m.imageUrl ? `<img src="${m.imageUrl}" onclick="window.open(this.src,'_blank')" style="max-width:100%;max-height:240px;border-radius:8px;margin-top:${m.text ? '6px' : '0'};cursor:pointer;display:block;">` : '';
+      return `
       <div class="cc-msg cc-msg--${m.sender === 'staff' ? 'staff' : 'client'}">
         <div class="cc-msg__meta">${m.sender === 'staff' ? (m.senderName || 'Agence') : (m.senderName || 'Client')} · ${fdate(m.createdAt)}</div>
-        <div>${(m.text || '').replace(/</g, '&lt;')}</div>
-      </div>`).join('');
+        <div>${(m.text || '').replace(/</g, '&lt;')}</div>${img}
+      </div>`; }).join('');
     el.scrollTop = el.scrollHeight;
   },
 
@@ -140,11 +144,11 @@ export const ChatClientsView = {
     } catch (e) { /* non bloquant */ }
   },
 
-  async send() {
+  async send(imageUrl) {
     if (!this.selectedTail) { this.app.showToast("Sélectionnez une conversation.", "error"); return; }
     const ta = document.getElementById('ccText');
     const text = (ta?.value || '').trim();
-    if (!text) return;
+    if (!text && !imageUrl) return;
     const activeAgency = sessionStorage.getItem('currentActiveAgency') || 'paris';
     // On retrouve le numéro complet du client pour le rattachement.
     const any = this.messages.find(m => m.phoneTail === this.selectedTail);
@@ -154,6 +158,7 @@ export const ChatClientsView = {
         phoneE164: (any && any.phoneE164) || '',
         agency: activeAgency,
         text,
+        imageUrl: imageUrl || '',
         sender: 'staff',
         senderName: sessionStorage.getItem('userName') || 'Agence',
         createdAt: new Date().toISOString(),
@@ -165,6 +170,30 @@ export const ChatClientsView = {
       console.error('Envoi réponse client:', e);
       this.app.showToast("Erreur d'envoi.", "error");
     }
+  },
+
+  // Photo jointe par le staff : compresse (JPEG 800px, q0.6) puis envoie.
+  handleImage(event) {
+    const file = event.target.files && event.target.files[0];
+    event.target.value = '';
+    if (!file) return;
+    if (!this.selectedTail) { this.app.showToast("Sélectionnez d'abord une conversation.", "error"); return; }
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        const MAX = 800;
+        let w = img.width, h = img.height;
+        if (w > h) { if (w > MAX) { h = Math.round(h * (MAX / w)); w = MAX; } }
+        else { if (h > MAX) { w = Math.round(w * (MAX / h)); h = MAX; } }
+        const canvas = document.createElement('canvas');
+        canvas.width = w; canvas.height = h;
+        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+        this.send(canvas.toDataURL('image/jpeg', 0.6));
+      };
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
   },
 
   destroy() { if (this.unsub) { try { this.unsub(); } catch (e) {} this.unsub = null; } }

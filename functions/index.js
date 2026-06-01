@@ -731,6 +731,7 @@ exports.getMyChat = onCall({ region: REGION, invoker: "public" }, async (request
         msgs = snap.docs.map((d) => { const x = d.data() || {}; return {
             id: d.id, agency: x.agency || "", text: x.text || "", sender: x.sender || "client",
             senderName: x.senderName || "", createdAt: x.createdAt || "", readByClient: !!x.readByClient,
+            imageUrl: x.imageUrl || "",
         }; });
     } catch (e) {}
     // S'assurer que toute agence ayant des messages apparaît aussi en conversation.
@@ -761,8 +762,13 @@ exports.sendClientMessage = onCall({ region: REGION, invoker: "public" }, async 
     if (!phone) throw new HttpsError("unauthenticated", "Connexion par téléphone requise.");
     const data = request.data || {};
     const text = String(data.text == null ? "" : data.text).trim().slice(0, 2000);
+    // Image : dataURL JPEG compressée côté client (même format que le chat staff).
+    // Limite ~900 Ko pour rester sous la limite Firestore de 1 Mo par document.
+    let imageUrl = String(data.imageUrl || "");
+    if (imageUrl && !/^data:image\/(jpeg|png|webp);base64,/.test(imageUrl)) imageUrl = "";
+    if (imageUrl.length > 950000) throw new HttpsError("invalid-argument", "Image trop lourde.");
     let agency = String(data.agency || "").trim();
-    if (!text) throw new HttpsError("invalid-argument", "Message vide.");
+    if (!text && !imageUrl) throw new HttpsError("invalid-argument", "Message vide.");
 
     const digits = String(phone).replace(/\D/g, "");
     const tail = digits.length >= 9 ? digits.slice(-9) : digits;
@@ -780,14 +786,14 @@ exports.sendClientMessage = onCall({ region: REGION, invoker: "public" }, async 
     const now = new Date().toISOString();
     const ref = await db.collection("client_messages").add({
         phoneTail: tail, phoneE164: phone, agency,
-        text, sender: "client", senderName: data.fromName || "",
+        text, imageUrl, sender: "client", senderName: data.fromName || "",
         createdAt: now, readByClient: true, readByStaff: false,
     });
     // Notifier le staff (page Notifications, temps réel).
     try {
         await db.collection("notifications").add({
             title: "💬 Nouveau message client",
-            message: `${data.fromName || phone} : ${text.slice(0, 80)}`,
+            message: `${data.fromName || phone} : ${imageUrl && !text ? "📷 Photo" : text.slice(0, 80)}`,
             agency, type: "client_chat", refId: ref.id,
             createdAt: now, readBy: [],
         });

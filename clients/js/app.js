@@ -383,6 +383,8 @@ document.addEventListener('click', (e) => {
   if (cback) { chatAgency = null; renderView('chat'); return; }
   const csend = e.target.closest('[data-chatsend]');
   if (csend) { sendChatMessage(); return; }
+  const cphoto = e.target.closest('[data-chatphoto]');
+  if (cphoto) { pickChatPhoto(); return; }
 });
 
 // Changement de la route de départ (select) dans le simulateur de devis.
@@ -621,24 +623,65 @@ function openChatAgency(ag) {
   if (had) { httpsCallable(functions, 'markChatRead')({ agency: ag }).catch(() => {}); }
 }
 
-async function sendChatMessage() {
+async function sendChatMessage(imageUrl) {
   const ta = document.getElementById('chatText');
   const text = (ta?.value || '').trim();
-  if (!text || !chatAgency) return;
+  if ((!text && !imageUrl) || !chatAgency) return;
   // Affichage optimiste.
   const now = new Date().toISOString();
-  chatMessages.push({ id: 'tmp_' + now, agency: chatAgency, text, sender: 'client', senderName: 'Vous', createdAt: now, readByClient: true });
+  chatMessages.push({ id: 'tmp_' + now, agency: chatAgency, text, imageUrl: imageUrl || '', sender: 'client', senderName: 'Vous', createdAt: now, readByClient: true });
   if (ta) ta.value = '';
   renderView('chat'); scrollChatBottom();
   try {
     const u = auth.currentUser;
     if (u) { try { await u.getIdToken(true); } catch (_) {} }
-    await httpsCallable(functions, 'sendClientMessage')({ text, agency: chatAgency, fromName: clientSelfName || '' });
+    await httpsCallable(functions, 'sendClientMessage')({ text, imageUrl: imageUrl || '', agency: chatAgency, fromName: clientSelfName || '' });
     chatLoaded = false; await loadChat(); // recharge l'état réel
   } catch (e) {
     console.warn('sendClientMessage:', e && e.code, e && e.message);
-    alert("Envoi impossible pour le moment.");
+    alert(e && e.code === 'invalid-argument' ? "Photo trop lourde, réessayez." : "Envoi impossible pour le moment.");
   }
+}
+
+// Compresse une image (JPEG max 800px, qualité 0.6) -> dataURL. Même réglage
+// que le chat staff, pour rester sous la limite Firestore de 1 Mo.
+function compressChatImage(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        const MAX = 800;
+        let w = img.width, h = img.height;
+        if (w > h) { if (w > MAX) { h = Math.round(h * (MAX / w)); w = MAX; } }
+        else { if (h > MAX) { w = Math.round(w * (MAX / h)); h = MAX; } }
+        const canvas = document.createElement('canvas');
+        canvas.width = w; canvas.height = h;
+        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+        resolve(canvas.toDataURL('image/jpeg', 0.6));
+      };
+      img.onerror = reject;
+      img.src = e.target.result;
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+// Ouvre le sélecteur de photo puis envoie l'image compressée.
+function pickChatPhoto() {
+  const input = document.getElementById('chatImgInput');
+  if (!input) return;
+  input.onchange = async (ev) => {
+    const file = ev.target.files && ev.target.files[0];
+    ev.target.value = '';
+    if (!file) return;
+    try {
+      const dataUrl = await compressChatImage(file);
+      await sendChatMessage(dataUrl);
+    } catch (e) { alert("Image illisible."); }
+  };
+  input.click();
 }
 
 // --- Devis (simulateur) ---
@@ -1211,13 +1254,15 @@ const VIEWS = {
     const conv = chatConversations.find(c => c.agency === chatAgency) || { name: chatAgency };
     const msgs = chatMessages.filter(m => m.agency === chatAgency);
     const fdt = (d) => { try { return new Date(d).toLocaleString('fr-FR'); } catch (e) { return ''; } };
-    const bubbles = msgs.length ? msgs.map(m => `
+    const bubbles = msgs.length ? msgs.map(m => {
+      const img = m.imageUrl ? `<img src="${m.imageUrl}" onclick="window.open(this.src,'_blank')" style="max-width:100%;max-height:230px;border-radius:10px;margin-top:${m.text ? '6px' : '0'};cursor:pointer;display:block;">` : '';
+      return `
       <div style="display:flex;${m.sender === 'client' ? 'justify-content:flex-end;' : ''}margin-bottom:8px;">
         <div style="max-width:78%;padding:9px 13px;border-radius:14px;font-size:14px;line-height:1.4;${m.sender === 'client' ? 'background:var(--amt-blue);color:#fff;border-bottom-right-radius:4px;' : 'background:#fff;border:1px solid var(--line);border-bottom-left-radius:4px;'}">
           <div style="font-size:10px;opacity:.7;margin-bottom:2px;">${m.sender === 'client' ? 'Vous' : (m.senderName || conv.name)} · ${fdt(m.createdAt)}</div>
-          ${(m.text || '').replace(/</g, '&lt;')}
+          ${(m.text || '').replace(/</g, '&lt;')}${img}
         </div>
-      </div>`).join('') : `<div class="placeholder" style="padding:20px;">Démarrez la conversation avec ${conv.name}.</div>`;
+      </div>`; }).join('') : `<div class="placeholder" style="padding:20px;">Démarrez la conversation avec ${conv.name}.</div>`;
 
     const backBtn = chatConversations.length > 1
       ? `<button class="btn btn--ghost" data-chatback="1" style="text-align:left;margin:0 0 6px;">← Mes conversations</button>` : '';
@@ -1226,7 +1271,9 @@ const VIEWS = {
       ${backBtn}
       <div class="rf-card" style="margin-bottom:10px;"><div class="rf-card__head"><span class="rf-ic">💬</span> ${conv.name}</div></div>
       <div class="card" id="chatScroll" style="max-height:55vh;overflow-y:auto;">${bubbles}</div>
-      <div style="display:flex;gap:8px;margin-top:10px;">
+      <div style="display:flex;gap:8px;margin-top:10px;align-items:flex-end;">
+        <input type="file" id="chatImgInput" accept="image/*" style="display:none;">
+        <button class="btn btn--ghost" style="width:auto;padding:0 14px;font-size:20px;" data-chatphoto="1" title="Joindre une photo">📷</button>
         <textarea id="chatText" class="rf-input" rows="2" placeholder="Votre message…" style="flex:1;"></textarea>
         <button class="btn btn--primary" style="width:auto;padding:0 18px;" data-chatsend="1">Envoyer</button>
       </div>`;
