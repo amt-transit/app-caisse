@@ -3,7 +3,7 @@
 // (verrou d'ouverture ; la vraie sécurité = jeton Firebase persistant).
 // Étape 1 du portage RN : on valide CE circuit avant de porter le reste.
 import React, { useRef, useState, useEffect } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, KeyboardAvoidingView, Platform, Image } from 'react-native';
 import { PhoneAuthProvider, signInWithCredential, signOut } from 'firebase/auth';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { auth } from '../firebase';
@@ -117,6 +117,7 @@ export default function LoginScreen({ onAuthed }) {
         <RecaptchaModal ref={recaptchaRef} />
 
         <View style={st.card}>
+          <Image source={require('../../assets/logo.png')} style={st.logo} resizeMode="contain" />
           <Text style={st.brand}>AMT <Text style={{ color: colors.gold }}>TRANS'IT</Text></Text>
           <Text style={st.tag}>Votre espace expéditeur & destinataire</Text>
 
@@ -191,6 +192,7 @@ function Btn({ label, onPress, busy }) {
 const st = StyleSheet.create({
   wrap: { flexGrow: 1, justifyContent: 'center', alignItems: 'center', padding: 22, backgroundColor: colors.blue },
   card: { width: '100%', maxWidth: 420, backgroundColor: colors.card, borderRadius: 24, padding: 24 },
+  logo: { width: 120, height: 64, alignSelf: 'center', marginBottom: 10 },
   brand: { fontSize: 26, fontWeight: '800', color: colors.blue, textAlign: 'center' },
   tag: { fontSize: 12.5, color: colors.muted, textAlign: 'center', marginTop: 4, marginBottom: 18 },
   label: { fontSize: 13, fontWeight: '600', color: colors.blue, marginBottom: 8, marginTop: 8 },

@@ -2,10 +2,15 @@
   "expo": {
     "name": "AMT TRANS'IT",
     "slug": "amt-clients",
+    "owner": "jeanaffas-organization",
     "version": "1.0.0",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "icon": "./assets/icon.png",
     "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
       "backgroundColor": "#1A3553"
     },
     "assetBundlePatterns": [
@@ -16,17 +21,25 @@
       "bundleIdentifier": "com.amttransit.clients",
       "infoPlist": {
         "NSMicrophoneUsageDescription": "Pour enregistrer des messages vocaux dans le chat.",
-        "NSPhotoLibraryUsageDescription": "Pour joindre des photos dans le chat."
+        "NSPhotoLibraryUsageDescription": "Pour joindre des photos dans le chat.",
+        "NSCameraUsageDescription": "Pour prendre des photos à joindre dans le chat."
       }
     },
     "android": {
       "package": "com.amttransit.clients",
-      "permissions": ["RECORD_AUDIO"]
+      "permissions": ["RECORD_AUDIO", "CAMERA"],
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#1A3553"
+      }
     },
     "plugins": [
       "expo-asset",
       "expo-notifications",
-      ["expo-image-picker", { "photosPermission": "Pour joindre des photos dans le chat." }],
+      ["expo-image-picker", {
+        "photosPermission": "Pour joindre des photos dans le chat.",
+        "cameraPermission": "Pour prendre des photos à joindre dans le chat."
+      }],
       ["expo-av", { "microphonePermission": "Pour enregistrer des messages vocaux dans le chat." }]
     ]
   }
