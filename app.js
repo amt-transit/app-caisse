@@ -137,6 +137,31 @@ export const app = {
         });
         this.updateBadges();
         this.initPendingSessionsBadge();
+        this.initClientChatBadge();
+    },
+
+    // Badge TEMPS RÉEL des messages clients non lus (section « Communication »).
+    // Écouteur indépendant de la page ouverte : la pastille rouge apparaît dès
+    // qu'un client écrit, et disparaît quand le staff a tout lu.
+    initClientChatBadge() {
+        const activeAgency = sessionStorage.getItem('currentActiveAgency') || 'paris';
+        import('./firebase-config.js').then(async cfg => {
+            const { collection, query, where, onSnapshot } = await import('https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js');
+            if (this.unsubClientChat) { try { this.unsubClientChat(); } catch (e) {} }
+            const q = query(collection(cfg.db, "client_messages"),
+                where("agency", "==", activeAgency), where("sender", "==", "client"), where("readByStaff", "==", false));
+            this.unsubClientChat = onSnapshot(q, snap => {
+                const n = snap.size;
+                const cb = document.getElementById('clientChatBadge');
+                if (cb) { cb.textContent = n; cb.style.display = n > 0 ? 'inline-block' : 'none'; }
+                document.querySelectorAll('.sidebar-category-title').forEach(title => {
+                    if (title.textContent.includes('Communication')) {
+                        if (n > 0) title.setAttribute('data-pending', n);
+                        else title.removeAttribute('data-pending');
+                    }
+                });
+            }, err => console.warn("Badge messages clients:", err && err.message));
+        }).catch(e => console.warn("initClientChatBadge:", e));
     },
 
     async loadMenuConfig() {
