@@ -5,7 +5,7 @@ import { View, Text, ScrollView, TextInput, TouchableOpacity, StyleSheet, Image,
 import { Card, SectionTitle, Btn, Loading } from '../components/ui';
 import { colors, fcfa } from '../theme';
 import { api } from '../api';
-import { pickChatImage } from '../media';
+import { pickChatImage, takeChatPhoto } from '../media';
 
 const TAUX = 655.957;
 const toFcfa = (v, cur) => (cur === 'EUR' ? (v || 0) * TAUX : (v || 0));
@@ -53,15 +53,22 @@ export default function ProfileScreen({ data, phone, onLogout }) {
     finally { setSaving(false); }
   };
 
-  // Changer la photo de profil (galerie -> base64 compressé -> fiche).
-  const changePhoto = async () => {
+  // Changer la photo de profil (appareil photo ou galerie -> base64 -> fiche).
+  const applyPhoto = async (getter) => {
     try {
-      const dataUrl = await pickChatImage();
+      const dataUrl = await getter();
       if (!dataUrl) return;
       if (dataUrl.length > 600000) { Alert.alert('Photo', 'Photo trop lourde, choisissez-en une plus petite.'); return; }
       setProfile({ ...profile, photoUrl: dataUrl }); // aperçu immédiat
       await api.saveMyProfile({ photoUrl: dataUrl });
     } catch (e) { Alert.alert('Photo', e.message || 'Impossible.'); }
+  };
+  const changePhoto = () => {
+    Alert.alert('Photo de profil', null, [
+      { text: '📷 Prendre une photo', onPress: () => applyPhoto(takeChatPhoto) },
+      { text: '🖼️ Choisir dans la galerie', onPress: () => applyPhoto(pickChatImage) },
+      { text: 'Annuler', style: 'cancel' },
+    ]);
   };
 
   // Changer la langue (préférence enregistrée ; l'app reste en FR pour l'instant).

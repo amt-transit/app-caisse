@@ -6,7 +6,7 @@ import { Audio } from 'expo-av';
 import { Card, Empty, Loading } from '../components/ui';
 import { colors } from '../theme';
 import { api } from '../api';
-import { pickChatImage, uploadChatAudio } from '../media';
+import { pickChatImage, takeChatPhoto, uploadChatAudio } from '../media';
 
 const fdt = (d) => { try { return new Date(d).toLocaleString('fr-FR'); } catch (e) { return ''; } };
 
@@ -57,15 +57,25 @@ export default function ChatScreen({ selfName }) {
     setSending(false);
   };
 
-  const sendPhoto = async () => {
+  // Envoie une image obtenue via galerie ou appareil photo.
+  const sendImageFrom = async (getter) => {
     if (!agency) return;
     try {
-      const dataUrl = await pickChatImage();
+      const dataUrl = await getter();
       if (!dataUrl) return;
       setSending(true);
       await sendPayload({ imageUrl: dataUrl }, { imageUrl: dataUrl });
     } catch (e) { Alert.alert('Photo', e.message || 'Impossible.'); }
     finally { setSending(false); }
+  };
+  // Propose le choix : appareil photo ou galerie.
+  const sendPhoto = () => {
+    if (!agency) return;
+    Alert.alert('Ajouter une photo', null, [
+      { text: '📷 Prendre une photo', onPress: () => sendImageFrom(takeChatPhoto) },
+      { text: '🖼️ Choisir dans la galerie', onPress: () => sendImageFrom(pickChatImage) },
+      { text: 'Annuler', style: 'cancel' },
+    ]);
   };
 
   // --- Enregistrement vocal (expo-av) ---

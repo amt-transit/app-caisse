@@ -9,21 +9,24 @@ function uid() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
 }
 
-// Ouvre la galerie, renvoie une dataURL JPEG compressée (ou null si annulé).
-// L'image part en base64 dans le message (comme la PWA), pas dans Storage.
+const PICK_OPTS = { mediaTypes: ImagePicker.MediaTypeOptions.Images, quality: 0.6, base64: true, allowsEditing: false };
+const toDataUrl = (res) => {
+  if (res.canceled || !res.assets || !res.assets[0] || !res.assets[0].base64) return null;
+  return `data:image/jpeg;base64,${res.assets[0].base64}`;
+};
+
+// Choisir une image dans la GALERIE -> dataURL JPEG compressée (ou null).
 export async function pickChatImage() {
   const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
   if (!perm.granted) throw new Error('Autorisation photos refusée.');
-  const res = await ImagePicker.launchImageLibraryAsync({
-    mediaTypes: ImagePicker.MediaTypeOptions.Images,
-    quality: 0.6,
-    base64: true,
-    allowsEditing: false,
-  });
-  if (res.canceled || !res.assets || !res.assets[0]) return null;
-  const a = res.assets[0];
-  if (!a.base64) return null;
-  return `data:image/jpeg;base64,${a.base64}`;
+  return toDataUrl(await ImagePicker.launchImageLibraryAsync(PICK_OPTS));
+}
+
+// Prendre une PHOTO avec l'appareil -> dataURL JPEG compressée (ou null).
+export async function takeChatPhoto() {
+  const perm = await ImagePicker.requestCameraPermissionsAsync();
+  if (!perm.granted) throw new Error('Autorisation appareil photo refusée.');
+  return toDataUrl(await ImagePicker.launchCameraAsync(PICK_OPTS));
 }
 
 // Upload un fichier local (audio) vers Storage et renvoie son URL publique.
