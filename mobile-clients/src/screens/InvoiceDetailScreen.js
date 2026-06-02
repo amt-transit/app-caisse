@@ -5,7 +5,7 @@ import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Alert } from 'rea
 import { Card, SectionTitle, Btn, Badge, Loading } from '../components/ui';
 import { colors, fcfa, fdate } from '../theme';
 import { api } from '../api';
-import { shareInvoicePdf, printInvoicePdf } from '../invoicePdf';
+import { shareInvoicePdf, saveInvoicePdf } from '../invoicePdf';
 
 const STAGES = ['📥 Entrepôt', '📦 Conteneur', '🛬 Arrivé', '✅ Livré'];
 
@@ -38,18 +38,17 @@ export default function InvoiceDetailScreen({ reference, onBack }) {
     })();
   }, [reference]);
 
-  const runPdf = async (fn) => {
+  const runPdf = async (fn, okMsg) => {
     setPdfBusy(true);
-    try { await fn(detail); }
+    try { const r = await fn(detail); if (okMsg && r && r.saved) Alert.alert('PDF', okMsg); }
     catch (e) { Alert.alert('PDF', "Génération impossible pour le moment."); }
     finally { setPdfBusy(false); }
   };
-  // Propose : enregistrer le PDF (impression système -> « Enregistrer en PDF »)
-  // ou le partager (mail, WhatsApp…).
+  // Propose : enregistrer le PDF dans un dossier (Téléchargements…) ou le partager.
   const exportPdf = () => {
     Alert.alert('Facture PDF', 'Que souhaitez-vous faire ?', [
-      { text: '💾 Enregistrer en PDF', onPress: () => runPdf(printInvoicePdf) },
-      { text: '📤 Partager', onPress: () => runPdf(shareInvoicePdf) },
+      { text: '💾 Enregistrer dans un dossier', onPress: () => runPdf(saveInvoicePdf, 'Facture enregistrée ✅') },
+      { text: '📤 Partager (WhatsApp, mail…)', onPress: () => runPdf(shareInvoicePdf) },
       { text: 'Annuler', style: 'cancel' },
     ]);
   };

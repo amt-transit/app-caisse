@@ -30,7 +30,10 @@ export async function registerPushToken() {
         importance: Notifications.AndroidImportance.HIGH,
       });
     }
-    const tokenData = await Notifications.getExpoPushTokenAsync();
+    // On passe l'EAS projectId (requis pour récupérer le token dans un build
+    // standalone). Sans lui, getExpoPushTokenAsync peut échouer silencieusement.
+    const projectId = 'c0fb29ce-f8eb-4c3e-9ffb-f97d4329dee5';
+    const tokenData = await Notifications.getExpoPushTokenAsync({ projectId });
     const token = tokenData && tokenData.data;
     if (token) { try { await api.saveMyPushToken(token); } catch (_) {} }
   } catch (e) {

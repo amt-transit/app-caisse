@@ -1,8 +1,10 @@
 // Génération du PDF de facture (HTML -> PDF via expo-print).
 // Reprend le modèle officiel (en-tête, FACTURÉ À, articles, récap financier,
 // CGV, pied de page). Données fournies par la Cloud Function getMyInvoiceDetail.
+import { Platform } from 'react-native';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
+import * as FileSystem from 'expo-file-system';
 
 const TAUX = 655.957;
 // Formatage FCFA (les montants stockés sont en FCFA).
@@ -126,12 +128,27 @@ export async function shareInvoicePdf(detail) {
   return true;
 }
 
-// Ouvre la boîte « Imprimer » du système. Sur Android, le client peut y choisir
-// « Enregistrer au format PDF » -> le fichier va directement dans ses
-// Téléchargements (vraie sauvegarde, sans passer par le partage). Sur iOS, c'est
-// l'aperçu d'impression (avec option d'enregistrement/partage natif).
-export async function printInvoicePdf(detail) {
+// VRAI enregistrement du PDF (pas la boîte d'impression). Sur Android : on
+// demande à l'utilisateur de choisir un dossier (ex. « Téléchargements ») et on
+// y écrit le fichier directement. Sur iOS : partage natif (inclut « Enregistrer
+// dans Fichiers »). Renvoie { saved:true } ou { saved:false } si annulé.
+export async function saveInvoicePdf(detail) {
   const html = buildInvoiceHtml(detail);
-  await Print.printAsync({ html });
-  return true;
+  const { uri } = await Print.printToFileAsync({ html });
+  const name = `Facture_${String(detail.reference || 'AMT').replace(/[^\w.-]/g, '_')}`;
+
+  if (Platform.OS === 'android' && FileSystem.StorageAccessFramework) {
+    const perm = await FileSystem.StorageAccessFramework.requestDirectoryPermissionsAsync();
+    if (!perm.granted) return { saved: false }; // l'utilisateur a annulé le choix du dossier
+    const b64 = await FileSystem.readAsStringAsync(uri, { encoding: FileSystem.EncodingType.Base64 });
+    const dest = await FileSystem.StorageAccessFramework.createFileAsync(perm.directoryUri, name, 'application/pdf');
+    await FileSystem.writeAsStringAsync(dest, b64, { encoding: FileSystem.EncodingType.Base64 });
+    return { saved: true };
+  }
+
+  // iOS / repli : partage natif (avec « Enregistrer dans Fichiers »).
+  if (await Sharing.isAvailableAsync()) {
+    await Sharing.shareAsync(uri, { mimeType: 'application/pdf', dialogTitle: `Facture ${detail.reference || ''}` });
+  }
+  return { saved: true };
 }

@@ -163,14 +163,19 @@ export const ChatClientsView = {
     if (!conv.length) { el.innerHTML = '<div class="cc-empty">Aucun message.</div>'; return; }
     const fdate = (d) => { try { return new Date(d).toLocaleString('fr-FR'); } catch (e) { return ''; } };
     const clientNm = this.clientName(this.selectedTail, conv.find(m => m.senderName)?.senderName, conv[0] && conv[0].phoneE164);
-    const bubbles = conv.map(m => {
+    // Index du DERNIER message du STAFF lu par le client (readByClient) -> on
+    // affiche « Vu » dessous, comme dans une messagerie.
+    let lastSeenStaff = -1;
+    conv.forEach((m, i) => { if (m.sender === 'staff' && m.readByClient) lastSeenStaff = i; });
+    const bubbles = conv.map((m, idx) => {
       const img = m.imageUrl ? `<img src="${m.imageUrl}" onclick="window.open(this.src,'_blank')" style="max-width:100%;max-height:240px;border-radius:8px;margin-top:${m.text ? '6px' : '0'};cursor:pointer;display:block;">` : '';
       const audio = m.audioUrl ? `<audio controls src="${m.audioUrl}" style="margin-top:6px;max-width:240px;height:38px;display:block;"></audio>` : '';
+      const seen = idx === lastSeenStaff ? `<div style="align-self:flex-end;font-size:10px;color:#3b82f6;font-weight:700;margin:2px 2px 0;">Vu ✓✓</div>` : '';
       return `
       <div class="cc-msg cc-msg--${m.sender === 'staff' ? 'staff' : 'client'}">
         <div class="cc-msg__meta">${m.sender === 'staff' ? (m.senderName || 'Agence') : clientNm} · ${fdate(m.createdAt)}</div>
         <div>${(m.text || '').replace(/</g, '&lt;')}</div>${img}${audio}
-      </div>`; }).join('');
+      </div>${seen}`; }).join('');
     // Bandeau en-tête : avatar + nom + téléphone du client.
     const ph = (conv.find(m => m.phoneE164) || {}).phoneE164 || '';
     const header = `<div style="position:sticky;top:0;background:#fff;border-bottom:1px solid #e2e8f0;padding:10px 14px;display:flex;align-items:center;gap:10px;margin:-18px -18px 14px;z-index:1;">

@@ -689,8 +689,17 @@ export const app = {
             try {
                 const qMsg = query(collection(cfg.db, "client_messages"), where("agency", "==", activeAgency), where("sender", "==", "client"), where("readByStaff", "==", false));
                 const snapMsg = await getDocs(qMsg);
+                const n = snapMsg.size;
                 const cb = document.getElementById('clientChatBadge');
-                if (cb) cb.textContent = snapMsg.size;
+                if (cb) { cb.textContent = n; cb.style.display = n > 0 ? 'inline-block' : 'none'; }
+                // Indice rouge aussi sur le TITRE de section « Communication »
+                // (comme « Entrées Caisse »), visible même menu replié.
+                document.querySelectorAll('.sidebar-category-title').forEach(title => {
+                    if (title.textContent.includes('Communication')) {
+                        if (n > 0) title.setAttribute('data-pending', n);
+                        else title.removeAttribute('data-pending');
+                    }
+                });
             } catch (e) { /* collection vide / absente */ }
         });
     },
