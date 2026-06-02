@@ -72,6 +72,77 @@ exports.verifyInvoice = onRequest({ region: REGION, invoker: "public", cors: tru
     }
 });
 
+// Suivi colis PUBLIC (lien partageable, sans compte). Renvoie UNIQUEMENT les
+// étapes de livraison (aucun montant, ni nom complet, ni téléphone). Mêmes
+// paramètres que verifyInvoice : c (collection transactions route-aware) + id.
+exports.verifyTracking = onRequest({ region: REGION, invoker: "public", cors: true }, async (req, res) => {
+    try {
+        const c = String((req.query && req.query.c) || "");
+        const id = String((req.query && req.query.id) || "");
+        if (!/^transactions(_[a-z0-9_]+)?$/.test(c) || !id) {
+            res.status(400).json({ ok: false, error: "Paramètres invalides." });
+            return;
+        }
+        const db = admin.firestore();
+        const snap = await db.collection(c).doc(id).get();
+        if (!snap.exists) { res.json({ ok: true, found: false }); return; }
+        const t = snap.data() || {};
+        if (t.isDeleted) { res.json({ ok: true, found: false, deleted: true }); return; }
+
+        const ref = String(t.reference || "");
+        // Collection livraisons dérivée de la collection transactions (route + aérien).
+        const aerien = /_aerien$/.test(c);
+        const route = configSourceForCollection(c);
+        const suffix = (route === "paris" ? "" : "_" + route) + (aerien ? "_aerien" : "");
+        const livCols = [`livraisons${suffix}`, `livraisons${suffix}_archives`];
+        const livraisons = [];
+        for (const lc of livCols) {
+            try { const ls = await db.collection(lc).where("ref", "==", ref).get(); ls.forEach((d) => livraisons.push(d.data() || {})); }
+            catch (e) { /* collection absente */ }
+        }
+
+        // Étape (0 Entrepôt, 1 Conteneur/Départ, 2 Arrivé, 3 Livré) — même règle
+        // que l'app (scanHistory par label, sinon repli sur le statut global).
+        const stageOf = (liv, label) => {
+            const scans = (liv.scanHistory || []).filter((s) => !label || s.scanRef === label)
+                .sort((a, b) => String(b.date).localeCompare(String(a.date)));
+            if (scans.length) {
+                const tp = scans[0].type;
+                if (tp === "REMISE_CLIENT") return 3;
+                if (tp === "DECHARGEMENT_ABIDJAN") return 2;
+                if (tp === "CONTENEUR_CHARGEMENT" || tp === "DEPART_VOL" || tp === "DEPART_VOL_RETOUR") return 1;
+                if (tp === "ENTREPOT_PARIS") return 0;
+            }
+            if (liv.status === "LIVRE") return 3;
+            if (liv.containerStatus === "EN_COURS") return 2;
+            if (liv.containerStatus === "A_VENIR") return 1;
+            return 0;
+        };
+
+        const colis = [];
+        livraisons.forEach((liv) => {
+            const labels = (liv.labels && liv.labels.length) ? liv.labels : [liv.ref || ref];
+            labels.forEach((lb) => colis.push({ label: String(lb || ref), desc: liv.description || "", stage: stageOf(liv, lb) }));
+        });
+
+        // Vie privée : prénom seul du destinataire (pas le nom complet ni le tel).
+        const destFirst = String(t.nomDestinataire || "").replace(/(\+?\d[\d\s.\-]{6,}\d)/g, "").trim().split(/\s+/)[0] || "";
+
+        res.json({
+            ok: true, found: true,
+            reference: ref,
+            destinataire: destFirst,
+            conteneur: t.conteneur || "",
+            commune: t.lieuLivraison || t.commune || "",
+            colis,
+            checkedAt: new Date().toISOString(),
+        });
+    } catch (e) {
+        console.error("verifyTracking:", e);
+        res.status(500).json({ ok: false, error: "Erreur serveur." });
+    }
+});
+
 // ===========================================================================
 //  getMyInvoices — app AMT Clients : factures du client connecté
 // ---------------------------------------------------------------------------

@@ -1,7 +1,7 @@
 // Écran DÉTAIL FACTURE : bilan financier, infos client, suivi colis-par-colis,
 // téléchargement/partage du PDF officiel.
 import React, { useState, useEffect } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Alert } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Alert, Share } from 'react-native';
 import { Card, SectionTitle, Btn, Badge, Loading } from '../components/ui';
 import { colors, fcfa, fdate } from '../theme';
 import { api } from '../api';
@@ -44,6 +44,15 @@ export default function InvoiceDetailScreen({ reference, onBack }) {
     catch (e) { Alert.alert('PDF', "Génération impossible pour le moment."); }
     finally { setPdfBusy(false); }
   };
+  // Partage un LIEN de suivi public (page web sans compte) au destinataire.
+  const shareTracking = async () => {
+    if (!detail.collection || !detail.transDocId) { Alert.alert('Suivi', "Lien de suivi indisponible pour cette facture."); return; }
+    const url = `https://app-caisse.vercel.app/suivi.html?c=${encodeURIComponent(detail.collection)}&id=${encodeURIComponent(detail.transDocId)}`;
+    try {
+      await Share.share({ message: `📦 Suivez le colis ${(detail.transaction && detail.transaction.reference) || ''} (AMT Trans'it) :\n${url}` });
+    } catch (e) { /* partage annulé */ }
+  };
+
   // Propose : enregistrer le PDF dans un dossier (Téléchargements…) ou le partager.
   const exportPdf = () => {
     Alert.alert('Facture PDF', 'Que souhaitez-vous faire ?', [
@@ -125,6 +134,7 @@ export default function InvoiceDetailScreen({ reference, onBack }) {
             ))}
         </Card>
 
+        <Btn label="🔗 Partager le suivi du colis" kind="gold" onPress={shareTracking} />
         <Btn label={pdfBusy ? 'Génération…' : '📄 Enregistrer / Partager le PDF'} onPress={exportPdf} busy={pdfBusy} />
         <Text style={s.note}>« Enregistrer en PDF » place le fichier dans vos Téléchargements. Le PDF officiel inclut les conditions générales et le récapitulatif financier.</Text>
       </ScrollView>
