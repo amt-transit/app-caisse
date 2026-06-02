@@ -82,9 +82,9 @@ export default function ProfileScreen({ data, phone, onLock, onLogout, onProfile
   };
 
   const confirmLogout = () => {
-    Alert.alert('Se déconnecter', 'Vous devrez vous reconnecter par SMS.', [
+    Alert.alert('Changer de compte ?', 'Déconnexion totale : à la réouverture, il faudra revalider par SMS. Pour simplement fermer, utilisez « Se déconnecter » (code PIN).', [
       { text: 'Annuler', style: 'cancel' },
-      { text: 'Se déconnecter', style: 'destructive', onPress: onLogout },
+      { text: 'Déconnexion totale', style: 'destructive', onPress: onLogout },
     ]);
   };
 
@@ -190,9 +190,10 @@ export default function ProfileScreen({ data, phone, onLock, onLogout, onProfile
         </Card>
       )}
 
-      <Btn label="🔒 Verrouiller l'application" kind="ghost" onPress={onLock} style={{ marginTop: 4 }} />
-      <TouchableOpacity onPress={confirmLogout} style={{ alignItems: 'center', paddingVertical: 12 }}>
-        <Text style={{ color: colors.red, fontWeight: '700' }}>Se déconnecter</Text>
+      <Btn label="🔒 Se déconnecter" onPress={onLock} style={{ marginTop: 4 }} />
+      <Text style={[s.muted, { textAlign: 'center', marginTop: 6 }]}>À la réouverture, votre code PIN suffira (pas de SMS).</Text>
+      <TouchableOpacity onPress={confirmLogout} style={{ alignItems: 'center', paddingVertical: 14 }}>
+        <Text style={{ color: colors.muted, fontWeight: '700', fontSize: 13 }}>Changer de compte (déconnexion totale)</Text>
       </TouchableOpacity>
       <Text style={s.version}>AMT Clients · v1.0</Text>
     </ScrollView>

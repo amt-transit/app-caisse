@@ -25,9 +25,11 @@ function buildHtml(cfg) {
   return `<!DOCTYPE html><html><head><meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
   <style>
-    html,body{margin:0;height:100%;font-family:-apple-system,system-ui,sans-serif;background:#fff;}
-    .wrap{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;padding:18px;box-sizing:border-box;}
-    .title{font-size:15px;color:#1A3553;font-weight:700;margin-bottom:16px;text-align:center;}
+    html,body{margin:0;min-height:100%;font-family:-apple-system,system-ui,sans-serif;background:#fff;}
+    /* Aligné en HAUT + défilement autorisé : la grille d'images reCAPTCHA et son
+       bouton « Valider » s'affichent en entier, sans contenu coupé. */
+    .wrap{display:flex;flex-direction:column;align-items:center;justify-content:flex-start;min-height:100%;padding:18px 12px 28px;box-sizing:border-box;}
+    .title{font-size:15px;color:#1A3553;font-weight:700;margin:8px 0 16px;text-align:center;}
     #c{transform:scale(1);}
   </style>
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
@@ -115,6 +117,8 @@ const RecaptchaModal = forwardRef(function RecaptchaModal(_props, ref) {
             source={{ html: buildHtml(firebaseConfig), baseUrl: `https://${firebaseConfig.authDomain}` }}
             onMessage={onMessage}
             javaScriptEnabled
+            scrollEnabled
+            nestedScrollEnabled
             style={{ flex: 1, backgroundColor: 'transparent' }}
           />
           {loading && (
@@ -130,8 +134,8 @@ const RecaptchaModal = forwardRef(function RecaptchaModal(_props, ref) {
 export default RecaptchaModal;
 
 const s = StyleSheet.create({
-  backdrop: { flex: 1, backgroundColor: 'rgba(15,23,42,0.6)', justifyContent: 'center', padding: 18 },
-  box: { backgroundColor: '#fff', borderRadius: 18, height: 360, overflow: 'hidden' },
+  backdrop: { flex: 1, backgroundColor: 'rgba(15,23,42,0.6)', justifyContent: 'center', paddingHorizontal: 10, paddingVertical: 36 },
+  box: { backgroundColor: '#fff', borderRadius: 18, flex: 1, overflow: 'hidden' },
   loader: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center', backgroundColor: '#fff' },
   cancel: { padding: 12, alignItems: 'center', borderTopWidth: 1, borderTopColor: colors.line },
   cancelTxt: { color: colors.muted, fontWeight: '700' },

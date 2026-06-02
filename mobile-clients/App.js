@@ -56,6 +56,7 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [openInvoice, setOpenInvoice] = useState(null);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [visited, setVisited] = useState({ home: true }); // onglets déjà ouverts (keep-alive)
   const cacheLoaded = useRef(false);
 
   // Chargement : 1) cache (instantané) 2) réseau (silencieux) -> maj + cache.
@@ -68,6 +69,10 @@ export default function App() {
     } catch (e) { console.warn('getMyInvoices:', e?.code, e?.message); }
     finally { setLoading(false); }
   }, []);
+
+  // Garde en mémoire chaque onglet déjà ouvert (évite de tout recharger à
+  // chaque clic). Un écran se monte une fois puis reste vivant en arrière-plan.
+  useEffect(() => { if (!visited[tab]) setVisited((v) => ({ ...v, [tab]: true })); }, [tab]);
 
   useEffect(() => {
     if (!authed) return;
@@ -129,6 +134,12 @@ export default function App() {
 
   const go = (key) => { setMenuOpen(false); setTab(key); };
 
+  // Rend un écran seulement s'il a déjà été ouvert, puis le garde monté (on
+  // bascule juste display none/flex) -> navigation instantanée, pas de rechargement.
+  const pane = (key, node) => visited[key] ? (
+    <View key={key} style={{ flex: 1, display: tab === key ? 'flex' : 'none' }}>{node}</View>
+  ) : null;
+
   const menuItems = MENU.filter(m => !m.senderOnly || isSender);
 
   return (
@@ -146,16 +157,16 @@ export default function App() {
       </LinearGradient>
 
       <View style={{ flex: 1 }}>
-        {tab === 'home' && <HomeScreen data={data} loading={loading} onRefresh={() => load(false)} onOpenInvoice={setOpenInvoice} onNavigate={go} isSender={isSender} />}
-        {tab === 'tracking' && <TrackingScreen data={data} loading={loading} onRefresh={() => load(false)} />}
-        {tab === 'requests' && <RequestsScreen selfName={selfName} selfAddress={profile.address || ''} selfPhone={phone} />}
-        {tab === 'quotes' && <QuoteScreen />}
-        {tab === 'chat' && <ChatScreen selfName={selfName} />}
-        {tab === 'profile' && <ProfileScreen data={data} phone={phone} onLock={lock} onLogout={logout} onProfileSaved={onProfileSaved} />}
-        {tab === 'invoices' && <InvoicesScreen data={data} loading={loading} onRefresh={() => load(false)} onOpenInvoice={setOpenInvoice} />}
-        {tab === 'notifications' && <NotificationsScreen />}
-        {tab === 'stats' && <StatsScreen data={data} />}
-        {tab === 'departures' && <DeparturesScreen />}
+        {pane('home', <HomeScreen data={data} loading={loading} onRefresh={() => load(false)} onOpenInvoice={setOpenInvoice} onNavigate={go} isSender={isSender} />)}
+        {pane('tracking', <TrackingScreen data={data} loading={loading} onRefresh={() => load(false)} />)}
+        {pane('requests', <RequestsScreen selfName={selfName} selfAddress={profile.address || ''} selfPhone={phone} />)}
+        {pane('quotes', <QuoteScreen />)}
+        {pane('chat', <ChatScreen selfName={selfName} active={tab === 'chat'} />)}
+        {pane('profile', <ProfileScreen data={data} phone={phone} onLock={lock} onLogout={logout} onProfileSaved={onProfileSaved} />)}
+        {pane('invoices', <InvoicesScreen data={data} loading={loading} onRefresh={() => load(false)} onOpenInvoice={setOpenInvoice} />)}
+        {pane('notifications', <NotificationsScreen />)}
+        {pane('stats', <StatsScreen data={data} />)}
+        {pane('departures', <DeparturesScreen />)}
       </View>
 
       <View style={s.tabbar}>

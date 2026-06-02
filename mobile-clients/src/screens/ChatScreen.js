@@ -10,7 +10,7 @@ import { pickChatImage, takeChatPhoto, uploadChatAudio } from '../media';
 
 const fdt = (d) => { try { return new Date(d).toLocaleString('fr-FR'); } catch (e) { return ''; } };
 
-export default function ChatScreen({ selfName }) {
+export default function ChatScreen({ selfName, active }) {
   const [loading, setLoading] = useState(true);
   const [convs, setConvs] = useState([]);
   const [messages, setMessages] = useState([]);
@@ -31,6 +31,9 @@ export default function ChatScreen({ selfName }) {
     finally { setLoading(false); }
   };
   useEffect(() => { load(); }, []);
+  // Rafraîchit en silence quand on revient sur l'onglet Chat (keep-alive) :
+  // pas de spinner, les messages déjà affichés restent, on récupère les nouveaux.
+  useEffect(() => { if (active) load(); }, [active]);
   useEffect(() => { if (!agency && convs.length === 1) setAgency(convs[0].agency); }, [convs]);
   useEffect(() => () => { if (soundRef.current) soundRef.current.unloadAsync().catch(() => {}); }, []);
 
