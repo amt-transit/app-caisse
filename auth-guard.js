@@ -217,22 +217,84 @@ onAuthStateChanged(auth, async (user) => {
             throw new Error("Champ 'role' manquant.");
         }
 
-        // --- NOUVEAU : SYSTÈME DE PRÉSENCE (En Ligne) ---
-        // Marquer l'utilisateur comme en ligne avec la date d'activité
-        updateDoc(userDocRef, { lastActive: new Date().toISOString(), isOnline: true }).catch(e => console.error(e));
-        // Mettre à jour l'activité toutes les 3 minutes pendant qu'il navigue
-        window.presenceInterval = setInterval(() => {
-            updateDoc(userDocRef, { lastActive: new Date().toISOString() }).catch(e => console.error(e));
-        }, 3 * 60 * 1000);
+        // --- SYSTÈME DE PRÉSENCE (En Ligne) — DIFFÉRÉ ---
+        // On REPOUSSE cette écriture après l'affichage de la page : lancée pendant
+        // le boot, elle occupait la connexion Firestore et ralentissait la lecture
+        // du rôle (~3 s mesurées). 4 s plus tard, la page est affichée depuis
+        // longtemps ; la présence n'a aucune urgence.
+        setTimeout(() => {
+            updateDoc(userDocRef, { lastActive: new Date().toISOString(), isOnline: true }).catch(e => console.error(e));
+            window.presenceInterval = setInterval(() => {
+                updateDoc(userDocRef, { lastActive: new Date().toISOString() }).catch(e => console.error(e));
+            }, 3 * 60 * 1000);
+        }, 4000);
 
-        // --- CHARGEMENT DES PERMISSIONS DYNAMIQUES ---
-        let userPermissions = [];
-        try {
-            const roleDocSnap = await getDoc(doc(db, 'roles', userRole));
-            if (roleDocSnap.exists()) {
-                userPermissions = roleDocSnap.data().permissions || [];
+        // --- DÉCONNEXION AUTOMATIQUE APRÈS INACTIVITÉ (30 min) ---
+        // Sécurité poste partagé : sans aucune action (souris/clavier/clic/scroll/
+        // tactile) pendant 30 min, on déconnecte et on renvoie à l'écran de
+        // connexion. Le minuteur se réarme à chaque action -> aucune gêne quand on
+        // travaille. (Armé une seule fois par chargement de page.)
+        if (!window.__amtIdleSetup) {
+            window.__amtIdleSetup = true;
+            const IDLE_MS = 30 * 60 * 1000;
+            let idleTimer = null;
+            // Un scan se fait par CAMÉRA (html5-qrcode) : ça ne génère ni clic ni
+            // frappe. On considère donc qu'un scan caméra EN COURS = activité, pour
+            // ne JAMAIS déconnecter en plein chargement/déchargement.
+            const scanCameraActive = () => {
+                const v = document.querySelector('video');
+                return !!(v && v.srcObject && !v.paused && v.readyState > 0);
+            };
+            const resetIdle = () => { if (idleTimer) clearTimeout(idleTimer); idleTimer = setTimeout(doIdleLogout, IDLE_MS); };
+            async function doIdleLogout() {
+                // Caméra de scan active -> on REPORTE la déconnexion (on ne coupe
+                // pas une session de scan).
+                if (scanCameraActive()) { resetIdle(); return; }
+                try { if (auth.currentUser) await updateDoc(doc(db, 'users', auth.currentUser.uid), { isOnline: false }); } catch (_) {}
+                try { await signOut(auth); } catch (_) {}
+                try { sessionStorage.clear(); } catch (_) {}
+                const inSub = window.location.pathname.includes('/paris/') || window.location.pathname.includes('/abidjan/');
+                window.location.href = inSub ? '../login.html' : 'login.html';
             }
-        } catch (e) { console.warn("Impossible de charger les permissions:", e); }
+            // Throttle : on ne réarme qu'au plus une fois toutes les 5 s.
+            let lastReset = 0;
+            const onActivity = () => { const now = Date.now(); if (now - lastReset > 5000) { lastReset = now; resetIdle(); } };
+            ['mousemove', 'mousedown', 'keydown', 'scroll', 'touchstart', 'click'].forEach((ev) =>
+                window.addEventListener(ev, onActivity, { passive: true }));
+            // « Je suis actif » réutilisable : les écrans de scan peuvent l'appeler
+            // à chaque scan réussi (window.amtKeepAlive()) pour réarmer le minuteur.
+            window.amtKeepAlive = () => resetIdle();
+            resetIdle();
+        }
+
+        // --- CHARGEMENT DES PERMISSIONS DYNAMIQUES (cache-first) ---
+        // La lecture réseau de roles/<role> peut être lente (~3 s en 4G) et
+        // BLOQUAIT l'affichage. On applique donc les permissions EN CACHE
+        // (localStorage) instantanément, et on revalide en arrière-plan. Un
+        // changement de rôle (rare, action admin) est pris en compte au
+        // rafraîchissement suivant.
+        let userPermissions = [];
+        const permKey = 'amt_perm_' + userRole;
+        const cachedPerm = localStorage.getItem(permKey);
+        const fetchPerms = async () => {
+            try {
+                const snap = await getDoc(doc(db, 'roles', userRole));
+                // On met en cache MÊME si le document n'existe pas (ex. super_admin
+                // sans permissions listées) : permissions = []. Ainsi la lecture
+                // réseau n'a lieu qu'UNE fois par appareil, puis tout est instantané.
+                const fresh = (snap.exists() && snap.data().permissions) ? snap.data().permissions : [];
+                localStorage.setItem(permKey, JSON.stringify(fresh));
+                sessionStorage.setItem('userPermissions', JSON.stringify(fresh));
+                return fresh;
+            } catch (e) { console.warn("Permissions:", e); return null; } // échec réseau : on NE cache pas (on réessaiera)
+        };
+        if (cachedPerm) {
+            try { userPermissions = JSON.parse(cachedPerm) || []; } catch (_) {}
+            fetchPerms(); // revalidation en arrière-plan (non bloquant)
+        } else {
+            const fresh = await fetchPerms(); // 1re fois sur cet appareil : on attend une fois
+            if (fresh) userPermissions = fresh;
+        }
 
         // Stockage session
         let userName = userData.displayName;
@@ -509,7 +571,12 @@ onAuthStateChanged(auth, async (user) => {
                 applyBranding(branding);
             } catch(e) { console.error("Branding error:", e); }
         };
-        await loadAgencyBranding(currentActiveAgency);
+        // NE PLUS BLOQUER l'affichage sur le branding : le cache (sessionStorage)
+        // est déjà appliqué SYNCHRONEMENT dans loadAgencyBranding ; la mise à
+        // jour réseau (3 lectures settings) se fait en arrière-plan, sans retarder
+        // l'apparition de la page. Gain : ~plusieurs lectures Firestore en moins
+        // avant le 1er affichage.
+        loadAgencyBranding(currentActiveAgency);
 
         // --- REDIRECTION AUTOMATIQUE VERS LA BONNE INTERFACE ---
         const pathUrl = window.location.pathname;
