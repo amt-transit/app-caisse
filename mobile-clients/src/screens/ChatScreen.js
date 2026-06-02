@@ -144,6 +144,9 @@ export default function ChatScreen({ selfName }) {
 
   const conv = convs.find(c => c.agency === agency) || { name: agency };
   const msgs = messages.filter(m => m.agency === agency);
+  // Index du DERNIER de mes messages lu par l'agence -> on affiche « Vu » dessous.
+  let lastSeenIdx = -1;
+  msgs.forEach((m, i) => { if (m.sender === 'client' && m.readByStaff) lastSeenIdx = i; });
   return (
     <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }} keyboardVerticalOffset={90}>
       <View style={s.cHead}>
@@ -155,18 +158,21 @@ export default function ChatScreen({ selfName }) {
           msgs.map((m, i) => {
             const mine = m.sender === 'client';
             return (
-              <View key={i} style={[s.bubbleRow, mine && { justifyContent: 'flex-end' }]}>
-                <View style={[s.bubble, mine ? s.bubbleMe : s.bubbleOther]}>
-                  <Text style={[s.bMeta, mine && { color: 'rgba(255,255,255,0.7)' }]}>{mine ? 'Vous' : (m.senderName || conv.name)} · {fdt(m.createdAt)}</Text>
-                  {!!m.text && <Text style={[s.bTxt, mine && { color: '#fff' }]}>{m.text}</Text>}
-                  {!!m.imageUrl && <Image source={{ uri: m.imageUrl }} style={s.img} resizeMode="cover" />}
-                  {!!m.audioUrl && (
-                    <TouchableOpacity style={[s.audio, mine ? s.audioMe : s.audioOther]} onPress={() => playAudio(m.id || i, m.audioUrl)}>
-                      <Text style={{ fontSize: 18 }}>{playingId === (m.id || i) ? '⏸️' : '▶️'}</Text>
-                      <Text style={[s.audioTxt, mine && { color: '#fff' }]}>Message vocal</Text>
-                    </TouchableOpacity>
-                  )}
+              <View key={i} style={{ marginBottom: 8 }}>
+                <View style={[s.bubbleRow, { marginBottom: 0 }, mine && { justifyContent: 'flex-end' }]}>
+                  <View style={[s.bubble, mine ? s.bubbleMe : s.bubbleOther]}>
+                    <Text style={[s.bMeta, mine && { color: 'rgba(255,255,255,0.7)' }]}>{mine ? 'Vous' : (m.senderName || conv.name)} · {fdt(m.createdAt)}</Text>
+                    {!!m.text && <Text style={[s.bTxt, mine && { color: '#fff' }]}>{m.text}</Text>}
+                    {!!m.imageUrl && <Image source={{ uri: m.imageUrl }} style={s.img} resizeMode="cover" />}
+                    {!!m.audioUrl && (
+                      <TouchableOpacity style={[s.audio, mine ? s.audioMe : s.audioOther]} onPress={() => playAudio(m.id || i, m.audioUrl)}>
+                        <Text style={{ fontSize: 18 }}>{playingId === (m.id || i) ? '⏸️' : '▶️'}</Text>
+                        <Text style={[s.audioTxt, mine && { color: '#fff' }]}>Message vocal</Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
                 </View>
+                {i === lastSeenIdx && <Text style={s.seen}>Vu ✓✓</Text>}
               </View>
             );
           })}
@@ -208,6 +214,7 @@ const s = StyleSheet.create({
   bubbleMe: { backgroundColor: colors.blue, borderBottomRightRadius: 4 },
   bubbleOther: { backgroundColor: '#fff', borderWidth: 1, borderColor: colors.line, borderBottomLeftRadius: 4 },
   bMeta: { fontSize: 10, color: colors.muted, marginBottom: 2 },
+  seen: { fontSize: 10, color: colors.blue, fontWeight: '700', textAlign: 'right', marginTop: 2, marginRight: 4 },
   bTxt: { fontSize: 14, color: colors.ink, lineHeight: 19 },
   img: { width: 200, height: 200, borderRadius: 10, marginTop: 6 },
   audio: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 6, paddingVertical: 6, paddingHorizontal: 10, borderRadius: 20 },

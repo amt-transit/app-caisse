@@ -305,6 +305,23 @@ exports.getMyInvoices = onCall({ region: REGION, invoker: "public" }, async (req
         } catch (e) { /* non bloquant */ }
     }
 
+    // Préférence : la fiche profil ÉDITÉE par le client (client_profiles) prime
+    // sur le nom/adresse/photo déduits des factures. Ainsi ce que le client
+    // saisit dans l'app s'affiche partout (en-tête, menu, profil) et PERSISTE
+    // après rechargement.
+    try {
+        const pd = await db.collection("client_profiles").doc(tail).get();
+        if (pd.exists) {
+            const p = pd.data() || {};
+            const full = `${p.prenom || ""} ${p.nom || ""}`.trim();
+            if (p.prenom) self.prenom = String(p.prenom);
+            if (p.nom) self.nom = String(p.nom);
+            if (full) self.name = full;
+            if (p.address) self.address = String(p.address);
+            if (p.photoUrl) self.photoUrl = String(p.photoUrl);
+        }
+    } catch (e) { /* non bloquant */ }
+
     // Nettoyage des champs internes (préfixe _) avant envoi au client.
     invoices.forEach((inv) => { Object.keys(inv).forEach((k) => { if (k[0] === "_") delete inv[k]; }); });
     invoices.sort((a, b) => String(b.date).localeCompare(String(a.date)));
@@ -744,7 +761,7 @@ exports.getMyChat = onCall({ region: REGION, invoker: "public" }, async (request
         msgs = snap.docs.map((d) => { const x = d.data() || {}; return {
             id: d.id, agency: x.agency || "", text: x.text || "", sender: x.sender || "client",
             senderName: x.senderName || "", createdAt: x.createdAt || "", readByClient: !!x.readByClient,
-            imageUrl: x.imageUrl || "", audioUrl: x.audioUrl || "",
+            readByStaff: !!x.readByStaff, imageUrl: x.imageUrl || "", audioUrl: x.audioUrl || "",
         }; });
     } catch (e) {}
     // S'assurer que toute agence ayant des messages apparaît aussi en conversation.
@@ -853,10 +870,10 @@ exports.getMyProfile = onCall({ region: REGION, invoker: "public" }, async (requ
     const tail = digits.length >= 9 ? digits.slice(-9) : digits;
     const db = admin.firestore();
 
-    let profile = { prenom: "", nom: "", photoUrl: "", lang: "fr" };
+    let profile = { prenom: "", nom: "", photoUrl: "", lang: "fr", address: "" };
     try {
         const d = await db.collection("client_profiles").doc(tail).get();
-        if (d.exists) { const x = d.data() || {}; profile = { prenom: x.prenom || "", nom: x.nom || "", photoUrl: x.photoUrl || "", lang: x.lang || "fr" }; }
+        if (d.exists) { const x = d.data() || {}; profile = { prenom: x.prenom || "", nom: x.nom || "", photoUrl: x.photoUrl || "", lang: x.lang || "fr", address: x.address || "" }; }
     } catch (e) {}
 
     // Repli : si la fiche profil n'a aucun nom, on déduit le nom du client depuis
@@ -914,6 +931,7 @@ exports.saveMyProfile = onCall({ region: REGION, invoker: "public" }, async (req
     const upd = { phoneE164: phone, updatedAt: new Date().toISOString() };
     if (data.prenom !== undefined) upd.prenom = clip(data.prenom, 60);
     if (data.nom !== undefined) upd.nom = clip(data.nom, 60);
+    if (data.address !== undefined) upd.address = clip(data.address, 200);
     if (data.lang !== undefined) upd.lang = (data.lang === "en") ? "en" : "fr";
     if (data.photoUrl !== undefined) {
         let img = String(data.photoUrl || "");

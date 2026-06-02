@@ -27,7 +27,11 @@
     },
     "android": {
       "package": "com.amttransit.clients",
-      "permissions": ["RECORD_AUDIO", "CAMERA"],
+      "permissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.CAMERA",
+        "android.permission.MODIFY_AUDIO_SETTINGS"
+      ],
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#1A3553"
@@ -36,11 +40,24 @@
     "plugins": [
       "expo-asset",
       "expo-notifications",
-      ["expo-image-picker", {
-        "photosPermission": "Pour joindre des photos dans le chat.",
-        "cameraPermission": "Pour prendre des photos à joindre dans le chat."
-      }],
-      ["expo-av", { "microphonePermission": "Pour enregistrer des messages vocaux dans le chat." }]
-    ]
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Pour joindre des photos dans le chat.",
+          "cameraPermission": "Pour prendre des photos à joindre dans le chat."
+        }
+      ],
+      [
+        "expo-av",
+        {
+          "microphonePermission": "Pour enregistrer des messages vocaux dans le chat."
+        }
+      ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "c0fb29ce-f8eb-4c3e-9ffb-f97d4329dee5"
+      }
+    }
   }
 }

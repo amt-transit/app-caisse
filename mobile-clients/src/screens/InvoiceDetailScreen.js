@@ -5,7 +5,7 @@ import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Alert } from 'rea
 import { Card, SectionTitle, Btn, Badge, Loading } from '../components/ui';
 import { colors, fcfa, fdate } from '../theme';
 import { api } from '../api';
-import { shareInvoicePdf } from '../invoicePdf';
+import { shareInvoicePdf, printInvoicePdf } from '../invoicePdf';
 
 const STAGES = ['📥 Entrepôt', '📦 Conteneur', '🛬 Arrivé', '✅ Livré'];
 
@@ -38,11 +38,20 @@ export default function InvoiceDetailScreen({ reference, onBack }) {
     })();
   }, [reference]);
 
-  const exportPdf = async () => {
+  const runPdf = async (fn) => {
     setPdfBusy(true);
-    try { await shareInvoicePdf(detail); }
+    try { await fn(detail); }
     catch (e) { Alert.alert('PDF', "Génération impossible pour le moment."); }
     finally { setPdfBusy(false); }
+  };
+  // Propose : enregistrer le PDF (impression système -> « Enregistrer en PDF »)
+  // ou le partager (mail, WhatsApp…).
+  const exportPdf = () => {
+    Alert.alert('Facture PDF', 'Que souhaitez-vous faire ?', [
+      { text: '💾 Enregistrer en PDF', onPress: () => runPdf(printInvoicePdf) },
+      { text: '📤 Partager', onPress: () => runPdf(shareInvoicePdf) },
+      { text: 'Annuler', style: 'cancel' },
+    ]);
   };
 
   if (error) return (
@@ -106,8 +115,8 @@ export default function InvoiceDetailScreen({ reference, onBack }) {
             ))}
         </Card>
 
-        <Btn label={pdfBusy ? 'Génération…' : '📄 Télécharger le PDF'} onPress={exportPdf} busy={pdfBusy} />
-        <Text style={s.note}>Le PDF officiel inclut les conditions générales et un récapitulatif financier.</Text>
+        <Btn label={pdfBusy ? 'Génération…' : '📄 Enregistrer / Partager le PDF'} onPress={exportPdf} busy={pdfBusy} />
+        <Text style={s.note}>« Enregistrer en PDF » place le fichier dans vos Téléchargements. Le PDF officiel inclut les conditions générales et le récapitulatif financier.</Text>
       </ScrollView>
     </View>
   );

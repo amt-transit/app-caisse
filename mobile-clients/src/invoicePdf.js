@@ -125,3 +125,13 @@ export async function shareInvoicePdf(detail) {
   }
   return true;
 }
+
+// Ouvre la boîte « Imprimer » du système. Sur Android, le client peut y choisir
+// « Enregistrer au format PDF » -> le fichier va directement dans ses
+// Téléchargements (vraie sauvegarde, sans passer par le partage). Sur iOS, c'est
+// l'aperçu d'impression (avec option d'enregistrement/partage natif).
+export async function printInvoicePdf(detail) {
+  const html = buildInvoiceHtml(detail);
+  await Print.printAsync({ html });
+  return true;
+}

@@ -82,6 +82,28 @@ export default function App() {
     })();
   }, [authed, load]);
 
+  // Le profil a été modifié (nom/adresse) -> on met à jour les données en
+  // mémoire + le cache pour que l'en-tête, le menu et le formulaire de dépôt
+  // reflètent le changement immédiatement (sans attendre un rechargement).
+  const onProfileSaved = (upd) => {
+    setData((d) => {
+      if (!d) return d;
+      const full = `${upd.prenom || ''} ${upd.nom || ''}`.trim();
+      const merged = { ...d, profile: { ...(d.profile || {}), ...upd, name: full || (d.profile || {}).name } };
+      setCache('home', merged);
+      return merged;
+    });
+  };
+
+  // VERROUILLER : garde la session Firebase + le PIN. Retour par code PIN (pas
+  // de nouveau SMS). C'est l'action « normale » au quotidien.
+  const lock = () => {
+    cacheLoaded.current = false;
+    setData(null); setTab('home'); setAuthed(false);
+  };
+
+  // SE DÉCONNECTER : ferme vraiment la session + oublie le PIN -> reconnexion
+  // par SMS la prochaine fois. À réserver à « changer de compte ».
   const logout = async () => {
     try { await signOut(auth); } catch (_) {}
     await AsyncStorage.multiRemove(['amtc_registered', 'amtc_pin']);
@@ -115,6 +137,7 @@ export default function App() {
         <TouchableOpacity onPress={() => setMenuOpen(true)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
           <Text style={s.burger}>☰</Text>
         </TouchableOpacity>
+        <Image source={require('./assets/logo.png')} style={s.hLogo} resizeMode="contain" />
         <View style={{ flex: 1 }}>
           <Text style={s.hTitle}>AMT TRANS'IT</Text>
           <Text style={s.hSub}>{TITLES[tab] || ''}</Text>
@@ -127,7 +150,7 @@ export default function App() {
         {tab === 'requests' && <RequestsScreen selfName={selfName} selfAddress={profile.address || ''} selfPhone={phone} />}
         {tab === 'quotes' && <QuoteScreen />}
         {tab === 'chat' && <ChatScreen selfName={selfName} />}
-        {tab === 'profile' && <ProfileScreen data={data} phone={phone} onLogout={logout} />}
+        {tab === 'profile' && <ProfileScreen data={data} phone={phone} onLock={lock} onLogout={logout} onProfileSaved={onProfileSaved} />}
         {tab === 'invoices' && <InvoicesScreen data={data} loading={loading} onRefresh={() => load(false)} onOpenInvoice={setOpenInvoice} />}
         {tab === 'notifications' && <NotificationsScreen />}
         {tab === 'stats' && <StatsScreen data={data} />}
@@ -174,6 +197,7 @@ const s = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg },
   header: { flexDirection: 'row', alignItems: 'center', gap: 14, backgroundColor: colors.blue, paddingTop: 50, paddingBottom: 14, paddingHorizontal: 18, borderBottomWidth: 2, borderBottomColor: colors.gold },
   burger: { color: '#fff', fontSize: 24, fontWeight: '800' },
+  hLogo: { width: 38, height: 38 },
   hTitle: { color: '#fff', fontSize: 18, fontWeight: '800' },
   hSub: { color: 'rgba(255,255,255,0.85)', fontSize: 13, marginTop: 2 },
   tabbar: { flexDirection: 'row', backgroundColor: '#fff', borderTopWidth: 1, borderTopColor: colors.line, paddingBottom: 22, paddingTop: 8 },

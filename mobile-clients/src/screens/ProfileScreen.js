@@ -10,12 +10,13 @@ import { pickAvatarFromLibrary, takeAvatarPhoto } from '../media';
 const TAUX = 655.957;
 const toFcfa = (v, cur) => (cur === 'EUR' ? (v || 0) * TAUX : (v || 0));
 
-export default function ProfileScreen({ data, phone, onLogout }) {
+export default function ProfileScreen({ data, phone, onLock, onLogout, onProfileSaved }) {
   const [profile, setProfile] = useState(null);
   const [about, setAbout] = useState(null);
   const [editing, setEditing] = useState(false);
   const [prenom, setPrenom] = useState('');
   const [nom, setNom] = useState('');
+  const [address, setAddress] = useState('');
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -26,6 +27,7 @@ export default function ProfileScreen({ data, phone, onLogout }) {
         setAbout(r.about || null);
         setPrenom(r.profile?.prenom || '');
         setNom(r.profile?.nom || '');
+        setAddress(r.profile?.address || '');
       } catch (e) { setProfile({}); }
     })();
   }, []);
@@ -46,8 +48,10 @@ export default function ProfileScreen({ data, phone, onLogout }) {
   const save = async () => {
     setSaving(true);
     try {
-      await api.saveMyProfile({ prenom: prenom.trim(), nom: nom.trim() });
-      setProfile({ ...profile, prenom: prenom.trim(), nom: nom.trim() });
+      const upd = { prenom: prenom.trim(), nom: nom.trim(), address: address.trim() };
+      await api.saveMyProfile(upd);
+      setProfile({ ...profile, ...upd });
+      onProfileSaved && onProfileSaved(upd);   // remonte à l'app (en-tête / menu)
       setEditing(false);
     } catch (e) { Alert.alert('Erreur', "Enregistrement impossible."); }
     finally { setSaving(false); }
@@ -139,7 +143,11 @@ export default function ProfileScreen({ data, phone, onLogout }) {
         {!editing ? (
           <TouchableOpacity style={s.line} onPress={() => setEditing(true)}>
             <Text style={s.lineIc}>✏️</Text>
-            <View style={{ flex: 1 }}><Text style={s.lineT}>Modifier nom / prénom</Text><Text style={s.lineS}>{fullName || 'Non renseigné'}</Text></View>
+            <View style={{ flex: 1 }}>
+              <Text style={s.lineT}>Modifier nom / prénom / adresse</Text>
+              <Text style={s.lineS}>{fullName || 'Nom non renseigné'}</Text>
+              {!!profile.address && <Text style={s.lineS}>📍 {profile.address}</Text>}
+            </View>
             <Text style={s.chev}>›</Text>
           </TouchableOpacity>
         ) : (
@@ -148,6 +156,8 @@ export default function ProfileScreen({ data, phone, onLogout }) {
             <TextInput style={s.input} value={prenom} onChangeText={setPrenom} placeholder="Prénom" placeholderTextColor={colors.muted} />
             <Text style={s.lbl}>Nom</Text>
             <TextInput style={s.input} value={nom} onChangeText={setNom} placeholder="Nom" placeholderTextColor={colors.muted} />
+            <Text style={s.lbl}>Adresse (pour vos enlèvements / livraisons)</Text>
+            <TextInput style={[s.input, { height: 64, textAlignVertical: 'top' }]} value={address} onChangeText={setAddress} placeholder="N°, rue, code postal, ville…" placeholderTextColor={colors.muted} multiline />
             <Btn label="Enregistrer" onPress={save} busy={saving} />
             <Btn label="Annuler" kind="ghost" onPress={() => setEditing(false)} />
           </View>
@@ -180,7 +190,10 @@ export default function ProfileScreen({ data, phone, onLogout }) {
         </Card>
       )}
 
-      <Btn label="Se déconnecter" kind="ghost" onPress={confirmLogout} style={{ marginTop: 4 }} />
+      <Btn label="🔒 Verrouiller l'application" kind="ghost" onPress={onLock} style={{ marginTop: 4 }} />
+      <TouchableOpacity onPress={confirmLogout} style={{ alignItems: 'center', paddingVertical: 12 }}>
+        <Text style={{ color: colors.red, fontWeight: '700' }}>Se déconnecter</Text>
+      </TouchableOpacity>
       <Text style={s.version}>AMT Clients · v1.0</Text>
     </ScrollView>
   );

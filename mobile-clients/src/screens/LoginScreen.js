@@ -116,8 +116,10 @@ export default function LoginScreen({ onAuthed }) {
       <ScrollView contentContainerStyle={st.wrap} keyboardShouldPersistTaps="handled">
         <RecaptchaModal ref={recaptchaRef} />
 
+        {/* Logo (jaune/blanc) posé sur le FOND BLEU, où il est visible. */}
+        <Image source={require('../../assets/logo.png')} style={st.logo} resizeMode="contain" />
+
         <View style={st.card}>
-          <Image source={require('../../assets/logo.png')} style={st.logo} resizeMode="contain" />
           <Text style={st.brand}>AMT <Text style={{ color: colors.gold }}>TRANS'IT</Text></Text>
           <Text style={st.tag}>Votre espace expéditeur & destinataire</Text>
 
@@ -192,7 +194,7 @@ function Btn({ label, onPress, busy }) {
 const st = StyleSheet.create({
   wrap: { flexGrow: 1, justifyContent: 'center', alignItems: 'center', padding: 22, backgroundColor: colors.blue },
   card: { width: '100%', maxWidth: 420, backgroundColor: colors.card, borderRadius: 24, padding: 24 },
-  logo: { width: 120, height: 64, alignSelf: 'center', marginBottom: 10 },
+  logo: { width: 150, height: 80, alignSelf: 'center', marginBottom: 18 },
   brand: { fontSize: 26, fontWeight: '800', color: colors.blue, textAlign: 'center' },
   tag: { fontSize: 12.5, color: colors.muted, textAlign: 'center', marginTop: 4, marginBottom: 18 },
   label: { fontSize: 13, fontWeight: '600', color: colors.blue, marginBottom: 8, marginTop: 8 },
