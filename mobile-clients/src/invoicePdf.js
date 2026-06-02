@@ -5,6 +5,20 @@ import { Platform } from 'react-native';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import * as FileSystem from 'expo-file-system';
+import qrcode from 'qrcode-generator';
+
+// Site public (origine des liens de vérification, comme côté staff).
+const SITE_ORIGIN = 'https://app-caisse.vercel.app';
+
+// QR code -> data URL GIF (pur JS, sans DOM ni canvas, OK en React Native).
+function qrDataUrl(text) {
+  try {
+    const qr = qrcode(0, 'M'); // correction d'erreur niveau M
+    qr.addData(String(text || ''));
+    qr.make();
+    return qr.createDataURL(4, 8); // cellSize, marge
+  } catch (e) { return ''; }
+}
 
 const TAUX = 655.957;
 // Formatage FCFA (les montants stockés sont en FCFA).
@@ -48,6 +62,13 @@ export function buildInvoiceHtml(detail) {
 
   const cgvText = (cfg.cgv ? String(cfg.cgv).replace(/\\n/g, '\n').split('\n') : DEFAULT_CGV);
   const footer = cfg.footer || "81 AVENUE ARISTIDE BRIAND 93240 STAINS | Tel. 0186900380 | amt.transit@gmail.com";
+
+  // QR de vérification (même URL publique que le PDF staff : statut réel en
+  // direct). Nécessite la collection + l'id renvoyés par getMyInvoiceDetail.
+  const verifyUrl = (detail.collection && detail.transDocId)
+    ? `${SITE_ORIGIN}/verify.html?c=${encodeURIComponent(detail.collection)}&id=${encodeURIComponent(detail.transDocId)}`
+    : '';
+  const qrImg = verifyUrl ? qrDataUrl(verifyUrl) : '';
   const clientName = String(t.nomDestinataire || t.nom || 'Client').replace(/(\+?\d[\d\s.\-]{6,}\d)/g, '').trim();
 
   return `<!DOCTYPE html><html><head><meta charset="utf-8">
@@ -109,6 +130,13 @@ export function buildInvoiceHtml(detail) {
         <div class="reste"><div class="r" style="padding:0"><span>RESTE À PAYER :</span><span>${fcfa(reste)}</span></div></div>
       </div>
       <div class="stamp">${isPaid ? 'PAYÉ' : 'IMPAYÉ'}</div>
+      ${qrImg ? `<div style="display:flex;align-items:center;gap:12px;margin-top:22px;border-top:1px solid #e2e8f0;padding-top:14px;">
+        <img src="${qrImg}" style="width:92px;height:92px;">
+        <div style="font-size:9px;color:#475569;line-height:1.5;">
+          <b style="color:${headerColor};font-size:10px;">Facture vérifiable</b><br>
+          Scannez ce QR code pour vérifier l'authenticité<br>et le statut réel (payé / impayé) de cette facture en ligne.
+        </div>
+      </div>` : ''}
       <div class="cgv">
         <h5>CONDITIONS GÉNÉRALES DE VENTE — À LIRE ATTENTIVEMENT :</h5>
         ${cgvText.map((l) => `<div>${esc(l)}</div>`).join('')}
