@@ -22,6 +22,7 @@ export const api = {
   createClientRequest: (data) => call('createClientRequest', data),
   respondClientRequest: (id, action) => call('respondClientRequest', { id, action }),
   cancelClientRequest: (id) => call('cancelClientRequest', { id }),
+  updateClientRequest: (data) => call('updateClientRequest', data),
   getRdvAvailability: (year, month, agency) => call('getRdvAvailability', { year, month, agency }),
   // Devis
   getQuoteConfig: () => call('getQuoteConfig'),

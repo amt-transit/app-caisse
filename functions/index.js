@@ -1140,6 +1140,7 @@ exports.getMyRequests = onCall({ region: REGION, invoker: "public" }, async (req
             id: d.id, type: x.type || "depot", status: x.status || "en_attente",
             fullName: x.fullName || "", address: x.address || "", commune: x.commune || "",
             wantedDate: x.wantedDate || "", wantedTime: x.wantedTime || "", description: x.description || "",
+            etage: x.etage || "", acces: x.acces || "", codeAcces: x.codeAcces || "", contactTel: x.contactTel || "",
             createdAt: x.createdAt || "",
             // Proposition du staff (visible par le client quand status === 'modifiee').
             staffDate: x.staffDate || "", staffTime: x.staffTime || "", staffNote: x.staffNote || "",
@@ -1180,6 +1181,60 @@ exports.cancelClientRequest = onCall({ region: REGION, invoker: "public" }, asyn
         });
     } catch (e) { /* non bloquant */ }
     return { ok: true, status: "annulee" };
+});
+
+// Modifier une demande TANT QUE le rendez-vous n'est pas fixé (statut traitee).
+// Le client peut corriger adresse / date / champs. Repasse en 'en_attente'
+// (le staff devra re-traiter). Sécurité : propriété par phoneTail.
+exports.updateClientRequest = onCall({ region: REGION, invoker: "public" }, async (request) => {
+    const auth = request.auth;
+    const phone = auth && auth.token && auth.token.phone_number;
+    if (!phone) throw new HttpsError("unauthenticated", "Connexion par téléphone requise.");
+    const data = request.data || {};
+    const id = data.id;
+    if (!id) throw new HttpsError("invalid-argument", "Demande manquante.");
+    const digits = String(phone).replace(/\D/g, "");
+    const tail = digits.length >= 9 ? digits.slice(-9) : digits;
+
+    const db = admin.firestore();
+    const ref = db.collection("client_requests").doc(id);
+    const snap = await ref.get();
+    if (!snap.exists) throw new HttpsError("not-found", "Demande introuvable.");
+    const r = snap.data() || {};
+    if (r.phoneTail !== tail) throw new HttpsError("permission-denied", "Demande non autorisée.");
+    if (r.status === "traitee") throw new HttpsError("failed-precondition", "Le rendez-vous est déjà fixé. Contactez l'agence.");
+
+    const clean = (s, max) => String(s == null ? "" : s).trim().slice(0, max || 200);
+    const upd = {
+        type: (data.type === "recup") ? "recup" : "depot",
+        fullName: clean(data.fullName, 120),
+        address: clean(data.address, 300),
+        commune: clean(data.commune, 120),
+        wantedDate: clean(data.date, 30),
+        wantedTime: clean(data.time, 40),
+        description: clean(data.description, 1000),
+        etage: clean(data.etage, 120),
+        acces: clean(data.acces, 60),
+        codeAcces: clean(data.codeAcces, 120),
+        contactTel: clean(data.contactTel, 40),
+        // La modification client remet la demande dans la file (sauf si refusée/annulée).
+        status: "en_attente",
+        // La date choisie sert de proposition par défaut au staff.
+        staffDate: clean(data.date, 30), staffTime: clean(data.time, 40),
+        updatedAt: new Date().toISOString(),
+    };
+    if (!upd.address && !upd.commune) throw new HttpsError("invalid-argument", "Adresse requise.");
+    await ref.update(upd);
+
+    try {
+        await db.collection("notifications").add({
+            title: "✏️ Demande modifiée par le client",
+            message: `${upd.fullName || r.phoneE164 || "Un client"} a modifié sa demande de ${upd.type === "recup" ? "récupération" : "dépôt"}.`,
+            agency: r.agency || "paris", type: "client_request", refId: id,
+            createdAt: new Date().toISOString(), readBy: [],
+        });
+    } catch (e) {}
+    return { ok: true };
 });
 
 // Réponse du CLIENT à une proposition du staff (date/créneau modifiés).
