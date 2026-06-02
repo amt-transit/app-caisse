@@ -27,6 +27,9 @@ export default function HomeScreen({ data, loading, onRefresh, onOpenInvoice, on
   const prenom = (profile.prenom || (profile.name || '').split(' ')[0] || '').trim();
   const totalDu = invoices.reduce((s, i) => s + toFcfa(i.remaining != null ? i.remaining : (i.total - i.paid), i.currency), 0);
   const nbImpayees = invoices.filter(i => i.status !== 'PAYE').length;
+  // Alerte magasinage : factures avec des frais de stockage en cours.
+  const magInvoices = invoices.filter(i => Number(i.magasinage) > 0);
+  const totalMag = magInvoices.reduce((s, i) => s + toFcfa(i.magasinage, i.currency), 0);
   const shortcuts = SHORTCUTS.filter(sc => !sc.senderOnly || isSender);
 
   return (
@@ -57,6 +60,18 @@ export default function HomeScreen({ data, loading, onRefresh, onOpenInvoice, on
       </LinearGradient>
 
       <View style={{ paddingHorizontal: 16, marginTop: 16 }}>
+        {/* Alerte magasinage (frais de stockage qui augmentent) */}
+        {magInvoices.length > 0 && (
+          <TouchableOpacity style={s.magBanner} activeOpacity={0.85} onPress={() => onNavigate && onNavigate('invoices')}>
+            <Text style={s.magBannerIc}>⚠️</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={s.magBannerT}>Frais de stockage en cours</Text>
+              <Text style={s.magBannerS}>{magInvoices.length} facture{magInvoices.length > 1 ? 's' : ''} · {fcfa(totalMag)} — récupérez vos colis pour éviter qu'ils n'augmentent.</Text>
+            </View>
+            <Text style={s.magBannerChev}>›</Text>
+          </TouchableOpacity>
+        )}
+
         {/* Services (raccourcis colorés) */}
         <SectionTitle>Services</SectionTitle>
         <View style={s.grid}>
@@ -112,6 +127,11 @@ const s = StyleSheet.create({
   balBtn: { backgroundColor: colors.gold, borderRadius: 12, paddingHorizontal: 18, paddingVertical: 10 },
   balBtnTxt: { color: colors.blue, fontWeight: '800', fontSize: 14 },
 
+  magBanner: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: '#FFF7ED', borderWidth: 1, borderColor: '#FED7AA', borderRadius: 14, padding: 14, marginBottom: 14 },
+  magBannerIc: { fontSize: 22 },
+  magBannerT: { color: '#C2410C', fontWeight: '800', fontSize: 14 },
+  magBannerS: { color: '#9A3412', fontSize: 12, marginTop: 2, lineHeight: 16 },
+  magBannerChev: { color: '#C2410C', fontWeight: '800', fontSize: 20 },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   shortcut: { width: '31%', backgroundColor: colors.card, borderWidth: 1, borderColor: colors.line, borderRadius: 18, alignItems: 'center', justifyContent: 'center', paddingVertical: 14 },
   scIcWrap: { width: 46, height: 46, borderRadius: 23, alignItems: 'center', justifyContent: 'center', marginBottom: 8 },

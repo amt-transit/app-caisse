@@ -78,6 +78,17 @@ export default function InvoiceDetailScreen({ reference, onBack }) {
     <View style={s.wrap}>
       <Header onBack={onBack} title={t.reference || 'Facture'} />
       <ScrollView contentContainerStyle={{ padding: 16 }}>
+        {/* Alerte magasinage : frais de stockage qui augmentent tant que les
+            colis ne sont pas récupérés / la facture pas réglée. */}
+        {mag > 0 && (
+          <View style={s.magAlert}>
+            <Text style={s.magAlertTitle}>⚠️ Frais de magasinage en cours</Text>
+            <Text style={s.magAlertTxt}>
+              Des frais de stockage de {fcfa(mag)} s'appliquent et <Text style={{ fontWeight: '800' }}>augmentent chaque jour</Text> tant que les colis ne sont pas récupérés. Récupérez-les ou réglez la facture au plus vite.
+            </Text>
+          </View>
+        )}
+
         {/* Bilan */}
         <Card>
           <View style={s.bilanHead}>
@@ -155,4 +166,7 @@ const s = StyleSheet.create({
   muted: { color: colors.muted, fontSize: 12 },
   note: { fontSize: 12, color: colors.muted, textAlign: 'center', marginTop: 8, lineHeight: 18 },
   err: { color: colors.red, textAlign: 'center', padding: 30, fontWeight: '600' },
+  magAlert: { backgroundColor: '#FFF7ED', borderWidth: 1, borderColor: '#FED7AA', borderRadius: 14, padding: 14, marginBottom: 14 },
+  magAlertTitle: { color: '#C2410C', fontWeight: '800', fontSize: 14, marginBottom: 4 },
+  magAlertTxt: { color: '#9A3412', fontSize: 12.5, lineHeight: 18 },
 });
