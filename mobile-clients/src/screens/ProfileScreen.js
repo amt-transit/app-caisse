@@ -5,7 +5,7 @@ import { View, Text, ScrollView, TextInput, TouchableOpacity, StyleSheet, Image,
 import { Card, SectionTitle, Btn, Loading } from '../components/ui';
 import { colors, fcfa } from '../theme';
 import { api } from '../api';
-import { pickChatImage, takeChatPhoto } from '../media';
+import { pickAvatarFromLibrary, takeAvatarPhoto } from '../media';
 
 const TAUX = 655.957;
 const toFcfa = (v, cur) => (cur === 'EUR' ? (v || 0) * TAUX : (v || 0));
@@ -65,8 +65,8 @@ export default function ProfileScreen({ data, phone, onLogout }) {
   };
   const changePhoto = () => {
     Alert.alert('Photo de profil', null, [
-      { text: '📷 Prendre une photo', onPress: () => applyPhoto(takeChatPhoto) },
-      { text: '🖼️ Choisir dans la galerie', onPress: () => applyPhoto(pickChatImage) },
+      { text: '📷 Prendre une photo', onPress: () => applyPhoto(takeAvatarPhoto) },
+      { text: '🖼️ Choisir dans la galerie', onPress: () => applyPhoto(pickAvatarFromLibrary) },
       { text: 'Annuler', style: 'cancel' },
     ]);
   };
