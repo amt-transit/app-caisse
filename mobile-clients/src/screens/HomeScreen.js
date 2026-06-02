@@ -8,10 +8,22 @@ const TAUX = 655.957;
 const toFcfa = (v, cur) => (cur === 'EUR' ? (v || 0) * TAUX : (v || 0));
 const STATUS = { PAYE: ['Payé', 'paid'], PARTIEL: ['Acompte', 'wait'], IMPAYE: ['Impayé', 'bad'] };
 
-export default function HomeScreen({ data, loading, onRefresh, onOpenInvoice }) {
+// Raccourcis (libellés clairs). senderOnly = visible pour les expéditeurs.
+const SHORTCUTS = [
+  { key: 'requests', icon: '📦', label: 'Déposer un carton', senderOnly: true },
+  { key: 'requests', icon: '🔄', label: 'Demande de récup', senderOnly: true },
+  { key: 'invoices', icon: '🧾', label: 'Mes factures' },
+  { key: 'quotes', icon: '🧮', label: 'Faire un devis' },
+  { key: 'notifications', icon: '🔔', label: 'Notifications' },
+  { key: 'chat', icon: '💬', label: 'Discuter' },
+  { key: 'departures', icon: '🚢', label: 'Prochains départs' },
+];
+
+export default function HomeScreen({ data, loading, onRefresh, onOpenInvoice, onNavigate, isSender }) {
   if (loading && !data) return <Loading text="Chargement de vos factures…" />;
   const invoices = (data && data.invoices) || [];
   const totalDu = invoices.reduce((s, i) => s + toFcfa(i.remaining != null ? i.remaining : (i.total - i.paid), i.currency), 0);
+  const shortcuts = SHORTCUTS.filter(sc => !sc.senderOnly || isSender);
 
   return (
     <ScrollView contentContainerStyle={{ padding: 16 }}
@@ -44,6 +56,16 @@ export default function HomeScreen({ data, loading, onRefresh, onOpenInvoice }) 
           );
         })}
       </Card>
+
+      <SectionTitle>Services</SectionTitle>
+      <View style={s.grid}>
+        {shortcuts.map((sc, i) => (
+          <TouchableOpacity key={i} style={s.shortcut} onPress={() => onNavigate && onNavigate(sc.key)} activeOpacity={0.7}>
+            <Text style={s.scIc}>{sc.icon}</Text>
+            <Text style={s.scLb}>{sc.label}</Text>
+          </TouchableOpacity>
+        ))}
+      </View>
     </ScrollView>
   );
 }
@@ -59,4 +81,8 @@ const s = StyleSheet.create({
   sub: { fontSize: 12, color: colors.muted, marginTop: 3 },
   amt: { fontWeight: '700', color: colors.ink },
   none: { padding: 18, color: colors.muted, textAlign: 'center' },
+  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  shortcut: { width: '31%', aspectRatio: 1, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.line, borderRadius: 16, alignItems: 'center', justifyContent: 'center', padding: 6 },
+  scIc: { fontSize: 26, marginBottom: 6 },
+  scLb: { fontSize: 11.5, fontWeight: '700', color: colors.blue, textAlign: 'center', lineHeight: 14 },
 });

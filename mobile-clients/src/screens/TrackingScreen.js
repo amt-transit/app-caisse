@@ -1,8 +1,10 @@
 // Onglet SUIVI : colis par étape (Entrepôt → Conteneur → Arrivé → Livré).
 import React, { useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, RefreshControl } from 'react-native';
+import { View, Text, ScrollView, TextInput, TouchableOpacity, StyleSheet, RefreshControl } from 'react-native';
 import { Card, Empty, Loading } from '../components/ui';
 import { colors, fdate } from '../theme';
+
+const norm = (s) => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
 
 const STAGES = [
   { l: 'Entrepôt', ic: '📥' },
@@ -13,14 +15,24 @@ const STAGES = [
 
 export default function TrackingScreen({ data, loading, onRefresh }) {
   const [filter, setFilter] = useState(-1); // -1 = tous
+  const [q, setQ] = useState('');
   if (loading && !data) return <Loading text="Chargement de vos colis…" />;
   const parcels = (data && data.parcels) || [];
   const counts = STAGES.map((_, i) => parcels.filter(p => p.stage === i).length);
-  const list = parcels.filter(p => filter < 0 || p.stage === filter);
+  const term = norm(q.trim());
+  const list = parcels.filter(p =>
+    (filter < 0 || p.stage === filter) &&
+    (!term || norm(`${p.label} ${p.ref} ${p.desc}`).includes(term)));
 
   return (
     <ScrollView contentContainerStyle={{ padding: 16 }}
       refreshControl={<RefreshControl refreshing={!!loading} onRefresh={onRefresh} tintColor={colors.blue} />}>
+      {/* Barre de recherche */}
+      <View style={s.searchBar}>
+        <Text style={s.searchIc}>🔍</Text>
+        <TextInput style={s.search} value={q} onChangeText={setQ} placeholder="Rechercher un colis (réf, description)…" placeholderTextColor={colors.muted} />
+        {!!q && <TouchableOpacity onPress={() => setQ('')}><Text style={s.clearX}>✕</Text></TouchableOpacity>}
+      </View>
       {/* Récap par étape (cliquable = filtre) */}
       <View style={s.pipe}>
         {STAGES.map((st, i) => (
@@ -73,6 +85,10 @@ function Stepper({ stage }) {
 }
 
 const s = StyleSheet.create({
+  searchBar: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#fff', borderWidth: 1, borderColor: colors.line, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 9, marginBottom: 12 },
+  searchIc: { fontSize: 15 },
+  search: { flex: 1, fontSize: 14, color: colors.ink, paddingVertical: 2 },
+  clearX: { color: colors.muted, fontSize: 15, paddingHorizontal: 4 },
   pipe: { flexDirection: 'row', gap: 8, marginBottom: 8 },
   p: { flex: 1, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.line, borderRadius: 14, paddingVertical: 12, alignItems: 'center' },
   pActive: { borderColor: colors.blue, backgroundColor: '#f4f8fd' },

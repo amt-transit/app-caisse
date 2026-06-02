@@ -33,4 +33,6 @@ export const api = {
   // Notifications
   getMyNotifications: () => call('getMyNotifications'),
   markNotificationsRead: (ids) => call('markNotificationsRead', { ids }),
+  // Prochains départs
+  getNextDepartures: () => call('getNextDepartures'),
 };

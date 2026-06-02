@@ -943,6 +943,45 @@ exports.saveMyPushToken = onCall({ region: REGION, invoker: "public" }, async (r
     return { ok: true };
 });
 
+// Prochains départs (bateaux) des routes rattachées au client. Lit la collection
+// `boats` (+ variantes route) et renvoie les départs à venir, triés par date.
+exports.getNextDepartures = onCall({ region: REGION, invoker: "public" }, async (request) => {
+    const auth = request.auth;
+    const phone = auth && auth.token && auth.token.phone_number;
+    if (!phone) throw new HttpsError("unauthenticated", "Connexion par téléphone requise.");
+    const digits = String(phone).replace(/\D/g, "");
+    const tail = digits.length >= 9 ? digits.slice(-9) : digits;
+
+    const db = admin.firestore();
+    // Routes de départ du client (departureAgency) -> collections boats.
+    let routes = new Set(["paris"]);
+    try {
+        const att = await clientAgenciesFor(db, tail);
+        // les agences "exp" sont des départs ; on ne garde pas les arrivées (abidjan…)
+        for (const [ag, role] of att) {
+            if (role === "exp" || role === "both") routes.add(ag);
+        }
+    } catch (e) {}
+
+    const boatCol = (route) => (route === "paris" ? "boats" : `boats_${route}`);
+    const todayStr = new Date().toISOString().slice(0, 10);
+    const out = [];
+    for (const route of routes) {
+        try {
+            const snap = await db.collection(boatCol(route)).limit(200).get();
+            snap.forEach((d) => {
+                const b = d.data() || {};
+                const dt = String(b.departureDate || "");
+                if (!dt || dt < todayStr) return;             // passé ou sans date -> ignoré
+                if (b.status === "ARRIVE" || b.status === "ANNULE") return;
+                out.push({ name: b.name || "", date: dt, destination: b.destination || "", route });
+            });
+        } catch (e) { /* collection absente */ }
+    }
+    out.sort((a, b) => String(a.date).localeCompare(String(b.date)));
+    return { departures: out.slice(0, 20) };
+});
+
 exports.getQuoteConfig = onCall({ region: REGION, invoker: "public" }, async (request) => {
     if (!request.auth || !request.auth.token || !request.auth.token.phone_number) {
         throw new HttpsError("unauthenticated", "Connexion par téléphone requise.");
