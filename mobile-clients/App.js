@@ -5,6 +5,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Modal, Pressable, ScrollView, Image } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
+import { LinearGradient } from 'expo-linear-gradient';
 import { signOut } from 'firebase/auth';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { auth } from './src/firebase';
@@ -133,7 +134,7 @@ export default function App() {
   return (
     <View style={s.root}>
       <StatusBar style="light" />
-      <View style={s.header}>
+      <LinearGradient colors={['#21426A', '#16293F']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={s.header}>
         <TouchableOpacity onPress={() => setMenuOpen(true)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
           <Text style={s.burger}>☰</Text>
         </TouchableOpacity>
@@ -142,7 +143,7 @@ export default function App() {
           <Text style={s.hTitle}>AMT TRANS'IT</Text>
           <Text style={s.hSub}>{TITLES[tab] || ''}</Text>
         </View>
-      </View>
+      </LinearGradient>
 
       <View style={{ flex: 1 }}>
         {tab === 'home' && <HomeScreen data={data} loading={loading} onRefresh={() => load(false)} onOpenInvoice={setOpenInvoice} onNavigate={go} isSender={isSender} />}

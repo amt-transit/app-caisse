@@ -1,12 +1,13 @@
 // Thème AMT (charte officielle) — version légère pour l'app Client RN.
-// Triade : Bleu de Prusse #1A3553 · Rouge #E51F21 · Or #F2A312.
+// Triade : Bleu de Prusse #1A3553 · Rouge #E51F21 · JAUNE #FDC615.
 export const colors = {
   blue: '#1A3553',
   blueDark: '#13283F',
   blueLight: '#2D567F',
   red: '#E51F21',
-  gold: '#F2A312',
-  goldDark: '#C47F10',
+  gold: '#FDC615',        // jaune officiel AMT (remplace l'orange)
+  goldDark: '#C99700',    // variante foncée (texte jaune sur fond clair)
+  goldSoft: '#FFF6D6',    // teinte douce (fonds de puces/accents)
   green: '#16A34A',
   ink: '#0F172A',
   muted: '#5B6B7F',
@@ -14,6 +15,17 @@ export const colors = {
   bg: '#EEF2F7',
   card: '#FFFFFF',
   white: '#FFFFFF',
+};
+
+// Dégradés réutilisables (expo-linear-gradient).
+export const gradients = {
+  blue: ['#21426A', '#16293F'],     // bannières / en-têtes
+  gold: ['#FFD740', '#FDC615'],     // accents jaunes
+};
+
+// Teintes douces par catégorie (fonds d'icônes de raccourcis).
+export const tints = {
+  blue: '#E7EEF7', red: '#FDE7E7', gold: '#FFF3CC', green: '#E3F6EC', violet: '#ECE9FB',
 };
 
 export const radius = { sm: 12, md: 16, lg: 22, pill: 999 };

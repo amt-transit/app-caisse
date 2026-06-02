@@ -855,6 +855,32 @@ exports.markChatRead = onCall({ region: REGION, invoker: "public" }, async (requ
     } catch (e) { return { ok: true, updated: 0 }; }
 });
 
+// Déclencheur : quand l'AGENCE répond dans le chat (doc client_messages créé
+// avec sender='staff'), le client reçoit une NOTIFICATION PUSH (app fermée
+// incluse), comme une vraie messagerie. Les messages du client sont ignorés.
+exports.onClientMessageCreated = onDocumentCreated(
+    { region: REGION, document: "client_messages/{id}" },
+    async (event) => {
+        const m = (event.data && event.data.data()) || null;
+        if (!m || m.sender !== "staff") return;
+        const tail = String(m.phoneTail || "");
+        if (!tail) return;
+        try {
+            const db = admin.firestore();
+            const prof = await db.collection("client_profiles").doc(tail).get();
+            const token = prof.exists ? (prof.data() || {}).pushToken : null;
+            if (!token) return;
+            const apercu = m.audioUrl && !m.text ? "🎤 Message vocal"
+                : (m.imageUrl && !m.text ? "📷 Photo" : String(m.text || "").slice(0, 120));
+            await sendExpoPush(token, {
+                title: `💬 ${m.senderName || "AMT Trans'it"}`,
+                body: apercu || "Nouveau message",
+                data: { type: "chat", agency: m.agency || "" },
+            });
+        } catch (e) { /* push best-effort */ }
+    }
+);
+
 // ===========================================================================
 //  PROFIL CLIENT (app AMT Clients) — fiche par numéro
 // ---------------------------------------------------------------------------
