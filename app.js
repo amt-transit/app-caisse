@@ -1158,42 +1158,176 @@ export const app = {
                 <p>Erreur de chargement : ${e.message}</p></div>`;
         }
     },
+    // Analytics Clientèle — analyse détaillée de la base clients (12 mois
+    // glissants) à partir des FACTURES (collection transactions, route-aware) :
+    // CA, factures, clients actifs, panier moyen, impayés, churn, réactivation,
+    // concentration Top clients, segments d'action (R/S/D/N), courbe mensuelle.
     async renderClientsAnalytics() {
         const c = document.getElementById('contentContainer');
-        c.innerHTML = `<div class="loading"><i class="fas fa-spinner fa-spin"></i> Calcul des analyses clients…</div>`;
+        c.innerHTML = `<div class="loading"><i class="fas fa-spinner fa-spin"></i> Analyse de la base clients (12 mois)…</div>`;
         try {
             const { db } = await import('./firebase-config.js');
             const { collection, query, where, getDocs } = await import('https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js');
             const { getCollectionName } = await import('./agencies-config.js');
+            const { paidAmount, isArrivalAgency } = await import('./agency-money.js');
+            const { isEurAgency } = await import('./services/format.js');
+            const { CONSTANTS } = await import('./constants.js');
+
             const agency = sessionStorage.getItem('currentActiveAgency') || 'abidjan';
+            const isArr = isArrivalAgency(agency);
+            const eur = isEurAgency();
+            const TAUX = (CONSTANTS && CONSTANTS.TAUX_CONVERSION) || 655.957;
+            const money = (fcfa) => this.formatMoneyLocal(eur ? (fcfa / TAUX) : fcfa);
 
-            // Mêmes collections / filtrage que le module Clients (source unique).
-            const [csnap, lsnap] = await Promise.all([
-                getDocs(query(collection(db, getCollectionName('clients')), where('agency', '==', agency))),
-                getDocs(query(collection(db, getCollectionName('livraisons')), where('agency', '==', agency))),
-            ]);
+            const snap = await getDocs(query(collection(db, getCollectionName('transactions')),
+                where('agency', '==', agency), where('isDeleted', '==', false)));
+            const txs = snap.docs.map(d => d.data());
 
-            const nbClients = csnap.size;
-            const livs = lsnap.docs.map(d => d.data()).filter(l => l && l.isDeleted !== true);
-            const nbColis = livs.length;
-            const caTotal = livs.reduce((s, liv) =>
-                s + (parseFloat(String(liv.prixOriginal || liv.montant || '0').replace(/[^\d]/g, '')) || 0), 0);
+            const now = Date.now(), DAY = 86400000;
+            const d12 = now - 365 * DAY, d24 = now - 730 * DAY;
+            const parseD = (s) => { const t = Date.parse(s); return isNaN(t) ? 0 : t; };
+
+            let caCur = 0, factCur = 0, impayeCur = 0;
+            const curClients = new Map();       // nom -> CA (FCFA) sur 12M
+            const prevClients = new Set();      // actifs 12-24M
+            const olderClients = new Set();     // actifs avant 24M
+            const firstSeen = new Map(), lastSeen = new Map();
+            const act30 = new Set(), act60 = new Set(), act90 = new Set();
+            const months = {};                  // YYYY-MM -> { ca, fact }
+
+            for (const t of txs) {
+                const ts = parseD(t.date);
+                if (!ts) continue;
+                const prix = parseFloat(t.prix) || 0;
+                const paid = paidAmount(t, agency) || 0;
+                const reste = Math.max(0, prix - paid);
+                const name = String((isArr ? (t.nomDestinataire || t.nom) : (t.nom || t.nomDestinataire)) || '')
+                    .replace(/(\+?\d[\d\s.\-]{6,}\d)/g, '').trim().toUpperCase() || '—';
+                if (!firstSeen.has(name) || ts < firstSeen.get(name)) firstSeen.set(name, ts);
+                if (!lastSeen.has(name) || ts > lastSeen.get(name)) lastSeen.set(name, ts);
+                if (ts >= d12) {
+                    caCur += prix; factCur++; impayeCur += reste;
+                    curClients.set(name, (curClients.get(name) || 0) + prix);
+                    const mk = String(t.date).slice(0, 7);
+                    (months[mk] = months[mk] || { ca: 0, fact: 0 }).ca += prix; months[mk].fact++;
+                    if (ts >= now - 30 * DAY) act30.add(name);
+                    if (ts >= now - 60 * DAY) act60.add(name);
+                    if (ts >= now - 90 * DAY) act90.add(name);
+                } else if (ts >= d24) prevClients.add(name);
+                else olderClients.add(name);
+            }
+
+            let churn = 0; prevClients.forEach(n => { if (!curClients.has(n)) churn++; });
+            let react = 0; curClients.forEach((_, n) => { if (!prevClients.has(n) && olderClients.has(n)) react++; });
+            const sorted = [...curClients.values()].sort((a, b) => b - a);
+            const sum = (a) => a.reduce((s, x) => s + x, 0);
+            const top10 = caCur ? sum(sorted.slice(0, 10)) / caCur * 100 : 0;
+            const top20 = caCur ? sum(sorted.slice(0, 20)) / caCur * 100 : 0;
+
+            const topSet = new Set([...curClients.entries()].sort((a, b) => b[1] - a[1]).slice(0, 20).map(e => e[0]));
+            let segN = 0, segS = 0, segD = 0, segR = 0;
+            curClients.forEach((ca, n) => {
+                if (firstSeen.get(n) >= d12) segN++;                 // Onboard : 1re facture sur 12M
+                else if (topSet.has(n)) segS++;                       // Sécuriser : gros clients
+                else if (lastSeen.get(n) < now - 90 * DAY) segR++;    // Réactiver : sans facture >90j
+                else segD++;                                          // Développer : actifs moyens
+            });
+
+            const clients12 = curClients.size;
+            const panier = factCur ? caCur / factCur : 0;
+            const tauxImp = caCur ? impayeCur / caCur * 100 : 0;
+            const churnPct = prevClients.size ? churn / prevClients.size * 100 : 0;
+            const reactPct = clients12 ? react / clients12 * 100 : 0;
+            const pct = (v) => v.toLocaleString('fr-FR', { maximumFractionDigits: 1 });
+
+            // 12 derniers mois (ordonnés) pour la courbe.
+            const mKeys = []; const dref = new Date();
+            for (let i = 11; i >= 0; i--) { const d = new Date(dref.getFullYear(), dref.getMonth() - i, 1); mKeys.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`); }
+            const caSeries = mKeys.map(k => Math.round((months[k] ? months[k].ca : 0) / (eur ? TAUX : 1)));
+            const factSeries = mKeys.map(k => months[k] ? months[k].fact : 0);
+
+            const card = (cls, icon, label, value, hint, desc) => `
+                <div class="kpi-card ${cls}">
+                    <div class="kpi-card__head"><span class="kpi-card__icon">${icon}</span><span class="kpi-card__label">${label}</span></div>
+                    <div class="kpi-card__value">${value}</div>
+                    <div class="kpi-card__hint">${hint}</div>
+                    <div class="kpi-card__desc">${desc}</div>
+                </div>`;
 
             c.innerHTML = `
-            <div class="form-card">
-                <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
-                    <h3 style="margin:0;">Analytique clients <span style="font-size:12px;color:#64748b;font-weight:600;">· agence ${agency}</span></h3>
-                    <button class="btn btn-secondary" id="btnReloadAnalytics"><i class="fas fa-sync"></i> Actualiser</button>
+            <style>
+                .ca-an{max-width:1200px;margin:0 auto;animation:fadeIn .3s ease;}
+                .ca-an__head{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;background:#fff;border:1px solid #e2e8f0;border-radius:16px;padding:18px 22px;margin-bottom:16px;}
+                .ca-an__head h2{margin:0;font-size:19px;color:#0f172a;}
+                .ca-an__head p{margin:4px 0 0;font-size:12.5px;color:#64748b;}
+                .kpi-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:14px;margin-bottom:16px;}
+                .kpi-card{background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:16px;border-left:4px solid #3b82f6;}
+                .kpi-card--blue{border-left-color:#3b82f6;} .kpi-card--purple{border-left-color:#8b5cf6;}
+                .kpi-card--gray{border-left-color:#94a3b8;} .kpi-card--green{border-left-color:#16a34a;}
+                .kpi-card--orange{border-left-color:#f59e0b;} .kpi-card--red{border-left-color:#ef4444;}
+                .kpi-card__head{display:flex;align-items:center;gap:8px;color:#64748b;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.3px;}
+                .kpi-card__icon{font-size:16px;}
+                .kpi-card__value{font-size:22px;font-weight:800;color:#0f172a;margin:8px 0 2px;}
+                .kpi-card__hint{font-size:12px;color:#475569;font-weight:600;}
+                .kpi-card__desc{font-size:11.5px;color:#94a3b8;line-height:1.5;margin-top:8px;}
+                .ca-chart{background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:18px;}
+                .ca-chart h3{margin:0 0 2px;font-size:15px;color:#0f172a;}
+                .ca-chart p{margin:0 0 14px;font-size:12px;color:#64748b;}
+            </style>
+            <div class="ca-an">
+                <div class="ca-an__head">
+                    <div>
+                        <h2>📊 Analytics Clientèle</h2>
+                        <p>Tableau de bord — 12 mois glissants · agence ${agency} · ${factCur.toLocaleString('fr-FR')} factures analysées</p>
+                    </div>
+                    <button class="btn btn-secondary" id="btnReloadAnalytics"><i class="fas fa-sync"></i> Rafraîchir</button>
                 </div>
-                <div class="stats-grid" style="margin-top:18px;">
-                    <div class="stat-card"><div class="stat-value">${this.formatMoneyLocal(caTotal)}</div><div class="stat-label">Chiffre d'affaires (colis)</div></div>
-                    <div class="stat-card"><div class="stat-value">${nbClients.toLocaleString('fr-FR')}</div><div class="stat-label">Clients enregistrés</div></div>
-                    <div class="stat-card"><div class="stat-value">${nbColis.toLocaleString('fr-FR')}</div><div class="stat-label">Colis traités</div></div>
+                <div class="kpi-grid">
+                    ${card('kpi-card--blue', '💰', 'CA 12M', money(caCur), 'Facturation totale (agence)', "Taille du business sur 12 mois. À comparer au mois précédent et au Top clients pour vérifier une croissance saine.")}
+                    ${card('kpi-card--purple', '📄', 'Factures 12M', factCur.toLocaleString('fr-FR'), "Volume d'activité", "Cadence opérationnelle. Si le CA monte mais pas les factures, le panier moyen augmente.")}
+                    ${card('kpi-card--gray', '👥', 'Clients 12M', clients12.toLocaleString('fr-FR'), 'Base active sur 12 mois', "Clients ayant eu au moins une facture sur la période. Suit l'élargissement de la base.")}
+                    ${card('kpi-card--green', '✅', 'Actifs 30j / 60j / 90j', `${act30.size} / ${act60.size} / ${act90.size}`, 'Santé de la base (récence)', "Température commerciale. Un écart fort entre 30j et 90j signale des clients qui ralentissent.")}
+                    ${card('kpi-card--orange', '🛒', 'Panier moyen', money(panier), 'CA / factures', "Valeur moyenne d'une facture. À surveiller par segment pour détecter un mix client qui change.")}
+                    ${card('kpi-card--red', '⚠️', 'Impayés estimés 12M', money(impayeCur), `Taux : ${pct(tauxImp)} %`, "Impact direct sur la trésorerie. Si le taux monte, déclenchez le recouvrement.")}
+                    ${card('kpi-card--gray', '📉', 'Churn 12M', `${churn.toLocaleString('fr-FR')} (${pct(churnPct)} %)`, 'Clients perdus vs période précédente', "Clients actifs avant mais plus sur 12M. À croiser avec « à risque » pour sécuriser avant la perte.")}
+                    ${card('kpi-card--green', '🔄', 'Réactivation 12M', `${react.toLocaleString('fr-FR')} (${pct(reactPct)} %)`, 'Retour de clients dormants', "Clients revenus après une longue absence. Bon indicateur d'efficacité des relances.")}
+                    ${card('kpi-card--blue', '🎯', 'Dépendance Top clients', `Top 10 : ${pct(top10)} % / Top 20 : ${pct(top20)} %`, 'Concentration du CA', "Plus le ratio est élevé, plus le risque business augmente. Développer les « moyens », sécuriser les « gros ».")}
+                    ${card('kpi-card--orange', '📋', "Plans d'action (volumes)", `R : ${segR} · S : ${segS} · D : ${segD} · N : ${segN}`, 'Cibles prioritaires', "Réactiver (dormants) · Sécuriser (gros) · Développer (moyens) · Onboard (nouveaux).")}
                 </div>
-                <p style="margin-top:14px;color:#94a3b8;font-size:12px;">Chiffres calculés en direct depuis la base (collections clients & livraisons).</p>
+                <div class="ca-chart">
+                    <h3>📈 CA + factures (mensuel)</h3>
+                    <p>Évolution mois par mois : le CA (barres) et la cadence (ligne).</p>
+                    <div style="position:relative;height:300px;width:100%;"><canvas id="caAnalyticsChart"></canvas></div>
+                </div>
             </div>`;
+
             const btn = document.getElementById('btnReloadAnalytics');
             if (btn) btn.onclick = () => this.renderClientsAnalytics();
+
+            // Courbe Chart.js (barres CA + ligne factures sur 2e axe).
+            try {
+                if (this._caChart) { this._caChart.destroy(); this._caChart = null; }
+                const ctx = document.getElementById('caAnalyticsChart');
+                if (ctx && window.Chart) {
+                    this._caChart = new window.Chart(ctx, {
+                        data: {
+                            labels: mKeys,
+                            datasets: [
+                                { type: 'bar', label: `CA (${eur ? '€' : 'CFA'})`, data: caSeries, backgroundColor: 'rgba(59,130,246,0.85)', borderRadius: 4, yAxisID: 'y' },
+                                { type: 'line', label: 'Factures', data: factSeries, borderColor: '#16a34a', backgroundColor: '#16a34a', tension: 0.3, yAxisID: 'y1' },
+                            ],
+                        },
+                        options: {
+                            responsive: true, maintainAspectRatio: false,
+                            scales: {
+                                y: { position: 'left', ticks: { callback: (v) => Number(v).toLocaleString('fr-FR') } },
+                                y1: { position: 'right', grid: { drawOnChartArea: false } },
+                            },
+                            plugins: { legend: { position: 'top' } },
+                        },
+                    });
+                }
+            } catch (e) { console.warn('Analytics chart:', e); }
         } catch (e) {
             c.innerHTML = `<div style="padding:40px;text-align:center;color:#ef4444;background:white;border-radius:12px;">
                 <i class="fas fa-exclamation-triangle fa-2x" style="margin-bottom:12px;"></i>
