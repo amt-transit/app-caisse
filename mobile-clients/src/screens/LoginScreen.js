@@ -9,6 +9,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { auth } from '../firebase';
 import { colors } from '../theme';
 import { api } from '../api';
+import { useLang, tr } from '../i18n';
 import RecaptchaModal from '../components/RecaptchaModal';
 
 const LS = { registered: 'amtc_registered', phone: 'amtc_phone', pin: 'amtc_pin' };
@@ -16,6 +17,7 @@ const LS = { registered: 'amtc_registered', phone: 'amtc_phone', pin: 'amtc_pin'
 const pinHash = (s) => 'amtc:' + s;
 
 export default function LoginScreen({ onAuthed }) {
+  const { t } = useLang();
   const recaptchaRef = useRef(null);
   const [step, setStep] = useState('loading'); // loading|phone|code|setpin|pin
   const [dial, setDial] = useState('+225');
@@ -137,13 +139,13 @@ export default function LoginScreen({ onAuthed }) {
 
         <View style={st.card}>
           <Text style={st.brand}>AMT <Text style={{ color: colors.gold }}>TRANS'IT</Text></Text>
-          <Text style={st.tag}>Votre espace expéditeur & destinataire</Text>
+          <Text style={st.tag}>{t('Votre espace expéditeur & destinataire')}</Text>
 
-          {step === 'loading' && <Text style={st.hint}>Chargement…</Text>}
+          {step === 'loading' && <Text style={st.hint}>{t('Chargement…')}</Text>}
 
           {step === 'phone' && (
             <>
-              <Text style={st.label}>Votre numéro de téléphone</Text>
+              <Text style={st.label}>{t('Votre numéro de téléphone')}</Text>
               <View style={st.phoneRow}>
                 <View style={st.cc}>
                   <TouchableOpacity onPress={() => setDial(dial === '+225' ? '+33' : '+225')}>
@@ -153,41 +155,41 @@ export default function LoginScreen({ onAuthed }) {
                 <TextInput style={st.numInput} keyboardType="number-pad" placeholder="07 48 52 88 24"
                   value={num} onChangeText={setNum} placeholderTextColor={colors.muted} />
               </View>
-              <Btn label="Recevoir le code par SMS" onPress={sendCode} busy={busy} />
-              <Text style={st.hint}>Un code à 6 chiffres vous sera envoyé par SMS.</Text>
+              <Btn label={t('Recevoir le code par SMS')} onPress={sendCode} busy={busy} />
+              <Text style={st.hint}>{t('Un code à 6 chiffres vous sera envoyé par SMS.')}</Text>
             </>
           )}
 
           {step === 'code' && (
             <>
-              <TouchableOpacity onPress={() => setStep('phone')}><Text style={st.back}>← Modifier le numéro</Text></TouchableOpacity>
-              <Text style={st.sentTo}>Code envoyé au {savedPhone}</Text>
+              <TouchableOpacity onPress={() => setStep('phone')}><Text style={st.back}>{t('← Modifier le numéro')}</Text></TouchableOpacity>
+              <Text style={st.sentTo}>{t('Code envoyé au')} {savedPhone}</Text>
               <TextInput style={st.pinField} keyboardType="number-pad" maxLength={6} placeholder="••••••"
                 value={code} onChangeText={setCode} placeholderTextColor={colors.muted} />
-              <Btn label="Valider" onPress={verifyCode} busy={busy} />
+              <Btn label={t('Valider')} onPress={verifyCode} busy={busy} />
             </>
           )}
 
           {step === 'setpin' && (
             <>
-              <Text style={st.label}>Créez votre code PIN (4 chiffres)</Text>
-              <Text style={st.hint}>Il remplacera le SMS aux prochaines connexions.</Text>
+              <Text style={st.label}>{t('Créez votre code PIN (4 chiffres)')}</Text>
+              <Text style={st.hint}>{t('Il remplacera le SMS aux prochaines connexions.')}</Text>
               <TextInput style={st.pinField} keyboardType="number-pad" maxLength={4} placeholder="••••"
                 value={pin1} onChangeText={setPin1} placeholderTextColor={colors.muted} secureTextEntry />
               <TextInput style={st.pinField} keyboardType="number-pad" maxLength={4} placeholder="••••"
                 value={pin2} onChangeText={setPin2} placeholderTextColor={colors.muted} secureTextEntry />
-              <Btn label="Enregistrer" onPress={savePin} busy={busy} />
+              <Btn label={t('Enregistrer')} onPress={savePin} busy={busy} />
             </>
           )}
 
           {step === 'pin' && (
             <>
-              <Text style={st.welcome}>Bon retour 👋</Text>
+              <Text style={st.welcome}>{t('Bon retour 👋')}</Text>
               {!!savedPhone && <Text style={st.sentTo}>{savedPhone}</Text>}
               <TextInput style={st.pinField} keyboardType="number-pad" maxLength={4} placeholder="••••"
                 value={pinIn} onChangeText={setPinIn} placeholderTextColor={colors.muted} secureTextEntry />
-              <Btn label="Déverrouiller" onPress={unlock} busy={busy} />
-              <TouchableOpacity onPress={forgotPin}><Text style={st.ghost}>J'ai oublié mon code (recevoir un SMS)</Text></TouchableOpacity>
+              <Btn label={t('Déverrouiller')} onPress={unlock} busy={busy} />
+              <TouchableOpacity onPress={forgotPin}><Text style={st.ghost}>{t("J'ai oublié mon code (recevoir un SMS)")}</Text></TouchableOpacity>
             </>
           )}
 
@@ -202,7 +204,7 @@ export default function LoginScreen({ onAuthed }) {
 function Btn({ label, onPress, busy }) {
   return (
     <TouchableOpacity style={[st.btn, busy && { opacity: 0.6 }]} onPress={onPress} disabled={busy} activeOpacity={0.85}>
-      <Text style={st.btnTxt}>{busy ? 'Veuillez patienter…' : label}</Text>
+      <Text style={st.btnTxt}>{busy ? tr('Veuillez patienter…') : label}</Text>
     </TouchableOpacity>
   );
 }

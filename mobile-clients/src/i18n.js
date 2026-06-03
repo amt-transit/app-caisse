@@ -88,6 +88,22 @@ export const EN = {
   'Votre numéro de téléphone': 'Your phone number',
   'Recevoir le code par SMS': 'Get the code by SMS', 'Déverrouiller': 'Unlock',
   'Bon retour 👋': 'Welcome back 👋', 'Créez votre code PIN (4 chiffres)': 'Create your PIN (4 digits)',
+  'Votre espace expéditeur & destinataire': 'Your shipper & recipient space',
+  'Un code à 6 chiffres vous sera envoyé par SMS.': 'A 6-digit code will be sent to you by SMS.',
+  '← Modifier le numéro': '← Change number', 'Code envoyé au': 'Code sent to',
+  'Il remplacera le SMS aux prochaines connexions.': 'It will replace the SMS at next logins.',
+  "J'ai oublié mon code (recevoir un SMS)": 'I forgot my code (get an SMS)',
+  'Veuillez patienter…': 'Please wait…',
+
+  // --- Factures (liste) ---
+  'Toutes vos factures, à jour.': 'All your invoices, up to date.',
+  'Aucune facture pour le moment.': 'No invoice yet.',
+  'Rechercher (réf, nom, conteneur…)': 'Search (ref, name, container…)',
+
+  // --- Demandes / Notifications / Stats / Départs ---
+  'Demande de dépôt': 'Drop-off request', 'Demande de récupération': 'Pickup request',
+  'Aucune demande': 'No request', 'Aucune notification': 'No notification',
+  'Aucun départ programmé': 'No scheduled departure',
 };
 
 // État global (pour appels hors composant) + abonnés.
