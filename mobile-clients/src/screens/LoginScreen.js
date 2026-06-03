@@ -4,10 +4,11 @@
 // Étape 1 du portage RN : on valide CE circuit avant de porter le reste.
 import React, { useRef, useState, useEffect } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, KeyboardAvoidingView, Platform, Image } from 'react-native';
-import { PhoneAuthProvider, signInWithCredential, signOut } from 'firebase/auth';
+import { PhoneAuthProvider, signInWithCredential, signOut, onAuthStateChanged } from 'firebase/auth';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { auth } from '../firebase';
 import { colors } from '../theme';
+import { api } from '../api';
 import RecaptchaModal from '../components/RecaptchaModal';
 
 const LS = { registered: 'amtc_registered', phone: 'amtc_phone', pin: 'amtc_pin' };
@@ -29,14 +30,26 @@ export default function LoginScreen({ onAuthed }) {
   const [savedPhone, setSavedPhone] = useState('');
 
   useEffect(() => {
-    (async () => {
+    // IMPORTANT : la session Firebase (persistée dans AsyncStorage) se restaure
+    // de façon ASYNCHRONE au démarrage. On ATTEND donc onAuthStateChanged (qui
+    // se déclenche une fois l'état connu, session restaurée incluse) AVANT de
+    // décider PIN vs SMS. Sinon, à froid (ex. après une mise à jour),
+    // auth.currentUser est encore null -> on retombait à tort sur le SMS.
+    let done = false;
+    const decide = async (user) => {
+      if (done) return; done = true;
       const reg = await AsyncStorage.getItem(LS.registered);
       const ph = await AsyncStorage.getItem(LS.phone);
+      const hasPin = await AsyncStorage.getItem(LS.pin);
       setSavedPhone(ph || '');
-      // Si déjà enregistré ET session Firebase encore active -> écran PIN.
-      if (reg === '1' && auth.currentUser) setStep('pin');
+      // Déjà enregistré + session restaurée + PIN défini -> déverrouillage PIN.
+      if (reg === '1' && user && hasPin) setStep('pin');
       else setStep('phone');
-    })();
+    };
+    const unsub = onAuthStateChanged(auth, (user) => { decide(user); });
+    // Filet de sécurité : si onAuthStateChanged tarde (>4s), on décide quand même.
+    const t = setTimeout(() => decide(auth.currentUser), 4000);
+    return () => { clearTimeout(t); unsub(); };
   }, []);
 
   const fail = (m) => { setErr(m); setBusy(false); };
@@ -90,6 +103,9 @@ export default function LoginScreen({ onAuthed }) {
     if (a !== b) return fail('Les deux codes ne correspondent pas.');
     await AsyncStorage.setItem(LS.pin, pinHash(a));
     await AsyncStorage.setItem(LS.registered, '1');
+    // 1re création de compte : enregistre le client comme "client potentiel"
+    // côté staff + déclenche le message de bienvenue (non bloquant, best-effort).
+    try { api.registerClientLead(); } catch (_) {}
     finish();
   };
 

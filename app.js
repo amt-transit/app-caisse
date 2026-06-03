@@ -13,6 +13,7 @@ import { ParrainageView } from './shared/views/parrainage.js';
 import { ProfilView } from './profil-view.js';
 import { DemandesClientView } from './shared/views/demandes-client.js';
 import { ChatClientsView } from './shared/views/chat-clients.js';
+import { ClientsPotentielsView } from './shared/views/clients-potentiels.js';
 
 // --- PARIS VIEWS (Départ) ---
 import { DashboardView as ParisDashboardView } from './paris/js/views/dashboard.js';
@@ -138,6 +139,21 @@ export const app = {
         this.updateBadges();
         this.initPendingSessionsBadge();
         this.initClientChatBadge();
+        this.initClientLeadsBadge();
+    },
+
+    // Badge TEMPS RÉEL des clients potentiels non lus (nouveaux comptes app).
+    initClientLeadsBadge() {
+        import('./firebase-config.js').then(async cfg => {
+            const { collection, query, where, onSnapshot } = await import('https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js');
+            if (this.unsubClientLeads) { try { this.unsubClientLeads(); } catch (e) {} }
+            const q = query(collection(cfg.db, "client_leads"), where("readByStaff", "==", false));
+            this.unsubClientLeads = onSnapshot(q, snap => {
+                const n = snap.size;
+                const b = document.getElementById('clientLeadsBadge');
+                if (b) { b.textContent = n; b.style.display = n > 0 ? 'inline-block' : 'none'; }
+            }, err => console.warn("Badge clients potentiels:", err && err.message));
+        }).catch(e => console.warn("initClientLeadsBadge:", e));
     },
 
     // Badge TEMPS RÉEL des messages clients non lus (section « Communication »).
@@ -864,6 +880,7 @@ export const app = {
             'settings-profile': () => ProfilView.render(this, container),
             'demandes-client': () => DemandesClientView.render(this, container),
             'chat-clients': () => ChatClientsView.render(this, container),
+            'clients-potentiels': () => ClientsPotentielsView.render(this, container),
             
             // --- Conditional / Dual (Selon l'agence) ---
             'dashboard': () => isArrival ? AbidjanDashboardView.render(this, container) : ParisDashboardView.render(this),

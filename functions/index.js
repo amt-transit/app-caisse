@@ -1058,6 +1058,47 @@ exports.saveMyPushToken = onCall({ region: REGION, invoker: "public" }, async (r
     return { ok: true };
 });
 
+// CLIENT POTENTIEL : appelée par l'app à la 1re création de compte. Enregistre
+// un "lead" (collection client_leads, doc = phoneTail) visible par tout le staff
+// (page « Clients potentiels »), et envoie au client un MESSAGE DE BIENVENUE
+// (cloche app + push). Idempotente : si le lead existe déjà, ne refait rien.
+exports.registerClientLead = onCall({ region: REGION, invoker: "public" }, async (request) => {
+    const auth = request.auth;
+    const phone = auth && auth.token && auth.token.phone_number;
+    if (!phone) throw new HttpsError("unauthenticated", "Connexion par téléphone requise.");
+    const digits = String(phone).replace(/\D/g, "");
+    const tail = digits.length >= 9 ? digits.slice(-9) : digits;
+    if (tail.length < 8) return { ok: true, new: false };
+
+    const db = admin.firestore();
+    const ref = db.collection("client_leads").doc(tail);
+    const snap = await ref.get();
+    if (snap.exists) return { ok: true, new: false }; // déjà inscrit -> pas de re-bienvenue
+
+    // Nom éventuel + indication s'il a déjà des factures (= client existant).
+    let prenom = "", nom = "";
+    try { const p = await db.collection("client_profiles").doc(tail).get(); if (p.exists) { prenom = p.data().prenom || ""; nom = p.data().nom || ""; } } catch (e) {}
+    let hasInvoices = false;
+    try { const m = await clientAgenciesFor(db, tail); hasInvoices = m && m.size > 0; } catch (e) {}
+
+    await ref.set({
+        phoneTail: tail, phoneE164: phone, prenom, nom,
+        hasInvoices, status: "nouveau", readByStaff: false,
+        createdAt: new Date().toISOString(),
+    });
+
+    // Message de BIENVENUE au client (cloche de l'app + push s'il a un token).
+    try {
+        await createClientNotif(db, tail, {
+            title: "Bienvenue chez AMT Trans'it 🎉",
+            body: "Votre compte est créé ! Suivez vos colis, consultez vos factures et discutez avec votre agence, directement ici.",
+            icon: "👋", type: "welcome",
+        });
+    } catch (e) { /* bienvenue best-effort */ }
+
+    return { ok: true, new: true };
+});
+
 // Prochains départs (bateaux) des routes rattachées au client. Lit la collection
 // `boats` (+ variantes route) et renvoie les départs à venir, triés par date.
 exports.getNextDepartures = onCall({ region: REGION, invoker: "public" }, async (request) => {

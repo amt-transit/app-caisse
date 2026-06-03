@@ -132,6 +132,15 @@ service cloud.firestore {
       allow read: if isAuthenticated() && (hasGlobalAccess() || getUserData().agency in ['paris', 'abidjan']);
     }
 
+    // Clients potentiels (nouveaux comptes créés sur l'app Client). Créés par
+    // Cloud Function (Admin SDK). Visibles par TOUT le STAFF (toutes agences) ;
+    // le STAFF peut marquer "lu". Un client (auth par téléphone, sans fiche
+    // users) n'y a PAS accès : on exige une fiche users (= membre du personnel).
+    match /client_leads/{document=**} {
+      allow read, write: if isAuthenticated()
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid));
+    }
+
     // Flotte automobile (Gestion Véhicule) : collections NON suffixées par route,
     // partagées par le personnel logistique paris/abidjan. Sans cette règle,
     // seuls les comptes globaux (super admin / agency 'all') pouvaient charger
