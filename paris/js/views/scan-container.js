@@ -393,11 +393,13 @@ export const ScanContainerView = {
                             addRecentScan(text, 'Non trouvé en base', 'Colis inconnu', 'err');
                             feedback('err');
                         }
-                    } catch(e) { 
-                        console.error(e); 
+                    } catch(e) {
+                        console.error(e);
                         stats.value.error++;
                         logData.status = 'ERREUR';
-                        showToast("Erreur de connexion", "error"); 
+                        feedback('err');
+                        addRecentScan(text, 'NON ENREGISTRÉ', 'Erreur réseau — re-scannez ce colis', 'err');
+                        showToast("⚠️ Scan NON enregistré (réseau). Re-scannez ce colis.", "error");
                     }
                     
                     // Sauvegarde silencieuse du log

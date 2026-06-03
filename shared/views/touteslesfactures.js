@@ -2095,7 +2095,24 @@ export const ToutesLesFacturesView = {
                         labelIndex++;
                     }
                 } else if (newTotalQty < updatedLabels.length) {
-                    updatedLabels = updatedLabels.slice(0, newTotalQty);
+                    // SÉCURITÉ : ne JAMAIS supprimer un label DÉJÀ SCANNÉ (sinon
+                    // l'historique de scan devient orphelin et le suivi colis
+                    // incohérent). On retire en priorité les labels NON scannés ;
+                    // si la nouvelle quantité passe sous le nombre de colis déjà
+                    // scannés, on BLOQUE la modification avec un message clair.
+                    const scannedSet = new Set((livData.scanHistory || []).map(s => s.scanRef));
+                    const scannedCount = updatedLabels.filter(l => scannedSet.has(l)).length;
+                    if (newTotalQty < scannedCount) {
+                        if (btn) { btn.innerHTML = '<i class="fas fa-save"></i> Enregistrer'; btn.disabled = false; }
+                        const msg = `Impossible de réduire à ${newTotalQty} colis : ${scannedCount} colis ont déjà été scannés. Gardez au moins ${scannedCount} colis (ou corrigez d'abord les scans).`;
+                        if (window.AppModal) await window.AppModal.error(msg, "Réduction bloquée");
+                        else alert(msg);
+                        return;
+                    }
+                    // Retire uniquement des labels NON scannés (depuis la fin).
+                    const removable = updatedLabels.filter(l => !scannedSet.has(l));
+                    const removeSet = new Set(removable.slice(-(updatedLabels.length - newTotalQty)));
+                    updatedLabels = updatedLabels.filter(l => !removeSet.has(l));
                 }
 
                 batch.update(livDoc.ref, {

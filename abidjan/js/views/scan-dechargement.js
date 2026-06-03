@@ -430,11 +430,13 @@ export const ScanDechargementView = {
                 this.addRecentScan(text, 'Non trouvé en base', 'Colis inconnu', 'err');
                 this.feedback('err');
             }
-        } catch(e) { 
-            console.error(e); 
+        } catch(e) {
+            console.error(e);
             this.stats.error++;
             logData.status = 'ERREUR';
-            this.app.showToast("Erreur de connexion", "error"); 
+            this.feedback('err');
+            this.addRecentScan(text, 'NON ENREGISTRÉ', 'Erreur réseau — re-scannez ce colis', 'err');
+            this.app.showToast("⚠️ Scan NON enregistré (réseau). Re-scannez ce colis.", "error");
         }
         
         addDoc(collection(db, 'scan_logs'), { ...logData, modeExpedition: sessionStorage.getItem('shippingMode') || 'maritime' }).catch(e => console.error("Log error", e));

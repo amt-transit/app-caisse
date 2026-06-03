@@ -386,11 +386,13 @@ export const ScanWarehouseView = {
                             addRecentScan(text, 'Non trouvé en base', 'Colis inconnu', 'err');
                             feedback('err');
                         }
-                    } catch(e) { 
-                        console.error(e); 
+                    } catch(e) {
+                        console.error(e);
                         stats.error++;
                         logData.status = 'ERREUR';
-                        globalApp.showToast("Erreur de connexion", "error"); 
+                        feedback('err');
+                        addRecentScan(text, 'NON ENREGISTRÉ', 'Erreur réseau — re-scannez ce colis', 'err');
+                        globalApp.showToast("⚠️ Scan NON enregistré (réseau). Re-scannez ce colis.", "error");
                     }
                     
                     addDoc(collection(db, 'scan_logs'), { ...logData, modeExpedition: sessionStorage.getItem('shippingMode') || 'maritime' }).catch(e => console.error("Log error", e));
