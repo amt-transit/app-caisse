@@ -1119,6 +1119,106 @@ exports.registerClientLead = onCall({ region: REGION, invoker: "public" }, async
     return { ok: true, new: true };
 });
 
+// ===========================================================================
+//  DEVIS ENREGISTRÉS (app AMT Clients) — client_quotes (doc auto, phoneTail)
+// ===========================================================================
+function _tailFromAuth(request) {
+    const phone = request.auth && request.auth.token && request.auth.token.phone_number;
+    if (!phone) throw new HttpsError("unauthenticated", "Connexion par téléphone requise.");
+    const digits = String(phone).replace(/\D/g, "");
+    return { phone, tail: digits.length >= 9 ? digits.slice(-9) : digits };
+}
+
+exports.saveMyQuote = onCall({ region: REGION, invoker: "public" }, async (request) => {
+    const { phone, tail } = _tailFromAuth(request);
+    const d = request.data || {};
+    const db = admin.firestore();
+    const ref = await db.collection("client_quotes").add({
+        phoneTail: tail, phoneE164: phone,
+        route: String(d.route || ""), mode: String(d.mode || ""), aerienType: String(d.aerienType || ""),
+        items: Array.isArray(d.items) ? d.items.slice(0, 40) : [],
+        currency: d.currency === "EUR" ? "EUR" : "XOF",
+        totalEur: Number(d.totalEur) || 0, totalCfa: Number(d.totalCfa) || 0,
+        lines: Array.isArray(d.lines) ? d.lines.slice(0, 60) : [],
+        label: String(d.label || "").slice(0, 80),
+        createdAt: new Date().toISOString(),
+    });
+    return { ok: true, id: ref.id };
+});
+
+exports.getMyQuotes = onCall({ region: REGION, invoker: "public" }, async (request) => {
+    const { tail } = _tailFromAuth(request);
+    const db = admin.firestore();
+    let quotes = [];
+    try {
+        const snap = await db.collection("client_quotes").where("phoneTail", "==", tail).limit(100).get();
+        quotes = snap.docs.map((x) => ({ id: x.id, ...x.data() }))
+            .sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
+    } catch (e) {}
+    return { quotes };
+});
+
+exports.deleteMyQuote = onCall({ region: REGION, invoker: "public" }, async (request) => {
+    const { tail } = _tailFromAuth(request);
+    const id = String((request.data || {}).id || "");
+    if (!id) throw new HttpsError("invalid-argument", "id requis.");
+    const db = admin.firestore();
+    const ref = db.collection("client_quotes").doc(id);
+    const snap = await ref.get();
+    if (snap.exists && (snap.data() || {}).phoneTail === tail) await ref.delete(); // sécurité : son propre devis
+    return { ok: true };
+});
+
+// ===========================================================================
+//  CARNET DE DESTINATAIRES (app AMT Clients) — client_contacts (doc auto)
+// ===========================================================================
+exports.getMyContacts = onCall({ region: REGION, invoker: "public" }, async (request) => {
+    const { tail } = _tailFromAuth(request);
+    const db = admin.firestore();
+    let contacts = [];
+    try {
+        const snap = await db.collection("client_contacts").where("phoneTail", "==", tail).limit(200).get();
+        contacts = snap.docs.map((x) => ({ id: x.id, ...x.data() }))
+            .sort((a, b) => String(a.nom || "").localeCompare(String(b.nom || "")));
+    } catch (e) {}
+    return { contacts };
+});
+
+exports.saveMyContact = onCall({ region: REGION, invoker: "public" }, async (request) => {
+    const { tail } = _tailFromAuth(request);
+    const d = request.data || {};
+    const clip = (s, n) => String(s == null ? "" : s).trim().slice(0, n);
+    const nom = clip(d.nom, 80);
+    if (!nom) throw new HttpsError("invalid-argument", "Nom requis.");
+    const payload = {
+        phoneTail: tail, nom,
+        telephone: clip(d.telephone, 30), adresse: clip(d.adresse, 200), commune: clip(d.commune, 80),
+        updatedAt: new Date().toISOString(),
+    };
+    const db = admin.firestore();
+    if (d.id) {
+        const ref = db.collection("client_contacts").doc(String(d.id));
+        const snap = await ref.get();
+        if (!snap.exists || (snap.data() || {}).phoneTail !== tail) throw new HttpsError("permission-denied", "Contact introuvable.");
+        await ref.set(payload, { merge: true });
+        return { ok: true, id: d.id };
+    }
+    payload.createdAt = new Date().toISOString();
+    const ref = await db.collection("client_contacts").add(payload);
+    return { ok: true, id: ref.id };
+});
+
+exports.deleteMyContact = onCall({ region: REGION, invoker: "public" }, async (request) => {
+    const { tail } = _tailFromAuth(request);
+    const id = String((request.data || {}).id || "");
+    if (!id) throw new HttpsError("invalid-argument", "id requis.");
+    const db = admin.firestore();
+    const ref = db.collection("client_contacts").doc(id);
+    const snap = await ref.get();
+    if (snap.exists && (snap.data() || {}).phoneTail === tail) await ref.delete();
+    return { ok: true };
+});
+
 // Prochains départs (bateaux) des routes rattachées au client. Lit la collection
 // `boats` (+ variantes route) et renvoie les départs à venir, triés par date.
 exports.getNextDepartures = onCall({ region: REGION, invoker: "public" }, async (request) => {

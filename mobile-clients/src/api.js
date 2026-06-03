@@ -28,6 +28,13 @@ export const api = {
   // Devis
   getQuoteConfig: () => call('getQuoteConfig'),
   computeQuote: (data) => call('computeQuote', data),
+  saveMyQuote: (data) => call('saveMyQuote', data),
+  getMyQuotes: () => call('getMyQuotes'),
+  deleteMyQuote: (id) => call('deleteMyQuote', { id }),
+  // Carnet de destinataires
+  getMyContacts: () => call('getMyContacts'),
+  saveMyContact: (data) => call('saveMyContact', data),
+  deleteMyContact: (id) => call('deleteMyContact', { id }),
   // Chat
   getMyChat: () => call('getMyChat'),
   sendClientMessage: (data) => call('sendClientMessage', data),

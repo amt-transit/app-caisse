@@ -1,5 +1,5 @@
 // Onglet SUIVI : colis par étape (Entrepôt → Conteneur → Arrivé → Livré).
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, ScrollView, TextInput, TouchableOpacity, StyleSheet, RefreshControl } from 'react-native';
 import { Card, Empty, Loading } from '../components/ui';
 import { colors, fdate } from '../theme';
@@ -13,9 +13,17 @@ const STAGES = [
   { l: 'Livré', ic: '✅' },
 ];
 
-export default function TrackingScreen({ data, loading, onRefresh }) {
+export default function TrackingScreen({ data, loading, onRefresh, active }) {
   const [filter, setFilter] = useState(-1); // -1 = tous
   const [q, setQ] = useState('');
+  // Suivi quasi temps réel : rafraîchit en arrivant sur l'onglet, puis toutes
+  // les 60 s tant qu'on le regarde (silencieux). S'arrête quand on quitte.
+  useEffect(() => {
+    if (!active) return;
+    onRefresh && onRefresh();
+    const id = setInterval(() => { onRefresh && onRefresh(); }, 60000);
+    return () => clearInterval(id);
+  }, [active]);
   if (loading && !data) return <Loading text="Chargement de vos colis…" />;
   const parcels = (data && data.parcels) || [];
   const counts = STAGES.map((_, i) => parcels.filter(p => p.stage === i).length);

@@ -76,6 +76,18 @@ export default function InvoiceDetailScreen({ reference, onBack }) {
   const statusKind = reste <= 0 ? 'paid' : (paye > 0 ? 'wait' : 'bad');
   const statusLbl = reste <= 0 ? 'Payée' : (paye > 0 ? 'Acompte' : 'Impayée');
 
+  // Date estimée d'arrivée : depuis la date de départ + délai selon le mode
+  // (aérien ~8 j, maritime ~40 j). Si déjà arrivé/livré, on l'indique.
+  const liv0 = (detail.livraisons || [])[0] || {};
+  const etaMode = liv0.modeExpedition === 'aerien' ? 'aerien' : 'maritime';
+  let etaText = '';
+  if (liv0.status === 'LIVRE') etaText = 'Livré ✅';
+  else if (liv0.arrivalDate) etaText = `Arrivé le ${fdate(liv0.arrivalDate)}`;
+  else if (liv0.departureDate) {
+    const d = new Date(liv0.departureDate);
+    if (!isNaN(d)) { d.setDate(d.getDate() + (etaMode === 'aerien' ? 8 : 40)); etaText = `~ ${fdate(d.toISOString())} (estimée)`; }
+  } else etaText = 'À confirmer (pas encore parti)';
+
   // Colis : un par label (sinon la livraison entière).
   const colis = [];
   (detail.livraisons || []).forEach(liv => {
@@ -117,6 +129,7 @@ export default function InvoiceDetailScreen({ reference, onBack }) {
           <Row k="Destinataire" v={t.nomDestinataire || '—'} />
           <Row k="Date" v={fdate(t.date)} />
           {!!t.conteneur && <Row k="Conteneur" v={t.conteneur} />}
+          {!!etaText && <Row k="Arrivée estimée" v={etaText} color={liv0.status === 'LIVRE' ? colors.green : colors.blue} />}
         </Card>
 
         {/* Suivi colis */}

@@ -25,6 +25,7 @@ import InvoicesScreen from './src/screens/InvoicesScreen';
 import NotificationsScreen from './src/screens/NotificationsScreen';
 import StatsScreen from './src/screens/StatsScreen';
 import DeparturesScreen from './src/screens/DeparturesScreen';
+import ContactsScreen from './src/screens/ContactsScreen';
 
 // Onglets de la barre du bas (le quotidien).
 const BOTTOM_TABS = [
@@ -38,6 +39,7 @@ const MENU = [
   { key: 'requests', icon: '📦', label: 'Dépôt / Récupération', senderOnly: true },
   { key: 'invoices', icon: '🧾', label: 'Mes factures' },
   { key: 'quotes', icon: '🧮', label: 'Faire un devis' },
+  { key: 'contacts', icon: '📒', label: 'Carnet destinataires', senderOnly: true },
   { key: 'stats', icon: '📊', label: 'Statistiques' },
   { key: 'notifications', icon: '🔔', label: 'Notifications' },
   { key: 'departures', icon: '🚢', label: 'Prochains départs' },
@@ -47,6 +49,7 @@ const TITLES = {
   home: 'Accueil', tracking: 'Suivi des colis', requests: 'Dépôt / Récupération',
   quotes: 'Devis', chat: 'Messagerie', profile: 'Profil', invoices: 'Mes factures',
   stats: 'Statistiques', notifications: 'Notifications', departures: 'Prochains départs',
+  contacts: 'Carnet de destinataires',
 };
 
 export default function App() {
@@ -158,7 +161,7 @@ export default function App() {
 
       <View style={{ flex: 1 }}>
         {pane('home', <HomeScreen data={data} loading={loading} onRefresh={() => load(false)} onOpenInvoice={setOpenInvoice} onNavigate={go} isSender={isSender} />)}
-        {pane('tracking', <TrackingScreen data={data} loading={loading} onRefresh={() => load(false)} />)}
+        {pane('tracking', <TrackingScreen data={data} loading={loading} onRefresh={() => load(false)} active={tab === 'tracking'} />)}
         {pane('requests', <RequestsScreen selfName={selfName} selfAddress={profile.address || ''} selfPhone={phone} />)}
         {pane('quotes', <QuoteScreen />)}
         {pane('chat', <ChatScreen selfName={selfName} active={tab === 'chat'} />)}
@@ -167,6 +170,7 @@ export default function App() {
         {pane('notifications', <NotificationsScreen />)}
         {pane('stats', <StatsScreen data={data} />)}
         {pane('departures', <DeparturesScreen />)}
+        {pane('contacts', <ContactsScreen />)}
       </View>
 
       <View style={s.tabbar}>

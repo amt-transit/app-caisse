@@ -2,7 +2,7 @@
 // Le client choisit route + mode + produits du catalogue (prix/CBM connus) ;
 // en aérien, saisit poids + dimensions. Résultat en €/FCFA.
 import React, { useState, useEffect } from 'react';
-import { View, Text, ScrollView, TextInput, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, ScrollView, TextInput, TouchableOpacity, StyleSheet, Alert } from 'react-native';
 import { Card, SectionTitle, Btn, Loading, Empty } from '../components/ui';
 import { colors, fcfa } from '../theme';
 import { api } from '../api';
@@ -17,15 +17,45 @@ export default function QuoteScreen() {
   const [items, setItems] = useState([blankItem()]);
   const [result, setResult] = useState(null);
   const [calc, setCalc] = useState(false);
+  const [saved, setSaved] = useState([]);
+  const [saving, setSaving] = useState(false);
+  const [savedOpen, setSavedOpen] = useState(false);
 
   function blankItem() { return { desc: '', qty: '1', poids: '', lng: '', lrg: '', haut: '', parfum: false }; }
+
+  const loadSaved = async () => { try { const r = await api.getMyQuotes(); setSaved(r.quotes || []); } catch (e) {} };
 
   useEffect(() => {
     (async () => {
       try { const r = await api.getQuoteConfig(); setRoutes(r.routes || []); if (r.routes?.[0]) setRouteId(r.routes[0].id); }
       catch (e) { setRoutes([]); }
     })();
+    loadSaved();
   }, []);
+
+  // Enregistre le devis affiché (avec le nom de la route pour s'y retrouver).
+  const saveQuote = async () => {
+    if (!result) return;
+    setSaving(true);
+    try {
+      const rt = routes.find(r => r.id === routeId);
+      await api.saveMyQuote({
+        route: routeId, mode, aerienType, items,
+        currency: result.currency, totalEur: result.totalEur, totalCfa: result.totalCfa, lines: result.lines,
+        label: `${rt ? rt.name : routeId} · ${mode === 'aerien' ? 'Aérien' : 'Maritime'}`,
+      });
+      await loadSaved();
+      setSavedOpen(true);
+      Alert.alert('Devis', 'Devis enregistré ✅. Retrouvez-le dans « Mes devis enregistrés ».');
+    } catch (e) { Alert.alert('Devis', "Enregistrement impossible."); }
+    finally { setSaving(false); }
+  };
+  const delQuote = (id) => {
+    Alert.alert('Supprimer ce devis ?', null, [
+      { text: 'Annuler', style: 'cancel' },
+      { text: 'Supprimer', style: 'destructive', onPress: async () => { try { await api.deleteMyQuote(id); await loadSaved(); } catch (e) {} } },
+    ]);
+  };
 
   if (routes === null) return <Loading text="Chargement du simulateur…" />;
   if (routes.length === 0) return <Empty icon="🧾" text="Tarification indisponible pour le moment." />;
@@ -126,11 +156,33 @@ export default function QuoteScreen() {
             <Text key={i} style={s.line}>• {l.desc || 'Article'} — {l.detail} = {l.currency === 'EUR' ? eur(l.amount) : fcfa(l.amount)}</Text>
           ))}
           <Text style={s.note}>Estimation indicative, hors frais éventuels. Tarifs identiques à la facturation.</Text>
+          <Btn label="💾 Enregistrer ce devis" kind="gold" onPress={saveQuote} busy={saving} />
+        </Card>
+      )}
+
+      {/* Mes devis enregistrés */}
+      {saved.length > 0 && (
+        <Card style={{ marginTop: 14 }}>
+          <TouchableOpacity onPress={() => setSavedOpen(o => !o)} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+            <SectionTitle>Mes devis enregistrés ({saved.length})</SectionTitle>
+            <Text style={{ color: colors.blue, fontWeight: '800', fontSize: 16 }}>{savedOpen ? '▾' : '▸'}</Text>
+          </TouchableOpacity>
+          {savedOpen && saved.map((q, i) => (
+            <View key={q.id || i} style={[s.qrow, i > 0 && { borderTopWidth: 1, borderTopColor: colors.line }]}>
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={s.qlabel}>{q.label || 'Devis'}</Text>
+                <Text style={s.qsub}>{q.currency === 'EUR' ? eur(q.totalEur) : fcfa(q.totalCfa)} · {fdate(q.createdAt)}</Text>
+              </View>
+              <TouchableOpacity onPress={() => delQuote(q.id)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}><Text style={s.qdel}>🗑</Text></TouchableOpacity>
+            </View>
+          ))}
         </Card>
       )}
     </ScrollView>
   );
 }
+
+const fdate = (v) => { try { return new Date(v).toLocaleDateString('fr-FR'); } catch (e) { return ''; } };
 
 function Chip({ active, label, onPress, small }) {
   return (
@@ -166,4 +218,8 @@ const s = StyleSheet.create({
   del: { color: colors.red, fontWeight: '700', textAlign: 'right', marginTop: 8 },
   total: { fontSize: 24, fontWeight: '800', color: colors.blue, marginBottom: 8 },
   line: { fontSize: 12.5, color: colors.muted, marginBottom: 4, lineHeight: 18 },
+  qrow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 11 },
+  qlabel: { fontWeight: '700', color: colors.blue, fontSize: 14 },
+  qsub: { fontSize: 12, color: colors.muted, marginTop: 2 },
+  qdel: { fontSize: 18 },
 });
