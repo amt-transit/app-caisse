@@ -13,6 +13,7 @@ import { api } from './src/api';
 import { colors } from './src/theme';
 import { registerPushToken } from './src/push';
 import { getCache, setCache, clearCache } from './src/cache';
+import { LangProvider, useLang } from './src/i18n';
 import LoginScreen from './src/screens/LoginScreen';
 import HomeScreen from './src/screens/HomeScreen';
 import TrackingScreen from './src/screens/TrackingScreen';
@@ -52,7 +53,8 @@ const TITLES = {
   contacts: 'Carnet de destinataires',
 };
 
-export default function App() {
+function AppInner() {
+  const { t } = useLang();
   const [authed, setAuthed] = useState(!!auth.currentUser);
   const [tab, setTab] = useState('home');
   const [data, setData] = useState(null);
@@ -155,7 +157,7 @@ export default function App() {
         <Image source={require('./assets/logo.png')} style={s.hLogo} resizeMode="contain" />
         <View style={{ flex: 1 }}>
           <Text style={s.hTitle}>AMT TRANS'IT</Text>
-          <Text style={s.hSub}>{TITLES[tab] || ''}</Text>
+          <Text style={s.hSub}>{t(TITLES[tab] || '')}</Text>
         </View>
       </LinearGradient>
 
@@ -174,10 +176,10 @@ export default function App() {
       </View>
 
       <View style={s.tabbar}>
-        {BOTTOM_TABS.map(t => (
-          <TouchableOpacity key={t.key} style={s.tab} onPress={() => setTab(t.key)} activeOpacity={0.7}>
-            <Text style={[s.tabIc, tab === t.key && { opacity: 1 }]}>{t.icon}</Text>
-            <Text style={[s.tabLb, tab === t.key && s.tabLbOn]}>{t.label}</Text>
+        {BOTTOM_TABS.map(tt => (
+          <TouchableOpacity key={tt.key} style={s.tab} onPress={() => setTab(tt.key)} activeOpacity={0.7}>
+            <Text style={[s.tabIc, tab === tt.key && { opacity: 1 }]}>{tt.icon}</Text>
+            <Text style={[s.tabLb, tab === tt.key && s.tabLbOn]}>{t(tt.label)}</Text>
           </TouchableOpacity>
         ))}
       </View>
@@ -190,7 +192,7 @@ export default function App() {
               {profile.photoUrl ? <Image source={{ uri: profile.photoUrl }} style={s.dAv} /> :
                 <View style={s.dAvInit}><Text style={s.dAvTxt}>{(selfName || phone).slice(0, 2).toUpperCase()}</Text></View>}
               <View style={{ flex: 1 }}>
-                <Text style={s.dName}>{selfName || 'Client AMT'}</Text>
+                <Text style={s.dName}>{selfName || t('Client AMT')}</Text>
                 <Text style={s.dPhone}>{phone}</Text>
               </View>
             </View>
@@ -198,7 +200,7 @@ export default function App() {
               {menuItems.map(m => (
                 <TouchableOpacity key={m.key} style={s.dItem} onPress={() => go(m.key)} activeOpacity={0.7}>
                   <Text style={s.dIcon}>{m.icon}</Text>
-                  <Text style={s.dLabel}>{m.label}</Text>
+                  <Text style={s.dLabel}>{t(m.label)}</Text>
                 </TouchableOpacity>
               ))}
             </ScrollView>
@@ -206,6 +208,14 @@ export default function App() {
         </Pressable>
       </Modal>
     </View>
+  );
+}
+
+export default function App() {
+  return (
+    <LangProvider>
+      <AppInner />
+    </LangProvider>
   );
 }
 

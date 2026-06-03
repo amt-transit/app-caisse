@@ -4,6 +4,7 @@ import { View, Text, ScrollView, TouchableOpacity, StyleSheet, RefreshControl } 
 import { LinearGradient } from 'expo-linear-gradient';
 import { Card, SectionTitle, Badge, Loading } from '../components/ui';
 import { colors, gradients, tints, fcfa, fdate } from '../theme';
+import { useLang } from '../i18n';
 
 const TAUX = 655.957;
 const toFcfa = (v, cur) => (cur === 'EUR' ? (v || 0) * TAUX : (v || 0));
@@ -21,7 +22,8 @@ const SHORTCUTS = [
 ];
 
 export default function HomeScreen({ data, loading, onRefresh, onOpenInvoice, onNavigate, isSender }) {
-  if (loading && !data) return <Loading text="Chargement de vos factures…" />;
+  const { t } = useLang();
+  if (loading && !data) return <Loading text={t('Chargement de vos factures…')} />;
   const invoices = (data && data.invoices) || [];
   const profile = (data && data.profile) || {};
   const prenom = (profile.prenom || (profile.name || '').split(' ')[0] || '').trim();
@@ -41,20 +43,20 @@ export default function HomeScreen({ data, loading, onRefresh, onOpenInvoice, on
         {/* accents décoratifs jaunes */}
         <View style={s.blob1} />
         <View style={s.blob2} />
-        <Text style={s.greet}>Bonjour{prenom ? ',' : ' 👋'}</Text>
+        <Text style={s.greet}>{t('Bonjour')}{prenom ? ',' : ' 👋'}</Text>
         {!!prenom && <Text style={s.name}>{prenom} 👋</Text>}
 
         <View style={s.balanceCard}>
           <View style={{ flex: 1 }}>
-            <Text style={s.balLabel}>Reste à payer</Text>
+            <Text style={s.balLabel}>{t('Reste à payer')}</Text>
             <Text style={[s.balValue, { color: totalDu > 0 ? '#fff' : '#8EF0B5' }]}>{fcfa(totalDu)}</Text>
             <Text style={s.balSub}>
-              {invoices.length} facture{invoices.length > 1 ? 's' : ''}
-              {nbImpayees > 0 ? ` · ${nbImpayees} à régler` : ' · tout est à jour ✅'}
+              {invoices.length} {invoices.length > 1 ? t('factures') : t('facture')}
+              {nbImpayees > 0 ? ` · ${nbImpayees} ${t('à régler')}` : ` · ${t('tout est à jour ✅')}`}
             </Text>
           </View>
           <TouchableOpacity style={s.balBtn} activeOpacity={0.85} onPress={() => onNavigate && onNavigate('invoices')}>
-            <Text style={s.balBtnTxt}>Voir</Text>
+            <Text style={s.balBtnTxt}>{t('Voir')}</Text>
           </TouchableOpacity>
         </View>
       </LinearGradient>
@@ -65,30 +67,30 @@ export default function HomeScreen({ data, loading, onRefresh, onOpenInvoice, on
           <TouchableOpacity style={s.magBanner} activeOpacity={0.85} onPress={() => onNavigate && onNavigate('invoices')}>
             <Text style={s.magBannerIc}>⚠️</Text>
             <View style={{ flex: 1 }}>
-              <Text style={s.magBannerT}>Frais de stockage en cours</Text>
-              <Text style={s.magBannerS}>{magInvoices.length} facture{magInvoices.length > 1 ? 's' : ''} · {fcfa(totalMag)} — récupérez vos colis pour éviter qu'ils n'augmentent.</Text>
+              <Text style={s.magBannerT}>{t('Frais de stockage en cours')}</Text>
+              <Text style={s.magBannerS}>{magInvoices.length} {t('factures')} · {fcfa(totalMag)} — {t("récupérez vos colis pour éviter qu'ils n'augmentent.")}</Text>
             </View>
             <Text style={s.magBannerChev}>›</Text>
           </TouchableOpacity>
         )}
 
         {/* Services (raccourcis colorés) */}
-        <SectionTitle>Services</SectionTitle>
+        <SectionTitle>{t('Services')}</SectionTitle>
         <View style={s.grid}>
           {shortcuts.map((sc, i) => (
             <TouchableOpacity key={i} style={s.shortcut} onPress={() => onNavigate && onNavigate(sc.key)} activeOpacity={0.75}>
               <View style={[s.scIcWrap, { backgroundColor: sc.tint }]}><Text style={s.scIc}>{sc.icon}</Text></View>
-              <Text style={s.scLb}>{sc.label}</Text>
+              <Text style={s.scLb}>{t(sc.label)}</Text>
             </TouchableOpacity>
           ))}
         </View>
 
         {/* Dernières factures */}
         <View style={{ height: 6 }} />
-        <SectionTitle>Dernières factures</SectionTitle>
+        <SectionTitle>{t('Dernières factures')}</SectionTitle>
         <Card style={{ padding: 6 }}>
           {invoices.length === 0 ? (
-            <Text style={s.none}>Aucune facture reliée à votre numéro pour le moment.</Text>
+            <Text style={s.none}>{t('Aucune facture reliée à votre numéro pour le moment.')}</Text>
           ) : invoices.slice(0, 8).map((i, idx) => {
             const [lbl, kind] = STATUS[i.status] || STATUS.IMPAYE;
             const other = i.counterpart || '';
@@ -98,10 +100,10 @@ export default function HomeScreen({ data, loading, onRefresh, onOpenInvoice, on
                 <View style={{ flex: 1, minWidth: 0 }}>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                     <Text style={s.ref}>{i.reference || '—'}</Text>
-                    <Badge text={lbl} kind={kind} />
+                    <Badge text={t(lbl)} kind={kind} />
                   </View>
                   <Text style={s.sub} numberOfLines={1}>
-                    {(i.role === 'dest' ? 'Expéditeur' : 'Destinataire')} : {other || '—'} · {fdate(i.date)}
+                    {(i.role === 'dest' ? t('Expéditeur') : t('Destinataire'))} : {other || '—'} · {fdate(i.date)}
                   </Text>
                 </View>
                 <Text style={s.amt}>{fcfa(toFcfa(i.total, i.currency))}</Text>

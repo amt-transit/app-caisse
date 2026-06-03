@@ -6,11 +6,13 @@ import { Card, SectionTitle, Btn, Loading } from '../components/ui';
 import { colors, fcfa } from '../theme';
 import { api } from '../api';
 import { pickAvatarFromLibrary, takeAvatarPhoto } from '../media';
+import { useLang } from '../i18n';
 
 const TAUX = 655.957;
 const toFcfa = (v, cur) => (cur === 'EUR' ? (v || 0) * TAUX : (v || 0));
 
 export default function ProfileScreen({ data, phone, onLock, onLogout, onProfileSaved }) {
+  const { t, lang, setLang } = useLang();
   const [profile, setProfile] = useState(null);
   const [about, setAbout] = useState(null);
   const [editing, setEditing] = useState(false);
@@ -75,10 +77,11 @@ export default function ProfileScreen({ data, phone, onLock, onLogout, onProfile
     ]);
   };
 
-  // Changer la langue (préférence enregistrée ; l'app reste en FR pour l'instant).
-  const changeLang = async (lang) => {
-    setProfile({ ...profile, lang });
-    try { await api.saveMyProfile({ lang }); } catch (e) {}
+  // Changer la langue : bascule TOUTE l'app (i18n) + mémorise la préférence.
+  const changeLang = async (l) => {
+    setLang(l);
+    setProfile({ ...profile, lang: l });
+    try { await api.saveMyProfile({ lang: l }); } catch (e) {}
   };
 
   const confirmLogout = () => {
@@ -166,16 +169,15 @@ export default function ProfileScreen({ data, phone, onLock, onLogout, onProfile
 
       {/* Langue (préférence ; l'app reste en français pour l'instant) */}
       <Card>
-        <SectionTitle>Langue</SectionTitle>
+        <SectionTitle>{t('Langue')}</SectionTitle>
         <View style={{ flexDirection: 'row', gap: 10 }}>
           {[['fr', '🇫🇷 Français'], ['en', '🇬🇧 English']].map(([code, lbl]) => (
             <TouchableOpacity key={code} onPress={() => changeLang(code)} activeOpacity={0.7}
-              style={[s.langChip, (profile.lang || 'fr') === code && s.langChipOn]}>
-              <Text style={[s.langTxt, (profile.lang || 'fr') === code && { color: colors.blue }]}>{lbl}</Text>
+              style={[s.langChip, lang === code && s.langChipOn]}>
+              <Text style={[s.langTxt, lang === code && { color: colors.blue }]}>{lbl}</Text>
             </TouchableOpacity>
           ))}
         </View>
-        {(profile.lang || 'fr') === 'en' && <Text style={s.muted}>La traduction complète arrivera prochainement.</Text>}
       </Card>
 
       {/* À propos */}
