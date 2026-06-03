@@ -1366,9 +1366,10 @@ exports.computeQuote = onCall({ region: REGION, invoker: "public" }, async (requ
                 const real = num(it.poids);
                 const vol = (num(it.lng) * num(it.lrg) * num(it.haut)) / tarifs.volDiviseur;
                 const kg = Math.max(real, vol);
+                const wType = vol > real ? "volumétrique" : "réel";
                 const lineCfa = Math.round(kg * qty * rate);
                 totalCfa += lineCfa;
-                lines.push({ desc: it.desc || "", qty, detail: `${kg.toFixed(1)} kg × ${qty} × ${rate} FCFA/kg`, amount: lineCfa, currency: "XOF" });
+                lines.push({ desc: it.desc || "", qty, weightType: wType, detail: `${kg.toFixed(1)} kg (poids ${wType}) × ${qty} × ${rate} FCFA/kg`, amount: lineCfa, currency: "XOF" });
             }
         } else {
             currency = "EUR";
@@ -1377,10 +1378,11 @@ exports.computeQuote = onCall({ region: REGION, invoker: "public" }, async (requ
                 const real = num(it.poids);
                 const vol = (num(it.lng) * num(it.lrg) * num(it.haut)) / tarifs.volDiviseur;
                 const kg = Math.max(real, vol);
+                const wType = vol > real ? "volumétrique" : "réel";
                 const rateEur = it.parfum ? tarifs.kgParfumEur : tarifs.kgStdEur;
                 const lineEur = kg * qty * rateEur;
                 totalEur += lineEur;
-                lines.push({ desc: it.desc || "", qty, detail: `${kg.toFixed(1)} kg × ${qty} × ${rateEur} €/kg${it.parfum ? " (parfum/alcool)" : ""}`, amount: lineEur, currency: "EUR" });
+                lines.push({ desc: it.desc || "", qty, weightType: wType, detail: `${kg.toFixed(1)} kg (poids ${wType}) × ${qty} × ${rateEur} €/kg${it.parfum ? " (parfum/alcool)" : ""}`, amount: lineEur, currency: "EUR" });
             }
         }
     }

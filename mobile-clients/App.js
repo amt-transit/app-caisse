@@ -163,7 +163,7 @@ export default function App() {
         {pane('home', <HomeScreen data={data} loading={loading} onRefresh={() => load(false)} onOpenInvoice={setOpenInvoice} onNavigate={go} isSender={isSender} />)}
         {pane('tracking', <TrackingScreen data={data} loading={loading} onRefresh={() => load(false)} active={tab === 'tracking'} />)}
         {pane('requests', <RequestsScreen selfName={selfName} selfAddress={profile.address || ''} selfPhone={phone} />)}
-        {pane('quotes', <QuoteScreen />)}
+        {pane('quotes', <QuoteScreen agencies={(data && data.agencies) || []} />)}
         {pane('chat', <ChatScreen selfName={selfName} active={tab === 'chat'} />)}
         {pane('profile', <ProfileScreen data={data} phone={phone} onLock={lock} onLogout={logout} onProfileSaved={onProfileSaved} />)}
         {pane('invoices', <InvoicesScreen data={data} loading={loading} onRefresh={() => load(false)} onOpenInvoice={setOpenInvoice} />)}

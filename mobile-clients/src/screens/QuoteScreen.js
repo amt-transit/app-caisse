@@ -9,9 +9,11 @@ import { api } from '../api';
 
 const eur = (v) => `${(Number(v) || 0).toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} €`;
 
-export default function QuoteScreen() {
+export default function QuoteScreen({ agencies = [] }) {
   const [routes, setRoutes] = useState(null);
   const [routeId, setRouteId] = useState('');
+  const [showAllRoutes, setShowAllRoutes] = useState(false);
+  const [expanded, setExpanded] = useState(null); // id du devis enregistré déplié
   const [mode, setMode] = useState('maritime');
   const [aerienType, setAerienType] = useState('normal');
   const [items, setItems] = useState([blankItem()]);
@@ -27,8 +29,15 @@ export default function QuoteScreen() {
 
   useEffect(() => {
     (async () => {
-      try { const r = await api.getQuoteConfig(); setRoutes(r.routes || []); if (r.routes?.[0]) setRouteId(r.routes[0].id); }
-      catch (e) { setRoutes([]); }
+      try {
+        const r = await api.getQuoteConfig();
+        const rts = r.routes || [];
+        setRoutes(rts);
+        // Pré-sélection : la route où le client EXPÉDIE (depuis son compte).
+        const dep = agencies.filter(a => a.role === 'exp' || a.role === 'both').map(a => a.agency);
+        const pref = rts.find(x => dep.includes(x.id)) || rts[0];
+        if (pref) setRouteId(pref.id);
+      } catch (e) { setRoutes([]); }
     })();
     loadSaved();
   }, []);
@@ -65,6 +74,13 @@ export default function QuoteScreen() {
   const isAerien = mode === 'aerien';
   const catalog = (isAerien ? route.productsAerien : route.productsMaritime) || [];
 
+  // Libellé d'un produit AVEC son prix unitaire (maritime ; l'aérien est au poids).
+  const puLabel = (p) => {
+    if (isAerien) return p.desc;
+    if (isChine) { const v = Math.round((Number(p.dim) || 0) * (route.tarifs.cbmChine || 0)); return v ? `${p.desc} · ${v.toLocaleString('fr-FR')} F` : p.desc; }
+    return p.price ? `${p.desc} · ${Number(p.price).toLocaleString('fr-FR')} €` : p.desc;
+  };
+
   const setItem = (i, k, v) => setItems(arr => arr.map((it, idx) => idx === i ? { ...it, [k]: v } : it));
   const addItem = () => setItems(arr => [...arr, blankItem()]);
   const delItem = (i) => setItems(arr => arr.filter((_, idx) => idx !== i));
@@ -89,11 +105,18 @@ export default function QuoteScreen() {
       <Card>
         <SectionTitle>Simulateur de devis</SectionTitle>
         <Text style={s.lbl}>Pays / route de départ</Text>
-        <View style={s.chips}>
-          {routes.map(r => (
-            <Chip key={r.id} active={r.id === routeId} label={`${r.flag || ''} ${r.name}`} onPress={() => { setRouteId(r.id); setResult(null); }} />
-          ))}
-        </View>
+        {routes.length > 1 && !showAllRoutes ? (
+          <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
+            <Chip active label={`${route.flag || ''} ${route.name}`} onPress={() => setShowAllRoutes(true)} />
+            <TouchableOpacity onPress={() => setShowAllRoutes(true)}><Text style={s.changeLink}>Changer de pays de départ ›</Text></TouchableOpacity>
+          </View>
+        ) : (
+          <View style={s.chips}>
+            {routes.map(r => (
+              <Chip key={r.id} active={r.id === routeId} label={`${r.flag || ''} ${r.name}`} onPress={() => { setRouteId(r.id); setResult(null); setShowAllRoutes(false); }} />
+            ))}
+          </View>
+        )}
         <Text style={s.lbl}>Mode d'expédition</Text>
         <View style={s.chips}>
           <Chip active={mode === 'maritime'} label="🚢 Maritime" onPress={() => { setMode('maritime'); setResult(null); }} />
@@ -109,6 +132,15 @@ export default function QuoteScreen() {
           </>
         )}
         <Text style={s.note}>{tarifNote}</Text>
+        {isAerien && (
+          <View style={s.aero}>
+            <Text style={s.aeroT}>✈️ Tarification au poids facturé</Text>
+            <Text style={s.aeroTxt}>
+              Le prix se base sur le <Text style={s.b}>poids facturé</Text> = le plus élevé entre le <Text style={s.b}>poids réel</Text> et le <Text style={s.b}>poids volumétrique</Text> (Longueur × largeur × hauteur en cm ÷ {route.tarifs.volDiviseur || 5000}).{'\n'}
+              ⚠️ Ce mode de calcul est <Text style={s.b}>imposé par l'aéroport</Text> (les compagnies aériennes), ce n'est pas un choix d'AMT. Renseignez le <Text style={s.b}>poids ET les dimensions</Text> pour une estimation juste.
+            </Text>
+          </View>
+        )}
       </Card>
 
       <SectionTitle>Articles</SectionTitle>
@@ -121,7 +153,7 @@ export default function QuoteScreen() {
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 8 }}>
             <View style={{ flexDirection: 'row', gap: 6 }}>
               {catalog.map((p, idx) => (
-                <Chip key={idx} active={it.desc === p.desc} label={p.desc} onPress={() => setItem(i, 'desc', p.desc)} small />
+                <Chip key={idx} active={it.desc === p.desc} label={puLabel(p)} onPress={() => setItem(i, 'desc', p.desc)} small />
               ))}
             </View>
           </ScrollView>
@@ -167,15 +199,30 @@ export default function QuoteScreen() {
             <SectionTitle>Mes devis enregistrés ({saved.length})</SectionTitle>
             <Text style={{ color: colors.blue, fontWeight: '800', fontSize: 16 }}>{savedOpen ? '▾' : '▸'}</Text>
           </TouchableOpacity>
-          {savedOpen && saved.map((q, i) => (
-            <View key={q.id || i} style={[s.qrow, i > 0 && { borderTopWidth: 1, borderTopColor: colors.line }]}>
-              <View style={{ flex: 1, minWidth: 0 }}>
-                <Text style={s.qlabel}>{q.label || 'Devis'}</Text>
-                <Text style={s.qsub}>{q.currency === 'EUR' ? eur(q.totalEur) : fcfa(q.totalCfa)} · {fdate(q.createdAt)}</Text>
+          {savedOpen && saved.map((q, i) => {
+            const open = expanded === (q.id || i);
+            return (
+              <View key={q.id || i} style={i > 0 ? { borderTopWidth: 1, borderTopColor: colors.line } : null}>
+                <View style={s.qrow}>
+                  <TouchableOpacity style={{ flex: 1, minWidth: 0 }} onPress={() => setExpanded(open ? null : (q.id || i))} activeOpacity={0.7}>
+                    <Text style={s.qlabel}>{q.label || 'Devis'} {open ? '▾' : '▸'}</Text>
+                    <Text style={s.qsub}>{q.currency === 'EUR' ? eur(q.totalEur) : fcfa(q.totalCfa)} · {fdate(q.createdAt)}</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={() => delQuote(q.id)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}><Text style={s.qdel}>🗑</Text></TouchableOpacity>
+                </View>
+                {open && (
+                  <View style={s.qdetail}>
+                    {(q.items || []).map((it, k) => (
+                      <Text key={k} style={s.qitem}>• {it.qty || 1}× {it.desc || 'Article'}{it.poids ? ` · ${it.poids} kg` : ''}{(it.lng || it.lrg || it.haut) ? ` · ${it.lng || '?'}×${it.lrg || '?'}×${it.haut || '?'} cm` : ''}{it.parfum ? ' · parfum/alcool' : ''}</Text>
+                    ))}
+                    {(q.lines || []).map((l, k) => (
+                      <Text key={'l' + k} style={s.qcalc}>↳ {l.detail} = {l.currency === 'EUR' ? eur(l.amount) : fcfa(l.amount)}</Text>
+                    ))}
+                  </View>
+                )}
               </View>
-              <TouchableOpacity onPress={() => delQuote(q.id)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}><Text style={s.qdel}>🗑</Text></TouchableOpacity>
-            </View>
-          ))}
+            );
+          })}
         </Card>
       )}
     </ScrollView>
@@ -222,4 +269,12 @@ const s = StyleSheet.create({
   qlabel: { fontWeight: '700', color: colors.blue, fontSize: 14 },
   qsub: { fontSize: 12, color: colors.muted, marginTop: 2 },
   qdel: { fontSize: 18 },
+  qdetail: { paddingBottom: 12, paddingLeft: 4 },
+  qitem: { fontSize: 12.5, color: colors.ink, marginBottom: 3, lineHeight: 18 },
+  qcalc: { fontSize: 11.5, color: colors.muted, marginBottom: 2, marginLeft: 10, lineHeight: 17 },
+  changeLink: { color: colors.blue, fontWeight: '700', fontSize: 13 },
+  b: { fontWeight: '800', color: colors.ink },
+  aero: { backgroundColor: '#EEF4FB', borderWidth: 1, borderColor: '#cfe0f3', borderRadius: 12, padding: 12, marginTop: 12 },
+  aeroT: { color: colors.blue, fontWeight: '800', fontSize: 13, marginBottom: 4 },
+  aeroTxt: { color: '#33506f', fontSize: 12, lineHeight: 18 },
 });
