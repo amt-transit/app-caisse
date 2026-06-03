@@ -141,6 +141,13 @@ service cloud.firestore {
         && exists(/databases/$(database)/documents/users/$(request.auth.uid));
     }
 
+    // Comptes app client (page « Client application »). Écrits par Cloud Function
+    // (Admin SDK) à chaque ouverture de l'app ; lus par le STAFF (toutes agences).
+    match /client_app_accounts/{document=**} {
+      allow read: if isAuthenticated()
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid));
+    }
+
     // Flotte automobile (Gestion Véhicule) : collections NON suffixées par route,
     // partagées par le personnel logistique paris/abidjan. Sans cette règle,
     // seuls les comptes globaux (super admin / agency 'all') pouvaient charger

@@ -428,6 +428,26 @@ exports.getMyInvoices = onCall({ region: REGION, invoker: "public" }, async (req
     agencies.sort((a, b) => String(a.name).localeCompare(String(b.name)));
 
     parcels.sort((a, b) => String(b.date).localeCompare(String(a.date)));
+
+    // ALIMENTE la page staff « Client application » (collection
+    // `client_app_accounts`, 1 doc par phoneTail) à CHAQUE ouverture de l'app :
+    // contrat = nom, telephone, statut, derniereConnexion, clientLieNom,
+    // facturesAgence, derniereFacture, agency. Données réelles -> la page existante
+    // se remplit automatiquement dans son format. Non bloquant.
+    try {
+        const fullName = `${self.prenom || ""} ${self.nom || ""}`.trim() || self.name || "";
+        await db.collection("client_app_accounts").doc(tail).set({
+            nom: fullName || ("…" + tail),
+            telephone: phone || self.tel || "",
+            statut: "Actif",
+            derniereConnexion: new Date().toISOString(),
+            clientLieNom: invoices.length ? (self.name || fullName || null) : null,
+            facturesAgence: invoices.length,
+            derniereFacture: (invoices[0] && invoices[0].date) || null,
+            agency: (agencies[0] && agencies[0].agency) || "",
+        }, { merge: true });
+    } catch (e) { /* non bloquant : ne casse pas le chargement de l'app */ }
+
     return { invoices, parcels, profile: self, agencies, loyalty: { sentAsSender, freeCartons, toNext } };
 });
 
