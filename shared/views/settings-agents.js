@@ -202,8 +202,8 @@ export const SettingsAgentsView = {
                     </div>
                     
                     <div class="form-group" style="margin-bottom: 15px;">
-                        <label style="font-weight: 600; color: #1e293b; margin-bottom: 6px; display: block;">Initiale</label>
-                        <input type="text" id="agentInitials" style="width: 100%; padding: 12px; border: 1px solid #cbd5e1; border-radius: 8px;" placeholder="Ex: FM" maxlength="4">
+                        <label style="font-weight: 600; color: #1e293b; margin-bottom: 6px; display: block;">Initiale <span style="color:#ef4444;">*</span> <span style="font-weight:400; color:#64748b; font-size:12px;">(2 lettres, unique par agence — préfixe des références)</span></label>
+                        <input type="text" id="agentInitials" style="width: 100%; padding: 12px; border: 1px solid #cbd5e1; border-radius: 8px; text-transform: uppercase;" placeholder="Ex: FM" maxlength="2" oninput="this.value=this.value.replace(/[^a-zA-Z]/g,'').toUpperCase();">
                     </div>
 
                     <div class="ag-section-title"><span>🔐</span> Connexion</div>
@@ -358,6 +358,21 @@ export const SettingsAgentsView = {
         const isUserOnline = (a) => a.isOnline === true || (a.lastActive && (new Date() - new Date(a.lastActive)) < 5 * 60 * 1000);
         const onlineCount = this.agents.filter(isUserOnline).length;
 
+        // REPÉRAGE DES DOUBLONS D'INITIALE par agence (préfixe de la référence
+        // colis : un doublon = risque de références identiques).
+        const _iniCount = {};
+        this.agents.forEach(a => {
+            const ini = String(a.initials || '').trim().toUpperCase();
+            if (!ini) return;
+            const k = (a.agency || '') + '|' + ini;
+            _iniCount[k] = (_iniCount[k] || 0) + 1;
+        });
+        const dupInitKeys = new Set(Object.keys(_iniCount).filter(k => _iniCount[k] > 1));
+        const hasDupInitials = (a) => {
+            const ini = String(a.initials || '').trim().toUpperCase();
+            return !!ini && dupInitKeys.has((a.agency || '') + '|' + ini);
+        };
+
         const kpiContainer = document.getElementById('kpiContainer');
         if (!kpiContainer) return; // Sécurité : arrête la fonction si on a quitté la page
 
@@ -368,6 +383,9 @@ export const SettingsAgentsView = {
             <div class="am__kpi am__kpi--red"><div class="am__kpi-icon"><i class="fas fa-ban"></i></div><div><div class="am__kpi-val">${inactiveCount}</div><div class="am__kpi-lbl">Inactifs</div></div></div>
             <div class="am__kpi am__kpi--teal"><div class="am__kpi-icon"><i class="fas fa-wifi"></i></div><div><div class="am__kpi-val">${onlineCount}</div><div class="am__kpi-lbl">En ligne</div></div></div>
         `;
+        if (dupInitKeys.size > 0) {
+            kpiContainer.innerHTML += `<div style="grid-column:1/-1; flex-basis:100%; width:100%; background:#fef2f2; border:1px solid #fecaca; border-radius:12px; padding:12px 16px; margin-top:4px; display:flex; align-items:center; gap:10px; color:#991b1b; font-size:13px; font-weight:600;"><i class="fas fa-triangle-exclamation" style="color:#ef4444;"></i> ${dupInitKeys.size} initiale(s) en DOUBLON sur une même agence — à corriger (risque de références de colis en conflit). Les agents concernés sont signalés ci-dessous.</div>`;
+        }
 
         const tbody = document.getElementById('agentTableBody');
         const cards = document.getElementById('agentCardsContainer');
@@ -401,7 +419,7 @@ export const SettingsAgentsView = {
                                 }
                                 <span class="cmc-ref" style="font-family: 'Inter', sans-serif; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${name}</span>
                             </div>
-                            ${this.getRoleBadge(a.role)}
+                            ${this.getRoleBadge(a.role)}${hasDupInitials(a) ? `<span title="Initiale en doublon sur cette agence" style="margin-left:6px; background:#fee2e2; color:#991b1b; font-size:10px; font-weight:700; padding:2px 7px; border-radius:8px;">⚠ ${String(a.initials||'').toUpperCase()} DOUBLON</span>` : ''}
                         </div>
                         <div class="cmc-body">
                             <div class="cmc-route" style="font-size: 11px;">
@@ -444,7 +462,7 @@ export const SettingsAgentsView = {
                                 }
                                 <div>
                                     <div class="am__agent-name">${name}</div>
-                                    <div class="am__agent-id">${a.email || 'Pas d\'email'} &middot; ${a.initials || this.getInitials(name)}</div>
+                                    <div class="am__agent-id">${a.email || 'Pas d\'email'} &middot; ${a.initials || this.getInitials(name)}${hasDupInitials(a) ? ` <span title="Initiale en doublon sur cette agence" style="background:#fee2e2; color:#991b1b; font-size:10px; font-weight:700; padding:1px 6px; border-radius:7px; margin-left:4px;">⚠ DOUBLON</span>` : ''}</div>
                                 </div>
                             </div>
                         </td>
@@ -598,6 +616,12 @@ export const SettingsAgentsView = {
 
         if (!name || !rawUsername || !password) {
             return this.app.showToast("Veuillez remplir le nom, l'identifiant et le mot de passe.", "error");
+        }
+
+        // INITIALE OBLIGATOIRE — exactement 2 LETTRES (préfixe de la référence
+        // colis, ex. « JB-003-AER1 »).
+        if (!/^[A-Z]{2}$/.test(initials)) {
+            return this.app.showToast("L'initiale est obligatoire et doit faire exactement 2 lettres (ex. JB).", "error");
         }
 
         // UNICITÉ DE L'INITIALE PAR ROUTE/AGENCE.
