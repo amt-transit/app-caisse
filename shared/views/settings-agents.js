@@ -599,7 +599,25 @@ export const SettingsAgentsView = {
         if (!name || !rawUsername || !password) {
             return this.app.showToast("Veuillez remplir le nom, l'identifiant et le mot de passe.", "error");
         }
-        
+
+        // UNICITÉ DE L'INITIALE PAR ROUTE/AGENCE.
+        // L'initiale est un PRÉFIXE de la RÉFÉRENCE des colis (ex. « J-003-AER1 »).
+        // Deux agents de la MÊME agence avec la même initiale peuvent produire des
+        // références identiques (collision, surtout en saisie simultanée). On bloque.
+        if (initials) {
+            const clash = (this.agents || []).find(a =>
+                a.id !== id &&
+                String(a.agency || '') === String(agency) &&
+                String(a.initials || '').trim().toUpperCase() === initials
+            );
+            if (clash) {
+                return this.app.showToast(
+                    `L'initiale « ${initials} » est déjà utilisée par ${clash.displayName || clash.email || 'un autre agent'} sur cette agence. Choisissez-en une autre — sinon les références de colis entreraient en conflit.`,
+                    "error"
+                );
+            }
+        }
+
         // Auto-complétion de l'email comme sur le login
         let email = rawUsername;
         if (!email.includes('@')) email += '@amt.com';
