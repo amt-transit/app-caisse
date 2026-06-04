@@ -594,7 +594,7 @@ onAuthStateChanged(auth, async (user) => {
         // Architecture unifiée : l'application vit à la racine. On rapatrie
         // tout utilisateur encore sur un ancien dossier /paris/ ou /abidjan/
         // vers l'app unique à la racine. Les pages racine légitimes (ex.
-        // livreurscan.html, login.html) ne sont PAS touchées.
+        // login.html) ne sont PAS touchées.
         if ((inParisFolder || inAbidjanFolder) && !isLogin) {
             window.location.href = '../index.html';
             return;

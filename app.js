@@ -104,7 +104,7 @@ export const app = {
         'finance-cashier': 'finance', 'finance-cheques': 'finance', 'finance-expenses': 'finance',
         'index': 'entrees-caisse', 'confirmation': 'entrees-caisse', 'history': 'entrees-caisse', 'other-income': 'entrees-caisse',
         'expenses': 'finance', 'bank': 'finance', 'audit': 'finance',
-        'livraison': 'logistique', 'livreurscan': 'logistique', 'voiture': 'logistique', 'magasinage': 'logistique', 'points': 'logistique',
+        'livraison': 'logistique', 'voiture': 'logistique', 'magasinage': 'logistique', 'points': 'logistique',
         'admin-panel': 'settings', 'salaire': 'settings', 'comptejb': 'settings', 'settings-agency': 'settings', 'settings-company': 'settings', 'settings-software': 'settings', 'settings-design': 'settings', 'settings-sms': 'settings', 'settings-notifications': 'settings', 'settings-menus': 'settings', 'settings-agents': 'settings', 'settings-agencies': 'settings', 'settings-roles': 'settings', 'settings-appointments': 'settings', 'settings-profile': 'settings',
         'stock-list': 'stock',
         'balance-monthly': 'bilans-financiers', 'balance-12m': 'bilans-financiers',
@@ -826,7 +826,7 @@ export const app = {
             'parrainage': 'Réseau Partenaires', 'chine-dashboard': 'Tableau de Bord Asie',
             'finance-cashier': 'Caisse globale', 'finance-cheques': 'Liste des chèques', 'finance-expenses': 'Dépenses',
             'index': 'Saisie de Caisse', 'confirmation': 'Confirmation Saisies', 'history': 'Historique Opérations', 'other-income': 'Autres Entrées', 'expenses': 'Dépenses Caisse', 'bank': 'Mouvements Banque', 'audit': 'Audit Saisies',
-            'livraison': 'LIVRAISON', 'livreurscan': 'Mode Livreur', 'voiture': 'Gestion Véhicules', 'magasinage': 'Magasinage', 'points': 'Points Utilisateurs',
+            'livraison': 'LIVRAISON', 'voiture': 'Gestion Véhicules', 'magasinage': 'Magasinage', 'points': 'Points Utilisateurs',
             'admin-panel': 'Gestion des agents', 'salaire': 'Salaire & RH', 'comptejb': 'Livre de Caisse JB', 
             'settings-agency': 'Paramètres Agence', 'settings-company': 'Paramètres Entreprise', 'settings-software': 'Paramètres logiciel', 'settings-design': 'Apparence & Menus', 'settings-sms': 'Configuration SMS', 'settings-notifications': 'Configuration notifications', 'settings-menus': 'Gestion menus', 'settings-agents': 'Gestion des agents', 'settings-agencies': 'Gestion des agences', 'settings-roles': 'Rôles & Permissions', 'settings-appointments': 'Paramètres RDV', 'settings-profile': 'Mon profil',
             'stock-list': 'Stock produits',
@@ -962,11 +962,6 @@ export const app = {
             'sms-send': () => SmsView.render(this, container), // Map vers le vrai module SMS Abidjan
             'sms-history': () => SmsView.render(this, container)
         };
-
-        if (page === 'livreurscan') {
-            window.location.href = 'livreurscan.html';
-            return;
-        }
 
         const renderer = renderers[page];
         if (renderer) {
