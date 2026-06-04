@@ -273,29 +273,80 @@ export const HistoriqueProgrammesView = {
         if (!prog) return;
 
         const { jsPDF } = window.jspdf;
-        const doc = new jsPDF(); 
-        
-        doc.setFontSize(18);
-        doc.text(`Feuille de route - ${livreur} - ${date}`, 14, 22);
-        
+        const doc = new jsPDF();
+        const BLUE = [26, 53, 83];     // bleu AMT #1A3553
+        const GOLD = [253, 198, 21];   // jaune AMT #FDC615
+        const pageW = doc.internal.pageSize.getWidth();
+
         const items = [...prog.items].sort((a, b) => (a.orderInRoute || 0) - (b.orderInRoute || 0));
-        const tableColumn = ["ORDRE", "TYPE", "CLIENT", "TELEPHONE", "ADRESSE", "HEURE"];
-        const tableRows = items.map((r, i) => [
-            (i + 1).toString(),
-            r.rdvType === 'DEPOT' ? 'DEPOT' : 'RECUP',
-            r.client || '',
-            r.tel || '',
-            r.adresse || '',
-            r.time || ''
-        ]);
+        const nbDepot = items.filter(r => r.rdvType === 'DEPOT').length;
+        const nbRecup = items.length - nbDepot;
+
+        // --- En-tete (banniere bleue + lisere dore) ---
+        doc.setFillColor(...BLUE);
+        doc.rect(0, 0, pageW, 30, 'F');
+        doc.setFillColor(...GOLD);
+        doc.rect(0, 30, pageW, 2.5, 'F');
+        doc.setTextColor(255, 255, 255);
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(18);
+        doc.text("FEUILLE DE ROUTE", 14, 15);
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(10);
+        doc.text("AMT Trans'it", 14, 23);
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(12);
+        doc.text(livreur, pageW - 14, 13, { align: 'right' });
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(9.5);
+        doc.text(`Date : ${date}`, pageW - 14, 20, { align: 'right' });
+        doc.text(`${items.length} arret(s)  -  ${nbDepot} depot  -  ${nbRecup} recup`, pageW - 14, 26, { align: 'right' });
+
+        // --- Tableau (adresse + acces sur plusieurs lignes) ---
+        const tableColumn = ["#", "TYPE", "CLIENT", "TELEPHONE", "ADRESSE & ACCES", "CRENEAU"];
+        const tableRows = items.map((r, i) => {
+            let acc = r.adresse || '';
+            if (r.etage) acc += `\nEtage/Bat. : ${r.etage}`;
+            if (r.acces && r.acces !== 'Aucun') acc += `\nAcces : ${r.acces}${r.codeAcces ? ' (' + r.codeAcces + ')' : ''}`;
+            return [
+                (i + 1).toString(),
+                r.rdvType === 'DEPOT' ? 'DEPOT' : 'RECUP',
+                r.client || '',
+                r.tel || '',
+                acc,
+                r.time || ''
+            ];
+        });
 
         doc.autoTable({
             head: [tableColumn],
             body: tableRows,
-            startY: 30,
-            theme: 'grid',
-            styles: { fontSize: 8 },
-            headStyles: { fillColor: [26, 53, 83] }
+            startY: 40,
+            theme: 'striped',
+            styles: { fontSize: 8.5, cellPadding: 3, valign: 'middle', lineColor: [226, 232, 240], lineWidth: 0.1 },
+            headStyles: { fillColor: BLUE, textColor: 255, fontStyle: 'bold', fontSize: 9 },
+            alternateRowStyles: { fillColor: [245, 248, 252] },
+            columnStyles: {
+                0: { cellWidth: 9, halign: 'center', fontStyle: 'bold' },
+                1: { cellWidth: 18, halign: 'center' },
+                2: { cellWidth: 36, fontStyle: 'bold' },
+                3: { cellWidth: 28 },
+                5: { cellWidth: 26, halign: 'center' }
+            },
+            didParseCell: (data) => {
+                if (data.section === 'body' && data.column.index === 1) {
+                    data.cell.styles.fontStyle = 'bold';
+                    data.cell.styles.textColor = data.cell.raw === 'DEPOT' ? [180, 83, 9] : [22, 101, 52];
+                }
+            },
+            didDrawPage: (data) => {
+                const h = doc.internal.pageSize.getHeight();
+                doc.setFontSize(8);
+                doc.setTextColor(150);
+                doc.setFont('helvetica', 'normal');
+                doc.text("AMT Trans'it - Feuille de route chauffeur", 14, h - 8);
+                doc.text(`Page ${data.pageNumber}`, pageW - 14, h - 8, { align: 'right' });
+            }
         });
 
         doc.save(`Feuille_de_route_${livreur.replace(/\s+/g, '_')}_${date}.pdf`);

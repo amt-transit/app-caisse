@@ -155,7 +155,11 @@ export const MonProgrammeView = {
                                         </td>
                                         <td><div class="phone-cell">📞 {{ r.tel || '--' }}</div></td>
                                         <td><div class="time-cell">🕐 {{ r.time || '10:00 - 12:00' }}</div></td>
-                                        <td class="address-cell" :title="r.adresse">{{ r.adresse || '-' }}</td>
+                                        <td class="address-cell" :title="r.adresse">
+                                            {{ r.adresse || '-' }}
+                                            <div v-if="r.etage" style="font-size:11px; color:#64748b; margin-top:2px;">🏢 {{ r.etage }}</div>
+                                            <div v-if="r.acces && r.acces !== 'Aucun'" style="font-size:11px; color:#64748b;">🔑 {{ r.acces }}<span v-if="r.codeAcces"> : {{ r.codeAcces }}</span></div>
+                                        </td>
                                         <td class="actions-cell">
                                             <button class="btn-action btn-action--call" @click="callClient(r.tel)" title="Appeler">📞</button>
                                             <button class="btn-action btn-action--map" @click="openMap(r.adresse)" title="Itinéraire">🗺️</button>

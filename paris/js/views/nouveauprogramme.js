@@ -991,27 +991,69 @@ export const NouveauProgrammeView = {
                     try {
                         const { jsPDF } = await loadJsPdf();
                         const docp = new jsPDF('p', 'mm', 'a4');
-                        docp.setFontSize(16); docp.setTextColor(26, 53, 83);
-                        docp.text(`Feuille de route — ${driverName}`, 14, 18);
-                        docp.setFontSize(9); docp.setTextColor(100);
-                        docp.text(`Date : ${formattedDate.value}`, 14, 25);
-                        docp.text(`Départ / Arrivée : ${DEPOT_ADDRESS}`, 14, 30);
-                        const body = driverRdvs.map((r, i) => [
-                            i + 1,
-                            r.rdvType === 'DEPOT' ? 'DÉPÔT' : 'RÉCUP',
-                            r.client || '',
-                            r.tel || '',
-                            r.adresse || '',
-                            (r.notes || '').replace(/\s+/g, ' ').trim()
-                        ]);
+                        const BLUE = [26, 53, 83];     // bleu AMT
+                        const GOLD = [253, 198, 21];   // jaune AMT
+                        const pageW = docp.internal.pageSize.getWidth();
+                        const nbDepot = driverRdvs.filter(r => r.rdvType === 'DEPOT').length;
+                        const nbRecup = driverRdvs.length - nbDepot;
+
+                        // En-tete : banniere bleue + lisere dore
+                        docp.setFillColor(...BLUE);
+                        docp.rect(0, 0, pageW, 30, 'F');
+                        docp.setFillColor(...GOLD);
+                        docp.rect(0, 30, pageW, 2.5, 'F');
+                        docp.setTextColor(255, 255, 255);
+                        docp.setFont('helvetica', 'bold'); docp.setFontSize(18);
+                        docp.text("FEUILLE DE ROUTE", 14, 15);
+                        docp.setFont('helvetica', 'normal'); docp.setFontSize(10);
+                        docp.text("AMT Trans'it", 14, 23);
+                        docp.setFont('helvetica', 'bold'); docp.setFontSize(12);
+                        docp.text(driverName, pageW - 14, 13, { align: 'right' });
+                        docp.setFont('helvetica', 'normal'); docp.setFontSize(9.5);
+                        docp.text(`Date : ${formattedDate.value}`, pageW - 14, 20, { align: 'right' });
+                        docp.text(`${driverRdvs.length} arret(s)  -  ${nbDepot} depot  -  ${nbRecup} recup`, pageW - 14, 26, { align: 'right' });
+
+                        // Depart / Arrivee (depot)
+                        docp.setFontSize(9); docp.setTextColor(80);
+                        docp.setFont('helvetica', 'bold');
+                        docp.text("Depart / Arrivee :", 14, 40);
+                        docp.setFont('helvetica', 'normal');
+                        docp.text(String(DEPOT_ADDRESS || ''), 47, 40);
+
+                        const body = driverRdvs.map((r, i) => {
+                            let acc = r.adresse || '';
+                            if (r.etage) acc += `\nEtage/Bat. : ${r.etage}`;
+                            if (r.acces && r.acces !== 'Aucun') acc += `\nAcces : ${r.acces}${r.codeAcces ? ' (' + r.codeAcces + ')' : ''}`;
+                            return [
+                                i + 1,
+                                r.rdvType === 'DEPOT' ? 'DÉPÔT' : 'RÉCUP',
+                                r.client || '',
+                                r.tel || '',
+                                acc,
+                                (r.notes || '').replace(/\s+/g, ' ').trim()
+                            ];
+                        });
                         docp.autoTable({
-                            startY: 36,
-                            head: [['#', 'Type', 'Client', 'Téléphone', 'Adresse', 'Description']],
+                            startY: 46,
+                            head: [['#', 'Type', 'Client', 'Téléphone', 'Adresse & Accès', 'Description']],
                             body,
-                            theme: 'grid',
-                            styles: { fontSize: 8, cellPadding: 2, overflow: 'linebreak' },
-                            headStyles: { fillColor: [26, 53, 83], textColor: 255, fontStyle: 'bold' },
-                            columnStyles: { 0: { cellWidth: 8, halign: 'center' }, 1: { cellWidth: 16 }, 3: { cellWidth: 26 }, 4: { cellWidth: 48 } }
+                            theme: 'striped',
+                            styles: { fontSize: 8.5, cellPadding: 2.5, overflow: 'linebreak', valign: 'middle', lineColor: [226, 232, 240], lineWidth: 0.1 },
+                            headStyles: { fillColor: BLUE, textColor: 255, fontStyle: 'bold', fontSize: 9 },
+                            alternateRowStyles: { fillColor: [245, 248, 252] },
+                            columnStyles: { 0: { cellWidth: 9, halign: 'center', fontStyle: 'bold' }, 1: { cellWidth: 17, halign: 'center' }, 2: { cellWidth: 32, fontStyle: 'bold' }, 3: { cellWidth: 26 } },
+                            didParseCell: (data) => {
+                                if (data.section === 'body' && data.column.index === 1) {
+                                    data.cell.styles.fontStyle = 'bold';
+                                    data.cell.styles.textColor = (data.cell.raw && String(data.cell.raw)[0] === 'D') ? [180, 83, 9] : [22, 101, 52];
+                                }
+                            },
+                            didDrawPage: (data) => {
+                                const h = docp.internal.pageSize.getHeight();
+                                docp.setFontSize(8); docp.setTextColor(150); docp.setFont('helvetica', 'normal');
+                                docp.text("AMT Trans'it - Feuille de route chauffeur", 14, h - 8);
+                                docp.text(`Page ${data.pageNumber}`, pageW - 14, h - 8, { align: 'right' });
+                            }
                         });
                         docp.save(`Feuille_route_${driverName}_${filters.date}.pdf`);
                     } catch (e) {

@@ -319,11 +319,32 @@ export const TousLesRdvView = {
                                     <div class="em-card__head em-card__head--green"><span class="em-card__icon">📋</span><span class="em-card__title">Détails d'intervention</span></div>
                                     <div class="em-card__body">
                                         <label class="em-field">
+                                            <span class="em-field__label">Nom du contact</span>
+                                            <input type="text" v-model="editForm.client" class="em-field__input" placeholder="Nom de la personne">
+                                        </label>
+                                        <label class="em-field">
                                             <span class="em-field__label">Adresse exacte</span>
                                             <div style="position:relative;">
                                                 <input id="tlrEditAdresse" type="text" v-model="editForm.adresse" class="em-field__input" placeholder="Adresse complète" autocomplete="off">
                                                 <ul id="tlrEditAdresseSuggestions" style="margin:0; padding:0; list-style:none; display:none;"></ul>
                                             </div>
+                                        </label>
+                                        <label class="em-field">
+                                            <span class="em-field__label">Étage / Bâtiment</span>
+                                            <input type="text" v-model="editForm.etage" class="em-field__input" placeholder="Ex : Bloc B, 3e étage, Porte 12">
+                                        </label>
+                                        <label class="em-field">
+                                            <span class="em-field__label">Accès au bâtiment</span>
+                                            <select v-model="editForm.acces" class="em-field__input">
+                                                <option value="">Sélectionner…</option>
+                                                <option value="Interphone">Interphone</option>
+                                                <option value="Code">Code / Digicode</option>
+                                                <option value="Aucun">Aucun / Accès libre</option>
+                                            </select>
+                                        </label>
+                                        <label class="em-field" v-if="editForm.acces === 'Interphone' || editForm.acces === 'Code'">
+                                            <span class="em-field__label">Code / Nom à l'interphone</span>
+                                            <input type="text" v-model="editForm.codeAcces" class="em-field__input" placeholder="Ex : B1234 ou DUPONT">
                                         </label>
                                         <label class="em-field">
                                             <span class="em-field__label">Téléphone de contact</span>
@@ -486,10 +507,14 @@ export const TousLesRdvView = {
                     saving.value = true;
 
                     const updates = {
+                        client: editForm.client,
                         rdvType: editForm.rdvType,
                         date: editForm.date,
                         time: editForm.time,
                         adresse: editForm.adresse,
+                        etage: editForm.etage || '',
+                        acces: editForm.acces || '',
+                        codeAcces: editForm.codeAcces || '',
                         tel: editForm.tel,
                         notes: editForm.notes
                     };
