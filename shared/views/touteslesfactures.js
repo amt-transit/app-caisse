@@ -1611,6 +1611,14 @@ export const ToutesLesFacturesView = {
                                     <div id="tlfEditExpFeedback" style="font-size: 11px; color: #64748b; margin-top: 4px;"></div>
                                 </div>
                                 <div>
+                                    <label style="font-size: 12px; font-weight: 700; color: #475569; display: block; margin-bottom: 6px;">Téléphone</label>
+                                    <input type="text" id="tlfEditExpTel" value="${inv.tel || ''}" style="width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 8px; outline: none; font-weight: 600; box-sizing: border-box;">
+                                </div>
+                                <div>
+                                    <label style="font-size: 12px; font-weight: 700; color: #475569; display: block; margin-bottom: 6px;">Lieu / Adresse</label>
+                                    <input type="text" id="tlfEditExpAdresse" value="${inv.adresseExpediteur || ''}" style="width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 8px; outline: none; font-weight: 600; box-sizing: border-box;">
+                                </div>
+                                <div>
                                     <label style="font-size: 12px; font-weight: 700; color: #475569; display: block; margin-bottom: 6px;">Conteneur assigné</label>
                                     <input type="text" id="tlfEditConteneur" value="${inv.conteneur || 'ATT'}" style="width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 8px; outline: none; font-weight: 600; box-sizing: border-box; text-transform: uppercase;">
                                 </div>
@@ -2061,6 +2069,8 @@ export const ToutesLesFacturesView = {
 
         const updates = {
             nom: document.getElementById('tlfEditExp').value.trim(),
+            tel: document.getElementById('tlfEditExpTel').value.trim(),
+            adresseExpediteur: document.getElementById('tlfEditExpAdresse').value.trim(),
             nomDestinataire: document.getElementById('tlfEditDest').value.trim(),
             numero: document.getElementById('tlfEditTel').value.trim(),
             adresseDestinataire: document.getElementById('tlfEditLieu').value.trim(),
