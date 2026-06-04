@@ -1255,13 +1255,13 @@ export const ToutesLesFacturesView = {
                             </select>
                         </div>
                     </div>
-                    <button id="tlfAddOrUpdateBtn" class="btn btn-outline" onclick="window.app.views.toutesLesFactures.addOrUpdateLocalPayment()" style="margin-top:10px; width: 100%; border-color: #3b82f6; color: #3b82f6; font-weight: bold;">Ajouter ce paiement à la liste</button>
+                    <p style="margin-top:8px; font-size:11.5px; color:#64748b;">Remplissez le montant ci-dessus puis cliquez sur <b>Enregistrer</b> en bas : le paiement est pris en compte automatiquement.</p>
                 </div>
-                
+
                 <div style="padding: 20px 25px; border-top: 1px solid #e2e8f0; background: #f8fafc; display: flex; justify-content: flex-end; gap: 10px;">
                     <button class="btn btn-outline" onclick="this.closest('.modal').remove()" style="padding: 10px 15px; font-weight: 600; background: white; color:#334155; border: 1px solid #cbd5e1; border-radius: 8px;">Annuler</button>
                     <button class="btn btn-primary" onclick="window.app.views.toutesLesFactures.savePaymentsToFirestore('${inv.id}')" style="padding: 10px 20px; font-weight: 600; background: #10b981; color: white; border: none; border-radius: 8px;">
-                        <i class="fas fa-save"></i> Enregistrer les modifications
+                        <i class="fas fa-save"></i> Enregistrer le paiement
                     </button>
                 </div>
             </div>
@@ -1369,8 +1369,7 @@ export const ToutesLesFacturesView = {
         document.getElementById('tlfPayInfo').value = p.agentMobileMoney || '';
         document.getElementById('tlfPayAgent').value = p.agent || '';
         
-        document.getElementById('tlfPaymentFormTitle').textContent = "Modifier le paiement";
-        document.getElementById('tlfAddOrUpdateBtn').textContent = "Mettre à jour ce paiement";
+        document.getElementById('tlfPaymentFormTitle').textContent = "Modifier le paiement (puis cliquez Enregistrer)";
     },
 
     deleteLocalPayment(index) {
@@ -1387,7 +1386,6 @@ export const ToutesLesFacturesView = {
             document.getElementById('tlfPayInfo').value = '';
             document.getElementById('tlfPayAgent').value = '';
             document.getElementById('tlfPaymentFormTitle').textContent = "Ajouter un paiement";
-            document.getElementById('tlfAddOrUpdateBtn').textContent = "Ajouter ce paiement à la liste";
         }
     },
 
@@ -1446,12 +1444,20 @@ export const ToutesLesFacturesView = {
         document.getElementById('tlfPayInfo').value = '';
         document.getElementById('tlfPayAgent').value = '';
         document.getElementById('tlfPaymentFormTitle').textContent = "Ajouter un paiement";
-        document.getElementById('tlfAddOrUpdateBtn').textContent = "Ajouter ce paiement à la liste";
     },
 
     async savePaymentsToFirestore(id) {
         const inv = this.invoices.find(i => i.id === id);
         if (!inv) return;
+
+        // Plus de bouton « Ajouter à la liste » : si un montant est saisi dans le
+        // formulaire mais pas encore ajouté, on le prend en compte ICI
+        // automatiquement (remplir le formulaire + Enregistrer suffit).
+        const pendingParis = parseFloat(document.getElementById('tlfPayAmountParis')?.value) || 0;
+        const pendingAbidjan = parseFloat(document.getElementById('tlfPayAmountAbidjan')?.value) || 0;
+        if (pendingParis > 0 || pendingAbidjan > 0) {
+            this.addOrUpdateLocalPayment();
+        }
 
         const isEur = isEurAgency();
         const TAUX = isEur ? CONSTANTS.TAUX_CONVERSION : 1;
