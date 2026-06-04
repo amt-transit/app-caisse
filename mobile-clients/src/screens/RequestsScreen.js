@@ -8,6 +8,7 @@ import { Card, SectionTitle, Btn, Empty, Loading, Badge } from '../components/ui
 import { colors, fdate } from '../theme';
 import { api } from '../api';
 import AvailabilityCalendar from '../components/AvailabilityCalendar';
+import { useLang, tr } from '../i18n';
 
 const STATUS = {
   en_attente: ['En attente', 'wait'], modifiee: ['Nouvelle date proposée', 'info'],
@@ -16,6 +17,7 @@ const STATUS = {
 const ACCES = ['Interphone', 'Code / Digicode', 'Aucun / Accès libre'];
 
 export default function RequestsScreen({ selfName, selfAddress, selfPhone }) {
+  const { t } = useLang();
   const [tab, setTab] = useState('list'); // list | form
   const [editId, setEditId] = useState(null); // id si modification, sinon création
   const [loading, setLoading] = useState(true);
@@ -51,9 +53,9 @@ export default function RequestsScreen({ selfName, selfAddress, selfPhone }) {
   };
 
   const submit = async () => {
-    if (!String(f.commune || '').trim() && !String(f.address || '').trim()) { Alert.alert('Adresse requise', 'Indiquez au moins une commune ou une adresse.'); return; }
-    if (!String(f.contactTel || '').trim()) { Alert.alert('Téléphone requis', 'Indiquez un téléphone de contact.'); return; }
-    if (!String(f.acces || '').trim()) { Alert.alert('Accès requis', "Précisez l'accès au bâtiment."); return; }
+    if (!String(f.commune || '').trim() && !String(f.address || '').trim()) { Alert.alert(tr('Adresse requise'), tr('Indiquez au moins une commune ou une adresse.')); return; }
+    if (!String(f.contactTel || '').trim()) { Alert.alert(tr('Téléphone requis'), tr('Indiquez un téléphone de contact.')); return; }
+    if (!String(f.acces || '').trim()) { Alert.alert(tr('Accès requis'), tr("Précisez l'accès au bâtiment.")); return; }
     setSending(true);
     const payload = {
       type: f.type, fullName: (f.fullName || '').trim(), commune: (f.commune || '').trim(),
@@ -66,69 +68,69 @@ export default function RequestsScreen({ selfName, selfAddress, selfPhone }) {
       else await api.createClientRequest(payload);
       setTab('list'); await load();
     } catch (e) {
-      Alert.alert('Erreur', e?.code === 'already-exists' ? "Vous avez déjà une demande de ce type en cours." : (e?.message || "Envoi impossible."));
+      Alert.alert(tr('Erreur'), e?.code === 'already-exists' ? tr("Vous avez déjà une demande de ce type en cours.") : (e?.message || tr("Envoi impossible.")));
     } finally { setSending(false); }
   };
 
   const respond = async (id, action) => {
-    try { await api.respondClientRequest(id, action); await load(); } catch (e) { Alert.alert('Erreur', 'Action impossible.'); }
+    try { await api.respondClientRequest(id, action); await load(); } catch (e) { Alert.alert(tr('Erreur'), tr('Action impossible.')); }
   };
-  const cancel = (id) => Alert.alert('Annuler', 'Annuler cette demande ?', [
-    { text: 'Non', style: 'cancel' },
-    { text: 'Oui', style: 'destructive', onPress: async () => { try { await api.cancelClientRequest(id); await load(); } catch (e) {} } },
+  const cancel = (id) => Alert.alert(tr('Annuler'), tr('Annuler cette demande ?'), [
+    { text: tr('Non'), style: 'cancel' },
+    { text: tr('Oui'), style: 'destructive', onPress: async () => { try { await api.cancelClientRequest(id); await load(); } catch (e) {} } },
   ]);
 
-  if (loading) return <Loading text="Chargement de vos demandes…" />;
+  if (loading) return <Loading text={t('Chargement de vos demandes…')} />;
 
   if (tab === 'form') {
     const isRecup = f.type === 'recup';
     return (
       <ScrollView contentContainerStyle={{ padding: 16 }} keyboardShouldPersistTaps="handled">
-        <TouchableOpacity onPress={() => setTab('list')}><Text style={s.back}>← Mes demandes</Text></TouchableOpacity>
+        <TouchableOpacity onPress={() => setTab('list')}><Text style={s.back}>{t('← Mes demandes')}</Text></TouchableOpacity>
         <Card>
-          <SectionTitle>{editId ? 'Modifier la demande' : 'Nouvelle demande'}</SectionTitle>
+          <SectionTitle>{editId ? t('Modifier la demande') : t('Nouvelle demande')}</SectionTitle>
           <View style={s.chips}>
-            <Pick active={f.type === 'depot'} label="📦 Dépôt" onPress={() => set('type', 'depot')} />
-            <Pick active={f.type === 'recup'} label="🔄 Récupération" onPress={() => set('type', 'recup')} />
+            <Pick active={f.type === 'depot'} label={t('📦 Dépôt')} onPress={() => set('type', 'depot')} />
+            <Pick active={f.type === 'recup'} label={t('🔄 Récupération')} onPress={() => set('type', 'recup')} />
           </View>
 
-          <L>Nom complet</L>
-          <TextInput style={s.in} value={f.fullName} onChangeText={(v) => set('fullName', v)} placeholder="Votre nom" placeholderTextColor={colors.muted} />
+          <L>{t('Nom complet')}</L>
+          <TextInput style={s.in} value={f.fullName} onChangeText={(v) => set('fullName', v)} placeholder={t('Votre nom')} placeholderTextColor={colors.muted} />
 
-          <L>Téléphone *</L>
-          <TextInput style={s.in} value={f.contactTel} onChangeText={(v) => set('contactTel', v)} keyboardType="phone-pad" placeholder="Contact sur place" placeholderTextColor={colors.muted} />
+          <L>{t('Téléphone *')}</L>
+          <TextInput style={s.in} value={f.contactTel} onChangeText={(v) => set('contactTel', v)} keyboardType="phone-pad" placeholder={t('Contact sur place')} placeholderTextColor={colors.muted} />
 
-          <L>Commune / Ville</L>
-          <TextInput style={s.in} value={f.commune} onChangeText={(v) => set('commune', v)} placeholder="Ex : Cocody, Paris…" placeholderTextColor={colors.muted} />
+          <L>{t('Commune / Ville')}</L>
+          <TextInput style={s.in} value={f.commune} onChangeText={(v) => set('commune', v)} placeholder={t('Ex : Cocody, Paris…')} placeholderTextColor={colors.muted} />
 
-          <L>{isRecup ? 'Adresse de livraison / récupération' : "Adresse d'enlèvement"}</L>
-          <TextInput style={s.in} value={f.address} onChangeText={(v) => set('address', v)} placeholder="Quartier, rue, repère" placeholderTextColor={colors.muted} />
+          <L>{isRecup ? t('Adresse de livraison / récupération') : t("Adresse d'enlèvement")}</L>
+          <TextInput style={s.in} value={f.address} onChangeText={(v) => set('address', v)} placeholder={t('Quartier, rue, repère')} placeholderTextColor={colors.muted} />
 
-          <L>Étage / Bâtiment *</L>
-          <TextInput style={s.in} value={f.etage} onChangeText={(v) => set('etage', v)} placeholder="Ex : Bât. B, 3e étage" placeholderTextColor={colors.muted} />
+          <L>{t('Étage / Bâtiment *')}</L>
+          <TextInput style={s.in} value={f.etage} onChangeText={(v) => set('etage', v)} placeholder={t('Ex : Bât. B, 3e étage')} placeholderTextColor={colors.muted} />
 
-          <L>Accès au bâtiment *</L>
+          <L>{t('Accès au bâtiment *')}</L>
           <View style={s.chips}>
-            {ACCES.map(a => <Pick key={a} active={f.acces === a} label={a} onPress={() => set('acces', a)} small />)}
+            {ACCES.map(a => <Pick key={a} active={f.acces === a} label={t(a)} onPress={() => set('acces', a)} small />)}
           </View>
           {(f.acces === 'Interphone' || f.acces === 'Code / Digicode') && (
-            <TextInput style={s.in} value={f.codeAcces} onChangeText={(v) => set('codeAcces', v)} placeholder={f.acces === 'Code / Digicode' ? 'Code / digicode' : "Nom à l'interphone"} placeholderTextColor={colors.muted} />
+            <TextInput style={s.in} value={f.codeAcces} onChangeText={(v) => set('codeAcces', v)} placeholder={f.acces === 'Code / Digicode' ? t('Code / digicode') : t("Nom à l'interphone")} placeholderTextColor={colors.muted} />
           )}
 
-          <L>Date souhaitée</L>
-          {f.date ? <Text style={s.dateSel}>📅 {fdate(f.date)}</Text> : <Text style={s.muted}>Choisissez un jour disponible ci-dessous.</Text>}
+          <L>{t('Date souhaitée')}</L>
+          {f.date ? <Text style={s.dateSel}>📅 {fdate(f.date)}</Text> : <Text style={s.muted}>{t('Choisissez un jour disponible ci-dessous.')}</Text>}
           <AvailabilityCalendar selected={f.date} onSelect={(v) => set('date', v)} />
 
-          <L>Créneau souhaité</L>
+          <L>{t('Créneau souhaité')}</L>
           <View style={s.chips}>
-            <Pick active={(f.slot || '').startsWith('Matin')} label="Matin (10H-12H)" onPress={() => set('slot', 'Matin (10H-12H)')} />
-            <Pick active={(f.slot || '').startsWith('Après')} label="Après-midi (12H-18H)" onPress={() => set('slot', 'Après-midi (12H-18H)')} />
+            <Pick active={(f.slot || '').startsWith('Matin')} label={t('Matin (10H-12H)')} onPress={() => set('slot', 'Matin (10H-12H)')} />
+            <Pick active={(f.slot || '').startsWith('Après')} label={t('Après-midi (12H-18H)')} onPress={() => set('slot', 'Après-midi (12H-18H)')} />
           </View>
 
-          <L>Description du colis</L>
-          <TextInput style={[s.in, { height: 70 }]} value={f.desc} onChangeText={(v) => set('desc', v)} placeholder="Ex : 2 cartons, 1 valise…" placeholderTextColor={colors.muted} multiline />
+          <L>{t('Description du colis')}</L>
+          <TextInput style={[s.in, { height: 70 }]} value={f.desc} onChangeText={(v) => set('desc', v)} placeholder={t('Ex : 2 cartons, 1 valise…')} placeholderTextColor={colors.muted} multiline />
 
-          <Btn label={editId ? 'Enregistrer les modifications' : 'Envoyer la demande'} onPress={submit} busy={sending} />
+          <Btn label={editId ? t('Enregistrer les modifications') : t('Envoyer la demande')} onPress={submit} busy={sending} />
         </Card>
       </ScrollView>
     );
@@ -137,37 +139,37 @@ export default function RequestsScreen({ selfName, selfAddress, selfPhone }) {
   return (
     <ScrollView contentContainerStyle={{ padding: 16 }}>
       <View style={{ flexDirection: 'row', gap: 10, marginBottom: 14 }}>
-        <Btn label="📦 Dépôt" onPress={() => openForm('depot')} style={{ flex: 1, marginTop: 0 }} />
-        <Btn label="🔄 Récup" kind="gold" onPress={() => openForm('recup')} style={{ flex: 1, marginTop: 0 }} />
+        <Btn label={t('📦 Dépôt')} onPress={() => openForm('depot')} style={{ flex: 1, marginTop: 0 }} />
+        <Btn label={t('🔄 Récup')} kind="gold" onPress={() => openForm('recup')} style={{ flex: 1, marginTop: 0 }} />
       </View>
       {requests.length === 0 ? (
-        <Empty icon="📦" text="Aucune demande pour le moment." />
+        <Empty icon="📦" text={t('Aucune demande pour le moment.')} />
       ) : requests.map((r) => {
         const [lbl, kind] = STATUS[r.status] || STATUS.en_attente;
         const editable = r.status === 'en_attente' || r.status === 'modifiee';
         return (
           <Card key={r.id}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-              <Text style={s.type}>{r.type === 'recup' ? '🔄 Récupération' : '📦 Dépôt'}</Text>
-              <Badge text={lbl} kind={kind} />
+              <Text style={s.type}>{r.type === 'recup' ? t('🔄 Récupération') : t('📦 Dépôt')}</Text>
+              <Badge text={t(lbl)} kind={kind} />
             </View>
             {!!(r.commune || r.address) && <Text style={s.det}>📍 {[r.commune, r.address].filter(Boolean).join(' · ')}{r.etage ? ' — 🏢 ' + r.etage : ''}</Text>}
             {!!r.contactTel && <Text style={s.det}>📞 {r.contactTel}</Text>}
-            <Text style={s.det}>🗓️ Souhaité : {fdate(r.wantedDate)}{r.wantedTime ? ` (${r.wantedTime})` : ''}</Text>
+            <Text style={s.det}>🗓️ {t('Souhaité')} : {fdate(r.wantedDate)}{r.wantedTime ? ` (${r.wantedTime})` : ''}</Text>
             {r.status === 'modifiee' && (
               <View style={s.propose}>
-                <Text style={s.proposeT}>L'agence propose : {fdate(r.staffDate)} {r.staffTime ? `(${r.staffTime})` : ''}</Text>
+                <Text style={s.proposeT}>{t("L'agence propose")} : {fdate(r.staffDate)} {r.staffTime ? `(${r.staffTime})` : ''}</Text>
                 {!!r.staffNote && <Text style={s.det}>📝 {r.staffNote}</Text>}
                 <View style={{ flexDirection: 'row', gap: 10, marginTop: 8 }}>
-                  <Btn label="✅ Accepter" onPress={() => respond(r.id, 'accept')} style={{ flex: 1, marginTop: 0 }} />
-                  <Btn label="✕ Refuser" kind="ghost" onPress={() => respond(r.id, 'refuse')} style={{ flex: 1, marginTop: 0 }} />
+                  <Btn label={t('✅ Accepter')} onPress={() => respond(r.id, 'accept')} style={{ flex: 1, marginTop: 0 }} />
+                  <Btn label={t('✕ Refuser')} kind="ghost" onPress={() => respond(r.id, 'refuse')} style={{ flex: 1, marginTop: 0 }} />
                 </View>
               </View>
             )}
             {editable && (
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 10 }}>
-                <TouchableOpacity onPress={() => openForm(r.type, r)}><Text style={s.edit}>✏️ Modifier</Text></TouchableOpacity>
-                <TouchableOpacity onPress={() => cancel(r.id)}><Text style={s.cancel}>Annuler</Text></TouchableOpacity>
+                <TouchableOpacity onPress={() => openForm(r.type, r)}><Text style={s.edit}>{t('✏️ Modifier')}</Text></TouchableOpacity>
+                <TouchableOpacity onPress={() => cancel(r.id)}><Text style={s.cancel}>{t('Annuler')}</Text></TouchableOpacity>
               </View>
             )}
           </Card>

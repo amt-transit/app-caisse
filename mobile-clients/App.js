@@ -4,6 +4,8 @@
 // départs). Cache persistant (affichage instantané + rafraîchissement silencieux).
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Modal, Pressable, ScrollView, Image } from 'react-native';
+import { useFonts } from 'expo-font';
+import { APP_FONTS } from './src/fonts'; // charge + applique Comfortaa/Jost partout
 import { StatusBar } from 'expo-status-bar';
 import { LinearGradient } from 'expo-linear-gradient';
 import { signOut } from 'firebase/auth';
@@ -212,6 +214,10 @@ function AppInner() {
 }
 
 export default function App() {
+  // On attend que les polices de marque soient prêtes avant d'afficher (sinon
+  // l'app démarrerait avec la police système puis basculerait visiblement).
+  const [fontsLoaded] = useFonts(APP_FONTS);
+  if (!fontsLoaded) return null; // l'écran de démarrage (splash) reste affiché
   return (
     <LangProvider>
       <AppInner />

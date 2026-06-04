@@ -6,10 +6,12 @@ import { View, Text, ScrollView, TextInput, TouchableOpacity, StyleSheet, Alert 
 import { Card, SectionTitle, Btn, Loading, Empty } from '../components/ui';
 import { colors, fcfa } from '../theme';
 import { api } from '../api';
+import { useLang, tr } from '../i18n';
 
 const eur = (v) => `${(Number(v) || 0).toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} €`;
 
 export default function QuoteScreen({ agencies = [] }) {
+  const { t } = useLang();
   const [routes, setRoutes] = useState(null);
   const [routeId, setRouteId] = useState('');
   const [showAllRoutes, setShowAllRoutes] = useState(false);
@@ -55,19 +57,19 @@ export default function QuoteScreen({ agencies = [] }) {
       });
       await loadSaved();
       setSavedOpen(true);
-      Alert.alert('Devis', 'Devis enregistré ✅. Retrouvez-le dans « Mes devis enregistrés ».');
-    } catch (e) { Alert.alert('Devis', "Enregistrement impossible."); }
+      Alert.alert(tr('Devis'), tr('Devis enregistré ✅. Retrouvez-le dans « Mes devis enregistrés ».'));
+    } catch (e) { Alert.alert(tr('Devis'), tr("Enregistrement impossible.")); }
     finally { setSaving(false); }
   };
   const delQuote = (id) => {
-    Alert.alert('Supprimer ce devis ?', null, [
-      { text: 'Annuler', style: 'cancel' },
-      { text: 'Supprimer', style: 'destructive', onPress: async () => { try { await api.deleteMyQuote(id); await loadSaved(); } catch (e) {} } },
+    Alert.alert(tr('Supprimer ce devis ?'), null, [
+      { text: tr('Annuler'), style: 'cancel' },
+      { text: tr('Supprimer'), style: 'destructive', onPress: async () => { try { await api.deleteMyQuote(id); await loadSaved(); } catch (e) {} } },
     ]);
   };
 
-  if (routes === null) return <Loading text="Chargement du simulateur…" />;
-  if (routes.length === 0) return <Empty icon="🧾" text="Tarification indisponible pour le moment." />;
+  if (routes === null) return <Loading text={t('Chargement du simulateur…')} />;
+  if (routes.length === 0) return <Empty icon="🧾" text={t('Tarification indisponible pour le moment.')} />;
 
   const route = routes.find(r => r.id === routeId) || routes[0];
   const isChine = route.model === 'chine';
@@ -95,20 +97,20 @@ export default function QuoteScreen({ agencies = [] }) {
   };
 
   let tarifNote = '';
-  if (!isAerien && isChine) tarifNote = `Maritime : ${(route.tarifs.cbmChine || 0).toLocaleString('fr-FR')} FCFA / m³`;
-  else if (!isAerien) tarifNote = `Maritime : prix catalogue par article (€)`;
-  else if (isChine) tarifNote = `Aérien : ${(route.tarifs.kgAerienNormal || 0).toLocaleString('fr-FR')} / ${(route.tarifs.kgAerienExpress || 0).toLocaleString('fr-FR')} FCFA/kg`;
-  else tarifNote = `Aérien : ${route.tarifs.kgStdEur} €/kg · ${route.tarifs.kgParfumEur} €/kg (parfum)`;
+  if (!isAerien && isChine) tarifNote = `${t('Maritime')} : ${(route.tarifs.cbmChine || 0).toLocaleString('fr-FR')} FCFA / m³`;
+  else if (!isAerien) tarifNote = `${t('Maritime')} : ${t('prix catalogue par article (€)')}`;
+  else if (isChine) tarifNote = `${t('Aérien')} : ${(route.tarifs.kgAerienNormal || 0).toLocaleString('fr-FR')} / ${(route.tarifs.kgAerienExpress || 0).toLocaleString('fr-FR')} FCFA/kg`;
+  else tarifNote = `${t('Aérien')} : ${route.tarifs.kgStdEur} €/kg · ${route.tarifs.kgParfumEur} €/kg (${t('parfum')})`;
 
   return (
     <ScrollView contentContainerStyle={{ padding: 16 }}>
       <Card>
-        <SectionTitle>Simulateur de devis</SectionTitle>
-        <Text style={s.lbl}>Pays / route de départ</Text>
+        <SectionTitle>{t('Simulateur de devis')}</SectionTitle>
+        <Text style={s.lbl}>{t('Pays / route de départ')}</Text>
         {routes.length > 1 && !showAllRoutes ? (
           <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
             <Chip active label={`${route.flag || ''} ${route.name}`} onPress={() => setShowAllRoutes(true)} />
-            <TouchableOpacity onPress={() => setShowAllRoutes(true)}><Text style={s.changeLink}>Changer de pays de départ ›</Text></TouchableOpacity>
+            <TouchableOpacity onPress={() => setShowAllRoutes(true)}><Text style={s.changeLink}>{t('Changer de pays de départ ›')}</Text></TouchableOpacity>
           </View>
         ) : (
           <View style={s.chips}>
@@ -117,39 +119,39 @@ export default function QuoteScreen({ agencies = [] }) {
             ))}
           </View>
         )}
-        <Text style={s.lbl}>Mode d'expédition</Text>
+        <Text style={s.lbl}>{t("Mode d'expédition")}</Text>
         <View style={s.chips}>
-          <Chip active={mode === 'maritime'} label="🚢 Maritime" onPress={() => { setMode('maritime'); setResult(null); }} />
-          <Chip active={mode === 'aerien'} label="✈️ Aérien" onPress={() => { setMode('aerien'); setResult(null); }} />
+          <Chip active={mode === 'maritime'} label={t('🚢 Maritime')} onPress={() => { setMode('maritime'); setResult(null); }} />
+          <Chip active={mode === 'aerien'} label={t('✈️ Aérien')} onPress={() => { setMode('aerien'); setResult(null); }} />
         </View>
         {isAerien && isChine && (
           <>
-            <Text style={s.lbl}>Type aérien</Text>
+            <Text style={s.lbl}>{t('Type aérien')}</Text>
             <View style={s.chips}>
-              <Chip active={aerienType === 'normal'} label="Normal" onPress={() => setAerienType('normal')} />
-              <Chip active={aerienType === 'express'} label="Express" onPress={() => setAerienType('express')} />
+              <Chip active={aerienType === 'normal'} label={t('Normal')} onPress={() => setAerienType('normal')} />
+              <Chip active={aerienType === 'express'} label={t('Express')} onPress={() => setAerienType('express')} />
             </View>
           </>
         )}
         <Text style={s.note}>{tarifNote}</Text>
         {isAerien && (
           <View style={s.aero}>
-            <Text style={s.aeroT}>✈️ Tarification au poids facturé</Text>
+            <Text style={s.aeroT}>{t('✈️ Tarification au poids facturé')}</Text>
             <Text style={s.aeroTxt}>
-              Le prix se base sur le <Text style={s.b}>poids facturé</Text> = le plus élevé entre le <Text style={s.b}>poids réel</Text> et le <Text style={s.b}>poids volumétrique</Text> (Longueur × largeur × hauteur en cm ÷ {route.tarifs.volDiviseur || 5000}).{'\n'}
-              ⚠️ Ce mode de calcul est <Text style={s.b}>imposé par l'aéroport</Text> (les compagnies aériennes), ce n'est pas un choix d'AMT. Renseignez le <Text style={s.b}>poids ET les dimensions</Text> pour une estimation juste.
+              {t('Le prix se base sur le')} <Text style={s.b}>{t('poids facturé')}</Text> = {t('le plus élevé entre le')} <Text style={s.b}>{t('poids réel')}</Text> {t('et le')} <Text style={s.b}>{t('poids volumétrique')}</Text> ({t('Longueur × largeur × hauteur en cm ÷')} {route.tarifs.volDiviseur || 5000}).{'\n'}
+              {t("⚠️ Ce mode de calcul est")} <Text style={s.b}>{t("imposé par l'aéroport")}</Text> {t("(les compagnies aériennes), ce n'est pas un choix d'AMT. Renseignez le")} <Text style={s.b}>{t('poids ET les dimensions')}</Text> {t('pour une estimation juste.')}
             </Text>
           </View>
         )}
       </Card>
 
-      <SectionTitle>Articles</SectionTitle>
+      <SectionTitle>{t('Articles')}</SectionTitle>
       {catalog.length === 0 && !isAerien && (
-        <Text style={s.warn}>Aucun produit au catalogue de cette route pour ce mode.</Text>
+        <Text style={s.warn}>{t('Aucun produit au catalogue de cette route pour ce mode.')}</Text>
       )}
       {items.map((it, i) => (
         <Card key={i}>
-          <Text style={s.lbl}>Produit{isAerien ? ' (optionnel)' : ''}</Text>
+          <Text style={s.lbl}>{t('Produit')}{isAerien ? t(' (optionnel)') : ''}</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 8 }}>
             <View style={{ flexDirection: 'row', gap: 6 }}>
               {catalog.map((p, idx) => (
@@ -158,37 +160,37 @@ export default function QuoteScreen({ agencies = [] }) {
             </View>
           </ScrollView>
           <View style={s.grid}>
-            <Field label="Quantité" value={it.qty} onChange={(v) => setItem(i, 'qty', v)} />
-            {isAerien && <Field label="Poids (kg)" value={it.poids} onChange={(v) => setItem(i, 'poids', v)} />}
+            <Field label={t('Quantité')} value={it.qty} onChange={(v) => setItem(i, 'qty', v)} />
+            {isAerien && <Field label={t('Poids (kg)')} value={it.poids} onChange={(v) => setItem(i, 'poids', v)} />}
           </View>
           {isAerien && (
             <View style={s.grid}>
-              <Field label="Long (cm)" value={it.lng} onChange={(v) => setItem(i, 'lng', v)} />
-              <Field label="Larg (cm)" value={it.lrg} onChange={(v) => setItem(i, 'lrg', v)} />
-              <Field label="Haut (cm)" value={it.haut} onChange={(v) => setItem(i, 'haut', v)} />
+              <Field label={t('Long (cm)')} value={it.lng} onChange={(v) => setItem(i, 'lng', v)} />
+              <Field label={t('Larg (cm)')} value={it.lrg} onChange={(v) => setItem(i, 'lrg', v)} />
+              <Field label={t('Haut (cm)')} value={it.haut} onChange={(v) => setItem(i, 'haut', v)} />
             </View>
           )}
           {isAerien && !isChine && (
             <TouchableOpacity style={s.parfum} onPress={() => setItem(i, 'parfum', !it.parfum)}>
               <Text style={{ fontSize: 16 }}>{it.parfum ? '☑️' : '⬜'}</Text>
-              <Text style={s.parfumTxt}>Parfum / alcool (tarif majoré)</Text>
+              <Text style={s.parfumTxt}>{t('Parfum / alcool (tarif majoré)')}</Text>
             </TouchableOpacity>
           )}
-          {items.length > 1 && <TouchableOpacity onPress={() => delItem(i)}><Text style={s.del}>🗑 Retirer</Text></TouchableOpacity>}
+          {items.length > 1 && <TouchableOpacity onPress={() => delItem(i)}><Text style={s.del}>{t('🗑 Retirer')}</Text></TouchableOpacity>}
         </Card>
       ))}
-      <Btn label="+ Ajouter un article" kind="ghost" onPress={addItem} />
-      <Btn label="Calculer l'estimation" onPress={compute} busy={calc} />
+      <Btn label={t('+ Ajouter un article')} kind="ghost" onPress={addItem} />
+      <Btn label={t("Calculer l'estimation")} onPress={compute} busy={calc} />
 
       {result && (
         <Card style={{ marginTop: 14 }}>
-          <SectionTitle>Estimation</SectionTitle>
+          <SectionTitle>{t('Estimation')}</SectionTitle>
           <Text style={s.total}>{result.currency === 'EUR' ? `${eur(result.totalEur)}  (${fcfa(result.totalCfa)})` : fcfa(result.totalCfa)}</Text>
           {(result.lines || []).map((l, i) => (
-            <Text key={i} style={s.line}>• {l.desc || 'Article'} — {l.detail} = {l.currency === 'EUR' ? eur(l.amount) : fcfa(l.amount)}</Text>
+            <Text key={i} style={s.line}>• {l.desc || t('Article')} — {l.detail} = {l.currency === 'EUR' ? eur(l.amount) : fcfa(l.amount)}</Text>
           ))}
-          <Text style={s.note}>Estimation indicative, hors frais éventuels. Tarifs identiques à la facturation.</Text>
-          <Btn label="💾 Enregistrer ce devis" kind="gold" onPress={saveQuote} busy={saving} />
+          <Text style={s.note}>{t('Estimation indicative, hors frais éventuels. Tarifs identiques à la facturation.')}</Text>
+          <Btn label={t('💾 Enregistrer ce devis')} kind="gold" onPress={saveQuote} busy={saving} />
         </Card>
       )}
 
@@ -196,7 +198,7 @@ export default function QuoteScreen({ agencies = [] }) {
       {saved.length > 0 && (
         <Card style={{ marginTop: 14 }}>
           <TouchableOpacity onPress={() => setSavedOpen(o => !o)} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-            <SectionTitle>Mes devis enregistrés ({saved.length})</SectionTitle>
+            <SectionTitle>{t('Mes devis enregistrés')} ({saved.length})</SectionTitle>
             <Text style={{ color: colors.blue, fontWeight: '800', fontSize: 16 }}>{savedOpen ? '▾' : '▸'}</Text>
           </TouchableOpacity>
           {savedOpen && saved.map((q, i) => {
@@ -205,7 +207,7 @@ export default function QuoteScreen({ agencies = [] }) {
               <View key={q.id || i} style={i > 0 ? { borderTopWidth: 1, borderTopColor: colors.line } : null}>
                 <View style={s.qrow}>
                   <TouchableOpacity style={{ flex: 1, minWidth: 0 }} onPress={() => setExpanded(open ? null : (q.id || i))} activeOpacity={0.7}>
-                    <Text style={s.qlabel}>{q.label || 'Devis'} {open ? '▾' : '▸'}</Text>
+                    <Text style={s.qlabel}>{q.label || t('Devis')} {open ? '▾' : '▸'}</Text>
                     <Text style={s.qsub}>{q.currency === 'EUR' ? eur(q.totalEur) : fcfa(q.totalCfa)} · {fdate(q.createdAt)}</Text>
                   </TouchableOpacity>
                   <TouchableOpacity onPress={() => delQuote(q.id)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}><Text style={s.qdel}>🗑</Text></TouchableOpacity>
@@ -213,7 +215,7 @@ export default function QuoteScreen({ agencies = [] }) {
                 {open && (
                   <View style={s.qdetail}>
                     {(q.items || []).map((it, k) => (
-                      <Text key={k} style={s.qitem}>• {it.qty || 1}× {it.desc || 'Article'}{it.poids ? ` · ${it.poids} kg` : ''}{(it.lng || it.lrg || it.haut) ? ` · ${it.lng || '?'}×${it.lrg || '?'}×${it.haut || '?'} cm` : ''}{it.parfum ? ' · parfum/alcool' : ''}</Text>
+                      <Text key={k} style={s.qitem}>• {it.qty || 1}× {it.desc || t('Article')}{it.poids ? ` · ${it.poids} kg` : ''}{(it.lng || it.lrg || it.haut) ? ` · ${it.lng || '?'}×${it.lrg || '?'}×${it.haut || '?'} cm` : ''}{it.parfum ? ` · ${tr('parfum/alcool')}` : ''}</Text>
                     ))}
                     {(q.lines || []).map((l, k) => (
                       <Text key={'l' + k} style={s.qcalc}>↳ {l.detail} = {l.currency === 'EUR' ? eur(l.amount) : fcfa(l.amount)}</Text>

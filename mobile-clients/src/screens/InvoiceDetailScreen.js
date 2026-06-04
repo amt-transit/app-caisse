@@ -6,6 +6,7 @@ import { Card, SectionTitle, Btn, Badge, Loading } from '../components/ui';
 import { colors, fcfa, fdate } from '../theme';
 import { api } from '../api';
 import { shareInvoicePdf, saveInvoicePdf } from '../invoicePdf';
+import { useLang, tr } from '../i18n';
 
 const STAGES = ['📥 Entrepôt', '📦 Conteneur', '🛬 Arrivé', '✅ Livré'];
 
@@ -27,6 +28,7 @@ function stageOf(liv, label) {
 }
 
 export default function InvoiceDetailScreen({ reference, onBack }) {
+  const { t: T } = useLang();
   const [detail, setDetail] = useState(null);
   const [error, setError] = useState('');
   const [pdfBusy, setPdfBusy] = useState(false);
@@ -63,9 +65,9 @@ export default function InvoiceDetailScreen({ reference, onBack }) {
   };
 
   if (error) return (
-    <View style={s.wrap}><Header onBack={onBack} title="Facture" /><Text style={s.err}>{error}</Text></View>
+    <View style={s.wrap}><Header onBack={onBack} title={T('Facture')} /><Text style={s.err}>{T(error)}</Text></View>
   );
-  if (!detail) return (<View style={s.wrap}><Header onBack={onBack} title="Facture" /><Loading text="Chargement de la facture…" /></View>);
+  if (!detail) return (<View style={s.wrap}><Header onBack={onBack} title={T('Facture')} /><Loading text={T('Chargement de la facture…')} /></View>);
 
   const t = detail.transaction || {};
   const prix = Number(t.prix) || 0;
@@ -74,19 +76,19 @@ export default function InvoiceDetailScreen({ reference, onBack }) {
   let reste = prix - (Number(detail.reduction) || 0) + mag - paye;
   if (reste < 0) reste = 0;
   const statusKind = reste <= 0 ? 'paid' : (paye > 0 ? 'wait' : 'bad');
-  const statusLbl = reste <= 0 ? 'Payée' : (paye > 0 ? 'Acompte' : 'Impayée');
+  const statusLbl = reste <= 0 ? T('Payée') : (paye > 0 ? T('Acompte') : T('Impayée'));
 
   // Date estimée d'arrivée : depuis la date de départ + délai selon le mode
   // (aérien ~8 j, maritime ~40 j). Si déjà arrivé/livré, on l'indique.
   const liv0 = (detail.livraisons || [])[0] || {};
   const etaMode = liv0.modeExpedition === 'aerien' ? 'aerien' : 'maritime';
   let etaText = '';
-  if (liv0.status === 'LIVRE') etaText = 'Livré ✅';
-  else if (liv0.arrivalDate) etaText = `Arrivé le ${fdate(liv0.arrivalDate)}`;
+  if (liv0.status === 'LIVRE') etaText = T('Livré ✅');
+  else if (liv0.arrivalDate) etaText = `${T('Arrivé le')} ${fdate(liv0.arrivalDate)}`;
   else if (liv0.departureDate) {
     const d = new Date(liv0.departureDate);
-    if (!isNaN(d)) { d.setDate(d.getDate() + (etaMode === 'aerien' ? 8 : 40)); etaText = `~ ${fdate(d.toISOString())} (estimée)`; }
-  } else etaText = 'À confirmer (pas encore parti)';
+    if (!isNaN(d)) { d.setDate(d.getDate() + (etaMode === 'aerien' ? 8 : 40)); etaText = `~ ${fdate(d.toISOString())} ${T('(estimée)')}`; }
+  } else etaText = T('À confirmer (pas encore parti)');
 
   // Colis : un par label (sinon la livraison entière).
   const colis = [];
@@ -103,9 +105,9 @@ export default function InvoiceDetailScreen({ reference, onBack }) {
             colis ne sont pas récupérés / la facture pas réglée. */}
         {mag > 0 && (
           <View style={s.magAlert}>
-            <Text style={s.magAlertTitle}>⚠️ Frais de magasinage en cours</Text>
+            <Text style={s.magAlertTitle}>{T('⚠️ Frais de magasinage en cours')}</Text>
             <Text style={s.magAlertTxt}>
-              Des frais de stockage de {fcfa(mag)} s'appliquent et <Text style={{ fontWeight: '800' }}>augmentent chaque jour</Text> tant que les colis ne sont pas récupérés. Récupérez-les ou réglez la facture au plus vite.
+              {T('Des frais de stockage de')} {fcfa(mag)} {T("s'appliquent et")} <Text style={{ fontWeight: '800' }}>{T('augmentent chaque jour')}</Text> {T("tant que les colis ne sont pas récupérés. Récupérez-les ou réglez la facture au plus vite.")}
             </Text>
           </View>
         )}
@@ -113,43 +115,43 @@ export default function InvoiceDetailScreen({ reference, onBack }) {
         {/* Bilan */}
         <Card>
           <View style={s.bilanHead}>
-            <SectionTitle>Bilan</SectionTitle>
+            <SectionTitle>{T('Bilan')}</SectionTitle>
             <Badge text={statusLbl} kind={statusKind} />
           </View>
-          <Row k="Prix total" v={fcfa(prix)} />
-          <Row k="Montant payé" v={fcfa(paye)} color={colors.green} />
-          {mag > 0 && <Row k="Frais de magasinage" v={fcfa(mag)} color="#c2410c" />}
-          <Row k="Reste à payer" v={fcfa(reste)} color={reste > 0 ? colors.red : colors.green} bold />
+          <Row k={T('Prix total')} v={fcfa(prix)} />
+          <Row k={T('Montant payé')} v={fcfa(paye)} color={colors.green} />
+          {mag > 0 && <Row k={T('Frais de magasinage')} v={fcfa(mag)} color="#c2410c" />}
+          <Row k={T('Reste à payer')} v={fcfa(reste)} color={reste > 0 ? colors.red : colors.green} bold />
         </Card>
 
         {/* Infos */}
         <Card>
-          <SectionTitle>Informations</SectionTitle>
-          <Row k="Expéditeur" v={String(t.nom || '—').replace(/(\+?\d[\d\s.\-]{6,}\d)/g, '').trim() || '—'} />
-          <Row k="Destinataire" v={t.nomDestinataire || '—'} />
-          <Row k="Date" v={fdate(t.date)} />
-          {!!t.conteneur && <Row k="Conteneur" v={t.conteneur} />}
-          {!!etaText && <Row k="Arrivée estimée" v={etaText} color={liv0.status === 'LIVRE' ? colors.green : colors.blue} />}
+          <SectionTitle>{T('Informations')}</SectionTitle>
+          <Row k={T('Expéditeur')} v={String(t.nom || '—').replace(/(\+?\d[\d\s.\-]{6,}\d)/g, '').trim() || '—'} />
+          <Row k={T('Destinataire')} v={t.nomDestinataire || '—'} />
+          <Row k={T('Date')} v={fdate(t.date)} />
+          {!!t.conteneur && <Row k={T('Conteneur')} v={t.conteneur} />}
+          {!!etaText && <Row k={T('Arrivée estimée')} v={etaText} color={liv0.status === 'LIVRE' ? colors.green : colors.blue} />}
         </Card>
 
         {/* Suivi colis */}
         <Card>
-          <SectionTitle>Suivi des colis</SectionTitle>
-          {colis.length === 0 ? <Text style={s.muted}>Aucun colis rattaché.</Text> :
+          <SectionTitle>{T('Suivi des colis')}</SectionTitle>
+          {colis.length === 0 ? <Text style={s.muted}>{T('Aucun colis rattaché.')}</Text> :
             colis.map((c, i) => (
               <View key={i} style={[s.colis, i > 0 && s.colisBorder]}>
                 <View style={{ flex: 1 }}>
                   <Text style={s.colisRef}>{c.label}</Text>
                   {!!c.desc && <Text style={s.muted}>{c.desc}</Text>}
                 </View>
-                <Text style={s.stage}>{STAGES[c.stage]}</Text>
+                <Text style={s.stage}>{tr(STAGES[c.stage])}</Text>
               </View>
             ))}
         </Card>
 
-        <Btn label="🔗 Partager le suivi du colis" kind="gold" onPress={shareTracking} />
-        <Btn label={pdfBusy ? 'Génération…' : '📄 Enregistrer / Partager le PDF'} onPress={exportPdf} busy={pdfBusy} />
-        <Text style={s.note}>« Enregistrer en PDF » place le fichier dans vos Téléchargements. Le PDF officiel inclut les conditions générales et le récapitulatif financier.</Text>
+        <Btn label={T('🔗 Partager le suivi du colis')} kind="gold" onPress={shareTracking} />
+        <Btn label={pdfBusy ? T('Génération…') : T('📄 Enregistrer / Partager le PDF')} onPress={exportPdf} busy={pdfBusy} />
+        <Text style={s.note}>{T('« Enregistrer en PDF » place le fichier dans vos Téléchargements. Le PDF officiel inclut les conditions générales et le récapitulatif financier.')}</Text>
       </ScrollView>
     </View>
   );

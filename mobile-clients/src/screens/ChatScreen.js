@@ -7,10 +7,12 @@ import { Card, Empty, Loading } from '../components/ui';
 import { colors } from '../theme';
 import { api } from '../api';
 import { pickChatImage, takeChatPhoto, uploadChatAudio } from '../media';
+import { useLang, tr } from '../i18n';
 
 const fdt = (d) => { try { return new Date(d).toLocaleString('fr-FR'); } catch (e) { return ''; } };
 
 export default function ChatScreen({ selfName, active }) {
+  const { t } = useLang();
   const [loading, setLoading] = useState(true);
   const [convs, setConvs] = useState([]);
   const [messages, setMessages] = useState([]);
@@ -49,14 +51,14 @@ export default function ChatScreen({ selfName, active }) {
     setMessages(ms => [...ms, { id: 'tmp' + now, agency, sender: 'client', senderName: 'Vous', createdAt: now, ...optimistic }]);
     setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 50);
     try { await api.sendClientMessage({ agency, fromName: selfName || '', ...payload }); await load(); }
-    catch (e) { Alert.alert('Chat', "Envoi impossible."); }
+    catch (e) { Alert.alert('Chat', tr("Envoi impossible.")); }
   };
 
   const sendText = async () => {
-    const t = text.trim();
-    if (!t || !agency) return;
+    const msg = text.trim();
+    if (!msg || !agency) return;
     setText(''); setSending(true);
-    await sendPayload({ text: t }, { text: t });
+    await sendPayload({ text: msg }, { text: msg });
     setSending(false);
   };
 
@@ -68,16 +70,16 @@ export default function ChatScreen({ selfName, active }) {
       if (!dataUrl) return;
       setSending(true);
       await sendPayload({ imageUrl: dataUrl }, { imageUrl: dataUrl });
-    } catch (e) { Alert.alert('Photo', e.message || 'Impossible.'); }
+    } catch (e) { Alert.alert(tr('Photo'), e.message || tr('Impossible.')); }
     finally { setSending(false); }
   };
   // Propose le choix : appareil photo ou galerie.
   const sendPhoto = () => {
     if (!agency) return;
-    Alert.alert('Ajouter une photo', null, [
-      { text: '📷 Prendre une photo', onPress: () => sendImageFrom(takeChatPhoto) },
-      { text: '🖼️ Choisir dans la galerie', onPress: () => sendImageFrom(pickChatImage) },
-      { text: 'Annuler', style: 'cancel' },
+    Alert.alert(tr('Ajouter une photo'), null, [
+      { text: tr('📷 Prendre une photo'), onPress: () => sendImageFrom(takeChatPhoto) },
+      { text: tr('🖼️ Choisir dans la galerie'), onPress: () => sendImageFrom(pickChatImage) },
+      { text: tr('Annuler'), style: 'cancel' },
     ]);
   };
 
@@ -85,11 +87,11 @@ export default function ChatScreen({ selfName, active }) {
   const startRec = async () => {
     try {
       const perm = await Audio.requestPermissionsAsync();
-      if (!perm.granted) { Alert.alert('Micro', 'Autorisation micro refusée.'); return; }
+      if (!perm.granted) { Alert.alert(tr('Micro'), tr('Autorisation micro refusée.')); return; }
       await Audio.setAudioModeAsync({ allowsRecordingIOS: true, playsInSilentModeIOS: true });
       const { recording } = await Audio.Recording.createAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
       setRecording(recording);
-    } catch (e) { Alert.alert('Micro', "Impossible de démarrer l'enregistrement."); }
+    } catch (e) { Alert.alert(tr('Micro'), tr("Impossible de démarrer l'enregistrement.")); }
   };
   const cancelRec = async () => {
     if (!recording) return;
@@ -105,7 +107,7 @@ export default function ChatScreen({ selfName, active }) {
       setRecording(null);
       const url = await uploadChatAudio(uri, 'audio/m4a');
       await sendPayload({ audioUrl: url }, { audioUrl: url });
-    } catch (e) { Alert.alert('Vocal', "Envoi du vocal impossible."); }
+    } catch (e) { Alert.alert(tr('Vocal'), tr("Envoi du vocal impossible.")); }
     finally { setSending(false); }
   };
 
@@ -118,23 +120,23 @@ export default function ChatScreen({ selfName, active }) {
       soundRef.current = sound;
       setPlayingId(id);
       sound.setOnPlaybackStatusUpdate((st) => { if (st.didJustFinish) { setPlayingId(null); sound.unloadAsync().catch(() => {}); soundRef.current = null; } });
-    } catch (e) { Alert.alert('Lecture', "Lecture impossible."); setPlayingId(null); }
+    } catch (e) { Alert.alert(tr('Lecture'), tr("Lecture impossible.")); setPlayingId(null); }
   };
 
-  if (loading) return <Loading text="Chargement de votre messagerie…" />;
-  if (convs.length === 0) return <Empty icon="💬" text="Aucune agence rattachée à votre numéro. Vos conversations apparaîtront ici dès votre première facture." />;
+  if (loading) return <Loading text={t('Chargement de votre messagerie…')} />;
+  if (convs.length === 0) return <Empty icon="💬" text={t('Aucune agence rattachée à votre numéro. Vos conversations apparaîtront ici dès votre première facture.')} />;
 
   // Liste des conversations.
   if (!agency) {
     return (
       <ScrollView contentContainerStyle={{ padding: 16 }}>
-        <Text style={s.title}>Vos conversations</Text>
+        <Text style={s.title}>{t('Vos conversations')}</Text>
         <Card style={{ padding: 6 }}>
           {convs.map((c, i) => (
             <TouchableOpacity key={i} style={[s.conv, i > 0 && s.convBorder]} onPress={() => openAgency(c.agency)} activeOpacity={0.7}>
               <View style={{ flex: 1 }}>
                 <Text style={s.convN}>{c.name}</Text>
-                <Text style={s.convS}>{c.role === 'exp' ? 'vos envois' : c.role === 'dest' ? 'vos réceptions' : 'expéditions & réceptions'}</Text>
+                <Text style={s.convS}>{c.role === 'exp' ? t('vos envois') : c.role === 'dest' ? t('vos réceptions') : t('expéditions & réceptions')}</Text>
               </View>
               {c.unread > 0 && <Text style={s.badge}>{c.unread}</Text>}
               <Text style={s.chev}>›</Text>
@@ -157,25 +159,25 @@ export default function ChatScreen({ selfName, active }) {
         <Text style={s.cHeadT}>{conv.name}</Text>
       </View>
       <ScrollView ref={scrollRef} contentContainerStyle={{ padding: 14 }} onContentSizeChange={() => scrollRef.current?.scrollToEnd({ animated: false })}>
-        {msgs.length === 0 ? <Text style={s.startTxt}>Démarrez la conversation avec {conv.name}.</Text> :
+        {msgs.length === 0 ? <Text style={s.startTxt}>{t('Démarrez la conversation avec')} {conv.name}.</Text> :
           msgs.map((m, i) => {
             const mine = m.sender === 'client';
             return (
               <View key={i} style={{ marginBottom: 8 }}>
                 <View style={[s.bubbleRow, { marginBottom: 0 }, mine && { justifyContent: 'flex-end' }]}>
                   <View style={[s.bubble, mine ? s.bubbleMe : s.bubbleOther]}>
-                    <Text style={[s.bMeta, mine && { color: 'rgba(255,255,255,0.7)' }]}>{mine ? 'Vous' : (m.senderName || conv.name)} · {fdt(m.createdAt)}</Text>
+                    <Text style={[s.bMeta, mine && { color: 'rgba(255,255,255,0.7)' }]}>{mine ? t('Vous') : (m.senderName || conv.name)} · {fdt(m.createdAt)}</Text>
                     {!!m.text && <Text style={[s.bTxt, mine && { color: '#fff' }]}>{m.text}</Text>}
                     {!!m.imageUrl && <Image source={{ uri: m.imageUrl }} style={s.img} resizeMode="cover" />}
                     {!!m.audioUrl && (
                       <TouchableOpacity style={[s.audio, mine ? s.audioMe : s.audioOther]} onPress={() => playAudio(m.id || i, m.audioUrl)}>
                         <Text style={{ fontSize: 18 }}>{playingId === (m.id || i) ? '⏸️' : '▶️'}</Text>
-                        <Text style={[s.audioTxt, mine && { color: '#fff' }]}>Message vocal</Text>
+                        <Text style={[s.audioTxt, mine && { color: '#fff' }]}>{t('Message vocal')}</Text>
                       </TouchableOpacity>
                     )}
                   </View>
                 </View>
-                {i === lastSeenIdx && <Text style={s.seen}>Vu ✓✓</Text>}
+                {i === lastSeenIdx && <Text style={s.seen}>{t('Vu ✓✓')}</Text>}
               </View>
             );
           })}
@@ -184,15 +186,15 @@ export default function ChatScreen({ selfName, active }) {
       {recording ? (
         <View style={s.recBar}>
           <View style={s.recDot} />
-          <Text style={s.recTxt}>Enregistrement…</Text>
-          <TouchableOpacity style={s.recCancel} onPress={cancelRec}><Text style={s.recCancelTxt}>Annuler</Text></TouchableOpacity>
+          <Text style={s.recTxt}>{t('Enregistrement…')}</Text>
+          <TouchableOpacity style={s.recCancel} onPress={cancelRec}><Text style={s.recCancelTxt}>{t('Annuler')}</Text></TouchableOpacity>
           <TouchableOpacity style={[s.sendBtn, sending && { opacity: 0.6 }]} onPress={stopAndSend} disabled={sending}><Text style={s.sendTxt}>➤</Text></TouchableOpacity>
         </View>
       ) : (
         <View style={s.inputBar}>
           <TouchableOpacity style={s.iconBtn} onPress={sendPhoto} disabled={sending}><Text style={s.icon}>📷</Text></TouchableOpacity>
           <TouchableOpacity style={s.iconBtn} onPress={startRec} disabled={sending}><Text style={s.icon}>🎤</Text></TouchableOpacity>
-          <TextInput style={s.input} value={text} onChangeText={setText} placeholder="Votre message…" placeholderTextColor={colors.muted} multiline />
+          <TextInput style={s.input} value={text} onChangeText={setText} placeholder={t('Votre message…')} placeholderTextColor={colors.muted} multiline />
           <TouchableOpacity style={[s.sendBtn, sending && { opacity: 0.6 }]} onPress={sendText} disabled={sending}><Text style={s.sendTxt}>➤</Text></TouchableOpacity>
         </View>
       )}

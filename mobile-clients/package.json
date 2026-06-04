@@ -8,12 +8,15 @@
     "ios": "expo run:ios"
   },
   "dependencies": {
+    "@expo-google-fonts/comfortaa": "^0.4.2",
+    "@expo-google-fonts/jost": "^0.4.2",
     "@react-native-async-storage/async-storage": "1.23.1",
     "expo": "~52.0.0",
     "expo-asset": "~11.0.5",
     "expo-av": "~15.0.2",
     "expo-device": "~7.0.3",
     "expo-file-system": "~18.0.12",
+    "expo-font": "~13.0.4",
     "expo-image-manipulator": "~13.0.6",
     "expo-image-picker": "~16.0.6",
     "expo-linear-gradient": "~14.0.2",

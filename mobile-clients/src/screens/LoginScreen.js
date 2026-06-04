@@ -74,7 +74,11 @@ export default function LoginScreen({ onAuthed }) {
       setStep('code');
     } catch (e) {
       console.warn('verifyPhoneNumber:', e?.code, e?.message);
-      fail(e?.code === 'auth/invalid-phone-number' ? 'Numéro invalide.' : "Envoi du SMS impossible. Réessayez.");
+      // [DIAGNOSTIC TEMPORAIRE] On affiche le code/détail exact de l'erreur pour
+      // savoir POURQUOI le SMS échoue (reCAPTCHA, quota, région, facturation…).
+      // À retirer une fois le problème identifié.
+      const detail = e?.code || e?.message || 'inconnu';
+      fail(e?.code === 'auth/invalid-phone-number' ? 'Numéro invalide.' : ("Envoi du SMS impossible. [" + detail + "]"));
     }
   };
 

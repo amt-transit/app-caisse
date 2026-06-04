@@ -5,10 +5,12 @@ import { View, Text, ScrollView, TextInput, TouchableOpacity, StyleSheet, Alert 
 import { Card, SectionTitle, Btn, Loading, Empty } from '../components/ui';
 import { colors } from '../theme';
 import { api } from '../api';
+import { useLang, tr } from '../i18n';
 
 const blank = { id: '', nom: '', telephone: '', adresse: '', commune: '' };
 
 export default function ContactsScreen() {
+  const { t } = useLang();
   const [contacts, setContacts] = useState(null);
   const [editing, setEditing] = useState(null); // objet en cours d'édition (ou null)
   const [saving, setSaving] = useState(false);
@@ -17,7 +19,7 @@ export default function ContactsScreen() {
   useEffect(() => { load(); }, []);
 
   const save = async () => {
-    if (!editing.nom.trim()) { Alert.alert('Carnet', 'Le nom est obligatoire.'); return; }
+    if (!editing.nom.trim()) { Alert.alert(tr('Carnet'), tr('Le nom est obligatoire.')); return; }
     setSaving(true);
     try {
       await api.saveMyContact({
@@ -26,18 +28,18 @@ export default function ContactsScreen() {
       });
       setEditing(null);
       await load();
-    } catch (e) { Alert.alert('Carnet', "Enregistrement impossible."); }
+    } catch (e) { Alert.alert(tr('Carnet'), tr("Enregistrement impossible.")); }
     finally { setSaving(false); }
   };
 
   const remove = (ct) => {
-    Alert.alert('Supprimer ?', `Retirer ${ct.nom} du carnet ?`, [
-      { text: 'Annuler', style: 'cancel' },
-      { text: 'Supprimer', style: 'destructive', onPress: async () => { try { await api.deleteMyContact(ct.id); await load(); } catch (e) {} } },
+    Alert.alert(tr('Supprimer ?'), `${tr('Retirer')} ${ct.nom} ${tr('du carnet ?')}`, [
+      { text: tr('Annuler'), style: 'cancel' },
+      { text: tr('Supprimer'), style: 'destructive', onPress: async () => { try { await api.deleteMyContact(ct.id); await load(); } catch (e) {} } },
     ]);
   };
 
-  if (contacts === null) return <Loading text="Chargement du carnet…" />;
+  if (contacts === null) return <Loading text={t('Chargement du carnet…')} />;
 
   // Formulaire (ajout / édition)
   if (editing) {
@@ -45,17 +47,17 @@ export default function ContactsScreen() {
     return (
       <ScrollView contentContainerStyle={{ padding: 16 }}>
         <Card>
-          <SectionTitle>{editing.id ? 'Modifier le destinataire' : 'Nouveau destinataire'}</SectionTitle>
-          <Text style={s.lbl}>Nom complet *</Text>
-          <TextInput style={s.input} value={editing.nom} onChangeText={(v) => set('nom', v)} placeholder="Nom et prénom" placeholderTextColor={colors.muted} />
-          <Text style={s.lbl}>Téléphone</Text>
-          <TextInput style={s.input} value={editing.telephone} onChangeText={(v) => set('telephone', v)} placeholder="Numéro du destinataire" placeholderTextColor={colors.muted} keyboardType="phone-pad" />
-          <Text style={s.lbl}>Commune / ville</Text>
-          <TextInput style={s.input} value={editing.commune} onChangeText={(v) => set('commune', v)} placeholder="Ex : Cocody" placeholderTextColor={colors.muted} />
-          <Text style={s.lbl}>Adresse de livraison</Text>
-          <TextInput style={[s.input, { height: 64, textAlignVertical: 'top' }]} value={editing.adresse} onChangeText={(v) => set('adresse', v)} placeholder="Quartier, rue, repère…" placeholderTextColor={colors.muted} multiline />
-          <Btn label="Enregistrer" onPress={save} busy={saving} />
-          <Btn label="Annuler" kind="ghost" onPress={() => setEditing(null)} />
+          <SectionTitle>{editing.id ? t('Modifier le destinataire') : t('Nouveau destinataire')}</SectionTitle>
+          <Text style={s.lbl}>{t('Nom complet *')}</Text>
+          <TextInput style={s.input} value={editing.nom} onChangeText={(v) => set('nom', v)} placeholder={t('Nom et prénom')} placeholderTextColor={colors.muted} />
+          <Text style={s.lbl}>{t('Téléphone')}</Text>
+          <TextInput style={s.input} value={editing.telephone} onChangeText={(v) => set('telephone', v)} placeholder={t('Numéro du destinataire')} placeholderTextColor={colors.muted} keyboardType="phone-pad" />
+          <Text style={s.lbl}>{t('Commune / ville')}</Text>
+          <TextInput style={s.input} value={editing.commune} onChangeText={(v) => set('commune', v)} placeholder={t('Ex : Cocody')} placeholderTextColor={colors.muted} />
+          <Text style={s.lbl}>{t('Adresse de livraison')}</Text>
+          <TextInput style={[s.input, { height: 64, textAlignVertical: 'top' }]} value={editing.adresse} onChangeText={(v) => set('adresse', v)} placeholder={t('Quartier, rue, repère…')} placeholderTextColor={colors.muted} multiline />
+          <Btn label={t('Enregistrer')} onPress={save} busy={saving} />
+          <Btn label={t('Annuler')} kind="ghost" onPress={() => setEditing(null)} />
         </Card>
       </ScrollView>
     );
@@ -63,9 +65,9 @@ export default function ContactsScreen() {
 
   return (
     <ScrollView contentContainerStyle={{ padding: 16 }}>
-      <Btn label="+ Ajouter un destinataire" onPress={() => setEditing({ ...blank })} />
+      <Btn label={t('+ Ajouter un destinataire')} onPress={() => setEditing({ ...blank })} />
       {contacts.length === 0 ? (
-        <Empty icon="📒" text="Votre carnet est vide. Ajoutez vos destinataires habituels pour gagner du temps." />
+        <Empty icon="📒" text={t('Votre carnet est vide. Ajoutez vos destinataires habituels pour gagner du temps.')} />
       ) : (
         <Card style={{ padding: 6, marginTop: 14 }}>
           {contacts.map((ct, i) => (

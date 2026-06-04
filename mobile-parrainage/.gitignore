@@ -6,3 +6,7 @@ web-build/
 .DS_Store
 *.tgz
 .env
+
+# Dossiers natifs générés par expo prebuild (régénérables, volumineux, contiennent le build)
+android/
+ios/

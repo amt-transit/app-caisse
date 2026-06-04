@@ -8,3 +8,7 @@ npm-debug.*
 *.key
 *.mobileprovision
 .DS_Store
+
+# Dossiers natifs générés par expo prebuild (régénérables, volumineux, contiennent le build)
+android/
+ios/

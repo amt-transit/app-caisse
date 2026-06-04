@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import { View, Text, ScrollView, TextInput, TouchableOpacity, StyleSheet, RefreshControl } from 'react-native';
 import { Card, Badge, Loading, Empty } from '../components/ui';
 import { colors, fcfa, fdate } from '../theme';
+import { useLang } from '../i18n';
 
 const TAUX = 655.957;
 const toFcfa = (v, cur) => (cur === 'EUR' ? (v || 0) * TAUX : (v || 0));
@@ -10,8 +11,9 @@ const STATUS = { PAYE: ['Payé', 'paid'], PARTIEL: ['Acompte', 'wait'], IMPAYE: 
 const norm = (s) => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
 
 export default function InvoicesScreen({ data, loading, onRefresh, onOpenInvoice }) {
+  const { t } = useLang();
   const [q, setQ] = useState('');
-  if (loading && !data) return <Loading text="Chargement…" />;
+  if (loading && !data) return <Loading text={t('Chargement…')} />;
   const invoices = (data && data.invoices) || [];
   const term = norm(q.trim());
   const list = !term ? invoices : invoices.filter(i =>
@@ -21,13 +23,13 @@ export default function InvoicesScreen({ data, loading, onRefresh, onOpenInvoice
     <View style={{ flex: 1 }}>
       <View style={s.searchBar}>
         <Text style={s.searchIc}>🔍</Text>
-        <TextInput style={s.search} value={q} onChangeText={setQ} placeholder="Rechercher une facture…" placeholderTextColor={colors.muted} />
+        <TextInput style={s.search} value={q} onChangeText={setQ} placeholder={t('Rechercher une facture…')} placeholderTextColor={colors.muted} />
         {!!q && <TouchableOpacity onPress={() => setQ('')}><Text style={s.clear}>✕</Text></TouchableOpacity>}
       </View>
       <ScrollView contentContainerStyle={{ padding: 16 }}
         refreshControl={<RefreshControl refreshing={!!loading} onRefresh={onRefresh} tintColor={colors.blue} />}>
         {list.length === 0 ? (
-          <Empty icon="🧾" text={q ? 'Aucune facture ne correspond.' : 'Aucune facture pour le moment.'} />
+          <Empty icon="🧾" text={q ? t('Aucune facture ne correspond.') : t('Aucune facture pour le moment.')} />
         ) : (
           <Card style={{ padding: 6 }}>
             {list.map((i, idx) => {
@@ -37,10 +39,10 @@ export default function InvoicesScreen({ data, loading, onRefresh, onOpenInvoice
                   <View style={{ flex: 1, minWidth: 0 }}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                       <Text style={s.ref}>{i.reference || '—'}</Text>
-                      <Badge text={lbl} kind={kind} />
+                      <Badge text={t(lbl)} kind={kind} />
                     </View>
                     <Text style={s.sub} numberOfLines={1}>
-                      {(i.role === 'dest' ? 'Exp.' : 'Dest.')} : {i.counterpart || '—'} · {fdate(i.date)}
+                      {(i.role === 'dest' ? t('Exp.') : t('Dest.'))} : {i.counterpart || '—'} · {fdate(i.date)}
                     </Text>
                   </View>
                   <Text style={s.amt}>{fcfa(toFcfa(i.total, i.currency))}</Text>
@@ -49,7 +51,7 @@ export default function InvoicesScreen({ data, loading, onRefresh, onOpenInvoice
             })}
           </Card>
         )}
-        <Text style={s.count}>{list.length} facture(s)</Text>
+        <Text style={s.count}>{list.length} {t('facture(s)')}</Text>
       </ScrollView>
     </View>
   );

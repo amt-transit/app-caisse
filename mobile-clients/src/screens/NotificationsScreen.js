@@ -4,8 +4,10 @@ import { View, Text, ScrollView, StyleSheet, RefreshControl } from 'react-native
 import { Card, Loading, Empty } from '../components/ui';
 import { colors, fdate } from '../theme';
 import { api } from '../api';
+import { useLang } from '../i18n';
 
 export default function NotificationsScreen() {
+  const { t } = useLang();
   const [notifs, setNotifs] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -20,8 +22,8 @@ export default function NotificationsScreen() {
   };
   useEffect(() => { load(); }, []);
 
-  if (notifs === null) return <Loading text="Chargement…" />;
-  if (notifs.length === 0) return <Empty icon="🔔" text="Aucune notification pour le moment." />;
+  if (notifs === null) return <Loading text={t('Chargement…')} />;
+  if (notifs.length === 0) return <Empty icon="🔔" text={t('Aucune notification pour le moment.')} />;
 
   return (
     <ScrollView contentContainerStyle={{ padding: 16 }}

@@ -1,0 +1,30 @@
+{
+  "project_info": {
+    "project_number": "682789156997",
+    "firebase_url": "https://caisse-amt-perso-default-rtdb.firebaseio.com",
+    "project_id": "caisse-amt-perso",
+    "storage_bucket": "caisse-amt-perso.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:682789156997:android:a191c54532701e52be91ec",
+        "android_client_info": {
+          "package_name": "com.amttransit.parrainage"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBvqduU6hmIjhftNZR8hFF69N91icWA5Tw"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

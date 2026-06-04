@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, ScrollView, TextInput, TouchableOpacity, StyleSheet, RefreshControl } from 'react-native';
 import { Card, Empty, Loading } from '../components/ui';
 import { colors, fdate } from '../theme';
+import { useLang, tr } from '../i18n';
 
 const norm = (s) => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
 
@@ -14,6 +15,7 @@ const STAGES = [
 ];
 
 export default function TrackingScreen({ data, loading, onRefresh, active }) {
+  const { t } = useLang();
   const [filter, setFilter] = useState(-1); // -1 = tous
   const [q, setQ] = useState('');
   // Suivi quasi temps réel : rafraîchit en arrivant sur l'onglet, puis toutes
@@ -24,7 +26,7 @@ export default function TrackingScreen({ data, loading, onRefresh, active }) {
     const id = setInterval(() => { onRefresh && onRefresh(); }, 60000);
     return () => clearInterval(id);
   }, [active]);
-  if (loading && !data) return <Loading text="Chargement de vos colis…" />;
+  if (loading && !data) return <Loading text={t('Chargement de vos colis…')} />;
   const parcels = (data && data.parcels) || [];
   const counts = STAGES.map((_, i) => parcels.filter(p => p.stage === i).length);
   const term = norm(q.trim());
@@ -38,7 +40,7 @@ export default function TrackingScreen({ data, loading, onRefresh, active }) {
       {/* Barre de recherche */}
       <View style={s.searchBar}>
         <Text style={s.searchIc}>🔍</Text>
-        <TextInput style={s.search} value={q} onChangeText={setQ} placeholder="Rechercher un colis (réf, description)…" placeholderTextColor={colors.muted} />
+        <TextInput style={s.search} value={q} onChangeText={setQ} placeholder={t('Rechercher un colis (réf, description)…')} placeholderTextColor={colors.muted} />
         {!!q && <TouchableOpacity onPress={() => setQ('')}><Text style={s.clearX}>✕</Text></TouchableOpacity>}
       </View>
       {/* Récap par étape (cliquable = filtre) */}
@@ -47,16 +49,16 @@ export default function TrackingScreen({ data, loading, onRefresh, active }) {
           <TouchableOpacity key={i} style={[s.p, filter === i && s.pActive]} onPress={() => setFilter(filter === i ? -1 : i)} activeOpacity={0.7}>
             <Text style={{ fontSize: 20 }}>{st.ic}</Text>
             <Text style={s.pV}>{counts[i]}</Text>
-            <Text style={s.pL}>{st.l}</Text>
+            <Text style={s.pL}>{tr(st.l)}</Text>
           </TouchableOpacity>
         ))}
       </View>
       {filter >= 0 && (
-        <TouchableOpacity onPress={() => setFilter(-1)}><Text style={s.clear}>↺ Voir tous les colis</Text></TouchableOpacity>
+        <TouchableOpacity onPress={() => setFilter(-1)}><Text style={s.clear}>{t('↺ Voir tous les colis')}</Text></TouchableOpacity>
       )}
 
       {list.length === 0 ? (
-        <Empty icon="📦" text={parcels.length === 0 ? "Aucun colis rattaché à votre numéro." : "Aucun colis à cette étape."} />
+        <Empty icon="📦" text={parcels.length === 0 ? t('Aucun colis rattaché à votre numéro.') : t('Aucun colis à cette étape.')} />
       ) : list.map((p, idx) => (
         <Card key={idx}>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
@@ -84,7 +86,7 @@ function Stepper({ stage }) {
             <View style={[s.dot, done && s.dotDone, current && s.dotCurrent]}>
               <Text style={{ fontSize: 12 }}>{i <= stage ? st.ic : (i + 1)}</Text>
             </View>
-            <Text style={[s.stepLb, (done || current) && { color: colors.blue, fontWeight: '700' }]}>{st.l}</Text>
+            <Text style={[s.stepLb, (done || current) && { color: colors.blue, fontWeight: '700' }]}>{tr(st.l)}</Text>
           </View>
         );
       })}

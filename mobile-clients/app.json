@@ -53,7 +53,8 @@
         {
           "microphonePermission": "Pour enregistrer des messages vocaux dans le chat."
         }
-      ]
+      ],
+      "expo-font"
     ],
     "extra": {
       "eas": {

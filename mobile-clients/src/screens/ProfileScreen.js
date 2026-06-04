@@ -34,7 +34,7 @@ export default function ProfileScreen({ data, phone, onLock, onLogout, onProfile
     })();
   }, []);
 
-  if (!profile) return <Loading text="Chargement du profil…" />;
+  if (!profile) return <Loading text={t('Chargement du profil…')} />;
 
   const invoices = (data && data.invoices) || [];
   const agencies = (data && data.agencies) || [];
@@ -101,28 +101,28 @@ export default function ProfileScreen({ data, phone, onLock, onLogout, onProfile
           <View style={s.camBadge}><Text style={{ fontSize: 11 }}>📷</Text></View>
         </TouchableOpacity>
         <View style={{ flex: 1, minWidth: 0 }}>
-          <Text style={s.heroName}>{fullName || 'Client AMT'}</Text>
+          <Text style={s.heroName}>{fullName || t('Client AMT')}</Text>
           <Text style={s.heroSub}>📞 {phone || '—'}</Text>
         </View>
       </View>
 
       {/* Stats */}
       <View style={s.stats}>
-        <Card style={s.stat}><Text style={s.statV}>{invoices.length}</Text><Text style={s.statL}>Factures</Text></Card>
-        <Card style={s.stat}><Text style={s.statV}>{loyalty.sentAsSender || 0}</Text><Text style={s.statL}>Envois</Text></Card>
-        <Card style={s.stat}><Text style={[s.statV, { color: totalDu > 0 ? colors.red : colors.green }]}>{fcfa(totalDu)}</Text><Text style={s.statL}>Reste</Text></Card>
+        <Card style={s.stat}><Text style={s.statV}>{invoices.length}</Text><Text style={s.statL}>{t('Factures')}</Text></Card>
+        <Card style={s.stat}><Text style={s.statV}>{loyalty.sentAsSender || 0}</Text><Text style={s.statL}>{t('Envois')}</Text></Card>
+        <Card style={s.stat}><Text style={[s.statV, { color: totalDu > 0 ? colors.red : colors.green }]}>{fcfa(totalDu)}</Text><Text style={s.statL}>{t('Reste')}</Text></Card>
       </View>
 
       {/* Agences rattachées */}
       {agencies.length > 0 && (
         <Card>
-          <SectionTitle>Mes agences AMT</SectionTitle>
+          <SectionTitle>{t('Mes agences AMT')}</SectionTitle>
           {agencies.map((a, i) => (
             <View key={i} style={[s.line, i > 0 && s.lineBorder]}>
               <Text style={s.lineIc}>🏢</Text>
               <View style={{ flex: 1 }}>
                 <Text style={s.lineT}>{a.name}</Text>
-                <Text style={s.lineS}>{a.role === 'exp' ? 'Vous expédiez via cette agence' : a.role === 'dest' ? 'Vous recevez via cette agence' : 'Expéditions & réceptions'}</Text>
+                <Text style={s.lineS}>{a.role === 'exp' ? t('Vous expédiez via cette agence') : a.role === 'dest' ? t('Vous recevez via cette agence') : t('Expéditions & réceptions')}</Text>
               </View>
             </View>
           ))}
@@ -131,7 +131,7 @@ export default function ProfileScreen({ data, phone, onLock, onLogout, onProfile
 
       {/* Fidélité */}
       <Card>
-        <SectionTitle>Fidélité 🎁</SectionTitle>
+        <SectionTitle>{t('Fidélité 🎁')}</SectionTitle>
         <Text style={s.muted}>À {need} envois, 1 carton moyen offert.{loyalty.freeCartons ? ` Déjà ${loyalty.freeCartons} gagné(s).` : ''}</Text>
         <View style={s.bar}><View style={[s.barFill, { width: `${pct}%` }]} /></View>
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 6 }}>
@@ -142,27 +142,27 @@ export default function ProfileScreen({ data, phone, onLock, onLogout, onProfile
 
       {/* Mon compte */}
       <Card>
-        <SectionTitle>Mon compte</SectionTitle>
+        <SectionTitle>{t('Mon compte')}</SectionTitle>
         {!editing ? (
           <TouchableOpacity style={s.line} onPress={() => setEditing(true)}>
             <Text style={s.lineIc}>✏️</Text>
             <View style={{ flex: 1 }}>
-              <Text style={s.lineT}>Modifier nom / prénom / adresse</Text>
-              <Text style={s.lineS}>{fullName || 'Nom non renseigné'}</Text>
+              <Text style={s.lineT}>{t('Modifier nom / prénom / adresse')}</Text>
+              <Text style={s.lineS}>{fullName || t('Nom non renseigné')}</Text>
               {!!profile.address && <Text style={s.lineS}>📍 {profile.address}</Text>}
             </View>
             <Text style={s.chev}>›</Text>
           </TouchableOpacity>
         ) : (
           <View>
-            <Text style={s.lbl}>Prénom</Text>
-            <TextInput style={s.input} value={prenom} onChangeText={setPrenom} placeholder="Prénom" placeholderTextColor={colors.muted} />
-            <Text style={s.lbl}>Nom</Text>
-            <TextInput style={s.input} value={nom} onChangeText={setNom} placeholder="Nom" placeholderTextColor={colors.muted} />
-            <Text style={s.lbl}>Adresse (pour vos enlèvements / livraisons)</Text>
-            <TextInput style={[s.input, { height: 64, textAlignVertical: 'top' }]} value={address} onChangeText={setAddress} placeholder="N°, rue, code postal, ville…" placeholderTextColor={colors.muted} multiline />
-            <Btn label="Enregistrer" onPress={save} busy={saving} />
-            <Btn label="Annuler" kind="ghost" onPress={() => setEditing(false)} />
+            <Text style={s.lbl}>{t('Prénom')}</Text>
+            <TextInput style={s.input} value={prenom} onChangeText={setPrenom} placeholder={t('Prénom')} placeholderTextColor={colors.muted} />
+            <Text style={s.lbl}>{t('Nom')}</Text>
+            <TextInput style={s.input} value={nom} onChangeText={setNom} placeholder={t('Nom')} placeholderTextColor={colors.muted} />
+            <Text style={s.lbl}>{t('Adresse (pour vos enlèvements / livraisons)')}</Text>
+            <TextInput style={[s.input, { height: 64, textAlignVertical: 'top' }]} value={address} onChangeText={setAddress} placeholder={t('N°, rue, code postal, ville…')} placeholderTextColor={colors.muted} multiline />
+            <Btn label={t('Enregistrer')} onPress={save} busy={saving} />
+            <Btn label={t('Annuler')} kind="ghost" onPress={() => setEditing(false)} />
           </View>
         )}
       </Card>
@@ -183,7 +183,7 @@ export default function ProfileScreen({ data, phone, onLock, onLogout, onProfile
       {/* À propos */}
       {about && (
         <Card>
-          <SectionTitle>À propos</SectionTitle>
+          <SectionTitle>{t('À propos')}</SectionTitle>
           <Text style={s.aboutName}>{about.name || "AMT TRANS'IT"}</Text>
           {!!about.address && <Text style={s.muted}>📍 {about.address}</Text>}
           {!!about.phone && <Text style={s.muted}>📞 {about.phone}</Text>}
@@ -192,10 +192,10 @@ export default function ProfileScreen({ data, phone, onLock, onLogout, onProfile
         </Card>
       )}
 
-      <Btn label="🔒 Se déconnecter" onPress={onLock} style={{ marginTop: 4 }} />
-      <Text style={[s.muted, { textAlign: 'center', marginTop: 6 }]}>À la réouverture, votre code PIN suffira (pas de SMS).</Text>
+      <Btn label={t('🔒 Se déconnecter')} onPress={onLock} style={{ marginTop: 4 }} />
+      <Text style={[s.muted, { textAlign: 'center', marginTop: 6 }]}>{t('À la réouverture, votre code PIN suffira (pas de SMS).')}</Text>
       <TouchableOpacity onPress={confirmLogout} style={{ alignItems: 'center', paddingVertical: 14 }}>
-        <Text style={{ color: colors.muted, fontWeight: '700', fontSize: 13 }}>Changer de compte (déconnexion totale)</Text>
+        <Text style={{ color: colors.muted, fontWeight: '700', fontSize: 13 }}>{t('Changer de compte (déconnexion totale)')}</Text>
       </TouchableOpacity>
       <Text style={s.version}>AMT Clients · v1.0</Text>
     </ScrollView>

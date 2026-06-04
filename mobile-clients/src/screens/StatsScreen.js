@@ -5,14 +5,16 @@ import { View, Text, ScrollView, StyleSheet } from 'react-native';
 import Svg, { Polyline, Circle, Line as SvgLine } from 'react-native-svg';
 import { Card, SectionTitle, Empty } from '../components/ui';
 import { colors, fcfa } from '../theme';
+import { useLang } from '../i18n';
 
 const TAUX = 655.957;
 const toFcfa = (v, cur) => (cur === 'EUR' ? (v || 0) * TAUX : (v || 0));
 
 export default function StatsScreen({ data }) {
+  const { t } = useLang();
   const invoices = (data && data.invoices) || [];
   const loyalty = (data && data.loyalty) || {};
-  if (invoices.length === 0) return <Empty icon="📊" text="Pas encore de données à afficher." />;
+  if (invoices.length === 0) return <Empty icon="📊" text={t('Pas encore de données à afficher.')} />;
 
   const nb = invoices.length;
   const paye = invoices.reduce((s, i) => s + toFcfa(i.paid, i.currency), 0);
@@ -46,22 +48,22 @@ export default function StatsScreen({ data }) {
   return (
     <ScrollView contentContainerStyle={{ padding: 16 }}>
       <View style={st.kpis}>
-        <Kpi v={nb} l="Factures" />
-        <Kpi v={envois} l="Envois" />
+        <Kpi v={nb} l={t('Factures')} />
+        <Kpi v={envois} l={t('Envois')} />
       </View>
       <View style={st.kpis}>
-        <Kpi v={fcfa(ca)} l="CA total" color={colors.blue} />
-        <Kpi v={fcfa(impayeMontant)} l="Impayé" color={colors.red} />
+        <Kpi v={fcfa(ca)} l={t('CA total')} color={colors.blue} />
+        <Kpi v={fcfa(impayeMontant)} l={t('Impayé')} color={colors.red} />
       </View>
 
       <Card>
-        <SectionTitle>Répartition par statut</SectionTitle>
+        <SectionTitle>{t('Répartition par statut')}</SectionTitle>
         {statusRows.map(r => {
           const pct = nb > 0 ? Math.round(r.n / nb * 100) : 0;
           return (
             <View key={r.k} style={st.srow}>
               <View style={st.sline}>
-                <Text style={st.slabel}>{r.l}</Text>
+                <Text style={st.slabel}>{t(r.l)}</Text>
                 <Text style={st.svalue}>{r.n} · {pct}%</Text>
               </View>
               <View style={st.track}><View style={[st.fill, { width: `${pct}%`, backgroundColor: r.c }]} /></View>
@@ -71,11 +73,11 @@ export default function StatsScreen({ data }) {
       </Card>
 
       <Card>
-        <SectionTitle>Envois / Impayés (6 mois)</SectionTitle>
+        <SectionTitle>{t('Envois / Impayés (6 mois)')}</SectionTitle>
         <LineChart months={months} />
         <View style={st.legendRow}>
-          <View style={st.legend}><View style={[st.dot, { backgroundColor: colors.blue }]} /><Text style={st.legendT}>Envois</Text></View>
-          <View style={st.legend}><View style={[st.dot, { backgroundColor: colors.red }]} /><Text style={st.legendT}>Impayés</Text></View>
+          <View style={st.legend}><View style={[st.dot, { backgroundColor: colors.blue }]} /><Text style={st.legendT}>{t('Envois')}</Text></View>
+          <View style={st.legend}><View style={[st.dot, { backgroundColor: colors.red }]} /><Text style={st.legendT}>{t('Impayés')}</Text></View>
         </View>
       </Card>
     </ScrollView>
