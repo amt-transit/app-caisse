@@ -2,7 +2,6 @@
 // upload d'un fichier (audio) vers Firebase Storage (dossier client_chat/).
 import * as ImagePicker from 'expo-image-picker';
 import * as ImageManipulator from 'expo-image-manipulator';
-import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { storage, auth } from './firebase';
 
 // Identifiant unique sans dépendance externe (Date + aléatoire).
@@ -67,9 +66,8 @@ export async function uploadChatAudio(fileUri, contentType = 'audio/m4a') {
   const tail = (auth.currentUser?.phoneNumber || 'anon').replace(/\D/g, '').slice(-9) || 'anon';
   const ext = contentType.includes('mp4') || contentType.includes('m4a') ? 'm4a' : 'audio';
   const path = `client_chat/${tail}/${uid()}.${ext}`;
-  const resp = await fetch(fileUri);
-  const blob = await resp.blob();
-  const r = storageRef(storage, path);
-  await uploadBytes(r, blob, { contentType });
-  return await getDownloadURL(r);
+  // RNFirebase : on uploade directement le fichier local (pas de fetch/blob).
+  const r = storage.ref(path);
+  await r.putFile(fileUri, { contentType });
+  return await r.getDownloadURL();
 }

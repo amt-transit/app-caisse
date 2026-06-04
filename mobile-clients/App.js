@@ -8,7 +8,6 @@ import { useFonts } from 'expo-font';
 import { APP_FONTS } from './src/fonts'; // charge + applique Comfortaa/Jost partout
 import { StatusBar } from 'expo-status-bar';
 import { LinearGradient } from 'expo-linear-gradient';
-import { signOut } from 'firebase/auth';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { auth } from './src/firebase';
 import { api } from './src/api';
@@ -118,7 +117,7 @@ function AppInner() {
   // SE DÉCONNECTER : ferme vraiment la session + oublie le PIN -> reconnexion
   // par SMS la prochaine fois. À réserver à « changer de compte ».
   const logout = async () => {
-    try { await signOut(auth); } catch (_) {}
+    try { await auth.signOut(); } catch (_) {}
     await AsyncStorage.multiRemove(['amtc_registered', 'amtc_pin']);
     await clearCache();
     cacheLoaded.current = false;

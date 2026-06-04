@@ -1,16 +1,14 @@
-// Écran de connexion — Phone Auth Firebase (SMS) via expo-firebase-recaptcha.
-// MÊME logique que la PWA /clients/ : SMS la 1re fois, puis code PIN local
-// (verrou d'ouverture ; la vraie sécurité = jeton Firebase persistant).
-// Étape 1 du portage RN : on valide CE circuit avant de porter le reste.
+// Écran de connexion — Phone Auth Firebase NATIF (@react-native-firebase).
+// SMS la 1re fois (vérification native Play Integrity / reCAPTCHA, SANS WebView),
+// puis code PIN local (verrou d'ouverture ; la vraie sécurité = session Firebase
+// native persistante).
 import React, { useRef, useState, useEffect } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, KeyboardAvoidingView, Platform, Image } from 'react-native';
-import { PhoneAuthProvider, signInWithCredential, signOut, onAuthStateChanged } from 'firebase/auth';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { auth } from '../firebase';
 import { colors } from '../theme';
 import { api } from '../api';
 import { useLang, tr } from '../i18n';
-import RecaptchaModal from '../components/RecaptchaModal';
 
 const LS = { registered: 'amtc_registered', phone: 'amtc_phone', pin: 'amtc_pin' };
 // Obfuscation locale du PIN (verrou d'ouverture, NON cryptographique).
@@ -18,7 +16,6 @@ const pinHash = (s) => 'amtc:' + s;
 
 export default function LoginScreen({ onAuthed }) {
   const { t } = useLang();
-  const recaptchaRef = useRef(null);
   const [step, setStep] = useState('loading'); // loading|phone|code|setpin|pin
   const [dial, setDial] = useState('+225');
   const [num, setNum] = useState('');
@@ -26,7 +23,7 @@ export default function LoginScreen({ onAuthed }) {
   const [pin1, setPin1] = useState('');
   const [pin2, setPin2] = useState('');
   const [pinIn, setPinIn] = useState('');
-  const [verifId, setVerifId] = useState(null);
+  const confirmRef = useRef(null); // objet de confirmation SMS (RNFirebase)
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
   const [savedPhone, setSavedPhone] = useState('');
@@ -48,7 +45,7 @@ export default function LoginScreen({ onAuthed }) {
       if (reg === '1' && user && hasPin) setStep('pin');
       else setStep('phone');
     };
-    const unsub = onAuthStateChanged(auth, (user) => { decide(user); });
+    const unsub = auth.onAuthStateChanged((user) => { decide(user); });
     // Filet de sécurité : si onAuthStateChanged tarde (>4s), on décide quand même.
     const t = setTimeout(() => decide(auth.currentUser), 4000);
     return () => { clearTimeout(t); unsub(); };
@@ -64,16 +61,17 @@ export default function LoginScreen({ onAuthed }) {
     const e164 = dial + digits;
     setBusy(true);
     try {
-      const provider = new PhoneAuthProvider(auth);
-      const verifier = recaptchaRef.current.makeVerifier();
-      const id = await provider.verifyPhoneNumber(e164, verifier);
-      setVerifId(id);
+      // Connexion par téléphone NATIVE : envoie le SMS et renvoie un objet de
+      // confirmation. La vérification (Play Integrity / reCAPTCHA natif) est
+      // gérée par le SDK, sans WebView ni case à cocher.
+      const confirmation = await auth.signInWithPhoneNumber(e164);
+      confirmRef.current = confirmation;
       await AsyncStorage.setItem(LS.phone, e164);
       setSavedPhone(e164);
       setBusy(false);
       setStep('code');
     } catch (e) {
-      console.warn('verifyPhoneNumber:', e?.code, e?.message);
+      console.warn('signInWithPhoneNumber:', e?.code, e?.message);
       // [DIAGNOSTIC TEMPORAIRE] On affiche le code/détail exact de l'erreur pour
       // savoir POURQUOI le SMS échoue (reCAPTCHA, quota, région, facturation…).
       // À retirer une fois le problème identifié.
@@ -89,14 +87,15 @@ export default function LoginScreen({ onAuthed }) {
     if (c.length < 6) return fail('Entrez le code reçu (6 chiffres).');
     setBusy(true);
     try {
-      const credential = PhoneAuthProvider.credential(verifId, c);
-      await signInWithCredential(auth, credential);
+      if (!confirmRef.current) { setBusy(false); return fail('Session expirée, renvoyez le code.'); }
+      // confirm() vérifie le code ET connecte l'utilisateur (session native).
+      await confirmRef.current.confirm(c);
       setBusy(false);
       const reg = await AsyncStorage.getItem(LS.registered);
       if (reg === '1') finish();
       else setStep('setpin');
     } catch (e) {
-      console.warn('signInWithCredential:', e?.code, e?.message);
+      console.warn('confirm:', e?.code, e?.message);
       fail('Code incorrect.');
     }
   };
@@ -127,7 +126,7 @@ export default function LoginScreen({ onAuthed }) {
   const forgotPin = async () => {
     await AsyncStorage.removeItem(LS.registered);
     await AsyncStorage.removeItem(LS.pin);
-    try { await signOut(auth); } catch (_) {}
+    try { await auth.signOut(); } catch (_) {}
     setPinIn(''); setStep('phone');
   };
 
@@ -136,8 +135,6 @@ export default function LoginScreen({ onAuthed }) {
   return (
     <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
       <ScrollView contentContainerStyle={st.wrap} keyboardShouldPersistTaps="handled">
-        <RecaptchaModal ref={recaptchaRef} />
-
         {/* Logo (jaune/blanc) posé sur le FOND BLEU, où il est visible. */}
         <Image source={require('../../assets/logo.png')} style={st.logo} resizeMode="contain" />
 

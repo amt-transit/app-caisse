@@ -54,7 +54,10 @@
           "microphonePermission": "Pour enregistrer des messages vocaux dans le chat."
         }
       ],
-      "expo-font"
+      "expo-font",
+      "@react-native-firebase/app",
+      "@react-native-firebase/auth",
+      "expo-build-properties"
     ],
     "extra": {
       "eas": {

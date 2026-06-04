@@ -1,13 +1,12 @@
 // Appels aux Cloud Functions (mêmes que la PWA /clients/). Aucun accès
 // Firestore direct côté client. On rafraîchit le jeton avant chaque appel
 // pour éviter les "unauthenticated" après une longue inactivité.
-import { httpsCallable } from 'firebase/functions';
 import { auth, functions } from './firebase';
 
 async function call(name, payload) {
   const u = auth.currentUser;
   if (u) { try { await u.getIdToken(true); } catch (_) {} }
-  const res = await httpsCallable(functions, name)(payload || {});
+  const res = await functions.httpsCallable(name)(payload || {});
   return (res && res.data) || {};
 }
 

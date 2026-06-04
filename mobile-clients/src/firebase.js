@@ -1,34 +1,21 @@
-// Firebase — MÊME projet que l'app web et l'app parrainage (caisse-amt-perso).
-// Clés client publiques (aucun secret). L'app Client ne touche PAS Firestore
-// directement : tout passe par les Cloud Functions (getMyInvoices, getMyChat,
-// getMyProfile, etc.), comme la PWA /clients/.
-import { initializeApp, getApps, getApp } from 'firebase/app';
-import { initializeAuth, getReactNativePersistence } from 'firebase/auth';
-import { getFunctions } from 'firebase/functions';
-import { getStorage } from 'firebase/storage';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+// Firebase NATIF (@react-native-firebase) — MÊME projet que le site et l'app
+// parrainage (caisse-amt-perso). La configuration vient de google-services.json
+// (Android), pas du JS — d'où l'absence de firebaseConfig ici.
+//
+// Pourquoi le natif ? L'authentification par téléphone (SMS) se fait désormais
+// NATIVEMENT (Play Integrity / reCAPTCHA natif), sans la WebView fragile. La
+// session est persistée par le SDK natif. L'app Client ne touche PAS Firestore
+// directement : tout passe par les Cloud Functions (getMyInvoices, getMyChat…).
+import authModule from '@react-native-firebase/auth';
+import functionsModule from '@react-native-firebase/functions';
+import storageModule from '@react-native-firebase/storage';
 
-const firebaseConfig = {
-  apiKey: 'AIzaSyA255n3XWDRKaYZ9kwOYkfovf5lRexoCA4',
-  authDomain: 'caisse-amt-perso.firebaseapp.com',
-  projectId: 'caisse-amt-perso',
-  storageBucket: 'caisse-amt-perso.firebasestorage.app',
-  messagingSenderId: '682789156997',
-  appId: '1:682789156997:web:9ce3303120851d37be91ec',
-};
-
-const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
-
-// Persistance de session via AsyncStorage (sinon déconnexion à chaque ouverture).
-export const auth = initializeAuth(app, {
-  persistence: getReactNativePersistence(AsyncStorage),
-});
-
-// Région alignée sur les Cloud Functions (us-central1, cf. functions/index.js).
-export const functions = getFunctions(app, 'us-central1');
-
-// Storage : vocaux & pièces jointes du chat (dossier client_chat/).
-export const storage = getStorage(app);
-
-export { firebaseConfig };
-export default app;
+// Instances exportées. On garde les MÊMES noms/propriétés que le reste de l'app
+// utilise déjà (auth.currentUser, auth.onAuthStateChanged, auth.signOut,
+// auth.signInWithPhoneNumber, functions.httpsCallable, storage.ref…), pour ne
+// rien casser ailleurs.
+export const auth = authModule();
+// Région des Cloud Functions = us-central1 (valeur par défaut de RNFirebase,
+// alignée sur functions/index.js).
+export const functions = functionsModule();
+export const storage = storageModule();
