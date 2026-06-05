@@ -2,7 +2,12 @@
 // upload d'un fichier (audio) vers Firebase Storage (dossier client_chat/).
 import * as ImagePicker from 'expo-image-picker';
 import * as ImageManipulator from 'expo-image-manipulator';
-import { storage, auth } from './firebase';
+import * as FileSystem from 'expo-file-system';
+import { auth } from './firebase';
+
+// Bucket Firebase Storage (cf. config). Upload via l'API REST -> pas besoin du
+// module natif @react-native-firebase/storage (cassé sur ce build).
+const STORAGE_BUCKET = 'caisse-amt-perso.firebasestorage.app';
 
 // Identifiant unique sans dépendance externe (Date + aléatoire).
 function uid() {
@@ -66,8 +71,21 @@ export async function uploadChatAudio(fileUri, contentType = 'audio/m4a') {
   const tail = (auth.currentUser?.phoneNumber || 'anon').replace(/\D/g, '').slice(-9) || 'anon';
   const ext = contentType.includes('mp4') || contentType.includes('m4a') ? 'm4a' : 'audio';
   const path = `client_chat/${tail}/${uid()}.${ext}`;
-  // RNFirebase : on uploade directement le fichier local (pas de fetch/blob).
-  const r = storage.ref(path);
-  await r.putFile(fileUri, { contentType });
-  return await r.getDownloadURL();
+  // Upload via l'API REST Firebase Storage (jeton d'identité en en-tête).
+  // expo-file-system envoie les octets bruts du fichier local -> fiable en RN.
+  const token = auth.currentUser ? await auth.currentUser.getIdToken() : null;
+  const uploadUrl = `https://firebasestorage.googleapis.com/v0/b/${STORAGE_BUCKET}/o?uploadType=media&name=${encodeURIComponent(path)}`;
+  const res = await FileSystem.uploadAsync(uploadUrl, fileUri, {
+    httpMethod: 'POST',
+    uploadType: FileSystem.FileSystemUploadType.BINARY_CONTENT,
+    headers: {
+      'Content-Type': contentType,
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+  });
+  if (res.status < 200 || res.status >= 300) throw new Error('Envoi du vocal impossible (' + res.status + ').');
+  let meta = {};
+  try { meta = JSON.parse(res.body || '{}'); } catch (_) {}
+  const dlToken = meta.downloadTokens || '';
+  return `https://firebasestorage.googleapis.com/v0/b/${STORAGE_BUCKET}/o/${encodeURIComponent(path)}?alt=media${dlToken ? '&token=' + dlToken : ''}`;
 }
