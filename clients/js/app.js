@@ -472,7 +472,7 @@ function initRequestForm() {
     requestDraft.acces = acc.value;
   });
   // Saisie intelligente d'adresse (API gouv) — chargée à la demande.
-  import('../../paris/js/views/autocomplete.js').then(({ Autocomplete }) => {
+  import('../../depart/js/views/autocomplete.js').then(({ Autocomplete }) => {
     try { Autocomplete.initAddress('reqAddress', 'reqAddressSugg'); } catch (_) {}
   }).catch(() => {});
   loadAvailability();

@@ -1,6 +1,6 @@
 import { db } from '../../firebase-config.js';
 import { collection, query, where, onSnapshot, doc, writeBatch, getDocs, orderBy, limit } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
-import { Autocomplete } from '../../paris/js/views/autocomplete.js';
+import { Autocomplete } from '../../depart/js/views/autocomplete.js';
 import { CONSTANTS, DEFAULT_CGV, DEFAULT_COMPANY_FOOTER } from '../../constants.js';
 import { createApp, ref, computed, reactive, onMounted, onUnmounted } from "https://unpkg.com/vue@3/dist/vue.esm-browser.prod.js";
 import { getCollectionName, AGENCIES, getConfigSourceAgency } from '../../agencies-config.js';
@@ -1936,7 +1936,7 @@ export const ToutesLesFacturesView = {
         });
     },
 
-    // Helpers facture aerien (memes formules que paris/js/views/facture-aerien.js).
+    // Helpers facture aerien (memes formules que depart/js/views/facture-aerien.js).
     _lineBilledKgEdit(item) {
         let kg = parseFloat(item.poids) || 0;
         const vol = ((parseFloat(item.lng) || 0) * (parseFloat(item.lrg) || 0) * (parseFloat(item.haut) || 0)) / 5000;

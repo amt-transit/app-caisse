@@ -1,6 +1,6 @@
 import { db } from '../../firebase-config.js';
 import { collection, query, where, onSnapshot, doc, writeBatch, getDocs, orderBy, limit, updateDoc, addDoc } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
-import { Autocomplete } from '../../paris/js/views/autocomplete.js';
+import { Autocomplete } from '../../depart/js/views/autocomplete.js';
 import { CONSTANTS } from '../../constants.js';
 import { getCollectionName, AGENCIES } from '../../agencies-config.js';
 import { normalizePhone } from '../../affiliations.js';
