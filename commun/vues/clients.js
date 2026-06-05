@@ -200,6 +200,7 @@ export const ClientsView = {
                             </tbody>
                         </table>
                     </div>
+                    <div id="clPagination" style="display:flex; justify-content:center; align-items:center; gap:12px; padding:14px 0; flex-wrap:wrap;"></div>
                 </div>
             </div>
 
@@ -547,6 +548,7 @@ export const ClientsView = {
             if (segment && c.segment !== segment) return false;
             return true;
         });
+        this.currentPage = 1; // toute recherche/filtre revient à la page 1
         this.renderTable();
     },
 
@@ -560,15 +562,24 @@ export const ClientsView = {
         if (kpiTotal) kpiTotal.textContent = this.clients.length;
         if (kpiActifs) kpiActifs.textContent = this.clients.filter(c => c.ca > 0).length;
         
-        const top100 = this.filteredClients.slice(0, 100);
-        if (listCount) listCount.textContent = `${top100.length} affichés sur ${this.filteredClients.length}`;
+        // Pagination AFFICHAGE : 50 clients par page (recherche, filtres et KPI
+        // restent calculés sur TOUTE la liste).
+        const PAGE_SIZE = 50;
+        const totalPages = Math.max(1, Math.ceil(this.filteredClients.length / PAGE_SIZE));
+        if (!this.currentPage || this.currentPage < 1) this.currentPage = 1;
+        if (this.currentPage > totalPages) this.currentPage = totalPages;
+        const _cStart = (this.currentPage - 1) * PAGE_SIZE;
+        const pageClients = this.filteredClients.slice(_cStart, _cStart + PAGE_SIZE);
+        if (listCount) listCount.textContent = `${this.filteredClients.length} client(s)`;
 
-        if (top100.length === 0) {
+        if (pageClients.length === 0) {
             tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; padding: 20px; color: #64748b;">Aucun client trouvé.</td></tr>';
+            const emptyPag = document.getElementById('clPagination');
+            if (emptyPag) emptyPag.innerHTML = '';
             return;
         }
 
-        tbody.innerHTML = top100.map(c => {
+        tbody.innerHTML = pageClients.map(c => {
             const par = this.getParrainForPhone(c.tel);
             const parrainBadge = par ? `<div style="margin-top:4px; display:inline-flex; align-items:center; gap:5px; background:#fff7ed; color:#9a3412; padding:2px 8px; border-radius:10px; font-size:11px; font-weight:600;"><i class="fas fa-handshake" style="font-size:10px;"></i> Parrain : ${par.prenom} ${par.nom}</div>` : '';
             return `
@@ -584,6 +595,24 @@ export const ClientsView = {
             </tr>
         `;
         }).join('');
+        this.renderClientsPagination(totalPages);
+    },
+
+    renderClientsPagination(totalPages) {
+        const el = document.getElementById('clPagination');
+        if (!el) return;
+        if (!totalPages || totalPages <= 1) { el.innerHTML = ''; return; }
+        const p = this.currentPage;
+        const btn = (label, target, disabled) =>
+            `<button onclick="window.app.views.clients.goToClientsPage(${target})" ${disabled ? 'disabled' : ''} style="padding:8px 14px; border:1px solid #cbd5e1; border-radius:8px; background:${disabled ? '#f1f5f9' : '#fff'}; color:${disabled ? '#94a3b8' : '#1e293b'}; cursor:${disabled ? 'default' : 'pointer'}; font-weight:600;">${label}</button>`;
+        el.innerHTML = `${btn('‹ Précédent', p - 1, p <= 1)}<span style="font-weight:600; color:#475569;">Page ${p} / ${totalPages}</span>${btn('Suivant ›', p + 1, p >= totalPages)}`;
+    },
+
+    goToClientsPage(page) {
+        this.currentPage = page;
+        this.renderTable();
+        const t = document.querySelector('.cl-table');
+        if (t) t.scrollIntoView({ behavior: 'smooth', block: 'start' });
     },
 
     // Export Excel des clients actuellement filtrés (respecte la recherche

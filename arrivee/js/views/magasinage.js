@@ -46,6 +46,7 @@ export const MagasinageView = {
                         </tbody>
                     </table>
                 </div>
+                <div id="magPagination" style="display:flex; justify-content:center; align-items:center; gap:12px; padding:14px 0; flex-wrap:wrap;"></div>
             </div>
         `;
         this.initLogic();
@@ -66,6 +67,7 @@ export const MagasinageView = {
 
         let allTransactions = [];
         let currentFiltered = [];
+        let currentPage = 1; // page d'affichage courante (pagination)
         let deliveryStatusMap = new Map(); 
 
         // Nettoyage des anciens listeners pour le mode SPA
@@ -145,17 +147,32 @@ export const MagasinageView = {
             if (!tableBody) return;
             
             tableBody.innerHTML = '';
+
+            // Total des frais sur TOUTE la liste filtrée (indépendant de la
+            // pagination : on somme tout, on n'affiche que la page courante).
             let totalPotentialFees = 0;
+            filtered.forEach(t => {
+                const { fee } = transactionService.calculateStorageFee(t.dateAjout || t.date, t);
+                if (fee > 0) totalPotentialFees += fee;
+            });
+            if (totalFeesEl) totalFeesEl.textContent = formatCFA(totalPotentialFees);
 
             if (filtered.length === 0) {
                 tableBody.innerHTML = '<tr><td colspan="8" style="text-align:center;">Aucun colis avec frais de magasinage trouvé.</td></tr>';
-                if(totalFeesEl) totalFeesEl.textContent = formatCFA(0);
+                renderMagPagination(1);
                 return;
             }
 
-            filtered.forEach(t => {
+            // Pagination AFFICHAGE : 50 lignes par page.
+            const PAGE_SIZE = 50;
+            const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+            if (currentPage < 1) currentPage = 1;
+            if (currentPage > totalPages) currentPage = totalPages;
+            const _mStart = (currentPage - 1) * PAGE_SIZE;
+            const pageItems = filtered.slice(_mStart, _mStart + PAGE_SIZE);
+
+            pageItems.forEach(t => {
                 const { days, fee } = transactionService.calculateStorageFee(t.dateAjout || t.date, t);
-                if (fee > 0) totalPotentialFees += fee;
 
                 const row = document.createElement('tr');
                 let feeStyle = fee > 20000 ? 'font-weight:bold; color:#dc3545;' : (fee > 0 ? 'color:#d97706;' : 'color:#10b981;');
@@ -207,10 +224,32 @@ export const MagasinageView = {
                 tableBody.appendChild(row);
             });
 
-            if(totalFeesEl) totalFeesEl.textContent = formatCFA(totalPotentialFees);
+            renderMagPagination(totalPages);
         }
 
-        if(searchInput) searchInput.addEventListener('input', () => renderTable());
+        // Boutons « Précédent / Suivant » + indicateur de page, sous le tableau.
+        function renderMagPagination(totalPages) {
+            const el = document.getElementById('magPagination');
+            if (!el) return;
+            if (!totalPages || totalPages <= 1) { el.innerHTML = ''; return; }
+            el.innerHTML = '';
+            const mk = (label, target, disabled) => {
+                const b = document.createElement('button');
+                b.textContent = label;
+                b.disabled = disabled;
+                b.style.cssText = `padding:8px 14px; border:1px solid #cbd5e1; border-radius:8px; background:${disabled ? '#f1f5f9' : '#fff'}; color:${disabled ? '#94a3b8' : '#1e293b'}; cursor:${disabled ? 'default' : 'pointer'}; font-weight:600;`;
+                if (!disabled) b.addEventListener('click', () => { currentPage = target; renderTable(); const tb = document.getElementById('magasinageTableBody'); if (tb) tb.scrollIntoView({ behavior: 'smooth', block: 'start' }); });
+                return b;
+            };
+            const info = document.createElement('span');
+            info.style.cssText = 'font-weight:600; color:#475569;';
+            info.textContent = `Page ${currentPage} / ${totalPages}`;
+            el.appendChild(mk('‹ Précédent', currentPage - 1, currentPage <= 1));
+            el.appendChild(info);
+            el.appendChild(mk('Suivant ›', currentPage + 1, currentPage >= totalPages));
+        }
+
+        if(searchInput) searchInput.addEventListener('input', () => { currentPage = 1; renderTable(); });
 
         if (exportPdfBtn) {
             exportPdfBtn.addEventListener('click', () => {
