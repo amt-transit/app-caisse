@@ -13,6 +13,12 @@ import { useLang, tr } from '../i18n';
 const LS = { registered: 'amtc_registered', phone: 'amtc_phone', pin: 'amtc_pin' };
 // Obfuscation locale du PIN (verrou d'ouverture, NON cryptographique).
 const pinHash = (s) => 'amtc:' + s;
+// Indicatifs proposés : on cycle dessus en tapant sur le drapeau.
+const DIALS = [
+  { code: '+225', label: '🇨🇮 +225' },
+  { code: '+33', label: '🇫🇷 +33' },
+  { code: '+86', label: '🇨🇳 +86' },
+];
 
 export default function LoginScreen({ onAuthed }) {
   const { t } = useLang();
@@ -27,6 +33,7 @@ export default function LoginScreen({ onAuthed }) {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
   const [savedPhone, setSavedPhone] = useState('');
+  const [resendIn, setResendIn] = useState(0); // compte à rebours avant de pouvoir renvoyer le SMS
 
   useEffect(() => {
     // IMPORTANT : la session Firebase (persistée dans AsyncStorage) se restaure
@@ -41,15 +48,37 @@ export default function LoginScreen({ onAuthed }) {
       const ph = await AsyncStorage.getItem(LS.phone);
       const hasPin = await AsyncStorage.getItem(LS.pin);
       setSavedPhone(ph || '');
-      // Déjà enregistré + session restaurée + PIN défini -> déverrouillage PIN.
-      if (reg === '1' && user && hasPin) setStep('pin');
-      else setStep('phone');
+      // Session Firebase valide (native, persistée) => JAMAIS de SMS :
+      //  - PIN déjà créé -> déverrouillage par PIN.
+      //  - session OK mais pas encore de PIN (cas après migration / auto-login)
+      //    -> on en crée un MAINTENANT, sans repasser par le SMS.
+      // SMS uniquement s'il n'y a PAS de session du tout.
+      if (user) {
+        if (reg === '1' && hasPin) setStep('pin');
+        else setStep('setpin');
+      } else {
+        setStep('phone');
+      }
     };
     const unsub = auth.onAuthStateChanged((user) => { decide(user); });
     // Filet de sécurité : si onAuthStateChanged tarde (>4s), on décide quand même.
     const t = setTimeout(() => decide(auth.currentUser), 4000);
     return () => { clearTimeout(t); unsub(); };
   }, []);
+
+  // Décrémente le compte à rebours « renvoyer le code » chaque seconde.
+  useEffect(() => {
+    if (resendIn <= 0) return;
+    const id = setTimeout(() => setResendIn((n) => n - 1), 1000);
+    return () => clearTimeout(id);
+  }, [resendIn]);
+
+  // Passe à l'indicatif suivant (CI -> FR -> Chine -> CI…).
+  const cycleDial = () => {
+    const i = DIALS.findIndex((d) => d.code === dial);
+    setDial(DIALS[(i + 1) % DIALS.length].code);
+  };
+  const dialLabel = (DIALS.find((d) => d.code === dial) || DIALS[0]).label;
 
   const fail = (m) => { setErr(m); setBusy(false); };
 
@@ -70,13 +99,10 @@ export default function LoginScreen({ onAuthed }) {
       setSavedPhone(e164);
       setBusy(false);
       setStep('code');
+      setResendIn(30); // anti-abus : 30 s avant de pouvoir renvoyer
     } catch (e) {
       console.warn('signInWithPhoneNumber:', e?.code, e?.message);
-      // [DIAGNOSTIC TEMPORAIRE] On affiche le code/détail exact de l'erreur pour
-      // savoir POURQUOI le SMS échoue (reCAPTCHA, quota, région, facturation…).
-      // À retirer une fois le problème identifié.
-      const detail = e?.code || e?.message || 'inconnu';
-      fail(e?.code === 'auth/invalid-phone-number' ? 'Numéro invalide.' : ("Envoi du SMS impossible. [" + detail + "]"));
+      fail(e?.code === 'auth/invalid-phone-number' ? 'Numéro invalide.' : "Envoi du SMS impossible. Réessayez.");
     }
   };
 
@@ -149,8 +175,8 @@ export default function LoginScreen({ onAuthed }) {
               <Text style={st.label}>{t('Votre numéro de téléphone')}</Text>
               <View style={st.phoneRow}>
                 <View style={st.cc}>
-                  <TouchableOpacity onPress={() => setDial(dial === '+225' ? '+33' : '+225')}>
-                    <Text style={st.ccTxt}>{dial === '+225' ? '🇨🇮 +225' : '🇫🇷 +33'}</Text>
+                  <TouchableOpacity onPress={cycleDial}>
+                    <Text style={st.ccTxt}>{dialLabel}</Text>
                   </TouchableOpacity>
                 </View>
                 <TextInput style={st.numInput} keyboardType="number-pad" placeholder="07 48 52 88 24"
@@ -168,6 +194,9 @@ export default function LoginScreen({ onAuthed }) {
               <TextInput style={st.pinField} keyboardType="number-pad" maxLength={6} placeholder="••••••"
                 value={code} onChangeText={setCode} placeholderTextColor={colors.muted} />
               <Btn label={t('Valider')} onPress={verifyCode} busy={busy} />
+              {resendIn > 0
+                ? <Text style={st.hint}>{t('Renvoyer le code dans')} {resendIn}s</Text>
+                : <TouchableOpacity onPress={sendCode} disabled={busy}><Text style={st.ghost}>{t('Renvoyer le code par SMS')}</Text></TouchableOpacity>}
             </>
           )}
 

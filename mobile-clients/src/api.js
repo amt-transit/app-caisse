@@ -1,13 +1,35 @@
 // Appels aux Cloud Functions (mêmes que la PWA /clients/). Aucun accès
 // Firestore direct côté client. On rafraîchit le jeton avant chaque appel
 // pour éviter les "unauthenticated" après une longue inactivité.
-import { auth, functions } from './firebase';
+import { auth } from './firebase';
+
+// On appelle les Cloud Functions (onCall v2) directement en HTTPS, avec le jeton
+// d'identité de l'utilisateur (fourni par @react-native-firebase/auth, qui marche).
+// On n'utilise PLUS le module natif @react-native-firebase/functions : il est
+// fragile sur ce montage Android (new arch) et faisait échouer TOUS les appels.
+// Même protocole onCall que le site (cf. parrainage.js) : POST {data} + Bearer.
+const FUNCTIONS_BASE = 'https://us-central1-caisse-amt-perso.cloudfunctions.net';
 
 async function call(name, payload) {
   const u = auth.currentUser;
-  if (u) { try { await u.getIdToken(true); } catch (_) {} }
-  const res = await functions.httpsCallable(name)(payload || {});
-  return (res && res.data) || {};
+  let token = null;
+  if (u) { try { token = await u.getIdToken(); } catch (_) {} }
+  const res = await fetch(`${FUNCTIONS_BASE}/${name}`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify({ data: payload || {} }),
+  });
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok || (json && json.error)) {
+    const err = (json && json.error) || {};
+    const e = new Error(err.message || `Erreur serveur (HTTP ${res.status}).`);
+    e.code = err.status || ('http-' + res.status);
+    throw e;
+  }
+  return (json && json.result) || {};
 }
 
 export const api = {

@@ -153,6 +153,8 @@ export const EN = {
   'Il remplacera le SMS aux prochaines connexions.': 'It will replace the SMS at next logins.',
   "J'ai oublié mon code (recevoir un SMS)": 'I forgot my code (get an SMS)',
   'Veuillez patienter…': 'Please wait…',
+  'Renvoyer le code par SMS': 'Resend the code by SMS',
+  'Renvoyer le code dans': 'Resend the code in',
 
   // --- Factures (liste) ---
   'Toutes vos factures, à jour.': 'All your invoices, up to date.',
