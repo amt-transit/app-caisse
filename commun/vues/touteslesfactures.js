@@ -213,6 +213,7 @@ export const ToutesLesFacturesView = {
                         </table>
                     </div>
                     <div class="show-on-mobile" id="invoicesCards"></div>
+                    <div id="invoicesPagination" style="display:flex; justify-content:center; align-items:center; gap:12px; padding:14px 0; flex-wrap:wrap;"></div>
                 </div>
 
                 <!-- Conteneur pour les fenêtres modales -->
@@ -435,6 +436,7 @@ export const ToutesLesFacturesView = {
         });
 
         this.filteredInvoices = filtered;
+        this.currentPage = 1; // tout filtre/tri ramène à la 1re page
         this.renderTable();
     },
 
@@ -449,6 +451,8 @@ export const ToutesLesFacturesView = {
             tbody.innerHTML = '<tr><td colspan="10" style="text-align: center; padding: 40px; color: #64748b;">Aucune facture trouvée</td></tr>';
             const emptyCards = document.getElementById('invoicesCards');
             if (emptyCards) emptyCards.innerHTML = '<div style="text-align:center; padding:30px; color:#64748b;">Aucune facture trouvée</div>';
+            const emptyPag = document.getElementById('invoicesPagination');
+            if (emptyPag) emptyPag.innerHTML = '';
             return;
         }
 
@@ -468,11 +472,21 @@ export const ToutesLesFacturesView = {
         const canDel = window.app.isBuiltinRole() || window.app.hasPermission('delete_invoice');
         const delBtnTable = canDel ? `<button class="icon-btn btn--del" onclick="window.app.views.toutesLesFactures.deleteInvoice('__ID__')" title="Supprimer">🗑️</button>` : '';
 
+        // Pagination AFFICHAGE : on ne DESSINE que la page courante (50 lignes)
+        // pour éviter la lenteur quand il y a des centaines/milliers de factures.
+        // Les totaux et la recherche, eux, restent calculés sur TOUTE la liste.
+        const PAGE_SIZE = 50;
+        const totalPages = Math.max(1, Math.ceil(this.filteredInvoices.length / PAGE_SIZE));
+        if (!this.currentPage || this.currentPage < 1) this.currentPage = 1;
+        if (this.currentPage > totalPages) this.currentPage = totalPages;
+        const _pStart = (this.currentPage - 1) * PAGE_SIZE;
+        const _pageInvoices = this.filteredInvoices.slice(_pStart, _pStart + PAGE_SIZE);
+
         // On construit en un seul passage les lignes du tableau (ordinateur)
         // ET les fiches compactes (mobile, modèle validé : 3 lignes + actions).
         const rows = [];
         const cards = [];
-        this.filteredInvoices.forEach(inv => {
+        _pageInvoices.forEach(inv => {
             const totalDisplay = (parseFloat(inv.prix) || 0) / TAUX;
             const resteDisplay = Math.abs(parseFloat(inv.reste) || 0) / TAUX;
             const isPayee = resteDisplay <= 0;
@@ -563,6 +577,26 @@ export const ToutesLesFacturesView = {
         tbody.innerHTML = rows.join('');
         const cardsEl = document.getElementById('invoicesCards');
         if (cardsEl) cardsEl.innerHTML = cards.join('');
+        this.renderInvoicesPagination(totalPages);
+    },
+
+    // Boutons « Précédent / Suivant » + indicateur « Page X / Y ». Masqués s'il
+    // n'y a qu'une seule page.
+    renderInvoicesPagination(totalPages) {
+        const el = document.getElementById('invoicesPagination');
+        if (!el) return;
+        if (!totalPages || totalPages <= 1) { el.innerHTML = ''; return; }
+        const p = this.currentPage;
+        const btn = (label, target, disabled) =>
+            `<button onclick="window.app.views.toutesLesFactures.goToInvoicePage(${target})" ${disabled ? 'disabled' : ''} style="padding:8px 14px; border:1px solid #cbd5e1; border-radius:8px; background:${disabled ? '#f1f5f9' : '#fff'}; color:${disabled ? '#94a3b8' : '#1e293b'}; cursor:${disabled ? 'default' : 'pointer'}; font-weight:600;">${label}</button>`;
+        el.innerHTML = `${btn('‹ Précédent', p - 1, p <= 1)}<span style="font-weight:600; color:#475569;">Page ${p} / ${totalPages}</span>${btn('Suivant ›', p + 1, p >= totalPages)}`;
+    },
+
+    goToInvoicePage(page) {
+        this.currentPage = page;
+        this.renderTable();
+        const t = document.querySelector('.factures-table') || document.getElementById('invoicesCards');
+        if (t) t.scrollIntoView({ behavior: 'smooth', block: 'start' });
     },
 
     async viewInvoice(id) {
