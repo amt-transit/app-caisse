@@ -34,7 +34,7 @@ import { DemandesDevisView } from './depart/js/views/demandesdevis.js';
 import { ConfectionConteneursView } from './depart/js/views/confection-conteneurs.js';
 import { BateauxDepartView } from './depart/js/views/bateaux-depart.js';
 import { AvionsDepartView } from './depart/js/views/avions-depart.js';
-import { ArriveesView } from './abidjan/js/views/arrivees.js';
+import { ArriveesView } from './arrivee/js/views/arrivees.js';
 import { ScanHistoryView as ParisScanHistoryView } from './depart/js/views/scan-history.js';
 import { FinanceCaisseView } from './depart/js/views/finance-caisse.js';
 import { FinanceDepensesView } from './depart/js/views/finance-depenses.js';
@@ -58,29 +58,29 @@ import { ProspectingView as ParisProspectingView } from './depart/js/views/prosp
 import { NotificationsView } from './depart/js/views/notifications.js';
 
 // --- ABIDJAN VIEWS (Arrivée) ---
-import { DashboardView as AbidjanDashboardView } from './abidjan/js/views/dashboard.js';
-import { ExpensesView } from './abidjan/js/views/expenses.js';
-import { MagasinageView } from './abidjan/js/views/magasinage.js';
-import { LivraisonView } from './abidjan/js/views/livraison.js';
-import { CaisseView } from './abidjan/js/views/caisse.js';
-import { AuditView } from './abidjan/js/views/audit.js';
-import { HistoryView } from './abidjan/js/views/history.js';
-import { BankView } from './abidjan/js/views/bank.js';
-import { OtherIncomeView } from './abidjan/js/views/other-income.js';
-import { VoitureView } from './abidjan/js/views/voiture.js';
-import { PointsView } from './abidjan/js/views/points.js';
-import { ComptejbView } from './abidjan/js/views/comptejb.js';
-import { SalaireView } from './abidjan/js/views/salaire.js';
-import { ConfirmationView } from './abidjan/js/views/confirmation.js';
-import { ScanDechargementView } from './abidjan/js/views/scan-dechargement.js';
-import { ScanLivraisonView } from './abidjan/js/views/scan-livraison.js';
-import { ScanLivrerView } from './abidjan/js/views/scan-livrer.js';
-import { ScanHistoryView as AbidjanScanHistoryView } from './abidjan/js/views/scan-history.js';
-import { SmsView } from './abidjan/js/views/sms.js';
-import { ChatView as AbidjanChatView } from './abidjan/js/views/chat.js';
-import { AuditLogView as AbidjanAuditLogView } from './abidjan/js/views/audit-log.js';
-import { ProspectingView as AbidjanProspectingView } from './abidjan/js/views/prospecting.js';
-import { SettingsSoftwareView as AbidjanSettingsSoftwareView } from './abidjan/js/views/settings-software.js';
+import { DashboardView as AbidjanDashboardView } from './arrivee/js/views/dashboard.js';
+import { ExpensesView } from './arrivee/js/views/expenses.js';
+import { MagasinageView } from './arrivee/js/views/magasinage.js';
+import { LivraisonView } from './arrivee/js/views/livraison.js';
+import { CaisseView } from './arrivee/js/views/caisse.js';
+import { AuditView } from './arrivee/js/views/audit.js';
+import { HistoryView } from './arrivee/js/views/history.js';
+import { BankView } from './arrivee/js/views/bank.js';
+import { OtherIncomeView } from './arrivee/js/views/other-income.js';
+import { VoitureView } from './arrivee/js/views/voiture.js';
+import { PointsView } from './arrivee/js/views/points.js';
+import { ComptejbView } from './arrivee/js/views/comptejb.js';
+import { SalaireView } from './arrivee/js/views/salaire.js';
+import { ConfirmationView } from './arrivee/js/views/confirmation.js';
+import { ScanDechargementView } from './arrivee/js/views/scan-dechargement.js';
+import { ScanLivraisonView } from './arrivee/js/views/scan-livraison.js';
+import { ScanLivrerView } from './arrivee/js/views/scan-livrer.js';
+import { ScanHistoryView as AbidjanScanHistoryView } from './arrivee/js/views/scan-history.js';
+import { SmsView } from './arrivee/js/views/sms.js';
+import { ChatView as AbidjanChatView } from './arrivee/js/views/chat.js';
+import { AuditLogView as AbidjanAuditLogView } from './arrivee/js/views/audit-log.js';
+import { ProspectingView as AbidjanProspectingView } from './arrivee/js/views/prospecting.js';
+import { SettingsSoftwareView as AbidjanSettingsSoftwareView } from './arrivee/js/views/settings-software.js';
 
 export const app = {
     currentPage: 'dashboard',
