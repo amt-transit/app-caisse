@@ -5,7 +5,7 @@ import { getCollectionName, AGENCIES } from '../../agencies-config.js';
 import { matchesShippingMode } from '../../shipping-mode.js';
 import { paidAmount } from '../../agency-money.js';
 
-import { formatMoney, isEurAgency } from '../../commun/services/format.js';
+import { formatMoney, isEurAgency } from '../services/format.js';
 
 export const DailyUsersView = {
     formatMoneyLocal(amount) { return formatMoney(amount); },

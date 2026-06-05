@@ -5,7 +5,7 @@ import { httpsCallable } from "https://www.gstatic.com/firebasejs/9.22.0/firebas
 import { createApp, ref, reactive, computed, onMounted, onUnmounted, nextTick, watch } from "https://unpkg.com/vue@3/dist/vue.esm-browser.prod.js";
 import { isAffiliationActive } from '../../affiliation-config.js';
 import { AGENCIES, getCollectionName } from '../../agencies-config.js';
-import { loadJsPdf } from '../../commun/services/pdf-common.js';
+import { loadJsPdf } from '../services/pdf-common.js';
 
 export const ParrainageView = {
     vueApp: null,

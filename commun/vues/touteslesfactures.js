@@ -4,15 +4,15 @@ import { Autocomplete } from '../../paris/js/views/autocomplete.js';
 import { CONSTANTS, DEFAULT_CGV, DEFAULT_COMPANY_FOOTER } from '../../constants.js';
 import { createApp, ref, computed, reactive, onMounted, onUnmounted } from "https://unpkg.com/vue@3/dist/vue.esm-browser.prod.js";
 import { getCollectionName, AGENCIES, getConfigSourceAgency } from '../../agencies-config.js';
-import { loadJsPdf } from '../../commun/services/pdf-common.js';
-import { applyInvoiceSecurity } from '../../commun/services/invoice-security.js';
-import { phoneTail, toE164Intl, toE164Detect, routePhoneCountries } from '../../commun/services/phone.js';
-import { extractPhone, stripPhoneFromName } from '../../commun/services/phone.js';
+import { loadJsPdf } from '../services/pdf-common.js';
+import { applyInvoiceSecurity } from '../services/invoice-security.js';
+import { phoneTail, toE164Intl, toE164Detect, routePhoneCountries } from '../services/phone.js';
+import { extractPhone, stripPhoneFromName } from '../services/phone.js';
 import { filterByShippingMode } from '../../shipping-mode.js';
 import { normalizePhone } from '../../affiliations.js';
-import { calculateStorageFee } from '../../commun/services/storageFee.js';
+import { calculateStorageFee } from '../services/storageFee.js';
 
-import { formatMoney, isEurAgency } from '../../commun/services/format.js';
+import { formatMoney, isEurAgency } from '../services/format.js';
 
 export const ToutesLesFacturesView = {
     unsub: null,

@@ -4,10 +4,10 @@ import { Autocomplete } from '../../paris/js/views/autocomplete.js';
 import { CONSTANTS } from '../../constants.js';
 import { getCollectionName, AGENCIES } from '../../agencies-config.js';
 import { normalizePhone } from '../../affiliations.js';
-import { CI_PHONE_REGEX, phoneTail } from '../../commun/services/phone.js';
+import { CI_PHONE_REGEX, phoneTail } from '../services/phone.js';
 import { getShippingMode, filterByShippingMode } from '../../shipping-mode.js';
 
-import { formatMoney, isEurAgency } from '../../commun/services/format.js';
+import { formatMoney, isEurAgency } from '../services/format.js';
 
 export const ClientsView = {
     unsubClients: null,

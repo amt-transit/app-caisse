@@ -2,18 +2,18 @@ import { AGENCIES } from './agencies-config.js';
 import { isAffiliationActive } from './affiliation-config.js';
 
 // --- SHARED VIEWS ---
-import { ClientsView } from './shared/views/clients.js';
-import { ToutesLesFacturesView } from './shared/views/touteslesfactures.js';
-import { DailyBilanView } from './shared/views/daily-bilan.js';
-import { DailyUsersView } from './shared/views/daily-users.js';
-import { StatistiquesView } from './shared/views/statistiques.js';
-import { SettingsAgentsView } from './shared/views/settings-agents.js';
-import { SettingsRolesMenusView } from './shared/views/settings-roles-menus.js';
-import { ParrainageView } from './shared/views/parrainage.js';
+import { ClientsView } from './commun/vues/clients.js';
+import { ToutesLesFacturesView } from './commun/vues/touteslesfactures.js';
+import { DailyBilanView } from './commun/vues/daily-bilan.js';
+import { DailyUsersView } from './commun/vues/daily-users.js';
+import { StatistiquesView } from './commun/vues/statistiques.js';
+import { SettingsAgentsView } from './commun/vues/settings-agents.js';
+import { SettingsRolesMenusView } from './commun/vues/settings-roles-menus.js';
+import { ParrainageView } from './commun/vues/parrainage.js';
 import { ProfilView } from './profil-view.js';
-import { DemandesClientView } from './shared/views/demandes-client.js';
-import { ChatClientsView } from './shared/views/chat-clients.js';
-import { ClientsPotentielsView } from './shared/views/clients-potentiels.js';
+import { DemandesClientView } from './commun/vues/demandes-client.js';
+import { ChatClientsView } from './commun/vues/chat-clients.js';
+import { ClientsPotentielsView } from './commun/vues/clients-potentiels.js';
 
 // --- PARIS VIEWS (Départ) ---
 import { DashboardView as ParisDashboardView } from './paris/js/views/dashboard.js';
