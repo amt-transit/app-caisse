@@ -1165,7 +1165,7 @@ export const app = {
             const { collection, query, where, getDocs } = await import('https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js');
             const { getCollectionName } = await import('./agencies-config.js');
             const { paidAmount, isArrivalAgency } = await import('./agency-money.js');
-            const { isEurAgency } = await import('./services/format.js');
+            const { isEurAgency } = await import('./commun/services/format.js');
             const { CONSTANTS } = await import('./constants.js');
 
             const agency = sessionStorage.getItem('currentActiveAgency') || 'abidjan';

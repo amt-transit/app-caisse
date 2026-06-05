@@ -3,7 +3,7 @@ import { collection, doc, updateDoc, setDoc, query, where, orderBy, onSnapshot, 
 import { getCollectionName } from '../../../agencies-config.js';
 import { createApp, ref, reactive, computed, onMounted, onUnmounted, watch } from "https://unpkg.com/vue@3/dist/vue.esm-browser.prod.js";
 import { getShippingMode, filterByShippingMode } from '../../../shipping-mode.js';
-import { formatMoney } from '../../../services/format.js';
+import { formatMoney } from '../../../commun/services/format.js';
 
 export const ExpensesView = {
     vueApp: null,

@@ -1,10 +1,10 @@
 import { db } from '../../../firebase-config.js';
 import { collection, getDocs, query, where, orderBy, onSnapshot } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 import { getCollectionName } from '../../../agencies-config.js';
-import { calculateStorageFee } from '../../../services/storageFee.js';
-import { CI_PHONE_REGEX } from '../../../services/phone.js';
+import { calculateStorageFee } from '../../../commun/services/storageFee.js';
+import { CI_PHONE_REGEX } from '../../../commun/services/phone.js';
 
-import { formatMoney } from '../../../services/format.js';
+import { formatMoney } from '../../../commun/services/format.js';
 
 export const MagasinageView = {
     render(app, container) {

@@ -10,7 +10,7 @@ const sessionMatchesMode = (logData) => {
     return m === getShippingMode();
 };
 
-import { formatMoney } from '../../../services/format.js';
+import { formatMoney } from '../../../commun/services/format.js';
 
 export const AuditView = {
     render(app, container) {

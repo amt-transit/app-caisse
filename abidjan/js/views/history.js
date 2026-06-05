@@ -3,7 +3,7 @@ import { collection, doc, addDoc, updateDoc, getDocs, query, where, orderBy, onS
 import { getCollectionName } from '../../../agencies-config.js';
 import { matchesShippingMode } from '../../../shipping-mode.js';
 
-import { formatMoney } from '../../../services/format.js';
+import { formatMoney } from '../../../commun/services/format.js';
 
 export const HistoryView = {
     render(app, container) {

@@ -3,10 +3,10 @@ import { collection, getDocs, query, where, onSnapshot } from "https://www.gstat
 import { CONSTANTS } from '../../../constants.js';
 import { getCollectionName } from '../../../agencies-config.js';
 import { filterByShippingMode } from '../../../shipping-mode.js';
-import { calculateStorageFee } from '../../../services/storageFee.js';
-import { loadJsPdf } from '../../../services/pdf-common.js';
+import { calculateStorageFee } from '../../../commun/services/storageFee.js';
+import { loadJsPdf } from '../../../commun/services/pdf-common.js';
 
-import { formatMoney } from '../../../services/format.js';
+import { formatMoney } from '../../../commun/services/format.js';
 
 export const DashboardView = {
     render(app, container) {

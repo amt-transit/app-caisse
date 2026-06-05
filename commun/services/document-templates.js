@@ -10,10 +10,10 @@
 // page appelante). La config (logo/couleur/CGV/pied) est lue depuis
 // settings/invoice_config_<agence> et settings/company_<agence>.
 
-import { db } from '../firebase-config.js';
+import { db } from '../../firebase-config.js';
 import { getDoc, getDocs, doc, collection, query, where, limit } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
-import { getCollectionName, getConfigSourceAgency } from '../agencies-config.js';
-import { DEFAULT_CGV, DEFAULT_COMPANY_FOOTER, CONSTANTS } from '../constants.js';
+import { getCollectionName, getConfigSourceAgency } from '../../agencies-config.js';
+import { DEFAULT_CGV, DEFAULT_COMPANY_FOOTER, CONSTANTS } from '../../constants.js';
 import { stripPhoneFromName } from './phone.js';
 import { applyInvoiceSecurity } from './invoice-security.js';
 import { isEurAgency } from './format.js';

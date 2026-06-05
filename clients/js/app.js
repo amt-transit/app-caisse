@@ -824,8 +824,8 @@ async function exportClientInvoicePDF(ref) {
   try {
     const detail = (await httpsCallable(functions, 'getMyInvoiceDetail')({ reference: ref })).data;
     if (!detail || !detail.transaction) { alert("Facture introuvable."); return; }
-    const { loadJsPdf } = await import('../../services/pdf-common.js');
-    const { renderOfficialInvoice } = await import('../../services/invoice-pdf-render.js');
+    const { loadJsPdf } = await import('../../commun/services/pdf-common.js');
+    const { renderOfficialInvoice } = await import('../../commun/services/invoice-pdf-render.js');
     const { jsPDF } = await loadJsPdf();
     const doc = new jsPDF('p', 'mm', 'a4');
     const t = detail.transaction;

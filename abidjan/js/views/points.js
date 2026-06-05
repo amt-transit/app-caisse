@@ -3,7 +3,7 @@ import { collection, getDocs, query, where, orderBy } from "https://www.gstatic.
 import { getCollectionName, AGENCIES } from '../../../agencies-config.js';
 import { matchesShippingMode } from '../../../shipping-mode.js';
 
-import { formatMoney } from '../../../services/format.js';
+import { formatMoney } from '../../../commun/services/format.js';
 
 export const PointsView = {
     render(app, container) {

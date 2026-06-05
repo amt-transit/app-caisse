@@ -22,7 +22,7 @@ const sessionMatchesAgency = (logData, activeAgency) => {
     return false;
 };
 
-import { formatMoney } from '../../../services/format.js';
+import { formatMoney } from '../../../commun/services/format.js';
 
 export const ConfirmationView = {
     render(app, container) {

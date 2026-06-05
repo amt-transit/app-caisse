@@ -2,7 +2,7 @@ import { db } from '../../../firebase-config.js';
 import { getCollectionName } from '../../../agencies-config.js';
 import { collection, query, where, onSnapshot, doc, updateDoc, writeBatch, getDocs } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 import { createApp, ref, computed, reactive, onMounted, onUnmounted, watch } from "https://unpkg.com/vue@3/dist/vue.esm-browser.prod.js";
-import { loadJsPdf } from '../../../services/pdf-common.js';
+import { loadJsPdf } from '../../../commun/services/pdf-common.js';
 
 // Dépôt AMT : point de DÉPART et d'ARRIVÉE de chaque tournée chauffeur.
 // (Modifiable ici si l'entrepôt déménage.)

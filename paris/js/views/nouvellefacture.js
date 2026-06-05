@@ -6,7 +6,7 @@ import { getCollectionName, AGENCIES } from '../../../agencies-config.js';
 import { Autocomplete } from './autocomplete.js';
 import { isAffiliationActive } from '../../../affiliation-config.js';
 import { getAffiliation, ensureAffiliation, creerCommissionParrainage } from '../../../affiliations.js';
-import { toE164Intl, toE164Detect, phoneTail, routePhoneCountries } from '../../../services/phone.js';
+import { toE164Intl, toE164Detect, phoneTail, routePhoneCountries } from '../../../commun/services/phone.js';
 
 export const NouvelleFactureView = {
     vueApp: null,

@@ -3,7 +3,7 @@ import { getCollectionName } from '../../../agencies-config.js';
 import { collection, query, where, onSnapshot, getDocs } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 import { CONSTANTS } from '../../../constants.js';
 import { isEurAgency } from '../../../agency-money.js';
-import { loadJsPdf } from '../../../services/pdf-common.js';
+import { loadJsPdf } from '../../../commun/services/pdf-common.js';
 
 export const ChauffeursListView = {
     unsubAppts: null,

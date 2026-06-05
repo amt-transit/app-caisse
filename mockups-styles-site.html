@@ -1,0 +1,854 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AMT Trans'it — Études visuelles du site web</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Comfortaa:wght@400;500;600;700&family=Jost:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<style>
+  /* ════════════════════════════════════════════════════════════════════════
+     CHARTE AMT — Référence officielle
+     Bleu de Prusse #1A3553 (base) · Rouge #E51F21 (focal) · Or #F2A312 (valeur)
+     ════════════════════════════════════════════════════════════════════════ */
+  :root {
+    --amt-blue: #1A3553;
+    --amt-blue-2: #0F2238;
+    --amt-blue-3: #2C4E76;
+    --amt-blue-soft: #4A6B8E;
+    --amt-red: #E51F21;
+    --amt-red-deep: #B5181A;
+    --amt-gold: #F2A312;
+    --amt-gold-deep: #B8780A;
+    --amt-gold-light: #FFD98A;
+    --paper: #F5F8FB;
+    --paper-2: #ECF2F8;
+    --ink: #0B2540;
+    --line: rgba(11,37,64,0.10);
+    --line-strong: rgba(11,37,64,0.18);
+    --text: #0B2540;
+    --text-dim: #4A6178;
+    --text-faint: #8198B0;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+  body {
+    font-family: 'Jost', sans-serif;
+    background: var(--paper);
+    color: var(--text);
+    min-height: 100vh;
+    overflow-x: hidden;
+    background-image:
+      radial-gradient(ellipse 60% 40% at 100% 0%, rgba(242,163,18,0.08), transparent 60%),
+      radial-gradient(ellipse 50% 40% at 0% 100%, rgba(229,31,33,0.05), transparent 60%);
+  }
+
+  /* Grain subtil (SVG inline) — donne du « papier » au fond */
+  body::before {
+    content: '';
+    position: fixed; inset: 0;
+    pointer-events: none;
+    opacity: 0.35;
+    mix-blend-mode: multiply;
+    background-image: url("data:image/svg+xml;utf8,<svg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2'/><feColorMatrix values='0 0 0 0 0.04 0 0 0 0 0.15 0 0 0 0 0.25 0 0 0 0.05 0'/></filter><rect width='200' height='200' filter='url(%23n)'/></svg>");
+  }
+
+  /* ═══════════════════════ HEADER ═══════════════════════ */
+  header {
+    padding: 60px 60px 40px;
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    align-items: end;
+    gap: 40px;
+    max-width: 1800px;
+    margin: 0 auto;
+    position: relative;
+    z-index: 1;
+  }
+
+  .brand {
+    display: flex; align-items: center; gap: 14px;
+  }
+  .brand-dot {
+    width: 56px; height: 56px; border-radius: 50%;
+    background: radial-gradient(circle at 35% 30%, var(--amt-gold) 0%, var(--amt-gold-deep) 100%);
+    box-shadow: 0 8px 24px rgba(242,163,18,0.35), inset 0 -6px 10px rgba(0,0,0,0.15);
+    position: relative;
+  }
+  .brand-dot::after {
+    content: 'amt';
+    position: absolute; inset: 0;
+    display: flex; align-items: center; justify-content: center;
+    color: #1a0c08; font-family: 'Comfortaa', sans-serif; font-weight: 700; font-size: 13px;
+    letter-spacing: -0.5px;
+  }
+  .brand-name { font-family: 'Comfortaa', sans-serif; font-weight: 700; font-size: 22px; letter-spacing: -0.5px; color: var(--amt-blue); }
+  .brand-sub { font-size: 11px; color: var(--text-faint); margin-top: 2px; letter-spacing: 2px; text-transform: uppercase; font-family: 'JetBrains Mono', monospace; }
+
+  .title-block {
+    text-align: center;
+    padding: 0 20px;
+  }
+  .eyebrow {
+    display: inline-flex; align-items: center; gap: 10px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; color: var(--amt-gold-deep);
+    letter-spacing: 3px; text-transform: uppercase;
+    padding-bottom: 14px;
+  }
+  .eyebrow::before, .eyebrow::after {
+    content: ''; width: 30px; height: 1px;
+    background: linear-gradient(to right, transparent, var(--amt-gold), transparent);
+  }
+  h1 {
+    font-family: 'Comfortaa', sans-serif;
+    font-weight: 400; font-size: clamp(30px, 3.5vw, 46px);
+    letter-spacing: -1.2px;
+    line-height: 1.05;
+    color: var(--amt-blue);
+  }
+  h1 em {
+    font-style: normal;
+    font-weight: 700;
+    color: var(--amt-red);
+    position: relative;
+  }
+  h1 em::after {
+    content: ''; position: absolute; left: 0; right: 0; bottom: -4px;
+    height: 3px;
+    background: linear-gradient(to right, transparent, var(--amt-gold), transparent);
+    border-radius: 2px;
+  }
+  .lede {
+    margin-top: 18px;
+    color: var(--text-dim);
+    font-size: 14px;
+    max-width: 540px;
+    margin-left: auto; margin-right: auto;
+    line-height: 1.55;
+  }
+
+  /* Palette à droite */
+  .palette-ref { display: flex; gap: 10px; align-items: end; }
+  .swatch {
+    width: 38px; height: 64px;
+    border-radius: 8px;
+    position: relative;
+    transition: transform 0.3s ease;
+    box-shadow: 0 4px 12px rgba(11,37,64,0.15);
+  }
+  .swatch:hover { transform: translateY(-4px); }
+  .swatch span {
+    position: absolute; bottom: -22px; left: 50%;
+    transform: translateX(-50%);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    color: var(--text-faint);
+    white-space: nowrap;
+  }
+  .sw-blue { background: var(--amt-blue); }
+  .sw-red { background: var(--amt-red); height: 48px; }
+  .sw-gold { background: var(--amt-gold); height: 40px; }
+
+  /* ═══════════════════════ GALLERY ═══════════════════════ */
+  .gallery {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 28px;
+    padding: 20px 60px 80px;
+    max-width: 1800px;
+    margin: 0 auto;
+    position: relative;
+    z-index: 1;
+  }
+
+  .proposition {
+    background: white;
+    border: 1px solid var(--line);
+    border-radius: 24px;
+    overflow: hidden;
+    box-shadow: 0 20px 60px -25px rgba(11,37,64,0.18), 0 4px 12px rgba(11,37,64,0.04);
+    animation: rise 0.9s cubic-bezier(0.16, 1, 0.3, 1) backwards;
+    display: flex; flex-direction: column;
+  }
+  .proposition:nth-child(1) { animation-delay: 0.1s; }
+  .proposition:nth-child(2) { animation-delay: 0.25s; }
+  .proposition:nth-child(3) { animation-delay: 0.4s; }
+  @keyframes rise {
+    from { opacity: 0; transform: translateY(40px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .prop-head {
+    padding: 28px 28px 22px;
+    background: linear-gradient(180deg, #fafcfe 0%, #f3f6fa 100%);
+    border-bottom: 1px solid var(--line);
+    position: relative;
+  }
+  .prop-letter {
+    font-family: 'Comfortaa', sans-serif;
+    font-weight: 700; font-size: 88px;
+    line-height: 0.85;
+    background: linear-gradient(135deg, var(--amt-gold), var(--amt-gold-deep));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    display: block;
+    margin-bottom: 4px;
+  }
+  .prop-name {
+    font-family: 'Comfortaa', sans-serif;
+    font-weight: 700; font-size: 22px;
+    color: var(--amt-blue);
+    letter-spacing: -0.5px;
+  }
+  .prop-tag {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: var(--text-faint);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    margin-top: 4px;
+  }
+  .prop-desc {
+    margin-top: 12px;
+    font-size: 13px;
+    color: var(--text-dim);
+    line-height: 1.55;
+    min-height: 50px;
+  }
+  .prop-body {
+    padding: 28px;
+    background: var(--paper);
+    flex: 1;
+  }
+
+  .section-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9.5px;
+    color: var(--text-faint);
+    letter-spacing: 2.5px;
+    text-transform: uppercase;
+    margin-bottom: 12px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .section-label::after {
+    content: ''; flex: 1; height: 1px;
+    background: linear-gradient(to right, var(--line), transparent);
+  }
+
+  .kpi-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin-bottom: 24px;
+  }
+  .kpi-grid > :first-child { grid-column: span 2; }
+
+  .actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 10px;
+    margin-bottom: 24px;
+  }
+
+  /* ════════════════════════════════════════════════════════════════════════
+     PROPOSITION A — PREMIUM AMT (gradients pleins + watermarks)
+     ════════════════════════════════════════════════════════════════════════ */
+  .A .kpi {
+    position: relative; overflow: hidden;
+    border-radius: 16px;
+    padding: 18px 20px;
+    color: white;
+    box-shadow: 0 10px 25px -8px rgba(11,37,64,0.25), 0 4px 8px -3px rgba(11,37,64,0.1);
+    cursor: pointer;
+    transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.4s;
+    min-height: 100px;
+    display: flex; flex-direction: column; justify-content: space-between;
+  }
+  .A .kpi:hover {
+    transform: translateY(-4px) scale(1.02);
+    box-shadow: 0 20px 35px -12px rgba(11,37,64,0.35);
+  }
+  .A .kpi:hover .kpi-mark { transform: rotate(0deg) scale(1.15); opacity: 0.25; }
+  .A .kpi-title {
+    font-size: 12.5px;
+    opacity: 0.92;
+    font-weight: 600;
+    margin-bottom: 8px;
+    letter-spacing: -0.2px;
+  }
+  .A .kpi-value {
+    font-family: 'Jost', sans-serif;
+    font-weight: 800;
+    font-size: 24px;
+    letter-spacing: -0.8px;
+  }
+  .A .kpi-mark {
+    position: absolute;
+    right: -10px; bottom: -16px;
+    font-size: 72px;
+    line-height: 1;
+    opacity: 0.15;
+    transform: rotate(-15deg);
+    transition: transform 0.5s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.5s;
+    pointer-events: none;
+  }
+  .A .kpi-1 { background: linear-gradient(135deg, var(--amt-blue) 0%, var(--amt-blue-2) 100%); }
+  .A .kpi-2 { background: linear-gradient(135deg, var(--amt-gold) 0%, var(--amt-gold-deep) 100%); }
+  .A .kpi-3 { background: linear-gradient(135deg, var(--amt-red) 0%, var(--amt-red-deep) 100%); }
+
+  .A .action-btn {
+    border: none;
+    background: white;
+    border-radius: 12px;
+    padding: 14px 8px;
+    display: flex; flex-direction: column; align-items: center; gap: 6px;
+    cursor: pointer;
+    border: 1px solid var(--line);
+    box-shadow: 0 4px 10px -4px rgba(11,37,64,0.08);
+    transition: all 0.25s;
+  }
+  .A .action-btn:hover {
+    transform: translateY(-3px);
+    border-color: var(--amt-gold);
+    box-shadow: 0 8px 18px -6px rgba(242,163,18,0.3);
+  }
+  .A .action-btn i {
+    font-size: 18px;
+    color: var(--amt-blue);
+    width: 36px; height: 36px;
+    border-radius: 10px;
+    background: linear-gradient(135deg, rgba(242,163,18,0.18), rgba(242,163,18,0.05));
+    display: flex; align-items: center; justify-content: center;
+  }
+  .A .action-btn span {
+    font-size: 11px;
+    color: var(--amt-blue);
+    font-weight: 600;
+    text-align: center;
+    line-height: 1.2;
+  }
+  .A .row-card {
+    background: white;
+    border-radius: 16px;
+    border: 1px solid var(--line);
+    box-shadow: 0 6px 16px -8px rgba(11,37,64,0.12);
+    padding: 16px 18px;
+    display: flex; align-items: center; gap: 14px;
+  }
+  .A .row-card .av {
+    width: 42px; height: 42px;
+    border-radius: 12px;
+    background: linear-gradient(135deg, var(--amt-blue), var(--amt-blue-2));
+    color: white; font-family: 'Jost', sans-serif; font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 14px; letter-spacing: -0.3px;
+    box-shadow: 0 4px 10px -3px rgba(26,53,83,0.4);
+  }
+
+  /* ════════════════════════════════════════════════════════════════════════
+     PROPOSITION B — SOLEIL CHALEUREUX (white opaque + accent doré)
+     ════════════════════════════════════════════════════════════════════════ */
+  .B .kpi {
+    position: relative; overflow: hidden;
+    background: white;
+    border-radius: 14px;
+    padding: 18px 20px 18px 24px;
+    border: 1px solid var(--line);
+    box-shadow: 0 6px 14px -8px rgba(11,37,64,0.08);
+    cursor: pointer;
+    transition: all 0.3s;
+    min-height: 100px;
+    display: flex; flex-direction: column; justify-content: space-between;
+  }
+  .B .kpi::before {
+    content: ''; position: absolute;
+    left: 0; top: 14px; bottom: 14px;
+    width: 4px; border-radius: 0 2px 2px 0;
+    background: linear-gradient(180deg, var(--amt-gold), var(--amt-gold-deep));
+  }
+  .B .kpi:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 14px 28px -10px rgba(242,163,18,0.25);
+    border-color: rgba(242,163,18,0.5);
+  }
+  .B .kpi-head { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+  .B .kpi-icon {
+    width: 32px; height: 32px;
+    border-radius: 10px;
+    background: linear-gradient(135deg, #FDF1DA, #FBE5B5);
+    color: var(--amt-gold-deep);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 14px;
+    border: 1px solid rgba(242,163,18,0.3);
+  }
+  .B .kpi-title {
+    font-size: 11px;
+    color: var(--text-dim);
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+  }
+  .B .kpi-value {
+    font-family: 'Jost', sans-serif;
+    font-weight: 700;
+    font-size: 24px;
+    color: var(--amt-blue);
+    letter-spacing: -0.6px;
+  }
+  .B .kpi-value strong { color: var(--amt-gold-deep); }
+  .B .kpi-mark {
+    position: absolute;
+    right: 14px; top: 14px;
+    color: var(--amt-gold);
+    opacity: 0.18;
+    font-size: 38px;
+    pointer-events: none;
+  }
+
+  .B .action-btn {
+    border-radius: 12px;
+    padding: 14px 8px;
+    display: flex; flex-direction: column; align-items: center; gap: 6px;
+    cursor: pointer;
+    transition: all 0.25s;
+    border: none;
+  }
+  .B .action-btn-primary {
+    background: linear-gradient(135deg, var(--amt-gold) 0%, var(--amt-gold-deep) 100%);
+    color: #1a0c08;
+    box-shadow: 0 8px 18px -6px rgba(242,163,18,0.45);
+  }
+  .B .action-btn-outline {
+    background: white;
+    color: var(--amt-gold-deep);
+    border: 1.5px solid var(--amt-gold);
+  }
+  .B .action-btn:hover { transform: translateY(-3px); }
+  .B .action-btn i {
+    font-size: 18px;
+    width: 30px; height: 30px;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .B .action-btn span {
+    font-size: 11px;
+    font-weight: 700;
+    text-align: center;
+    line-height: 1.2;
+  }
+  .B .row-card {
+    background: white;
+    border-radius: 14px;
+    border: 1px solid var(--line);
+    padding: 16px 18px;
+    display: flex; align-items: center; gap: 14px;
+    box-shadow: 0 4px 12px -6px rgba(11,37,64,0.06);
+    border-left: 4px solid var(--amt-gold);
+  }
+  .B .row-card .av {
+    width: 42px; height: 42px;
+    border-radius: 21px;
+    background: linear-gradient(135deg, #FDF1DA, #FBE5B5);
+    color: var(--amt-gold-deep);
+    font-family: 'Jost', sans-serif; font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 14px;
+    border: 1px solid rgba(242,163,18,0.35);
+  }
+
+  /* ════════════════════════════════════════════════════════════════════════
+     PROPOSITION C — ÉDITORIAL AMT (minimalisme magazine financier)
+     ════════════════════════════════════════════════════════════════════════ */
+  .C .kpi {
+    position: relative;
+    background: white;
+    padding: 22px 24px 24px;
+    border-radius: 0;
+    border: 1px solid var(--line);
+    border-bottom: 2px solid var(--amt-gold);
+    cursor: pointer;
+    transition: all 0.3s ease;
+    min-height: 110px;
+    display: flex; flex-direction: column; justify-content: space-between;
+  }
+  .C .kpi:hover { background: #fafdff; transform: translateY(-2px); }
+  .C .kpi-title {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: var(--amt-blue);
+    font-weight: 500;
+    letter-spacing: 2.5px;
+    text-transform: uppercase;
+    margin-bottom: 12px;
+  }
+  .C .kpi-value {
+    font-family: 'Comfortaa', sans-serif;
+    font-weight: 600;
+    font-size: 34px;
+    color: var(--amt-blue);
+    letter-spacing: -1.5px;
+    line-height: 0.95;
+  }
+  .C .kpi-value small {
+    font-family: 'Jost', sans-serif;
+    font-weight: 400;
+    font-size: 13px;
+    color: var(--text-faint);
+    margin-left: 4px;
+    letter-spacing: 0;
+  }
+  .C .kpi-foot {
+    margin-top: 8px;
+    font-size: 11px;
+    color: var(--text-dim);
+    display: flex; align-items: center; gap: 6px;
+  }
+  .C .kpi-foot .delta-up { color: #047857; font-weight: 700; }
+  .C .kpi-foot .delta-down { color: var(--amt-red-deep); font-weight: 700; }
+
+  .C .action-btn {
+    background: transparent;
+    border: none;
+    border-bottom: 1.5px solid transparent;
+    padding: 12px 4px;
+    display: flex; flex-direction: column; align-items: flex-start; gap: 4px;
+    cursor: pointer;
+    transition: border-color 0.3s ease;
+    position: relative;
+  }
+  .C .action-btn::after {
+    content: '';
+    position: absolute;
+    left: 0; bottom: 0;
+    width: 0; height: 1.5px;
+    background: var(--amt-gold);
+    transition: width 0.35s ease;
+  }
+  .C .action-btn:hover { border-color: transparent; }
+  .C .action-btn:hover::after { width: 100%; }
+  .C .action-btn i {
+    font-size: 14px;
+    color: var(--amt-gold-deep);
+  }
+  .C .action-btn span {
+    font-family: 'Comfortaa', sans-serif;
+    font-size: 12.5px;
+    color: var(--amt-blue);
+    font-weight: 600;
+    letter-spacing: -0.2px;
+    text-align: left;
+  }
+  .C .row-card {
+    background: white;
+    padding: 18px 24px;
+    border: none;
+    border-top: 1px solid var(--line);
+    border-bottom: 1px solid var(--line);
+    display: flex; align-items: center; gap: 18px;
+    position: relative;
+  }
+  .C .row-card::before {
+    content: ''; position: absolute;
+    left: 0; top: 0; bottom: 0;
+    width: 3px;
+    background: var(--amt-blue);
+  }
+  .C .row-card .av {
+    width: 40px; height: 40px;
+    border-radius: 50%;
+    background: transparent;
+    color: var(--amt-blue);
+    font-family: 'Comfortaa', sans-serif; font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 15px;
+    border: 1.5px solid var(--amt-blue);
+  }
+
+  /* ── Row-card commun (titre + ref) ──── */
+  .row-info { flex: 1; min-width: 0; }
+  .row-name {
+    font-weight: 700;
+    font-size: 13.5px;
+    color: var(--amt-blue);
+    letter-spacing: -0.2px;
+  }
+  .row-sub {
+    font-size: 11.5px;
+    color: var(--text-dim);
+    margin-top: 2px;
+    font-family: 'JetBrains Mono', monospace;
+    letter-spacing: 0.3px;
+  }
+  .row-pill {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    padding: 4px 10px;
+    border-radius: 100px;
+  }
+  .A .row-pill { background: linear-gradient(135deg, rgba(16,185,129,0.18), rgba(16,185,129,0.08)); color: #047857; border: 1px solid rgba(16,185,129,0.3); }
+  .B .row-pill { background: #E4F4EE; color: #047857; border: 1px solid rgba(4,120,87,0.25); }
+  .C .row-pill { background: transparent; color: #047857; border: 1px solid #047857; padding: 3px 8px; }
+
+  /* Footer */
+  .foot {
+    max-width: 900px;
+    margin: 0 auto 60px;
+    padding: 28px;
+    text-align: center;
+    color: var(--text-faint);
+    font-size: 12.5px;
+    line-height: 1.7;
+    border-top: 1px dashed var(--line);
+    padding-top: 32px;
+  }
+  .foot strong { color: var(--amt-gold-deep); font-family: 'JetBrains Mono', monospace; font-weight: 500; }
+
+  @media (max-width: 1200px) {
+    .gallery { grid-template-columns: 1fr; gap: 50px; padding: 30px; }
+    header { grid-template-columns: 1fr; gap: 30px; padding: 40px 24px; }
+    .palette-ref { justify-content: center; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════════ HEADER ═══════════════════════ -->
+<header>
+  <div class="brand">
+    <div class="brand-dot"></div>
+    <div>
+      <div class="brand-name">AMT Trans'it</div>
+      <div class="brand-sub">Études visuelles du site</div>
+    </div>
+  </div>
+
+  <div class="title-block">
+    <div class="eyebrow">Web · Refonte du langage visuel</div>
+    <h1>Trois <em>styles</em>,<br>une même charte AMT.</h1>
+    <p class="lede">
+      Comparaison de trois directions de style pour les cards et les boutons
+      du site. Chaque proposition utilise la même triade officielle — seules
+      la composition, la typographie et les ombres changent.
+    </p>
+  </div>
+
+  <div class="palette-ref">
+    <div class="swatch sw-blue"><span>#1A3553</span></div>
+    <div class="swatch sw-red"><span>#E51F21</span></div>
+    <div class="swatch sw-gold"><span>#F2A312</span></div>
+  </div>
+</header>
+
+<!-- ═══════════════════════ GALLERY ═══════════════════════ -->
+<section class="gallery">
+
+  <!-- ──────────── A · PREMIUM AMT ──────────── -->
+  <article class="proposition A">
+    <div class="prop-head">
+      <span class="prop-letter">A</span>
+      <h2 class="prop-name">Premium AMT</h2>
+      <div class="prop-tag">Magazine financier</div>
+      <p class="prop-desc">
+        Cards à gradients pleins, watermark emoji, ombres profondes. C'est le style
+        qui plaît dans le dashboard Abidjan — premium, expressif, mémorable.
+      </p>
+    </div>
+    <div class="prop-body">
+
+      <div class="section-label">KPI principaux</div>
+      <div class="kpi-grid">
+        <div class="kpi kpi-1">
+          <div class="kpi-title">Total encaissé · CHINE</div>
+          <div class="kpi-value">2 750 000 F CFA</div>
+          <div class="kpi-mark">💰</div>
+        </div>
+        <div class="kpi kpi-2">
+          <div class="kpi-title">Commissions</div>
+          <div class="kpi-value">485 000 F</div>
+          <div class="kpi-mark">🤝</div>
+        </div>
+        <div class="kpi kpi-3">
+          <div class="kpi-title">Reste à payer</div>
+          <div class="kpi-value">320 000 F</div>
+          <div class="kpi-mark">⚠️</div>
+        </div>
+      </div>
+
+      <div class="section-label">Actions rapides</div>
+      <div class="actions">
+        <button class="action-btn">
+          <i class="fas fa-file-invoice"></i>
+          <span>Nouvelle facture</span>
+        </button>
+        <button class="action-btn">
+          <i class="fas fa-receipt"></i>
+          <span>Toutes les factures</span>
+        </button>
+        <button class="action-btn">
+          <i class="fas fa-users"></i>
+          <span>Clients</span>
+        </button>
+      </div>
+
+      <div class="section-label">Dernière expédition</div>
+      <div class="row-card">
+        <div class="av">DA</div>
+        <div class="row-info">
+          <div class="row-name">DOUMBIA ABIDJAN</div>
+          <div class="row-sub">J-003-CHN2 · 20/05/2026</div>
+        </div>
+        <div class="row-pill">Payée</div>
+      </div>
+
+    </div>
+  </article>
+
+  <!-- ──────────── B · SOLEIL CHALEUREUX ──────────── -->
+  <article class="proposition B">
+    <div class="prop-head">
+      <span class="prop-letter">B</span>
+      <h2 class="prop-name">Soleil chaleureux</h2>
+      <div class="prop-tag">Fintech accessible</div>
+      <p class="prop-desc">
+        Cards blanches lisibles avec un accent doré marqué (filet vertical, icône en cercle).
+        Style chaleureux et clair, à la Revolut / N26 — facile à lire à toute heure.
+      </p>
+    </div>
+    <div class="prop-body">
+
+      <div class="section-label">KPI principaux</div>
+      <div class="kpi-grid">
+        <div class="kpi">
+          <div class="kpi-head">
+            <div class="kpi-icon"><i class="fas fa-coins"></i></div>
+            <div class="kpi-title">Total encaissé · Chine</div>
+          </div>
+          <div class="kpi-value"><strong>2 750 000</strong> F CFA</div>
+          <i class="fas fa-sack-dollar kpi-mark"></i>
+        </div>
+        <div class="kpi">
+          <div class="kpi-head">
+            <div class="kpi-icon"><i class="fas fa-handshake"></i></div>
+            <div class="kpi-title">Commissions</div>
+          </div>
+          <div class="kpi-value"><strong>485 000</strong> F</div>
+        </div>
+        <div class="kpi">
+          <div class="kpi-head">
+            <div class="kpi-icon"><i class="fas fa-triangle-exclamation"></i></div>
+            <div class="kpi-title">Reste à payer</div>
+          </div>
+          <div class="kpi-value"><strong>320 000</strong> F</div>
+        </div>
+      </div>
+
+      <div class="section-label">Actions rapides</div>
+      <div class="actions">
+        <button class="action-btn action-btn-primary">
+          <i class="fas fa-plus"></i>
+          <span>Nouvelle facture</span>
+        </button>
+        <button class="action-btn action-btn-outline">
+          <i class="fas fa-receipt"></i>
+          <span>Factures</span>
+        </button>
+        <button class="action-btn action-btn-outline">
+          <i class="fas fa-users"></i>
+          <span>Clients</span>
+        </button>
+      </div>
+
+      <div class="section-label">Dernière expédition</div>
+      <div class="row-card">
+        <div class="av">DA</div>
+        <div class="row-info">
+          <div class="row-name">DOUMBIA ABIDJAN</div>
+          <div class="row-sub">J-003-CHN2 · 20/05/2026</div>
+        </div>
+        <div class="row-pill">Payée</div>
+      </div>
+
+    </div>
+  </article>
+
+  <!-- ──────────── C · ÉDITORIAL AMT ──────────── -->
+  <article class="proposition C">
+    <div class="prop-head">
+      <span class="prop-letter">C</span>
+      <h2 class="prop-name">Éditorial AMT</h2>
+      <div class="prop-tag">Bloomberg · FT minimaliste</div>
+      <p class="prop-desc">
+        Cards angulaires, GROS chiffres en Comfortaa, séparateur or franc en bas.
+        Style magazine financier minimaliste — pour qui aime le sobre, le typographique,
+        le précis.
+      </p>
+    </div>
+    <div class="prop-body">
+
+      <div class="section-label">KPI principaux</div>
+      <div class="kpi-grid">
+        <div class="kpi">
+          <div class="kpi-title">Total encaissé · Chine</div>
+          <div class="kpi-value">2 750 000<small>F CFA</small></div>
+          <div class="kpi-foot"><span class="delta-up">▲ +12.4%</span> · vs. semaine passée</div>
+        </div>
+        <div class="kpi">
+          <div class="kpi-title">Commissions</div>
+          <div class="kpi-value">485 000<small>F</small></div>
+          <div class="kpi-foot"><span class="delta-up">▲ +5.1%</span></div>
+        </div>
+        <div class="kpi">
+          <div class="kpi-title">Reste à payer</div>
+          <div class="kpi-value">320 000<small>F</small></div>
+          <div class="kpi-foot"><span class="delta-down">▼ −3.8%</span></div>
+        </div>
+      </div>
+
+      <div class="section-label">Actions rapides</div>
+      <div class="actions">
+        <button class="action-btn">
+          <i class="fas fa-plus"></i>
+          <span>Nouvelle facture</span>
+        </button>
+        <button class="action-btn">
+          <i class="fas fa-receipt"></i>
+          <span>Toutes les factures</span>
+        </button>
+        <button class="action-btn">
+          <i class="fas fa-users"></i>
+          <span>Clients</span>
+        </button>
+      </div>
+
+      <div class="section-label">Dernière expédition</div>
+      <div class="row-card">
+        <div class="av">D</div>
+        <div class="row-info">
+          <div class="row-name">DOUMBIA ABIDJAN</div>
+          <div class="row-sub">J-003-CHN2 · 20/05/2026</div>
+        </div>
+        <div class="row-pill">PAYÉE</div>
+      </div>
+
+    </div>
+  </article>
+
+</section>
+
+<!-- Footer -->
+<div class="foot">
+  Charte officielle AMT conservée dans les 3 propositions —
+  <strong>#1A3553</strong> bleu de Prusse ·
+  <strong>#E51F21</strong> rouge ·
+  <strong>#F2A312</strong> or marigold.
+  <br>Survolez les cards pour voir les micro-interactions.
+</div>
+
+</body>
+</html>

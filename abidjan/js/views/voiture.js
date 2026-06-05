@@ -2,7 +2,7 @@ import { db } from '../../../firebase-config.js';
 import { collection, doc, addDoc, setDoc, updateDoc, query, where, orderBy, onSnapshot } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 import { getCollectionName } from '../../../agencies-config.js';
 
-import { formatMoney } from '../../../services/format.js';
+import { formatMoney } from '../../../commun/services/format.js';
 
 export const VoitureView = {
     render(app, container) {

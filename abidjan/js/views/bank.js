@@ -2,7 +2,7 @@ import { db } from '../../../firebase-config.js';
 import { collection, doc, setDoc, updateDoc, getDocs, query, where, orderBy, onSnapshot, writeBatch } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 import { getCollectionName } from '../../../agencies-config.js';
 import { getShippingMode, filterByShippingMode } from '../../../shipping-mode.js';
-import { calculateStorageFee } from '../../../services/storageFee.js';
+import { calculateStorageFee } from '../../../commun/services/storageFee.js';
 
 export const BankView = {
     render(app, container) {

@@ -8,7 +8,7 @@
 // sinon FCFA/XOF). Le stockage interne reste en FCFA ; la conversion ÷ TAUX
 // quand on veut afficher en EUR est faite par l'appelant (comme avant).
 
-import { AGENCIES } from '../agencies-config.js';
+import { AGENCIES } from '../../agencies-config.js';
 
 // EUR si agence historique 'paris' OU route SaaS dont la devise configurée
 // est EUR. (Même règle que l'ancien app.formatMoneyLocal / les copies des vues.)

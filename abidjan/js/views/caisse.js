@@ -2,8 +2,8 @@ import { db } from '../../../firebase-config.js';
 import { collection, doc, addDoc, updateDoc, getDocs, query, where, orderBy, limit, onSnapshot, writeBatch, arrayUnion } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 import { getCollectionName } from '../../../agencies-config.js';
 import { matchesShippingMode, isAerienMode, getShippingMode } from '../../../shipping-mode.js';
-import { calculateStorageFee } from '../../../services/storageFee.js';
-import { formatMoney } from '../../../services/format.js';
+import { calculateStorageFee } from '../../../commun/services/storageFee.js';
+import { formatMoney } from '../../../commun/services/format.js';
 import { createApp, ref, reactive, computed, onMounted, onUnmounted, watch } from "https://unpkg.com/vue@3/dist/vue.esm-browser.prod.js";
 
 export const CaisseView = {
