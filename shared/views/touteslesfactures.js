@@ -6,6 +6,7 @@ import { createApp, ref, computed, reactive, onMounted, onUnmounted } from "http
 import { getCollectionName, AGENCIES, getConfigSourceAgency } from '../../agencies-config.js';
 import { loadJsPdf } from '../../services/pdf-common.js';
 import { applyInvoiceSecurity } from '../../services/invoice-security.js';
+import { phoneTail, toE164Intl, toE164Detect, routePhoneCountries } from '../../services/phone.js';
 import { extractPhone, stripPhoneFromName } from '../../services/phone.js';
 import { filterByShippingMode } from '../../shipping-mode.js';
 import { normalizePhone } from '../../affiliations.js';
@@ -1771,7 +1772,14 @@ export const ToutesLesFacturesView = {
             const clientInfo = this.clientsData.get(expediteur);
             if (feedbackExp) feedbackExp.innerHTML = `<span style="color:#059669;"><i class="fas fa-check-circle"></i> <b>Tél:</b> ${clientInfo.tel || 'N/A'} | <b>Adresse:</b> ${clientInfo.adresse || 'N/A'}</span>`;
         } else {
-            if (feedbackExp) feedbackExp.innerHTML = `<span style="color:#f59e0b;"><i class="fas fa-exclamation-triangle"></i> Nouveau client expéditeur</span>`;
+            // Même logique que le destinataire : numéro inchangé = correction de nom.
+            const enteredTail = phoneTail(document.getElementById('tlfEditExpTel')?.value || '');
+            const origTail = this.currentEditInvoice ? (phoneTail(this.currentEditInvoice.tel || '') || this.currentEditInvoice.expPhoneTail || '') : '';
+            if (enteredTail && enteredTail === origTail) {
+                if (feedbackExp) feedbackExp.innerHTML = `<span style="color:#059669;"><i class="fas fa-pen"></i> Correction de nom (même numéro) — sera mise à jour partout</span>`;
+            } else if (feedbackExp) {
+                feedbackExp.innerHTML = `<span style="color:#f59e0b;"><i class="fas fa-exclamation-triangle"></i> Nouveau client expéditeur</span>`;
+            }
         }
     },
 
@@ -1800,7 +1808,17 @@ export const ToutesLesFacturesView = {
         if (isFound) {
             if (feedbackDest) feedbackDest.innerHTML = `<span style="color:#059669;"><i class="fas fa-check-circle"></i> Client reconnu dans l'historique</span>`;
         } else {
-            if (feedbackDest) feedbackDest.innerHTML = `<span style="color:#f59e0b;"><i class="fas fa-exclamation-triangle"></i> Nouveau destinataire</span>`;
+            // Reconnaissance par TÉLÉPHONE (ancre stable) : si le numéro saisi est
+            // celui du destinataire D'ORIGINE de cette facture, c'est une simple
+            // CORRECTION DE NOM (même personne) -> sera répercutée partout, pas un
+            // nouveau destinataire.
+            const enteredTail = phoneTail(document.getElementById('tlfEditTel')?.value || '');
+            const origTail = this.currentEditInvoice ? (phoneTail(this.currentEditInvoice.numero || '') || this.currentEditInvoice.destPhoneTail || '') : '';
+            if (enteredTail && enteredTail === origTail) {
+                if (feedbackDest) feedbackDest.innerHTML = `<span style="color:#059669;"><i class="fas fa-pen"></i> Correction de nom (même numéro) — sera mise à jour partout</span>`;
+            } else if (feedbackDest) {
+                feedbackDest.innerHTML = `<span style="color:#f59e0b;"><i class="fas fa-exclamation-triangle"></i> Nouveau destinataire</span>`;
+            }
         }
     },
 
@@ -2086,6 +2104,17 @@ export const ToutesLesFacturesView = {
         const payeCfa = (parseFloat(inv.montantParis) || 0) + (parseFloat(inv.montantAbidjan) || 0);
         updates.reste = payeCfa - newPrixCfa;
 
+        // App Clients : on RECALCULE le lien client<->facture (phoneTail = 9
+        // derniers chiffres) à CHAQUE modif de numéro. Sinon le colis resterait
+        // rattaché à l'ANCIEN numéro et le client ne le retrouverait plus sous
+        // son nouveau numéro. (E.164 = affichage, recalculé aussi par cohérence.)
+        const _agTail = inv.departureAgency || sessionStorage.getItem('currentActiveAgency') || 'paris';
+        const _pcTail = routePhoneCountries(_agTail);
+        updates.expPhoneTail = phoneTail(updates.tel);
+        updates.destPhoneTail = phoneTail(updates.numero);
+        updates.expPhoneE164 = _pcTail.exp ? toE164Intl(updates.tel, _pcTail.exp) : toE164Detect(updates.tel);
+        updates.destPhoneE164 = _pcTail.dest ? toE164Intl(updates.numero, _pcTail.dest) : toE164Detect(updates.numero);
+
         try {
             const btn = document.querySelector('#tlfModalsContainer .btn-primary');
             if(btn) { btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Application...'; btn.disabled = true; }
@@ -2152,6 +2181,30 @@ export const ToutesLesFacturesView = {
             }
 
             await batch.commit();
+
+            // ===== Correction de nom « partout » (anti-doublon destinataire/expéditeur) =====
+            // Si le NOM change mais que le NUMÉRO reste le même => même personne,
+            // simple correction => on répercute le nouveau nom sur TOUTES ses
+            // factures + livraisons (ancre = phoneTail). Si le numéro change aussi
+            // => autre personne => on ne touche QUE cette facture (déjà fait).
+            try {
+                const propagateRename = async (oldName, newName, oldTail, newTail, tailField, txNameField, livField) => {
+                    const o = String(oldName || '').trim(), n = String(newName || '').trim();
+                    if (!o || !n || o.toUpperCase() === n.toUpperCase()) return; // nom inchangé
+                    if (!oldTail || oldTail !== newTail) return; // numéro changé/absent => autre personne
+                    const b2 = writeBatch(db);
+                    let cnt = 0;
+                    const txSnap = await getDocs(query(collection(db, getCollectionName('transactions')), where(tailField, '==', oldTail)));
+                    txSnap.forEach(d => { if (d.id !== id) { b2.update(d.ref, { [txNameField]: n }); cnt++; } });
+                    const livSnap = await getDocs(query(collection(db, getCollectionName('livraisons')), where(livField, '==', o)));
+                    livSnap.forEach(d => { b2.update(d.ref, { [livField]: n }); cnt++; });
+                    if (cnt > 0) await b2.commit();
+                };
+                const oldDestTail = inv.destPhoneTail || phoneTail(inv.numero || '');
+                const oldExpTail = inv.expPhoneTail || phoneTail(inv.tel || '');
+                await propagateRename(inv.nomDestinataire, updates.nomDestinataire, oldDestTail, updates.destPhoneTail, 'destPhoneTail', 'nomDestinataire', 'destinataire');
+                await propagateRename(inv.nom, updates.nom, oldExpTail, updates.expPhoneTail, 'expPhoneTail', 'nom', 'expediteur');
+            } catch (eProp) { console.warn('Propagation renommage :', eProp); }
 
             this.app.showToast("Facture modifiée avec succès !", "success");
             document.getElementById('tlfModalsContainer').innerHTML = '';

@@ -482,6 +482,37 @@ export const ClientsView = {
             }
         });
 
+        // ===== ANTI-DOUBLON : fusionne les fiches ayant le MÊME TÉLÉPHONE =====
+        // Le téléphone (phoneTail = 9 derniers chiffres) est l'ancre stable : une
+        // même personne renommée (ancienne fiche + fiche au nouveau nom) ne doit
+        // apparaître qu'UNE fois. On garde le nom le PLUS RÉCENT et on cumule les
+        // stats. (Sans numéro, on ne peut pas dédoublonner -> la fiche reste.)
+        {
+            const tailToKey = new Map(); // phoneTail -> clé conservée
+            for (const [key, profile] of [...clientProfiles.entries()]) {
+                const tl = phoneTail(profile.tel || '');
+                if (!tl) continue;
+                const keptKey = tailToKey.get(tl);
+                if (keptKey === undefined) { tailToKey.set(tl, key); continue; }
+                const aStats = statsMap.get(keptKey) || { ca: 0, factures: 0, lastDate: null };
+                const bStats = statsMap.get(key) || { ca: 0, factures: 0, lastDate: null };
+                const keptProfile = clientProfiles.get(keptKey);
+                // La fiche la plus récemment active porte le nom le plus à jour.
+                const bNewer = bStats.lastDate && (!aStats.lastDate || bStats.lastDate > aStats.lastDate);
+                if (bNewer) {
+                    if (profile.nom) keptProfile.nom = profile.nom;
+                    if (profile.adresse && profile.adresse !== '-') keptProfile.adresse = profile.adresse;
+                    if (profile.tel && profile.tel !== '-') keptProfile.tel = profile.tel;
+                }
+                aStats.ca += bStats.ca;
+                aStats.factures += bStats.factures;
+                if (bStats.lastDate && (!aStats.lastDate || bStats.lastDate > aStats.lastDate)) aStats.lastDate = bStats.lastDate;
+                statsMap.set(keptKey, aStats);
+                statsMap.delete(key);
+                clientProfiles.delete(key);
+            }
+        }
+
         // Consolider la liste
         const clientsList = [];
         for (const [nomUpper, profile] of clientProfiles.entries()) {

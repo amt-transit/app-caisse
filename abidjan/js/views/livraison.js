@@ -2774,6 +2774,7 @@ export const LivraisonView = {
                const moreMenu = archived ? '' : buildActionMenu(d, phone, destName);
                const editPanel = (!isViewer && !archived) ? `
                    <div class="lv-edit" id="lvedit-${d.id}" style="display:none">
+                       <label>Expéditeur<input type="text" value="${lvEsc(d.expediteur||'')}" onchange="updateDeliveryExpediteur('${d.id}', this.value)"></label>
                        <label>Destinataire<input type="text" value="${lvEsc(destName)}" onchange="updateDeliveryRecipient('${d.id}', this.value)"></label>
                        <label>Téléphone<input type="text" value="${lvEsc(phone)}" onchange="updateDeliveryPhone('${d.id}', this.value)"></label>
                        <label>Lieu de livraison<input type="text" value="${lvEsc(d.lieuLivraison||'')}" onchange="updateDeliveryLocation('${d.id}', this.value)"></label>
@@ -4016,7 +4017,7 @@ export const LivraisonView = {
        // Identification : par (tél + nom) si présents, sinon par celui présent ;
        // sinon création. Comme une seule clé change par édition, l'autre sert
        // d'ancre pour retrouver la bonne fiche.
-       async function syncDestinataireToClients({ nom, tel, adresse }) {
+       async function syncDestinataireToClients({ nom, oldNom, tel, adresse }) {
            try {
                // « Le départ décide » : les destinataires sont stockés sous l'agence
                // de DÉPART de la route (c'est là que Nouvelle Facture les lit/crée).
@@ -4024,6 +4025,9 @@ export const LivraisonView = {
                const targetAgency = getConfigSourceAgency();
                const cleanNom = stripPhoneFromName(nom || '').trim();
                const nNom = cleanNom.toUpperCase();
+               // Ancien nom (avant renommage) : sert à RETROUVER la fiche existante
+               // pour la mettre à jour au lieu d'en créer une nouvelle (anti-doublon).
+               const nOldNom = stripPhoneFromName(oldNom || '').trim().toUpperCase();
                const nTel = tel ? toE164(tel) : '';
                if (!nNom && !nTel) return;
 
@@ -4035,7 +4039,8 @@ export const LivraisonView = {
                    const cTel = c.tel ? toE164(c.tel) : '';
                    const cNom = (c.nom || '').toUpperCase().trim();
                    const tMatch = nTel && cTel === nTel;
-                   const noMatch = nNom && cNom === nNom;
+                   // Correspondance nom = nouveau nom OU ancien nom (anti-doublon au renommage).
+                   const noMatch = (nNom && cNom === nNom) || (nOldNom && cNom === nOldNom);
                    if (tMatch && noMatch) { if (!both) both = docu.id; }
                    else if (tMatch) { if (!byTel) byTel = docu.id; }
                    else if (noMatch) { if (!byNom) byNom = docu.id; }
@@ -4107,18 +4112,47 @@ export const LivraisonView = {
            updateDoc(doc(db, CONSTANTS.COLLECTION, id), { destinataire: cleanRecip }).then(() => {
                if (d && oldRecip !== cleanRecip) logLivraisonAudit("MODIF_LIVRAISON", `Colis ${d.ref} : Destinataire modifié de "${oldRecip}" à "${cleanRecip}"`, id);
            });
-           // Propagation vers la fiche client (le numéro sert d'ancre).
-           syncDestinataireToClients({ nom: cleanRecip, tel: d ? d.numero : '', adresse: d ? d.lieuLivraison : '' });
+           // Propagation vers la fiche client (numéro = ancre ; on passe AUSSI
+           // l'ancien nom pour retrouver la fiche au renommage au lieu d'en créer une).
+           syncDestinataireToClients({ nom: cleanRecip, oldNom: (d ? d.destinataire : ''), tel: d ? d.numero : '', adresse: d ? d.lieuLivraison : '' });
        }
-       
-       // Mise à jour du numéro en direct
-       function updateDeliveryPhone(id, newPhone) {
+
+       // Mise à jour de l'expéditeur en direct
+       function updateDeliveryExpediteur(id, newExpediteur) {
+           const cleanExp = cleanString(newExpediteur);
+           const d = deliveries.find(item => item.id === id);
+           const oldExp = d ? (d.expediteur || '') : '';
+           updateDoc(doc(db, CONSTANTS.COLLECTION, id), { expediteur: cleanExp }).then(() => {
+               if (d && oldExp !== cleanExp) logLivraisonAudit("MODIF_LIVRAISON", `Colis ${d.ref} : Expéditeur modifié de "${oldExp}" à "${cleanExp}"`, id);
+           });
+       }
+
+       // Mise à jour du numéro (destinataire) en direct
+       async function updateDeliveryPhone(id, newPhone) {
            const cleanPhone = cleanString(newPhone);
            const d = deliveries.find(item => item.id === id);
            const oldPhone = d ? d.numero : '?';
-           updateDoc(doc(db, CONSTANTS.COLLECTION, id), { numero: cleanPhone }).then(() => {
+           try {
+               const batch = writeBatch(db);
+               batch.update(doc(db, CONSTANTS.COLLECTION, id), { numero: cleanPhone });
+               // App Clients : on RECALCULE le lien (destPhoneTail) sur la FACTURE
+               // jumelle, sinon le client ne retrouverait plus son colis sous son
+               // nouveau numéro.
+               if (d && d.ref) {
+                   const qTrans = await getDocs(query(collection(db, getCollectionName('transactions')), where('reference', '==', d.ref), limit(1)));
+                   if (!qTrans.empty) {
+                       batch.update(qTrans.docs[0].ref, {
+                           numero: cleanPhone,
+                           destPhoneTail: phoneTail(cleanPhone),
+                           destPhoneE164: toE164Intl(cleanPhone, 'CI') || toE164Detect(cleanPhone)
+                       });
+                   }
+               }
+               await batch.commit();
                if (d && oldPhone !== cleanPhone) logLivraisonAudit("MODIF_LIVRAISON", `Colis ${d.ref} : Téléphone modifié de "${oldPhone}" à "${cleanPhone}"`, id);
-           });
+           } catch (e) {
+               console.error("Erreur maj téléphone livraison:", e);
+           }
            // Propagation vers la fiche client (le nom sert d'ancre).
            if (d) syncDestinataireToClients({ nom: d.destinataire, tel: cleanPhone, adresse: d.lieuLivraison });
        }
@@ -4786,7 +4820,7 @@ export const LivraisonView = {
            openBulkStatusModal, forceSyncTransactions, deleteSelectedDeliveries, exportToExcel,
            showAddModal, archiveCompletedDeliveries, openArchivesModal, closeArchivesModal,
            searchArchives, restoreFromArchive, filterDeliveries, sortTable, updateDeliveryLocation,
-           updateDeliveryRecipient, updateDeliveryPhone, updateDeliveryAmount, updateDeliveryQuantity,
+           updateDeliveryRecipient, updateDeliveryExpediteur, updateDeliveryPhone, updateDeliveryAmount, updateDeliveryQuantity,
            updateDeliveryInfo, updateDeliveryDescription, toggleClientNotified, markAsDelivered, markAsPending, deleteDelivery,
            openAbandonModal, closeAbandonModal, confirmAbandonment, generateAbandonmentPDFFromId,
            closeAddModal, updateContainerTitle, updateAvailableContainersList, toggleCommuneDropdown,
