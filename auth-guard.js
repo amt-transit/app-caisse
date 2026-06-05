@@ -3,6 +3,22 @@ import { AGENCIES, getDepartureAgencies, getArrivalAgencies, getCollectionName }
 import { onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-auth.js";
 import { doc, getDoc, updateDoc, collection, query, where, orderBy, onSnapshot } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 
+// ── AGENCE ACTIVE AU BOOT (anti-flash) ──────────────────────────────────────
+// app.js PEINT la page (menu, branding) AVANT qu'auth-guard ait lu la fiche
+// utilisateur (asynchrone). Si la session est vide (reconnexion), app.js
+// utilisait son agence par défaut -> "flash" de la mauvaise agence avant la
+// vraie. Ici, SYNCHRONEMENT et au plus tôt, on réutilise la dernière agence
+// mémorisée (localStorage, qui survit à la déconnexion) -> 1re peinture déjà
+// sur la bonne agence, plus de flash ni de reload.
+(function seedActiveAgencyAtBoot() {
+    try {
+        if (!sessionStorage.getItem('currentActiveAgency')) {
+            const last = localStorage.getItem('amt_lastAgency');
+            if (last) sessionStorage.setItem('currentActiveAgency', last);
+        }
+    } catch (_) {}
+})();
+
 // ── TRANSITION D'AGENCE (overlay persistant) ───────────────────────────────
 // Quand l'utilisateur change d'agence, switchAgency() pose un flag dans
 // sessionStorage et lance le reload. Au boot suivant, on RECRÉE immédiatement
@@ -332,10 +348,13 @@ onAuthStateChanged(auth, async (user) => {
         const APP_DEFAULT_AGENCY = 'paris';
         let currentActiveAgency = sessionStorage.getItem('currentActiveAgency');
         const desiredAgency = userData.agency === 'all'
-            ? (currentActiveAgency || 'abidjan')
+            ? (currentActiveAgency || localStorage.getItem('amt_lastAgency') || 'abidjan')
             : (userData.agency || 'abidjan');
         const renderedAgency = currentActiveAgency || APP_DEFAULT_AGENCY;
         sessionStorage.setItem('currentActiveAgency', desiredAgency);
+        // Mémorise l'agence effective pour le PROCHAIN boot (anti-flash) + pour
+        // qu'un utilisateur global retrouve sa dernière agence à la reconnexion.
+        try { localStorage.setItem('amt_lastAgency', desiredAgency); } catch (_) {}
         if (renderedAgency !== desiredAgency) {
             location.reload();
             return;
@@ -454,7 +473,10 @@ onAuthStateChanged(auth, async (user) => {
         const loadAgencyBranding = async (agencyId) => {
             try {
                 const cacheKey = `branding_${agencyId}`;
-                const cached = sessionStorage.getItem(cacheKey);
+                // Cache en localStorage (SURVIT à la déconnexion) : à la
+                // reconnexion, les couleurs/logo de l'agence s'appliquent
+                // SYNCHRONEMENT -> plus de "flash" du branding par défaut.
+                const cached = localStorage.getItem(cacheKey);
                 
                 const applyBranding = (branding) => {
                     if (branding.color) document.documentElement.style.setProperty('--primary', branding.color);
@@ -567,7 +589,7 @@ onAuthStateChanged(auth, async (user) => {
                     if (d.baseFontSize) branding.baseFontSize = d.baseFontSize;
                 }
                 
-                sessionStorage.setItem(cacheKey, JSON.stringify(branding));
+                localStorage.setItem(cacheKey, JSON.stringify(branding));
                 applyBranding(branding);
             } catch(e) { console.error("Branding error:", e); }
         };
@@ -616,6 +638,10 @@ onAuthStateChanged(auth, async (user) => {
             
             window.switchAgency = (targetAgency) => {
                 sessionStorage.setItem('currentActiveAgency', targetAgency);
+                // Mémorise la dernière agence choisie dans localStorage (qui SURVIT
+                // à la déconnexion, contrairement à sessionStorage) : à la
+                // reconnexion, l'utilisateur global retrouve SA dernière agence.
+                try { localStorage.setItem('amt_lastAgency', targetAgency); } catch (_) {}
                 // 1) Affiche un overlay « transition » avec le drapeau + nom de la
                 //    nouvelle agence pendant le rechargement.
                 // 2) Stocke ces infos dans sessionStorage pour que le NOUVEAU boot
