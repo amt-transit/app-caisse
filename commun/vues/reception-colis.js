@@ -4,8 +4,9 @@
 // route SaaS). Rattachement au client par le NUMÉRO (ancre phoneTail).
 // Voir PLAN-RECEPTION-COLIS.md. Passe 1 : réception + liste + pipeline + alerte
 // (photo + app Clients en passe 2).
-import { db } from '../firebase-config.js';
+import { db, app } from '../firebase-config.js';
 import { collection, doc, addDoc, updateDoc, query, where, getDocs, onSnapshot, serverTimestamp } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
+import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-storage.js";
 import { getCollectionName } from '../agencies-config.js';
 import { phoneTail } from '../services/phone.js';
 
@@ -481,6 +482,14 @@ export const ReceptionColisView = {
                 </div>` : ''}
             </div>`;
 
+        const photoBlock = `
+            <div style="margin:12px 0; display:flex; align-items:center; gap:14px; flex-wrap:wrap;">
+                ${r.photoUrl
+                    ? `<a href="${r.photoUrl}" target="_blank" rel="noopener"><img src="${r.photoUrl}" alt="Photo du colis" style="width:92px; height:92px; border-radius:10px; border:1px solid #e2e8f0; object-fit:cover;"></a>`
+                    : `<div style="width:92px; height:92px; border-radius:10px; border:1px dashed #cbd5e1; display:flex; align-items:center; justify-content:center; color:#94a3b8; font-size:26px;">📷</div>`}
+                ${editable ? `<label style="display:inline-flex; align-items:center; gap:8px; cursor:pointer; background:#f1f5f9; border:1px solid #d4dbe4; color:#334155; padding:8px 14px; border-radius:8px; font-weight:600; font-size:13px;">📷 ${r.photoUrl ? 'Changer la photo' : 'Ajouter une photo'}<input type="file" accept="image/*" onchange="window.app.views.receptionColis.uploadPhoto('${r.id}', this)" style="display:none;"></label>` : ''}
+            </div>`;
+
         const c = document.getElementById('rcModalContainer');
         if (!c) return;
         c.innerHTML = `
@@ -492,6 +501,7 @@ export const ReceptionColisView = {
                     <p>Contenu : ${r.contenu || '—'} · Fournisseur : ${r.fournisseur || '—'} · Suivi Chine : ${r.trackingChine || '—'}</p>
                     <p style="color:#64748b; margin:6px 0 0;">Reçu le ${r.dateReception || '—'}</p>
                     ${stepper}
+                    ${photoBlock}
                     ${groupNote}
                     ${factureBlock}
                     <h4 style="margin:14px 0 6px;">Cartons / produits ${items.length ? `(${items.length})` : ''}</h4>
@@ -527,6 +537,32 @@ export const ReceptionColisView = {
         if (items.length) { r.poids = upd.poids; r.volume = upd.volume; r.cartons = upd.cartons; }
         try { await updateDoc(doc(db, getCollectionName('receptions'), r.id), upd); }
         catch (e) { console.error('Réception — produits:', e); }
+    },
+
+    // Upload de la photo du colis vers Firebase Storage (même mécanique que le
+    // logo de facture). L'URL obtenue est stockée sur le colis (photoUrl).
+    async uploadPhoto(id, input) {
+        const file = input && input.files && input.files[0];
+        if (!file) return;
+        if (!/^image\//.test(file.type || '')) {
+            window.AppModal ? window.AppModal.error('Veuillez choisir une image.') : alert('Image attendue.');
+            return;
+        }
+        window.app.showToast && window.app.showToast('Envoi de la photo…');
+        try {
+            const path = `receptions/${getCollectionName('receptions')}/${id}`;
+            const sref = storageRef(getStorage(app), path);
+            await uploadBytes(sref, file);
+            const url = await getDownloadURL(sref);
+            const r = this.receptions.find(x => x.id === id);
+            if (r) r.photoUrl = url;
+            await updateDoc(doc(db, getCollectionName('receptions'), id), { photoUrl: url });
+            this.openDetail(id);
+            window.app.showToast && window.app.showToast('Photo ajoutée ✅');
+        } catch (e) {
+            console.error('Réception — photo:', e);
+            window.AppModal ? window.AppModal.error("Envoi de la photo impossible.") : alert("Envoi impossible.");
+        }
     },
 
     async addProduct(id) {

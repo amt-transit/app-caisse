@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>AMT Trans'it — Mise en relation Clients ↔ Partenaires</title>
+<style>
+  @page { size: A4; margin: 18mm 16mm; }
+  * { box-sizing: border-box; }
+  body { font-family: 'Segoe UI', Calibri, Arial, sans-serif; color: #1f2a37; line-height: 1.55; font-size: 12.5px; margin: 0; }
+  .cover { background: #1A3553; color: #fff; padding: 30px 34px; border-radius: 14px; margin-bottom: 26px; }
+  .cover .brand { font-size: 13px; letter-spacing: .14em; text-transform: uppercase; color: #FDC615; font-weight: 700; }
+  .cover h1 { font-size: 25px; margin: 8px 0 6px; line-height: 1.2; }
+  .cover .sub { font-size: 13px; color: #cdd7e4; font-style: italic; }
+  h2 { color: #1A3553; font-size: 16px; margin: 26px 0 8px; padding-bottom: 6px; border-bottom: 2px solid #FDC615; }
+  h2 .n { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; background: #1A3553; color: #fff; border-radius: 7px; font-size: 13px; margin-right: 9px; vertical-align: middle; }
+  p { margin: 7px 0; }
+  ul, ol { margin: 7px 0; padding-left: 22px; }
+  li { margin: 5px 0; }
+  strong { color: #142844; }
+  .quote { background: #fffbea; border-left: 4px solid #FDC615; padding: 12px 16px; border-radius: 0 8px 8px 0; margin: 12px 0; }
+  .quote p { margin: 3px 0; }
+  .rules { background: #f0f5fb; border: 1px solid #d9e2ee; border-radius: 10px; padding: 6px 18px; }
+  .steps { counter-reset: step; list-style: none; padding-left: 0; }
+  .steps > li { position: relative; padding-left: 40px; margin: 12px 0; }
+  .steps > li::before { counter-increment: step; content: counter(step); position: absolute; left: 0; top: 0; width: 26px; height: 26px; background: #1A3553; color: #fff; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 13px; }
+  .footer { margin-top: 30px; padding-top: 14px; border-top: 1px solid #e2e8f0; font-style: italic; color: #64748b; font-size: 11.5px; }
+  .avoid-break { break-inside: avoid; }
+</style>
+</head>
+<body>
+
+  <div class="cover">
+    <div class="brand">AMT Trans'it</div>
+    <h1>Service de mise en relation<br>Clients ↔ Partenaires</h1>
+    <div class="sub">Document de présentation — à valider ensemble</div>
+  </div>
+
+  <h2><span class="n">1</span>L'idée en une phrase</h2>
+  <p>Permettre à un <strong>client</strong> qui cherche un produit (ou un colis à faire venir de Chine) de <strong>déposer sa demande</strong>, et à nos <strong>partenaires</strong> de <strong>trouver ce produit</strong> et de proposer un prix — <strong>AMT restant toujours au centre</strong>, seul interlocuteur des deux côtés.</p>
+  <div class="quote">
+    <p>Le client a l'impression de traiter uniquement avec AMT.</p>
+    <p>Le partenaire a l'impression de répondre uniquement à une demande d'AMT.</p>
+    <p><strong>Les deux ne sont jamais mis en contact direct.</strong></p>
+  </div>
+
+  <h2><span class="n">2</span>Pourquoi c'est intéressant</h2>
+  <ul>
+    <li><strong>Pour le client</strong> : il décrit ce qu'il veut, sans chercher lui-même un fournisseur ni négocier en Chine. AMT s'occupe de tout.</li>
+    <li><strong>Pour le partenaire</strong> : il reçoit un flux de demandes concrètes, sans avoir à prospecter. Il répond avec ce qu'il trouve, et il est payé par AMT.</li>
+    <li><strong>Pour AMT</strong> : nous gardons la relation, la confiance et la marge. Personne ne peut nous « court-circuiter ».</li>
+  </ul>
+  <p>C'est exactement le fonctionnement des <strong>agents de sourcing en Chine</strong> (des sociétés qui trouvent les produits pour leurs clients sans jamais les mettre en contact avec l'usine) et des <strong>plateformes de demande de devis</strong> où la plateforme reste l'intermédiaire.</p>
+
+  <h2><span class="n">3</span>Le parcours, étape par étape</h2>
+  <ol class="steps">
+    <li><strong>Le client dépose une demande</strong> dans son application (« Je recherche tel produit » / « Je veux faire venir tel colis de Chine »), avec une description, une photo si possible, une quantité et un budget souhaité.</li>
+    <li><strong>La demande arrive chez AMT</strong> et devient visible par les partenaires concernés (application Partenaires et page de la route concernée, ex. Chine). La demande porte un <strong>numéro</strong> ; aucun nom, aucun numéro de téléphone n'est visible.</li>
+    <li><strong>Un partenaire trouve le produit</strong> et renseigne ses informations : <strong>prix d'achat, modalités de paiement, délais, photo du produit trouvé</strong>. (Plusieurs partenaires peuvent répondre à la même demande.)</li>
+    <li><strong>AMT vérifie et choisit la meilleure offre</strong>, puis <strong>ajoute sa marge</strong> et le coût du transport. AMT propose alors <strong>un prix final au client</strong>.</li>
+    <li><strong>Le client accepte</strong> (ou non). S'il accepte, <strong>la commande est lancée</strong>.</li>
+    <li><strong>Le colis est ensuite suivi</strong> dans notre outil « Réception Colis » déjà en place : réception à l'entrepôt → expédition → arrivée → livraison.</li>
+  </ol>
+
+  <h2><span class="n">4</span>Les règles d'or (à respecter absolument)</h2>
+  <div class="rules avoid-break">
+  <ul>
+    <li><strong>Anonymat total</strong> : le client ne connaît jamais le partenaire, et le partenaire ne connaît jamais le client.</li>
+    <li><strong>Marge protégée</strong> : le partenaire indique seulement son <strong>prix d'achat</strong> ; il ne voit <strong>jamais</strong> le prix final payé par le client. Le client ne voit jamais le prix d'achat.</li>
+    <li><strong>L'argent passe par AMT</strong> : le client paie AMT, et AMT paie le partenaire. C'est ce qui garantit que personne ne contourne le service.</li>
+    <li><strong>Tout échange passe par AMT</strong> : si des messages sont nécessaires, ils transitent par AMT (pas de contact direct).</li>
+  </ul>
+  </div>
+
+  <h2><span class="n">5</span>Ce que le partenaire doit fournir pour une demande</h2>
+  <ul>
+    <li>Confirmation qu'il a trouvé le produit (ou un équivalent).</li>
+    <li><strong>Prix d'achat</strong> unitaire.</li>
+    <li><strong>Modalités de paiement</strong> (acompte, délai, etc.).</li>
+    <li><strong>Délai</strong> d'obtention / de disponibilité.</li>
+    <li><strong>Photo</strong> du produit trouvé (recommandé).</li>
+    <li>Éventuellement une note (qualité, quantité minimum, etc.).</li>
+  </ul>
+
+  <h2><span class="n">6</span>Des exemples qui fonctionnent déjà ainsi</h2>
+  <ul>
+    <li><strong>Agents de sourcing Chine</strong> (sociétés qui trouvent les produits pour leurs clients et facturent un prix tout compris, marge incluse).</li>
+    <li><strong>Plateformes de demande de devis</strong> : le client décrit son besoin, des professionnels répondent, la plateforme garde les coordonnées masquées.</li>
+    <li><strong>Applications de mise en relation</strong> (transport, services) : tout passe par la plateforme, jamais de contact direct avant accord.</li>
+  </ul>
+
+  <h2><span class="n">7</span>Comment on le construit (par étapes)</h2>
+  <ul>
+    <li><strong>Étape 1 — l'essentiel</strong> : le client dépose une demande → les partenaires la voient → ils répondent (prix + modalités) → AMT valide et ajoute la marge → proposition au client → acceptation → création du colis à suivre.</li>
+    <li><strong>Étape 2 — le confort</strong> : messagerie interne (toujours masquée), notifications automatiques (nouvelle demande pour le partenaire, proposition prête pour le client), notes/fiabilité des partenaires.</li>
+    <li><strong>Étape 3 — le paiement en ligne</strong> intégré (le client paie AMT dans l'application, AMT règle le partenaire).</li>
+  </ul>
+
+  <h2><span class="n">8</span>Questions à valider ensemble</h2>
+  <ol>
+    <li>Le parcours en 6 étapes te convient-il ?</li>
+    <li>Quelles informations EXACTES veut-on demander au partenaire (section 5) ?</li>
+    <li>Comment gère-t-on le paiement au début (par AMT manuellement, puis en ligne) ?</li>
+    <li>Que se passe-t-il si <strong>plusieurs partenaires</strong> trouvent le même produit ? (Le plus rapide ? Le moins cher ? AMT choisit ?)</li>
+    <li>Faut-il une <strong>limite de temps</strong> pour répondre à une demande ?</li>
+    <li>Veut-on un système de <strong>notes / niveaux</strong> pour les partenaires les plus fiables ?</li>
+  </ol>
+
+  <div class="footer">Une fois ce document validé, nous le transformons en cahier des charges précis et nous démarrons l'Étape 1. — AMT Trans'it</div>
+
+</body>
+</html>
