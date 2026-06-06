@@ -14,6 +14,7 @@ import { ProfilView } from './commun/profil-view.js';
 import { DemandesClientView } from './commun/vues/demandes-client.js';
 import { ChatClientsView } from './commun/vues/messagerie-clients.js';
 import { ClientsPotentielsView } from './commun/vues/clients-potentiels.js';
+import { ReceptionColisView } from './commun/vues/reception-colis.js';
 
 // --- PARIS VIEWS (Départ) ---
 import { DashboardView as ParisDashboardView } from './depart/js/views/tableau-de-bord.js';
@@ -100,7 +101,7 @@ export const app = {
         'clients-list': 'clients', 'clients-app': 'clients', 'clients-analytics': 'clients', 'clients': 'logistique',
         'chat': 'comms', 'sms-send': 'comms', 'sms-history': 'comms', 'notifications': 'comms', 'notifications-history': 'comms', 'sms': 'comms',
         'products-list': 'produits',
-        'parrainage': 'special-asie', 'chine-dashboard': 'special-asie',
+        'parrainage': 'special-asie', 'chine-dashboard': 'special-asie', 'reception-colis': 'special-asie',
         'finance-cashier': 'finance', 'finance-cheques': 'finance', 'finance-expenses': 'finance',
         'index': 'entrees-caisse', 'confirmation': 'entrees-caisse', 'history': 'entrees-caisse', 'other-income': 'entrees-caisse',
         'expenses': 'finance', 'bank': 'finance', 'audit': 'finance',
@@ -826,7 +827,7 @@ export const app = {
             'parrainage': 'Réseau Partenaires', 'chine-dashboard': 'Tableau de Bord Asie',
             'finance-cashier': 'Caisse globale', 'finance-cheques': 'Liste des chèques', 'finance-expenses': 'Dépenses',
             'index': 'Saisie de Caisse', 'confirmation': 'Confirmation Saisies', 'history': 'Historique Opérations', 'other-income': 'Autres Entrées', 'expenses': 'Dépenses Caisse', 'bank': 'Mouvements Banque', 'audit': 'Audit Saisies',
-            'livraison': 'LIVRAISON', 'voiture': 'Gestion Véhicules', 'magasinage': 'Magasinage', 'points': 'Points Utilisateurs',
+            'livraison': 'LIVRAISON', 'voiture': 'Gestion Véhicules', 'magasinage': 'Magasinage', 'points': 'Points Utilisateurs', 'reception-colis': 'Réception Colis',
             'admin-panel': 'Gestion des agents', 'salaire': 'Salaire & RH', 'comptejb': 'Livre de Caisse JB', 
             'settings-agency': 'Paramètres Agence', 'settings-company': 'Paramètres Entreprise', 'settings-software': 'Paramètres logiciel', 'settings-design': 'Apparence & Menus', 'settings-sms': 'Configuration SMS', 'settings-notifications': 'Configuration notifications', 'settings-menus': 'Gestion menus', 'settings-agents': 'Gestion des agents', 'settings-agencies': 'Gestion des agences', 'settings-roles': 'Rôles & Permissions', 'settings-appointments': 'Paramètres RDV', 'settings-profile': 'Mon profil',
             'stock-list': 'Stock produits',
@@ -945,6 +946,7 @@ export const app = {
             'index': () => CaisseView.render(this, container),
             'expenses': () => ExpensesView.render(this, container),
             'magasinage': () => MagasinageView.render(this, container),
+            'reception-colis': () => ReceptionColisView.render(this, container),
             'livraison': () => LivraisonView.render(this, container),
             'audit': () => AuditView.render(this, container),
             'history': () => HistoryView.render(this, container),
