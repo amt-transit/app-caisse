@@ -141,12 +141,13 @@ export const NouvelleFactureView = {
                         </div>
                         <div id="nfDestinataireFeedback" style="font-size: 12px; color: #64748b; margin-top: 5px;" v-html="destFeedback"></div>
                         <div class="form-group" v-if="affiliationActive" style="margin-top: 15px;">
-                            <label><i class="fas fa-user-friends" style="color:#d97706;"></i> Parrain (parrainage)</label>
-                            <select v-model="form.parrainId" style="width:100%; padding:10px; border:1px solid #cbd5e1; border-radius:8px; box-sizing:border-box; outline:none; background:white;">
+                            <label><i class="fas fa-user-friends" style="color:#d97706;"></i> Parrain (parrainage) <span v-if="parrainLocked" style="color:#059669;">🔒</span></label>
+                            <select v-model="form.parrainId" :disabled="parrainLocked" style="width:100%; padding:10px; border:1px solid #cbd5e1; border-radius:8px; box-sizing:border-box; outline:none;" :style="parrainLocked ? 'background:#f1f5f9; cursor:not-allowed;' : 'background:white;'">
                                 <option value="">— Aucun parrain —</option>
                                 <option v-for="d in demarcheurs" :key="d.id" :value="d.id">{{ d.prenom }} {{ d.nom }}</option>
                             </select>
-                            <div style="font-size:11px; color:#94a3b8; margin-top:4px;">Si ce destinataire est déjà affilié, son parrain d'origine est conservé (rattachement permanent).</div>
+                            <div v-if="parrainLocked" style="font-size:11px; color:#059669; margin-top:4px;">🔒 Parrain permanent : <b>{{ parrainLockedName }}</b> — dissociation possible dans Parrainage.</div>
+                            <div v-else style="font-size:11px; color:#94a3b8; margin-top:4px;">Si ce destinataire est déjà affilié, son parrain d'origine est conservé (rattachement permanent).</div>
                         </div>
                         <div class="form-group" style="margin-top: 15px;">
                             <label>Lieu livraison / Adresse complète</label>
@@ -288,6 +289,14 @@ export const NouvelleFactureView = {
                                     <option value="BON D ENVOI">BON D'ENVOI</option>
                                     <option value="NON PAYE">NON PAYÉ (À régler à Abidjan)</option>
                                 </select>
+                            </div>
+                            <div class="form-group">
+                                <label>Agence de paiement *</label>
+                                <select v-model="form.paymentSide">
+                                    <option value="departure">Au départ (cette agence)</option>
+                                    <option value="arrival">À l'arrivée (destination)</option>
+                                </select>
+                                <small style="color:#64748b; font-size:11px;">Seule cette agence pourra encaisser la facture.</small>
                             </div>
                             <div class="form-group">
                                 <label>Valeur déclarée colis (€)</label>
@@ -504,7 +513,8 @@ initVue(globalApp) {
                 poids: '',            // Aérien : poids en kg
                 aerienType: 'normal', // 'normal' | 'express'
                 nbColisExpedies: '',  // Aérien Paris : nb de colis annoncés (reconditionnement)
-                totalCfa: 0           // Total facturé (CFA) en mode auto, modifiable
+                totalCfa: 0,          // Total facturé (CFA) en mode auto, modifiable
+                paymentSide: 'departure' // agence qui encaisse : 'departure' | 'arrival' (defaut route ci-dessous)
             });
 
             // Destinations = agences d'ARRIVÉE de la route de l'agence de départ
@@ -601,6 +611,8 @@ initVue(globalApp) {
             const resetAutoTotal = () => { userTouchedTotal.value = false; form.totalCfa = autoTotalCFA.value; };
             watch(autoTotalCFA, (v) => { if (!userTouchedTotal.value) form.totalCfa = v; }, { immediate: true });
             const demarcheurs = ref([]);
+            const parrainLocked = ref(false);   // destinataire déjà affilié -> parrain verrouillé
+            const parrainLockedName = ref('');
             if (affiliationActive) {
                 getDocs(collection(db, getCollectionName('demarcheurs'))).then(s => {
                     demarcheurs.value = s.docs.map(d => ({ id: d.id, ...d.data() }));
@@ -707,6 +719,8 @@ initVue(globalApp) {
                         if (typeof ic.forfaitChaussuresEur === 'number') tarifs.forfaitChaussuresEur = ic.forfaitChaussuresEur;
                         if (typeof ic.kgAerienNormal === 'number') tarifs.kgAerienNormal = ic.kgAerienNormal;
                         if (typeof ic.kgAerienExpress === 'number') tarifs.kgAerienExpress = ic.kgAerienExpress;
+                        // Defaut "agence de paiement" de la route (modifiable par facture).
+                        if (ic.paymentSide === 'departure' || ic.paymentSide === 'arrival') form.paymentSide = ic.paymentSide;
                     }
                     if (!userTouchedTotal.value) form.totalCfa = autoTotalCFA.value;
                 } catch (e) { console.warn('Tarifs/modèle (lecture):', e && e.message); }
@@ -844,6 +858,7 @@ initVue(globalApp) {
                 if (!dest) {
                     destFeedback.value = '';
                     form.lieu = '';
+                    parrainLocked.value = false;
                     return;
                 }
 
@@ -876,6 +891,25 @@ initVue(globalApp) {
 
                 if (isFound) destFeedback.value = `<span style="color:#059669;"><i class="fas fa-check-circle"></i> <b>Tél:</b> ${num || 'N/A'}</span>`;
                 else destFeedback.value = `<span style="color:#f59e0b;"><i class="fas fa-exclamation-triangle"></i> Nouveau destinataire</span>`;
+
+                // Parrainage : si ce destinataire est déjà affilié, son parrain est
+                // VERROUILLÉ (rattachement permanent ; dissociation via Parrainage).
+                if (affiliationActive) {
+                    const m = dest.match(/(.*?)\s*((?:\+|00)?\d{8,})/);
+                    let phone = m ? m[2].trim() : '';
+                    if (!phone) phone = num || (destInfos.value.get(m ? m[1].trim() : dest) || '');
+                    if (phone) {
+                        try {
+                            const aff = await getAffiliation(phone);
+                            if (aff && aff.demarcheurId) {
+                                form.parrainId = aff.demarcheurId;
+                                parrainLocked.value = true;
+                                const d = demarcheurs.value.find(x => x.id === aff.demarcheurId);
+                                parrainLockedName.value = aff.demarcheurName || (d ? `${d.prenom || ''} ${d.nom || ''}`.trim() : 'parrain enregistré');
+                            } else { parrainLocked.value = false; }
+                        } catch (e) { parrainLocked.value = false; }
+                    } else { parrainLocked.value = false; }
+                }
             };
 
             // --- Modale "Créer un expéditeur / destinataire" ---
@@ -1173,6 +1207,8 @@ initVue(globalApp) {
                     prix: totalCFA, montantParis: payeCFA, montantAbidjan: 0, reste: -resteCFA,
                     modePaiement: form.modePay, description: items.value.map(i => `${i.qty}x ${i.desc}`).join(', '),
                     items: items.value, quantite: totalColis, nbColisExpedies: nbColisExp, agency: activeAgency, isDeleted: false,
+                    paymentSide: form.paymentSide || 'departure', // agence autorisee a encaisser cette facture
+
                     saisiPar: userName,
                     modeExpedition: shippingMode,
                     poids: shippingMode === 'aerien' ? (parseFloat(form.poids) || 0) : null,
@@ -1293,7 +1329,7 @@ initVue(globalApp) {
                 handleExpediteurChange, handleDestinataireChange,
                 selectExp, selectDest, selectLieu, selectProduct, hideSugg,
                 addRow, removeRow, updateItem, totalFret, resteAPayer, submitInvoice,
-                destinationAgencies, affiliationActive, demarcheurs,
+                destinationAgencies, affiliationActive, demarcheurs, parrainLocked, parrainLockedName,
                 clientModal, openClientModal, closeClientModal, saveClientFromModal,
                 shippingMode, autoPricingActive, autoTotalCFA, userTouchedTotal, resetAutoTotal, tarifs,
                 isParisAerien, lineBilledKg, lineTotalCfaAerien, totalColisAuto,

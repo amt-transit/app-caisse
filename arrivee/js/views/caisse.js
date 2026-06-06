@@ -1,6 +1,6 @@
 import { db } from '../../../commun/firebase-config.js';
 import { collection, doc, addDoc, updateDoc, getDocs, query, where, orderBy, limit, onSnapshot, writeBatch, arrayUnion } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
-import { getCollectionName } from '../../../commun/agencies-config.js';
+import { getCollectionName, canValidatePayment } from '../../../commun/agencies-config.js';
 import { matchesShippingMode, isAerienMode, getShippingMode } from '../../../commun/shipping-mode.js';
 import { calculateStorageFee } from '../../../commun/services/storageFee.js';
 import { formatMoney } from '../../../commun/services/format.js';
@@ -627,6 +627,11 @@ export const CaisseView = {
                             dForm.reference = '';
                             return;
                         }
+                        if (!canValidatePayment(data.paymentSide)) {
+                            if (window.AppModal) window.AppModal.error("Cette facture est encaissée au DÉPART : impossible de l'encaisser à l'arrivée."); else alert("Encaissement réservé au départ.");
+                            dForm.reference = '';
+                            return;
+                        }
                         let effectivePrix = data.prix || 0;
                         if (data.adjustmentType === 'reduction') effectivePrix -= (data.adjustmentVal || 0);
                         const reste = ((data.montantParis || 0) + (data.montantAbidjan || 0)) - effectivePrix;
@@ -754,6 +759,11 @@ export const CaisseView = {
                         const data = qT.docs[0].data();
                         if (!matchesShippingMode(data)) {
                             if (window.AppModal) window.AppModal.error(isAerienMode() ? "Ce colis est MARITIME — basculez en mode 🚢 pour l'encaisser." : "Ce colis est AÉRIEN — basculez en mode ✈️ pour l'encaisser.");
+                            mForm.reference = '';
+                            return;
+                        }
+                        if (!canValidatePayment(data.paymentSide)) {
+                            if (window.AppModal) window.AppModal.error("Cette facture est encaissée au DÉPART : impossible de l'encaisser à l'arrivée."); else alert("Encaissement réservé au départ.");
                             mForm.reference = '';
                             return;
                         }

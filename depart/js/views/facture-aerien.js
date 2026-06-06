@@ -283,6 +283,14 @@ export const FactureAerienView = {
                                 </select>
                             </div>
                             <div class="form-group">
+                                <label>Agence de paiement *</label>
+                                <select v-model="form.paymentSide">
+                                    <option value="departure">Au départ (cette agence)</option>
+                                    <option value="arrival">À l'arrivée (destination)</option>
+                                </select>
+                                <small style="color:#64748b; font-size:11px;">Seule cette agence pourra encaisser la facture.</small>
+                            </div>
+                            <div class="form-group">
                                 <label>Valeur déclarée colis (€)</label>
                                 <input type="number" id="nfValeur" placeholder="Optionnel" v-model="form.valeur">
                             </div>
@@ -445,6 +453,7 @@ initVue(globalApp) {
                 montantPaye: 0,
                 comment: (_prefill && _prefill.adresse) ? `Récupération RDV — ${_prefill.adresse}` : '',
                 parrainId: '',
+                paymentSide: 'departure', // agence qui encaisse : 'departure' | 'arrival' (defaut route ci-dessous)
                 poids: '',            // Aérien : poids total facturé (kg)
                 factureMode: 'valeur', // 'valeur' (PU saisi) | 'poids' (poids/volume)
                 nbColisExpedies: '',  // Aérien Paris : nb de colis annoncés (reconditionnement)
@@ -642,6 +651,7 @@ initVue(globalApp) {
                         if (typeof ic.forfaitChaussuresEur === 'number') tarifs.forfaitChaussuresEur = ic.forfaitChaussuresEur;
                         if (typeof ic.kgAerienNormal === 'number') tarifs.kgAerienNormal = ic.kgAerienNormal;
                         if (typeof ic.kgAerienExpress === 'number') tarifs.kgAerienExpress = ic.kgAerienExpress;
+                        if (ic.paymentSide === 'departure' || ic.paymentSide === 'arrival') form.paymentSide = ic.paymentSide;
                     }
                     if (!userTouchedTotal.value) form.totalCfa = autoTotalCFA.value;
                 } catch (e) { console.warn('Tarifs/modèle (lecture):', e && e.message); }
@@ -1145,6 +1155,7 @@ initVue(globalApp) {
                     prix: totalCFA, montantParis: payeCFA, montantAbidjan: 0, reste: -resteCFA,
                     modePaiement: form.modePay, description: items.value.map(i => `${i.qty}x ${i.desc}`).join(', '),
                     items: items.value, quantite: totalColis, nbColisExpedies: nbColisExp, agency: activeAgency, isDeleted: false,
+                    paymentSide: form.paymentSide || 'departure', // agence autorisee a encaisser
                     saisiPar: userName,
                     modeExpedition: shippingMode,
                     poids: parseFloat(form.poids) || 0,

@@ -118,3 +118,22 @@ export const getConfigSourceAgency = () => {
 
 // Alias historique (conteneur) : même règle « le départ décide, l'arrivée suit ».
 export const getContainerConfigAgency = () => getConfigSourceAgency();
+
+// Côté (départ / arrivée) de l'agence ACTIVE — pour la règle « agence de paiement ».
+export const currentAgencySide = () => {
+    const agency = sessionStorage.getItem('currentActiveAgency') || 'paris';
+    const a = AGENCIES[agency];
+    return (a && a.type === 'arrival') ? 'arrival' : 'departure';
+};
+
+// Règle « agence de paiement » : SEULE l'agence désignée (paymentSide =
+// 'departure' | 'arrival') peut encaisser/valider une facture.
+// - Factures historiques SANS le champ paymentSide => PAS de blocage (compatibilité).
+// - Seule la vue GLOBALE 'all' n'est pas bloquée (pas de côté précis). Le blocage
+//   s'applique sinon selon l'agence active, quel que soit le rôle (super_admin inclus).
+export const canValidatePayment = (paymentSide) => {
+    if (!paymentSide) return true;
+    const agency = sessionStorage.getItem('currentActiveAgency') || 'paris';
+    if (agency === 'all') return true; // vue globale : pas de côté départ/arrivée
+    return paymentSide === currentAgencySide();
+};

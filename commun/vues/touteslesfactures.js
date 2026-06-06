@@ -3,7 +3,7 @@ import { collection, query, where, onSnapshot, doc, writeBatch, getDocs, orderBy
 import { Autocomplete } from '../../depart/js/views/autocomplete.js';
 import { CONSTANTS, DEFAULT_CGV, DEFAULT_COMPANY_FOOTER } from '../constants.js';
 import { createApp, ref, computed, reactive, onMounted, onUnmounted } from "https://unpkg.com/vue@3/dist/vue.esm-browser.prod.js";
-import { getCollectionName, AGENCIES, getConfigSourceAgency } from '../agencies-config.js';
+import { getCollectionName, AGENCIES, getConfigSourceAgency, canValidatePayment } from '../agencies-config.js';
 import { loadJsPdf } from '../services/pdf-common.js';
 import { applyInvoiceSecurity } from '../services/invoice-security.js';
 import { phoneTail, toE164Intl, toE164Detect, routePhoneCountries } from '../services/phone.js';
@@ -146,7 +146,7 @@ export const ToutesLesFacturesView = {
                             <h1 class="factures-header__title">Toutes les factures</h1>
                             <p class="factures-header__subtitle">Gestion des factures et colis envoyés</p>
                         </div>
-                        <button class="amt-btn amt-btn-primary" onclick="app.renderPage(sessionStorage.getItem('shippingMode') === 'aerien' ? 'invoice-aerien' : 'invoice-new')">
+                        <button class="amt-btn amt-btn-primary" onclick="app.renderPage((sessionStorage.getItem('shippingMode') === 'aerien' && (sessionStorage.getItem('currentActiveAgency')||'paris') === 'paris') ? 'invoice-aerien' : 'invoice-new')">
                             <i class="fas fa-plus"></i> Nouvelle facture
                         </button>
                     </div>
@@ -915,6 +915,10 @@ export const ToutesLesFacturesView = {
                                     <div class="bilan-pill__label">RESTE À PAYER</div>
                                     <div class="bilan-pill__value">${this.formatMoneyLocal(resteTotal)}</div>
                                 </div>
+                                <div class="bilan-pill">
+                                    <div class="bilan-pill__label">AGENCE DE PAIEMENT</div>
+                                    <div class="bilan-pill__value">${invoice.paymentSide === 'arrival' ? '🛬 Arrivée' : (invoice.paymentSide === 'departure' ? '🛫 Départ' : '—')}</div>
+                                </div>
                             </div>
                         </div>
 
@@ -1085,6 +1089,17 @@ export const ToutesLesFacturesView = {
         document.getElementById('tlfModalsContainer').insertAdjacentHTML('beforeend', html);
     },
 
+    // Règle « agence de paiement » : bloque l'encaissement si l'agence active
+    // n'est PAS celle désignée pour la facture (sinon affiche un message).
+    cannotPay(inv) {
+        if (canValidatePayment(inv && inv.paymentSide)) return false;
+        const where = inv.paymentSide === 'arrival' ? "à l'ARRIVÉE" : "au DÉPART";
+        window.AppModal
+            ? window.AppModal.error(`Encaissement réservé à l'agence de paiement (${where}). Vous ne pouvez pas valider cette facture ici.`)
+            : alert("Encaissement réservé à l'autre agence.");
+        return true;
+    },
+
     // Encaissement EXPRESS : petit formulaire pour le cas courant (le client
     // paie le reste, en espèces). Montant pré-rempli avec le reste à payer,
     // un seul mode, un bouton. Les cas complexes (split Paris/Abidjan,
@@ -1092,6 +1107,7 @@ export const ToutesLesFacturesView = {
     quickPay(id) {
         const inv = this.invoices.find(i => i.id === id);
         if (!inv) return;
+        if (this.cannotPay(inv)) return;
         const isEur = isEurAgency();
         const TAUX = isEur ? CONSTANTS.TAUX_CONVERSION : 1;
         const resteDisplay = Math.max(0, Math.abs(parseFloat(inv.reste) || 0) / TAUX);
@@ -1187,6 +1203,7 @@ export const ToutesLesFacturesView = {
     async addPayment(id) {
         const inv = this.invoices.find(i => i.id === id);
         if (!inv) return;
+        if (this.cannotPay(inv)) return;
 
         this.currentPaymentInvoice = JSON.parse(JSON.stringify(inv));
         if (!this.currentPaymentInvoice.paymentHistory) this.currentPaymentInvoice.paymentHistory = [];
@@ -1484,6 +1501,7 @@ export const ToutesLesFacturesView = {
     async savePaymentsToFirestore(id) {
         const inv = this.invoices.find(i => i.id === id);
         if (!inv) return;
+        if (this.cannotPay(inv)) return;
 
         // Plus de bouton « Ajouter à la liste » : si un montant est saisi dans le
         // formulaire mais pas encore ajouté, on le prend en compte ICI
@@ -2286,7 +2304,7 @@ export const ToutesLesFacturesView = {
         
         sessionStorage.setItem('reuseExpediteur', inv.nom || '');
 
-        const target = sessionStorage.getItem('shippingMode') === 'aerien' ? 'invoice-aerien' : 'invoice-new';
+        const target = (sessionStorage.getItem('shippingMode') === 'aerien' && (sessionStorage.getItem('currentActiveAgency') || 'paris') === 'paris') ? 'invoice-aerien' : 'invoice-new';
         this.app.renderPage(target);
         this.app.showToast(`Pré-remplissage avec les informations de ${inv.nom}...`, "info");
     },
