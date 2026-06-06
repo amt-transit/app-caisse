@@ -35,7 +35,7 @@ const MENU_META = [
 // scope facultatif par item (sinon hérite de la section).
 const MENU_ITEMS = {
     main: [{ page: 'dashboard', label: 'Tableau de bord' }],
-    'special-asie': [{ page: 'parrainage', label: 'Réseau Partenaires' }],
+    'special-asie': [{ page: 'parrainage', label: 'Réseau Partenaires' }, { page: 'reception-colis', label: 'Réception Colis' }, { page: 'invoice-new', label: 'Nouvelle facture (Chine)' }],
     bilan: [{ page: 'daily-bilan', label: 'Bilan du jour' }, { page: 'daily-users', label: 'Bilan par utilisateurs' }],
     factures: [
         { page: 'invoices-list', label: 'Toutes les factures', scope: 'departure' },

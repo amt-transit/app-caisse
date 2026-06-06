@@ -395,6 +395,9 @@ export const app = {
                     if (hiddenItems.has(item.dataset.page)) { item.style.display = 'none'; return; }
                     // 1-bis) Module masqué pour CE rôle (par-rôle, prioritaire).
                     if (roleHidden.has(item.dataset.page)) { item.style.display = 'none'; return; }
+                    // 1-bis-2) « Facture Aérien (Paris) » est DÉDIÉE à Paris : les
+                    // routes SaaS (Chine…) facturent l'aérien via « Nouvelle facture ».
+                    if (item.dataset.page === 'invoice-aerien' && (sessionStorage.getItem('currentActiveAgency') || 'paris') !== 'paris') { item.style.display = 'none'; return; }
                     // 1-ter) Visibilité selon le mode d'expédition (Maritime/Aérien),
                     // appliquée dans les 2 modes (config autoritaire ou non).
                     if (item.classList.contains('mode-aerien-only') && _shipMode !== 'aerien') { item.style.display = 'none'; return; }

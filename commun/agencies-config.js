@@ -68,7 +68,8 @@ const MODE_SENSITIVE_COLLECTIONS = new Set([
     'appointments',
     'quotes',
     'quote_requests',
-    'boats'
+    'boats',
+    'receptions'
 ]);
 
 // OPTION 5 : Routage dynamique des collections (Data Mirroring)

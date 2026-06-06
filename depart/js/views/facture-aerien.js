@@ -421,6 +421,17 @@ initVue(globalApp) {
                 }
             } catch (e) { _prefill = null; }
 
+            // Pré-remplissage depuis la RÉCEPTION COLIS (bouton « Créer la facture »).
+            let _rc = null, _rcColisId = '';
+            try {
+                const rcRaw = sessionStorage.getItem('rc_prefillFacture');
+                if (rcRaw) {
+                    _rc = JSON.parse(rcRaw);
+                    _rcColisId = (_rc && _rc.colisId) || '';
+                    sessionStorage.removeItem('rc_prefillFacture');
+                }
+            } catch (e) { _rc = null; }
+
             const form = reactive({
                 date: new Date().toISOString().split('T')[0],
                 type: _presetType,
@@ -500,6 +511,21 @@ initVue(globalApp) {
             };
             // Lignes d'articles.
             const items = ref([{ id: Date.now(), desc: '', qty: 1, pu: '', total: 0, vol: '', poids: '', type: 'poids', parfum: false, mode: 'valeur', lng: '', lrg: '', haut: '', showSugg: false }]);
+
+            // Pré-remplissage RÉCEPTION COLIS : destinataire (modifiable) + poids/
+            // volume + chaque PRODUIT du colis devient une ligne.
+            if (_rc) {
+                form.destinataire = `${_rc.ownerName || ''} ${_rc.ownerPhone || ''}`.trim();
+                if (_rc.volume) form.volume = _rc.volume;
+                if (_rc.poids) form.poids = _rc.poids;
+                if (Array.isArray(_rc.items) && _rc.items.length) {
+                    items.value = _rc.items.map((p, i) => {
+                        const q = Math.max(1, p.quantite || 1);
+                        // Mesure du carton déjà UNITAIRE -> directement dans CBM U / poids U.
+                        return { id: Date.now() + i, desc: p.designation || '', qty: q, pu: '', total: 0, vol: Number(p.volume) || 0, poids: Number(p.poids) || 0, type: 'poids', parfum: false, mode: 'valeur', lng: '', lrg: '', haut: '', showSugg: false };
+                    });
+                }
+            }
             const factureModel = ref('paris');
             // Agence de DÉPART (Paris) = facturation EN €. On force le chemin EUR :
             // saisie et affichage en €, conversion en CFA uniquement à
@@ -1190,6 +1216,14 @@ initVue(globalApp) {
                                 facturedAt: new Date().toISOString(),
                             });
                         } catch (e) { console.warn('Lien RDV (non bloquant):', e); }
+                    }
+
+                    // Lien COLIS (Réception) → facture : relie le colis à sa facture
+                    // (autorise alors son chargement en conteneur). Non bloquant.
+                    if (_rcColisId) {
+                        try {
+                            await updateDoc(doc(db, getCollectionName('receptions'), _rcColisId), { factureRef: ref });
+                        } catch (e) { console.warn('Lien colis (non bloquant):', e); }
                     }
 
                     globalApp.showToast(
