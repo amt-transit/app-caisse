@@ -322,6 +322,7 @@ export function createDocumentTemplates({ showToast, calculateMagasinageFee }) {
         doc2.text(`Date : ${new Date().toLocaleDateString('fr-FR')}`, 15, 64);
         doc2.text(`Conteneur : ${d.conteneur || '-'}`, 15, 71);
         doc2.text(`Expéditeur : ${d.expediteur || '-'}`, 15, 78);
+        if (transData && transData.demarcheurName) doc2.text(`Parrain : ${transData.demarcheurName}`, 15, 85);
 
         doc2.setFillColor(248, 250, 252);
         doc2.setDrawColor(226, 232, 240);

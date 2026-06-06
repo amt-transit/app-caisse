@@ -1156,6 +1156,12 @@ initVue(globalApp) {
                         }
                     } catch (e) { console.warn('Affiliation (non bloquant):', e); }
                 }
+                // Nom du parrain (affiché sur la facture + l'étiquette).
+                let affiliationDemarcheurName = '';
+                if (affiliationDemarcheurId) {
+                    const _d = demarcheurs.value.find(d => d.id === affiliationDemarcheurId);
+                    affiliationDemarcheurName = _d ? `${_d.prenom || ''} ${_d.nom || ''}`.trim() : '';
+                }
 
                 const totalColis = items.value.reduce((sum, item) => sum + item.qty, 0);
                 // Reconditionnement : nb de colis annoncés (si saisi), sinon = somme des quantités.
@@ -1199,6 +1205,7 @@ initVue(globalApp) {
                 const transRef = doc(collection(db, getCollectionName("transactions")));
                 batch.set(transRef, {
                     demarcheurId: affiliationDemarcheurId,
+                    demarcheurName: affiliationDemarcheurName,
                     appointmentId: _appointmentId || null,
                     reference: ref, nom: finalExpName, nomDestinataire: finalDestName, numero: destPhone, tel: expPhone,
                     departureAgency: activeAgency, // agence de DÉPART (= ici l'agence active) pour l'app Clients
@@ -1299,7 +1306,7 @@ initVue(globalApp) {
                     const now = new Date();
                     const formattedDate = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}:${String(now.getSeconds()).padStart(2,'0')}`;
                     
-                    globalApp.printLabels({ ref: ref, date: formattedDate, destName: finalDestName, destPhone: destPhone, destAddress: lieuLivraison, expName: finalExpName, expAddress: expAddr, labels: printLabelsData });
+                    globalApp.printLabels({ ref: ref, date: formattedDate, destName: finalDestName, destPhone: destPhone, destAddress: lieuLivraison, expName: finalExpName, expAddress: expAddr, parrainName: affiliationDemarcheurName, labels: printLabelsData });
 
                     // On RESTE sur Nouvelle Facture (plus pratique pour
                     // enchaîner). Réinitialisation rapide du formulaire sans

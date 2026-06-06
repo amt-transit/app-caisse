@@ -1675,6 +1675,13 @@ export const ToutesLesFacturesView = {
                                     <label style="font-size: 12px; font-weight: 700; color: #475569; display: block; margin-bottom: 6px;">Conteneur assigné</label>
                                     <input type="text" id="tlfEditConteneur" value="${inv.conteneur || 'ATT'}" style="width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 8px; outline: none; font-weight: 600; box-sizing: border-box; text-transform: uppercase;">
                                 </div>
+                                <div>
+                                    <label style="font-size: 12px; font-weight: 700; color: #475569; display: block; margin-bottom: 6px;">Agence de paiement *</label>
+                                    <select id="tlfEditPaymentSide" style="width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 8px; outline: none; font-weight: 600; box-sizing: border-box;">
+                                        <option value="departure" ${(inv.paymentSide || 'departure') === 'departure' ? 'selected' : ''}>Au départ</option>
+                                        <option value="arrival" ${inv.paymentSide === 'arrival' ? 'selected' : ''}>À l'arrivée</option>
+                                    </select>
+                                </div>
                             </div>
                         </div>
 
@@ -2146,6 +2153,7 @@ export const ToutesLesFacturesView = {
             adresseDestinataire: document.getElementById('tlfEditLieu').value.trim(),
             description: newDescription,
             conteneur: newConteneur,
+            paymentSide: document.getElementById('tlfEditPaymentSide')?.value || inv.paymentSide || 'departure',
             prix: newPrixCfa,
             items: this.editItems, // Enregistré en EUR si isEur, sinon CFA
             quantite: newTotalQty,

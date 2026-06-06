@@ -1482,6 +1482,7 @@ export const app = {
                         <div style="font-size: ${titleFont}; font-weight: bold;">${data.expName}</div>
                         <div style="font-size: ${fontSize};">${data.expAddress?.replace(/\n/g, '<br>') || ''}</div>
                     </div>
+                    ${data.parrainName ? `<div style="font-size: ${fontSize}; margin-bottom: 4mm;"><strong>Parrain :</strong> ${data.parrainName}</div>` : ''}
                     <div style="flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; width: 100%;">
                         <div style="font-size: ${refFont}; font-weight: 900; letter-spacing: 2px; word-break: break-all;">${data.ref}</div>
                         <div style="font-size: ${fontSize}; font-weight: bold; margin-top: 2mm; text-transform: uppercase;">${label.desc}</div>
@@ -1514,6 +1515,7 @@ export const app = {
                     <div style="display: flex; justify-content: space-between; border-top: 2px solid ${theme.border}; padding-top: 2mm; margin-top: 3mm; font-size: ${isA5 ? '9pt' : '7pt'};">
                         <div><strong>Exp:</strong> ${data.expName?.split(' ')[0] || ''}</div>
                         <div><strong>Dest:</strong> ${data.destName?.split(' ')[0] || ''}</div>
+                        ${data.parrainName ? `<div><strong>Parrain:</strong> ${data.parrainName.split(' ')[0]}</div>` : ''}
                     </div>
                 </div>
             </div>
@@ -1552,6 +1554,7 @@ export const app = {
                                     <div style="font-size: ${isA5 ? '9pt' : '8pt'};">TEL: ${data.destPhone || ''}</div>
                                     <div style="font-size: ${isA5 ? '9pt' : '8pt'};">${data.destAddress || ''}</div>
                                 </div>
+                                ${data.parrainName ? `<div style="margin-top:3mm;"><div style="font-size: ${isA5 ? '10pt' : '9pt'}; font-weight: bold;">🤝 Parrain : ${data.parrainName}</div></div>` : ''}
                             </div>
                             <div style="display: flex; flex-direction: column; align-items: center; justify-content: center;">
                                 <img src="${qrDataUrl}" style="width: ${isA5 ? '50mm' : '40mm'}; height: ${isA5 ? '50mm' : '40mm'};" />
@@ -1603,6 +1606,7 @@ export const app = {
                                 <div style="font-size: ${isA5 ? '9pt' : '7pt'}; font-weight: bold; color: #94a3b8; letter-spacing: 1px;">EXPÉDITEUR</div>
                                 <div style="font-size: ${fontSize}; font-weight: bold;">${data.expName}</div>
                             </div>
+                            ${data.parrainName ? `<div style="margin-top: 2mm;"><div style="font-size: ${isA5 ? '9pt' : '7pt'}; font-weight: bold; color: #94a3b8; letter-spacing: 1px;">PARRAIN</div><div style="font-size: ${fontSize}; font-weight: bold;">${data.parrainName}</div></div>` : ''}
                         </div>
                         <div style="text-align: center;">
                             <img src="${qrDataUrl}" style="width: ${isA5 ? '42mm' : '33mm'}; height: ${isA5 ? '42mm' : '33mm'};" />
