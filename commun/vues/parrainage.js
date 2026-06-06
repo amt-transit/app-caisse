@@ -1,10 +1,10 @@
-import { db, functions, auth, app } from '../../firebase-config.js';
+import { db, functions, auth, app } from '../firebase-config.js';
 import { collection, doc, getDoc, getDocs, setDoc, addDoc, updateDoc, query, where, orderBy, onSnapshot, serverTimestamp, increment, writeBatch } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-storage.js";
 import { httpsCallable } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-functions.js";
 import { createApp, ref, reactive, computed, onMounted, onUnmounted, nextTick, watch } from "https://unpkg.com/vue@3/dist/vue.esm-browser.prod.js";
-import { isAffiliationActive } from '../../affiliation-config.js';
-import { AGENCIES, getCollectionName } from '../../agencies-config.js';
+import { isAffiliationActive } from '../affiliation-config.js';
+import { AGENCIES, getCollectionName } from '../agencies-config.js';
 import { loadJsPdf } from '../services/pdf-common.js';
 
 export const ParrainageView = {

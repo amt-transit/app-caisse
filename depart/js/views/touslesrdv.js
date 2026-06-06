@@ -1,5 +1,5 @@
-import { db } from '../../../firebase-config.js';
-import { getCollectionName, AGENCIES } from '../../../agencies-config.js';
+import { db } from '../../../commun/firebase-config.js';
+import { getCollectionName, AGENCIES } from '../../../commun/agencies-config.js';
 import { collection, query, where, onSnapshot, doc, updateDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 import { createApp, ref, computed, reactive, onMounted, onUnmounted, nextTick } from "https://unpkg.com/vue@3/dist/vue.esm-browser.prod.js";
 import { Autocomplete } from './autocomplete.js';

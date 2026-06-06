@@ -1,8 +1,8 @@
-import { db } from '../../../firebase-config.js';
+import { db } from '../../../commun/firebase-config.js';
 import { collection, getDocs, query, where, onSnapshot } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
-import { CONSTANTS } from '../../../constants.js';
-import { getCollectionName } from '../../../agencies-config.js';
-import { filterByShippingMode } from '../../../shipping-mode.js';
+import { CONSTANTS } from '../../../commun/constants.js';
+import { getCollectionName } from '../../../commun/agencies-config.js';
+import { filterByShippingMode } from '../../../commun/shipping-mode.js';
 import { calculateStorageFee } from '../../../commun/services/storageFee.js';
 import { loadJsPdf } from '../../../commun/services/pdf-common.js';
 

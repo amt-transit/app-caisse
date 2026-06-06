@@ -1,5 +1,5 @@
-import { db } from '../../../firebase-config.js';
-import { AGENCIES, getCollectionName } from '../../../agencies-config.js';
+import { db } from '../../../commun/firebase-config.js';
+import { AGENCIES, getCollectionName } from '../../../commun/agencies-config.js';
 import { collection, doc, getDoc, setDoc, deleteDoc, addDoc, onSnapshot, writeBatch } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 import { createApp, ref, reactive, computed, onMounted, onUnmounted } from "https://unpkg.com/vue@3/dist/vue.esm-browser.prod.js";
 

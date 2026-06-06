@@ -1,11 +1,11 @@
-import { db } from '../../../firebase-config.js';
+import { db } from '../../../commun/firebase-config.js';
 import { collection, doc, writeBatch, getDocs, query, where, limit, addDoc, updateDoc } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
-import { CONSTANTS } from '../../../constants.js';
+import { CONSTANTS } from '../../../commun/constants.js';
 import { createApp, ref, reactive, computed, onMounted, watch, nextTick } from "https://unpkg.com/vue@3/dist/vue.esm-browser.prod.js";
 import { Autocomplete } from './autocomplete.js';
-import { getCollectionName, AGENCIES } from '../../../agencies-config.js';
-import { isAffiliationActive } from '../../../affiliation-config.js';
-import { getAffiliation, ensureAffiliation, creerCommissionParrainage } from '../../../affiliations.js';
+import { getCollectionName, AGENCIES } from '../../../commun/agencies-config.js';
+import { isAffiliationActive } from '../../../commun/affiliation-config.js';
+import { getAffiliation, ensureAffiliation, creerCommissionParrainage } from '../../../commun/affiliations.js';
 import { toE164Intl, toE164Detect, phoneTail, routePhoneCountries } from '../../../commun/services/phone.js';
 
 export const FactureAerienView = {

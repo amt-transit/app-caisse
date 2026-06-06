@@ -1,6 +1,6 @@
-import { db } from '../../../firebase-config.js';
+import { db } from '../../../commun/firebase-config.js';
 import { collection, query, where, onSnapshot, doc, setDoc, addDoc, updateDoc, arrayUnion, getDocs, writeBatch } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
-import { getCollectionName } from '../../../agencies-config.js';
+import { getCollectionName } from '../../../commun/agencies-config.js';
 
 export const ProspectingView = {
     unsub: null,

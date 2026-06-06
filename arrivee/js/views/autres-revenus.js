@@ -1,6 +1,6 @@
-import { db } from '../../../firebase-config.js';
+import { db } from '../../../commun/firebase-config.js';
 import { collection, doc, addDoc, setDoc, updateDoc, query, where, orderBy, onSnapshot, writeBatch, limit } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
-import { getShippingMode, filterByShippingMode } from '../../../shipping-mode.js';
+import { getShippingMode, filterByShippingMode } from '../../../commun/shipping-mode.js';
 
 export const OtherIncomeView = {
     render(app, container) {

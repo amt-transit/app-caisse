@@ -1,7 +1,7 @@
-import { db } from '../../../firebase-config.js';
+import { db } from '../../../commun/firebase-config.js';
 import { collection, query, onSnapshot, doc, writeBatch, where } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 import { createApp, ref, reactive, computed, onMounted, onUnmounted } from "https://unpkg.com/vue@3/dist/vue.esm-browser.prod.js";
-import { getCollectionName } from '../../../agencies-config.js';
+import { getCollectionName } from '../../../commun/agencies-config.js';
 
 // ARRIVÉES (agence d'arrivée) — « Bateau arrivée » (maritime) / « Vol arrivée »
 // (aérien). Liste les bateaux/vols partis (statut ENREGISTRE) et permet de

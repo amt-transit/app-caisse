@@ -1,5 +1,5 @@
-import { AGENCIES } from './agencies-config.js';
-import { isAffiliationActive } from './affiliation-config.js';
+import { AGENCIES } from './commun/agencies-config.js';
+import { isAffiliationActive } from './commun/affiliation-config.js';
 
 // --- SHARED VIEWS ---
 import { ClientsView } from './commun/vues/clients.js';
@@ -10,7 +10,7 @@ import { StatistiquesView } from './commun/vues/statistiques.js';
 import { SettingsAgentsView } from './commun/vues/settings-agents.js';
 import { SettingsRolesMenusView } from './commun/vues/settings-roles-menus.js';
 import { ParrainageView } from './commun/vues/parrainage.js';
-import { ProfilView } from './profil-view.js';
+import { ProfilView } from './commun/profil-view.js';
 import { DemandesClientView } from './commun/vues/demandes-client.js';
 import { ChatClientsView } from './commun/vues/messagerie-clients.js';
 import { ClientsPotentielsView } from './commun/vues/clients-potentiels.js';
@@ -144,7 +144,7 @@ export const app = {
 
     // Badge TEMPS RÉEL des clients potentiels non lus (nouveaux comptes app).
     initClientLeadsBadge() {
-        import('./firebase-config.js').then(async cfg => {
+        import('./commun/firebase-config.js').then(async cfg => {
             const { collection, query, where, onSnapshot } = await import('https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js');
             if (this.unsubClientLeads) { try { this.unsubClientLeads(); } catch (e) {} }
             const q = query(collection(cfg.db, "client_leads"), where("readByStaff", "==", false));
@@ -161,7 +161,7 @@ export const app = {
     // qu'un client écrit, et disparaît quand le staff a tout lu.
     initClientChatBadge() {
         const activeAgency = sessionStorage.getItem('currentActiveAgency') || 'paris';
-        import('./firebase-config.js').then(async cfg => {
+        import('./commun/firebase-config.js').then(async cfg => {
             const { collection, query, where, onSnapshot } = await import('https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js');
             if (this.unsubClientChat) { try { this.unsubClientChat(); } catch (e) {} }
             const q = query(collection(cfg.db, "client_messages"),
@@ -182,7 +182,7 @@ export const app = {
 
     async loadMenuConfig() {
         try {
-            const { db } = await import('./firebase-config.js');
+            const { db } = await import('./commun/firebase-config.js');
             const { doc, getDoc } = await import('https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js');
             const activeAgency = sessionStorage.getItem('currentActiveAgency') || 'paris';
             
@@ -536,9 +536,9 @@ export const app = {
             if (this.unsubAerienGauge) this.unsubAerienGauge();
             if (gaugeEl) gaugeEl.style.display = '';
 
-            const { db } = await import('./firebase-config.js');
+            const { db } = await import('./commun/firebase-config.js');
             const { doc, onSnapshot, collection, query, where } = await import('https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js');
-            const { getCollectionName, getContainerConfigAgency } = await import('./agencies-config.js');
+            const { getCollectionName, getContainerConfigAgency } = await import('./commun/agencies-config.js');
 
             // AÉRIEN : jauge en Kg, SANS maximum. Affiche le poids total des colis
             // « en magasin » = livraisons aériennes au statut PARIS (reçues, pas
@@ -700,9 +700,9 @@ export const app = {
 
     updateBadges() {
         const activeAgency = sessionStorage.getItem('currentActiveAgency') || 'paris';
-        import('./firebase-config.js').then(async cfg => {
+        import('./commun/firebase-config.js').then(async cfg => {
             const { collection, query, where, getDocs } = await import('https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js');
-            const { getCollectionName } = await import('./agencies-config.js');
+            const { getCollectionName } = await import('./commun/agencies-config.js');
             // Devis
             const qQuotes = query(collection(cfg.db, getCollectionName("quote_requests")), where("agency", "==", activeAgency), where("status", "==", "NOUVEAU"));
             const snapQuotes = await getDocs(qQuotes);
@@ -756,7 +756,7 @@ export const app = {
         const role = sessionStorage.getItem('userRole') || '';
         if (role !== 'admin' && role !== 'super_admin') return;
         const activeAgency = sessionStorage.getItem('currentActiveAgency') || 'paris';
-        import('./firebase-config.js').then(async cfg => {
+        import('./commun/firebase-config.js').then(async cfg => {
             const { collection, query, where, onSnapshot } = await import('https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js');
             if (this.unsubPendingSessions) { try { this.unsubPendingSessions(); } catch (e) {} }
             // audit_logs reste une collection globale (confirmation.js l'écrit en brut, sans suffixe de route)
@@ -1050,7 +1050,7 @@ export const app = {
         const c = document.getElementById('contentContainer');
         c.innerHTML = `<div class="loading"><i class="fas fa-spinner fa-spin"></i> Chargement des comptes clients…</div>`;
         try {
-            const { db } = await import('./firebase-config.js');
+            const { db } = await import('./commun/firebase-config.js');
             const { collection, getDocs } = await import('https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js');
 
             let rows = [];
@@ -1161,12 +1161,12 @@ export const app = {
         const c = document.getElementById('contentContainer');
         c.innerHTML = `<div class="loading"><i class="fas fa-spinner fa-spin"></i> Analyse de la base clients (12 mois)…</div>`;
         try {
-            const { db } = await import('./firebase-config.js');
+            const { db } = await import('./commun/firebase-config.js');
             const { collection, query, where, getDocs } = await import('https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js');
-            const { getCollectionName } = await import('./agencies-config.js');
-            const { paidAmount, isArrivalAgency } = await import('./agency-money.js');
+            const { getCollectionName } = await import('./commun/agencies-config.js');
+            const { paidAmount, isArrivalAgency } = await import('./commun/agency-money.js');
             const { isEurAgency } = await import('./commun/services/format.js');
-            const { CONSTANTS } = await import('./constants.js');
+            const { CONSTANTS } = await import('./commun/constants.js');
 
             const agency = sessionStorage.getItem('currentActiveAgency') || 'abidjan';
             const isArr = isArrivalAgency(agency);

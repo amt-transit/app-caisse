@@ -1,7 +1,7 @@
-import { db } from '../../../firebase-config.js';
+import { db } from '../../../commun/firebase-config.js';
 import { collection, getDocs, query, where, orderBy } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
-import { getCollectionName, AGENCIES } from '../../../agencies-config.js';
-import { matchesShippingMode } from '../../../shipping-mode.js';
+import { getCollectionName, AGENCIES } from '../../../commun/agencies-config.js';
+import { matchesShippingMode } from '../../../commun/shipping-mode.js';
 
 import { formatMoney } from '../../../commun/services/format.js';
 

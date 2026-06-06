@@ -1,9 +1,9 @@
-import { db } from '../../../firebase-config.js';
+import { db } from '../../../commun/firebase-config.js';
 import { collection, query, where, onSnapshot, doc, updateDoc, writeBatch, setDoc, arrayUnion, getDocs, addDoc, limit } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 import { createApp, ref, computed, onMounted, onUnmounted, watch } from "https://unpkg.com/vue@3/dist/vue.esm-browser.prod.js";
-import { getCollectionName } from '../../../agencies-config.js';
-import { matchesShippingMode } from '../../../shipping-mode.js';
-import { isEurAgency } from '../../../agency-money.js';
+import { getCollectionName } from '../../../commun/agencies-config.js';
+import { matchesShippingMode } from '../../../commun/shipping-mode.js';
+import { isEurAgency } from '../../../commun/agency-money.js';
 
 export const ConfectionConteneursView = {
     vueApp: null,

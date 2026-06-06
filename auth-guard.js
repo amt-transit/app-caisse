@@ -1,5 +1,5 @@
-import { auth, db } from './firebase-config.js';
-import { AGENCIES, getDepartureAgencies, getArrivalAgencies, getCollectionName } from './agencies-config.js';
+import { auth, db } from './commun/firebase-config.js';
+import { AGENCIES, getDepartureAgencies, getArrivalAgencies, getCollectionName } from './commun/agencies-config.js';
 import { onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-auth.js";
 import { doc, getDoc, updateDoc, collection, query, where, orderBy, onSnapshot } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 

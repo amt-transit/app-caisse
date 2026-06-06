@@ -1,8 +1,8 @@
-import { db } from '../../../firebase-config.js';
-import { getCollectionName } from '../../../agencies-config.js';
+import { db } from '../../../commun/firebase-config.js';
+import { getCollectionName } from '../../../commun/agencies-config.js';
 import { collection, query, where, onSnapshot, getDocs } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
-import { CONSTANTS } from '../../../constants.js';
-import { isEurAgency } from '../../../agency-money.js';
+import { CONSTANTS } from '../../../commun/constants.js';
+import { isEurAgency } from '../../../commun/agency-money.js';
 import { loadJsPdf } from '../../../commun/services/pdf-common.js';
 
 export const ChauffeursListView = {

@@ -1,8 +1,8 @@
 // scan-container.js
-import { db } from '../../../firebase-config.js';
+import { db } from '../../../commun/firebase-config.js';
 import { collection, query, where, getDocs, updateDoc, doc, arrayUnion, limit, addDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 import { createApp, ref, computed, onMounted, onUnmounted, watch } from "https://unpkg.com/vue@3/dist/vue.esm-browser.prod.js";
-import { getCollectionName } from '../../../agencies-config.js';
+import { getCollectionName } from '../../../commun/agencies-config.js';
 
 export const ScanContainerView = {
     vueApp: null,

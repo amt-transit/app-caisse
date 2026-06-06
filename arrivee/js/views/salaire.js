@@ -1,8 +1,8 @@
 import { createApp, ref, computed, onMounted, onBeforeUnmount, watch } from "https://unpkg.com/vue@3/dist/vue.esm-browser.prod.js";
-import { auth, db } from '../../../firebase-config.js';
+import { auth, db } from '../../../commun/firebase-config.js';
 import { signInWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-auth.js";
 import { collection, addDoc, setDoc, deleteDoc, query, where, orderBy, onSnapshot, updateDoc, doc, Timestamp, runTransaction } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
-import { getCollectionName } from '../../../agencies-config.js';
+import { getCollectionName } from '../../../commun/agencies-config.js';
 
 export const SalaireView = {
     vueApp: null,

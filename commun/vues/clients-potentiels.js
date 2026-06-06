@@ -2,7 +2,7 @@
 // Clients. Collection `client_leads` (1 doc par phoneTail, créé par la Cloud
 // Function registerClientLead). Liste temps réel, plus récents d'abord, badge
 // rouge pour les non-lus ; ouverture de la page = marquer comme lus.
-import { db } from '../../firebase-config.js';
+import { db } from '../firebase-config.js';
 import { collection, query, onSnapshot, limit, doc, writeBatch } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 
 export const ClientsPotentielsView = {

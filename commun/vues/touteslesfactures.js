@@ -1,15 +1,15 @@
-import { db } from '../../firebase-config.js';
+import { db } from '../firebase-config.js';
 import { collection, query, where, onSnapshot, doc, writeBatch, getDocs, orderBy, limit } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 import { Autocomplete } from '../../depart/js/views/autocomplete.js';
-import { CONSTANTS, DEFAULT_CGV, DEFAULT_COMPANY_FOOTER } from '../../constants.js';
+import { CONSTANTS, DEFAULT_CGV, DEFAULT_COMPANY_FOOTER } from '../constants.js';
 import { createApp, ref, computed, reactive, onMounted, onUnmounted } from "https://unpkg.com/vue@3/dist/vue.esm-browser.prod.js";
-import { getCollectionName, AGENCIES, getConfigSourceAgency } from '../../agencies-config.js';
+import { getCollectionName, AGENCIES, getConfigSourceAgency } from '../agencies-config.js';
 import { loadJsPdf } from '../services/pdf-common.js';
 import { applyInvoiceSecurity } from '../services/invoice-security.js';
 import { phoneTail, toE164Intl, toE164Detect, routePhoneCountries } from '../services/phone.js';
 import { extractPhone, stripPhoneFromName } from '../services/phone.js';
-import { filterByShippingMode } from '../../shipping-mode.js';
-import { normalizePhone } from '../../affiliations.js';
+import { filterByShippingMode } from '../shipping-mode.js';
+import { normalizePhone } from '../affiliations.js';
 import { calculateStorageFee } from '../services/storageFee.js';
 
 import { formatMoney, isEurAgency } from '../services/format.js';
@@ -612,7 +612,7 @@ export const ToutesLesFacturesView = {
             </div>
         `;
 
-        const { getCollectionName } = await import('../../agencies-config.js');
+        const { getCollectionName } = await import('../agencies-config.js');
         const livQ = await getDocs(query(collection(db, getCollectionName("livraisons")), where("ref", "==", invoice.reference)));
         const livraisons = livQ.docs.map(d => ({id: d.id, ...d.data()}));
 
@@ -1035,7 +1035,7 @@ export const ToutesLesFacturesView = {
 
     async showSubPackageHistory(livId, label) {
         const { getDoc, doc } = await import("https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js");
-        const { getCollectionName } = await import('../../agencies-config.js');
+        const { getCollectionName } = await import('../agencies-config.js');
         const docSnap = await getDoc(doc(db, getCollectionName("livraisons"), livId));
         if (!docSnap.exists()) return;
         const liv = docSnap.data();
@@ -1502,7 +1502,7 @@ export const ToutesLesFacturesView = {
             if(btn) { btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Traitement...'; btn.disabled = true; }
 
             const { updateDoc, doc, writeBatch, collection } = await import("https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js");
-            const { getCollectionName } = await import('../../agencies-config.js');
+            const { getCollectionName } = await import('../agencies-config.js');
             const batch = writeBatch(db);
 
             let totalAbidjanCfa = 0;
@@ -2154,7 +2154,7 @@ export const ToutesLesFacturesView = {
             if(btn) { btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Application...'; btn.disabled = true; }
 
             const { updateDoc, doc, writeBatch, getDocs, query, collection, where, limit } = await import("https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js");
-            const { getCollectionName } = await import('../../agencies-config.js');
+            const { getCollectionName } = await import('../agencies-config.js');
             
             const batch = writeBatch(db);
             
@@ -2260,7 +2260,7 @@ export const ToutesLesFacturesView = {
 
         try {
             const { updateDoc, doc, writeBatch, getDocs, query, collection, where } = await import("https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js");
-            const { getCollectionName } = await import('../../agencies-config.js');
+            const { getCollectionName } = await import('../agencies-config.js');
             
             const batch = writeBatch(db);
             
@@ -2312,7 +2312,7 @@ export const ToutesLesFacturesView = {
         localStorage.setItem('amt_label_format', format);
         
         const { getDocs, query, collection, where, limit } = await import("https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js");
-        const { getCollectionName } = await import('../../agencies-config.js');
+        const { getCollectionName } = await import('../agencies-config.js');
         
         const livQ = await getDocs(query(collection(db, getCollectionName("livraisons")), where("ref", "==", invoice.reference), limit(1)));
         

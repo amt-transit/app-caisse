@@ -1,7 +1,7 @@
-import { db, app as firebaseApp } from '../../../firebase-config.js';
+import { db, app as firebaseApp } from '../../../commun/firebase-config.js';
 import { doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-storage.js";
-import { CONSTANTS } from '../../../constants.js';
+import { CONSTANTS } from '../../../commun/constants.js';
 
 export const ConfigInvoiceView = {
     docRef: null,

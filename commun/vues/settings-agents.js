@@ -1,9 +1,9 @@
-import { db, app as firebaseApp, functions } from '../../firebase-config.js';
+import { db, app as firebaseApp, functions } from '../firebase-config.js';
 import { collection, query, onSnapshot, doc, getDoc, setDoc, updateDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 import { getAuth } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-auth.js";
 import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-storage.js";
 import { httpsCallable } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-functions.js";
-import { AGENCIES } from '../../agencies-config.js';
+import { AGENCIES } from '../agencies-config.js';
 
 export const SettingsAgentsView = {
     unsub: null,

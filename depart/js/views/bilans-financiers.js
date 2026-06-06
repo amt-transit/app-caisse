@@ -1,9 +1,9 @@
-import { db } from '../../../firebase-config.js';
+import { db } from '../../../commun/firebase-config.js';
 import { collection, query, where, onSnapshot, getDoc, doc } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
-import { CONSTANTS } from '../../../constants.js';
-import { getCollectionName } from '../../../agencies-config.js';
-import { isEurAgency } from '../../../agency-money.js';
-import { filterByShippingMode } from '../../../shipping-mode.js';
+import { CONSTANTS } from '../../../commun/constants.js';
+import { getCollectionName } from '../../../commun/agencies-config.js';
+import { isEurAgency } from '../../../commun/agency-money.js';
+import { filterByShippingMode } from '../../../commun/shipping-mode.js';
 
 export const BilansFinanciersView = {
     unsubTrans: null,

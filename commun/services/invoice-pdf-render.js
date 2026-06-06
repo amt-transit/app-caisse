@@ -17,7 +17,7 @@
 //   magasinageFee  : frais magasinage déjà calculés (FCFA)
 //   reduction      : réduction éventuelle (FCFA)
 //   securityIsEur  : true => filigrane/QR en EUR, sinon FCFA
-import { DEFAULT_CGV, DEFAULT_COMPANY_FOOTER, CONSTANTS } from '../../constants.js';
+import { DEFAULT_CGV, DEFAULT_COMPANY_FOOTER, CONSTANTS } from '../constants.js';
 import { stripPhoneFromName } from './phone.js';
 import { applyInvoiceSecurity } from './invoice-security.js';
 

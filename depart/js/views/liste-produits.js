@@ -1,8 +1,8 @@
-import { db } from '../../../firebase-config.js';
+import { db } from '../../../commun/firebase-config.js';
 import { collection, query, where, onSnapshot, doc, addDoc, updateDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
-import { getCollectionName } from '../../../agencies-config.js';
+import { getCollectionName } from '../../../commun/agencies-config.js';
 import { createApp, ref, computed, reactive, onMounted, onUnmounted } from "https://unpkg.com/vue@3/dist/vue.esm-browser.prod.js";
-import { getShippingMode, filterByShippingMode } from '../../../shipping-mode.js';
+import { getShippingMode, filterByShippingMode } from '../../../commun/shipping-mode.js';
 
 export const ProductsListView = {
     vueApp: null,

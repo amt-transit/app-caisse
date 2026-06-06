@@ -1,6 +1,6 @@
-import { db } from '../../../firebase-config.js';
+import { db } from '../../../commun/firebase-config.js';
 import { doc, getDoc, setDoc, updateDoc } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
-import { AGENCIES } from '../../../agencies-config.js';
+import { AGENCIES } from '../../../commun/agencies-config.js';
 import { Autocomplete } from './autocomplete.js';
 
 export const SettingsCompanyView = {

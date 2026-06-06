@@ -1,7 +1,7 @@
-import { db } from '../../firebase-config.js';
+import { db } from '../firebase-config.js';
 import { doc, setDoc, deleteDoc, onSnapshot, collection } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 import { createApp, ref, reactive, onMounted, onUnmounted, computed } from "https://unpkg.com/vue@3/dist/vue.esm-browser.prod.js";
-import { AGENCIES } from '../../agencies-config.js';
+import { AGENCIES } from '../agencies-config.js';
 
 // Catalogue des menus : reflète FIDÈLEMENT le menu (sidebar) de index.html.
 // clé technique (utilisée par app.js) + libellé + icône + portée :

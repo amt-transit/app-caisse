@@ -1,6 +1,6 @@
-import { db } from '../../../firebase-config.js';
+import { db } from '../../../commun/firebase-config.js';
 import { collection, getDocs, query, where, orderBy, onSnapshot } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
-import { getCollectionName } from '../../../agencies-config.js';
+import { getCollectionName } from '../../../commun/agencies-config.js';
 import { calculateStorageFee } from '../../../commun/services/storageFee.js';
 import { CI_PHONE_REGEX } from '../../../commun/services/phone.js';
 

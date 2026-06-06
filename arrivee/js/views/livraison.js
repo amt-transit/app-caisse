@@ -1,7 +1,7 @@
-import { db } from '../../../firebase-config.js';
+import { db } from '../../../commun/firebase-config.js';
 import { collection, doc, getDoc, getDocs, addDoc, setDoc, updateDoc, deleteDoc, query, where, orderBy, limit, onSnapshot, writeBatch, deleteField, arrayUnion } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
-import { getCollectionName, getConfigSourceAgency } from '../../../agencies-config.js';
-import { matchesShippingMode, getShippingMode } from '../../../shipping-mode.js';
+import { getCollectionName, getConfigSourceAgency } from '../../../commun/agencies-config.js';
+import { matchesShippingMode, getShippingMode } from '../../../commun/shipping-mode.js';
 import { calculateStorageFee } from '../../../commun/services/storageFee.js';
 import { createDocumentTemplates } from '../../../commun/services/document-templates.js';
 import { CI_PHONE_REGEX, extractPhone, toE164, stripPhoneFromName, phoneTail, toE164Intl, toE164Detect } from '../../../commun/services/phone.js';

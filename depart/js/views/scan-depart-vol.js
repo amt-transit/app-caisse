@@ -1,10 +1,10 @@
 // scan-depart-vol.js — Scan INVERSÉ aérien (« Départ vol »).
 // On scanne les colis qui RESTENT en entrepôt ; à la validation, le système
 // marque « en vol » (statut À venir / A_VENIR) tous ceux qui ne sont plus là.
-import { db } from '../../../firebase-config.js';
+import { db } from '../../../commun/firebase-config.js';
 import { collection, query, where, getDocs, doc, arrayUnion, writeBatch, addDoc } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 import { createApp, ref, computed, onMounted, onUnmounted } from "https://unpkg.com/vue@3/dist/vue.esm-browser.prod.js";
-import { getCollectionName } from '../../../agencies-config.js';
+import { getCollectionName } from '../../../commun/agencies-config.js';
 
 export const ScanDepartVolView = {
     vueApp: null,

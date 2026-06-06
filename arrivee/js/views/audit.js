@@ -1,7 +1,7 @@
-import { db } from '../../../firebase-config.js';
+import { db } from '../../../commun/firebase-config.js';
 import { collection, doc, updateDoc, deleteDoc, getDoc, getDocs, query, where, orderBy, onSnapshot, writeBatch, arrayRemove, limit } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
-import { getCollectionName } from '../../../agencies-config.js';
-import { getShippingMode } from '../../../shipping-mode.js';
+import { getCollectionName } from '../../../commun/agencies-config.js';
+import { getShippingMode } from '../../../commun/shipping-mode.js';
 // Helper : une session de validation appartient au mode actif si son
 // champ modeExpedition correspond. Anciennes sessions sans ce champ
 // = maritime (regle legacy unique).

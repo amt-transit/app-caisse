@@ -2,7 +2,7 @@
 // Collection `client_messages` (un doc par message, voir functions/index.js).
 // On affiche la liste des clients ayant écrit à l'agence active, et la
 // conversation du client sélectionné ; le staff peut répondre (sender:'staff').
-import { db } from '../../firebase-config.js';
+import { db } from '../firebase-config.js';
 import { collection, query, where, onSnapshot, addDoc, doc, getDoc, updateDoc, writeBatch, getDocs, limit } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 
 export const ChatClientsView = {

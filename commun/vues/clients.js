@@ -1,11 +1,11 @@
-import { db } from '../../firebase-config.js';
+import { db } from '../firebase-config.js';
 import { collection, query, where, onSnapshot, doc, writeBatch, getDocs, orderBy, limit, updateDoc, addDoc } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 import { Autocomplete } from '../../depart/js/views/autocomplete.js';
-import { CONSTANTS } from '../../constants.js';
-import { getCollectionName, AGENCIES } from '../../agencies-config.js';
-import { normalizePhone } from '../../affiliations.js';
+import { CONSTANTS } from '../constants.js';
+import { getCollectionName, AGENCIES } from '../agencies-config.js';
+import { normalizePhone } from '../affiliations.js';
 import { CI_PHONE_REGEX, phoneTail } from '../services/phone.js';
-import { getShippingMode, filterByShippingMode } from '../../shipping-mode.js';
+import { getShippingMode, filterByShippingMode } from '../shipping-mode.js';
 
 import { formatMoney, isEurAgency } from '../services/format.js';
 

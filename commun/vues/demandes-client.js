@@ -10,9 +10,9 @@
 // Données : collection `client_requests` (créée par les Cloud Functions
 // createClientRequest / getMyRequests). Le staff a read/write dessus
 // (firestore.rules). Les RDV vont dans getCollectionName('appointments').
-import { db } from '../../firebase-config.js';
+import { db } from '../firebase-config.js';
 import { collection, query, where, onSnapshot, doc, updateDoc, addDoc } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
-import { getCollectionName } from '../../agencies-config.js';
+import { getCollectionName } from '../agencies-config.js';
 
 export const DemandesClientView = {
   unsub: null,

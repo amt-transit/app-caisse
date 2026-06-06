@@ -1,9 +1,9 @@
-import { db } from '../../firebase-config.js';
+import { db } from '../firebase-config.js';
 import { collection, query, where, getDocs } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
-import { CONSTANTS } from '../../constants.js';
-import { getCollectionName, AGENCIES } from '../../agencies-config.js';
-import { matchesShippingMode } from '../../shipping-mode.js';
-import { paidAmount } from '../../agency-money.js';
+import { CONSTANTS } from '../constants.js';
+import { getCollectionName, AGENCIES } from '../agencies-config.js';
+import { matchesShippingMode } from '../shipping-mode.js';
+import { paidAmount } from '../agency-money.js';
 
 import { formatMoney, isEurAgency } from '../services/format.js';
 

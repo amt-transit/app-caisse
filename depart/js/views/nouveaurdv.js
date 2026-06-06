@@ -1,8 +1,8 @@
-import { db } from '../../../firebase-config.js';
+import { db } from '../../../commun/firebase-config.js';
 import { collection, addDoc, getDocs, query, where, limit, onSnapshot, orderBy, doc, updateDoc } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 import { Autocomplete } from './autocomplete.js';
-import { getCollectionName, AGENCIES } from '../../../agencies-config.js';
-import { getShippingMode } from '../../../shipping-mode.js';
+import { getCollectionName, AGENCIES } from '../../../commun/agencies-config.js';
+import { getShippingMode } from '../../../commun/shipping-mode.js';
 
 export const NouveauRdvView = {
     unsubTodayRdv: null,
