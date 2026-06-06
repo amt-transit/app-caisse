@@ -5,7 +5,7 @@
 // Voir PLAN-RECEPTION-COLIS.md. Passe 1 : réception + liste + pipeline + alerte
 // (photo + app Clients en passe 2).
 import { db } from '../firebase-config.js';
-import { collection, doc, addDoc, updateDoc, query, where, onSnapshot, serverTimestamp } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
+import { collection, doc, addDoc, updateDoc, query, where, getDocs, onSnapshot, serverTimestamp } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 import { getCollectionName } from '../agencies-config.js';
 import { phoneTail } from '../services/phone.js';
 
@@ -158,9 +158,13 @@ export const ReceptionColisView = {
                 : '—';
             const idx = STEPS.findIndex(s => s.key === statut);
             const nextStep = idx >= 0 && idx < STEPS.length - 1 ? STEPS[idx + 1] : null;
-            const advBtn = nextStep
-                ? `<button class="btn btn-small" title="Passer à : ${nextStep.label}" onclick="window.app.views.receptionColis.advance('${r.id}')" style="background:#2563eb; color:#fff; border:none; padding:4px 8px; border-radius:5px; cursor:pointer; font-size:11px;">→ ${nextStep.icon}</button>`
-                : '';
+            let advBtn = '';
+            if (statut === 'ATTENTE_GROUPAGE') {
+                // Colis groupé : pas d'avancement en un clic — confirmation requise.
+                advBtn = `<button class="btn btn-small" title="Confirmer que le regroupement est terminé" onclick="window.app.views.receptionColis.advance('${r.id}')" style="background:#16a34a; color:#fff; border:none; padding:4px 8px; border-radius:5px; cursor:pointer; font-size:11px;">✓ Regrouper</button>`;
+            } else if (nextStep) {
+                advBtn = `<button class="btn btn-small" title="Passer à : ${nextStep.label}" onclick="window.app.views.receptionColis.advance('${r.id}')" style="background:#2563eb; color:#fff; border:none; padding:4px 8px; border-radius:5px; cursor:pointer; font-size:11px;">→ ${nextStep.icon}</button>`;
+            }
             return `
                 <tr${alert ? ' style="background:#fff1f2;"' : ''}>
                     <td><strong>${r.reference || '—'}</strong></td>
@@ -238,6 +242,10 @@ export const ReceptionColisView = {
         const agency = sessionStorage.getItem('currentActiveAgency') || 'chine';
         const initials = (sessionStorage.getItem('userInitials') || name.slice(0, 2)).toUpperCase();
         const date = v('rcfDate') || new Date().toISOString().slice(0, 10);
+        const groupage = v('rcfGroupage') || 'seul';
+        // Colis à grouper : démarre "En attente groupage" ; il ne pourra avancer
+        // qu'après confirmation explicite que le regroupement est terminé.
+        const startStatut = groupage === 'attendre' ? 'ATTENTE_GROUPAGE' : 'RECU';
         const doc0 = {
             ownerName: name,
             ownerPhone: phone,
@@ -250,10 +258,11 @@ export const ReceptionColisView = {
             fournisseur: v('rcfFournisseur'),
             trackingChine: v('rcfTracking'),
             valeurDeclaree: parseFloat(v('rcfValeur')) || 0,
-            groupage: v('rcfGroupage') || 'seul',
+            groupage,
+            items: [],
             dateReception: date,
-            statut: 'RECU',
-            statusHistory: [{ statut: 'RECU', date: new Date().toISOString() }],
+            statut: startStatut,
+            statusHistory: [{ statut: startStatut, date: new Date().toISOString() }],
             reference: `${initials}-${date.replace(/-/g, '').slice(2)}-${Math.random().toString(36).slice(2, 5).toUpperCase()}`,
             agency,
             isDeleted: false,
@@ -273,9 +282,27 @@ export const ReceptionColisView = {
     async advance(id) {
         const r = this.receptions.find(x => x.id === id);
         if (!r) return;
-        const idx = STEPS.findIndex(s => s.key === (r.statut || 'RECU'));
+        const cur = r.statut || 'RECU';
+        const idx = STEPS.findIndex(s => s.key === cur);
         if (idx < 0 || idx >= STEPS.length - 1) return;
         const next = STEPS[idx + 1].key;
+        // RÈGLE DE CONTRÔLE : pas de chargement en conteneur sans facture liée
+        // (vérification supplémentaire du suivi). Voir setFacture().
+        if (next === 'CHARGE_CONTENEUR' && !r.factureRef) {
+            const go = window.AppModal
+                ? await window.AppModal.confirm("Ce colis n'a pas de facture. Voulez-vous la créer maintenant ? Les infos de réception (client, produits, poids, volume) seront pré-remplies, et la facture sera reliée au colis automatiquement.", 'Créer la facture', false)
+                : confirm("Ce colis n'a pas de facture. La créer maintenant ?");
+            if (go) this.createFactureFromColis(id);
+            return;
+        }
+        // Colis en attente de groupage : NE PAS avancer en un clic — il faut
+        // confirmer explicitement que le regroupement est terminé.
+        if (cur === 'ATTENTE_GROUPAGE') {
+            const ok = window.AppModal
+                ? await window.AppModal.confirm("Le regroupement de ce colis est-il terminé ? Il passera à l'étape suivante et pourra être chargé.", 'Regroupement terminé ?', false)
+                : confirm('Le regroupement est-il terminé ?');
+            if (!ok) return;
+        }
         const history = Array.isArray(r.statusHistory) ? r.statusHistory.slice() : [];
         history.push({ statut: next, date: new Date().toISOString() });
         try {
@@ -288,18 +315,68 @@ export const ReceptionColisView = {
     openDetail(id) {
         const r = this.receptions.find(x => x.id === id);
         if (!r) return;
+        const statut = r.statut || 'RECU';
+        // Produits modifiables tant que le colis n'est pas embarqué.
+        const editable = !['EMBARQUE', 'EN_TRANSIT', 'ARRIVE', 'LIVRE'].includes(statut);
+        const items = Array.isArray(r.items) ? r.items : [];
         const hist = (r.statusHistory || []).map(h => `<li>${STEP_LABEL[h.statut] || h.statut} — ${new Date(h.date).toLocaleString('fr-FR')}</li>`).join('') || '<li>—</li>';
+
+        const rows = items.length
+            ? items.map(it => `
+                <tr>
+                    <td>${it.designation || ''}</td>
+                    <td style="text-align:center;">${it.quantite || 1}</td>
+                    <td style="text-align:center;">${it.poids || 0} kg</td>
+                    <td style="text-align:center;">${it.volume || 0} m³</td>
+                    <td style="text-align:center;">${editable ? `<button title="Retirer" onclick="window.app.views.receptionColis.removeProduct('${r.id}','${it.id}')" style="background:#fee2e2; color:#b91c1c; border:none; padding:3px 7px; border-radius:5px; cursor:pointer;">🗑</button>` : ''}</td>
+                </tr>`).join('')
+            : '<tr><td colspan="5" style="text-align:center; color:#94a3b8; padding:10px;">Aucun produit ajouté</td></tr>';
+
+        const addForm = editable ? `
+            <div style="display:flex; gap:6px; flex-wrap:wrap; margin-top:10px; align-items:center;">
+                <input id="rcpDesig" placeholder="Désignation*" style="flex:2; min-width:120px; padding:7px; border:1px solid #cbd5e1; border-radius:6px;">
+                <input id="rcpQte" type="number" min="1" placeholder="Qté" style="width:60px; padding:7px; border:1px solid #cbd5e1; border-radius:6px;">
+                <input id="rcpPoids" type="number" step="0.1" min="0" placeholder="Poids tot. (kg)" style="width:110px; padding:7px; border:1px solid #cbd5e1; border-radius:6px;">
+                <input id="rcpVol" type="number" step="0.001" min="0" placeholder="Vol. (m³)" style="width:90px; padding:7px; border:1px solid #cbd5e1; border-radius:6px;">
+                <button onclick="window.app.views.receptionColis.addProduct('${r.id}')" style="background:#2563eb; color:#fff; border:none; padding:7px 12px; border-radius:6px; cursor:pointer;">+ Ajouter</button>
+            </div>` : '';
+
+        const groupNote = statut === 'ATTENTE_GROUPAGE'
+            ? `<div style="background:#fff7ed; color:#9a3412; padding:8px 12px; border-radius:8px; margin:10px 0; font-size:13px;">⏳ Ce colis attend le regroupement. Ajoutez ses produits ; il n'avancera qu'après « ✓ Regroupement terminé ».</div>`
+            : '';
+
+        const factureBlock = `
+            <div style="background:${r.factureRef ? '#f0fdf4' : '#fef2f2'}; border:1px solid ${r.factureRef ? '#86efac' : '#fecaca'}; padding:10px 12px; border-radius:8px; margin:10px 0; font-size:13px;">
+                <strong>Facture liée :</strong> ${r.factureRef ? `✅ ${r.factureRef}` : '❌ aucune — requise avant « Chargé conteneur »'}
+                ${editable ? `<div style="display:flex; gap:6px; margin-top:8px; flex-wrap:wrap; align-items:center;">
+                    ${!r.factureRef ? `<button onclick="window.app.views.receptionColis.createFactureFromColis('${r.id}')" style="background:#16a34a; color:#fff; border:none; padding:7px 12px; border-radius:6px; cursor:pointer;">+ Créer la facture (pré-remplie)</button>` : ''}
+                    <input id="rcFactureRef" placeholder="ou n° d'une facture existante" value="${r.factureRef || ''}" style="flex:1; min-width:150px; padding:7px; border:1px solid #cbd5e1; border-radius:6px;">
+                    <button onclick="window.app.views.receptionColis.setFacture('${r.id}')" style="background:#2563eb; color:#fff; border:none; padding:7px 12px; border-radius:6px; cursor:pointer;">Lier</button>
+                </div>` : ''}
+            </div>`;
+
         const c = document.getElementById('rcModalContainer');
         if (!c) return;
         c.innerHTML = `
             <div class="modal-overlay" style="position:fixed; inset:0; background:rgba(0,0,0,.5); display:flex; align-items:center; justify-content:center; z-index:9999; padding:16px;" onclick="if(event.target===this) window.app.views.receptionColis.closeForm()">
-                <div class="modal-content" style="background:#fff; border-radius:12px; max-width:520px; width:100%; max-height:90vh; overflow:auto; padding:22px;">
+                <div class="modal-content" style="background:#fff; border-radius:12px; max-width:600px; width:100%; max-height:90vh; overflow:auto; padding:22px;">
                     <h3 style="margin:0 0 12px;">Colis ${r.reference || ''}</h3>
                     <p><strong>${r.ownerName}</strong> — ${r.ownerPhone}</p>
-                    <p>${r.mode === 'aerien' ? '✈️ Aérien' : '🚢 Maritime'} · ${r.poids || 0} kg · ${r.volume || 0} m³ · ${r.cartons || 1} carton(s)</p>
+                    <p>${r.mode === 'aerien' ? '✈️ Aérien' : '🚢 Maritime'} · <strong>${r.poids || 0} kg</strong> · <strong>${r.volume || 0} m³</strong> · ${r.cartons || 1} carton(s)</p>
                     <p>Contenu : ${r.contenu || '—'} · Fournisseur : ${r.fournisseur || '—'} · Suivi Chine : ${r.trackingChine || '—'}</p>
-                    <p>Reçu le ${r.dateReception || '—'} · Statut : ${STEP_LABEL[r.statut || 'RECU']}</p>
-                    <h4 style="margin:14px 0 6px;">Historique</h4>
+                    <p>Reçu le ${r.dateReception || '—'} · Statut : ${STEP_LABEL[statut]}</p>
+                    ${groupNote}
+                    ${factureBlock}
+                    <h4 style="margin:14px 0 6px;">Produits ${items.length ? `(${items.length})` : ''}</h4>
+                    <div style="background:#f8fafc; padding:6px; border:1px solid #e2e8f0; border-radius:8px;">
+                        <p style="margin:0 0 6px; font-size:12px; color:#64748b;">Quand il y a des produits, le poids/volume du colis = somme des produits.</p>
+                        <table class="table" style="width:100%; font-size:13px;">
+                            <thead><tr><th>Désignation</th><th style="text-align:center;">Qté</th><th style="text-align:center;">Poids</th><th style="text-align:center;">Volume</th><th></th></tr></thead>
+                            <tbody>${rows}</tbody>
+                        </table>
+                        ${addForm}
+                    </div>
+                    <h4 style="margin:16px 0 6px;">Historique</h4>
                     <ul style="margin:0; padding-left:18px; color:#475569;">${hist}</ul>
                     <div style="display:flex; justify-content:flex-end; margin-top:18px;">
                         <button class="btn" onclick="window.app.views.receptionColis.closeForm()" style="padding:9px 16px; border:1px solid #cbd5e1; border-radius:8px; background:#fff;">Fermer</button>
@@ -307,6 +384,90 @@ export const ReceptionColisView = {
                 </div>
             </div>
         `;
+    },
+
+    // Recalcule poids/volume du colis = somme des produits (si produits présents).
+    async saveItems(r, items) {
+        const upd = { items };
+        if (items.length) {
+            upd.poids = items.reduce((s, it) => s + (Number(it.poids) || 0), 0);
+            upd.volume = items.reduce((s, it) => s + (Number(it.volume) || 0), 0);
+        }
+        r.items = items; // maj locale immédiate (la modale se re-rend tout de suite)
+        if (items.length) { r.poids = upd.poids; r.volume = upd.volume; }
+        try { await updateDoc(doc(db, getCollectionName('receptions'), r.id), upd); }
+        catch (e) { console.error('Réception — produits:', e); }
+    },
+
+    async addProduct(id) {
+        const r = this.receptions.find(x => x.id === id);
+        if (!r) return;
+        const desig = (document.getElementById('rcpDesig')?.value || '').trim();
+        if (!desig) { window.app.showToast && window.app.showToast('Désignation obligatoire'); return; }
+        const item = {
+            id: Date.now().toString(36) + Math.random().toString(36).slice(2, 5),
+            designation: desig,
+            quantite: parseInt(document.getElementById('rcpQte')?.value, 10) || 1,
+            poids: parseFloat(document.getElementById('rcpPoids')?.value) || 0,
+            volume: parseFloat(document.getElementById('rcpVol')?.value) || 0,
+        };
+        const items = (Array.isArray(r.items) ? r.items.slice() : []);
+        items.push(item);
+        await this.saveItems(r, items);
+        this.openDetail(id); // re-rend la modale avec le nouveau produit
+    },
+
+    async removeProduct(id, itemId) {
+        const r = this.receptions.find(x => x.id === id);
+        if (!r) return;
+        const items = (r.items || []).filter(it => it.id !== itemId);
+        await this.saveItems(r, items);
+        this.openDetail(id);
+    },
+
+    // Lie une facture au colis APRÈS avoir vérifié qu'elle existe dans les
+    // transactions de la route. Contrôle requis avant le chargement en conteneur.
+    async setFacture(id) {
+        const r = this.receptions.find(x => x.id === id);
+        if (!r) return;
+        const ref = (document.getElementById('rcFactureRef')?.value || '').trim();
+        if (!ref) return;
+        try {
+            const snap = await getDocs(query(collection(db, getCollectionName('transactions')), where('reference', '==', ref)));
+            if (snap.empty) {
+                window.AppModal ? window.AppModal.error('Facture introuvable (vérifiez le numéro).') : alert('Facture introuvable.');
+                return;
+            }
+            await updateDoc(doc(db, getCollectionName('receptions'), id), { factureRef: ref });
+            r.factureRef = ref;
+            window.app.showToast && window.app.showToast('Facture liée ✅');
+            this.openDetail(id);
+        } catch (e) {
+            console.error('Réception — lien facture:', e);
+        }
+    },
+
+    // Phase 1.5 : redirige vers la création de facture PRÉ-REMPLIE avec les
+    // données de réception. Le côté facture lit sessionStorage 'rc_prefillFacture'
+    // pour remplir le formulaire, et reliera la facture au colis après save.
+    createFactureFromColis(id) {
+        const r = this.receptions.find(x => x.id === id);
+        if (!r) return;
+        const prefill = {
+            colisId: r.id,
+            reception: r.reference || '',
+            ownerName: r.ownerName || '',
+            ownerPhone: r.ownerPhone || '',
+            mode: r.mode || 'maritime',
+            poids: r.poids || 0,
+            volume: r.volume || 0,
+            contenu: r.contenu || '',
+            items: Array.isArray(r.items) ? r.items : [],
+        };
+        try { sessionStorage.setItem('rc_prefillFacture', JSON.stringify(prefill)); } catch (_) {}
+        this.closeForm();
+        const page = r.mode === 'aerien' ? 'invoice-aerien' : 'invoice-new';
+        window.app.renderPage(page);
     },
 
     async remove(id) {

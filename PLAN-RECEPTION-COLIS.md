@@ -57,6 +57,9 @@ longtemps à l'entrepôt.
 - **Fournisseur / boutique en Chine** (origine) · **N° de suivi Chine** (tracking du
   fournisseur, pour identifier le colis à la réception)
 - **Valeur déclarée** (optionnel) · **Référence colis** (auto, ex. initiales-numéro)
+- **Produits** : liste (désignation, qté, poids, volume) — surtout pour les colis
+  groupés ; le poids/volume du colis = **somme** des produits.
+- **Facture liée** (`factureRef`) : **requise avant le chargement conteneur**.
 - Champs techniques : `agency` (multi-tenant), `isDeleted` (suppression douce)
 
 ---
@@ -73,6 +76,13 @@ longtemps à l'entrepôt.
 - « En attente de groupage » est optionnel (seulement si le colis attend d'autres
   marchandises).
 - Reçu → Embarqué = côté **Chine**. Arrivé → Livré = côté **destination**.
+- **Colis à grouper** : démarre en « En attente de groupage » ; on lui **ajoute /
+  retire des produits** (désignation, qté, poids, volume → poids/volume du colis =
+  somme des produits). Il **ne s'avance PAS en un clic** : il faut confirmer
+  « ✓ Regroupement terminé ».
+- **CONTRÔLE : pas de « Chargé conteneur » sans FACTURE liée** au colis (vérifiée
+  dans les transactions de la route). Lien manuel pour l'instant (Détail → Lier la
+  facture) ; sera automatisé en Phase 1.5.
 
 ---
 
