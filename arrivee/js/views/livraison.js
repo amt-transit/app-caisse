@@ -639,7 +639,31 @@ export const LivraisonView = {
         let selectedIds = new Set(); 
         window.selectedIds = selectedIds;
         let currentSort = { column: null, direction: 'asc' };
-        let itemsPerPage = 100; 
+        let itemsPerPage = 50; // taille d'une PAGE (pagination Précédent/Suivant)
+        let lvCurrentPage = 1;
+        // Slice de la page courante + nombre total de pages (sur la liste filtrée).
+        function lvPageSlice() {
+            const totalPages = Math.max(1, Math.ceil(filteredDeliveries.length / itemsPerPage));
+            if (lvCurrentPage > totalPages) lvCurrentPage = totalPages;
+            if (lvCurrentPage < 1) lvCurrentPage = 1;
+            const start = (lvCurrentPage - 1) * itemsPerPage;
+            return { items: filteredDeliveries.slice(start, start + itemsPerPage), totalPages };
+        }
+        // Boutons « Précédent / Suivant » + « Page X / Y » (réutilisé liste ET fiches).
+        function lvPagerHTML(totalPages) {
+            if (!totalPages || totalPages <= 1) return '';
+            const p = lvCurrentPage;
+            const b = (label, target, off) => `<button class="btn" onclick="lvGoToPage(${target})" ${off ? 'disabled' : ''} style="padding:8px 14px; margin:0 6px; ${off ? 'opacity:0.5;' : ''}">${label}</button>`;
+            return `${b('‹ Précédent', p - 1, p <= 1)}<span style="font-weight:600; color:#475569;">Page ${p} / ${totalPages}</span>${b('Suivant ›', p + 1, p >= totalPages)}`;
+        }
+        function lvGoToPage(p) {
+            lvCurrentPage = p;
+            renderTable();
+            const card = document.getElementById('deliveriesCards');
+            const tbl = document.getElementById('deliveriesTable');
+            const target = (card && card.style.display !== 'none') ? card : tbl;
+            if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
         let programDetailsSort = { column: null, direction: 'asc' };
         let currentProgramView = { date: null, livreur: null };
         let isImporting = false;
@@ -2516,7 +2540,8 @@ export const LivraisonView = {
            const selectAllCheckbox = document.getElementById('selectAll');
            if(selectAllCheckbox) selectAllCheckbox.checked = filteredDeliveries.length > 0 && filteredDeliveries.every(d => selectedIds.has(d.id));
        
-           let tableRows = filteredDeliveries.slice(0, itemsPerPage).map(d => {
+           const _lvPg = lvPageSlice();
+           let tableRows = _lvPg.items.map(d => {
                // --- NOUVEAU : SYNCHRONISATION ET SÉCURITÉ DU MONTANT ---
                // Si le colis est à Abidjan (En Cours), on VÉRIFIE la Caisse
                if (d.containerStatus === 'EN_COURS' && d.ref) {
@@ -2731,9 +2756,9 @@ export const LivraisonView = {
                `;
            }).join('');
        
-           // Ajouter le bouton "Afficher plus" si nécessaire
-           if (filteredDeliveries.length > itemsPerPage) {
-               tableRows += `<tr><td colspan="12" style="text-align: center;"><button class="btn" onclick="loadMoreItems()">Afficher plus</button></td></tr>`;
+           // Pagination « Précédent / Suivant » (au lieu de « Afficher plus »).
+           if (_lvPg.totalPages > 1) {
+               tableRows += `<tr><td colspan="14" style="text-align: center; padding:14px;">${lvPagerHTML(_lvPg.totalPages)}</td></tr>`;
            }
        
            tbody.innerHTML = tableRows;
@@ -2745,7 +2770,8 @@ export const LivraisonView = {
        function renderCards(container) {
            if (!container) return;
            const tab = currentTab;
-           const list = filteredDeliveries.slice(0, itemsPerPage);
+           const _lvPg = lvPageSlice();
+           const list = _lvPg.items;
            if (list.length === 0) {
                let title = 'Aucun colis à Abidjan';
                let sub = "Importez le fichier du scanner ou validez l'arrivée d'un conteneur.";
@@ -2859,7 +2885,7 @@ export const LivraisonView = {
                    ${editPanel}
                    <div class="lv-acts">${actionsHtml}</div>
                </div>`;
-           }).join('') + (filteredDeliveries.length > itemsPerPage ? `<div class="lv-cards-more"><button class="lv-btn" onclick="loadMoreItems()">Afficher plus</button></div>` : '');
+           }).join('') + (_lvPg.totalPages > 1 ? `<div class="lv-cards-more" style="text-align:center; padding:14px 0;">${lvPagerHTML(_lvPg.totalPages)}</div>` : '');
        }
 
        function lvToggleCardEdit(id) {
@@ -3867,7 +3893,8 @@ export const LivraisonView = {
            const isContainerFilterActive = filterContainerCb && filterContainerCb.checked;
        
            const searchQuery = document.getElementById('searchBox').value.toLowerCase().trim();
-           
+
+           lvCurrentPage = 1; // tout (re)filtrage / changement d'onglet revient à la page 1
            filteredDeliveries = deliveries.filter(d => {
                const matchCommune = selectedCommunes.length === 0 || selectedCommunes.includes(d.commune);
                const matchLocation = selectedLocations.length === 0 || (d.lieuLivraison && selectedLocations.includes(d.lieuLivraison.trim()));
@@ -5670,6 +5697,7 @@ export const LivraisonView = {
             closePreviewModal: typeof closePreviewModal !== 'undefined' ? closePreviewModal : null,
             confirmImport: typeof confirmImport !== 'undefined' ? confirmImport : null,
             updateStats, loadMoreItems: typeof loadMoreItems !== 'undefined' ? loadMoreItems : null,
+            lvGoToPage: typeof lvGoToPage !== 'undefined' ? lvGoToPage : null,
             removeDuplicatesFromDatabase: typeof removeDuplicatesFromDatabase !== 'undefined' ? removeDuplicatesFromDatabase : null,
             openDeleteChoiceModal: typeof openDeleteChoiceModal !== 'undefined' ? openDeleteChoiceModal : null,
             closeDeleteChoiceModal: typeof closeDeleteChoiceModal !== 'undefined' ? closeDeleteChoiceModal : null,
