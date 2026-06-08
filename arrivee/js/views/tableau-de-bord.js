@@ -175,6 +175,12 @@ export const DashboardView = {
                         <p id="grandTotalSoldeBanque">0 CFA</p>
                         <div class="card-watermark">💳</div>
                     </div>
+                    <div class="total-card colored-card" id="card-caisse-euros" onclick="app.renderPage('bank')" style="cursor: pointer;">
+                        <h3>Caisse Euros (≈ CFA)</h3>
+                        <p id="grandTotalEuros">0 CFA</p>
+                        <div style="font-size:12px; opacity:0.85;" id="grandTotalEurosEur">0,00 €</div>
+                        <div class="card-watermark">💶</div>
+                    </div>
                     <div class="total-card colored-card" id="card-reste" onclick="app.renderPage('clients')" style="cursor: pointer;">
                         <h3>Dettes Clients (Reste Total)</h3>
                         <p id="grandTotalReste">0 CFA</p>
@@ -516,6 +522,21 @@ export const DashboardView = {
         const startDateInput = document.getElementById('startDate');
         const endDateInput = document.getElementById('endDate');
         const clearFilterBtn = document.getElementById('clearFilterBtn');
+
+        // --- Caisse Euros (≈ CFA) : solde live, séparé de la caisse CFA (collection
+        // isolée 'caisse_euros'). N'entre dans aucun autre total ; converti au taux fixe. ---
+        (() => {
+            const _ag = sessionStorage.getItem('currentActiveAgency') || 'abidjan';
+            const _taux = 655.957;
+            onSnapshot(query(collection(db, 'caisse_euros'), where('agency', '==', _ag)), s => {
+                let solde = 0;
+                s.docs.forEach(d => { const m = d.data(); if (m.isDeleted) return; solde += (m.type === 'Sortie' ? -1 : 1) * (Number(m.montant) || 0); });
+                const elCfa = document.getElementById('grandTotalEuros');
+                if (elCfa) elCfa.textContent = Math.round(solde * _taux).toLocaleString('fr-FR') + ' CFA';
+                const elEur = document.getElementById('grandTotalEurosEur');
+                if (elEur) elEur.textContent = solde.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €';
+            });
+        })();
 
         // --- GESTION DES ONGLETS ---
         const tabs = document.querySelectorAll('.sub-nav a');

@@ -7,10 +7,27 @@ import { calculateStorageFee } from '../../../commun/services/storageFee.js';
 export const BankView = {
     render(app, container) {
         this.app = app;
-        
+        window.app.views = window.app.views || {};
+        window.app.views.banque = this;
+
         container.innerHTML = `
-            <div class="dashboard-container">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 10px;"><h2 style="margin: 0; color: #1e293b;">🏦 Gestion de la Banque</h2></div>
+            <style>
+                .bk-page .total-card { background:#fff; border:1px solid #e7ebf0; border-radius:14px; box-shadow:0 1px 3px rgba(15,23,42,.05); transition:transform .08s, box-shadow .15s; }
+                .bk-page .total-card:hover { transform:translateY(-2px); box-shadow:0 6px 16px rgba(15,23,42,.12); }
+                .bk-page .total-card h3 { font-size:12px; text-transform:uppercase; letter-spacing:.03em; color:#64748b; font-weight:700; }
+                .bk-page .total-card p { font-size:23px; font-weight:800; margin:4px 0 0; }
+                .bk-page .bk-sec { background:#fff; border:1px solid #e7ebf0; border-radius:14px; box-shadow:0 1px 3px rgba(15,23,42,.05); padding:20px; margin-bottom:20px; }
+                .bk-page .bk-sec h3 { margin-top:0; color:#334155; }
+                .bk-page .form-grid input, .bk-page .form-grid select { padding:10px 12px; border:1px solid #d4dbe4; border-radius:9px; font-size:14px; }
+                .bk-page .form-grid input:focus, .bk-page .form-grid select:focus { outline:none; border-color:var(--primary-color,#1A3553); box-shadow:0 0 0 3px rgba(26,53,83,.10); }
+                .bk-page .table thead th { background:#f8fafc; color:#475569; text-transform:uppercase; font-size:11px; letter-spacing:.04em; font-weight:700; }
+                .bk-page .table tbody tr:hover { background:#f8fbff; }
+                .bk-head { display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; margin-bottom:22px; }
+                .bk-head h2 { margin:0; color:#0f172a; font-size:22px; font-weight:800; display:flex; align-items:center; gap:12px; }
+                .bk-head .bk-ico { width:40px; height:40px; border-radius:11px; background:var(--primary-color,#1A3553); color:#fff; display:inline-flex; align-items:center; justify-content:center; font-size:19px; box-shadow:0 4px 12px rgba(15,23,42,.18); }
+            </style>
+            <div class="dashboard-container bk-page">
+                <div class="bk-head"><h2><span class="bk-ico">🏦</span> Gestion de la Banque</h2></div>
                 <div class="totals-container" style="margin-bottom: 20px;">
                     <div class="total-card"><h3>Dépôts</h3><p id="totalBankDeposits" style="color:#10b981;">0 CFA</p></div>
                     <div class="total-card"><h3>Retraits / Paiements</h3><p id="totalBankWithdrawals" style="color:#ef4444;">0 CFA</p></div>
@@ -21,7 +38,7 @@ export const BankView = {
                     <div class="total-card" style="cursor: pointer;" onclick="window.filterByBank('BRIDGE')"><h3>Solde BRIDGE</h3><p id="totalBridge" style="color:#8b5cf6;">0 CFA</p></div>
                     <div class="total-card" style="cursor: pointer;" onclick="window.filterByBank('ORANGE')"><h3>Solde ORANGE BANK</h3><p id="totalOrange" style="color:#f59e0b;">0 CFA</p></div>
                 </div>
-                <div id="caisseForm" style="background: white; padding: 20px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin-bottom: 20px;">
+                <div id="caisseForm" class="bk-sec">
                     <h3 style="margin-top: 0; color: #334155;">Ajouter un mouvement</h3>
                     <div class="form-grid">
                         <input type="date" id="bankDate" required>
@@ -31,12 +48,30 @@ export const BankView = {
                         <button id="addBankMovementBtn" class="btn btn-success">Enregistrer le Mouvement</button>
                     </div>
                 </div>
-                <div class="import-section" style="background: white; padding: 20px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin-bottom: 20px;">
-                    <h3 style="margin-top: 0; color: #334155;">📥 Import Relevé Bancaire (CSV)</h3>
-                    <div style="display: flex; gap: 10px; align-items: center;"><input type="file" id="csvFile" accept=".csv" style="padding: 5px; border: 1px solid #ccc; border-radius: 4px;"><button id="uploadCsvBtn" class="amt-btn amt-btn-primary" style="background: #3b82f6; color: white; border: none; padding: 8px 15px; border-radius: 4px; cursor: pointer;">Importer</button></div>
-                    <div id="uploadLog" style="display: none; margin-top: 10px; font-size: 13px; color: #64748b;"></div>
+                <div class="bk-sec" style="border-left: 5px solid #2563eb;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; margin-bottom:14px;">
+                        <h3 style="margin:0; color:#334155;">💶 Caisse Euros <span style="font-size:12px; font-weight:600; color:#64748b;">(espèces en €, séparées de la caisse CFA)</span></h3>
+                        <div style="text-align:right;">
+                            <div style="font-size:12px; color:#64748b;">Solde en caisse €</div>
+                            <div id="eurBalance" style="font-size:22px; font-weight:800; color:#2563eb; line-height:1;">0,00 €</div>
+                            <div id="eurBalanceCfa" style="font-size:12px; color:#64748b;">≈ 0 CFA</div>
+                        </div>
+                    </div>
+                    <div class="form-grid">
+                        <input type="date" id="eurDate">
+                        <input type="text" id="eurDesc" placeholder="Description (client, collègue Paris…)">
+                        <input type="number" id="eurAmount" step="0.01" min="0" placeholder="Montant €">
+                        <select id="eurType"><option value="Entree">Entrée (€ reçu)</option><option value="Sortie">Sortie (€ remis / dépensé)</option></select>
+                        <button id="addEurMovementBtn" class="btn btn-success">Enregistrer (€)</button>
+                    </div>
+                    <div style="overflow-x:auto; margin-top:14px;">
+                        <table class="table" style="margin-bottom:0;">
+                            <thead><tr><th>Date</th><th>Description</th><th>Type</th><th style="text-align:right;">Montant €</th><th style="text-align:center;">Actions</th></tr></thead>
+                            <tbody id="eurTableBody"><tr><td colspan="5" style="text-align:center;">Chargement…</td></tr></tbody>
+                        </table>
+                    </div>
                 </div>
-                <div style="background: white; padding: 20px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+                <div class="bk-sec" style="margin-bottom:0;">
                     <div class="history-controls" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
                         <input type="text" id="bankSearch" placeholder="Rechercher (Desc, Banque...)" style="padding: 8px; border-radius: 4px; border: 1px solid #ccc; min-width: 250px;">
                         <div style="display: flex; align-items: center; gap: 5px;"><input type="checkbox" id="showDeletedCheckbox" style="width: auto; margin: 0;"><label for="showDeletedCheckbox" style="margin: 0; cursor: pointer; font-size: 13px;">Afficher supprimés</label></div>
@@ -52,7 +87,78 @@ export const BankView = {
             </div>
         `;
         
-        setTimeout(() => this.initLogic(), 50);
+        setTimeout(() => { this.initLogic(); this.initEurCash(); }, 50);
+    },
+
+    // --- Caisse Euros : espèces en € (séparées de la caisse CFA). Saisie en €,
+    // converti en CFA sur le tableau de bord. Collection isolée 'caisse_euros'
+    // filtrée par agence ; n'entre dans AUCUN total CFA. ---
+    initEurCash() {
+        const agency = sessionStorage.getItem('currentActiveAgency') || 'abidjan';
+        const TAUX = 655.957; // EUR -> XOF (taux fixe)
+        const fmtEur = v => (Number(v) || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €';
+        const fmtCfa = v => Math.round(Number(v) || 0).toLocaleString('fr-FR') + ' CFA';
+
+        const dEl = document.getElementById('eurDate');
+        if (dEl && !dEl.value) dEl.value = new Date().toISOString().slice(0, 10);
+
+        const addBtn = document.getElementById('addEurMovementBtn');
+        if (addBtn) addBtn.onclick = async () => {
+            const date = (document.getElementById('eurDate').value || '').trim();
+            const description = (document.getElementById('eurDesc').value || '').trim();
+            const montant = parseFloat(document.getElementById('eurAmount').value) || 0;
+            const type = document.getElementById('eurType').value || 'Entree';
+            if (!date || !description || montant <= 0) {
+                window.AppModal ? window.AppModal.error('Renseignez la date, la description et un montant € valide.') : alert('Champs € incomplets.');
+                return;
+            }
+            try {
+                await setDoc(doc(collection(db, 'caisse_euros')), {
+                    date, description, montant, type, devise: 'EUR',
+                    agency, isDeleted: false,
+                    createdAt: new Date().toISOString(),
+                    saisiPar: sessionStorage.getItem('userName') || ''
+                });
+                document.getElementById('eurDesc').value = '';
+                document.getElementById('eurAmount').value = '';
+                window.app.showToast && window.app.showToast('Mouvement € enregistré ✅');
+            } catch (e) {
+                console.error('Caisse € — ajout:', e);
+                window.AppModal ? window.AppModal.error("Enregistrement impossible.") : alert("Enregistrement impossible.");
+            }
+        };
+
+        if (this._unsubEur) this._unsubEur();
+        this._unsubEur = onSnapshot(query(collection(db, 'caisse_euros'), where('agency', '==', agency)), snap => {
+            const rows = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+                .filter(m => !m.isDeleted)
+                .sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+            let solde = 0;
+            rows.forEach(m => { solde += (m.type === 'Sortie' ? -1 : 1) * (Number(m.montant) || 0); });
+            const balEl = document.getElementById('eurBalance');
+            if (balEl) balEl.textContent = fmtEur(solde);
+            const balCfaEl = document.getElementById('eurBalanceCfa');
+            if (balCfaEl) balCfaEl.textContent = '≈ ' + fmtCfa(solde * TAUX);
+            const tb = document.getElementById('eurTableBody');
+            if (tb) tb.innerHTML = rows.length ? rows.map(m => {
+                const isOut = m.type === 'Sortie';
+                const col = isOut ? '#ef4444' : '#10b981';
+                return `<tr>
+                    <td>${m.date || '-'}</td>
+                    <td>${m.description || '-'}</td>
+                    <td><span style="color:${col}; font-weight:700;">${isOut ? 'Sortie' : 'Entrée'}</span></td>
+                    <td style="text-align:right; font-weight:700; color:${col};">${isOut ? '-' : '+'} ${fmtEur(m.montant)}</td>
+                    <td style="text-align:center;"><button title="Supprimer" onclick="window.app.views.banque.deleteEur('${m.id}')" style="background:#fee2e2; color:#b91c1c; border:none; padding:4px 8px; border-radius:5px; cursor:pointer;">🗑️</button></td>
+                </tr>`;
+            }).join('') : '<tr><td colspan="5" style="text-align:center; color:#94a3b8;">Aucun mouvement € pour le moment.</td></tr>';
+        });
+    },
+
+    async deleteEur(id) {
+        const ok = window.AppModal ? await window.AppModal.confirm('Supprimer ce mouvement € ?', 'Confirmation', true) : confirm('Supprimer ?');
+        if (!ok) return;
+        try { await updateDoc(doc(db, 'caisse_euros', id), { isDeleted: true }); }
+        catch (e) { console.error('Caisse € — suppression:', e); }
     },
 
     initLogic() {

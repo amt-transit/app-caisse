@@ -103,6 +103,10 @@ service cloud.firestore {
     match /bank_movements/{document=**} {
       allow read, write: if isAuthenticated() && (hasGlobalAccess() || getUserData().agency in ['paris', 'abidjan']);
     }
+    // Caisse Euros : especes en EUR (separees de la caisse CFA). Meme acces que la banque.
+    match /caisse_euros/{document=**} {
+      allow read, write: if isAuthenticated() && (hasGlobalAccess() || getUserData().agency in ['paris', 'abidjan']);
+    }
     // Demandes client (dépôt / récupération) émises depuis l'app AMT Clients.
     // Création/lecture côté client passent par des Cloud Functions (Admin SDK),
     // donc PAS besoin d'autoriser le client ici. Cette règle ouvre l'accès au
