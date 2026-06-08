@@ -12,6 +12,104 @@ admin.initializeApp();
 // changer sans mettre à jour les appels côté client.
 const REGION = "us-central1";
 
+// ============================================================================
+//  SUIVI AUTOMATIQUE DES CONTENEURS via ShipsGo (Phase 2)
+//  La clé API ShipsGo est un SECRET (Secret Manager), jamais côté client.
+//  Pas de webhook ShipsGo -> on interroge : POST pour enregistrer (= 1 crédit),
+//  puis GET pour récupérer navire/ports/étapes/ETA. ShipsGo gère TOUTES les
+//  compagnies (Maersk/CMA CGM gratuits ajoutables plus tard si client direct).
+// ============================================================================
+const { defineSecret } = require("firebase-functions/params");
+const SHIPSGO_API_KEY = defineSecret("SHIPSGO_API_KEY");
+
+// Mappe le statut texte ShipsGo vers nos étapes internes de suivi.
+function mapShipsgoStatus(s) {
+    const t = String(s || "").toLowerCase();
+    if (t.includes("deliver")) return "LIVRAISON";
+    if (t.includes("discharg") || t.includes("arriv")) return "ARRIVE";
+    if (t.includes("transship") || t.includes("tranship")) return "TRANSBORDEMENT";
+    if (t.includes("sail") || t.includes("transit") || t.includes("depart")) return "EN_TRANSIT";
+    if (t.includes("load") || t.includes("gate in")) return "CHARGE";
+    if (t.includes("book") || t.includes("empty")) return "PREPARATION";
+    return null;
+}
+
+// Lance/rafraîchit le suivi d'un conteneur via ShipsGo. Réservé au PERSONNEL.
+exports.shipsgoSync = onCall({ region: REGION, secrets: [SHIPSGO_API_KEY] }, async (request) => {
+    const uid = request.auth && request.auth.uid;
+    if (!uid) throw new HttpsError("unauthenticated", "Connexion requise.");
+    const userSnap = await admin.firestore().doc(`users/${uid}`).get();
+    if (!userSnap.exists) throw new HttpsError("permission-denied", "Réservé au personnel.");
+
+    const { collection, id, containerNumber } = request.data || {};
+    if (!collection || !id || !containerNumber) {
+        throw new HttpsError("invalid-argument", "collection, id et containerNumber requis.");
+    }
+    const num = String(containerNumber).toUpperCase().replace(/[^A-Z0-9]/g, "");
+    if (!/^[A-Z]{4}[0-9]{7}$/.test(num)) {
+        throw new HttpsError("invalid-argument", "N° de conteneur invalide (4 lettres + 7 chiffres).");
+    }
+
+    const authCode = SHIPSGO_API_KEY.value();
+    const ref = admin.firestore().doc(`${collection}/${id}`);
+    const snap = await ref.get();
+    if (!snap.exists) throw new HttpsError("not-found", "Conteneur introuvable.");
+    const data = snap.data() || {};
+    const BASE = "https://shipsgo.com/api/v1.2/ContainerService";
+
+    let requestId = data.shipsgoRequestId;
+
+    // 1) Enregistrer chez ShipsGo si pas déjà fait (consomme 1 crédit).
+    if (!requestId) {
+        const body = new URLSearchParams({ authCode, shippingLine: "OTHERS", containerNumber: num });
+        const r = await fetch(`${BASE}/PostContainerInfo/`, {
+            method: "POST",
+            headers: { "Content-Type": "application/x-www-form-urlencoded" },
+            body: body.toString(),
+        });
+        const txt = await r.text();
+        if (!r.ok) throw new HttpsError("internal", `ShipsGo POST ${r.status}: ${txt.slice(0, 300)}`);
+        let parsed = null;
+        try { parsed = JSON.parse(txt); } catch (_) { /* réponse en texte brut */ }
+        requestId = (parsed && (parsed.requestId || parsed.RequestId || parsed.message)) || txt.trim();
+        await ref.update({ shipsgoRequestId: String(requestId), shipsgoStartedAt: new Date().toISOString() });
+    }
+
+    // 2) Récupérer les infos de suivi.
+    const g = await fetch(`${BASE}/GetContainerInfo/?authCode=${encodeURIComponent(authCode)}&requestId=${encodeURIComponent(requestId)}&mapPoint=false`);
+    const gtxt = await g.text();
+    if (!g.ok) throw new HttpsError("internal", `ShipsGo GET ${g.status}: ${gtxt.slice(0, 300)}`);
+    let info = null;
+    try { info = JSON.parse(gtxt); } catch (_) { /* non-JSON */ }
+    const row = Array.isArray(info) ? info[0] : info;
+
+    // 3) Mise à jour du conteneur (+ réponse brute conservée pour affiner le mapping).
+    const upd = { shipsgoSyncedAt: new Date().toISOString(), shipsgoRaw: row || gtxt.slice(0, 6000) };
+    if (row) {
+        const vessel = row.Vessel || row.VesselName || row.vessel;
+        const eta = row.ETA || row.FirstETA || row.Eta || row.ContainerETA;
+        if (vessel) upd.vesselName = vessel;
+        if (eta) upd.eta = String(eta).slice(0, 10);
+        const stepKey = mapShipsgoStatus(row.Status || row.StatusName || row.status);
+        if (stepKey) {
+            const hist = Array.isArray(data.trackingHistory) ? data.trackingHistory.slice() : [];
+            if (!hist.some((h) => h.key === stepKey)) {
+                hist.push({ key: stepKey, date: new Date().toISOString(), source: "shipsgo" });
+            }
+            upd.trackingStatus = stepKey;
+            upd.trackingHistory = hist;
+        }
+    }
+    await ref.update(upd);
+    return {
+        ok: true,
+        requestId: String(requestId),
+        status: (row && (row.Status || row.StatusName || row.status)) || null,
+        vessel: upd.vesselName || null,
+        eta: upd.eta || null,
+    };
+});
+
 // VÉRIFICATION PUBLIQUE D'UNE FACTURE (anti-falsification).
 // Le QR code d'une facture PDF pointe vers verify.html, qui appelle cette
 // fonction. Elle lit la transaction via l'Admin SDK (source de vérité) et

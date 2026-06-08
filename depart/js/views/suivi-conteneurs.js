@@ -4,8 +4,9 @@
 // verront cette frise plus tard. Socle pour l'automatique (ShipsGo) + WhatsApp.
 // Étend la collection `containers` (isolée par route + mode via getCollectionName) :
 // champs ajoutés realContainerNo, vesselName, bl, eta, trackingStatus, trackingHistory.
-import { db } from '../../../commun/firebase-config.js';
+import { db, functions } from '../../../commun/firebase-config.js';
 import { collection, doc, updateDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
+import { httpsCallable } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-functions.js";
 import { getCollectionName } from '../../../commun/agencies-config.js';
 
 // Étapes du voyage d'un conteneur (ordre = progression).
@@ -188,7 +189,8 @@ export const SuiviConteneursView = {
                         <label>N° de BL<input id="scBl" type="text" value="${att(c.bl)}" style="width:100%; padding:9px; border:1px solid #cbd5e1; border-radius:8px;"></label>
                         <label style="grid-column:1/3;">Arrivée prévue (ETA)<input id="scEta" type="date" value="${att(c.eta)}" style="width:100%; padding:9px; border:1px solid #cbd5e1; border-radius:8px;"></label>
                     </div>
-                    <div style="text-align:right; margin-top:10px;">
+                    <div style="display:flex; gap:8px; justify-content:flex-end; flex-wrap:wrap; margin-top:10px;">
+                        <button onclick="window.app.views.suiviConteneurs.syncShipsgo('${c.id}')" style="background:#0e7490; color:#fff; border:none; padding:8px 16px; border-radius:8px; cursor:pointer; font-weight:600;" title="Remplir automatiquement le suivi depuis ShipsGo (consomme 1 crédit)">🛰️ Suivre via ShipsGo (auto)</button>
                         <button onclick="window.app.views.suiviConteneurs.saveInfo('${c.id}')" style="background:#2563eb; color:#fff; border:none; padding:8px 16px; border-radius:8px; cursor:pointer; font-weight:600;">💾 Enregistrer les infos</button>
                     </div>
 
@@ -223,6 +225,30 @@ export const SuiviConteneursView = {
         } catch (e) {
             console.error('Suivi conteneurs — infos:', e);
             window.AppModal ? window.AppModal.error("Enregistrement impossible.") : alert("Enregistrement impossible.");
+        }
+    },
+
+    // Remplissage AUTOMATIQUE du suivi via ShipsGo (fonction serveur, clé secrète).
+    async syncShipsgo(id) {
+        const c = this.containers.find(x => x.id === id);
+        if (!c) return;
+        const real = (document.getElementById('scReal')?.value || c.realContainerNo || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+        if (!/^[A-Z]{4}[0-9]{7}$/.test(real)) {
+            window.AppModal ? window.AppModal.error("Saisis d'abord un n° de conteneur réel valide (ex. MSKU1234567).") : alert("N° réel invalide.");
+            return;
+        }
+        window.app.showToast && window.app.showToast('Interrogation de ShipsGo… ⏳');
+        try {
+            await updateDoc(doc(db, getCollectionName('containers'), id), { realContainerNo: real });
+            const fn = httpsCallable(functions, 'shipsgoSync');
+            const res = await fn({ collection: getCollectionName('containers'), id, containerNumber: real });
+            const d = (res && res.data) || {};
+            window.app.showToast && window.app.showToast(`ShipsGo : ${d.status || 'suivi lancé'} ✅`);
+            setTimeout(() => this.openDetail(id), 400);
+        } catch (e) {
+            console.error('ShipsGo sync:', e);
+            const msg = (e && e.message) || 'Erreur ShipsGo.';
+            window.AppModal ? window.AppModal.error(`ShipsGo : ${msg}`) : alert(`ShipsGo : ${msg}`);
         }
     },
 
