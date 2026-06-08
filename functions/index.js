@@ -132,6 +132,22 @@ async function syncOneContainer(collection, id, num) {
     const seen = {};
     history = history.filter((h) => { if (!h || !h.key || seen[h.key]) return false; seen[h.key] = 1; return true; });
     history.sort((a, b) => STEP_ORDER.indexOf(a.key) - STEP_ORDER.indexOf(b.key));
+
+    // Dernier kilomètre : si TOUS les colis (livraisons) du conteneur sont livrés,
+    // le conteneur passe AUTOMATIQUEMENT à "Livré" (ShipsGo ne voit pas cette étape).
+    try {
+        const code = data.number || id;
+        const livCol = collection.replace("containers", "livraisons");
+        const livSnap = await admin.firestore().collection(livCol).where("conteneur", "==", code).get();
+        const livDocs = livSnap.docs.map((ld) => ld.data() || {}).filter((dd) => !dd.isDeleted);
+        if (livDocs.length && livDocs.every((dd) => dd.status === "LIVRE")) {
+            if (!history.some((h) => h.key === "LIVRAISON")) {
+                history.push({ key: "LIVRAISON", date: new Date().toISOString(), source: "livraison" });
+                history.sort((a, b) => STEP_ORDER.indexOf(a.key) - STEP_ORDER.indexOf(b.key));
+            }
+        }
+    } catch (_) { /* livraisons indisponibles : on ignore */ }
+
     let maxIdx = -1;
     for (const h of history) { const i = STEP_ORDER.indexOf(h.key); if (i > maxIdx) maxIdx = i; }
     const trackingStatus = maxIdx >= 0 ? STEP_ORDER[maxIdx] : (data.trackingStatus || "PREPARATION");

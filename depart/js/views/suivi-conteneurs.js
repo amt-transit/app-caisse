@@ -123,7 +123,7 @@ export const SuiviConteneursView = {
         const need = this.containers.filter(c =>
             c.shipsgoShipmentId && (c.trackingStatus || 'PREPARATION') !== 'LIVRAISON' &&
             /^[A-Z]{4}[0-9]{7}$/.test(String(c.realContainerNo || '').toUpperCase()) &&
-            (!c.vesselName || !c.eta || !c.shipsgoSyncedAt || (now - new Date(c.shipsgoSyncedAt).getTime()) > STALE)
+            (!c.vesselName || !c.eta || !c.shipsgoSyncedAt || (now - new Date(c.shipsgoSyncedAt).getTime()) > STALE || ['ARRIVE', 'DEDOUANE'].includes(c.trackingStatus))
         ).slice(0, 15);
         if (!need.length) return;
         const sync = httpsCallable(functions, 'shipsgoSync');
