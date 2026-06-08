@@ -62,10 +62,27 @@ exports.shipsgoSync = onCall({ region: REGION, secrets: [SHIPSGO_API_KEY] }, asy
     if (!snap.exists) throw new HttpsError("not-found", "Conteneur introuvable.");
     const data = snap.data() || {};
 
-    let shipmentId = data.shipsgoShipmentId;
+    // 1) Trouver le suivi du conteneur. On CHERCHE d'abord les suivis existants
+    // (évite de recréer un doublon = 1 crédit à chaque clic) et on privilégie celui
+    // qui a déjà les données plutôt qu'un suivi tout juste créé ("INPROGRESS").
+    let list = [];
+    try {
+        const lr = await fetch(`${BASE}/ocean/shipments?container_number=${encodeURIComponent(num)}`, { headers: HDRS });
+        if (lr.ok) { const lj = await lr.json().catch(() => null); list = (lj && (lj.shipments || lj.data)) || (Array.isArray(lj) ? lj : []); }
+    } catch (_) { /* liste indisponible : on retombera sur le POST */ }
+    const PENDING = (s) => String(s.status || "").toUpperCase() === "INPROGRESS";
+    const DONE = (s) => ["DISCHARGED", "DELIVERED", "DISCARDED", "EXPIRED", "ARCHIVED"].includes(String(s.status || "").toUpperCase());
+    list.sort((a, b) => (b.id || 0) - (a.id || 0));
 
-    // 1) Créer le suivi chez ShipsGo si pas déjà fait (consomme 1 crédit).
-    if (!shipmentId) {
+    let shipmentId = null;
+    if (list.length) {
+        let chosen = list[0]; // le plus récent = voyage en cours
+        if (PENDING(chosen)) { const twin = list.find((s) => !PENDING(s) && !DONE(s)); if (twin) chosen = twin; }
+        shipmentId = chosen.id;
+    } else if (data.shipsgoShipmentId) {
+        shipmentId = data.shipsgoShipmentId;
+    } else {
+        // Aucun suivi pour ce conteneur -> on en crée un (consomme 1 crédit).
         const r = await fetch(`${BASE}/ocean/shipments`, {
             method: "POST", headers: HDRS, body: JSON.stringify({ container_number: num }),
         });
@@ -74,7 +91,9 @@ exports.shipsgoSync = onCall({ region: REGION, secrets: [SHIPSGO_API_KEY] }, asy
         let j = null; try { j = JSON.parse(txt); } catch (_) { /* */ }
         shipmentId = j && j.shipment && j.shipment.id;
         if (!shipmentId) throw new HttpsError("internal", `ShipsGo: pas d'identifiant de suivi. ${txt.slice(0, 200)}`);
-        await ref.update({ shipsgoShipmentId: shipmentId, shipsgoStartedAt: new Date().toISOString() });
+    }
+    if (String(shipmentId) !== String(data.shipsgoShipmentId || "")) {
+        await ref.update({ shipsgoShipmentId: shipmentId, shipsgoStartedAt: data.shipsgoStartedAt || new Date().toISOString() });
     }
 
     // 2) Récupérer le suivi.
