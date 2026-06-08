@@ -220,6 +220,12 @@ export const SuiviConteneursView = {
                     <h4 style="margin:16px 0 6px;">Historique</h4>
                     <ul style="margin:0; padding-left:18px; color:#475569;">${hist}</ul>
 
+                    <h4 style="margin:18px 0 6px;">🗺️ Carte du navire ${c.vesselName ? '— ' + c.vesselName : ''}</h4>
+                    ${c.vesselImo ? `
+                        <iframe src="/commun/carte-navire.html?imo=${encodeURIComponent(c.vesselImo)}" style="width:100%; height:320px; border:1px solid #cbd5e1; border-radius:10px;" loading="lazy" title="Position du navire"></iframe>
+                        <div style="margin-top:6px;"><a href="https://www.vesselfinder.com/?imo=${encodeURIComponent(c.vesselImo)}" target="_blank" rel="noopener" style="font-size:13px; color:#0e7490;">Ouvrir la carte en grand ↗</a></div>
+                    ` : `<p style="margin:0; font-size:13px; color:#94a3b8;">La carte du navire s'affiche dès que le suivi ShipsGo est récupéré (navire + IMO).</p>`}
+
                     <div style="display:flex; justify-content:flex-end; margin-top:18px;">
                         <button onclick="window.app.views.suiviConteneurs.closeModal()" style="padding:9px 16px; border:1px solid #cbd5e1; border-radius:8px; background:#fff; color:#334155; font-weight:600; cursor:pointer;">Fermer</button>
                     </div>

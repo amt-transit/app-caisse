@@ -113,8 +113,8 @@ async function syncOneContainer(collection, id, num) {
     // 3) Extraire + mapper.
     const cont = (sh.containers && sh.containers[0]) || {};
     const movements = Array.isArray(cont.movements) ? cont.movements : [];
-    let vessel = "";
-    for (const m of movements) { if (m && m.vessel && m.vessel.name) { vessel = m.vessel.name; break; } }
+    let vessel = "", vesselImo = "";
+    for (const m of movements) { if (m && m.vessel && m.vessel.name) { vessel = m.vessel.name; vesselImo = m.vessel.imo ? String(m.vessel.imo) : ""; break; } }
     const eta = sh.route && sh.route.port_of_discharge && sh.route.port_of_discharge.date_of_discharge;
     const dep = sh.route && sh.route.port_of_loading && sh.route.port_of_loading.date_of_loading;
 
@@ -145,6 +145,7 @@ async function syncOneContainer(collection, id, num) {
         trackingHistory: history,
     };
     if (vessel) upd.vesselName = vessel;
+    if (vesselImo) upd.vesselImo = vesselImo;
     if (eta) { upd.eta = String(eta).slice(0, 10); upd.arrivalDate = upd.eta; }
     if (dep) upd.departureDate = String(dep).slice(0, 10);
     await ref.update(upd);

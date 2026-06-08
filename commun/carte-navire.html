@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Carte du navire</title>
+<style>html,body{margin:0;padding:0;height:100%;background:#eef2f7;}</style>
+</head>
+<body>
+<!--
+  Carte de position du navire (AIS), via le widget GRATUIT VesselFinder.
+  On l'isole dans cette petite page (chargée en iframe) car VesselFinder
+  utilise des variables GLOBALES + document.write, incompatibles avec le SPA.
+  Usage : carte-navire.html?imo=9480215
+-->
+<script>
+  var _p = new URLSearchParams(location.search);
+  var imo = (_p.get('imo') || '').replace(/[^0-9]/g, '');
+  var width = "100%";
+  var height = "100%";
+  var names = true;
+  var show_track = true;
+  var zoom = parseInt(_p.get('zoom') || '5', 10);
+  if (!imo) {
+    document.write('<p style="padding:16px;color:#64748b;font-family:system-ui,sans-serif;font-size:14px;">Carte indisponible : numéro IMO du navire inconnu. Lance/rafraîchis le suivi ShipsGo pour le récupérer.</p>');
+  }
+</script>
+<script type="text/javascript" src="https://www.vesselfinder.com/aismap.js"></script>
+</body>
+</html>
