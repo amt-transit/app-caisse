@@ -22,19 +22,23 @@ const REGION = "us-central1";
 const { defineSecret } = require("firebase-functions/params");
 const SHIPSGO_API_KEY = defineSecret("SHIPSGO_API_KEY");
 
-// Mappe le statut texte ShipsGo vers nos étapes internes de suivi.
-function mapShipsgoStatus(s) {
-    const t = String(s || "").toLowerCase();
-    if (t.includes("deliver")) return "LIVRAISON";
-    if (t.includes("discharg") || t.includes("arriv")) return "ARRIVE";
-    if (t.includes("transship") || t.includes("tranship")) return "TRANSBORDEMENT";
-    if (t.includes("sail") || t.includes("transit") || t.includes("depart")) return "EN_TRANSIT";
-    if (t.includes("load") || t.includes("gate in")) return "CHARGE";
-    if (t.includes("book") || t.includes("empty")) return "PREPARATION";
-    return null;
-}
+// Ordre de nos étapes (pour déterminer l'étape la plus avancée atteinte).
+const STEP_ORDER = ["PREPARATION", "CHARGE", "EMBARQUE", "EN_TRANSIT", "TRANSBORDEMENT", "ARRIVE", "DEDOUANE", "LIVRAISON"];
+// Mappe un code d'événement ShipsGo (API v2) vers nos étapes internes.
+const SHIPSGO_EVENT_STEP = {
+    EMSH: "PREPARATION", // Empty to shipper
+    GTIN: "CHARGE",      // Gate in (entré au port)
+    LOAD: "EMBARQUE",    // Chargé sur le navire
+    DEPA: "EN_TRANSIT",  // Départ du navire
+    TSDC: "TRANSBORDEMENT", TSLD: "TRANSBORDEMENT", TSDP: "TRANSBORDEMENT",
+    TSAR: "TRANSBORDEMENT", TSGI: "TRANSBORDEMENT", TSGO: "TRANSBORDEMENT",
+    ARRV: "ARRIVE",      // Arrivée au port
+    DISC: "ARRIVE",      // Déchargé
+    GTOU: "DEDOUANE",    // Gate out (sorti du port)
+    DLVR: "LIVRAISON", EMRE: "LIVRAISON", RETU: "LIVRAISON",
+};
 
-// Lance/rafraîchit le suivi d'un conteneur via ShipsGo. Réservé au PERSONNEL.
+// Lance/rafraîchit le suivi d'un conteneur via ShipsGo (API v2). Réservé au PERSONNEL.
 exports.shipsgoSync = onCall({ region: REGION, secrets: [SHIPSGO_API_KEY] }, async (request) => {
     const uid = request.auth && request.auth.uid;
     if (!uid) throw new HttpsError("unauthenticated", "Connexion requise.");
@@ -50,63 +54,81 @@ exports.shipsgoSync = onCall({ region: REGION, secrets: [SHIPSGO_API_KEY] }, asy
         throw new HttpsError("invalid-argument", "N° de conteneur invalide (4 lettres + 7 chiffres).");
     }
 
-    const authCode = SHIPSGO_API_KEY.value();
+    const token = SHIPSGO_API_KEY.value();
+    const HDRS = { "X-Shipsgo-User-Token": token, "Content-Type": "application/json" };
+    const BASE = "https://api.shipsgo.com/v2";
     const ref = admin.firestore().doc(`${collection}/${id}`);
     const snap = await ref.get();
     if (!snap.exists) throw new HttpsError("not-found", "Conteneur introuvable.");
     const data = snap.data() || {};
-    const BASE = "https://shipsgo.com/api/v1.2/ContainerService";
 
-    let requestId = data.shipsgoRequestId;
+    let shipmentId = data.shipsgoShipmentId;
 
-    // 1) Enregistrer chez ShipsGo si pas déjà fait (consomme 1 crédit).
-    if (!requestId) {
-        const body = new URLSearchParams({ authCode, shippingLine: "OTHERS", containerNumber: num });
-        const r = await fetch(`${BASE}/PostContainerInfo/`, {
-            method: "POST",
-            headers: { "Content-Type": "application/x-www-form-urlencoded" },
-            body: body.toString(),
+    // 1) Créer le suivi chez ShipsGo si pas déjà fait (consomme 1 crédit).
+    if (!shipmentId) {
+        const r = await fetch(`${BASE}/ocean/shipments`, {
+            method: "POST", headers: HDRS, body: JSON.stringify({ container_number: num }),
         });
         const txt = await r.text();
         if (!r.ok) throw new HttpsError("internal", `ShipsGo POST ${r.status}: ${txt.slice(0, 300)}`);
-        let parsed = null;
-        try { parsed = JSON.parse(txt); } catch (_) { /* réponse en texte brut */ }
-        requestId = (parsed && (parsed.requestId || parsed.RequestId || parsed.message)) || txt.trim();
-        await ref.update({ shipsgoRequestId: String(requestId), shipsgoStartedAt: new Date().toISOString() });
+        let j = null; try { j = JSON.parse(txt); } catch (_) { /* */ }
+        shipmentId = j && j.shipment && j.shipment.id;
+        if (!shipmentId) throw new HttpsError("internal", `ShipsGo: pas d'identifiant de suivi. ${txt.slice(0, 200)}`);
+        await ref.update({ shipsgoShipmentId: shipmentId, shipsgoStartedAt: new Date().toISOString() });
     }
 
-    // 2) Récupérer les infos de suivi.
-    const g = await fetch(`${BASE}/GetContainerInfo/?authCode=${encodeURIComponent(authCode)}&requestId=${encodeURIComponent(requestId)}&mapPoint=false`);
+    // 2) Récupérer le suivi.
+    const g = await fetch(`${BASE}/ocean/shipments/${shipmentId}`, { headers: HDRS });
     const gtxt = await g.text();
     if (!g.ok) throw new HttpsError("internal", `ShipsGo GET ${g.status}: ${gtxt.slice(0, 300)}`);
-    let info = null;
-    try { info = JSON.parse(gtxt); } catch (_) { /* non-JSON */ }
-    const row = Array.isArray(info) ? info[0] : info;
+    let body = null; try { body = JSON.parse(gtxt); } catch (_) { /* */ }
+    const sh = body && body.shipment;
+    if (!sh) throw new HttpsError("internal", "ShipsGo: réponse inattendue.");
 
-    // 3) Mise à jour du conteneur (+ réponse brute conservée pour affiner le mapping).
-    const upd = { shipsgoSyncedAt: new Date().toISOString(), shipsgoRaw: row || gtxt.slice(0, 6000) };
-    if (row) {
-        const vessel = row.Vessel || row.VesselName || row.vessel;
-        const eta = row.ETA || row.FirstETA || row.Eta || row.ContainerETA;
-        if (vessel) upd.vesselName = vessel;
-        if (eta) upd.eta = String(eta).slice(0, 10);
-        const stepKey = mapShipsgoStatus(row.Status || row.StatusName || row.status);
-        if (stepKey) {
-            const hist = Array.isArray(data.trackingHistory) ? data.trackingHistory.slice() : [];
-            if (!hist.some((h) => h.key === stepKey)) {
-                hist.push({ key: stepKey, date: new Date().toISOString(), source: "shipsgo" });
-            }
-            upd.trackingStatus = stepKey;
-            upd.trackingHistory = hist;
-        }
+    // 3) Extraire + mapper.
+    const cont = (sh.containers && sh.containers[0]) || {};
+    const movements = Array.isArray(cont.movements) ? cont.movements : [];
+    let vessel = "";
+    for (const m of movements) { if (m && m.vessel && m.vessel.name) { vessel = m.vessel.name; break; } }
+    const eta = sh.route && sh.route.port_of_discharge && sh.route.port_of_discharge.date_of_discharge;
+
+    // Étapes ATTEINTES = mouvements réels (status "ACT") mappés vers nos étapes.
+    const sgSteps = [];
+    for (const m of movements) {
+        if (!m || m.status !== "ACT") continue;
+        const key = SHIPSGO_EVENT_STEP[String(m.event || "").toUpperCase()];
+        if (key) sgSteps.push({ key, date: m.timestamp || new Date().toISOString(), source: "shipsgo" });
     }
+    // Fusion : on conserve les étapes MANUELLES non couvertes par ShipsGo.
+    const sgKeys = new Set(sgSteps.map((s) => s.key));
+    const kept = (Array.isArray(data.trackingHistory) ? data.trackingHistory : []).filter((h) => h && h.key && !sgKeys.has(h.key));
+    let history = kept.concat(sgSteps);
+    const seen = {};
+    history = history.filter((h) => { if (!h || !h.key || seen[h.key]) return false; seen[h.key] = 1; return true; });
+    history.sort((a, b) => STEP_ORDER.indexOf(a.key) - STEP_ORDER.indexOf(b.key));
+    let maxIdx = -1;
+    for (const h of history) { const i = STEP_ORDER.indexOf(h.key); if (i > maxIdx) maxIdx = i; }
+    const trackingStatus = maxIdx >= 0 ? STEP_ORDER[maxIdx] : (data.trackingStatus || "PREPARATION");
+
+    const upd = {
+        shipsgoSyncedAt: new Date().toISOString(),
+        shipsgoCarrier: (sh.carrier && sh.carrier.name) || "",
+        shipsgoMapToken: (sh.tokens && sh.tokens.map) || "",
+        shipsgoStatus: sh.status || cont.status || "",
+        trackingStatus,
+        trackingHistory: history,
+    };
+    if (vessel) upd.vesselName = vessel;
+    if (eta) upd.eta = String(eta).slice(0, 10);
     await ref.update(upd);
+
     return {
         ok: true,
-        requestId: String(requestId),
-        status: (row && (row.Status || row.StatusName || row.status)) || null,
+        shipmentId,
+        status: sh.status || cont.status || null,
         vessel: upd.vesselName || null,
         eta: upd.eta || null,
+        steps: history.length,
     };
 });
 
