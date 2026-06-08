@@ -243,8 +243,13 @@ export const SuiviConteneursView = {
             const fn = httpsCallable(functions, 'shipsgoSync');
             const res = await fn({ collection: getCollectionName('containers'), id, containerNumber: real });
             const d = (res && res.data) || {};
-            window.app.showToast && window.app.showToast(`ShipsGo : ${d.status || 'suivi lancé'} ✅`);
-            setTimeout(() => this.openDetail(id), 400);
+            const st = String(d.status || '').toUpperCase();
+            if (st === 'INPROGRESS' || st === 'PENDING' || (!d.vessel && !d.eta)) {
+                window.app.showToast && window.app.showToast('🛰️ ShipsGo récupère les données du transporteur… réessaie dans 1-2 min (sans recoût).');
+            } else {
+                window.app.showToast && window.app.showToast(`ShipsGo ✅ ${d.vessel ? d.vessel + ' — ' : ''}ETA ${d.eta || '?'}`);
+            }
+            setTimeout(() => this.openDetail(id), 600);
         } catch (e) {
             console.error('ShipsGo sync:', e);
             const msg = (e && e.message) || 'Erreur ShipsGo.';
