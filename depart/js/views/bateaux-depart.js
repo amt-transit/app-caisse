@@ -1,5 +1,6 @@
-import { db } from '../../../commun/firebase-config.js';
+import { db, functions } from '../../../commun/firebase-config.js';
 import { collection, query, onSnapshot, doc, setDoc, updateDoc, deleteDoc, writeBatch, getDocs, where, deleteField } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
+import { httpsCallable } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-functions.js";
 import { createApp, ref, reactive, computed, onMounted, onUnmounted } from "https://unpkg.com/vue@3/dist/vue.esm-browser.prod.js";
 import { getCollectionName } from '../../../commun/agencies-config.js';
 
@@ -572,8 +573,18 @@ export const BateauxDepartView = {
                                 });
                                 await batch.commit();
                                 selectedContainerIds.value = new Set();
+                                // Lancer AUTOMATIQUEMENT le suivi ShipsGo pour chaque conteneur
+                                // (en arrière-plan ; 1er appel = 1 crédit/conteneur, puis gratuit).
+                                try {
+                                    const sync = httpsCallable(functions, 'shipsgoSync');
+                                    const coll = getCollectionName('containers');
+                                    ids.forEach(cid => {
+                                        sync({ collection: coll, id: cid, containerNumber: numByCid[cid] })
+                                            .catch(e => console.warn('ShipsGo auto:', cid, e && e.message));
+                                    });
+                                } catch (e) { console.warn('ShipsGo auto-trigger:', e); }
                             }
-                            globalApp.showToast(`Nouveau bateau créé${ids.length ? ` (${ids.length} conteneur(s) rattaché(s), n° validés ✅)` : ''}.`, "success");
+                            globalApp.showToast(`Nouveau bateau créé${ids.length ? ` (${ids.length} conteneur(s) — suivi ShipsGo lancé 🛰️)` : ''}.`, "success");
                         }
                         closeBoatModal();
                     } catch(e) {

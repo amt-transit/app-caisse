@@ -111,7 +111,26 @@ export const SuiviConteneursView = {
         this.unsub = onSnapshot(collection(db, col), snap => {
             this.containers = snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(c => !c.isDeleted);
             this.applyFilters();
+            if (!this._autoRefreshed) { this._autoRefreshed = true; this.autoRefreshShipsgo(); }
         }, err => console.error('Suivi conteneurs — écoute:', err));
+    },
+
+    // Rafraîchit en arrière-plan (GET ShipsGo, SANS crédit) les conteneurs déjà suivis
+    // mais non peuplés (ex. "INPROGRESS" après création du bateau) ou anciens (> 6 h).
+    async autoRefreshShipsgo() {
+        const coll = getCollectionName('containers');
+        const STALE = 6 * 3600 * 1000, now = Date.now();
+        const need = this.containers.filter(c =>
+            c.shipsgoShipmentId && (c.trackingStatus || 'PREPARATION') !== 'LIVRAISON' &&
+            /^[A-Z]{4}[0-9]{7}$/.test(String(c.realContainerNo || '').toUpperCase()) &&
+            (!c.vesselName || !c.eta || !c.shipsgoSyncedAt || (now - new Date(c.shipsgoSyncedAt).getTime()) > STALE)
+        ).slice(0, 15);
+        if (!need.length) return;
+        const sync = httpsCallable(functions, 'shipsgoSync');
+        for (const c of need) {
+            try { await sync({ collection: coll, id: c.id, containerNumber: c.realContainerNo }); }
+            catch (e) { console.warn('ShipsGo refresh:', c.id, e && e.message); }
+        }
     },
 
     applyFilters() {

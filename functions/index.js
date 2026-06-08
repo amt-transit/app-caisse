@@ -110,6 +110,7 @@ exports.shipsgoSync = onCall({ region: REGION, secrets: [SHIPSGO_API_KEY] }, asy
     let vessel = "";
     for (const m of movements) { if (m && m.vessel && m.vessel.name) { vessel = m.vessel.name; break; } }
     const eta = sh.route && sh.route.port_of_discharge && sh.route.port_of_discharge.date_of_discharge;
+    const dep = sh.route && sh.route.port_of_loading && sh.route.port_of_loading.date_of_loading;
 
     // Étapes ATTEINTES = mouvements réels (status "ACT") mappés vers nos étapes.
     const sgSteps = [];
@@ -138,7 +139,8 @@ exports.shipsgoSync = onCall({ region: REGION, secrets: [SHIPSGO_API_KEY] }, asy
         trackingHistory: history,
     };
     if (vessel) upd.vesselName = vessel;
-    if (eta) upd.eta = String(eta).slice(0, 10);
+    if (eta) { upd.eta = String(eta).slice(0, 10); upd.arrivalDate = upd.eta; }
+    if (dep) upd.departureDate = String(dep).slice(0, 10);
     await ref.update(upd);
 
     return {
@@ -147,6 +149,7 @@ exports.shipsgoSync = onCall({ region: REGION, secrets: [SHIPSGO_API_KEY] }, asy
         status: sh.status || cont.status || null,
         vessel: upd.vesselName || null,
         eta: upd.eta || null,
+        departureDate: upd.departureDate || null,
         steps: history.length,
     };
 });
