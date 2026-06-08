@@ -291,6 +291,19 @@ export const ToutesLesFacturesView = {
     async loadContainers() {
         try {
             const containersSnap = await getDocs(collection(db, getCollectionName("containers")));
+            // Carte « code conteneur -> dates/navire » (alimentée par ShipsGo) pour
+            // pré-remplir départ/arrivée dans « Voir facture » sans saisie manuelle.
+            this.containersByCode = {};
+            containersSnap.docs.forEach(d => {
+                const data = d.data() || {};
+                const info = {
+                    departureDate: data.departureDate || '',
+                    arrivalDate: data.arrivalDate || data.eta || '',
+                    vesselName: data.vesselName || '',
+                };
+                this.containersByCode[d.id] = info;
+                if (data.number) this.containersByCode[data.number] = info;
+            });
             const select = document.getElementById('containerFilter');
             if (select) {
                 const options = containersSnap.docs.map(doc => `<option value="${doc.id}">${doc.data().number || doc.id}</option>`);
@@ -775,14 +788,21 @@ export const ToutesLesFacturesView = {
                 // les pièces réellement parties / arrivées / livrées les portent.
                 const lblShowDates = (lblStatusClass !== 'colis-paris' && lblStatusClass !== 'colis-pending');
 
+                // Dates départ/arrivée : on PRIVILÉGIE celles du CONTENEUR (remplies
+                // automatiquement par ShipsGo) ; à défaut, celles du dossier (livraison).
+                const ctnMap = (window.app.views.toutesLesFactures && window.app.views.toutesLesFactures.containersByCode) || {};
+                const ctnInfo = ctnMap[lblContainer] || null;
+                const depDate = (ctnInfo && ctnInfo.departureDate) || liv.departureDate || '';
+                const arrDate = (ctnInfo && ctnInfo.arrivalDate) || liv.arrivalDate || '';
+
                 trackingRows += `
                     <tr>
                         <td style="font-weight: 900; font-family: monospace;"><a href="#" onclick="event.preventDefault(); window.app.views.toutesLesFactures.showSubPackageHistory('${liv.id}', '${lbl}');" style="color: #3b82f6; text-decoration: underline;" title="Voir l'historique des scans">${lbl}</a></td>
                         <td class="modal-table__desc">${specificDesc}</td>
                         <td><span class="status-badge ${lblStatusClass}">${lblStatusDisplay}</span></td>
                         <td><span style="background:#f1f5f9; padding:4px 8px; border-radius:6px; font-weight:600;">${lblContainer}</span></td>
-                        <td>${lblShowDates && liv.departureDate ? new Date(liv.departureDate).toLocaleDateString('fr-FR') : '-'}</td>
-                        <td>${lblShowDates && liv.arrivalDate ? new Date(liv.arrivalDate).toLocaleDateString('fr-FR') : '-'}</td>
+                        <td>${lblShowDates && depDate ? new Date(depDate).toLocaleDateString('fr-FR') : '-'}</td>
+                        <td>${lblShowDates && arrDate ? new Date(arrDate).toLocaleDateString('fr-FR') : '-'}</td>
                     </tr>
                 `;
             });
