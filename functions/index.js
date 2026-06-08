@@ -5,6 +5,7 @@
 // session valide. On s'aligne donc sur l'API v2.
 const { onCall, onRequest, HttpsError } = require("firebase-functions/v2/https");
 const { onDocumentCreated, onDocumentUpdated } = require("firebase-functions/v2/firestore");
+const { onSchedule } = require("firebase-functions/v2/scheduler");
 const admin = require("firebase-admin");
 admin.initializeApp();
 
@@ -53,7 +54,12 @@ exports.shipsgoSync = onCall({ region: REGION, secrets: [SHIPSGO_API_KEY] }, asy
     if (!/^[A-Z]{4}[0-9]{7}$/.test(num)) {
         throw new HttpsError("invalid-argument", "N° de conteneur invalide (4 lettres + 7 chiffres).");
     }
+    return await syncOneContainer(collection, id, num);
+});
 
+// CŒUR du suivi ShipsGo, partagé par le bouton manuel ET le rafraîchissement
+// quotidien automatique. La clé reste un SECRET ; un GET ne consomme pas de crédit.
+async function syncOneContainer(collection, id, num) {
     const token = SHIPSGO_API_KEY.value();
     const HDRS = { "X-Shipsgo-User-Token": token, "Content-Type": "application/json" };
     const BASE = "https://api.shipsgo.com/v2";
@@ -151,8 +157,33 @@ exports.shipsgoSync = onCall({ region: REGION, secrets: [SHIPSGO_API_KEY] }, asy
         eta: upd.eta || null,
         departureDate: upd.departureDate || null,
         steps: history.length,
+        trackingStatus,
     };
-});
+}
+
+// RAFRAÎCHISSEMENT QUOTIDIEN : met à jour tous les conteneurs suivis encore en
+// cours, dans toutes les routes (collections "containers*"), sans intervention.
+exports.shipsgoRefreshDaily = onSchedule(
+    { schedule: "every day 06:00", timeZone: "Africa/Abidjan", region: REGION, secrets: [SHIPSGO_API_KEY] },
+    async () => {
+        const cols = await admin.firestore().listCollections();
+        const containerCols = cols.filter((c) => c.id === "containers" || c.id.startsWith("containers_"));
+        let done = 0, fail = 0;
+        for (const col of containerCols) {
+            const snap = await col.get();
+            for (const d of snap.docs) {
+                const data = d.data() || {};
+                if (data.isDeleted || !data.shipsgoShipmentId) continue;
+                if ((data.trackingStatus || "") === "LIVRAISON") continue; // voyage terminé
+                const num = String(data.realContainerNo || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+                if (!/^[A-Z]{4}[0-9]{7}$/.test(num)) continue;
+                try { await syncOneContainer(col.id, d.id, num); done++; }
+                catch (e) { fail++; console.warn("refreshDaily", col.id, d.id, e && e.message); }
+            }
+        }
+        console.log(`shipsgoRefreshDaily: ${done} maj, ${fail} echec(s).`);
+    }
+);
 
 // VÉRIFICATION PUBLIQUE D'UNE FACTURE (anti-falsification).
 // Le QR code d'une facture PDF pointe vers verify.html, qui appelle cette
