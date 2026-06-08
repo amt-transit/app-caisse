@@ -15,6 +15,7 @@ import { DemandesClientView } from './commun/vues/demandes-client.js';
 import { ChatClientsView } from './commun/vues/messagerie-clients.js';
 import { ClientsPotentielsView } from './commun/vues/clients-potentiels.js';
 import { ReceptionColisView } from './commun/vues/reception-colis.js';
+import { SuiviConteneursView } from './depart/js/views/suivi-conteneurs.js';
 
 // --- PARIS VIEWS (Départ) ---
 import { DashboardView as ParisDashboardView } from './depart/js/views/tableau-de-bord.js';
@@ -95,7 +96,7 @@ export const app = {
         'appointment-new': 'rdv', 'appointments-list': 'rdv', 'appointments-pending': 'rdv', 'appointments-calendar': 'rdv',
         'program-new': 'programmes', 'program-my': 'programmes', 'program-history': 'programmes', 'drivers': 'programmes', 'departures-calendar': 'programmes',
         'quotes-list': 'devis', 'quote-new': 'devis', 'quote-requests': 'devis',
-        'confection-containers': 'chargement', 'loading-boats': 'chargement', 'arrivals-boats': 'chargement',
+        'confection-containers': 'chargement', 'loading-boats': 'chargement', 'arrivals-boats': 'chargement', 'suivi-conteneurs': 'chargement',
         'scan-warehouse': 'scan', 'scan-container': 'scan', 'scan-depart-vol': 'scan', 'scan-classic': 'scan', 'scan-history': 'scan',
         'scan-dechargement': 'scan', 'scan-livraison': 'scan', 'scan-livrer': 'scan',
         'clients-list': 'clients', 'clients-app': 'clients', 'clients-analytics': 'clients', 'clients': 'logistique',
@@ -830,7 +831,7 @@ export const app = {
             'parrainage': 'Réseau Partenaires', 'chine-dashboard': 'Tableau de Bord Asie',
             'finance-cashier': 'Caisse globale', 'finance-cheques': 'Liste des chèques', 'finance-expenses': 'Dépenses',
             'index': 'Saisie de Caisse', 'confirmation': 'Confirmation Saisies', 'history': 'Historique Opérations', 'other-income': 'Autres Entrées', 'expenses': 'Dépenses Caisse', 'bank': 'Mouvements Banque', 'audit': 'Audit Saisies',
-            'livraison': 'LIVRAISON', 'voiture': 'Gestion Véhicules', 'magasinage': 'Magasinage', 'points': 'Points Utilisateurs', 'reception-colis': 'Réception Colis',
+            'livraison': 'LIVRAISON', 'voiture': 'Gestion Véhicules', 'magasinage': 'Magasinage', 'points': 'Points Utilisateurs', 'reception-colis': 'Réception Colis', 'suivi-conteneurs': 'Suivi Conteneurs',
             'admin-panel': 'Gestion des agents', 'salaire': 'Salaire & RH', 'comptejb': 'Livre de Caisse JB', 
             'settings-agency': 'Paramètres Agence', 'settings-company': 'Paramètres Entreprise', 'settings-software': 'Paramètres logiciel', 'settings-design': 'Apparence & Menus', 'settings-sms': 'Configuration SMS', 'settings-notifications': 'Configuration notifications', 'settings-menus': 'Gestion menus', 'settings-agents': 'Gestion des agents', 'settings-agencies': 'Gestion des agences', 'settings-roles': 'Rôles & Permissions', 'settings-appointments': 'Paramètres RDV', 'settings-profile': 'Mon profil',
             'stock-list': 'Stock produits',
@@ -950,6 +951,7 @@ export const app = {
             'expenses': () => ExpensesView.render(this, container),
             'magasinage': () => MagasinageView.render(this, container),
             'reception-colis': () => ReceptionColisView.render(this, container),
+            'suivi-conteneurs': () => SuiviConteneursView.render(this, container),
             'livraison': () => LivraisonView.render(this, container),
             'audit': () => AuditView.render(this, container),
             'history': () => HistoryView.render(this, container),
