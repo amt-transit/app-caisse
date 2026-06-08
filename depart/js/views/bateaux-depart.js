@@ -153,7 +153,7 @@ export const BateauxDepartView = {
                     <!-- DROITE : BATEAUX EN CONFECTION -->
                     <div class="panel panel--right">
                         <div class="panel__header panel__header--navy">
-                            <h2 class="panel__title"><span>🚢</span> Bateaux en confection <span class="badge">{{ confBoats.length }}</span></h2>
+                            <h2 class="panel__title" style="color:#fff;"><span>🚢</span> Bateaux en confection <span class="badge">{{ confBoats.length }}</span></h2>
                         </div>
                         <div class="panel__body">
                             <div class="new-bateau-form">
@@ -268,6 +268,19 @@ export const BateauxDepartView = {
                                     <label style="font-size: 12px; font-weight: 600; color: #475569; display: block; margin-bottom: 6px;">Date Arrivée (ETA)</label>
                                     <input type="date" v-model="boatForm.arrivalDate" class="filter-input" style="width: 100%; box-sizing: border-box;">
                                 </div>
+                            </div>
+                            <div v-if="!editingBoatId && selectedContainers.length" class="form-group" style="margin-bottom: 5px; border-top:1px dashed #e2e8f0; padding-top:14px;">
+                                <label style="font-size: 12px; font-weight: 700; color: #475569; display: block; margin-bottom: 8px;">📦 Conteneurs à embarquer — saisis le N° réel de chacun *</label>
+                                <div style="display:flex; flex-direction:column; gap:8px; max-height:210px; overflow:auto;">
+                                    <div v-for="c in selectedContainers" :key="c.id" style="display:flex; align-items:center; gap:10px;">
+                                        <span class="mono" style="min-width:78px; font-weight:700; color:#1A3553;">{{ c.number || c.id }}</span>
+                                        <input type="text" :value="getRealNo(c)" @input="setRealNo(c, $event.target.value)" placeholder="N° réel (ex. MSKU1234567)" maxlength="11" class="mono"
+                                               style="flex:1; padding:8px 10px; border:2px solid #cbd5e1; border-radius:6px; text-transform:uppercase; box-sizing:border-box;"
+                                               :style="{ borderColor: getRealNo(c) ? (isRealValid(c) ? '#10b981' : '#ef4444') : '#cbd5e1' }">
+                                        <span v-if="getRealNo(c)" :style="{ color: isRealValid(c) ? '#10b981' : '#ef4444', fontWeight: 800, minWidth: '14px' }">{{ isRealValid(c) ? '✓' : '✗' }}</span>
+                                    </div>
+                                </div>
+                                <div style="font-size:11px; color:#64748b; margin-top:6px;">Format : 4 lettres + 7 chiffres. Un n° invalide empêche la création du bateau.</div>
                             </div>
                         </div>
                         <div class="bd-modal-footer">
@@ -501,9 +514,28 @@ export const BateauxDepartView = {
                         globalApp.showToast("La compagnie maritime est obligatoire.", "error");
                         return;
                     }
-                    
+
+                    // CRÉATION avec conteneurs sélectionnés : on VALIDE leurs N° réels
+                    // AVANT de créer. Mauvais/vide => bateau NON créé.
+                    const ids = (!editingBoatId.value) ? Array.from(selectedContainerIds.value) : [];
+                    const RE = /^[A-Z]{4}[0-9]{7}$/; // n° conteneur ISO : 4 lettres + 7 chiffres
+                    const numByCid = {};
+                    if (ids.length) {
+                        const bad = [];
+                        ids.forEach(cid => {
+                            const c = containers.value.find(x => x.id === cid) || { id: cid };
+                            const real = getRealNo(c).toUpperCase().replace(/[^A-Z0-9]/g, '');
+                            numByCid[cid] = real;
+                            if (!RE.test(real)) bad.push(c.number || c.id || cid);
+                        });
+                        if (bad.length) {
+                            globalApp.showToast(`N° de conteneur invalide (4 lettres + 7 chiffres, ex. MSKU1234567) : ${bad.join(', ')} — bateau NON créé.`, "error");
+                            return;
+                        }
+                    }
+
                     saving.value = true;
-                    
+
                     const data = {
                         reference: boatForm.reference || `BT-${Date.now().toString().slice(-6)}`,
                         company: boatForm.company,
@@ -511,7 +543,7 @@ export const BateauxDepartView = {
                         departureDate: boatForm.departureDate,
                         arrivalDate: boatForm.arrivalDate,
                     };
-                    
+
                     try {
                         if (editingBoatId.value) {
                             await updateDoc(doc(db, getCollectionName("boats"),editingBoatId.value), data);
@@ -519,8 +551,29 @@ export const BateauxDepartView = {
                         } else {
                             data.status = 'EN_CONFECTION';
                             data.createdAt = new Date().toISOString();
-                            await setDoc(doc(collection(db, getCollectionName("boats"))), data);
-                            globalApp.showToast("Nouveau bateau créé.", "success");
+                            const newRef = doc(collection(db, getCollectionName("boats")));
+                            await setDoc(newRef, data);
+                            // Rattacher les conteneurs sélectionnés (n° déjà validés) + le navire.
+                            if (ids.length) {
+                                const batch = writeBatch(db);
+                                ids.forEach(cid => {
+                                    const c = containers.value.find(x => x.id === cid) || {};
+                                    const hist = Array.isArray(c.trackingHistory) ? c.trackingHistory.slice() : [];
+                                    if (!hist.some(h => h.key === 'CHARGE')) hist.push({ key: 'CHARGE', date: new Date().toISOString() });
+                                    batch.update(doc(db, getCollectionName("containers"), cid), {
+                                        boatId: newRef.id,
+                                        realContainerNo: numByCid[cid],
+                                        vesselName: data.name || '',
+                                        company: data.company || '',
+                                        eta: data.arrivalDate || '',
+                                        trackingStatus: 'CHARGE',
+                                        trackingHistory: hist
+                                    });
+                                });
+                                await batch.commit();
+                                selectedContainerIds.value = new Set();
+                            }
+                            globalApp.showToast(`Nouveau bateau créé${ids.length ? ` (${ids.length} conteneur(s) rattaché(s), n° validés ✅)` : ''}.`, "success");
                         }
                         closeBoatModal();
                     } catch(e) {
@@ -551,18 +604,40 @@ export const BateauxDepartView = {
                     }
                 };
                 
+                // Saisie du N° RÉEL de conteneur (compagnie) par conteneur, pré-rempli
+                // depuis l'existant ; validé au moment de l'ajout au bateau.
+                const realNoDraft = reactive({});
+                const getRealNo = (c) => (realNoDraft[c.id] !== undefined ? realNoDraft[c.id] : (c.realContainerNo || ''));
+                const setRealNo = (c, val) => { realNoDraft[c.id] = String(val || '').toUpperCase().replace(/[^A-Z0-9]/g, ''); };
+                const isRealValid = (c) => /^[A-Z]{4}[0-9]{7}$/.test(getRealNo(c).toUpperCase().replace(/[^A-Z0-9]/g, ''));
+                const selectedContainers = computed(() => availableContainers.value.filter(c => selectedContainerIds.value.has(c.id)));
+
                 const addToBoat = async (boatId) => {
                     if (selectedContainerIds.value.size === 0) return;
-                    
+                    const boat = boats.value.find(b => b.id === boatId);
                     try {
                         const batch = writeBatch(db);
-                        selectedContainerIds.value.forEach(cid => {
-                            batch.update(doc(db, getCollectionName("containers"),cid), { boatId: boatId });
+                        Array.from(selectedContainerIds.value).forEach(cid => {
+                            const c = containers.value.find(x => x.id === cid) || {};
+                            const real = getRealNo(c).toUpperCase().replace(/[^A-Z0-9]/g, '');
+                            const hist = Array.isArray(c.trackingHistory) ? c.trackingHistory.slice() : [];
+                            if (!hist.some(h => h.key === 'CHARGE')) hist.push({ key: 'CHARGE', date: new Date().toISOString() });
+                            const upd = {
+                                boatId: boatId,
+                                vesselName: (boat && boat.name) || '',
+                                company: (boat && boat.company) || '',
+                                eta: (boat && boat.arrivalDate) || '',
+                                trackingStatus: 'CHARGE',
+                                trackingHistory: hist
+                            };
+                            if (real) upd.realContainerNo = real; // n° si déjà saisi (sinon à compléter dans Suivi)
+                            batch.update(doc(db, getCollectionName("containers"), cid), upd);
                         });
                         await batch.commit();
                         selectedContainerIds.value = new Set();
                         globalApp.showToast("Conteneurs ajoutés au bateau.", "success");
                     } catch(e) {
+                        console.error('[bateaux-depart] addToBoat —', e);
                         globalApp.showToast("Erreur d'ajout.", "error");
                     }
                 };
@@ -705,6 +780,7 @@ export const BateauxDepartView = {
                     formatDate, formatDateTime, getDossiersCount, getBoatContainers,
                     toggleSelection, selectAllLeft, openBoatModal, closeBoatModal, saveBoat,
                     deleteBoat, addToBoat, removeFromBoat, registerBoat, unRegisterBoat, loadData,
+                    getRealNo, setRealNo, isRealValid, selectedContainers,
                     colisBoatId, colisBoatRef, openColis, getBoatParcels, getBoatPieces, pieceStatus, pieceStatusStyle
                 };
             }
