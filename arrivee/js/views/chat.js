@@ -145,7 +145,7 @@ export const ChatView = {
             const agencyLabel = msg.agency === 'paris' ? '🇫🇷 PARIS' : (msg.agency === 'abidjan' ? '🇨🇮 ABIDJAN' : 'GLOBAL');
             
             const formattedText = this.formatMessageText(msg.text || '');
-            const imageHtml = msg.imageUrl ? `<img src="${msg.imageUrl}" class="chat-img-preview" onclick="window.open('${msg.imageUrl}', '_blank')">` : '';
+            const imageHtml = msg.imageUrl ? `<img src="${msg.imageUrl}" loading="lazy" class="chat-img-preview" onclick="window.open('${msg.imageUrl}', '_blank')">` : '';
 
             return `
                 <div class="chat-msg ${isMe ? 'chat-msg--me' : 'chat-msg--other'}">

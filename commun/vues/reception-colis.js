@@ -485,7 +485,7 @@ export const ReceptionColisView = {
         const photoBlock = `
             <div style="margin:12px 0; display:flex; align-items:center; gap:14px; flex-wrap:wrap;">
                 ${r.photoUrl
-                    ? `<a href="${r.photoUrl}" target="_blank" rel="noopener"><img src="${r.photoUrl}" alt="Photo du colis" style="width:92px; height:92px; border-radius:10px; border:1px solid #e2e8f0; object-fit:cover;"></a>`
+                    ? `<a href="${r.photoUrl}" target="_blank" rel="noopener"><img src="${r.photoUrl}" loading="lazy" alt="Photo du colis" style="width:92px; height:92px; border-radius:10px; border:1px solid #e2e8f0; object-fit:cover;"></a>`
                     : `<div style="width:92px; height:92px; border-radius:10px; border:1px dashed #cbd5e1; display:flex; align-items:center; justify-content:center; color:#94a3b8; font-size:26px;">📷</div>`}
                 ${editable ? `<label style="display:inline-flex; align-items:center; gap:8px; cursor:pointer; background:#f1f5f9; border:1px solid #d4dbe4; color:#334155; padding:8px 14px; border-radius:8px; font-weight:600; font-size:13px;">📷 ${r.photoUrl ? 'Changer la photo' : 'Ajouter une photo'}<input type="file" accept="image/*" onchange="window.app.views.receptionColis.uploadPhoto('${r.id}', this)" style="display:none;"></label>` : ''}
             </div>`;
