@@ -165,8 +165,8 @@ export const SuiviConteneursView = {
                     <td style="color:#64748b;">${c.destination || c.destinationAgency || '—'}</td>
                     <td>${stepBadge(statut)}</td>
                     <td style="color:#64748b; white-space:nowrap;">${c.eta || '—'}</td>
-                    <td style="text-align:center; white-space:nowrap;" onclick="event.stopPropagation()">
-                        ${next ? `<button class="sc-act" title="Passer à : ${next.label}" onclick="window.app.views.suiviConteneurs.advance('${c.id}')">→ ${next.icon}</button>` : ''}
+                    <td style="text-align:center; white-space:nowrap;">
+                        ${c.shipsgoShipmentId ? '<span title="Suivi automatique ShipsGo actif" style="color:#0e7490;">🛰️</span>' : '<span title="Suivi non lancé" style="color:#cbd5e1;">—</span>'}
                     </td>
                 </tr>`;
         }).join('');
@@ -185,7 +185,7 @@ export const SuiviConteneursView = {
             <div style="display:flex; align-items:flex-start; margin:16px 0 6px; overflow-x:auto; padding-bottom:4px;">
                 ${STEPS.map((s, i) => {
                     const done = i <= curIdx, isCur = i === curIdx;
-                    return `<div style="flex:1; min-width:78px; text-align:center; position:relative; cursor:pointer;" title="Marquer : ${s.label}" onclick="window.app.views.suiviConteneurs.setStep('${c.id}','${s.key}')">
+                    return `<div style="flex:1; min-width:78px; text-align:center; position:relative;" title="${s.label}">
                         ${i > 0 ? `<div style="position:absolute; top:14px; left:-50%; width:100%; height:3px; background:${i <= curIdx ? 'var(--primary-color,#1A3553)' : '#e2e8f0'};"></div>` : ''}
                         <div style="position:relative; z-index:1; width:30px; height:30px; margin:0 auto; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:13px; background:${done ? 'var(--primary-color,#1A3553)' : '#e9edf2'}; color:${done ? '#fff' : '#94a3b8'};${isCur ? ' box-shadow:0 0 0 4px rgba(26,53,83,.15);' : ''}">${done && !isCur ? '✓' : s.icon}</div>
                         <div style="font-size:9.5px; margin-top:5px; color:${isCur ? 'var(--primary-color,#1A3553)' : '#94a3b8'}; font-weight:${isCur ? '700' : '500'}; line-height:1.2;">${s.label}</div>
@@ -214,7 +214,7 @@ export const SuiviConteneursView = {
                     </div>
 
                     <h4 style="margin:18px 0 4px;">Voyage</h4>
-                    <p style="margin:0 0 4px; font-size:12px; color:#64748b;">Clique une étape pour la marquer comme atteinte (avec la date du jour).</p>
+                    <p style="margin:0 0 4px; font-size:12px; color:#64748b;">🛰️ Étapes mises à jour <strong>automatiquement</strong> par le suivi ShipsGo (lecture seule).</p>
                     ${stepper}
 
                     <h4 style="margin:16px 0 6px;">Historique</h4>
