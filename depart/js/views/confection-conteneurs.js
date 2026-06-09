@@ -180,7 +180,7 @@ export const ConfectionConteneursView = {
                                     <div style="height:12px; background:#e2e8f0; border-radius:7px; overflow:hidden;">
                                         <div :style="{ width: Math.min(100, currentContainerCbm/68*100) + '%', height:'100%', background: (currentContainerCbm/68) > 0.98 ? '#ef4444' : ((currentContainerCbm/68) > 0.8 ? '#f59e0b' : '#16a34a'), transition:'width .3s' }"></div>
                                     </div>
-                                    <div style="font-size:12px; color:#475569; margin-top:4px; font-weight:600;">📦 {{ currentContainerTotalColis }} sous-colis · {{ currentContainerCbm.toFixed(1) }} / 68 CBM · {{ Math.round(currentContainerCbm/68*100) }}% rempli</div>
+                                    <div style="font-size:12px; color:#475569; margin-top:4px; font-weight:600;">📦 {{ currentContainerTotalColis }} sous-colis · {{ currentContainerCbm.toFixed(1) }} / 68 CBM · {{ Math.round(currentContainerCbm/68*100) }}% rempli<span v-if="currentContainerCbm > 68" style="color:#fff; background:#ef4444; padding:1px 8px; border-radius:10px; margin-left:8px;">⚠️ DÉPASSEMENT ({{ (currentContainerCbm - 68).toFixed(1) }} CBM de trop)</span></div>
                                 </div>
                                 <div class="ctn-actions">
                                     <button class="btn-action btn-action--add" type="button" @click="addSelectedToContainer" :disabled="selectedAvailableIds.length === 0">➕ Ajouter ({{ selectedAvailableIds.length }})</button>

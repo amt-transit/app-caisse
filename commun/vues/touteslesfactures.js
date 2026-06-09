@@ -1647,6 +1647,12 @@ export const ToutesLesFacturesView = {
         // sur la meme grille que « Facture Aerien - Paris » (mode valeur/poids,
         // dimensions, parfum/alcool, poids volume).
         this.isEditAerien = (inv.modeExpedition === 'aerien');
+        // Modèle CHINE maritime (CBM) : édition au VOLUME (comme la création), pas au P.U.
+        // = maritime + CFA. Tarif/m³ effectif dérivé de la facture (prix / volume).
+        this.isEditCbm = !this.isEditAerien && !isEur;
+        this._cbmChine = (parseFloat(inv.volumeCBM) > 0 && parseFloat(inv.prix) > 0)
+            ? (parseFloat(inv.prix) / parseFloat(inv.volumeCBM))
+            : 250000;
         this.editItems = inv.items && Array.isArray(inv.items) && inv.items.length > 0
             ? JSON.parse(JSON.stringify(inv.items))
             : [{ id: Date.now(), desc: inv.description || '', qty: 1, pu: total * (isEur ? 1 : TAUX), total: total * (isEur ? 1 : TAUX), vol: inv.volumeCBM || 0 }];
@@ -1664,6 +1670,12 @@ export const ToutesLesFacturesView = {
                 if (typeof it.parfum !== 'boolean') it.parfum = false;
                 if (it.pu == null) it.pu = '';
             });
+        }
+
+        // Modèle CHINE maritime : recalcule le total de chaque ligne au CBM
+        // (qté × CBM × tarif/m³) — les items stockés ont souvent total=0.
+        if (this.isEditCbm) {
+            this.editItems.forEach(it => { it.total = (parseFloat(it.qty) || 0) * (parseFloat(it.vol) || 0) * (this._cbmChine || 0); });
         }
 
         // Note : On gère l'affichage en CFA si on est à Abidjan pour le Edit, donc this.editItems est en CFA pour abidjan, EUR pour Paris
@@ -1983,6 +1995,38 @@ export const ToutesLesFacturesView = {
             document.querySelectorAll('.edit-item-lrg').forEach(el => el.addEventListener('input', (e) => this.updateEditItem(e, 'lrg')));
             document.querySelectorAll('.edit-item-haut').forEach(el => el.addEventListener('input', (e) => this.updateEditItem(e, 'haut')));
             document.querySelectorAll('.edit-item-parfum').forEach(el => el.addEventListener('change', (e) => this.updateEditItem(e, 'parfum')));
+        } else if (this.isEditCbm) {
+            // Modèle CHINE maritime : facturation au VOLUME (CBM U × qté × tarif/m³).
+            container.innerHTML = this.editItems.map((item) => `
+                <div class="form-grid" style="display: grid; grid-template-columns: 2fr 0.5fr 1fr 1fr auto; gap: 10px; align-items: end; background: #f8fafc; padding: 12px; border-radius: 8px; margin-bottom: 10px; border: 1px solid #e2e8f0;">
+                    <div>
+                        <label style="font-size: 11px; font-weight: 600; color: #475569; display: block; margin-bottom: 4px;">Description</label>
+                        <div style="position: relative;">
+                            <input type="text" class="edit-item-desc" id="tlfEditItem_${item.id}" data-id="${item.id}" value="${item.desc}" autocomplete="off" style="width: 100%; padding: 8px; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box; outline: none;">
+                            <ul id="tlfEditItemSuggestions_${item.id}" class="autocomplete-suggestions"></ul>
+                        </div>
+                    </div>
+                    <div>
+                        <label style="font-size: 11px; font-weight: 600; color: #475569; display: block; margin-bottom: 4px;">Qté</label>
+                        <input type="number" class="edit-item-qty" data-id="${item.id}" value="${item.qty}" min="1" style="width: 100%; padding: 8px; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box; text-align: center; outline: none;">
+                    </div>
+                    <div>
+                        <label style="font-size: 11px; font-weight: 600; color: #475569; display: block; margin-bottom: 4px;">CBM U (m³) *</label>
+                        <input type="number" class="edit-item-vol" data-id="${item.id}" value="${item.vol}" min="0" step="0.001" style="width: 100%; padding: 8px; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box; text-align: right; outline: none;">
+                    </div>
+                    <div>
+                        <label style="font-size: 11px; font-weight: 600; color: #475569; display: block; margin-bottom: 4px;">Total</label>
+                        <input type="text" value="${this.formatMoneyLocal(item.total)}" readonly style="width: 100%; padding: 8px; border: 1px solid #e2e8f0; border-radius: 6px; box-sizing: border-box; text-align: right; background: #e2e8f0; font-weight: bold; outline: none; color: #0f172a;">
+                    </div>
+                    <button class="btn btn-outline" onclick="window.app.views.toutesLesFactures.removeEditItemRow(${item.id})" style="padding: 8px 12px; border-color: #fecaca; color: #ef4444; background: white; border-radius: 6px; cursor: pointer;" title="Supprimer" ${this.editItems.length <= 1 ? 'disabled' : ''}>
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </div>
+            `).join('');
+
+            document.querySelectorAll('.edit-item-desc').forEach(el => el.addEventListener('input', (e) => this.updateEditItem(e, 'desc')));
+            document.querySelectorAll('.edit-item-qty').forEach(el => el.addEventListener('input', (e) => this.updateEditItem(e, 'qty')));
+            document.querySelectorAll('.edit-item-vol').forEach(el => el.addEventListener('input', (e) => this.updateEditItem(e, 'vol')));
         } else {
             container.innerHTML = this.editItems.map((item, index) => `
                 <div class="form-grid" style="display: grid; grid-template-columns: 2fr 0.5fr 1fr 1fr auto; gap: 10px; align-items: end; background: #f8fafc; padding: 12px; border-radius: 8px; margin-bottom: 10px; border: 1px solid #e2e8f0;">
@@ -2074,15 +2118,19 @@ export const ToutesLesFacturesView = {
             if (this.productsData && this.productsData.has(item.desc)) {
                 const prod = this.productsData.get(item.desc);
                 item.pu = parseFloat(prod.price) || 0;
+                if (this.isEditCbm) item.vol = parseFloat(prod.dim) || parseFloat(prod.volume) || item.vol || 0;
                 const row = e.target.closest('.form-grid');
                 if (row) {
                     const puInput = row.querySelector('.edit-item-pu');
                     if (puInput) puInput.value = item.pu;
+                    const volInput = row.querySelector('.edit-item-vol');
+                    if (volInput) volInput.value = item.vol;
                 }
             }
         }
         if (field === 'qty') item.qty = parseInt(e.target.value) || 0;
         if (field === 'pu') item.pu = parseFloat(e.target.value) || 0;
+        if (field === 'vol') item.vol = parseFloat(e.target.value) || 0;
 
         // Aerien : champs supplementaires + ajout/retrait dynamique des inputs
         // (P.U apparait en mode 'valeur', dimensions en mode 'poids').
@@ -2126,7 +2174,10 @@ export const ToutesLesFacturesView = {
             return;
         }
 
-        item.total = item.qty * item.pu;
+        // Modèle CHINE maritime : total = qté × CBM × tarif/m³ ; sinon qté × P.U.
+        item.total = this.isEditCbm
+            ? (parseFloat(item.qty) || 0) * (parseFloat(item.vol) || 0) * (this._cbmChine || 0)
+            : item.qty * item.pu;
 
         const row = e.target.closest('.form-grid');
         if (row) {
@@ -2173,6 +2224,16 @@ export const ToutesLesFacturesView = {
         
         const isEur = isEurAgency();
         const TAUX = isEur ? CONSTANTS.TAUX_CONVERSION : 1;
+
+        // Modèle CHINE maritime : volume (CBM) obligatoire sur CHAQUE ligne (comme à
+        // la création) — sinon prix à 0 + remplissage du conteneur faussé.
+        if (this.isEditCbm) {
+            const sansVol = this.editItems.filter(it => (it.desc || '').trim() !== '' && (parseFloat(it.vol) || 0) <= 0);
+            if (sansVol.length > 0) {
+                this.app.showToast(`Modèle Chine : le VOLUME (CBM) est obligatoire sur CHAQUE ligne. ${sansVol.length} ligne(s) sans volume — complétez-les.`, "error");
+                return;
+            }
+        }
 
         const newPrixCfa = this.editItems.reduce((sum, item) => sum + (isEur ? Math.round(item.total * TAUX) : item.total), 0);
         const newDescription = this.editItems.map(i => `${i.qty}x ${i.desc}`).join(', ');

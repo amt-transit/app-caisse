@@ -1023,6 +1023,18 @@ initVue(globalApp) {
                     return;
                 }
 
+                // Modèle CHINE maritime : le VOLUME (CBM) est obligatoire sur CHAQUE
+                // ligne — le prix (volume × tarif/m³) ET le remplissage du conteneur en
+                // dépendent. Une ligne sans volume = facturée à 0 + non comptée dans le
+                // conteneur (risque de surcharge du bateau).
+                if (shippingMode === 'maritime' && factureModel.value === 'chine') {
+                    const lignesSansVolume = items.value.filter(it => (it.desc || '').trim() !== '' && (parseFloat(it.vol) || 0) <= 0);
+                    if (lignesSansVolume.length > 0) {
+                        globalApp.showToast(`Modèle Chine : le VOLUME (CBM) est obligatoire sur CHAQUE ligne. ${lignesSansVolume.length} ligne(s) sans volume — complétez-les (sinon prix à 0 et conteneur faussé).`, "error");
+                        return;
+                    }
+                }
+
                 // ── CHEMIN DEVIS (isolé) ─────────────────────────────────────
                 // Un devis n'est PAS payé : on enregistre uniquement un
                 // document dans `quotes`. AUCUNE transaction, AUCUN encaissement
