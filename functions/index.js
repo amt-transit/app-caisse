@@ -22,6 +22,8 @@ const REGION = "us-central1";
 // ============================================================================
 const { defineSecret } = require("firebase-functions/params");
 const SHIPSGO_API_KEY = defineSecret("SHIPSGO_API_KEY");
+const WHATSAPP_TOKEN = defineSecret("WHATSAPP_TOKEN");
+const WHATSAPP_PHONE_ID = "1130808906791266"; // ID du numéro WhatsApp (non secret) ; à changer pour le numéro de production
 
 // Ordre de nos étapes (pour déterminer l'étape la plus avancée atteinte).
 const STEP_ORDER = ["PREPARATION", "CHARGE", "EMBARQUE", "EN_TRANSIT", "TRANSBORDEMENT", "ARRIVE", "DEDOUANE", "LIVRAISON"];
@@ -39,8 +41,49 @@ const SHIPSGO_EVENT_STEP = {
     DLVR: "LIVRAISON", EMRE: "LIVRAISON", RETU: "LIVRAISON",
 };
 
+// === NOTIFICATIONS WHATSAPP (Phase 4) ===
+// Étape de suivi -> modèle WhatsApp approuvé (nom + code langue EXACT).
+const STEP_TEMPLATE = {
+    EMBARQUE: { name: "colis_en_route", lang: "fr_CI" },
+    ARRIVE: { name: "colis_arrive", lang: "fr_CI" },
+    DEDOUANE: { name: "colis_disponible", lang: "fr_CI" },
+    LIVRAISON: { name: "colis_livre", lang: "en" },
+};
+// Normalise un numéro Côte d'Ivoire en E164 sans "+": 225 + 10 chiffres.
+function toWaPhone(raw) {
+    const n = String(raw || "").replace(/[^0-9]/g, "");
+    if (!n) return "";
+    if (n.startsWith("225")) return n;
+    if (n.length === 10) return "225" + n; // n° local CI (0X XX XX XX XX)
+    return n;
+}
+// Envoie un message MODÈLE WhatsApp (best-effort : ne casse jamais la sync).
+async function sendWhatsAppTemplate(to, templateName, lang, params) {
+    const token = WHATSAPP_TOKEN.value();
+    if (!token || !to) return false;
+    const body = {
+        messaging_product: "whatsapp",
+        to,
+        type: "template",
+        template: {
+            name: templateName,
+            language: { code: lang },
+            components: [{ type: "body", parameters: params.map((p) => ({ type: "text", text: String(p) })) }],
+        },
+    };
+    try {
+        const r = await fetch(`https://graph.facebook.com/v21.0/${WHATSAPP_PHONE_ID}/messages`, {
+            method: "POST",
+            headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+            body: JSON.stringify(body),
+        });
+        if (!r.ok) { const t = await r.text(); console.warn("WhatsApp", r.status, t.slice(0, 200)); return false; }
+        return true;
+    } catch (e) { console.warn("WhatsApp envoi:", e && e.message); return false; }
+}
+
 // Lance/rafraîchit le suivi d'un conteneur via ShipsGo (API v2). Réservé au PERSONNEL.
-exports.shipsgoSync = onCall({ region: REGION, secrets: [SHIPSGO_API_KEY] }, async (request) => {
+exports.shipsgoSync = onCall({ region: REGION, secrets: [SHIPSGO_API_KEY, WHATSAPP_TOKEN] }, async (request) => {
     const uid = request.auth && request.auth.uid;
     if (!uid) throw new HttpsError("unauthenticated", "Connexion requise.");
     const userSnap = await admin.firestore().doc(`users/${uid}`).get();
@@ -135,11 +178,12 @@ async function syncOneContainer(collection, id, num) {
 
     // Dernier kilomètre : si TOUS les colis (livraisons) du conteneur sont livrés,
     // le conteneur passe AUTOMATIQUEMENT à "Livré" (ShipsGo ne voit pas cette étape).
+    let livDocs = [];
     try {
         const code = data.number || id;
         const livCol = collection.replace("containers", "livraisons");
         const livSnap = await admin.firestore().collection(livCol).where("conteneur", "==", code).get();
-        const livDocs = livSnap.docs.map((ld) => ld.data() || {}).filter((dd) => !dd.isDeleted);
+        livDocs = livSnap.docs.map((ld) => ld.data() || {}).filter((dd) => !dd.isDeleted);
         if (livDocs.length && livDocs.every((dd) => dd.status === "LIVRE")) {
             if (!history.some((h) => h.key === "LIVRAISON")) {
                 history.push({ key: "LIVRAISON", date: new Date().toISOString(), source: "livraison" });
@@ -164,6 +208,33 @@ async function syncOneContainer(collection, id, num) {
     if (vesselImo) upd.vesselImo = vesselImo;
     if (eta) { upd.eta = String(eta).slice(0, 10); upd.arrivalDate = upd.eta; }
     if (dep) upd.departureDate = String(dep).slice(0, 10);
+
+    // NOTIFICATIONS WhatsApp : à l'entrée d'une étape clé (1 SEULE fois par étape).
+    // 1 message par référence client (numéro + nombre de sous-colis). Best-effort :
+    // si l'envoi échoue (ex. modèle pas encore approuvé), l'étape n'est PAS marquée
+    // notifiée -> nouvelle tentative au prochain passage (quotidien, etc.).
+    const notifiedSteps = Array.isArray(data.notifiedSteps) ? data.notifiedSteps.slice() : [];
+    const tpl = STEP_TEMPLATE[trackingStatus];
+    if (tpl && !notifiedSteps.includes(trackingStatus)) {
+        const byRef = {};
+        for (const dd of livDocs) {
+            const ref2 = String(dd.reference || "").trim();
+            const phone = toWaPhone(dd.numero || dd.tel || dd.telephone);
+            if (!ref2 || !phone) continue;
+            if (!byRef[ref2]) byRef[ref2] = { phone, count: 0 };
+            byRef[ref2].count += Number(dd.quantite || 1);
+        }
+        const refs = Object.keys(byRef);
+        let sent = 0;
+        for (const r2 of refs) {
+            if (await sendWhatsAppTemplate(byRef[r2].phone, tpl.name, tpl.lang, [r2, byRef[r2].count])) sent++;
+        }
+        if (sent > 0) {
+            console.log(`WhatsApp ${trackingStatus}: ${sent}/${refs.length} envoye(s) (${collection}/${id})`);
+            notifiedSteps.push(trackingStatus);
+            upd.notifiedSteps = notifiedSteps;
+        }
+    }
     await ref.update(upd);
 
     return {
@@ -181,7 +252,7 @@ async function syncOneContainer(collection, id, num) {
 // RAFRAÎCHISSEMENT QUOTIDIEN : met à jour tous les conteneurs suivis encore en
 // cours, dans toutes les routes (collections "containers*"), sans intervention.
 exports.shipsgoRefreshDaily = onSchedule(
-    { schedule: "every day 06:00", timeZone: "Africa/Abidjan", region: REGION, secrets: [SHIPSGO_API_KEY] },
+    { schedule: "every day 06:00", timeZone: "Africa/Abidjan", region: REGION, secrets: [SHIPSGO_API_KEY, WHATSAPP_TOKEN] },
     async () => {
         const cols = await admin.firestore().listCollections();
         const containerCols = cols.filter((c) => c.id === "containers" || c.id.startsWith("containers_"));
