@@ -287,6 +287,7 @@ export const ConfectionConteneursView = {
                 const activeTabId = ref(null);
                 const leftSearch = ref('');
                 const loadModal = ref({ open: false, dossierId: null, selected: [] }); // modale "charger sous-colis"
+                const loadModalItems = ref([]); // items de la TRANSACTION du dossier ouvert (produit par sous-colis)
                 const loadingLivraisons = ref(true);
                 const loadingContainers = ref(true);
 
@@ -433,15 +434,18 @@ export const ConfectionConteneursView = {
 
                 // === Modale "Choisir les sous-colis à charger" ===
                 // Étiquette -> produit (depuis les lignes de la facture).
-                const labelDescMapOf = (l) => {
-                    const map = {};
-                    const items = Array.isArray(l.items) ? l.items : [];
+                // Étiquette -> produit, depuis les LIGNES (items) de la TRANSACTION
+                // (chargées à l'ouverture de la modale). La livraison n'a que la
+                // description GLOBALE -> ancien bug (toute la facture sur chaque colis).
+                const modalDescMap = computed(() => {
+                    const l = loadModalDossier.value;
+                    if (!l) return {};
+                    const items = (loadModalItems.value && loadModalItems.value.length) ? loadModalItems.value : (Array.isArray(l.items) ? l.items : []);
                     const labels = l.labels || [];
-                    let idx = 0;
+                    const map = {}; let idx = 0;
                     items.forEach(it => { const q = parseInt(it.qty) || 1; for (let k = 0; k < q && idx < labels.length; k++) { map[labels[idx]] = it.desc || 'Colis'; idx++; } });
-                    labels.forEach(lbl => { if (!map[lbl]) map[lbl] = l.description || 'Colis'; });
                     return map;
-                };
+                });
                 const loadModalDossier = computed(() => livraisons.value.find(l => l.id === loadModal.value.dossierId) || null);
                 const modalLabelContainer = (lbl) => {
                     const l = loadModalDossier.value; if (!l) return '';
@@ -449,12 +453,22 @@ export const ConfectionConteneursView = {
                     if (info.whole) return l.conteneur || '?';
                     return info.byLabel.get(lbl) || '';
                 };
-                const modalLabelDesc = (lbl) => { const l = loadModalDossier.value; return l ? (labelDescMapOf(l)[lbl] || 'Colis') : ''; };
+                const modalLabelDesc = (lbl) => modalDescMap.value[lbl] || 'Colis';
                 const modalAvailableLabels = computed(() => {
                     const l = loadModalDossier.value; if (!l) return [];
                     return (l.labels || []).filter(lbl => !modalLabelContainer(lbl));
                 });
-                const openLoadModal = (id) => { loadModal.value = { open: true, dossierId: id, selected: [] }; };
+                const openLoadModal = async (id) => {
+                    loadModal.value = { open: true, dossierId: id, selected: [] };
+                    loadModalItems.value = [];
+                    const l = livraisons.value.find(x => x.id === id);
+                    if (l && l.ref) {
+                        try {
+                            const sT = await getDocs(query(collection(db, getCollectionName("transactions")), where('reference', '==', l.ref), limit(1)));
+                            if (!sT.empty) loadModalItems.value = sT.docs[0].data().items || [];
+                        } catch (_) { /* items indisponibles -> 'Colis' */ }
+                    }
+                };
                 const closeLoadModal = () => { loadModal.value.open = false; };
                 const modalSelectAll = (sel) => { loadModal.value.selected = sel ? modalAvailableLabels.value.slice() : []; };
                 const loadModalSelected = async () => {

@@ -702,7 +702,10 @@ export const ToutesLesFacturesView = {
             totalSubColis += labels.length;
             
             labels.forEach(lbl => {
-                let specificDesc = liv.description || invoice.description || 'Colis';
+                // Produit du sous-colis = ligne (item) correspondante de la facture.
+                // PAS de repli sur la description globale (sinon toute la facture
+                // s'affiche sur chaque sous-colis).
+                let specificDesc = 'Colis';
                 const match = lbl.match(/_(\d+)_/);
                 if (match && descMap[parseInt(match[1])]) {
                     specificDesc = descMap[parseInt(match[1])];

@@ -443,7 +443,7 @@ export const BateauxDepartView = {
                         const li = m ? parseInt(m[1]) : (idx + 1);
                         out.push({
                             sousRef: lbl,
-                            desc: descMap[li] || liv.description || 'Colis',
+                            desc: descMap[li] || 'Colis',
                             livId: liv.id,
                             livRef: liv.ref,
                             conteneur: pieceCont || liv.conteneur || '',
