@@ -1,6 +1,9 @@
 // Centralisation des constantes globales de l'application
 export const CONSTANTS = {
-    TAUX_CONVERSION: 656, // Taux maison EUR <-> FCFA (656 CFA = 1 €)
+    TAUX_CONVERSION: 656, // Taux maison EUR <-> FCFA (656 CFA = 1 €). Surchargé au
+                          // démarrage par parametres/tarifs.tauxEurCfa s'il existe.
+    MAX_CBM: 68,          // Capacité d'un conteneur maritime (40HC). Surchargé au
+                          // démarrage par parametres/tarifs.maxCbm s'il existe.
     // Vous pourrez ajouter d'autres constantes globales ici plus tard
 };
 

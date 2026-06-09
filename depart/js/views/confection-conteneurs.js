@@ -5,6 +5,7 @@ import { getCollectionName } from '../../../commun/agencies-config.js';
 import { matchesShippingMode } from '../../../commun/shipping-mode.js';
 import { isEurAgency } from '../../../commun/agency-money.js';
 import { containerStageBadgeHtml } from '../../../commun/container-stage.js';
+import { CONSTANTS } from '../../../commun/constants.js';
 
 export const ConfectionConteneursView = {
     vueApp: null,
@@ -178,9 +179,9 @@ export const ConfectionConteneursView = {
                                 </div>
                                 <div style="margin:0 0 12px;">
                                     <div style="height:12px; background:#e2e8f0; border-radius:7px; overflow:hidden;">
-                                        <div :style="{ width: Math.min(100, currentContainerCbm/68*100) + '%', height:'100%', background: (currentContainerCbm/68) > 0.98 ? '#ef4444' : ((currentContainerCbm/68) > 0.8 ? '#f59e0b' : '#16a34a'), transition:'width .3s' }"></div>
+                                        <div :style="{ width: Math.min(100, currentContainerCbm/maxCbm*100) + '%', height:'100%', background: (currentContainerCbm/maxCbm) > 0.98 ? '#ef4444' : ((currentContainerCbm/maxCbm) > 0.8 ? '#f59e0b' : '#16a34a'), transition:'width .3s' }"></div>
                                     </div>
-                                    <div style="font-size:12px; color:#475569; margin-top:4px; font-weight:600;">📦 {{ currentContainerTotalColis }} sous-colis · {{ currentContainerCbm.toFixed(1) }} / 68 CBM · {{ Math.round(currentContainerCbm/68*100) }}% rempli<span v-if="currentContainerCbm > 68" style="color:#fff; background:#ef4444; padding:1px 8px; border-radius:10px; margin-left:8px;">⚠️ DÉPASSEMENT ({{ (currentContainerCbm - 68).toFixed(1) }} CBM de trop)</span></div>
+                                    <div style="font-size:12px; color:#475569; margin-top:4px; font-weight:600;">📦 {{ currentContainerTotalColis }} sous-colis · {{ currentContainerCbm.toFixed(1) }} / {{ maxCbm }} CBM · {{ Math.round(currentContainerCbm/maxCbm*100) }}% rempli<span v-if="currentContainerCbm > maxCbm" style="color:#fff; background:#ef4444; padding:1px 8px; border-radius:10px; margin-left:8px;">⚠️ DÉPASSEMENT ({{ (currentContainerCbm - maxCbm).toFixed(1) }} CBM de trop)</span></div>
                                 </div>
                                 <div class="ctn-actions">
                                     <button class="btn-action btn-action--add" type="button" @click="addSelectedToContainer" :disabled="selectedAvailableIds.length === 0">➕ Ajouter ({{ selectedAvailableIds.length }})</button>
@@ -663,6 +664,7 @@ export const ConfectionConteneursView = {
                     loadingLivraisons, loadingContainers, availableLivraisons, activeContainers,
                     currentContainer, currentContainerName, currentContainerItems, currentContainerTotalColis, currentContainerCbm,
                     stageBadge: containerStageBadgeHtml,
+                    maxCbm: CONSTANTS.MAX_CBM || 68,
                     currentContainerTotalCA, currentContainerCADisplay, registeredContainers, currentUserName,
                     formatDate, formatMoney, getContainerItemsCount, getContainerColisCount,
                     toggleItemSelection, selectAllLeft, addSelectedToContainer, removeFromContainer,

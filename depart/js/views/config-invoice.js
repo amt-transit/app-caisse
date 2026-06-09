@@ -283,6 +283,14 @@ export const ConfigInvoiceView = {
                             <label style="font-weight:600; font-size:13px; color:#475569; margin-bottom:6px; display:block;">✈️ Aérien Express (CFA / kg)</label>
                             <input type="number" id="ciTarifAerienExpress" min="0" step="500" style="width:100%; padding:10px; border:1px solid #cbd5e1; border-radius:8px;" placeholder="14000">
                         </div>
+                        <div class="form-group">
+                            <label style="font-weight:600; font-size:13px; color:#475569; margin-bottom:6px; display:block;">💱 Taux € → CFA (1 € = ? CFA)</label>
+                            <input type="number" id="ciTauxEurCfa" min="1" step="1" style="width:100%; padding:10px; border:1px solid #cbd5e1; border-radius:8px;" placeholder="656">
+                        </div>
+                        <div class="form-group">
+                            <label style="font-weight:600; font-size:13px; color:#475569; margin-bottom:6px; display:block;">📦 Capacité conteneur (CBM)</label>
+                            <input type="number" id="ciMaxCbm" min="1" step="1" style="width:100%; padding:10px; border:1px solid #cbd5e1; border-radius:8px;" placeholder="68">
+                        </div>
                     </div>
                     <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; margin-top:18px;">
                         <div style="font-size:12px; color:#64748b;"><i class="fas fa-info-circle"></i> Maritime Chine = Volume (CBM) × Coût CBM. Aérien = Poids (kg) × tarif Normal/Express. Modifiable à tout moment.</div>
@@ -343,6 +351,8 @@ export const ConfigInvoiceView = {
                 setVal('ciTarifCbmChine', t.cbmChine != null ? t.cbmChine : 250000);
                 setVal('ciTarifAerienNormal', t.kgAerienNormal != null ? t.kgAerienNormal : 12000);
                 setVal('ciTarifAerienExpress', t.kgAerienExpress != null ? t.kgAerienExpress : 14000);
+                setVal('ciTauxEurCfa', t.tauxEurCfa != null ? t.tauxEurCfa : 656);
+                setVal('ciMaxCbm', t.maxCbm != null ? t.maxCbm : 68);
             } catch (e) { console.warn('Tarifs (lecture):', e && e.message); }
 
             this.updatePreview();
@@ -504,6 +514,8 @@ export const ConfigInvoiceView = {
                 cbmChine: num('ciTarifCbmChine', 250000),
                 kgAerienNormal: num('ciTarifAerienNormal', 12000),
                 kgAerienExpress: num('ciTarifAerienExpress', 14000),
+                tauxEurCfa: num('ciTauxEurCfa', 656),
+                maxCbm: num('ciMaxCbm', 68),
             };
             await setDoc(doc(db, 'parametres', 'tarifs'), payload, { merge: true });
             this.app.showToast("Tarifs d'expédition enregistrés ✔", "success");

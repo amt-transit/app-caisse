@@ -347,7 +347,7 @@ export const BilansFinanciersView = {
         let metricsHtml = '';
 
         if (this.activeTab === 'boat') {
-            const maxCBM = 68; // Capacité moyenne 40HC
+            const maxCBM = CONSTANTS.MAX_CBM || 68; // Capacité conteneur (40HC), paramétrable
             const fillRate = currentData.volumeCBM > 0 ? ((currentData.volumeCBM / maxCBM) * 100).toFixed(1) : 0;
             const targetBenefice = this.objectives.boatTarget || 25000;
             const pctBenefice = Math.min(100, (currentData.benefice / targetBenefice) * 100);

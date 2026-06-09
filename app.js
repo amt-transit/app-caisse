@@ -1,5 +1,6 @@
 import { AGENCIES } from './commun/agencies-config.js';
 import { isAffiliationActive } from './commun/affiliation-config.js';
+import { CONSTANTS } from './commun/constants.js';
 
 // --- SHARED VIEWS ---
 import { ClientsView } from './commun/vues/clients.js';
@@ -123,6 +124,7 @@ export const app = {
             window.AppModal.init();
         }
 
+        this.loadGlobalParams(); // taux €<->CFA + capacité conteneur (paramétrables)
         this.initContainerGauge();
         this.initSidebarEvents();
         this.initMobileToggle();
@@ -527,6 +529,22 @@ export const app = {
         if (c) c.innerHTML = '<div style="padding:48px 20px; text-align:center; color:#64748b;"><i class="fas fa-lock" style="font-size:32px; display:block; margin-bottom:12px; color:#cbd5e1;"></i>Aucune page accessible avec votre rôle.<br>Contactez un administrateur.</div>';
     },
 
+    // Charge les paramètres globaux (taux €<->CFA, capacité conteneur) depuis
+    // parametres/tarifs et surcharge les constantes par défaut. Permet de changer
+    // ces valeurs SANS toucher au code (réglées dans « Modèle de Facture »).
+    async loadGlobalParams() {
+        try {
+            const { db } = await import('./commun/firebase-config.js');
+            const { doc, getDoc } = await import('https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js');
+            const snap = await getDoc(doc(db, 'parametres', 'tarifs'));
+            if (snap.exists()) {
+                const t = snap.data() || {};
+                if (Number(t.tauxEurCfa) > 0) CONSTANTS.TAUX_CONVERSION = Number(t.tauxEurCfa);
+                if (Number(t.maxCbm) > 0) CONSTANTS.MAX_CBM = Number(t.maxCbm);
+            }
+        } catch (e) { console.warn('loadGlobalParams:', e && e.message); }
+    },
+
     async initContainerGauge() {
         try {
             // La jauge mesure le remplissage d'un CONTENEUR maritime (CBM / 68).
@@ -627,7 +645,7 @@ export const app = {
     },
 
     updateGaugeUI(currentCBM) {
-        const maxCBM = 68;
+        const maxCBM = CONSTANTS.MAX_CBM || 68;
         const percentage = Math.min(100, Math.max(0, (currentCBM / maxCBM) * 100));
         const volEl = document.getElementById('globalContainerVolume');
         const barEl = document.getElementById('globalContainerGaugeBar');
