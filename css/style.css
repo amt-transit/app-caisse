@@ -485,6 +485,7 @@ td button.editBtn { background-color: #007bff; color: white; border: none; paddi
 #card-depenses { background: linear-gradient(135deg, #f43f5e 0%, #be123c 100%) !important; }
 #card-caisse-especes { background: linear-gradient(135deg, #10b981 0%, #047857 100%) !important; }
 #card-solde-banque { background: linear-gradient(135deg, #6366f1 0%, #4338ca 100%) !important; }
+#card-caisse-euros { background: linear-gradient(135deg, #0ea5e9 0%, #0369a1 100%) !important; }
 #card-reste { background: linear-gradient(135deg, #f97316 0%, #c2410c 100%) !important; }
 #card-retraits { background: linear-gradient(135deg, #a855f7 0%, #7e22ce 100%) !important; }
 #card-depots { background: linear-gradient(135deg, #ec4899 0%, #be185d 100%) !important; }

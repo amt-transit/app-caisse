@@ -161,7 +161,7 @@ export const DashboardView = {
                         </div>
                         <div class="card-watermark">💸</div>
                     </div>
-                    <div class="total-card colored-card card-positif" id="card-caisse-especes" onclick="app.renderPage('index')" style="cursor: pointer; border: 2px solid #059669 !important; transform: scale(1.02);">
+                    <div class="total-card colored-card card-positif" id="card-caisse-especes" onclick="app.renderPage('index')" style="cursor: pointer; border: 2px solid #059669 !important; transform: scale(1.02);" title="CFA réellement en caisse. Les CFA retirés pour constituer des € sont déjà déduits (voir la carte Caisse €).">
                         <h3>Solde Caisse (Espèces + MM)</h3>
                         <p id="grandTotalCaisse">0 CFA</p>
                         <div class="card-watermark">🪙</div>
@@ -175,10 +175,10 @@ export const DashboardView = {
                         <p id="grandTotalSoldeBanque">0 CFA</p>
                         <div class="card-watermark">💳</div>
                     </div>
-                    <div class="total-card colored-card" id="card-caisse-euros" onclick="app.renderPage('bank')" style="cursor: pointer;">
-                        <h3>Caisse Euros (≈ CFA)</h3>
-                        <p id="grandTotalEuros">0 CFA</p>
-                        <div style="font-size:12px; opacity:0.85;" id="grandTotalEurosEur">0,00 €</div>
+                    <div class="total-card colored-card" id="card-caisse-euros" onclick="app.renderPage('bank')" style="cursor: pointer;" title="Espèces en euros détenues (reçues en retirant des CFA de la caisse). Déjà déduit de la caisse CFA.">
+                        <h3>Caisse € (espèces en euros)</h3>
+                        <p id="grandTotalEurosEur">0,00 €</p>
+                        <div style="font-size:12px; opacity:0.85;" id="grandTotalEuros">≈ 0 CFA</div>
                         <div class="card-watermark">💶</div>
                     </div>
                     <div class="total-card colored-card" id="card-reste" onclick="app.renderPage('clients')" style="cursor: pointer;">
@@ -512,7 +512,13 @@ export const DashboardView = {
                     if (d.type === 'Retrait') totalRetraits += (d.montant || 0);
                     if (d.type === 'Depot' && d.source !== 'Remise Chèques' && d.source !== 'Solde Initial') totalDepots += (d.montant || 0);
                 });
-                return (totalVentes + totalAutres + totalRetraits) - (totalDepenses + totalDepots);
+                // Caisse € : une Entrée (€ reçu) = des CFA RETIRÉS de la caisse -> on les déduit.
+                let totalEurEntreesCfa = 0;
+                try {
+                    const eurSnap = await getDocs(query(collection(db, 'caisse_euros'), where('agency', '==', activeAgency)));
+                    eurSnap.forEach(doc => { const m = doc.data(); if (m.isDeleted || m.type === 'Sortie') return; totalEurEntreesCfa += Number(m.montantCfa) || (Number(m.montant) || 0) * 656; });
+                } catch (_) { /* tolérant */ }
+                return (totalVentes + totalAutres + totalRetraits) - (totalDepenses + totalDepots + totalEurEntreesCfa);
             },
             // Calcul centralisé (source unique : services/storageFee.js).
             calculateStorageFee
@@ -523,18 +529,22 @@ export const DashboardView = {
         const endDateInput = document.getElementById('endDate');
         const clearFilterBtn = document.getElementById('clearFilterBtn');
 
-        // --- Caisse Euros (≈ CFA) : solde live, séparé de la caisse CFA (collection
-        // isolée 'caisse_euros'). N'entre dans aucun autre total ; converti au taux fixe. ---
+        // --- Caisse Euros : solde live + DÉDUCTION de la caisse CFA. Une ENTRÉE
+        // (€ reçu) = des CFA retirés de la caisse -> ces CFA sont déduits de la
+        // caisse CFA (dans calculateTotals / calculateAvailableBalance). ---
+        let allCaisseEuros = [];
         (() => {
             const _ag = sessionStorage.getItem('currentActiveAgency') || 'abidjan';
             const _taux = 656; // 656 CFA = 1 € (cohérent avec la Caisse Euros de la page Banque)
             onSnapshot(query(collection(db, 'caisse_euros'), where('agency', '==', _ag)), s => {
+                allCaisseEuros = s.docs.map(d => ({ id: d.id, ...d.data() }));
                 let soldeCfa = 0;
                 s.docs.forEach(d => { const m = d.data(); if (m.isDeleted) return; const cfa = Number(m.montantCfa) || (Number(m.montant) || 0) * _taux; soldeCfa += (m.type === 'Sortie' ? -1 : 1) * cfa; });
                 const elCfa = document.getElementById('grandTotalEuros');
-                if (elCfa) elCfa.textContent = Math.round(soldeCfa).toLocaleString('fr-FR') + ' CFA';
+                if (elCfa) elCfa.textContent = '≈ ' + Math.round(soldeCfa).toLocaleString('fr-FR') + ' CFA';
                 const elEur = document.getElementById('grandTotalEurosEur');
                 if (elEur) elEur.textContent = (soldeCfa / _taux).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €';
+                try { updateDashboard(); } catch (_) {} // recalcule la caisse CFA (déduction des Entrées €)
             });
         })();
 
@@ -635,8 +645,11 @@ export const DashboardView = {
             const filteredExp = filterByDate(cleanExpenses, start, end);
             const filteredInc = filterByDate(modeOtherIncome, start, end);
             const filteredBank = filterByDate(modeBankMovements, start, end);
+            // Caisse € : Entrées (€ reçus) filtrées par date = CFA retirés de la caisse.
+            const filteredEur = filterByDate(allCaisseEuros.filter(m => !m.isDeleted), start, end);
+            const eurEntreesCfa = filteredEur.filter(m => m.type !== 'Sortie').reduce((s, m) => s + (Number(m.montantCfa) || (Number(m.montant) || 0) * 656), 0);
 
-            calculateTotals(filteredTrans, filteredExp, filteredInc, filteredBank);
+            calculateTotals(filteredTrans, filteredExp, filteredInc, filteredBank, eurEntreesCfa);
             
             renderContainerSummary(filteredTrans, filteredExp, cleanTransactions);
             renderTopClients(filteredTrans);
@@ -664,7 +677,7 @@ export const DashboardView = {
 
         // --- 4. CALCULS FINANCIERS ---
 
-        function calculateTotals(transactions, expenses, incomes, bank) {
+        function calculateTotals(transactions, expenses, incomes, bank, eurEntreesCfa = 0) {
             let totalAbidjan = 0, totalParis = 0, totalCheques = 0, totalVirements = 0;
             let totalVentesCash = 0;
             let abidjanCheques = 0, abidjanVirements = 0;
@@ -730,7 +743,7 @@ export const DashboardView = {
             const totalSortiesBanque = bank.filter(m => m.type === 'Retrait' || m.type === 'Paiement').reduce((sum, m) => sum + m.montant, 0);
             
             const benefice = (totalAbidjan + totalOther) - totalDep;
-            const soldeCaisse = (totalVentesCash + totalOtherCash + retraitsEspeces) - (totalDepCash + depots);
+            const soldeCaisse = (totalVentesCash + totalOtherCash + retraitsEspeces) - (totalDepCash + depots + eurEntreesCfa);
             const soldeBanque = depotsAll + totalVirements + totalCheques - totalSortiesBanque;
             
             const resteTotal = transactions.reduce((sum, t) => sum + (t.reste || 0), 0);
