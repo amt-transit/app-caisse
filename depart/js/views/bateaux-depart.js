@@ -193,6 +193,7 @@ export const BateauxDepartView = {
                                     </div>
                                     <div class="bt-card__footer">
                                         <button class="btn-action btn-action--add" type="button" :disabled="selectedContainerIds.size === 0" @click="addToBoat(b.id)">➕ Ajouter ({{ selectedContainerIds.size }})</button>
+                                        <button class="btn-action" type="button" title="Voir les sous-colis chargés sur ce bateau" style="background:#eef2ff; color:#4338ca;" @click="openColis(b.id)">👁️ Colis</button>
                                         <button class="btn-action btn-action--register" type="button" @click="registerBoat(b.id)">✅ Enregistrer</button>
                                         <button class="btn-action btn-action--edit" type="button" title="Modifier infos bateau" @click="openBoatModal(b.id)">✎</button>
                                         <button class="btn-action btn-action--danger" type="button" title="Supprimer ce bateau" @click="deleteBoat(b.id)">🗑</button>
