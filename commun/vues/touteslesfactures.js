@@ -872,14 +872,30 @@ export const ToutesLesFacturesView = {
             }).join('');
             itemsList += `<tr style="background:#f8fafc; font-weight:800;"><td colspan="3" style="text-align:right;">Poids total facturé</td><td style="text-align:right; color:#1e40af;">${totalPoids.toFixed(1)} kg</td><td colspan="2"></td></tr>`;
         } else if (invoice.items && Array.isArray(invoice.items)) {
-            itemsList = invoice.items.map(item => `
+            // Modèle CBM (Chine maritime) : les items ne stockent pas pu/total
+            // (la facture est au volume global). On RÉPARTIT alors le prix total
+            // au prorata du volume (CBM) de chaque ligne — sinon de la quantité —
+            // pour afficher un prix cohérent par ligne (somme = total facture).
+            const totalVolPond = invoice.items.reduce((s, it) => s + ((parseFloat(it.vol) || 0) * (parseFloat(it.qty) || 0)), 0);
+            const useVol = totalVolPond > 0;
+            const totalPond = useVol ? totalVolPond : invoice.items.reduce((s, it) => s + (parseFloat(it.qty) || 0), 0);
+            itemsList = invoice.items.map(item => {
+                const qty = parseFloat(item.qty) || 0;
+                let pu = (item.pu || 0) / (isEur ? 1 : TAUX);
+                let lineTotal = (item.total || 0) / (isEur ? 1 : TAUX);
+                if (!lineTotal && totalPond > 0) {
+                    const w = useVol ? ((parseFloat(item.vol) || 0) * qty) : qty;
+                    lineTotal = total * w / totalPond;
+                    pu = qty ? lineTotal / qty : lineTotal;
+                }
+                return `
                 <tr>
                     <td class="modal-table__desc">${item.desc}</td>
                     <td style="text-align: right; font-weight:bold;">${item.qty}</td>
-                    <td style="text-align: right;">${this.formatMoneyLocal((item.pu || 0) / (isEur ? 1 : TAUX))}</td>
-                    <td style="text-align: right; font-weight: 900; color:#0f172a;">${this.formatMoneyLocal((item.total || 0) / (isEur ? 1 : TAUX))}</td>
-                </tr>
-            `).join('');
+                    <td style="text-align: right;">${lineTotal ? this.formatMoneyLocal(pu) : '-'}</td>
+                    <td style="text-align: right; font-weight: 900; color:#0f172a;">${lineTotal ? this.formatMoneyLocal(lineTotal) : '-'}</td>
+                </tr>`;
+            }).join('');
         } else {
             itemsList = (invoice.description || '-').split(',').map(d => {
                 const match = d.trim().match(/^(\d+)x\s+(.+)$/);
