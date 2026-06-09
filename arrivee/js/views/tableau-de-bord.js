@@ -527,14 +527,14 @@ export const DashboardView = {
         // isolée 'caisse_euros'). N'entre dans aucun autre total ; converti au taux fixe. ---
         (() => {
             const _ag = sessionStorage.getItem('currentActiveAgency') || 'abidjan';
-            const _taux = 655.957;
+            const _taux = 656; // 656 CFA = 1 € (cohérent avec la Caisse Euros de la page Banque)
             onSnapshot(query(collection(db, 'caisse_euros'), where('agency', '==', _ag)), s => {
-                let solde = 0;
-                s.docs.forEach(d => { const m = d.data(); if (m.isDeleted) return; solde += (m.type === 'Sortie' ? -1 : 1) * (Number(m.montant) || 0); });
+                let soldeCfa = 0;
+                s.docs.forEach(d => { const m = d.data(); if (m.isDeleted) return; const cfa = Number(m.montantCfa) || (Number(m.montant) || 0) * _taux; soldeCfa += (m.type === 'Sortie' ? -1 : 1) * cfa; });
                 const elCfa = document.getElementById('grandTotalEuros');
-                if (elCfa) elCfa.textContent = Math.round(solde * _taux).toLocaleString('fr-FR') + ' CFA';
+                if (elCfa) elCfa.textContent = Math.round(soldeCfa).toLocaleString('fr-FR') + ' CFA';
                 const elEur = document.getElementById('grandTotalEurosEur');
-                if (elEur) elEur.textContent = solde.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €';
+                if (elEur) elEur.textContent = (soldeCfa / _taux).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €';
             });
         })();
 

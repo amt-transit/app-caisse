@@ -80,7 +80,7 @@ function updateNotifBadge() {
   const n = unreadCount();
   b.textContent = n; b.hidden = (n === 0);
 }
-const TAUX = 655.957; // EUR -> FCFA
+const TAUX = 656; // EUR -> FCFA
 // Format selon la devise de la facture : 'EUR' (Paris) ou 'XOF'/FCFA (sinon).
 const money = (v, currency = 'XOF') => {
   const c = currency === 'EUR' ? 'EUR' : 'XOF';

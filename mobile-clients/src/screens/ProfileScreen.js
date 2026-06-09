@@ -8,7 +8,7 @@ import { api } from '../api';
 import { pickAvatarFromLibrary, takeAvatarPhoto } from '../media';
 import { useLang } from '../i18n';
 
-const TAUX = 655.957;
+const TAUX = 656;
 const toFcfa = (v, cur) => (cur === 'EUR' ? (v || 0) * TAUX : (v || 0));
 
 export default function ProfileScreen({ data, phone, onLock, onLogout, onProfileSaved }) {

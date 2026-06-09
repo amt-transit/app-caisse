@@ -1,6 +1,6 @@
 // Centralisation des constantes globales de l'application
 export const CONSTANTS = {
-    TAUX_CONVERSION: 655.957, // Taux de conversion officiel EUR <-> FCFA
+    TAUX_CONVERSION: 656, // Taux maison EUR <-> FCFA (656 CFA = 1 €)
     // Vous pourrez ajouter d'autres constantes globales ici plus tard
 };
 

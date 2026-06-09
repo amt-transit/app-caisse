@@ -20,7 +20,7 @@ function qrDataUrl(text) {
   } catch (e) { return ''; }
 }
 
-const TAUX = 655.957;
+const TAUX = 656;
 // Formatage FCFA (les montants stockés sont en FCFA).
 const fcfa = (n) => `${Math.round(Number(n) || 0).toLocaleString('fr-FR')} F CFA`;
 const esc = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');

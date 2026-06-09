@@ -60,13 +60,13 @@ export const BankView = {
                     <div class="form-grid">
                         <input type="date" id="eurDate">
                         <input type="text" id="eurDesc" placeholder="Description (client, collègue Paris…)">
-                        <input type="number" id="eurAmount" step="0.01" min="0" placeholder="Montant €">
+                        <input type="number" id="eurAmount" step="1" min="0" placeholder="Montant retiré (CFA)">
                         <select id="eurType"><option value="Entree">Entrée (€ reçu)</option><option value="Sortie">Sortie (€ remis / dépensé)</option></select>
-                        <button id="addEurMovementBtn" class="btn btn-success">Enregistrer (€)</button>
+                        <button id="addEurMovementBtn" class="btn btn-success">Enregistrer</button>
                     </div>
                     <div style="overflow-x:auto; margin-top:14px;">
                         <table class="table" style="margin-bottom:0;">
-                            <thead><tr><th>Date</th><th>Description</th><th>Type</th><th style="text-align:right;">Montant €</th><th style="text-align:center;">Actions</th></tr></thead>
+                            <thead><tr><th>Date</th><th>Description</th><th>Type</th><th style="text-align:right;">Montant (CFA → €)</th><th style="text-align:center;">Actions</th></tr></thead>
                             <tbody id="eurTableBody"><tr><td colspan="5" style="text-align:center;">Chargement…</td></tr></tbody>
                         </table>
                     </div>
@@ -95,7 +95,7 @@ export const BankView = {
     // filtrée par agence ; n'entre dans AUCUN total CFA. ---
     initEurCash() {
         const agency = sessionStorage.getItem('currentActiveAgency') || 'abidjan';
-        const TAUX = 655.957; // EUR -> XOF (taux fixe)
+        const TAUX = 656; // taux maison : 656 CFA = 1 € (saisie en CFA, équivalent € calculé)
         const fmtEur = v => (Number(v) || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €';
         const fmtCfa = v => Math.round(Number(v) || 0).toLocaleString('fr-FR') + ' CFA';
 
@@ -106,15 +106,16 @@ export const BankView = {
         if (addBtn) addBtn.onclick = async () => {
             const date = (document.getElementById('eurDate').value || '').trim();
             const description = (document.getElementById('eurDesc').value || '').trim();
-            const montant = parseFloat(document.getElementById('eurAmount').value) || 0;
+            const montantCfa = parseFloat(document.getElementById('eurAmount').value) || 0;
+            const montant = montantCfa / TAUX; // équivalent en € (656 CFA = 1 €)
             const type = document.getElementById('eurType').value || 'Entree';
-            if (!date || !description || montant <= 0) {
-                window.AppModal ? window.AppModal.error('Renseignez la date, la description et un montant € valide.') : alert('Champs € incomplets.');
+            if (!date || !description || montantCfa <= 0) {
+                window.AppModal ? window.AppModal.error('Renseignez la date, la description et un montant CFA valide.') : alert('Champs incomplets.');
                 return;
             }
             try {
                 await setDoc(doc(collection(db, 'caisse_euros')), {
-                    date, description, montant, type, devise: 'EUR',
+                    date, description, montantCfa, montant, type, devise: 'EUR',
                     agency, isDeleted: false,
                     createdAt: new Date().toISOString(),
                     saisiPar: sessionStorage.getItem('userName') || ''
@@ -133,21 +134,23 @@ export const BankView = {
             const rows = snap.docs.map(d => ({ id: d.id, ...d.data() }))
                 .filter(m => !m.isDeleted)
                 .sort((a, b) => (b.date || '').localeCompare(a.date || ''));
-            let solde = 0;
-            rows.forEach(m => { solde += (m.type === 'Sortie' ? -1 : 1) * (Number(m.montant) || 0); });
+            let soldeCfa = 0;
+            rows.forEach(m => { const cfa = Number(m.montantCfa) || (Number(m.montant) || 0) * TAUX; soldeCfa += (m.type === 'Sortie' ? -1 : 1) * cfa; });
+            const soldeEur = soldeCfa / TAUX;
             const balEl = document.getElementById('eurBalance');
-            if (balEl) balEl.textContent = fmtEur(solde);
+            if (balEl) balEl.textContent = fmtEur(soldeEur);
             const balCfaEl = document.getElementById('eurBalanceCfa');
-            if (balCfaEl) balCfaEl.textContent = '≈ ' + fmtCfa(solde * TAUX);
+            if (balCfaEl) balCfaEl.textContent = '≈ ' + fmtCfa(soldeCfa);
             const tb = document.getElementById('eurTableBody');
             if (tb) tb.innerHTML = rows.length ? rows.map(m => {
                 const isOut = m.type === 'Sortie';
                 const col = isOut ? '#ef4444' : '#10b981';
+                const cfa = Number(m.montantCfa) || (Number(m.montant) || 0) * TAUX;
                 return `<tr>
                     <td>${m.date || '-'}</td>
                     <td>${m.description || '-'}</td>
                     <td><span style="color:${col}; font-weight:700;">${isOut ? 'Sortie' : 'Entrée'}</span></td>
-                    <td style="text-align:right; font-weight:700; color:${col};">${isOut ? '-' : '+'} ${fmtEur(m.montant)}</td>
+                    <td style="text-align:right; font-weight:700; color:${col};">${isOut ? '-' : '+'} ${fmtCfa(cfa)} <span style="color:#64748b; font-weight:500; font-size:11px;">(${fmtEur(cfa / TAUX)})</span></td>
                     <td style="text-align:center;"><button title="Supprimer" onclick="window.app.views.banque.deleteEur('${m.id}')" style="background:#fee2e2; color:#b91c1c; border:none; padding:4px 8px; border-radius:5px; cursor:pointer;">🗑️</button></td>
                 </tr>`;
             }).join('') : '<tr><td colspan="5" style="text-align:center; color:#94a3b8;">Aucun mouvement € pour le moment.</td></tr>';

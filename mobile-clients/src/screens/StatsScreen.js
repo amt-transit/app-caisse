@@ -7,7 +7,7 @@ import { Card, SectionTitle, Empty } from '../components/ui';
 import { colors, fcfa } from '../theme';
 import { useLang } from '../i18n';
 
-const TAUX = 655.957;
+const TAUX = 656;
 const toFcfa = (v, cur) => (cur === 'EUR' ? (v || 0) * TAUX : (v || 0));
 
 export default function StatsScreen({ data }) {

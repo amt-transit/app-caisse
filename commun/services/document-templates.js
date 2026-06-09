@@ -505,7 +505,7 @@ export function createDocumentTemplates({ showToast, calculateMagasinageFee }) {
         // transaction n'a pas été retrouvée.
         if (transData && transDocId) {
             try {
-                const TAUX = (CONSTANTS && CONSTANTS.TAUX_CONVERSION) || 655.957;
+                const TAUX = (CONSTANTS && CONSTANTS.TAUX_CONVERSION) || 656;
                 await applyInvoiceSecurity(doc2, {
                     trans: transData,
                     collectionName: transCollection,

@@ -320,7 +320,7 @@ export const LivraisonView = {
                         <div class="form-group full-width" style="background:#fff7ed;border:1px solid #fdba74;border-radius:8px;padding:10px;">
                             <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:600;color:#9a3412;margin:0;">
                                 <input type="checkbox" id="importConvertEur" style="width:18px;height:18px;cursor:pointer;">
-                                💱 Les montants du fichier sont en EUROS → convertir en FCFA (×655,957)
+                                💱 Les montants du fichier sont en EUROS → convertir en FCFA (×656)
                             </label>
                             <small style="color:#9a3412;display:block;margin-top:4px;">Cochez si votre fichier indique les prix en € (Paris). Laissez décoché s'ils sont déjà en FCFA.</small>
                         </div>
@@ -1706,11 +1706,11 @@ export const LivraisonView = {
            const finalImportList = Array.from(uniqueImports.values());
 
            // CONVERSION € -> FCFA (case cochée dans l'aperçu) : on multiplie le
-           // montant et le prix d'origine par 655,957 AVANT toute écriture, pour
+           // montant et le prix d'origine par 656 AVANT toute écriture, pour
            // éviter l'erreur classique « montants laissés en euros ».
            const convertEur = !!document.getElementById('importConvertEur')?.checked;
            if (convertEur) {
-               const TAUX_EUR = 655.957;
+               const TAUX_EUR = 656;
                const toFcfa = (v) => {
                    const n = parseFloat(String(v == null ? '' : v).replace(/[^\d.,-]/g, '').replace(',', '.')) || 0;
                    return n > 0 ? String(Math.round(n * TAUX_EUR)) : (v || '');

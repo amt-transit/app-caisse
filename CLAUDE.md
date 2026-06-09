@@ -134,7 +134,7 @@ token).
   `backfill-agency.cjs` exists).
 - **Money / i18n:** `window.app.formatMoneyLocal(amount)` → EUR when active
   agency is `paris`, otherwise XOF (FCFA). EUR↔FCFA rate is
-  `CONSTANTS.TAUX_CONVERSION = 655.957` in `constants.js`.
+  `CONSTANTS.TAUX_CONVERSION = 656` in `constants.js`.
 - **Shipping mode:** `sessionStorage.shippingMode` (`maritime` | `aerien`),
   toggled from the header; changing it calls `location.reload()` so screens
   recalculate.

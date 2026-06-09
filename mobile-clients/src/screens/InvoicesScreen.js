@@ -5,7 +5,7 @@ import { Card, Badge, Loading, Empty } from '../components/ui';
 import { colors, fcfa, fdate } from '../theme';
 import { useLang } from '../i18n';
 
-const TAUX = 655.957;
+const TAUX = 656;
 const toFcfa = (v, cur) => (cur === 'EUR' ? (v || 0) * TAUX : (v || 0));
 const STATUS = { PAYE: ['Payé', 'paid'], PARTIEL: ['Acompte', 'wait'], IMPAYE: ['Impayé', 'bad'] };
 const norm = (s) => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');

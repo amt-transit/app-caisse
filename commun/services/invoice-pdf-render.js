@@ -264,7 +264,7 @@ export async function renderOfficialInvoice(doc2, payload = {}) {
   // --- Sécurité : filigrane statut + QR de vérification ---
   if (transData && transDocId) {
     try {
-      const TAUX = (CONSTANTS && CONSTANTS.TAUX_CONVERSION) || 655.957;
+      const TAUX = (CONSTANTS && CONSTANTS.TAUX_CONVERSION) || 656;
       await applyInvoiceSecurity(doc2, {
         trans: transData,
         collectionName: transCollection,

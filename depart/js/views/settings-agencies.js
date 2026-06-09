@@ -495,7 +495,7 @@ export const SettingsAgenciesView = {
                         await batch.commit();
                         // La devise du départ pilote le modèle de facturation
                         // déjà lu par Nouvelle Facture (settings/invoice_config_<dep>) :
-                        // € -> modèle 'paris' (saisie €, conversion ×655,957) ;
+                        // € -> modèle 'paris' (saisie €, conversion ×656) ;
                         // FCFA -> modèle 'chine' (saisie directe FCFA).
                         // Aucun changement du calcul : on règle juste le modèle.
                         await setDoc(doc(db, "settings", `invoice_config_${depId}`), {

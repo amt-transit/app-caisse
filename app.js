@@ -1178,7 +1178,7 @@ export const app = {
             const agency = sessionStorage.getItem('currentActiveAgency') || 'abidjan';
             const isArr = isArrivalAgency(agency);
             const eur = isEurAgency();
-            const TAUX = (CONSTANTS && CONSTANTS.TAUX_CONVERSION) || 655.957;
+            const TAUX = (CONSTANTS && CONSTANTS.TAUX_CONVERSION) || 656;
             const money = (fcfa) => this.formatMoneyLocal(eur ? (fcfa / TAUX) : fcfa);
 
             const snap = await getDocs(query(collection(db, getCollectionName('transactions')),

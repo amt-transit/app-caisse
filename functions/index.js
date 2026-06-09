@@ -279,7 +279,7 @@ exports.shipsgoRefreshDaily = onSchedule(
 // renvoie UNIQUEMENT des champs sûrs + le statut de paiement RÉEL et À JOUR.
 // Pas d'authentification (le destinataire d'une facture n'est pas connecté),
 // mais on n'expose que le minimum et l'id de doc est non devinable.
-const TAUX_EUR = 655.957;
+const TAUX_EUR = 656;
 exports.verifyInvoice = onRequest({ region: REGION, invoker: "public", cors: true }, async (req, res) => {
     try {
         const c = String((req.query && req.query.c) || "");
@@ -448,7 +448,7 @@ exports.getMyInvoices = onCall({ region: REGION, invoker: "public" }, async (req
     const cols = await db.listCollections();
     const txCols = cols.map((c) => c.id).filter((id) => /^transactions(_[a-z0-9_]+)?$/.test(id));
 
-    const TAUX = 655.957;
+    const TAUX = 656;
     const byKey = new Map(); // évite les doublons (même doc via exp ET dest)
     let sentAsSender = 0;
     // Profil du client connecté (pour préremplir l'app : Dépôt/Récup, etc.).
