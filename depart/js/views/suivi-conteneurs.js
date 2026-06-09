@@ -5,7 +5,7 @@
 // Étend la collection `containers` (isolée par route + mode via getCollectionName) :
 // champs ajoutés realContainerNo, vesselName, bl, eta, trackingStatus, trackingHistory.
 import { db, functions } from '../../../commun/firebase-config.js';
-import { collection, doc, updateDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
+import { collection, doc, updateDoc, onSnapshot, getDocs, getDoc, query, where } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 import { httpsCallable } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-functions.js";
 import { getCollectionName } from '../../../commun/agencies-config.js';
 
@@ -213,18 +213,34 @@ export const SuiviConteneursView = {
                         <button onclick="window.app.views.suiviConteneurs.saveInfo('${c.id}')" style="background:#2563eb; color:#fff; border:none; padding:8px 16px; border-radius:8px; cursor:pointer; font-weight:600;">💾 Enregistrer les infos</button>
                     </div>
 
-                    <h4 style="margin:18px 0 4px;">Voyage</h4>
-                    <p style="margin:0 0 4px; font-size:12px; color:#64748b;">🛰️ Étapes mises à jour <strong>automatiquement</strong> par le suivi ShipsGo (lecture seule).</p>
-                    ${stepper}
+                    <details open>
+                        <summary style="cursor:pointer; font-weight:700; font-size:15px; color:#0f172a; margin:14px 0 6px;">🧭 Voyage</summary>
+                        <p style="margin:0 0 4px; font-size:12px; color:#64748b;">🛰️ Étapes mises à jour <strong>automatiquement</strong> par le suivi ShipsGo (lecture seule).</p>
+                        ${stepper}
+                    </details>
 
-                    <h4 style="margin:16px 0 6px;">Historique</h4>
-                    <ul style="margin:0; padding-left:18px; color:#475569;">${hist}</ul>
+                    <details open>
+                        <summary style="cursor:pointer; font-weight:700; font-size:15px; color:#0f172a; margin:14px 0 6px;">🚢 Bateau</summary>
+                        <div id="scBoat" style="font-size:13px; color:#64748b;">Chargement…</div>
+                    </details>
 
-                    <h4 style="margin:18px 0 6px;">🗺️ Carte du navire ${c.vesselName ? '— ' + c.vesselName : ''}</h4>
-                    ${c.vesselImo ? `
+                    <details open>
+                        <summary style="cursor:pointer; font-weight:700; font-size:15px; color:#0f172a; margin:14px 0 6px;">📦 Contenu du conteneur</summary>
+                        <div id="scContent" style="font-size:13px; color:#64748b;">Chargement…</div>
+                    </details>
+
+                    <details>
+                        <summary style="cursor:pointer; font-weight:700; font-size:15px; color:#0f172a; margin:14px 0 6px;">🗺️ Carte du navire ${c.vesselName ? '— ' + c.vesselName : ''}</summary>
+                        ${c.vesselImo ? `
                         <iframe src="/commun/carte-navire.html?imo=${encodeURIComponent(c.vesselImo)}" style="width:100%; height:320px; border:1px solid #cbd5e1; border-radius:10px;" loading="lazy" title="Position du navire"></iframe>
                         <div style="margin-top:6px;"><a href="https://www.vesselfinder.com/?imo=${encodeURIComponent(c.vesselImo)}" target="_blank" rel="noopener" style="font-size:13px; color:#0e7490;">Ouvrir la carte en grand ↗</a></div>
-                    ` : `<p style="margin:0; font-size:13px; color:#94a3b8;">La carte du navire s'affiche dès que le suivi ShipsGo est récupéré (navire + IMO).</p>`}
+                        ` : `<p style="margin:0; font-size:13px; color:#94a3b8;">La carte du navire s'affiche dès que le suivi ShipsGo est récupéré (navire + IMO).</p>`}
+                    </details>
+
+                    <details>
+                        <summary style="cursor:pointer; font-weight:700; font-size:15px; color:#0f172a; margin:14px 0 6px;">📜 Historique</summary>
+                        <ul style="margin:0; padding-left:18px; color:#475569;">${hist}</ul>
+                    </details>
 
                     <div style="display:flex; justify-content:flex-end; margin-top:18px;">
                         <button onclick="window.app.views.suiviConteneurs.closeModal()" style="padding:9px 16px; border:1px solid #cbd5e1; border-radius:8px; background:#fff; color:#334155; font-weight:600; cursor:pointer;">Fermer</button>
@@ -232,9 +248,80 @@ export const SuiviConteneursView = {
                 </div>
             </div>
         `;
+        this.loadDetailExtras(code, c.boatId);
     },
 
     closeModal() { const m = document.getElementById('scModalContainer'); if (m) m.innerHTML = ''; },
+
+    // Étiquette -> produit, depuis les LIGNES (items) de la facture (1 ligne × qté
+    // = N sous-colis consécutifs). PAS de repli sur la description globale.
+    labelDescMap(labels, items) {
+        const map = {}; items = Array.isArray(items) ? items : []; labels = labels || [];
+        let idx = 0;
+        items.forEach(it => { const q = parseInt(it.qty) || 1; for (let k = 0; k < q && idx < labels.length; k++) { map[labels[idx]] = it.desc || 'Colis'; idx++; } });
+        return map;
+    },
+    // Conteneur de chargement de chaque sous-colis (depuis scanHistory ; gère l'ancien ajout global).
+    loadedContainerByLabel(l) {
+        const map = {}; const hist = Array.isArray(l.scanHistory) ? l.scanHistory : [];
+        hist.forEach(h => {
+            if (!h || h.type !== 'CONTENEUR_CHARGEMENT') return;
+            if (h.scanRef === l.ref) { (l.labels || []).forEach(lbl => { if (!map[lbl]) map[lbl] = h.container || l.conteneur || ''; }); }
+            else { map[h.scanRef] = h.container || l.conteneur || ''; }
+        });
+        return map;
+    },
+    // Charge à la volée le BATEAU + le CONTENU (sous-colis par client) du conteneur.
+    async loadDetailExtras(code, boatId) {
+        const boatEl = document.getElementById('scBoat');
+        try {
+            if (boatId) {
+                const bSnap = await getDoc(doc(db, getCollectionName('boats'), boatId));
+                if (bSnap.exists()) {
+                    const b = bSnap.data() || {};
+                    const etat = b.status === 'ARRIVE' ? '✅ À quai' : (b.status === 'EN_CONFECTION' ? '🏗️ En confection' : '🌊 En mer');
+                    if (boatEl) boatEl.innerHTML = `<div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:10px; padding:10px 12px;">🚢 <strong>${b.reference || '-'}</strong> · ${(b.company || '')} ${(b.name || '')} <br><span style="color:#64748b;">Départ ${b.departureDate || '-'} → Arrivée ${b.arrivalDate || '-'} · ${etat}</span></div>`;
+                } else if (boatEl) boatEl.innerHTML = `<p style="color:#94a3b8;">Bateau introuvable.</p>`;
+            } else if (boatEl) boatEl.innerHTML = `<p style="color:#94a3b8;">Pas encore affecté à un bateau.</p>`;
+        } catch (e) { if (boatEl) boatEl.innerHTML = ''; }
+
+        const contEl = document.getElementById('scContent');
+        try {
+            const snap = await getDocs(query(collection(db, getCollectionName('livraisons')), where('conteneur', '==', code)));
+            const livs = snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(l => !l.isDeleted);
+            if (!livs.length) { if (contEl) contEl.innerHTML = `<p style="color:#94a3b8;">Aucun colis lié à ce conteneur.</p>`; return; }
+            // Produit par sous-colis = lignes (items) de la TRANSACTION du conteneur.
+            const txByRef = {};
+            try {
+                const txSnap = await getDocs(query(collection(db, getCollectionName('transactions')), where('conteneur', '==', code)));
+                txSnap.docs.forEach(d => { const t = d.data() || {}; if (t.reference) txByRef[t.reference] = t.items || []; });
+            } catch (_) { /* items indisponibles */ }
+            let totalIci = 0; const clients = {};
+            livs.forEach(l => {
+                const client = (l.destinataire || l.expediteur || 'Client').toString().trim() || 'Client';
+                const labels = (l.labels && l.labels.length) ? l.labels : [l.ref];
+                const items = (txByRef[l.ref] && txByRef[l.ref].length) ? txByRef[l.ref] : (l.items || []);
+                const descMap = this.labelDescMap(labels, items);
+                const contByLabel = this.loadedContainerByLabel(l);
+                labels.forEach(lbl => {
+                    const ct = contByLabel[lbl] || '';
+                    let icon, etat;
+                    if (ct === code) { icon = '🟢'; etat = 'chargé ici'; totalIci++; }
+                    else if (ct) { icon = '📦'; etat = 'dans ' + ct; }
+                    else { icon = '⏳'; etat = 'en attente'; }
+                    (clients[client] = clients[client] || []).push({ lbl, desc: descMap[lbl] || 'Colis', icon, etat });
+                });
+            });
+            const names = Object.keys(clients);
+            let html = `<p style="margin:0 0 8px; font-weight:700; color:#0f172a;">${totalIci} sous-colis chargé(s) ici · ${names.length} client(s)</p>`;
+            names.forEach(cn => {
+                html += `<div style="margin-bottom:8px; border-left:3px solid #e2e8f0; padding-left:8px;"><div style="font-weight:700; color:#334155;">▸ ${cn} (${clients[cn].length})</div>`;
+                html += clients[cn].map(p => `<div style="padding:2px 0; font-size:13px; color:#475569;">${p.icon} <strong>${p.desc}</strong> <span style="font-family:monospace; font-size:11px; color:#94a3b8;">${p.lbl}</span> — ${p.etat}</div>`).join('');
+                html += `</div>`;
+            });
+            if (contEl) contEl.innerHTML = html;
+        } catch (e) { console.error('Contenu conteneur:', e); if (contEl) contEl.innerHTML = `<p style="color:#ef4444;">Contenu indisponible.</p>`; }
+    },
 
     async saveInfo(id) {
         const v = elId => (document.getElementById(elId)?.value || '').trim();
