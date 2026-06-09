@@ -700,7 +700,12 @@ export const ToutesLesFacturesView = {
         livraisons.forEach(liv => {
             const labels = liv.labels && liv.labels.length > 0 ? liv.labels : [liv.ref];
             totalSubColis += labels.length;
-            
+            // Chargement PAR PIÈCE actif ? (au moins un sous-colis chargé
+            // individuellement). Si oui, la vérité est PAR PIÈCE : le statut global
+            // "A_VENIR" ne doit PAS marquer les pièces NON chargées comme assignées
+            // (cohérence avec la section conteneur / confection).
+            const anyPieceLoaded = (liv.scanHistory || []).some(s => s && s.type === 'CONTENEUR_CHARGEMENT' && s.scanRef !== liv.ref);
+
             labels.forEach(lbl => {
                 // Produit du sous-colis = ligne (item) correspondante de la facture.
                 // PAS de repli sur la description globale (sinon toute la facture
@@ -762,7 +767,7 @@ export const ToutesLesFacturesView = {
                 //    UNIQUEMENT aux pièces non encore résolues par leur propre
                 //    scan. Ainsi une pièce non déchargée n'est jamais marquée
                 //    « Arrivé » à tort parce qu'une autre pièce du dossier l'est.
-                if (liv.containerStatus === 'A_VENIR' && !pieceResolved) {
+                if (liv.containerStatus === 'A_VENIR' && !pieceResolved && !anyPieceLoaded) {
                     if (liv.modeExpedition === 'aerien') {
                         lblStatusDisplay = 'En vol (Aérien)';
                     } else if (lblStatusClass === 'colis-transit') {
