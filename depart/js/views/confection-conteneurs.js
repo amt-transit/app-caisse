@@ -137,16 +137,17 @@ export const ConfectionConteneursView = {
                             <div class="dossier-list">
                                 <div v-if="loadingLivraisons" style="text-align: center; padding: 40px; color: #64748b;"><i class="fas fa-spinner fa-spin"></i> Chargement...</div>
                                 <div v-else-if="availableLivraisons.length === 0" style="text-align: center; padding: 40px; color: #64748b;">Aucun dossier disponible à assigner.</div>
-                                <div v-else v-for="l in availableLivraisons" :key="l.id" class="dossier-item" @click="toggleItemSelection(l.id)">
+                                <div v-else v-for="l in availableLivraisons" :key="l.id" class="dossier-item">
                                     <div class="dossier-item__check">
-                                        <input type="checkbox" :value="l.id" v-model="selectedAvailableIds" @click.stop>
+                                        <input type="checkbox" :value="l.id" v-model="selectedAvailableIds">
                                     </div>
-                                    <div class="dossier-item__info">
+                                    <div class="dossier-item__info" style="cursor:pointer;" @click="openLoadModal(l.id)" title="Choisir les sous-colis précis à charger">
                                         <div class="dossier-item__ref"><span class="status-icon">🔵</span><span class="mono">{{ l.ref }}</span></div>
                                         <div class="dossier-item__meta">
                                             <span class="meta-tag meta-tag--client">👤 {{ l.destinataire || l.expediteur || 'Client' }}</span>
-                                            <span class="meta-tag">📦 {{ l.quantite || 1 }} colis</span>
+                                            <span class="meta-tag" :style="{ background: loadedCount(l) ? '#fef9c3' : '' }">📦 {{ availableCount(l) }} dispo<span v-if="loadedCount(l)"> · {{ loadedCount(l) }} chargé(s)</span></span>
                                             <span class="meta-tag meta-tag--money">{{ l.prixOriginal || l.montant || '0 CFA' }}</span>
+                                            <span class="meta-tag" style="background:#eef2ff; color:#4338ca;">👆 choisir les sous-colis</span>
                                         </div>
                                     </div>
                                 </div>
@@ -186,11 +187,11 @@ export const ConfectionConteneursView = {
                                             <div class="ctn-dossier-item__ref mono">{{ l.ref }}</div>
                                             <div class="ctn-dossier-item__meta">
                                                 <span class="meta-tag meta-tag--client">👤 {{ l.destinataire || l.expediteur || 'Client' }}</span>
-                                                <span class="meta-tag">📦 {{ l.quantite || 1 }} colis</span>
+                                                <span class="meta-tag">📦 {{ loadedInContainer(l, currentContainerName) }} / {{ pieceTotal(l) }} chargé(s)</span>
                                                 <span class="meta-tag meta-tag--money">{{ l.prixOriginal || l.montant || '0 CFA' }}</span>
                                             </div>
                                         </div>
-                                        <button class="btn-remove" type="button" title="Retirer du conteneur" @click="removeFromContainer(l.id)">✕</button>
+                                        <button class="btn-remove" type="button" title="Retirer ces sous-colis du conteneur" @click="removeFromContainer(l.id)">✕</button>
                                     </div>
                                 </div>
                             </template>
@@ -232,6 +233,34 @@ export const ConfectionConteneursView = {
                         </div>
                     </div>
                 </div>
+
+                <!-- MODALE : choisir les sous-colis PRÉCIS à charger -->
+                <div v-if="loadModal.open && loadModalDossier" class="modal-overlay" style="position:fixed; inset:0; background:rgba(0,0,0,.5); display:flex; align-items:center; justify-content:center; z-index:9999; padding:16px;" @click.self="closeLoadModal">
+                    <div class="modal-content" style="background:#fff; border-radius:12px; max-width:700px; width:100%; max-height:90vh; overflow:auto; padding:22px;">
+                        <h3 style="margin:0 0 4px;">📦 Charger — <span class="mono">{{ loadModalDossier.ref }}</span></h3>
+                        <p style="color:#64748b; margin:0 0 12px;">Conteneur en cours : <strong>{{ currentContainerName || '— aucun conteneur actif' }}</strong> · {{ modalAvailableLabels.length }} disponible(s) sur {{ (loadModalDossier.labels || []).length }}</p>
+                        <div style="display:flex; gap:8px; margin-bottom:10px; flex-wrap:wrap;">
+                            <button class="btn-sm btn-sm--ghost" type="button" @click="modalSelectAll(true)">Tout cocher dispo</button>
+                            <button class="btn-sm btn-sm--ghost" type="button" @click="modalSelectAll(false)">Décocher</button>
+                        </div>
+                        <div style="border:1px solid #e2e8f0; border-radius:10px; overflow:hidden;">
+                            <div v-for="lbl in loadModalDossier.labels" :key="lbl" style="display:flex; align-items:center; gap:10px; padding:9px 12px; border-bottom:1px solid #f1f5f9;">
+                                <template v-if="modalLabelContainer(lbl)">
+                                    <span style="flex:1;"><span class="mono" style="font-size:12px;">{{ lbl }}</span> — <strong>{{ modalLabelDesc(lbl) }}</strong> <span style="color:#0369a1;">· 📦 chargé dans {{ modalLabelContainer(lbl) }}</span></span>
+                                    <button type="button" style="background:#fee2e2; color:#b91c1c; border:none; padding:4px 12px; border-radius:6px; cursor:pointer; font-weight:600;" @click="unloadModalLabel(lbl)">Décharger</button>
+                                </template>
+                                <template v-else>
+                                    <input type="checkbox" :value="lbl" v-model="loadModal.selected">
+                                    <span style="flex:1;"><span class="mono" style="font-size:12px;">{{ lbl }}</span> — <strong>{{ modalLabelDesc(lbl) }}</strong> <span style="color:#16a34a;">· 🟢 disponible</span></span>
+                                </template>
+                            </div>
+                        </div>
+                        <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; margin-top:16px; flex-wrap:wrap;">
+                            <button type="button" style="padding:9px 16px; border:1px solid #cbd5e1; border-radius:8px; background:#fff; color:#334155; font-weight:600; cursor:pointer;" @click="closeLoadModal">Fermer</button>
+                            <button type="button" :disabled="!loadModal.selected.length || !currentContainerName" style="padding:9px 18px; border:none; border-radius:8px; background:#16a34a; color:#fff; font-weight:700; cursor:pointer;" :style="{ opacity: (!loadModal.selected.length || !currentContainerName) ? .5 : 1 }" @click="loadModalSelected">✅ Charger ({{ loadModal.selected.length }}){{ currentContainerName ? ' dans ' + currentContainerName : '' }}</button>
+                        </div>
+                    </div>
+                </div>
             </div>
         `;
 
@@ -249,6 +278,7 @@ export const ConfectionConteneursView = {
                 const selectedAvailableIds = ref([]);
                 const activeTabId = ref(null);
                 const leftSearch = ref('');
+                const loadModal = ref({ open: false, dossierId: null, selected: [] }); // modale "charger sous-colis"
                 const loadingLivraisons = ref(true);
                 const loadingContainers = ref(true);
 
@@ -310,15 +340,36 @@ export const ConfectionConteneursView = {
                     }
                 });
 
+                // === SUIVI PAR SOUS-COLIS (étape 1) ===
+                // Étiquettes d'un dossier (null si données anciennes sans `labels`).
+                const piecesOf = (l) => (l.labels && l.labels.length) ? l.labels : null;
+                const pieceTotal = (l) => { const p = piecesOf(l); return p ? p.length : (parseInt(l.quantite) || 1); };
+                // Sous-colis chargés (scan CONTENEUR_CHARGEMENT). Gère l'ancien ajout
+                // "global" (scanRef = réf du dossier => dossier entier chargé).
+                const loadedInfo = (l) => {
+                    const p = piecesOf(l);
+                    const loads = (Array.isArray(l.scanHistory) ? l.scanHistory : []).filter(h => h && h.type === 'CONTENEUR_CHARGEMENT');
+                    if (!p) return { whole: loads.length > 0, byLabel: new Map() };
+                    let whole = false; const byLabel = new Map();
+                    for (const h of loads) {
+                        if (h.scanRef === l.ref) whole = true;
+                        else if (p.includes(h.scanRef)) byLabel.set(h.scanRef, h.container || l.conteneur || '');
+                    }
+                    return { whole, byLabel };
+                };
+                const loadedCount = (l) => { const i = loadedInfo(l); return i.whole ? pieceTotal(l) : i.byLabel.size; };
+                const availableCount = (l) => Math.max(0, pieceTotal(l) - loadedCount(l));
+                const loadedInContainer = (l, cont) => {
+                    const i = loadedInfo(l);
+                    if (i.whole) return (l.conteneur === cont) ? pieceTotal(l) : 0;
+                    let n = 0; for (const c of i.byLabel.values()) if (c === cont) n++;
+                    return n;
+                };
+
                 const availableLivraisons = computed(() => {
-                    let avail = livraisons.value.filter(l =>
-                        // "Disponible" = facture créée mais PAS encore chargée.
-                        // Le chargement se fait par SCAN ("Charger conteneur")
-                        // ou via le bouton "Ajouter" -> ils posent
-                        // containerStatus='A_VENIR'. Le conteneur pré-taggé à la
-                        // création ne compte donc PAS tant qu'on n'a pas scanné.
-                        (!l.containerStatus || l.containerStatus === 'PARIS' || l.containerStatus === 'EN_ATTENTE')
-                    );
+                    // Un dossier reste DISPONIBLE tant qu'il lui reste des sous-colis
+                    // non chargés (il ne disparaît qu'à 0 disponible).
+                    let avail = livraisons.value.filter(l => availableCount(l) > 0);
                     const search = leftSearch.value.toLowerCase().trim();
                     if (search) {
                         avail = avail.filter(l => 
@@ -335,13 +386,12 @@ export const ConfectionConteneursView = {
                 
                 const currentContainerItems = computed(() => {
                     if (!currentContainerName.value) return [];
-                    // Dans le conteneur = affecté à CE conteneur ET chargé
-                    // (scanné/ajouté => containerStatus 'A_VENIR').
-                    return livraisons.value.filter(l => l.conteneur === currentContainerName.value && l.containerStatus === 'A_VENIR');
+                    // Dossiers ayant au moins un sous-colis chargé dans CE conteneur.
+                    return livraisons.value.filter(l => loadedInContainer(l, currentContainerName.value) > 0);
                 });
 
                 const currentContainerTotalColis = computed(() => {
-                    return currentContainerItems.value.reduce((sum, item) => sum + (parseInt(item.quantite) || 1), 0);
+                    return currentContainerItems.value.reduce((sum, l) => sum + loadedInContainer(l, currentContainerName.value), 0);
                 });
 
                 const currentContainerTotalCA = computed(() => {
@@ -359,8 +409,59 @@ export const ConfectionConteneursView = {
                 const formatMoney = (amount) => globalApp.formatMoney(amount);
                 const formatDate = (dateString) => dateString ? new Date(dateString).toLocaleString('fr-FR') : '-';
 
-                const getContainerItemsCount = (c) => livraisons.value.filter(l => l.conteneur === (c.number || c.id) && l.containerStatus === 'A_VENIR').length;
-                const getContainerColisCount = (c) => livraisons.value.filter(l => l.conteneur === (c.number || c.id) && l.containerStatus === 'A_VENIR').reduce((sum, item) => sum + (parseInt(item.quantite) || 1), 0);
+                const getContainerItemsCount = (c) => livraisons.value.filter(l => loadedInContainer(l, c.number || c.id) > 0).length;
+                const getContainerColisCount = (c) => livraisons.value.reduce((sum, l) => sum + loadedInContainer(l, c.number || c.id), 0);
+
+                // === Modale "Choisir les sous-colis à charger" ===
+                // Étiquette -> produit (depuis les lignes de la facture).
+                const labelDescMapOf = (l) => {
+                    const map = {};
+                    const items = Array.isArray(l.items) ? l.items : [];
+                    const labels = l.labels || [];
+                    let idx = 0;
+                    items.forEach(it => { const q = parseInt(it.qty) || 1; for (let k = 0; k < q && idx < labels.length; k++) { map[labels[idx]] = it.desc || 'Colis'; idx++; } });
+                    labels.forEach(lbl => { if (!map[lbl]) map[lbl] = l.description || 'Colis'; });
+                    return map;
+                };
+                const loadModalDossier = computed(() => livraisons.value.find(l => l.id === loadModal.value.dossierId) || null);
+                const modalLabelContainer = (lbl) => {
+                    const l = loadModalDossier.value; if (!l) return '';
+                    const info = loadedInfo(l);
+                    if (info.whole) return l.conteneur || '?';
+                    return info.byLabel.get(lbl) || '';
+                };
+                const modalLabelDesc = (lbl) => { const l = loadModalDossier.value; return l ? (labelDescMapOf(l)[lbl] || 'Colis') : ''; };
+                const modalAvailableLabels = computed(() => {
+                    const l = loadModalDossier.value; if (!l) return [];
+                    return (l.labels || []).filter(lbl => !modalLabelContainer(lbl));
+                });
+                const openLoadModal = (id) => { loadModal.value = { open: true, dossierId: id, selected: [] }; };
+                const closeLoadModal = () => { loadModal.value.open = false; };
+                const modalSelectAll = (sel) => { loadModal.value.selected = sel ? modalAvailableLabels.value.slice() : []; };
+                const loadModalSelected = async () => {
+                    const l = loadModalDossier.value;
+                    if (!l || !currentContainerName.value || !loadModal.value.selected.length) return;
+                    const cont = currentContainerName.value;
+                    const nowIso = new Date().toISOString();
+                    const entries = loadModal.value.selected.map(lbl => ({ scanRef: lbl, date: nowIso, type: 'CONTENEUR_CHARGEMENT', container: cont, manual: true }));
+                    try {
+                        await updateDoc(doc(db, getCollectionName("livraisons"), l.id), {
+                            conteneur: l.conteneur || cont, containerStatus: 'A_VENIR', scanHistory: arrayUnion(...entries)
+                        });
+                        globalApp.showToast(`${entries.length} sous-colis chargé(s) dans ${cont}.`, "success");
+                        loadModal.value.selected = [];
+                    } catch (e) { globalApp.showToast("Erreur lors du chargement.", "error"); }
+                };
+                const unloadModalLabel = async (lbl) => {
+                    const l = loadModalDossier.value; if (!l) return;
+                    const hist = Array.isArray(l.scanHistory) ? l.scanHistory : [];
+                    const newHist = hist.filter(h => !(h && h.type === 'CONTENEUR_CHARGEMENT' && (h.scanRef === lbl || h.scanRef === l.ref)));
+                    const stillLoaded = newHist.some(h => h && h.type === 'CONTENEUR_CHARGEMENT');
+                    const upd = { scanHistory: newHist };
+                    if (!stillLoaded) { upd.containerStatus = 'PARIS'; upd.conteneur = ''; }
+                    try { await updateDoc(doc(db, getCollectionName("livraisons"), l.id), upd); globalApp.showToast("Sous-colis déchargé.", "info"); }
+                    catch (e) { globalApp.showToast("Erreur lors du déchargement.", "error"); }
+                };
 
                 const toggleItemSelection = (id) => {
                     const index = selectedAvailableIds.value.indexOf(id);
@@ -388,18 +489,25 @@ export const ConfectionConteneursView = {
 
                     const batch = writeBatch(db);
                     selected.forEach(l => {
+                        const p = piecesOf(l);
+                        if (!p) {
+                            // Données anciennes sans étiquettes -> ajout global (1 entrée).
+                            batch.update(doc(db, getCollectionName("livraisons"), l.id), {
+                                conteneur: l.conteneur || cont, containerStatus: 'A_VENIR',
+                                scanHistory: arrayUnion({ scanRef: l.ref || l.id, date: nowIso, type: 'CONTENEUR_CHARGEMENT', container: cont, manual: true })
+                            });
+                            return;
+                        }
+                        // Bouton "Ajouter" = charge TOUT le disponible (le précis se fait
+                        // dans la modale "Choisir les sous-colis").
+                        const info = loadedInfo(l);
+                        if (info.whole) return; // déjà tout chargé (ancien ajout global)
+                        const toLoad = p.filter(lbl => lbl !== l.ref && !info.byLabel.has(lbl));
+                        if (!toLoad.length) return;
+                        const entries = toLoad.map(lbl => ({ scanRef: lbl, date: nowIso, type: 'CONTENEUR_CHARGEMENT', container: cont, manual: true }));
                         batch.update(doc(db, getCollectionName("livraisons"), l.id), {
-                            conteneur: cont,
-                            containerStatus: 'A_VENIR',
-                            // Ajout manuel = AGIT COMME UN SCAN : on journalise
-                            // dans scanHistory (type identique au scan conteneur).
-                            scanHistory: arrayUnion({
-                                scanRef: l.ref || l.id,
-                                date: nowIso,
-                                type: 'CONTENEUR_CHARGEMENT',
-                                container: cont,
-                                manual: true
-                            })
+                            conteneur: l.conteneur || cont, containerStatus: 'A_VENIR',
+                            scanHistory: arrayUnion(...entries)
                         });
                     });
 
@@ -429,7 +537,7 @@ export const ConfectionConteneursView = {
                                 modeExpedition: sessionStorage.getItem('shippingMode') || 'maritime'
                             }).catch(e => console.error("Log scan (ajout manuel):", e));
                         }
-                        globalApp.showToast(`${selected.length} dossier(s) ajouté(s) au conteneur ${cont}.`, "success");
+                        globalApp.showToast(`Sous-colis chargés dans le conteneur ${cont}.`, "success");
                         selectedAvailableIds.value = [];
                     } catch(e) {
                         globalApp.showToast("Erreur lors de l'ajout.", "error");
@@ -437,12 +545,18 @@ export const ConfectionConteneursView = {
                 };
 
                 const removeFromContainer = async (id) => {
+                    const l = livraisons.value.find(x => x.id === id);
+                    if (!l) return;
+                    const cont = currentContainerName.value;
+                    // On retire les sous-colis chargés dans CE conteneur (+ ancien ajout global).
+                    const newHist = (Array.isArray(l.scanHistory) ? l.scanHistory : []).filter(h =>
+                        !(h && h.type === 'CONTENEUR_CHARGEMENT' && (h.container === cont || h.scanRef === l.ref)));
+                    const stillLoaded = newHist.some(h => h && h.type === 'CONTENEUR_CHARGEMENT');
+                    const upd = { scanHistory: newHist };
+                    if (!stillLoaded) { upd.containerStatus = 'PARIS'; upd.conteneur = ''; }
                     try {
-                        await updateDoc(doc(db, getCollectionName("livraisons"),id), {
-                            conteneur: '',
-                            containerStatus: 'PARIS'
-                        });
-                        globalApp.showToast("Dossier retiré du conteneur.", "info");
+                        await updateDoc(doc(db, getCollectionName("livraisons"), id), upd);
+                        globalApp.showToast("Sous-colis retirés du conteneur.", "info");
                     } catch(e) {
                         globalApp.showToast("Erreur lors du retrait.", "error");
                     }
@@ -454,9 +568,15 @@ export const ConfectionConteneursView = {
                         if (!await window.AppModal.confirm("Voulez-vous vraiment vider entièrement ce conteneur ?", "Vider le conteneur", true)) return;
                     } else if (!confirm("Vider le conteneur ?")) return;
 
+                    const cont = currentContainerName.value;
                     const batch = writeBatch(db);
                     currentContainerItems.value.forEach(l => {
-                        batch.update(doc(db, getCollectionName("livraisons"),l.id), { conteneur: '', containerStatus: 'PARIS' });
+                        const newHist = (Array.isArray(l.scanHistory) ? l.scanHistory : []).filter(h =>
+                            !(h && h.type === 'CONTENEUR_CHARGEMENT' && (h.container === cont || h.scanRef === l.ref)));
+                        const stillLoaded = newHist.some(h => h && h.type === 'CONTENEUR_CHARGEMENT');
+                        const upd = { scanHistory: newHist };
+                        if (!stillLoaded) { upd.containerStatus = 'PARIS'; upd.conteneur = ''; }
+                        batch.update(doc(db, getCollectionName("livraisons"), l.id), upd);
                     });
 
                     await batch.commit();
@@ -512,7 +632,10 @@ export const ConfectionConteneursView = {
                     currentContainerTotalCA, currentContainerCADisplay, registeredContainers, currentUserName,
                     formatDate, formatMoney, getContainerItemsCount, getContainerColisCount,
                     toggleItemSelection, selectAllLeft, addSelectedToContainer, removeFromContainer,
-                    emptyActiveContainer, registerContainer, loadData, globalApp
+                    emptyActiveContainer, registerContainer, loadData, globalApp,
+                    availableCount, loadedCount, loadedInContainer, pieceTotal,
+                    loadModal, loadModalDossier, modalLabelContainer, modalLabelDesc, modalAvailableLabels,
+                    openLoadModal, closeLoadModal, modalSelectAll, loadModalSelected, unloadModalLabel
                 };
             }
         });
