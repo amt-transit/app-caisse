@@ -586,16 +586,42 @@ export const app = {
                 if (this.unsubContainerGauge1) this.unsubContainerGauge1();
                 if (this.unsubContainerGauge2) this.unsubContainerGauge2();
                 
-                let snapTransDocs = [], snapLivDocs = [];
+                // Jauge PAR SOUS-COLIS (compatible chargement partiel). Pour le
+                // conteneur ACTIF, on compte le volume des sous-colis qui y sont
+                // chargés + ceux qui RESTENT à charger (non chargés). Les sous-colis
+                // déjà chargés dans un AUTRE conteneur (ex. scellé) sont EXCLUS, mais
+                // les colis restants de ces dossiers continuent de compter. volumeCBM
+                // est au niveau du dossier -> on prend la fraction concernée.
+                let snapLivDocs = [];
                 const updateVolume = () => {
                     let totalCBM = 0;
-                    snapTransDocs.forEach(d => { totalCBM += parseFloat(d.data().volumeCBM) || 0; });
-                    snapLivDocs.forEach(d => { if (d.data().conteneur !== activeContainer) totalCBM += parseFloat(d.data().volumeCBM) || 0; });
+                    snapLivDocs.forEach(d => {
+                        const liv = d.data();
+                        if (liv.isDeleted) return;
+                        const vol = parseFloat(liv.volumeCBM) || 0;
+                        if (vol <= 0) return;
+                        const labels = (liv.labels && liv.labels.length) ? liv.labels : [liv.ref];
+                        const pieceTotal = labels.length || 1;
+                        const hist = Array.isArray(liv.scanHistory) ? liv.scanHistory : [];
+                        const loadedElsewhere = new Set();
+                        hist.forEach(h => {
+                            if (!h || h.type !== 'CONTENEUR_CHARGEMENT') return;
+                            const ct = String(h.container || liv.conteneur || '').trim().toUpperCase();
+                            if (!ct || ct === activeContainer) return; // chargé dans le conteneur ACTIF -> compte
+                            if (h.scanRef === liv.ref) labels.forEach(l => loadedElsewhere.add(l)); // ancien chargement global
+                            else loadedElsewhere.add(h.scanRef);
+                        });
+                        const counted = Math.max(0, pieceTotal - loadedElsewhere.size);
+                        totalCBM += vol * (counted / pieceTotal);
+                    });
                     this.updateGaugeUI(totalCBM);
                 };
 
-                this.unsubContainerGauge1 = onSnapshot(query(collection(db, getCollectionName("transactions")), where("conteneur", "==", activeContainer), where("isDeleted", "==", false)), snap => { snapTransDocs = snap.docs; updateVolume(); });
-                this.unsubContainerGauge2 = onSnapshot(query(collection(db, getCollectionName("livraisons")), where("containerStatus", "==", "PARIS")), snap => { snapLivDocs = snap.docs; updateVolume(); });
+                this.unsubContainerGauge2 = onSnapshot(
+                    query(collection(db, getCollectionName("livraisons")), where("containerStatus", "in", ["PARIS", "A_VENIR"])),
+                    snap => { snapLivDocs = snap.docs; updateVolume(); },
+                    (err) => console.warn("Jauge conteneur :", err && err.message)
+                );
             });
         } catch (e) { console.error("Erreur initContainerGauge:", e); }
     },
