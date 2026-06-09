@@ -413,17 +413,28 @@ export const BateauxDepartView = {
                     }
                     return descMap;
                 };
-                // Sous-colis réellement CHARGÉS dans un conteneur (scan « Charger
-                // conteneur » = CONTENEUR_CHARGEMENT dans l'historique de la pièce).
-                const loadedPiecesOf = (liv) => {
+                // Sous-colis réellement CHARGÉS dans LES CONTENEURS DE CE BATEAU.
+                // Vérité = scan/ajout par étiquette (CONTENEUR_CHARGEMENT). On ne
+                // compte PLUS les non-chargés d'un dossier "A_VENIR", SAUF en cas de
+                // chargement GLOBAL (aucune pièce scannée individuellement = ancien
+                // ajout en bloc) où le repli s'applique encore.
+                const loadedPiecesInContainers = (liv, contSet) => {
                     const labels = (liv.labels && liv.labels.length) ? liv.labels : [liv.ref];
                     const descMap = descMapOf(liv.ref);
                     const hist = Array.isArray(liv.scanHistory) ? liv.scanHistory : [];
+                    const anyPieceScanned = hist.some(h => h && h.type === 'CONTENEUR_CHARGEMENT' && h.scanRef !== liv.ref);
                     const out = [];
                     labels.forEach((lbl, idx) => {
-                        const scansOfPiece = hist.filter(h => h.scanRef === lbl);
-                        const loaded = scansOfPiece.some(h => h.type === 'CONTENEUR_CHARGEMENT')
-                            || (scansOfPiece.length === 0 && liv.containerStatus === 'A_VENIR'); // repli (pas de suivi par pièce)
+                        const scans = hist.filter(h => h && h.scanRef === lbl && h.type === 'CONTENEUR_CHARGEMENT');
+                        let pieceCont = '';
+                        let loaded = false;
+                        if (scans.length) {
+                            pieceCont = scans[scans.length - 1].container || liv.conteneur || '';
+                            loaded = contSet.has(pieceCont); // pièce scannée -> embarquée si SON conteneur est sur ce bateau
+                        } else if (!anyPieceScanned && liv.containerStatus === 'A_VENIR') {
+                            pieceCont = liv.conteneur || '';
+                            loaded = contSet.has(pieceCont); // repli : chargement global -> suit le conteneur du dossier
+                        }
                         if (!loaded) return;
                         const m = lbl.match(/_(\d+)_/);
                         const li = m ? parseInt(m[1]) : (idx + 1);
@@ -432,15 +443,17 @@ export const BateauxDepartView = {
                             desc: descMap[li] || liv.description || 'Colis',
                             livId: liv.id,
                             livRef: liv.ref,
-                            conteneur: liv.conteneur || '',
+                            conteneur: pieceCont || liv.conteneur || '',
                             destinataire: liv.destinataire || ''
                         });
                     });
                     return out;
                 };
                 const getBoatPieces = (boatId) => {
+                    const contSet = new Set(getBoatContainers(boatId).map(c => c.number || c.id));
+                    if (!contSet.size) return [];
                     const arr = [];
-                    getBoatParcels(boatId).forEach(l => loadedPiecesOf(l).forEach(p => arr.push(p)));
+                    livraisons.value.forEach(l => loadedPiecesInContainers(l, contSet).forEach(p => arr.push(p)));
                     return arr;
                 };
                 const pieceStatus = (p) => {
