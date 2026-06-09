@@ -618,10 +618,12 @@ export const CaisseView = {
 
                     let qT = await getDocs(query(collection(db, getCollectionName("transactions")), where("reference", "==", ref)));
                     if (qT.empty) qT = await getDocs(query(collection(db, getCollectionName("transactions")), where("nom", "==", ref)));
-                    
-                    if (!qT.empty) {
-                        if (qT.size > 1) { if(window.AppModal) window.AppModal.error("Plusieurs résultats."); return; }
-                        const data = qT.docs[0].data();
+                    // Exclure les factures SUPPRIMÉES (soft-delete) : on n'encaisse pas dessus.
+                    const liveDocs = qT.docs.filter(dd => !dd.data().isDeleted);
+
+                    if (liveDocs.length > 0) {
+                        if (liveDocs.length > 1) { if(window.AppModal) window.AppModal.error("Plusieurs résultats."); return; }
+                        const data = liveDocs[0].data();
                         if (!matchesShippingMode(data)) {
                             if (window.AppModal) window.AppModal.error(isAerienMode() ? "Ce colis est MARITIME — basculez en mode 🚢 pour l'encaisser." : "Ce colis est AÉRIEN — basculez en mode ✈️ pour l'encaisser.");
                             dForm.reference = '';

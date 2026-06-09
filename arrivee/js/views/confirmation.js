@@ -610,6 +610,8 @@ export const ConfirmationView = {
                         const d = doc.data(); return (d.reference || '').toUpperCase().includes(term) || (d.nom || '').toUpperCase().includes(term);
                     });
                 }
+                // Ne jamais agir sur une facture SUPPRIMÉE (soft-delete).
+                matchingDocs = matchingDocs.filter(d => !d.data().isDeleted);
                 if (matchingDocs.length === 0) {
                     sessionsListPendingEl.innerHTML = '<p style="padding:10px; color:#ef4444;">Aucune transaction trouvée (sur les 2000 dernières).</p>';
                     return;
