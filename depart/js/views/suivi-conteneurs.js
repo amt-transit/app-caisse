@@ -8,6 +8,7 @@ import { db, functions } from '../../../commun/firebase-config.js';
 import { collection, doc, updateDoc, onSnapshot, getDocs, getDoc, query, where } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 import { httpsCallable } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-functions.js";
 import { getCollectionName } from '../../../commun/agencies-config.js';
+import { containerStageBadgeHtml } from '../../../commun/container-stage.js';
 
 // Étapes du voyage d'un conteneur (ordre = progression).
 const STEPS = [
@@ -163,7 +164,7 @@ export const SuiviConteneursView = {
                     <td>${c.realContainerNo ? `<span class="sc-real">${c.realContainerNo}</span>` : '<span style="color:#f59e0b;">à saisir</span>'}</td>
                     <td>${c.vesselName || '—'}</td>
                     <td style="color:#64748b;">${c.destination || c.destinationAgency || '—'}</td>
-                    <td>${stepBadge(statut)}</td>
+                    <td>${containerStageBadgeHtml(c)}</td>
                     <td style="color:#64748b; white-space:nowrap;">${c.eta || '—'}</td>
                     <td style="text-align:center; white-space:nowrap;">
                         ${c.shipsgoShipmentId ? '<span title="Suivi automatique ShipsGo actif" style="color:#0e7490;">🛰️</span>' : '<span title="Suivi non lancé" style="color:#cbd5e1;">—</span>'}
@@ -199,7 +200,7 @@ export const SuiviConteneursView = {
             <div class="modal-overlay" style="position:fixed; inset:0; background:rgba(0,0,0,.5); display:flex; align-items:center; justify-content:center; z-index:9999; padding:16px;" onclick="if(event.target===this) window.app.views.suiviConteneurs.closeModal()">
                 <div class="modal-content" style="background:#fff; border-radius:12px; max-width:640px; width:100%; max-height:90vh; overflow:auto; padding:22px;">
                     <h3 style="margin:0 0 4px;">📦 Conteneur ${code}</h3>
-                    <p style="color:#64748b; margin:0 0 12px;">Statut logistique : ${c.status || '—'}</p>
+                    <p style="margin:0 0 12px;">${containerStageBadgeHtml(c)}</p>
 
                     <div class="form-grid" style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
                         <label style="grid-column:1/3;">N° de conteneur réel (compagnie maritime)*

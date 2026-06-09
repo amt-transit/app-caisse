@@ -3,6 +3,7 @@ import { collection, query, onSnapshot, doc, setDoc, updateDoc, deleteDoc, write
 import { httpsCallable } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-functions.js";
 import { createApp, ref, reactive, computed, onMounted, onUnmounted } from "https://unpkg.com/vue@3/dist/vue.esm-browser.prod.js";
 import { getCollectionName } from '../../../commun/agencies-config.js';
+import { containerStageBadgeHtml } from '../../../commun/container-stage.js';
 
 export const BateauxDepartView = {
     vueApp: null,
@@ -142,6 +143,7 @@ export const BateauxDepartView = {
                                     <div class="conteneur-item__info">
                                         <div class="conteneur-item__ref"><span class="mono">{{ c.number || c.id }}</span></div>
                                         <div class="conteneur-item__meta">
+                                            <span v-html="stageBadge(c)"></span>
                                             <span class="meta-tag">📋 {{ getDossiersCount(c.number || c.id) }} dossier(s)</span>
                                             <span class="meta-tag meta-tag--date">{{ formatDate(c.registeredAt) }}</span>
                                         </div>
@@ -806,7 +808,8 @@ export const BateauxDepartView = {
                     toggleSelection, selectAllLeft, openBoatModal, closeBoatModal, saveBoat,
                     deleteBoat, addToBoat, removeFromBoat, registerBoat, unRegisterBoat, loadData,
                     getRealNo, setRealNo, isRealValid, selectedContainers,
-                    colisBoatId, colisBoatRef, openColis, getBoatParcels, getBoatPieces, pieceStatus, pieceStatusStyle
+                    colisBoatId, colisBoatRef, openColis, getBoatParcels, getBoatPieces, pieceStatus, pieceStatusStyle,
+                    stageBadge: containerStageBadgeHtml
                 };
             }
         });

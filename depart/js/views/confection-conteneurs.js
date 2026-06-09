@@ -4,6 +4,7 @@ import { createApp, ref, computed, onMounted, onUnmounted, watch } from "https:/
 import { getCollectionName } from '../../../commun/agencies-config.js';
 import { matchesShippingMode } from '../../../commun/shipping-mode.js';
 import { isEurAgency } from '../../../commun/agency-money.js';
+import { containerStageBadgeHtml } from '../../../commun/container-stage.js';
 
 export const ConfectionConteneursView = {
     vueApp: null,
@@ -168,11 +169,18 @@ export const ConfectionConteneursView = {
                         </div>
                         <div class="panel__body" style="background: white;">
                             <template v-if="currentContainer">
+                                <div style="margin-bottom:10px;"><span v-html="stageBadge(currentContainer)"></span></div>
                                 <div class="ctn-stats">
                                     <div class="ctn-stat"><div class="ctn-stat__label">Référence</div><div class="ctn-stat__value mono">{{ currentContainerName }}</div></div>
                                     <div class="ctn-stat"><div class="ctn-stat__label">Dossiers</div><div class="ctn-stat__value">{{ currentContainerItems.length }}</div></div>
                                     <div class="ctn-stat"><div class="ctn-stat__label">Total colis</div><div class="ctn-stat__value">{{ currentContainerTotalColis }}</div></div>
                                     <div class="ctn-stat"><div class="ctn-stat__label">CA total</div><div class="ctn-stat__value">{{ formatMoney(currentContainerCADisplay) }}</div></div>
+                                </div>
+                                <div style="margin:0 0 12px;">
+                                    <div style="height:12px; background:#e2e8f0; border-radius:7px; overflow:hidden;">
+                                        <div :style="{ width: Math.min(100, currentContainerCbm/68*100) + '%', height:'100%', background: (currentContainerCbm/68) > 0.98 ? '#ef4444' : ((currentContainerCbm/68) > 0.8 ? '#f59e0b' : '#16a34a'), transition:'width .3s' }"></div>
+                                    </div>
+                                    <div style="font-size:12px; color:#475569; margin-top:4px; font-weight:600;">📦 {{ currentContainerTotalColis }} sous-colis · {{ currentContainerCbm.toFixed(1) }} / 68 CBM · {{ Math.round(currentContainerCbm/68*100) }}% rempli</div>
                                 </div>
                                 <div class="ctn-actions">
                                     <button class="btn-action btn-action--add" type="button" @click="addSelectedToContainer" :disabled="selectedAvailableIds.length === 0">➕ Ajouter ({{ selectedAvailableIds.length }})</button>
@@ -392,6 +400,17 @@ export const ConfectionConteneursView = {
 
                 const currentContainerTotalColis = computed(() => {
                     return currentContainerItems.value.reduce((sum, l) => sum + loadedInContainer(l, currentContainerName.value), 0);
+                });
+                // CBM chargé = volume du dossier (volumeCBM) au prorata des sous-colis
+                // réellement chargés dans CE conteneur. Capacité standard = 68 CBM.
+                const currentContainerCbm = computed(() => {
+                    const code = currentContainerName.value;
+                    if (!code) return 0;
+                    return currentContainerItems.value.reduce((sum, l) => {
+                        const vol = parseFloat(l.volumeCBM) || 0;
+                        const tot = pieceTotal(l) || 1;
+                        return sum + vol * (loadedInContainer(l, code) / tot);
+                    }, 0);
                 });
 
                 const currentContainerTotalCA = computed(() => {
@@ -628,7 +647,8 @@ export const ConfectionConteneursView = {
                 return {
                     livraisons, containers, selectedAvailableIds, activeTabId, leftSearch,
                     loadingLivraisons, loadingContainers, availableLivraisons, activeContainers,
-                    currentContainer, currentContainerName, currentContainerItems, currentContainerTotalColis,
+                    currentContainer, currentContainerName, currentContainerItems, currentContainerTotalColis, currentContainerCbm,
+                    stageBadge: containerStageBadgeHtml,
                     currentContainerTotalCA, currentContainerCADisplay, registeredContainers, currentUserName,
                     formatDate, formatMoney, getContainerItemsCount, getContainerColisCount,
                     toggleItemSelection, selectAllLeft, addSelectedToContainer, removeFromContainer,
