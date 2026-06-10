@@ -91,9 +91,12 @@ export default function LoginScreen({ onAuthed }) {
     setBusy(true);
     try {
       // Connexion par téléphone NATIVE : envoie le SMS et renvoie un objet de
-      // confirmation. La vérification (Play Integrity / reCAPTCHA natif) est
-      // gérée par le SDK, sans WebView ni case à cocher.
-      const confirmation = await auth.signInWithPhoneNumber(e164);
+      // confirmation. Timeout 30 s pour ne JAMAIS rester bloqué sur « patienter »
+      // si la vérification (Play Integrity) traîne ou si le réseau coince.
+      const confirmation = await Promise.race([
+        auth.signInWithPhoneNumber(e164),
+        new Promise((_, rej) => setTimeout(() => rej({ code: 'timeout' }), 30000)),
+      ]);
       confirmRef.current = confirmation;
       await AsyncStorage.setItem(LS.phone, e164);
       setSavedPhone(e164);
@@ -102,7 +105,11 @@ export default function LoginScreen({ onAuthed }) {
       setResendIn(30); // anti-abus : 30 s avant de pouvoir renvoyer
     } catch (e) {
       console.warn('signInWithPhoneNumber:', e?.code, e?.message);
-      fail(e?.code === 'auth/invalid-phone-number' ? 'Numéro invalide.' : "Envoi du SMS impossible. Réessayez.");
+      const msg = e?.code === 'auth/invalid-phone-number' ? 'Numéro invalide.'
+        : e?.code === 'auth/too-many-requests' ? 'Trop de tentatives sur ce numéro. Réessaie dans quelques heures, ou utilise un numéro de test.'
+        : e?.code === 'timeout' ? "L'envoi du SMS traîne. Vérifie ta connexion et réessaie."
+        : "Envoi du SMS impossible. Réessayez.";
+      fail(msg);
     }
   };
 
