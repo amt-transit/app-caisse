@@ -1101,6 +1101,13 @@ initVue(globalApp) {
                     resteCFA = Math.round(resteEUR * TAUX);
                 }
 
+                // Garde-fou : le montant payé ne peut PAS dépasser le total dû.
+                if (payeCFA > totalCFA + 1) {
+                    saving.value = false;
+                    globalApp.showToast("Le montant payé ne peut pas dépasser le total à payer.", "error");
+                    return;
+                }
+
                 const batch = writeBatch(db);
                 const dateIso = form.date || new Date().toISOString().split('T')[0];
                 const volumeCBM = parseFloat(form.volume) || 0;
