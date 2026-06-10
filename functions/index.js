@@ -147,6 +147,10 @@ async function syncOneContainer(collection, id, num) {
         // L'utilisateur a IMPOSÉ le bon n° d'envoi ShipsGo (conteneur réutilisé sur
         // plusieurs voyages) -> priorité absolue, on suit exactement celui-là.
         shipmentId = String(data.shipsgoForcedId).trim();
+    } else if (data.shipsgoShipmentId && list.some((s) => String(s.id) === String(data.shipsgoShipmentId))) {
+        // STABILITÉ : on GARDE l'envoi déjà choisi tant qu'il existe encore (évite
+        // de "sauter" sur un autre voyage/doublon à chaque synchro).
+        shipmentId = data.shipsgoShipmentId;
     } else if (list.length) {
         let chosen = list[0]; // le plus récent = voyage en cours
         if (PENDING(chosen)) { const twin = list.find((s) => !PENDING(s) && !DONE(s)); if (twin) chosen = twin; }
