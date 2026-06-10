@@ -335,6 +335,16 @@ export const ToutesLesFacturesView = {
             this.invoices = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
             this.invoices.sort((a, b) => new Date(b.date) - new Date(a.date));
             this.applyFilters();
+            // Ouverture AUTO de la modale "Voir facture" juste après une création
+            // (depuis Nouvelle Facture) : la réf à ouvrir a été déposée sur app.
+            // Le listener re-fire quand la facture arrive -> on l'ouvre dès qu'on
+            // la trouve (et on abandonne après 15 s pour éviter toute ouverture tardive).
+            const pending = this.app && this.app._openInvoiceRef;
+            if (pending && pending.ref) {
+                const inv = this.invoices.find(i => i.reference === pending.ref);
+                if (inv) { this.app._openInvoiceRef = null; this.viewInvoice(inv.id); }
+                else if (Date.now() - (pending.at || 0) > 15000) { this.app._openInvoiceRef = null; }
+            }
         });
 
         // Pré-chargement des affiliations clients + démarcheurs pour afficher

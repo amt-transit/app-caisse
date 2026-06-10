@@ -1318,7 +1318,11 @@ initVue(globalApp) {
                     const now = new Date();
                     const formattedDate = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}:${String(now.getSeconds()).padStart(2,'0')}`;
                     
-                    globalApp.printLabels({ ref: ref, date: formattedDate, destName: finalDestName, destPhone: destPhone, destAddress: lieuLivraison, expName: finalExpName, expAddress: expAddr, parrainName: affiliationDemarcheurName, labels: printLabelsData });
+                    // Au lieu d'imprimer directement les étiquettes, on ouvre la
+                    // modale "Voir facture" (Toutes les factures) : l'utilisateur y
+                    // voit le récap et TÉLÉCHARGE les étiquettes (boutons A6/A5 PDF).
+                    globalApp._openInvoiceRef = { ref: ref, at: Date.now() };
+                    globalApp.renderPage('touteslesfactures');
 
                     // On RESTE sur Nouvelle Facture (plus pratique pour
                     // enchaîner). Réinitialisation rapide du formulaire sans
