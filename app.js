@@ -1036,7 +1036,7 @@ export const app = {
     // --- UTILITAIRES GLOBAUX ---
     showToast(message, type = 'success') {
         const toast = document.createElement('div');
-        toast.style.cssText = `position: fixed; bottom: 20px; right: 20px; background: ${type === 'success' ? '#10b981' : (type==='info' ? '#3b82f6' : '#ef4444')}; color: white; padding: 12px 20px; border-radius: 8px; z-index: 9999; box-shadow: 0 4px 6px rgba(0,0,0,0.1); transition: opacity 0.3s ease;`;
+        toast.style.cssText = `position: fixed; bottom: 20px; right: 20px; background: ${type === 'success' ? '#10b981' : (type==='info' ? '#3b82f6' : '#ef4444')}; color: white; padding: 12px 20px; border-radius: 8px; z-index: 100000; box-shadow: 0 4px 6px rgba(0,0,0,0.1); transition: opacity 0.3s ease;`;
         toast.innerHTML = `<i class="fas fa-${type === 'success' ? 'check-circle' : (type==='info' ? 'info-circle' : 'exclamation-triangle')}"></i> ${message}`;
         document.body.appendChild(toast);
         setTimeout(() => { toast.style.opacity = '0'; setTimeout(() => toast.remove(), 300); }, 3000);
@@ -1434,7 +1434,7 @@ export const app = {
         const theme = colors[colorScheme] || colors.default;
         
         const loadingToast = document.createElement('div');
-        loadingToast.style.cssText = 'position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: #3b82f6; color: white; padding: 12px 20px; border-radius: 8px; z-index: 9999; box-shadow: 0 4px 6px rgba(0,0,0,0.1); font-weight: bold;';
+        loadingToast.style.cssText = 'position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: #3b82f6; color: white; padding: 12px 20px; border-radius: 8px; z-index: 100000; box-shadow: 0 4px 6px rgba(0,0,0,0.1); font-weight: bold;';
         loadingToast.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Génération des étiquettes en cours...';
         document.body.appendChild(loadingToast);
 
@@ -1533,7 +1533,7 @@ export const app = {
             holder.style.cssText = 'position:fixed; left:-10000px; top:0; background:#fff; z-index:-1;';
             document.body.appendChild(holder);
 
-            const pdf = new jsPDF({ orientation: 'landscape', unit: 'mm', format: [widthMm, heightMm] });
+            const pdf = new jsPDF({ orientation: 'landscape', unit: 'mm', format: [widthMm, heightMm], compress: true });
             let first = true;
             for (const label of data.labels) {
                 const qr = await generateQR(label.sousRef);
@@ -1543,10 +1543,11 @@ export const app = {
                     : this.renderClassicLabel(widthMm, heightMm, qr, data, label, theme, headerColor);
                 holder.innerHTML = html;
                 const el = holder.querySelector('.label');
-                const canvas = await window.html2canvas(el, { scale: 3, backgroundColor: '#ffffff', logging: false });
+                // scale 2 + JPEG : étiquette nette (QR scannable) mais PDF ~10x plus léger.
+                const canvas = await window.html2canvas(el, { scale: 2, backgroundColor: '#ffffff', logging: false });
                 if (!first) pdf.addPage([widthMm, heightMm], 'landscape');
                 first = false;
-                pdf.addImage(canvas.toDataURL('image/png'), 'PNG', 0, 0, widthMm, heightMm);
+                pdf.addImage(canvas.toDataURL('image/jpeg', 0.9), 'JPEG', 0, 0, widthMm, heightMm);
             }
             document.body.removeChild(holder);
             pdf.save(`Etiquettes_${String(data.ref || 'facture').replace(/[^\w\-]/g, '_')}.pdf`);
