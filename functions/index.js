@@ -237,8 +237,11 @@ async function syncOneContainer(collection, id, num) {
     // si l'envoi échoue (ex. modèle pas encore approuvé), l'étape n'est PAS marquée
     // notifiée -> nouvelle tentative au prochain passage (quotidien, etc.).
     const notifiedSteps = Array.isArray(data.notifiedSteps) ? data.notifiedSteps.slice() : [];
-    const tpl = STEP_TEMPLATE[trackingStatus];
-    if (tpl && !notifiedSteps.includes(trackingStatus)) {
+    // Toutes les étapes clés ATTEINTES (jusqu'au statut courant) et pas encore
+    // notifiées -> on envoie CHACUNE. Gère les SAUTS d'étape (ex. Scellé -> En transit
+    // direct) : l'étape "Embarqué" n'est plus oubliée.
+    const stepsToNotify = STEP_ORDER.filter((k, i) => i <= finalIdx && STEP_TEMPLATE[k] && !notifiedSteps.includes(k));
+    if (stepsToNotify.length) {
         const byRef = {};
         for (const dd of livDocs) {
             const ref2 = String(dd.reference || "").trim();
@@ -248,15 +251,16 @@ async function syncOneContainer(collection, id, num) {
             byRef[ref2].count += Number(dd.quantite || 1);
         }
         const refs = Object.keys(byRef);
-        let sent = 0;
-        for (const r2 of refs) {
-            if (await sendWhatsAppTemplate(byRef[r2].phone, tpl.name, tpl.lang, [r2, byRef[r2].count])) sent++;
+        const before = notifiedSteps.length;
+        for (const stepKey of stepsToNotify) {
+            const tpl = STEP_TEMPLATE[stepKey];
+            let sent = 0;
+            for (const r2 of refs) {
+                if (await sendWhatsAppTemplate(byRef[r2].phone, tpl.name, tpl.lang, [r2, byRef[r2].count])) sent++;
+            }
+            if (sent > 0) { console.log(`WhatsApp ${stepKey}: ${sent}/${refs.length} envoye(s) (${collection}/${id})`); notifiedSteps.push(stepKey); }
         }
-        if (sent > 0) {
-            console.log(`WhatsApp ${trackingStatus}: ${sent}/${refs.length} envoye(s) (${collection}/${id})`);
-            notifiedSteps.push(trackingStatus);
-            upd.notifiedSteps = notifiedSteps;
-        }
+        if (notifiedSteps.length > before) upd.notifiedSteps = notifiedSteps;
     }
     await ref.update(upd);
 
