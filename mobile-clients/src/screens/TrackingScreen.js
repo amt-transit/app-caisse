@@ -20,6 +20,7 @@ export default function TrackingScreen({ data, loading, onRefresh, active }) {
   const { t } = useLang();
   const [filter, setFilter] = useState(-1); // -1 = tous
   const [q, setQ] = useState('');
+  const [expanded, setExpanded] = useState({}); // réfs dépliées (détail des colis)
   // Suivi quasi temps réel : rafraîchit en arrivant sur l'onglet, puis toutes
   // les 60 s tant qu'on le regarde (silencieux). S'arrête quand on quitte.
   useEffect(() => {
@@ -69,26 +70,45 @@ export default function TrackingScreen({ data, loading, onRefresh, active }) {
         <Empty icon="📦" text={parcels.length === 0 ? t('Aucun colis rattaché à votre numéro.') : t('Aucun colis à cette étape.')} />
       ) : groupKeys.map(ref => {
         const tk = trackByRef[ref];
+        const ps = groups[ref];
+        const gCounts = STAGES.map((_, i) => ps.filter(p => p.stage === i).length);
+        const isOpen = !!expanded[ref];
         return (
           <Card key={ref}>
-            <Text style={s.factureRef}>📄 {ref}</Text>
-            {tk ? (
-              <Text style={s.voyage}>🛰️ {SHIPSGO_STEPS[tk.status] || tk.status}{tk.vesselName ? ' · 🚢 ' + tk.vesselName : ''}
-                {tk.vesselImo ? <Text style={s.carte} onPress={() => Linking.openURL('https://www.vesselfinder.com/?imo=' + encodeURIComponent(tk.vesselImo))}>   🗺️ Carte</Text> : null}
-              </Text>
-            ) : null}
-            {groups[ref].map((p, idx) => (
-              <View key={idx} style={idx > 0 ? s.colisRow : { marginTop: 8 }}>
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={s.ref}>{p.label}</Text>
-                    <Text style={s.sub}>{p.desc || ''}</Text>
-                  </View>
-                  <Text style={s.date}>{p.date ? fdate(p.date) : ''}</Text>
-                </View>
-                <Stepper stage={p.stage} />
+            {/* Ligne référence : compteurs par statut + clic pour déplier */}
+            <TouchableOpacity activeOpacity={0.7} onPress={() => setExpanded(e => ({ ...e, [ref]: !e[ref] }))}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Text style={s.factureRef}>📄 {ref}</Text>
+                <Text style={s.chevron}>{ps.length} {tr('colis')} {isOpen ? '▲' : '▼'}</Text>
               </View>
-            ))}
+              <View style={s.countRow}>
+                {STAGES.map((st, i) => gCounts[i] > 0 ? (
+                  <View key={i} style={s.countPill}><Text style={s.countPillTxt}>{st.ic} {gCounts[i]} {tr(st.l)}</Text></View>
+                ) : null)}
+              </View>
+              {tk ? (
+                <Text style={s.voyage}>🛰️ {SHIPSGO_STEPS[tk.status] || tk.status}{tk.vesselName ? ' · 🚢 ' + tk.vesselName : ''}</Text>
+              ) : null}
+            </TouchableOpacity>
+            {isOpen && (
+              <View style={{ marginTop: 6 }}>
+                {ps.map((p, idx) => (
+                  <View key={idx} style={s.colisRow}>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={s.ref}>{p.label}</Text>
+                        <Text style={s.sub}>{p.desc || ''}</Text>
+                      </View>
+                      <Text style={s.date}>{p.date ? fdate(p.date) : ''}</Text>
+                    </View>
+                    <Stepper stage={p.stage} />
+                  </View>
+                ))}
+                {tk && tk.vesselImo ? (
+                  <Text style={[s.carte, { marginTop: 10 }]} onPress={() => Linking.openURL('https://www.vesselfinder.com/?imo=' + encodeURIComponent(tk.vesselImo))}>🗺️ Voir la carte du navire</Text>
+                ) : null}
+              </View>
+            )}
           </Card>
         );
       })}
@@ -130,6 +150,10 @@ const s = StyleSheet.create({
   sub: { fontSize: 12, color: colors.muted, marginTop: 2 },
   date: { fontSize: 11, color: colors.muted },
   factureRef: { fontWeight: '800', color: colors.ink, fontSize: 15 },
+  chevron: { fontSize: 12, color: colors.muted, fontWeight: '700' },
+  countRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 8 },
+  countPill: { backgroundColor: '#f1f5f9', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4 },
+  countPillTxt: { fontSize: 12, color: '#334155', fontWeight: '700' },
   voyage: { fontSize: 12, color: '#075985', backgroundColor: '#f0f9ff', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 6, marginTop: 6, overflow: 'hidden' },
   carte: { color: '#0e7490', fontWeight: '700' },
   colisRow: { marginTop: 10, borderTopWidth: 1, borderTopColor: colors.line, paddingTop: 10 },

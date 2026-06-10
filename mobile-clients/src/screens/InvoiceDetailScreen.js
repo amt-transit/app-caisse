@@ -21,6 +21,10 @@ function stageOf(liv, label) {
     if (tp === 'CONTENEUR_CHARGEMENT' || tp === 'DEPART_VOL' || tp === 'DEPART_VOL_RETOUR') return 1;
     if (tp === 'ENTREPOT_PARIS') return 0;
   }
+  // Pas de scan pour CE colis : si un chargement PAR SOUS-COLIS est en cours (au
+  // moins un autre label chargé), ce colis n'est PAS chargé -> reste Entrepôt.
+  const anyPieceLoaded = (liv.scanHistory || []).some(s => s && s.type === 'CONTENEUR_CHARGEMENT' && s.scanRef !== liv.ref);
+  if (label && anyPieceLoaded) return 0;
   if (liv.status === 'LIVRE') return 3;
   if (liv.containerStatus === 'EN_COURS') return 2;
   if (liv.containerStatus === 'A_VENIR') return 1;

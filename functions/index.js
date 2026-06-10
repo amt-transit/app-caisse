@@ -655,6 +655,9 @@ exports.getMyInvoices = onCall({ region: REGION, invoker: "public" }, async (req
                     : liv.containerStatus === "A_VENIR" ? 1 : 0;
                 const labels = (Array.isArray(liv.labels) && liv.labels.length) ? liv.labels : [String(liv.ref || inv.reference)];
                 const scans = Array.isArray(liv.scanHistory) ? liv.scanHistory : [];
+                // Chargement PAR SOUS-COLIS en cours ? (au moins un label chargé) ->
+                // les labels NON scannés ne sont PAS chargés, ils restent Entrepôt.
+                const anyPieceLoaded = scans.some((s) => s && s.type === "CONTENEUR_CHARGEMENT" && s.scanRef !== liv.ref);
                 const stageFromScan = (lbl) => {
                     const mine = scans.filter((s) => s.scanRef === lbl).sort((a, b) => String(b.date).localeCompare(String(a.date)));
                     if (!mine.length) return null;
@@ -681,7 +684,7 @@ exports.getMyInvoices = onCall({ region: REGION, invoker: "public" }, async (req
                         ref: inv.reference,
                         label: lbl,
                         desc: descFor(lbl) || liv.description || inv._desc || "Colis",
-                        stage: (st === null ? baseStage : st),
+                        stage: (st !== null ? st : (anyPieceLoaded ? 0 : baseStage)),
                         date: liv.dateAjout || inv.date || "",
                     });
                 });
