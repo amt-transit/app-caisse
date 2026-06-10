@@ -190,6 +190,15 @@ function FactureDetailModal({ facture, onClose }) {
   const f = facture;
   const items = Array.isArray(f.items) ? f.items : [];
 
+  // Nom du sous-colis = PRODUIT de la ligne (items de la facture), pas la
+  // description globale (le label porte son index REF_<index>_random).
+  const descForLabel = (lbl) => {
+    const m = String(lbl).match(/_(\d+)_/);
+    if (!m || !items.length) return '';
+    const idx = parseInt(m[1], 10); let pos = 0;
+    for (const it of items) { const q = parseInt(it.qty) || 1; if (idx <= pos + q) return it.desc || ''; pos += q; }
+    return '';
+  };
   // Liste plate de sous-colis (chaque label dans chaque livraison)
   const subColis = [];
   (f.livraisons || []).forEach((liv) => {
@@ -198,7 +207,7 @@ function FactureDetailModal({ facture, onClose }) {
       const { status, container } = statusOfLabel(liv, lbl);
       subColis.push({
         label: lbl,
-        desc: liv.description || f.description || 'Colis',
+        desc: descForLabel(lbl) || liv.description || f.description || 'Colis',
         status,
         container,
         departureDate: liv.departureDate,

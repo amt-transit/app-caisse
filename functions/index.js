@@ -539,6 +539,7 @@ exports.getMyInvoices = onCall({ region: REGION, invoker: "public" }, async (req
                 departureAgency: t.departureAgency || t.agency || "",
                 _factor: factor,
                 _desc: t.description || "",
+                _items: Array.isArray(t.items) ? t.items : [],
                 _adjType: t.adjustmentType || "",
                 _adjVal: parseFloat(t.adjustmentVal) || 0,
                 _waived: !!t.storageFeeWaived,
@@ -641,12 +642,22 @@ exports.getMyInvoices = onCall({ region: REGION, invoker: "public" }, async (req
                     if (tp === "ENTREPOT_PARIS") return 0;
                     return null;
                 };
+                // Produit du sous-colis depuis les LIGNES (items) de la facture (le
+                // label porte son index REF_<index>_random). Pas la description globale.
+                const items = Array.isArray(inv._items) ? inv._items : [];
+                const descFor = (lbl) => {
+                    const m = String(lbl).match(/_(\d+)_/);
+                    if (!m || !items.length) return "";
+                    const idx = parseInt(m[1], 10); let pos = 0;
+                    for (const it of items) { const q = parseInt(it.qty) || 1; if (idx <= pos + q) return it.desc || ""; pos += q; }
+                    return "";
+                };
                 labels.forEach((lbl) => {
                     const st = stageFromScan(lbl);
                     parcels.push({
                         ref: inv.reference,
                         label: lbl,
-                        desc: liv.description || inv._desc || "Colis",
+                        desc: descFor(lbl) || liv.description || inv._desc || "Colis",
                         stage: (st === null ? baseStage : st),
                         date: liv.dateAjout || inv.date || "",
                     });
@@ -816,7 +827,7 @@ exports.getMyInvoiceDetail = onCall({ region: REGION, invoker: "public" }, async
     const livCols = [`livraisons${suffix}`, `livraisons${suffix}_archives`];
     const LIV_KEYS = ["ref", "labels", "conteneur", "expediteur", "destinataire", "numero",
         "lieuLivraison", "commune", "description", "quantite", "quantiteRestante", "dateAjout",
-        "status", "containerStatus", "scanHistory", "departureDate", "arrivalDate",
+        "status", "containerStatus", "scanHistory", "departureDate", "arrivalDate", "tracking",
         "modeExpedition", "telExpediteur", "adresseExpediteur", "montant", "prixOriginal"];
     const livraisons = [];
     for (const lc of livCols) {

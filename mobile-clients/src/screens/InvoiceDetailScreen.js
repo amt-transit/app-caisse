@@ -1,7 +1,7 @@
 // Écran DÉTAIL FACTURE : bilan financier, infos client, suivi colis-par-colis,
 // téléchargement/partage du PDF officiel.
 import React, { useState, useEffect } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Alert, Share } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Alert, Share, Linking } from 'react-native';
 import { Card, SectionTitle, Btn, Badge, Loading } from '../components/ui';
 import { colors, fcfa, fdate } from '../theme';
 import { api } from '../api';
@@ -90,12 +90,32 @@ export default function InvoiceDetailScreen({ reference, onBack }) {
     if (!isNaN(d)) { d.setDate(d.getDate() + (etaMode === 'aerien' ? 8 : 40)); etaText = `~ ${fdate(d.toISOString())} ${T('(estimée)')}`; }
   } else etaText = T('À confirmer (pas encore parti)');
 
-  // Colis : un par label (sinon la livraison entière).
+  // Colis : un par label. Nom = PRODUIT de la ligne (items de la transaction),
+  // pas la description globale (le label porte son index REF_<index>_random).
+  const txItems = Array.isArray(t.items) ? t.items : [];
+  const descForLabel = (lbl) => {
+    const m = String(lbl).match(/_(\d+)_/);
+    if (!m || !txItems.length) return '';
+    const idx = parseInt(m[1], 10); let pos = 0;
+    for (const it of txItems) { const q = parseInt(it.qty) || 1; if (idx <= pos + q) return it.desc || ''; pos += q; }
+    return '';
+  };
   const colis = [];
   (detail.livraisons || []).forEach(liv => {
     const labels = (liv.labels && liv.labels.length) ? liv.labels : [liv.ref];
-    labels.forEach(lb => colis.push({ label: lb, desc: liv.description || '', stage: stageOf(liv, lb) }));
+    labels.forEach(lb => colis.push({ label: lb, desc: descForLabel(lb) || liv.description || '', stage: stageOf(liv, lb) }));
   });
+
+  // Suivi du conteneur (frise + carte) : résumé recopié sur la livraison par le
+  // serveur au sync ShipsGo (champ tracking).
+  const VOY_STEPS = [
+    { k: 'PREPARATION', l: '🏗️ Préparation' }, { k: 'CHARGE', l: '🔒 Scellé' },
+    { k: 'EMBARQUE', l: '🚢 Embarqué' }, { k: 'EN_TRANSIT', l: '🌊 En mer' },
+    { k: 'TRANSBORDEMENT', l: '🔄 Transbord.' }, { k: 'ARRIVE', l: '⚓ Arrivé' },
+    { k: 'DEDOUANE', l: '🛃 Dédouané' }, { k: 'LIVRAISON', l: '📦 Livré' },
+  ];
+  const voyage = (detail.livraisons || []).map(l => l.tracking).find(tk => tk && tk.status) || null;
+  const voyIdx = voyage ? VOY_STEPS.findIndex(x => x.k === voyage.status) : -1;
 
   return (
     <View style={s.wrap}>
@@ -133,6 +153,27 @@ export default function InvoiceDetailScreen({ reference, onBack }) {
           {!!t.conteneur && <Row k={T('Conteneur')} v={t.conteneur} />}
           {!!etaText && <Row k={T('Arrivée estimée')} v={etaText} color={liv0.status === 'LIVRE' ? colors.green : colors.blue} />}
         </Card>
+
+        {/* Suivi du conteneur (frise + carte du navire) */}
+        {voyage && (
+          <Card>
+            <SectionTitle>{T('Suivi du conteneur')}</SectionTitle>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', marginVertical: 6 }}>
+              {VOY_STEPS.map((st, i) => (
+                <Text key={st.k} style={{ fontSize: 11, marginRight: 4, marginBottom: 4, color: i <= voyIdx ? '#0e7490' : '#cbd5e1', fontWeight: i === voyIdx ? '800' : '400' }}>
+                  {st.l}{i < VOY_STEPS.length - 1 ? '  ›' : ''}
+                </Text>
+              ))}
+            </View>
+            <Text style={s.muted}>🚢 {voyage.vesselName || T('Navire à confirmer')}{voyage.container ? ' · ' + voyage.container : ''}</Text>
+            <Text style={s.muted}>📅 {T('Départ')} {voyage.departureDate ? fdate(voyage.departureDate) : '—'} → 📆 {T('Arrivée prévue')} {(voyage.arrivalDate || voyage.eta) ? fdate(voyage.arrivalDate || voyage.eta) : '—'}</Text>
+            {voyage.vesselImo ? (
+              <TouchableOpacity onPress={() => Linking.openURL('https://www.vesselfinder.com/?imo=' + encodeURIComponent(voyage.vesselImo))} style={{ marginTop: 6 }}>
+                <Text style={{ color: '#0e7490', fontWeight: '700' }}>🗺️ {T('Voir la carte du navire')}</Text>
+              </TouchableOpacity>
+            ) : null}
+          </Card>
+        )}
 
         {/* Suivi colis */}
         <Card>
