@@ -1174,6 +1174,8 @@ export const ToutesLesFacturesView = {
         const magDisplay = mag.fee / TAUX;
         const totalDisplay = resteDisplay + (applyMag ? magDisplay : 0);
         const totalVal = isEur ? totalDisplay.toFixed(2) : Math.round(totalDisplay);
+        // Plafond mémorisé : on ne pourra pas encaisser plus que ce total dû.
+        this._quickPayMax = parseFloat(totalVal) || 0;
         // Champs cachés d'ajustement transmis à savePaymentsToFirestore :
         // si magasinage -> on le verrouille en "augmentation" ; sinon on
         // conserve l'ajustement existant de la facture.
@@ -1232,6 +1234,12 @@ export const ToutesLesFacturesView = {
         const TAUX = isEur ? CONSTANTS.TAUX_CONVERSION : 1;
         const amountInput = parseFloat(document.getElementById('tlfQuickAmount').value) || 0;
         if (amountInput <= 0) { this.app.showToast("Veuillez saisir un montant.", "error"); return; }
+        // Garde-fou : on ne peut pas encaisser PLUS que le total dû (comme la Caisse).
+        const maxDue = this._quickPayMax || 0;
+        if (maxDue > 0 && amountInput > maxDue + (isEur ? 0.01 : 1)) {
+            this.app.showToast(`Le montant ne peut pas dépasser le total à encaisser (${this.formatMoneyLocal(maxDue)}).`, "error");
+            return;
+        }
         const mode = document.getElementById('tlfQuickMode').value;
         const amountCfa = isEur ? Math.round(amountInput * TAUX) : amountInput;
         // Le "panier" (caisse) dépend du TYPE d'agence active, pas de la devise :
