@@ -1,6 +1,6 @@
 // Onglet SUIVI : colis par étape (Entrepôt → Conteneur → Arrivé → Livré).
 import React, { useState, useEffect } from 'react';
-import { View, Text, ScrollView, TextInput, TouchableOpacity, StyleSheet, RefreshControl } from 'react-native';
+import { View, Text, ScrollView, TextInput, TouchableOpacity, StyleSheet, RefreshControl, Linking } from 'react-native';
 import { Card, Empty, Loading } from '../components/ui';
 import { colors, fdate } from '../theme';
 import { useLang, tr } from '../i18n';
@@ -13,6 +13,8 @@ const STAGES = [
   { l: 'Arrivé', ic: '🛬' },
   { l: 'Livré', ic: '✅' },
 ];
+
+const SHIPSGO_STEPS = { PREPARATION: '🏗️ Préparation', CHARGE: '🔒 Scellé', EMBARQUE: '🚢 Embarqué', EN_TRANSIT: '🌊 En mer', TRANSBORDEMENT: '🔄 Transbord.', ARRIVE: '⚓ Arrivé', DEDOUANE: '🛃 Dédouané', LIVRAISON: '📦 Livré' };
 
 export default function TrackingScreen({ data, loading, onRefresh, active }) {
   const { t } = useLang();
@@ -33,6 +35,12 @@ export default function TrackingScreen({ data, loading, onRefresh, active }) {
   const list = parcels.filter(p =>
     (filter < 0 || p.stage === filter) &&
     (!term || norm(`${p.label} ${p.ref} ${p.desc}`).includes(term)));
+  // Regroupement PAR FACTURE + voyage du conteneur (depuis les invoices).
+  const trackByRef = {};
+  ((data && data.invoices) || []).forEach(inv => { if (inv.tracking && inv.tracking.status) trackByRef[inv.reference] = inv.tracking; });
+  const groups = {};
+  list.forEach(p => { (groups[p.ref] = groups[p.ref] || []).push(p); });
+  const groupKeys = Object.keys(groups);
 
   return (
     <ScrollView contentContainerStyle={{ padding: 16 }}
@@ -59,18 +67,31 @@ export default function TrackingScreen({ data, loading, onRefresh, active }) {
 
       {list.length === 0 ? (
         <Empty icon="📦" text={parcels.length === 0 ? t('Aucun colis rattaché à votre numéro.') : t('Aucun colis à cette étape.')} />
-      ) : list.map((p, idx) => (
-        <Card key={idx}>
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-            <View style={{ flex: 1 }}>
-              <Text style={s.ref}>{p.label}</Text>
-              <Text style={s.sub}>{p.ref}{p.desc ? ' · ' + p.desc : ''}</Text>
-            </View>
-            <Text style={s.date}>{p.date ? fdate(p.date) : ''}</Text>
-          </View>
-          <Stepper stage={p.stage} />
-        </Card>
-      ))}
+      ) : groupKeys.map(ref => {
+        const tk = trackByRef[ref];
+        return (
+          <Card key={ref}>
+            <Text style={s.factureRef}>📄 {ref}</Text>
+            {tk ? (
+              <Text style={s.voyage}>🛰️ {SHIPSGO_STEPS[tk.status] || tk.status}{tk.vesselName ? ' · 🚢 ' + tk.vesselName : ''}
+                {tk.vesselImo ? <Text style={s.carte} onPress={() => Linking.openURL('https://www.vesselfinder.com/?imo=' + encodeURIComponent(tk.vesselImo))}>   🗺️ Carte</Text> : null}
+              </Text>
+            ) : null}
+            {groups[ref].map((p, idx) => (
+              <View key={idx} style={idx > 0 ? s.colisRow : { marginTop: 8 }}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={s.ref}>{p.label}</Text>
+                    <Text style={s.sub}>{p.desc || ''}</Text>
+                  </View>
+                  <Text style={s.date}>{p.date ? fdate(p.date) : ''}</Text>
+                </View>
+                <Stepper stage={p.stage} />
+              </View>
+            ))}
+          </Card>
+        );
+      })}
     </ScrollView>
   );
 }
@@ -108,6 +129,10 @@ const s = StyleSheet.create({
   ref: { fontWeight: '800', color: colors.blue, fontSize: 14 },
   sub: { fontSize: 12, color: colors.muted, marginTop: 2 },
   date: { fontSize: 11, color: colors.muted },
+  factureRef: { fontWeight: '800', color: colors.ink, fontSize: 15 },
+  voyage: { fontSize: 12, color: '#075985', backgroundColor: '#f0f9ff', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 6, marginTop: 6, overflow: 'hidden' },
+  carte: { color: '#0e7490', fontWeight: '700' },
+  colisRow: { marginTop: 10, borderTopWidth: 1, borderTopColor: colors.line, paddingTop: 10 },
   stepper: { flexDirection: 'row', marginTop: 14 },
   step: { flex: 1, alignItems: 'center' },
   bar: { position: 'absolute', top: 13, right: '50%', width: '100%', height: 3, backgroundColor: colors.line },
