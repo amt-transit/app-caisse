@@ -34,36 +34,36 @@ export default function LoginScreen({ onAuthed }) {
   const [err, setErr] = useState('');
   const [savedPhone, setSavedPhone] = useState('');
   const [resendIn, setResendIn] = useState(0); // compte à rebours avant de pouvoir renvoyer le SMS
+  // Refs à jour pour le listener auth (évite les captures obsolètes).
+  const onAuthedRef = useRef(onAuthed); onAuthedRef.current = onAuthed;
+  const stepRef = useRef(step); stepRef.current = step;
 
   useEffect(() => {
-    // IMPORTANT : la session Firebase (persistée dans AsyncStorage) se restaure
-    // de façon ASYNCHRONE au démarrage. On ATTEND donc onAuthStateChanged (qui
-    // se déclenche une fois l'état connu, session restaurée incluse) AVANT de
-    // décider PIN vs SMS. Sinon, à froid (ex. après une mise à jour),
-    // auth.currentUser est encore null -> on retombait à tort sur le SMS.
-    let done = false;
-    const decide = async (user) => {
-      if (done) return; done = true;
+    // 1re décision au démarrage (la session Firebase native se restaure de façon
+    // ASYNCHRONE) PUIS on reste à l'écoute : si l'utilisateur devient connecté
+    // PENDANT le flux SMS (validation manuelle OU auto-lecture du SMS par Android),
+    // on AVANCE au lieu de rester bloqué sur l'écran "code" avec une fausse erreur.
+    let initial = true;
+    const handle = async (user) => {
       const reg = await AsyncStorage.getItem(LS.registered);
       const ph = await AsyncStorage.getItem(LS.phone);
       const hasPin = await AsyncStorage.getItem(LS.pin);
-      setSavedPhone(ph || '');
-      // Session Firebase valide (native, persistée) => JAMAIS de SMS :
-      //  - PIN déjà créé -> déverrouillage par PIN.
-      //  - session OK mais pas encore de PIN (cas après migration / auto-login)
-      //    -> on en crée un MAINTENANT, sans repasser par le SMS.
-      // SMS uniquement s'il n'y a PAS de session du tout.
-      if (user) {
-        if (reg === '1' && hasPin) setStep('pin');
+      if (ph) setSavedPhone(ph);
+      if (initial) {
+        // Décision initiale : session restaurée -> PIN (ou création) ; sinon SMS.
+        initial = false;
+        setStep(user ? (reg === '1' && hasPin ? 'pin' : 'setpin') : 'phone');
+      } else if (user && (stepRef.current === 'code' || stepRef.current === 'phone')) {
+        // Connexion survenue pendant le flux SMS -> on enchaîne (pas de fausse erreur).
+        setErr('');
+        if (reg === '1') onAuthedRef.current && onAuthedRef.current();
         else setStep('setpin');
-      } else {
-        setStep('phone');
       }
     };
-    const unsub = auth.onAuthStateChanged((user) => { decide(user); });
+    const unsub = auth.onAuthStateChanged((user) => { handle(user); });
     // Filet de sécurité : si onAuthStateChanged tarde (>4s), on décide quand même.
-    const t = setTimeout(() => decide(auth.currentUser), 4000);
-    return () => { clearTimeout(t); unsub(); };
+    const safety = setTimeout(() => { if (initial) { initial = false; setStep(auth.currentUser ? 'setpin' : 'phone'); } }, 4000);
+    return () => { clearTimeout(safety); unsub(); };
   }, []);
 
   // Décrémente le compte à rebours « renvoyer le code » chaque seconde.
@@ -109,18 +109,25 @@ export default function LoginScreen({ onAuthed }) {
   // Étape 2 : vérification du code reçu.
   const verifyCode = async () => {
     setErr('');
+    // Déjà connecté (Android a lu le SMS automatiquement) -> le listener enchaîne.
+    if (auth.currentUser) { setBusy(false); return; }
     const c = (code || '').replace(/[^0-9]/g, '');
     if (c.length < 6) return fail('Entrez le code reçu (6 chiffres).');
     setBusy(true);
+    const advance = async () => {
+      const reg = await AsyncStorage.getItem(LS.registered);
+      if (reg === '1') finish(); else setStep('setpin');
+    };
     try {
       if (!confirmRef.current) { setBusy(false); return fail('Session expirée, renvoyez le code.'); }
       // confirm() vérifie le code ET connecte l'utilisateur (session native).
       await confirmRef.current.confirm(c);
       setBusy(false);
-      const reg = await AsyncStorage.getItem(LS.registered);
-      if (reg === '1') finish();
-      else setStep('setpin');
+      await advance();
     } catch (e) {
+      setBusy(false);
+      // Course avec l'auto-lecture du SMS : si on est malgré tout connecté, c'est bon.
+      if (auth.currentUser) { await advance(); return; }
       console.warn('confirm:', e?.code, e?.message);
       fail('Code incorrect.');
     }

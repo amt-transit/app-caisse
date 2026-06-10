@@ -56,7 +56,10 @@ const TITLES = {
 
 function AppInner() {
   const { t } = useLang();
-  const [authed, setAuthed] = useState(!!auth.currentUser);
+  // Toujours démarrer NON authentifié : l'écran de login est le SEUL gardien (il
+  // décide PIN si une session native est déjà restaurée, sinon SMS). Évite
+  // d'atterrir direct sur l'Accueil en SAUTANT le code PIN.
+  const [authed, setAuthed] = useState(false);
   const [tab, setTab] = useState('home');
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
