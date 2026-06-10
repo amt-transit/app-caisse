@@ -251,29 +251,14 @@ export const BateauxDepartView = {
                             <button class="icon-btn" @click="closeBoatModal" style="background:none; border:none; font-size:24px; cursor:pointer; color:#64748b;">&times;</button>
                         </div>
                         <div class="bd-modal-body">
+                            <div v-if="!editingBoatId" style="background:#eff6ff; border:1px solid #bfdbfe; color:#1e40af; border-radius:8px; padding:10px 12px; margin-bottom:15px; font-size:12px; line-height:1.4;">
+                                ℹ️ <strong>L'essentiel :</strong> la référence + le <strong>N° réel de chaque conteneur</strong>. La compagnie, le navire et les dates se remplissent <strong>automatiquement</strong> grâce au suivi ShipsGo — tu peux les laisser vides.
+                            </div>
                             <div class="form-group" style="margin-bottom: 15px;">
-                                <label style="font-size: 12px; font-weight: 600; color: #475569; display: block; margin-bottom: 6px;">Référence bateau *</label>
+                                <label style="font-size: 12px; font-weight: 600; color: #475569; display: block; margin-bottom: 6px;">Référence bateau</label>
                                 <input type="text" v-model="boatForm.reference" class="filter-input" placeholder="Générée automatiquement si vide" style="width: 100%; box-sizing: border-box;">
                             </div>
-                            <div class="form-group" style="margin-bottom: 15px;">
-                                <label style="font-size: 12px; font-weight: 600; color: #475569; display: block; margin-bottom: 6px;">Compagnie maritime *</label>
-                                <input type="text" v-model="boatForm.company" class="filter-input" placeholder="Ex: MSC, CMA CGM..." style="width: 100%; box-sizing: border-box;">
-                            </div>
-                            <div class="form-group" style="margin-bottom: 15px;">
-                                <label style="font-size: 12px; font-weight: 600; color: #475569; display: block; margin-bottom: 6px;">Nom du navire (ou N° Vol)</label>
-                                <input type="text" v-model="boatForm.name" class="filter-input" placeholder="Ex: MSC KATYAYNI" style="width: 100%; box-sizing: border-box;">
-                            </div>
-                            <div style="display: flex; gap: 15px; margin-bottom: 15px;">
-                                <div class="form-group" style="flex: 1;">
-                                    <label style="font-size: 12px; font-weight: 600; color: #475569; display: block; margin-bottom: 6px;">Date Départ prévue</label>
-                                    <input type="date" v-model="boatForm.departureDate" class="filter-input" style="width: 100%; box-sizing: border-box;">
-                                </div>
-                                <div class="form-group" style="flex: 1;">
-                                    <label style="font-size: 12px; font-weight: 600; color: #475569; display: block; margin-bottom: 6px;">Date Arrivée (ETA)</label>
-                                    <input type="date" v-model="boatForm.arrivalDate" class="filter-input" style="width: 100%; box-sizing: border-box;">
-                                </div>
-                            </div>
-                            <div v-if="!editingBoatId && selectedContainers.length" class="form-group" style="margin-bottom: 5px; border-top:1px dashed #e2e8f0; padding-top:14px;">
+                            <div v-if="!editingBoatId && selectedContainers.length" class="form-group" style="margin-bottom: 5px;">
                                 <label style="font-size: 12px; font-weight: 700; color: #475569; display: block; margin-bottom: 8px;">📦 Conteneurs à embarquer — saisis le N° réel de chacun *</label>
                                 <div style="display:flex; flex-direction:column; gap:8px; max-height:210px; overflow:auto;">
                                     <div v-for="c in selectedContainers" :key="c.id" style="display:flex; align-items:center; gap:10px;">
@@ -285,6 +270,27 @@ export const BateauxDepartView = {
                                     </div>
                                 </div>
                                 <div style="font-size:11px; color:#64748b; margin-top:6px;">Format : 4 lettres + 7 chiffres. Un n° invalide empêche la création du bateau.</div>
+                            </div>
+                            <div style="border-top:1px dashed #e2e8f0; padding-top:14px; margin-top:14px;">
+                                <div style="font-size:12px; font-weight:700; color:#0e7490; margin-bottom:10px;">🛰️ Rempli automatiquement par le suivi ShipsGo (optionnel)</div>
+                                <div class="form-group" style="margin-bottom: 15px;">
+                                    <label style="font-size: 12px; font-weight: 600; color: #475569; display: block; margin-bottom: 6px;">Compagnie maritime</label>
+                                    <input type="text" v-model="boatForm.company" class="filter-input" placeholder="Auto — ex: MSC, CMA CGM" style="width: 100%; box-sizing: border-box;">
+                                </div>
+                                <div class="form-group" style="margin-bottom: 15px;">
+                                    <label style="font-size: 12px; font-weight: 600; color: #475569; display: block; margin-bottom: 6px;">Nom du navire (ou N° Vol)</label>
+                                    <input type="text" v-model="boatForm.name" class="filter-input" placeholder="Auto — ex: MSC KATYAYNI" style="width: 100%; box-sizing: border-box;">
+                                </div>
+                                <div style="display: flex; gap: 15px; margin-bottom: 5px;">
+                                    <div class="form-group" style="flex: 1;">
+                                        <label style="font-size: 12px; font-weight: 600; color: #475569; display: block; margin-bottom: 6px;">Date Départ</label>
+                                        <input type="date" v-model="boatForm.departureDate" class="filter-input" style="width: 100%; box-sizing: border-box;">
+                                    </div>
+                                    <div class="form-group" style="flex: 1;">
+                                        <label style="font-size: 12px; font-weight: 600; color: #475569; display: block; margin-bottom: 6px;">Date Arrivée (ETA)</label>
+                                        <input type="date" v-model="boatForm.arrivalDate" class="filter-input" style="width: 100%; box-sizing: border-box;">
+                                    </div>
+                                </div>
                             </div>
                         </div>
                         <div class="bd-modal-footer">
@@ -527,10 +533,8 @@ export const BateauxDepartView = {
                 };
                 
                 const saveBoat = async () => {
-                    if (!boatForm.company.trim()) {
-                        globalApp.showToast("La compagnie maritime est obligatoire.", "error");
-                        return;
-                    }
+                    // Compagnie / navire / dates = remplis automatiquement par le suivi
+                    // ShipsGo (non obligatoires). L'essentiel validé = les N° réels.
 
                     // CRÉATION avec conteneurs sélectionnés : on VALIDE leurs N° réels
                     // AVANT de créer. Mauvais/vide => bateau NON créé.
