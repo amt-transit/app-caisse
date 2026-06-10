@@ -1421,28 +1421,44 @@ const VIEWS = {
       const step = SHIPSGO_STEPS[t.status] || t.status || '';
       const dep = t.departureDate ? fdate(t.departureDate) : '—';
       const arr = (t.arrivalDate || t.eta) ? fdate(t.arrivalDate || t.eta) : '—';
-      const carte = t.vesselImo ? `<a href="../commun/carte-navire.html?imo=${encodeURIComponent(t.vesselImo)}" target="_blank" rel="noopener" style="color:#0e7490; font-weight:700; text-decoration:none;">🗺️ Carte du navire</a>` : '';
-      return `<div style="margin-top:8px; padding:8px 10px; background:#f0f9ff; border:1px solid #bae6fd; border-radius:8px; font-size:13px; color:#075985;">
+      return `<div style="margin-top:6px; padding:8px 10px; background:#f0f9ff; border:1px solid #bae6fd; border-radius:8px; font-size:13px; color:#075985;">
         <div style="font-weight:700;">🛰️ Voyage : ${step}</div>
         <div style="margin-top:3px;">🚢 ${t.vesselName || 'Navire à confirmer'}${t.container ? ' · ' + t.container : ''}</div>
         <div style="margin-top:3px;">📅 Départ ${dep} → 📆 Arrivée prévue ${arr}</div>
-        ${carte ? '<div style="margin-top:5px;">' + carte + '</div>' : ''}
       </div>`;
     };
-    const list = PARCELS
-      .filter(p => trackFilter < 0 || p.stage === trackFilter)
-      .map(p => `
+    const carteBlock = (ref) => {
+      const t = trackByRef[ref];
+      if (!t || !t.vesselImo) return '';
+      return `<details style="margin-top:6px;">
+        <summary style="cursor:pointer; color:#0e7490; font-weight:700; font-size:13px;">🗺️ Carte du navire${t.vesselName ? ' — ' + t.vesselName : ''}</summary>
+        <iframe src="../commun/carte-navire.html?imo=${encodeURIComponent(t.vesselImo)}" style="width:100%; height:280px; border:1px solid #cbd5e1; border-radius:8px; margin-top:6px;" loading="lazy" title="Position du navire"></iframe>
+      </details>`;
+    };
+    // Regroupé PAR FACTURE : chaque facture = une carte avec son voyage + sa carte
+    // du navire + ses sous-colis.
+    const filtered = PARCELS.filter(p => trackFilter < 0 || p.stage === trackFilter);
+    const byRef = {};
+    filtered.forEach(p => { (byRef[p.ref] = byRef[p.ref] || []).push(p); });
+    const list = Object.keys(byRef).map(ref => {
+      const colisHtml = byRef[ref].map(p => `
         <div class="track-item">
           <div class="track-head">
             <div>
               <div class="track-ref">${p.label}</div>
-              <div class="track-desc">${p.ref} · ${p.desc}</div>
+              <div class="track-desc">${p.desc}</div>
             </div>
             <div class="track-date">${p.date ? fdate(p.date) : ''}</div>
           </div>
           ${stepper(p.stage)}
-          ${voyageBlock(p.ref)}
         </div>`).join('');
+      return `<div class="card">
+        <div style="font-weight:800; font-size:15px; color:#0f172a;">📄 ${ref}</div>
+        ${voyageBlock(ref)}
+        ${carteBlock(ref)}
+        <div style="margin-top:8px;">${colisHtml}</div>
+      </div>`;
+    }).join('');
 
     const empty = PARCELS.length === 0
       ? `<div class="card"><div class="placeholder"><span class="ph-ic">📦</span>Aucun colis rattaché à votre numéro pour le moment.</div></div>`
