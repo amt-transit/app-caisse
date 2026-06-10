@@ -1519,12 +1519,12 @@ export const ToutesLesFacturesView = {
 
         if (!date) {
             this.app.showToast("Veuillez saisir une date.", "error");
-            return;
+            return false;
         }
 
         if (amountAbidjanCfa <= 0 && amountParisCfa <= 0) {
             this.app.showToast("Veuillez saisir un montant.", "error");
-            return;
+            return false;
         }
 
         // Garde-fou AVANT d'ajouter : la somme des paiements ne peut pas DÉPASSER
@@ -1540,7 +1540,7 @@ export const ToutesLesFacturesView = {
         const othersCfa = (this.currentPaymentInvoice.paymentHistory || []).reduce((s, p, i) => i === editIdx ? s : s + (p.montantAbidjan || 0) + (p.montantParis || 0), 0);
         if (effPrixNow > 0 && othersCfa + newPayCfa > effPrixNow + 1) {
             this.app.showToast(`Le montant dépasse le total dû. Reste à payer : ${this.formatMoneyLocal(Math.max(0, (effPrixNow - othersCfa)) / TAUX)}.`, "error");
-            return;
+            return false;
         }
 
         const paymentData = {
@@ -1574,6 +1574,7 @@ export const ToutesLesFacturesView = {
         document.getElementById('tlfPayInfo').value = '';
         document.getElementById('tlfPayAgent').value = '';
         document.getElementById('tlfPaymentFormTitle').textContent = "Ajouter un paiement";
+        return true;
     },
 
     async savePaymentsToFirestore(id) {
@@ -1587,7 +1588,9 @@ export const ToutesLesFacturesView = {
         const pendingParis = parseFloat(document.getElementById('tlfPayAmountParis')?.value) || 0;
         const pendingAbidjan = parseFloat(document.getElementById('tlfPayAmountAbidjan')?.value) || 0;
         if (pendingParis > 0 || pendingAbidjan > 0) {
-            this.addOrUpdateLocalPayment();
+            // Si le montant est rejeté (trop grand, date manquante…), on N'enregistre
+            // PAS et on laisse la modale OUVERTE (juste le message d'erreur).
+            if (this.addOrUpdateLocalPayment() === false) return;
         }
 
         const isEur = isEurAgency();
