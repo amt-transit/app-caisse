@@ -138,8 +138,16 @@ async function syncOneContainer(collection, id, num) {
     const DONE = (s) => ["DISCHARGED", "DELIVERED", "DISCARDED", "EXPIRED", "ARCHIVED"].includes(String(s.status || "").toUpperCase());
     list.sort((a, b) => (b.id || 0) - (a.id || 0));
 
+    // Diagnostic : quand PLUSIEURS envois existent pour un même conteneur (n°
+    // réutilisé d'un voyage à l'autre), on les liste pour comprendre le choix.
+    if (list.length > 1) console.log(`ShipsGo ${num}: ${list.length} envois -> [${list.map((s) => (s.id || "?") + "/" + (s.status || "?")).join(", ")}] (force=${data.shipsgoForcedId || "-"})`);
+
     let shipmentId = null;
-    if (list.length) {
+    if (data.shipsgoForcedId) {
+        // L'utilisateur a IMPOSÉ le bon n° d'envoi ShipsGo (conteneur réutilisé sur
+        // plusieurs voyages) -> priorité absolue, on suit exactement celui-là.
+        shipmentId = String(data.shipsgoForcedId).trim();
+    } else if (list.length) {
         let chosen = list[0]; // le plus récent = voyage en cours
         if (PENDING(chosen)) { const twin = list.find((s) => !PENDING(s) && !DONE(s)); if (twin) chosen = twin; }
         shipmentId = chosen.id;

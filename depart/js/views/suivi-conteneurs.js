@@ -208,6 +208,8 @@ export const SuiviConteneursView = {
                         <label>Navire<input id="scVessel" type="text" value="${att(c.vesselName)}" placeholder="ex: MSC OSCAR" style="width:100%; padding:9px; border:1px solid #cbd5e1; border-radius:8px;"></label>
                         <label>N° de BL<input id="scBl" type="text" value="${att(c.bl)}" style="width:100%; padding:9px; border:1px solid #cbd5e1; border-radius:8px;"></label>
                         <label style="grid-column:1/3;">Arrivée prévue (ETA)<input id="scEta" type="date" value="${att(c.eta)}" style="width:100%; padding:9px; border:1px solid #cbd5e1; border-radius:8px;"></label>
+                        <label style="grid-column:1/3;">N° d'envoi ShipsGo — forcer (si le suivi est FAUX : colle ici le bon n° d'envoi vu sur ShipsGo)
+                            <input id="scForcedId" type="text" value="${att(c.shipsgoForcedId)}" placeholder="ex : 6301425" style="width:100%; padding:9px; border:1px solid #cbd5e1; border-radius:8px; font-family:monospace;"></label>
                     </div>
                     <div style="display:flex; gap:8px; justify-content:flex-end; flex-wrap:wrap; margin-top:10px;">
                         <button onclick="window.app.views.suiviConteneurs.syncShipsgo('${c.id}')" style="background:#0e7490; color:#fff; border:none; padding:8px 16px; border-radius:8px; cursor:pointer; font-weight:600;" title="Remplir automatiquement le suivi depuis ShipsGo (consomme 1 crédit)">🛰️ Suivre via ShipsGo (auto)</button>
@@ -331,6 +333,7 @@ export const SuiviConteneursView = {
             vesselName: v('scVessel'),
             bl: v('scBl'),
             eta: v('scEta'),
+            shipsgoForcedId: v('scForcedId').replace(/[^0-9]/g, ''), // n° d'envoi ShipsGo imposé (conteneur réutilisé)
         };
         try {
             await updateDoc(doc(db, getCollectionName('containers'), id), upd);
