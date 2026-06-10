@@ -1527,6 +1527,22 @@ export const ToutesLesFacturesView = {
             return;
         }
 
+        // Garde-fou AVANT d'ajouter : la somme des paiements ne peut pas DÉPASSER
+        // le total dû (prix +/- ajustement). On exclut l'entrée en cours d'édition.
+        const newPayCfa = amountParisCfa + amountAbidjanCfa;
+        const adjTypeNow = document.getElementById('tlfPayGlobalAdjType') ? document.getElementById('tlfPayGlobalAdjType').value : '';
+        const adjValNow = parseFloat((document.getElementById('tlfPayGlobalAdjVal') || {}).value) || 0;
+        const adjValNowCfa = isEur ? Math.round(adjValNow * TAUX) : adjValNow;
+        let effPrixNow = parseFloat((this.currentPaymentInvoice || {}).prix) || 0;
+        if (adjTypeNow === 'reduction' && adjValNowCfa > 0) effPrixNow -= adjValNowCfa;
+        else if (adjTypeNow === 'augmentation' && adjValNowCfa > 0) effPrixNow += adjValNowCfa;
+        const editIdx = indexStr !== '' ? parseInt(indexStr) : -1;
+        const othersCfa = (this.currentPaymentInvoice.paymentHistory || []).reduce((s, p, i) => i === editIdx ? s : s + (p.montantAbidjan || 0) + (p.montantParis || 0), 0);
+        if (effPrixNow > 0 && othersCfa + newPayCfa > effPrixNow + 1) {
+            this.app.showToast(`Le montant dépasse le total dû. Reste à payer : ${this.formatMoneyLocal(Math.max(0, (effPrixNow - othersCfa)) / TAUX)}.`, "error");
+            return;
+        }
+
         const paymentData = {
             date: date,
             montantParis: amountParisCfa,
