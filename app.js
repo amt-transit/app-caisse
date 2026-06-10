@@ -1489,7 +1489,73 @@ export const app = {
         loadingToast.remove();
         iframe.onload = () => { setTimeout(() => { iframe.contentWindow.focus(); iframe.contentWindow.print(); setTimeout(() => document.body.removeChild(iframe), 2000); }, 500); };
     },
-    
+
+    // Charge html2canvas (à la demande) pour convertir les étiquettes HTML en image.
+    async _ensureHtml2Canvas() {
+        if (window.html2canvas) return;
+        await new Promise((resolve, reject) => {
+            const s = document.createElement('script');
+            s.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';
+            s.onload = resolve; s.onerror = () => reject(new Error('html2canvas indisponible'));
+            document.head.appendChild(s);
+        });
+    },
+
+    // TÉLÉCHARGE les étiquettes en PDF (1 page par étiquette) au lieu d'ouvrir la
+    // boîte d'impression. Réutilise EXACTEMENT le même rendu que printLabels (chaque
+    // étiquette HTML est capturée via html2canvas) puis assemblée en PDF jsPDF.
+    async downloadLabels(data) {
+        const format = localStorage.getItem('amt_label_format') || 'A5';
+        const model = localStorage.getItem('amt_label_model') || 'classic';
+        const colorScheme = localStorage.getItem('amt_label_color') || 'default';
+        const headerColor = localStorage.getItem('amt_label_header_color') || '#000000';
+        const aerienHeaderColor = data.headerColor || localStorage.getItem('amt_label_aerien_header_color') || '#1A3553';
+        const dimensions = { A5: { width: 210, height: 148 }, A6: { width: 148, height: 105 } };
+        const dim = dimensions[format] || dimensions.A5;
+        const widthMm = dim.width, heightMm = dim.height;
+        const colorsMap = { default: { border: '#000', text: '#000' }, blue: { border: '#1e40af', text: '#1e3a8a' }, green: { border: '#065f46', text: '#064e3b' } };
+        const theme = colorsMap[colorScheme] || colorsMap.default;
+
+        if (this.showToast) this.showToast('Génération du PDF des étiquettes…', 'info');
+        try {
+            await this._ensureHtml2Canvas();
+            const { loadJsPdf } = await import('./commun/services/pdf-common.js');
+            await loadJsPdf();
+            const { jsPDF } = window.jspdf;
+
+            const generateQR = (text) => new Promise(resolve => {
+                const div = document.createElement('div');
+                new QRCode(div, { text, width: 300, height: 300, correctLevel: QRCode.CorrectLevel.H });
+                setTimeout(() => { const c = div.querySelector('canvas'); resolve(c ? c.toDataURL('image/png') : (div.querySelector('img') ? div.querySelector('img').src : '')); }, 150);
+            });
+
+            const holder = document.createElement('div');
+            holder.style.cssText = 'position:fixed; left:-10000px; top:0; background:#fff; z-index:-1;';
+            document.body.appendChild(holder);
+
+            const pdf = new jsPDF({ orientation: 'landscape', unit: 'mm', format: [widthMm, heightMm] });
+            let first = true;
+            for (const label of data.labels) {
+                const qr = await generateQR(label.sousRef);
+                const html = data.isAerien ? this.renderAerienLabel(widthMm, heightMm, qr, data, label, aerienHeaderColor)
+                    : model === 'compact' ? this.renderCompactLabel(widthMm, heightMm, qr, data, label, theme, headerColor)
+                    : model === 'premium' ? this.renderPremiumLabel(widthMm, heightMm, qr, data, label, theme, headerColor)
+                    : this.renderClassicLabel(widthMm, heightMm, qr, data, label, theme, headerColor);
+                holder.innerHTML = html;
+                const el = holder.querySelector('.label');
+                const canvas = await window.html2canvas(el, { scale: 3, backgroundColor: '#ffffff', logging: false });
+                if (!first) pdf.addPage([widthMm, heightMm], 'landscape');
+                first = false;
+                pdf.addImage(canvas.toDataURL('image/png'), 'PNG', 0, 0, widthMm, heightMm);
+            }
+            document.body.removeChild(holder);
+            pdf.save(`Etiquettes_${String(data.ref || 'facture').replace(/[^\w\-]/g, '_')}.pdf`);
+        } catch (e) {
+            console.error('downloadLabels:', e);
+            if (this.showToast) this.showToast('Échec de la génération du PDF des étiquettes.', 'error');
+        }
+    },
+
     renderClassicLabel(widthMm, heightMm, qrDataUrl, data, label, theme, headerColor) {
         const isA5 = widthMm === 210;
         const fontSize = isA5 ? '11pt' : '9pt';

@@ -1002,8 +1002,8 @@ export const ToutesLesFacturesView = {
                                 <div class="detail-card__title">Imprimer les documents</div>
                                 <div style="display: flex; gap: 10px; flex-wrap: wrap;">
                                     <button class="btn--doc btn--doc-facture" onclick="window.app.views.toutesLesFactures.printDocument('${invoice.id}', 'FACTURE')">📄 Facture</button>
-                                    <button class="btn--doc btn--doc-etiquette" onclick="window.app.views.toutesLesFactures.printEtiquettes('${invoice.id}', 'A6')">🏷️ Étiquette A6</button>
-                                    <button class="btn--doc btn--doc-etiquette" onclick="window.app.views.toutesLesFactures.printEtiquettes('${invoice.id}', 'A5')">🏷️ Étiquette A5</button>
+                                    <button class="btn--doc btn--doc-etiquette" onclick="window.app.views.toutesLesFactures.printEtiquettes('${invoice.id}', 'A6', true)">🏷️ Étiquettes A6 (PDF)</button>
+                                    <button class="btn--doc btn--doc-etiquette" onclick="window.app.views.toutesLesFactures.printEtiquettes('${invoice.id}', 'A5', true)">🏷️ Étiquettes A5 (PDF)</button>
                                     <button class="btn--doc btn--doc-attestation" onclick="window.app.views.toutesLesFactures.printDocument('${invoice.id}', 'ATTESTATION')">📋 Attestation</button>
                                     <button class="btn--doc btn--doc-livraison" onclick="window.app.views.toutesLesFactures.printDocument('${invoice.id}', 'BL')">🚚 Bon de livraison</button>
                                 </div>
@@ -2430,9 +2430,10 @@ export const ToutesLesFacturesView = {
         this.app.showToast("Export PDF en cours de développement", "info");
     },
 
-    async printEtiquettes(id, format) {
-        if (!this.app.printLabels) {
-            this.app.showToast("L'impression d'étiquettes sera bientôt disponible dans cette vue.", "info");
+    async printEtiquettes(id, format, asDownload) {
+        const labelFn = asDownload ? this.app.downloadLabels : this.app.printLabels;
+        if (!labelFn) {
+            this.app.showToast("Les étiquettes seront bientôt disponibles dans cette vue.", "info");
             return;
         }
         
@@ -2519,8 +2520,9 @@ export const ToutesLesFacturesView = {
             labels: labelsList
         };
         
-        await this.app.printLabels(data);
-        
+        if (asDownload) await this.app.downloadLabels(data);
+        else await this.app.printLabels(data);
+
         if (originalFormat) localStorage.setItem('amt_label_format', originalFormat);
     },
 
