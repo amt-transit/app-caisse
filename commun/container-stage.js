@@ -17,7 +17,8 @@ export const CONTAINER_STAGES = {
 // trackingStatus (ShipsGo / frise Suivi) -> étape canonique.
 const TS_MAP = {
     PREPARATION: 'PREPARATION', PREP: 'PREPARATION',
-    EMBARQUE: 'EMBARQUE', CHARGE: 'EMBARQUE', LOADED: 'EMBARQUE',
+    EMBARQUE: 'EMBARQUE', LOADED: 'EMBARQUE',
+    CHARGE: 'SCELLE', GTIN: 'SCELLE', GATE_IN: 'SCELLE', // entré au port / scellé (pas encore embarqué)
     EN_TRANSIT: 'EN_MER', TRANSIT: 'EN_MER', EN_MER: 'EN_MER',
     TRANSBORDEMENT: 'TRANSBORDEMENT', TRANSSHIPMENT: 'TRANSBORDEMENT',
     ARRIVE: 'ARRIVE', ARRIVED: 'ARRIVE',

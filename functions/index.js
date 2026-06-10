@@ -156,6 +156,9 @@ async function syncOneContainer(collection, id, num) {
     // 3) Extraire + mapper.
     const cont = (sh.containers && sh.containers[0]) || {};
     const movements = Array.isArray(cont.movements) ? cont.movements : [];
+    // DIAGNOSTIC : statut global ShipsGo + chaque mouvement (event / ACT|EST / date).
+    // À lire avec `npm run logs` pour comprendre pourquoi une étape n'avance pas.
+    console.log(`ShipsGo ${num}: status=${sh.status} | movements=[${movements.map((m) => `${(m.event || "")}/${(m.status || "")}@${String(m.timestamp || "").slice(0, 10)}`).join(", ")}]`);
     let vessel = "", vesselImo = "";
     for (const m of movements) { if (m && m.vessel && m.vessel.name) { vessel = m.vessel.name; vesselImo = m.vessel.imo ? String(m.vessel.imo) : ""; break; } }
     const eta = sh.route && sh.route.port_of_discharge && sh.route.port_of_discharge.date_of_discharge;
