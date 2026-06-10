@@ -171,13 +171,13 @@ async function syncOneContainer(collection, id, num) {
     // 3) Extraire + mapper.
     const cont = (sh.containers && sh.containers[0]) || {};
     const movements = Array.isArray(cont.movements) ? cont.movements : [];
-    // DIAGNOSTIC : statut global ShipsGo + chaque mouvement (event / ACT|EST / date).
-    // À lire avec `npm run logs` pour comprendre pourquoi une étape n'avance pas.
-    console.log(`ShipsGo ${num}: status=${sh.status} (plancher->${stepFromShipsgoStatus(sh.status) || "-"}) | movements=[${movements.map((m) => `${(m.event || "")}/${(m.status || "")}@${String(m.timestamp || "").slice(0, 10)}`).join(", ")}]`);
     let vessel = "", vesselImo = "";
     for (const m of movements) { if (m && m.vessel && m.vessel.name) { vessel = m.vessel.name; vesselImo = m.vessel.imo ? String(m.vessel.imo) : ""; break; } }
     const eta = sh.route && sh.route.port_of_discharge && sh.route.port_of_discharge.date_of_discharge;
     const dep = sh.route && sh.route.port_of_loading && sh.route.port_of_loading.date_of_loading;
+    // DIAGNOSTIC (npm run logs) : TOUT ce que ShipsGo renvoie pour ce conteneur,
+    // pour repérer un suivi qui ne correspond pas (mauvais navire/date/voyage).
+    console.log(`ShipsGo ${num}: shipmentId=${shipmentId} status=${sh.status} vessel=${vessel || "-"} eta=${eta || "-"} dep=${dep || "-"} | movements=[${movements.map((m) => `${(m.event || "")}/${(m.status || "")}@${String(m.timestamp || "").slice(0, 10)}`).join(", ")}]`);
 
     // Étapes ATTEINTES = mouvements réels (status "ACT") mappés vers nos étapes.
     const sgSteps = [];
@@ -213,10 +213,10 @@ async function syncOneContainer(collection, id, num) {
 
     let maxIdx = -1;
     for (const h of history) { const i = STEP_ORDER.indexOf(h.key); if (i > maxIdx) maxIdx = i; }
-    // Plancher : le STATUT GLOBAL ShipsGo peut devancer les mouvements détaillés.
-    const statusStep = stepFromShipsgoStatus(sh.status);
-    const statusIdx = statusStep ? STEP_ORDER.indexOf(statusStep) : -1;
-    const finalIdx = Math.max(maxIdx, statusIdx);
+    // On n'avance le statut QUE sur les mouvements RÉELS (ACT) de ShipsGo — PLUS de
+    // "plancher" sur le statut global, qui pouvait afficher "en mer" un conteneur
+    // encore au port. Source de vérité = les événements CONFIRMÉS uniquement.
+    const finalIdx = maxIdx;
     const trackingStatus = finalIdx >= 0 ? STEP_ORDER[finalIdx] : (data.trackingStatus || "PREPARATION");
 
     const upd = {
@@ -227,10 +227,15 @@ async function syncOneContainer(collection, id, num) {
         trackingStatus,
         trackingHistory: history,
     };
-    if (vessel) upd.vesselName = vessel;
-    if (vesselImo) upd.vesselImo = vesselImo;
-    if (eta) { upd.eta = String(eta).slice(0, 10); upd.arrivalDate = upd.eta; }
-    if (dep) upd.departureDate = String(dep).slice(0, 10);
+    // Navire / dates / carte : on ne les expose QUE si le conteneur est réellement
+    // PARTI (embarquement confirmé). Avant le départ, le "navire prévu" navigue
+    // souvent sur un AUTRE voyage -> on n'affiche pas de navire/position trompeurs.
+    const departed = finalIdx >= STEP_ORDER.indexOf("EMBARQUE");
+    upd.vesselName = (departed && vessel) ? vessel : "";
+    upd.vesselImo = (departed && vesselImo) ? vesselImo : "";
+    if (departed && eta) { upd.eta = String(eta).slice(0, 10); upd.arrivalDate = upd.eta; }
+    else { upd.eta = ""; upd.arrivalDate = ""; }
+    upd.departureDate = (departed && dep) ? String(dep).slice(0, 10) : "";
 
     // NOTIFICATIONS WhatsApp : à l'entrée d'une étape clé (1 SEULE fois par étape).
     // 1 message par référence client (numéro + nombre de sous-colis). Best-effort :
