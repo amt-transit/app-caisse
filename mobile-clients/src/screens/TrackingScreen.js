@@ -73,14 +73,19 @@ export default function TrackingScreen({ data, loading, onRefresh, active }) {
         const ps = groups[ref];
         const gCounts = STAGES.map((_, i) => ps.filter(p => p.stage === i).length);
         const isOpen = !!expanded[ref];
+        // EN RETARD : arrivée estimée dépassée mais conteneur pas encore arrivé.
+        const etaStr = tk && (tk.arrivalDate || tk.eta);
+        const maxStage = ps.reduce((m, p) => Math.max(m, p.stage), 0);
+        const isLate = !!etaStr && maxStage < 2 && new Date(etaStr) < new Date();
         return (
           <Card key={ref}>
             {/* Ligne référence : compteurs par statut + clic pour déplier */}
             <TouchableOpacity activeOpacity={0.7} onPress={() => setExpanded(e => ({ ...e, [ref]: !e[ref] }))}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Text style={s.factureRef}>📄 {ref}</Text>
+                <Text style={[s.factureRef, isLate && s.lateRef]}>📄 {ref}{isLate ? '  ⚠️' : ''}</Text>
                 <Text style={s.chevron}>{ps.length} {tr('colis')} {isOpen ? '▲' : '▼'}</Text>
               </View>
+              {isLate ? <Text style={s.lateBadge}>⚠️ {t('En retard — arrivée dépassée')}</Text> : null}
               <View style={s.countRow}>
                 {STAGES.map((st, i) => gCounts[i] > 0 ? (
                   <View key={i} style={s.countPill}><Text style={s.countPillTxt}>{st.ic} {gCounts[i]} {tr(st.l)}</Text></View>
@@ -150,6 +155,8 @@ const s = StyleSheet.create({
   sub: { fontSize: 12, color: colors.muted, marginTop: 2 },
   date: { fontSize: 11, color: colors.muted },
   factureRef: { fontWeight: '800', color: colors.ink, fontSize: 15 },
+  lateRef: { color: '#dc2626' },
+  lateBadge: { marginTop: 4, color: '#dc2626', fontWeight: '800', fontSize: 12 },
   chevron: { fontSize: 12, color: colors.muted, fontWeight: '700' },
   countRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 8 },
   countPill: { backgroundColor: '#f1f5f9', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4 },
