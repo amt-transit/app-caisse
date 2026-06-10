@@ -178,12 +178,13 @@ async function syncOneContainer(collection, id, num) {
 
     // Dernier kilomètre : si TOUS les colis (livraisons) du conteneur sont livrés,
     // le conteneur passe AUTOMATIQUEMENT à "Livré" (ShipsGo ne voit pas cette étape).
-    let livDocs = [];
+    let livDocs = [], livSnapDocs = [];
     try {
         const code = data.number || id;
         const livCol = collection.replace("containers", "livraisons");
         const livSnap = await admin.firestore().collection(livCol).where("conteneur", "==", code).get();
-        livDocs = livSnap.docs.map((ld) => ld.data() || {}).filter((dd) => !dd.isDeleted);
+        livSnapDocs = livSnap.docs.filter((ld) => !((ld.data() || {}).isDeleted));
+        livDocs = livSnapDocs.map((ld) => ld.data() || {});
         if (livDocs.length && livDocs.every((dd) => dd.status === "LIVRE")) {
             if (!history.some((h) => h.key === "LIVRAISON")) {
                 history.push({ key: "LIVRAISON", date: new Date().toISOString(), source: "livraison" });
@@ -236,6 +237,31 @@ async function syncOneContainer(collection, id, num) {
         }
     }
     await ref.update(upd);
+
+    // Recopie un RÉSUMÉ du suivi sur les colis (livraisons) du conteneur, pour que
+    // les apps Clients (via getMyInvoices) et Parrainage (lecture directe des
+    // livraisons) y accèdent SANS toucher aux règles ni lire le conteneur. Best-effort.
+    try {
+        const trackingSummary = {
+            status: trackingStatus,
+            container: data.number || id,
+            vesselName: upd.vesselName || data.vesselName || "",
+            vesselImo: upd.vesselImo || data.vesselImo || "",
+            eta: upd.eta || data.eta || "",
+            departureDate: upd.departureDate || data.departureDate || "",
+            arrivalDate: upd.arrivalDate || data.arrivalDate || "",
+            syncedAt: upd.shipsgoSyncedAt,
+        };
+        if (livSnapDocs.length) {
+            const db2 = admin.firestore();
+            let batch = db2.batch(), n = 0;
+            for (const ld of livSnapDocs) {
+                batch.update(ld.ref, { tracking: trackingSummary });
+                if (++n >= 400) { await batch.commit(); batch = db2.batch(); n = 0; }
+            }
+            if (n > 0) await batch.commit();
+        }
+    } catch (e) { console.warn("copy tracking->livraisons:", e && e.message); }
 
     return {
         ok: true,
@@ -567,6 +593,8 @@ exports.getMyInvoices = onCall({ region: REGION, invoker: "public" }, async (req
         for (const inv of invoices) {
             const base = livBaseFor(inv.collection);
             const liv = livByKey.get(base + "|" + String(inv.reference).toUpperCase());
+            // Suivi (frise/carte) : résumé recopié sur la livraison au sync ShipsGo.
+            inv.tracking = (liv && liv.tracking) || null;
             // Profil : adresse de l'EXPÉDITEUR depuis la livraison (nouveau format).
             if (liv && (inv.role === "exp" || inv.role === "both")) {
                 if (!self.address && liv.adresseExpediteur) self.address = String(liv.adresseExpediteur);

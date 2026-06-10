@@ -5,7 +5,7 @@
 // visibles sur l'onglet Wallet (bonus de parrainage).
 import React, { useMemo, useState } from 'react';
 import {
-  View, Text, TextInput, TouchableOpacity, Modal, ScrollView, StyleSheet, Dimensions,
+  View, Text, TextInput, TouchableOpacity, Modal, ScrollView, StyleSheet, Dimensions, Linking,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '../components/Icon';
@@ -207,6 +207,11 @@ function FactureDetailModal({ facture, onClose }) {
     });
   });
 
+  // Voyage du conteneur (frise ShipsGo + navire + carte) recopié sur la livraison
+  // par le serveur (champ tracking). On prend le suivi de la 1re livraison qui en a.
+  const SHIPSGO_STEPS = { PREPARATION: '🏗️ Préparation', EMBARQUE: '🚢 Embarqué', EN_TRANSIT: '🌊 En mer', TRANSBORDEMENT: '🔄 Transbordement', ARRIVE: '⚓ Arrivé', DEDOUANE: '🛃 Dédouané', LIVRAISON: '📦 Livré' };
+  const voyage = (f.livraisons || []).map((l) => l.tracking).find((t) => t && t.status) || null;
+
   // Paiements
   const payments = Array.isArray(f.paymentHistory) ? f.paymentHistory : [];
 
@@ -281,6 +286,18 @@ function FactureDetailModal({ facture, onClose }) {
             {/* Suivi colis */}
             {subColis.length > 0 && (
               <Section title={`Suivi colis (${subColis.length})`}>
+                {voyage && (
+                  <View style={{ backgroundColor: '#f0f9ff', borderColor: '#bae6fd', borderWidth: 1, borderRadius: 10, padding: 10, marginBottom: 10 }}>
+                    <Text style={{ fontWeight: '700', color: '#075985' }}>🛰️ Voyage : {SHIPSGO_STEPS[voyage.status] || voyage.status}</Text>
+                    <Text style={{ color: '#075985', marginTop: 3, fontSize: 13 }}>🚢 {voyage.vesselName || 'Navire à confirmer'}{voyage.container ? ' · ' + voyage.container : ''}</Text>
+                    <Text style={{ color: '#075985', marginTop: 3, fontSize: 13 }}>📅 Départ {voyage.departureDate ? fdate(voyage.departureDate) : '—'} → 📆 Arrivée prévue {(voyage.arrivalDate || voyage.eta) ? fdate(voyage.arrivalDate || voyage.eta) : '—'}</Text>
+                    {voyage.vesselImo ? (
+                      <TouchableOpacity onPress={() => Linking.openURL('https://www.vesselfinder.com/?imo=' + encodeURIComponent(voyage.vesselImo))}>
+                        <Text style={{ color: '#0e7490', fontWeight: '700', marginTop: 5 }}>🗺️ Voir la carte du navire</Text>
+                      </TouchableOpacity>
+                    ) : null}
+                  </View>
+                )}
                 {subColis.map((c, i) => (
                   <View key={i} style={ds.colisRow}>
                     <Text style={ds.colisLabel}>{c.label}</Text>

@@ -1410,6 +1410,25 @@ const VIEWS = {
     if (!invoicesLoaded) {
       return `<div class="card"><div class="placeholder"><span class="ph-ic">⏳</span>Chargement de vos colis…</div></div>`;
     }
+    // Voyage du conteneur (frise ShipsGo + navire + dates + carte) recopié sur la
+    // facture par le serveur (champ tracking). Affiché sous le colis si présent.
+    const SHIPSGO_STEPS = { PREPARATION:'🏗️ Préparation', EMBARQUE:'🚢 Embarqué', EN_TRANSIT:'🌊 En mer', TRANSBORDEMENT:'🔄 Transbordement', ARRIVE:'⚓ Arrivé', DEDOUANE:'🛃 Dédouané', LIVRAISON:'📦 Livré' };
+    const trackByRef = {};
+    INVOICES.forEach(i => { if (i.tracking && i.tracking.status) trackByRef[i.reference] = i.tracking; });
+    const voyageBlock = (ref) => {
+      const t = trackByRef[ref];
+      if (!t) return '';
+      const step = SHIPSGO_STEPS[t.status] || t.status || '';
+      const dep = t.departureDate ? fdate(t.departureDate) : '—';
+      const arr = (t.arrivalDate || t.eta) ? fdate(t.arrivalDate || t.eta) : '—';
+      const carte = t.vesselImo ? `<a href="../commun/carte-navire.html?imo=${encodeURIComponent(t.vesselImo)}" target="_blank" rel="noopener" style="color:#0e7490; font-weight:700; text-decoration:none;">🗺️ Carte du navire</a>` : '';
+      return `<div style="margin-top:8px; padding:8px 10px; background:#f0f9ff; border:1px solid #bae6fd; border-radius:8px; font-size:13px; color:#075985;">
+        <div style="font-weight:700;">🛰️ Voyage : ${step}</div>
+        <div style="margin-top:3px;">🚢 ${t.vesselName || 'Navire à confirmer'}${t.container ? ' · ' + t.container : ''}</div>
+        <div style="margin-top:3px;">📅 Départ ${dep} → 📆 Arrivée prévue ${arr}</div>
+        ${carte ? '<div style="margin-top:5px;">' + carte + '</div>' : ''}
+      </div>`;
+    };
     const list = PARCELS
       .filter(p => trackFilter < 0 || p.stage === trackFilter)
       .map(p => `
@@ -1422,6 +1441,7 @@ const VIEWS = {
             <div class="track-date">${p.date ? fdate(p.date) : ''}</div>
           </div>
           ${stepper(p.stage)}
+          ${voyageBlock(p.ref)}
         </div>`).join('');
 
     const empty = PARCELS.length === 0
