@@ -1597,6 +1597,15 @@ export const ToutesLesFacturesView = {
             if (adjType === 'reduction' && adjValCfa > 0) effectivePrixCfa -= adjValCfa;
             else if (adjType === 'augmentation' && adjValCfa > 0) effectivePrixCfa += adjValCfa;
 
+            // Garde-fou : la somme des paiements ne peut pas DÉPASSER le total dû
+            // (prix +/- ajustement/magasinage), comme la Caisse.
+            const totalPaidCfa = this.currentPaymentInvoice.paymentHistory.reduce((s, p) => s + (p.montantAbidjan || 0) + (p.montantParis || 0), 0);
+            if (totalPaidCfa > effectivePrixCfa + 1) {
+                if (btn) { btn.innerHTML = '<i class="fas fa-save"></i> Enregistrer le paiement'; btn.disabled = false; }
+                this.app.showToast(`Le total des paiements (${this.formatMoneyLocal(totalPaidCfa / TAUX)}) dépasse le total dû (${this.formatMoneyLocal(effectivePrixCfa / TAUX)}).`, "error");
+                return;
+            }
+
             this.currentPaymentInvoice.paymentHistory.forEach(p => {
                 totalAbidjanCfa += (p.montantAbidjan || 0);
                 totalParisCfa += (p.montantParis || 0);
