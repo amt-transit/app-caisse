@@ -2,7 +2,9 @@
     RESPONSIVE GLOBAL — TABLET (≤1024px)
 ============================================ */
 @media (max-width: 1024px) {
-    .sidebar { transform: translateX(-100%); }
+    /* Le tiroir (drawer) passe AU-DESSUS du top-bar (z-index 200) pour ne plus
+       être masqué par lui quand il est ouvert. */
+    .sidebar { transform: translateX(-100%); z-index: 300; }
     .sidebar.open { transform: translateX(0); }
     .main-content { margin-left: 0; width: 100%; }
     .mobile-toggle { display: block; }
@@ -17,7 +19,9 @@
     position: fixed;
     inset: 0;
     background: rgba(0, 0, 0, 0.45);
-    z-index: 99;
+    /* AU-DESSUS du top-bar (200) pour que le clic dans le vide ferme le menu
+       partout (y compris sur la zone du top-bar), et JUSTE SOUS le tiroir (300). */
+    z-index: 250;
     backdrop-filter: blur(2px);
     -webkit-backdrop-filter: blur(2px);
 }
@@ -174,7 +178,9 @@
     }
     
     .data-table td > *, .factures-table td > * { max-width: 65%; text-align: right; }
-    .row-actions, .td-actions { width: 100%; justify-content: flex-end; max-width: 100% !important; margin-top: 5px; }
+    .row-actions, .td-actions { width: 100%; justify-content: flex-end; flex-wrap: wrap; max-width: 100% !important; margin-top: 5px; }
+    /* Le filtre de recherche (min-width 250px par défaut) débordait sur petit écran. */
+    .search-filter { min-width: 0; width: 100%; }
 
     /* Reset pour les cartes ultra-compactes */
     tr.compact-row { padding: 0 !important; background: transparent !important; border: none !important; box-shadow: none !important; margin-bottom: 12px !important; }
