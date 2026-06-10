@@ -41,6 +41,21 @@ const SHIPSGO_EVENT_STEP = {
     DLVR: "LIVRAISON", EMRE: "LIVRAISON", RETU: "LIVRAISON",
 };
 
+// Plancher d'étape depuis le STATUT GLOBAL ShipsGo (ex. "Sailing", "In Transit",
+// "Arrived"...). ShipsGo connaît souvent l'état global AVANT d'avoir les mouvements
+// détaillés en "ACT" -> on s'en sert pour ne pas rester bloqué sur une étape passée.
+function stepFromShipsgoStatus(s) {
+    const x = String(s || "").toUpperCase();
+    if (!x) return "";
+    if (/DELIVER|EMPTY/.test(x)) return "LIVRAISON";
+    if (/DISCHAR|ARRIV/.test(x)) return "ARRIVE";
+    if (/TRANSHIP|TRANSBORD/.test(x)) return "TRANSBORDEMENT";
+    if (/SAIL|TRANSIT|DEPART/.test(x)) return "EN_TRANSIT";
+    if (/LOAD|GATE.?OUT|EMBARK/.test(x)) return "EMBARQUE";
+    if (/GATE.?IN/.test(x)) return "CHARGE";
+    return "";
+}
+
 // === NOTIFICATIONS WHATSAPP (Phase 4) ===
 // Étape de suivi -> modèle WhatsApp approuvé (nom + code langue EXACT).
 const STEP_TEMPLATE = {
@@ -158,7 +173,7 @@ async function syncOneContainer(collection, id, num) {
     const movements = Array.isArray(cont.movements) ? cont.movements : [];
     // DIAGNOSTIC : statut global ShipsGo + chaque mouvement (event / ACT|EST / date).
     // À lire avec `npm run logs` pour comprendre pourquoi une étape n'avance pas.
-    console.log(`ShipsGo ${num}: status=${sh.status} | movements=[${movements.map((m) => `${(m.event || "")}/${(m.status || "")}@${String(m.timestamp || "").slice(0, 10)}`).join(", ")}]`);
+    console.log(`ShipsGo ${num}: status=${sh.status} (plancher->${stepFromShipsgoStatus(sh.status) || "-"}) | movements=[${movements.map((m) => `${(m.event || "")}/${(m.status || "")}@${String(m.timestamp || "").slice(0, 10)}`).join(", ")}]`);
     let vessel = "", vesselImo = "";
     for (const m of movements) { if (m && m.vessel && m.vessel.name) { vessel = m.vessel.name; vesselImo = m.vessel.imo ? String(m.vessel.imo) : ""; break; } }
     const eta = sh.route && sh.route.port_of_discharge && sh.route.port_of_discharge.date_of_discharge;
@@ -198,7 +213,11 @@ async function syncOneContainer(collection, id, num) {
 
     let maxIdx = -1;
     for (const h of history) { const i = STEP_ORDER.indexOf(h.key); if (i > maxIdx) maxIdx = i; }
-    const trackingStatus = maxIdx >= 0 ? STEP_ORDER[maxIdx] : (data.trackingStatus || "PREPARATION");
+    // Plancher : le STATUT GLOBAL ShipsGo peut devancer les mouvements détaillés.
+    const statusStep = stepFromShipsgoStatus(sh.status);
+    const statusIdx = statusStep ? STEP_ORDER.indexOf(statusStep) : -1;
+    const finalIdx = Math.max(maxIdx, statusIdx);
+    const trackingStatus = finalIdx >= 0 ? STEP_ORDER[finalIdx] : (data.trackingStatus || "PREPARATION");
 
     const upd = {
         shipsgoSyncedAt: new Date().toISOString(),

@@ -187,10 +187,10 @@ export const BateauxDepartView = {
                                             <div v-if="getBoatContainers(b.id).length === 0" style="font-size:12px; color:#94a3b8; font-style:italic; padding:5px 0;">Aucun conteneur</div>
                                         </div>
                                         <div class="bt-card__info-row">
-                                            <span class="bt-card__info-tag">📅 Dép. {{ formatDate(b.departureDate) || '-' }}</span>
-                                            <span class="bt-card__info-tag">📆 Arr. {{ formatDate(b.arrivalDate) || '-' }}</span>
-                                            <span class="bt-card__info-tag">⚓ {{ b.company || '-' }}</span>
-                                            <span class="bt-card__info-tag">👤 {{ b.name || '-' }}</span>
+                                            <span class="bt-card__info-tag">📅 Dép. {{ formatDate(boatDep(b)) || '-' }}</span>
+                                            <span class="bt-card__info-tag">📆 Arr. {{ formatDate(boatArr(b)) || '-' }}</span>
+                                            <span class="bt-card__info-tag">⚓ {{ boatCompany(b) || '-' }}</span>
+                                            <span class="bt-card__info-tag">👤 {{ boatVessel(b) || '-' }}</span>
                                         </div>
                                     </div>
                                     <div class="bt-card__footer">
@@ -222,10 +222,10 @@ export const BateauxDepartView = {
                                     <tr v-else-if="regBoats.length === 0"><td colspan="9" style="text-align: center; padding: 40px; color: #64748b;">Aucun bateau en mer pour le moment.</td></tr>
                                     <tr v-else v-for="b in regBoats" :key="b.id">
                                         <td class="mono" style="font-weight: 800;">{{ b.reference }}</td>
-                                        <td class="mono">{{ formatDate(b.departureDate) || '-' }}</td>
-                                        <td class="mono">{{ formatDate(b.arrivalDate) || '-' }}</td>
-                                        <td>{{ b.company || '-' }}</td>
-                                        <td class="mono">{{ b.name || '-' }}</td>
+                                        <td class="mono">{{ formatDate(boatDep(b)) || '-' }}</td>
+                                        <td class="mono">{{ formatDate(boatArr(b)) || '-' }}</td>
+                                        <td>{{ boatCompany(b) || '-' }}</td>
+                                        <td class="mono">{{ boatVessel(b) || '-' }}</td>
                                         <td class="mono" style="max-width: 200px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" :title="getBoatContainers(b.id).map(c => c.number || c.id).join(' / ')">{{ getBoatContainers(b.id).map(c => c.number || c.id).join(' / ') || '-' }}</td>
                                         <td class="mono">{{ formatDate(b.registeredAt) || '-' }}</td>
                                         <td style="text-align: center;"><span class="status-badge" :class="b.status === 'ARRIVE' ? 'status-badge--arrived' : 'status-badge--valid'">{{ b.status === 'ARRIVE' ? '✅ À quai' : '🌊 En mer' }}</span></td>
@@ -394,6 +394,14 @@ export const BateauxDepartView = {
                 const getBoatContainers = (boatId) => {
                     return containers.value.filter(c => c.boatId === boatId);
                 };
+
+                // Navire / compagnie / dates : si vides sur le bateau, on prend celles
+                // de SON conteneur (remplies automatiquement par le suivi ShipsGo).
+                const boatCtnInfo = (b) => getBoatContainers(b.id).find(c => c.vesselName || c.departureDate || c.arrivalDate || c.eta) || {};
+                const boatVessel = (b) => b.name || boatCtnInfo(b).vesselName || '';
+                const boatCompany = (b) => b.company || boatCtnInfo(b).shipsgoCarrier || '';
+                const boatDep = (b) => b.departureDate || boatCtnInfo(b).departureDate || '';
+                const boatArr = (b) => b.arrivalDate || boatCtnInfo(b).arrivalDate || boatCtnInfo(b).eta || '';
 
                 // Détail des colis d'un bateau (envoi) : on relie via le n° de
                 // conteneur. Statut lisible par colis (entrepôt → transit → reçu
@@ -809,6 +817,7 @@ export const BateauxDepartView = {
                     loadingContainers, loadingBoats, boatForm,
                     availableContainers, confBoats, regBoats,
                     formatDate, formatDateTime, getDossiersCount, getBoatContainers,
+                    boatVessel, boatCompany, boatDep, boatArr,
                     toggleSelection, selectAllLeft, openBoatModal, closeBoatModal, saveBoat,
                     deleteBoat, addToBoat, removeFromBoat, registerBoat, unRegisterBoat, loadData,
                     getRealNo, setRealNo, isRealValid, selectedContainers,
