@@ -31,10 +31,6 @@ export const DashboardView = {
                         <div class="amt-quick-icon"><i class="fas fa-file-signature"></i></div>
                         <span class="amt-quick-label">Nouveau devis</span>
                     </button>
-                    <button v-if="checkAccess('quote-requests')" @click="renderPage('quote-requests')" class="amt-quick">
-                        <div class="amt-quick-icon"><i class="fas fa-inbox"></i></div>
-                        <span class="amt-quick-label">Demandes devis</span>
-                    </button>
                     <button v-if="checkAccess('appointments-pending')" @click="renderPage('appointments-pending')" class="amt-quick">
                         <div class="amt-quick-icon"><i class="fas fa-calendar-check"></i></div>
                         <span class="amt-quick-label">RDV à valider</span>
@@ -42,30 +38,6 @@ export const DashboardView = {
                     <button v-if="checkAccess('notifications')" @click="renderPage('notifications')" class="amt-quick">
                         <div class="amt-quick-icon"><i class="fas fa-bell"></i></div>
                         <span class="amt-quick-label">Notifications</span>
-                    </button>
-                    <button v-if="checkAccess('sms-send')" @click="renderPage('sms-send')" class="amt-quick">
-                        <div class="amt-quick-icon"><i class="fas fa-sms"></i></div>
-                        <span class="amt-quick-label">Envoi SMS</span>
-                    </button>
-                    <button v-if="checkAccess('loading-boats')" @click="renderPage('loading-boats')" class="amt-quick">
-                        <div class="amt-quick-icon"><i class="fas fa-ship"></i></div>
-                        <span class="amt-quick-label">Bateaux & Départs</span>
-                    </button>
-                    <button v-if="checkAccess('clients-list')" @click="renderPage('clients-list')" class="amt-quick">
-                        <div class="amt-quick-icon"><i class="fas fa-users"></i></div>
-                        <span class="amt-quick-label">Clients</span>
-                    </button>
-                    <button v-if="checkAccess('balance-monthly')" @click="renderPage('balance-monthly')" class="amt-quick">
-                        <div class="amt-quick-icon"><i class="fas fa-chart-line"></i></div>
-                        <span class="amt-quick-label">Bilan Comparatif</span>
-                    </button>
-                    <button v-if="checkAccess('scan-warehouse')" @click="renderPage('scan-warehouse')" class="amt-quick">
-                        <div class="amt-quick-icon"><i class="fas fa-barcode"></i></div>
-                        <span class="amt-quick-label">Numérisation</span>
-                    </button>
-                    <button v-if="checkAccess('finance-expenses')" @click="renderPage('finance-expenses')" class="amt-quick">
-                        <div class="amt-quick-icon"><i class="fas fa-money-bill-wave"></i></div>
-                        <span class="amt-quick-label">Dépenses</span>
                     </button>
                 </div>
 

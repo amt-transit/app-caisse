@@ -243,6 +243,44 @@ export const NouveauProgrammeView = {
                 .opti-stop__tag--orange { background: #ffedd5; color: #ea580c; }
                 .opti-stop__tag--green { background: #dcfce7; color: #16a34a; }
                 .opti-footer { padding: 15px 20px; border-top: 1px solid #e2e8f0; display: flex; justify-content: space-between; gap: 10px; background: #f8fafc; }
+
+                /* === Fiches PROGRAMME compactes (≤1024px) — override du format
+                   générique étalé. Deux tableaux .rdv-table distincts : le tableau
+                   principal (6 col.) et celui de la modale d'assignation (4 col.). */
+                @media (max-width: 1024px) {
+                    /* commun : on enlève les libellés vides et on met les lignes en fiches */
+                    .table-wrap .rdv-table thead, .amt-modal .rdv-table thead { display: none; }
+                    .table-wrap .rdv-table, .table-wrap .rdv-table tbody,
+                    .amt-modal .rdv-table, .amt-modal .rdv-table tbody { display: block; width: 100%; }
+                    .table-wrap .rdv-table td::before, .amt-modal .rdv-table td::before { display: none !important; }
+                    .table-wrap .rdv-table tbody tr, .amt-modal .rdv-table tbody tr {
+                        display: flex !important; flex-wrap: wrap; align-items: center; gap: 5px 10px;
+                        padding: 12px 14px !important; border: 1px solid #e8edf3; border-radius: 13px;
+                        margin-bottom: 10px; background: #fff; box-shadow: 0 1px 2px rgba(15,23,42,.04); }
+                    .table-wrap .rdv-table tbody td, .amt-modal .rdv-table tbody td {
+                        display: inline-flex !important; align-items: center; width: auto !important; max-width: 100%;
+                        border: none !important; padding: 0 !important; text-align: left !important;
+                        justify-content: flex-start !important; font-size: 12.5px; color: #475569; }
+
+                    /* Tableau principal : Type(1) Chauffeur(2) Client(3) Adresse(4) Description(5) Actions(6) */
+                    .table-wrap .rdv-table td:nth-child(3) { order: 0; width: 100% !important; }
+                    .table-wrap .rdv-table td:nth-child(3) .client-cell__name { font-weight: 800; color: #0f172a; font-size: 14.5px; }
+                    .table-wrap .rdv-table td:nth-child(1) { order: 1; }
+                    .table-wrap .rdv-table td:nth-child(2) { order: 2; margin-left: auto; font-weight: 700; color: #1e293b; }
+                    .table-wrap .rdv-table td:nth-child(4) { order: 3; width: 100% !important; }
+                    .table-wrap .rdv-table td.address-cell { max-width: 100% !important; white-space: normal !important; overflow: visible !important; font-weight: 600; }
+                    .table-wrap .rdv-table td:nth-child(5) { order: 4; width: 100% !important; }
+                    .table-wrap .rdv-table td.description-cell { max-width: 100% !important; white-space: normal !important; overflow: visible !important; }
+                    .table-wrap .rdv-table td:nth-child(6) { order: 5; width: 100% !important; justify-content: flex-end !important; margin-top: 5px; border-top: 1px solid #f1f5f9; padding-top: 9px !important; }
+
+                    /* Modale d'assignation : Checkbox(1) Type(2) Client/Adresse(3) Heure(4) */
+                    .amt-modal .rdv-table td:nth-child(1) { order: 0; }
+                    .amt-modal .rdv-table td:nth-child(3) { order: 1; flex: 1 1 auto; min-width: 0; }
+                    .amt-modal .rdv-table td:nth-child(3) > div:first-child { font-weight: 800; color: #0f172a; }
+                    .amt-modal .rdv-table td:nth-child(3) > div:last-child { max-width: 100% !important; white-space: normal !important; }
+                    .amt-modal .rdv-table td:nth-child(2) { order: 2; }
+                    .amt-modal .rdv-table td:nth-child(4) { order: 3; font-weight: 700; color: #334155; }
+                }
             </style>
 
             <div id="vue-nouveauprogramme-app" class="programmes-page" v-cloak>

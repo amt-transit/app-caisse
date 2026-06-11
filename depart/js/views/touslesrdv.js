@@ -71,6 +71,28 @@ export const TousLesRdvView = {
                 .btn-del { color: #ef4444; border-color: #fecaca; background: #fef2f2; }
                 .btn-del:hover { background: #fee2e2; }
 
+                /* === Fiches RDV COMPACTES (tablette/pliable/mobile ≤1024px) ===
+                   Remplace le format générique « 1 champ par ligne avec libellé »
+                   (trop étalé) par une fiche dense SANS libellés : Client en tête,
+                   badges Type/Statut, puis méta (date · tél), adresse, actions. */
+                @media (max-width: 1024px) {
+                    .rdv-table thead { display: none; }
+                    .rdv-table, .rdv-table tbody { display: block; width: 100%; }
+                    .rdv-table tbody tr { display: flex !important; flex-wrap: wrap; align-items: center; gap: 5px 10px; padding: 13px 15px !important; border: 1px solid #e8edf3; border-radius: 13px; margin-bottom: 11px; background: #fff; box-shadow: 0 1px 2px rgba(15,23,42,.04); }
+                    .rdv-table tbody td { display: inline-flex !important; align-items: center; width: auto !important; max-width: 100%; border: none !important; padding: 0 !important; text-align: left !important; justify-content: flex-start !important; font-size: 12.5px; color: #475569; }
+                    .rdv-table tbody td::before { display: none !important; }
+                    .rdv-table td:nth-child(3) { order: 0; width: 100% !important; font-weight: 800; color: #0f172a; font-size: 14.5px; }
+                    .rdv-table td:nth-child(1) { order: 1; }
+                    .rdv-table td:nth-child(6) { order: 2; margin-left: auto; }
+                    .rdv-table td:nth-child(2) { order: 3; color: #64748b; }
+                    .rdv-table td:nth-child(2) br { display: none; }
+                    .rdv-table td:nth-child(2) strong { font-weight: 700; color: #334155; margin-right: 6px; }
+                    .rdv-table td:nth-child(4) { order: 4; font-weight: 700; }
+                    .rdv-table td:nth-child(5) { order: 5; width: 100% !important; color: #64748b; }
+                    .rdv-table td:nth-child(5) div { max-width: 100% !important; white-space: normal !important; overflow: visible !important; }
+                    .rdv-table td:nth-child(7) { order: 6; width: 100% !important; justify-content: flex-end !important; margin-top: 5px; border-top: 1px solid #f1f5f9; padding-top: 9px !important; }
+                }
+
                 /* Edition Modal */
                 .em-modal { display: none; position: fixed; inset: 0; background: rgba(15,23,42,0.6); z-index: 1000; align-items: center; justify-content: center; backdrop-filter: blur(4px); }
                 .em-modal.active { display: flex; animation: fadeIn 0.2s; }
