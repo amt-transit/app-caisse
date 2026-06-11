@@ -24,6 +24,12 @@ export const DashboardView = {
                     .modern-dashboard table tbody tr { box-sizing:border-box; border:1px solid #e8edf3; border-radius:11px; margin-bottom:10px; padding:9px 13px; background:#fff; display:flex; flex-wrap:wrap; align-items:center; gap:6px 12px; box-shadow:0 1px 2px rgba(15,23,42,.04); }
                     .modern-dashboard table tbody td { box-sizing:border-box; border:none !important; padding:0 !important; width:auto; max-width:100%; font-size:12.5px; color:#475569; white-space:normal !important; overflow-wrap:anywhere; text-align:left !important; }
                     .modern-dashboard table tbody td:first-child { width:100%; color:#94a3b8; font-size:11px; }
+                    /* Carte de stats sur 2 colonnes -> pleine largeur (ne déborde plus). */
+                    .modern-dashboard .span-2 { grid-column: 1 / -1 !important; box-sizing: border-box; min-width: 0; }
+                    /* Graphiques : 1 colonne, et les cartes/toiles peuvent rétrécir. */
+                    .modern-dashboard .charts-grid { grid-template-columns: 1fr !important; }
+                    .modern-dashboard .charts-grid > * { min-width: 0 !important; box-sizing: border-box; }
+                    .modern-dashboard canvas { max-width: 100% !important; }
                 }
             </style>
             <div class="dashboard-container modern-dashboard">

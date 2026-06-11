@@ -11,8 +11,21 @@ export const SalaireView = {
         this.app = app;
         
         container.innerHTML = `
+            <style>
+                /* Fiches (tablette + pliable + mobile ≤1024px) : les tableaux de paie
+                   (5-8 colonnes) coupent sur petit écran -> fiches sans libellés. */
+                @media (max-width: 1024px) {
+                    .sal-page .table thead { display:none; }
+                    .sal-page .table, .sal-page .table tbody, .sal-page .table tr { display:block; width:100%; }
+                    .sal-page .table tbody tr { box-sizing:border-box; border:1px solid #e8edf3; border-radius:11px; margin-bottom:10px; padding:9px 13px; background:#fff; display:flex; flex-wrap:wrap; align-items:center; gap:6px 12px; box-shadow:0 1px 2px rgba(15,23,42,.04); }
+                    .sal-page .table tbody td { box-sizing:border-box; border:none !important; padding:0 !important; width:auto; max-width:100%; font-size:12.5px; color:#475569; white-space:normal !important; overflow-wrap:anywhere; text-align:left !important; }
+                    .sal-page .table tbody td:first-child { width:100%; font-weight:700; color:#0f172a; }
+                    .sal-page .table tfoot tr { display:flex; flex-wrap:wrap; gap:6px 12px; border-top:2px solid #e2e8f0; padding:8px 13px; }
+                    .sal-page .table tfoot td { border:none !important; padding:0 !important; width:auto; }
+                }
+            </style>
             <div id="app" v-cloak>
-                <div class="dashboard-container" v-if="user && !authLoading">
+                <div class="dashboard-container sal-page" v-if="user && !authLoading">
                     <div class="sub-nav" style="margin-bottom: 20px;">
                         <a href="#" :class="{ active: currentSalaireView === 'dashboard' }" @click.prevent="currentSalaireView = 'dashboard'">Tableau de bord</a>
                         <a href="#" :class="{ active: currentSalaireView === 'employees' }" @click.prevent="currentSalaireView = 'employees'">Employés & RH</a>
