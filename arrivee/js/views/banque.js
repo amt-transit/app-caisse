@@ -25,6 +25,16 @@ export const BankView = {
                 .bk-head { display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; margin-bottom:22px; }
                 .bk-head h2 { margin:0; color:#0f172a; font-size:22px; font-weight:800; display:flex; align-items:center; gap:12px; }
                 .bk-head .bk-ico { width:40px; height:40px; border-radius:11px; background:var(--primary-color,#1A3553); color:#fff; display:inline-flex; align-items:center; justify-content:center; font-size:19px; box-shadow:0 4px 12px rgba(15,23,42,.18); }
+
+                /* Fiches (tablette + pliable + mobile ≤1024px) : les tableaux (5-6
+                   colonnes) coupent sur petit écran -> fiches sans libellés. */
+                @media (max-width: 1024px) {
+                    .bk-page .table thead { display:none; }
+                    .bk-page .table, .bk-page .table tbody, .bk-page .table tr { display:block; width:100%; }
+                    .bk-page .table tbody tr { box-sizing:border-box; border:1px solid #e8edf3; border-radius:11px; margin-bottom:10px; padding:9px 13px; background:#fff; display:flex; flex-wrap:wrap; align-items:center; gap:6px 12px; box-shadow:0 1px 2px rgba(15,23,42,.04); }
+                    .bk-page .table tbody td { box-sizing:border-box; border:none !important; padding:0 !important; width:auto; max-width:100%; font-size:12.5px; color:#475569; white-space:normal !important; overflow-wrap:anywhere; }
+                    .bk-page .table tbody td:first-child { width:100%; color:#94a3b8; font-size:11px; }
+                }
             </style>
             <div class="dashboard-container bk-page">
                 <div class="bk-head"><h2><span class="bk-ico">🏦</span> Gestion de la Banque</h2></div>

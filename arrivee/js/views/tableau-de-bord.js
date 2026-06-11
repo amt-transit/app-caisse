@@ -15,6 +15,17 @@ export const DashboardView = {
         document.body.classList.remove('dash-show-details');
 
         container.innerHTML = `
+            <style>
+                /* Fiches (tablette + pliable + mobile ≤1024px) : tous les tableaux
+                   du tableau de bord deviennent des fiches (sans libellés). */
+                @media (max-width: 1024px) {
+                    .modern-dashboard table thead { display:none; }
+                    .modern-dashboard table, .modern-dashboard table tbody, .modern-dashboard table tr { display:block; width:100%; }
+                    .modern-dashboard table tbody tr { box-sizing:border-box; border:1px solid #e8edf3; border-radius:11px; margin-bottom:10px; padding:9px 13px; background:#fff; display:flex; flex-wrap:wrap; align-items:center; gap:6px 12px; box-shadow:0 1px 2px rgba(15,23,42,.04); }
+                    .modern-dashboard table tbody td { box-sizing:border-box; border:none !important; padding:0 !important; width:auto; max-width:100%; font-size:12.5px; color:#475569; white-space:normal !important; overflow-wrap:anywhere; text-align:left !important; }
+                    .modern-dashboard table tbody td:first-child { width:100%; color:#94a3b8; font-size:11px; }
+                }
+            </style>
             <div class="dashboard-container modern-dashboard">
                 <!-- HEADER & FILTRES MODERNES -->
                 <div class="dashboard-header-modern">

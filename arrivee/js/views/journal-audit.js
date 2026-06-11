@@ -80,6 +80,18 @@ export const AuditLogView = {
                 .al__table td, .al__perf-table td { padding: 12px 15px; border-bottom: 1px solid #f1f5f9; font-size: 13px; color: #334155; }
                 .al__table tr:hover td, .al__perf-table tr:hover td { background: #f8fafc; }
 
+                /* Tablette + pliable + mobile (≤1024px) : ces tableaux très larges
+                   deviennent des fiches (sans libellés ; badges/couleurs guident). */
+                @media (max-width: 1024px) {
+                    .al__perf-wrap, .al__table-wrap { overflow-x: visible; }
+                    .al__table thead, .al__perf-table thead { display: none; }
+                    .al__table, .al__perf-table, .al__table tbody, .al__perf-table tbody, .al__table tr, .al__perf-table tr { display: block; width: 100%; }
+                    .al__table tbody tr, .al__perf-table tbody tr { box-sizing: border-box; border: 1px solid #e8edf3; border-radius: 11px; margin-bottom: 10px; padding: 9px 13px; background: #fff; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; box-shadow: 0 1px 2px rgba(15,23,42,.04); }
+                    .al__table tbody td, .al__perf-table tbody td { box-sizing: border-box; border: none !important; padding: 0 !important; width: auto; max-width: 100%; font-size: 12px; white-space: normal !important; overflow-wrap: anywhere; }
+                    .al__td-desc { width: 100%; }
+                    .al__pagination { flex-wrap: wrap; justify-content: center; gap: 8px; }
+                }
+
                 .al__rank { width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; background: #f1f5f9; border-radius: 50%; font-size: 11px; font-weight: bold; color: #64748b; }
                 .al__rank--gold { background: #fef3c7; color: #d97706; }
                 .al__rank--silver { background: #f1f5f9; color: #475569; }
