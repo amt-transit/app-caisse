@@ -71,6 +71,21 @@ export const SuiviConteneursView = {
                 .sc-real { font-family:monospace; font-weight:700; }
                 .sc-empty { text-align:center; padding:46px 20px; color:#94a3b8; }
                 .sc-act { display:inline-flex; align-items:center; gap:4px; padding:6px 11px; border:none; border-radius:8px; font-size:12px; font-weight:700; cursor:pointer; background:var(--sc-primary); color:#fff; }
+
+                /* Fiches Suivi Conteneurs (tablette + pliable + mobile ≤1024px) :
+                   le tableau (7 colonnes) coupe sur petit écran -> fiches sans libellés. */
+                .sc-cards { display:none; }
+                .sc-mcard { background:#fff; border:1px solid #e7ebf0; border-left:4px solid var(--sc-primary); border-radius:13px; padding:12px 14px; box-shadow:0 1px 2px rgba(15,23,42,.05); cursor:pointer; -webkit-tap-highlight-color:transparent; }
+                .sc-mcard:active { background:#f8fbff; }
+                .sc-mcard-top { display:flex; align-items:center; justify-content:space-between; gap:10px; }
+                .sc-mcard-code { font-weight:800; color:var(--sc-primary); font-size:15px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0; }
+                .sc-mcard-meta { display:flex; align-items:center; flex-wrap:wrap; gap:4px 12px; margin-top:7px; font-size:12px; color:#64748b; }
+                .sc-mcard-meta b { color:#475569; font-weight:700; }
+                .sc-mcard-meta .sc-real { color:#1e293b; }
+                @media (max-width:1024px) {
+                    .sc-card { display:none; }
+                    .sc-cards { display:flex; flex-direction:column; gap:10px; }
+                }
             </style>
             <div class="dashboard-container sc-page">
                 <div class="sc-head">
@@ -94,6 +109,8 @@ export const SuiviConteneursView = {
                         <tbody id="scBody"><tr><td colspan="7" class="sc-empty">Chargement…</td></tr></tbody>
                     </table>
                 </div>
+                <!-- Version fiches (tablette + pliable + mobile) -->
+                <div class="sc-cards" id="scCards"></div>
                 <div id="scModalContainer"></div>
             </div>
         `;
@@ -148,10 +165,32 @@ export const SuiviConteneursView = {
 
     renderList() {
         const tb = document.getElementById('scBody');
+        const cardsEl = document.getElementById('scCards');
         if (!tb) return;
         if (!this.filtered.length) {
             tb.innerHTML = '<tr><td colspan="7" class="sc-empty">Aucun conteneur 📦</td></tr>';
+            if (cardsEl) cardsEl.innerHTML = '<div class="sc-empty">Aucun conteneur 📦</div>';
             return;
+        }
+        if (cardsEl) {
+            cardsEl.innerHTML = this.filtered.map(c => {
+                const code = c.number || c.id || '—';
+                const real = c.realContainerNo ? `<span class="sc-real">${c.realContainerNo}</span>` : '<span style="color:#f59e0b;">n° à saisir</span>';
+                const shipsgo = c.shipsgoShipmentId ? ' <span title="Suivi ShipsGo actif" style="color:#0e7490;">🛰️</span>' : '';
+                return `
+                <div class="sc-mcard" onclick="window.app.views.suiviConteneurs.openDetail('${c.id}')">
+                    <div class="sc-mcard-top">
+                        <span class="sc-mcard-code">${code}${shipsgo}</span>
+                        ${containerStageBadgeHtml(c)}
+                    </div>
+                    <div class="sc-mcard-meta">
+                        <span>🚢 <b>${c.vesselName || '—'}</b></span>
+                        <span>📍 ${c.destination || c.destinationAgency || '—'}</span>
+                        <span>${real}</span>
+                        <span>🗓️ ${c.eta || '—'}</span>
+                    </div>
+                </div>`;
+            }).join('');
         }
         tb.innerHTML = this.filtered.map(c => {
             const statut = c.trackingStatus || 'PREPARATION';

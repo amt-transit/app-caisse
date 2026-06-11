@@ -54,6 +54,26 @@ export const ScanHistoryView = {
                 .sh-group-meta { color: #64748b; font-size: 12px; }
                 .sh-group-agent { margin-left: auto; color: #1e293b; font-weight: 600; font-size: 12px; }
                 .sh-detail td:first-child { padding-left: 40px; }
+
+                /* ── Tablette + pliable + mobile (≤768px) : le tableau (6 colonnes
+                   nowrap) deborde -> on masque l'en-tete et on transforme les
+                   lignes de detail en fiches compactes SANS libelles. L'en-tete
+                   de dossier (.sh-group-head) est deja un flex qui s'enroule. */
+                @media (max-width: 768px) {
+                    .sh-table thead { display: none; }
+                    .sh-table, .sh-table tbody, .sh-table tr { display: block; width: 100%; }
+                    .sh-table td { box-sizing: border-box; }
+                    .sh-group-row td { display: block; width: 100%; padding: 12px 14px; }
+                    .sh-detail { display: flex; flex-wrap: wrap; align-items: center; gap: 5px 10px; margin: 7px 10px; padding: 9px 13px; border: 1px solid #e8edf3; border-left: 3px solid #cbd5e1; border-radius: 10px; background: #fff; }
+                    .sh-detail td { display: inline-flex; align-items: center; width: auto; border: none !important; padding: 0 !important; font-size: 12px; color: #475569; }
+                    .sh-detail td:first-child { width: 100%; padding-left: 0 !important; color: #94a3b8; font-size: 11px; }
+                    .sh-detail .sh-ref { font-size: 13px; }
+                    .sh-detail .sh-agent { font-size: 12px; }
+                    /* l'agent ne doit plus etre pousse a droite (deborde) : il
+                       passe a la ligne avec le reste de l'en-tete de dossier. */
+                    .sh-group-agent { margin-left: 0 !important; }
+                    .sh-group-head { gap: 6px 10px; }
+                }
             </style>
             <div class="sh-page">
                 <div class="sh-header">

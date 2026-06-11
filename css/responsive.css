@@ -152,8 +152,10 @@
     RESPONSIVE — MOBILE (≤768px)
 ============================================ */
 @media (max-width: 768px) {
-    .sidebar { width: 82vw; max-width: 290px; z-index: 100; }
-    .sidebar.open { z-index: 100; }
+    /* Le menu doit passer AU-DESSUS du voile sombre (.sidebar-overlay z-index:250)
+       sinon le voile le recouvre et le menu apparait flou/cache quand on l'ouvre. */
+    .sidebar { width: 82vw; max-width: 290px; z-index: 300; }
+    .sidebar.open { z-index: 300; }
     .main-content { margin-left: 0; padding-bottom: calc(60px + env(safe-area-inset-bottom, 0px)); }
     .top-bar { padding: 10px 14px; height: 52px; }
     .page-title { font-size: 16px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 160px; }

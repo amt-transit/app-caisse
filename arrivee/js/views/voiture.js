@@ -9,7 +9,21 @@ export const VoitureView = {
         this.app = app;
         
         container.innerHTML = `
-            <div class="dashboard-container">
+            <style>
+                /* Fiches (tablette + pliable + mobile ≤1024px) : le tableau Flotte
+                   (7 colonnes) coupe sur petit écran -> fiches sans libellés. */
+                @media (max-width: 1024px) {
+                    .vt-scope .table thead { display: none; }
+                    .vt-scope .table, .vt-scope .table tbody, .vt-scope .table tr { display: block; width: 100%; }
+                    .vt-scope .table td { box-sizing: border-box; }
+                    .vt-scope .table tbody tr { border: 1px solid #e8edf3; border-radius: 11px; margin-bottom: 10px; padding: 9px 13px; background: #fff; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; box-shadow: 0 1px 2px rgba(15,23,42,.04); }
+                    .vt-scope .table tbody td { border: none !important; padding: 0 !important; width: auto; font-size: 12.5px; color: #475569; }
+                    .vt-scope .table tbody td:nth-child(1) { width: 100%; color: #94a3b8; font-size: 11px; }
+                    .vt-scope .table tbody td:nth-child(5) { width: 100%; color: #334155; }
+                    .vt-scope .table tbody td:last-child { margin-left: auto; }
+                }
+            </style>
+            <div class="dashboard-container vt-scope">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 10px;"><h2 style="margin: 0; color: #1e293b;">🚗 Gestion de la Flotte & Véhicules</h2></div>
                 <div class="totals-container" style="margin-bottom: 20px;">
                     <div class="total-card"><h3>Revenus (Location)</h3><p id="statIncome" style="color:#10b981;">0 CFA</p></div>

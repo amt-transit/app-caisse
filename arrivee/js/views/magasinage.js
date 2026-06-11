@@ -10,6 +10,25 @@ export const MagasinageView = {
     render(app, container) {
         this.app = app;
         container.innerHTML = `
+            <style>
+                /* Fiches Magasinage (tablette + pliable + mobile ≤1024px) : le
+                   tableau a 8 colonnes -> coupe sur petit ecran. On le remplace
+                   par des fiches compactes SANS libelles. */
+                .mag-cards { display: none; }
+                .mag-card { background: #fff; border: 1px solid #e8edf3; border-left: 4px solid #cbd5e1; border-radius: 13px; padding: 11px 14px; box-shadow: 0 1px 2px rgba(15,23,42,0.04); }
+                .mag-card.is-rebus { border-left-color: #ef4444; background: #fff5f5; }
+                .mag-card-top { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+                .mag-card-ref { font-family: ui-monospace, Menlo, monospace; font-size: 14px; font-weight: 800; color: #0f172a; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+                .mag-card-fee { font-size: 14px; font-weight: 800; white-space: nowrap; flex-shrink: 0; text-align: right; }
+                .mag-card-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 12px; margin-top: 6px; font-size: 12px; color: #64748b; }
+                .mag-card-meta b { color: #475569; font-weight: 700; }
+                .mag-card-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 10px; }
+                .mag-card .tag { background: #e2e8f0; color: #334155; }
+                @media (max-width: 1024px) {
+                    .mag-table-wrap { display: none; }
+                    .mag-cards { display: flex; flex-direction: column; gap: 10px; }
+                }
+            </style>
             <div class="dashboard-container">
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
                     <h2>📦 Calcul Frais de Magasinage</h2>
@@ -27,7 +46,7 @@ export const MagasinageView = {
                     <button id="exportPdfBtn" class="btn" style="background-color: #d32f2f; color: white;">📄 Exporter PDF</button>
                 </div>
 
-                <div style="overflow-x: auto;">
+                <div class="mag-table-wrap" style="overflow-x: auto;">
                     <table class="table">
                         <thead>
                             <tr>
@@ -46,6 +65,8 @@ export const MagasinageView = {
                         </tbody>
                     </table>
                 </div>
+                <!-- Version fiches (tablette + pliable + mobile) -->
+                <div class="mag-cards" id="magCardsBody"></div>
                 <div id="magPagination" style="display:flex; justify-content:center; align-items:center; gap:12px; padding:14px 0; flex-wrap:wrap;"></div>
             </div>
         `;
@@ -61,6 +82,7 @@ export const MagasinageView = {
         function formatCFA(n) { return formatMoney(n, true); }
 
         const tableBody = document.getElementById('magasinageTableBody');
+        const cardsBody = document.getElementById('magCardsBody');
         const searchInput = document.getElementById('magasinageSearch');
         const totalFeesEl = document.getElementById('totalMagasinageFees');
         const exportPdfBtn = document.getElementById('exportPdfBtn');
@@ -147,6 +169,7 @@ export const MagasinageView = {
             if (!tableBody) return;
             
             tableBody.innerHTML = '';
+            if (cardsBody) cardsBody.innerHTML = '';
 
             // Total des frais sur TOUTE la liste filtrée (indépendant de la
             // pagination : on somme tout, on n'affiche que la page courante).
@@ -159,6 +182,7 @@ export const MagasinageView = {
 
             if (filtered.length === 0) {
                 tableBody.innerHTML = '<tr><td colspan="8" style="text-align:center;">Aucun colis avec frais de magasinage trouvé.</td></tr>';
+                if (cardsBody) cardsBody.innerHTML = '<div style="text-align:center; padding:24px; color:#64748b;">Aucun colis avec frais de magasinage trouvé.</div>';
                 renderMagPagination(1);
                 return;
             }
@@ -222,6 +246,31 @@ export const MagasinageView = {
                     <td>${waBtn}</td>
                 `;
                 tableBody.appendChild(row);
+
+                // Fiche compacte (tablette + pliable + mobile) — mêmes données.
+                if (cardsBody) {
+                    const rebus = days > 90;
+                    const rebusChip = rebus ? ' <span class="tag" style="background:#ef4444; color:#fff;">⚠️ REBUS</span>' : '';
+                    const card = document.createElement('div');
+                    card.className = 'mag-card' + (rebus ? ' is-rebus' : '');
+                    card.innerHTML = `
+                        <div class="mag-card-top">
+                            <span class="mag-card-ref">${t.reference || '—'}</span>
+                            <span class="mag-card-fee" style="${feeStyle}">${formatCFA(fee)}</span>
+                        </div>
+                        <div class="mag-card-meta">
+                            <span><b>${t.nom || '—'}</b></span>
+                            <span>📦 ${t.conteneur || '—'}</span>
+                            <span>📅 ${t.date || '—'}</span>
+                            <span class="tag">${days} j</span>
+                            <span><b>${t.quantite || 1}</b> colis</span>${rebusChip}
+                        </div>
+                        <div class="mag-card-foot">
+                            <span></span>
+                            ${waBtn}
+                        </div>`;
+                    cardsBody.appendChild(card);
+                }
             });
 
             renderMagPagination(totalPages);

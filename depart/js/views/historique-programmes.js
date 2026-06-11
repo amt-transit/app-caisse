@@ -53,6 +53,19 @@ export const HistoriqueProgrammesView = {
                 .btn-print { background: white; border: 1px solid var(--line); width: 32px; height: 32px; border-radius: 8px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: 0.2s; color: var(--muted); }
                 .btn-print:hover { border-color: var(--amt-blue); color: var(--amt-blue); }
 
+                /* Fiches Historique Programmes (tablette + pliable + mobile ≤1024px) */
+                .hp-cards { display: none; }
+                .hp-mcard { background:#fff; border:1px solid var(--line); border-left:4px solid var(--amt-blue); border-radius:13px; padding:12px 14px; box-shadow:0 1px 2px rgba(15,23,42,.04); }
+                .hp-mcard-top { display:flex; align-items:baseline; justify-content:space-between; gap:12px; }
+                .hp-mcard-name { font-weight:800; color:var(--amt-blue); font-size:15px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0; }
+                .hp-mcard-date { font-size:12px; color:var(--muted); white-space:nowrap; flex-shrink:0; }
+                .hp-mcard-meta { display:flex; align-items:center; flex-wrap:wrap; gap:8px; margin-top:8px; font-size:12px; color:#475569; }
+                .hp-mcard-foot { display:flex; gap:8px; margin-top:11px; }
+                @media (max-width:1024px) {
+                    .history-table-card .table-wrap { display:none; }
+                    .hp-cards { display:flex; flex-direction:column; gap:10px; }
+                }
+
                 /* Modal Details */
                 .hp-modal { --amt-blue:#1A3553; --amt-blue-d:#13283f; --amt-gold:#F2A312; --line:#e6ebf1; display:none; position:fixed; z-index:9999; left:0; top:0; width:100%; height:100%; background:rgba(15, 23, 42, 0.6); backdrop-filter: blur(4px); align-items:center; justify-content:center; }
                 .hp-modal.active { display:flex; }
@@ -104,6 +117,8 @@ export const HistoriqueProgrammesView = {
                             </tbody>
                         </table>
                     </div>
+                    <!-- Version fiches (tablette + pliable + mobile) -->
+                    <div class="hp-cards" id="hpCards"></div>
                 </div>
             </div>
 
@@ -203,10 +218,34 @@ export const HistoriqueProgrammesView = {
 
         document.getElementById('hpCount').textContent = filtered.length;
         const tbody = document.getElementById('hpTableBody');
+        const cardsEl = document.getElementById('hpCards');
 
         if (filtered.length === 0) {
             tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 40px; color: #64748b;">Aucun programme trouvé.</td></tr>';
+            if (cardsEl) cardsEl.innerHTML = '<div style="text-align:center; padding:24px; color:#64748b;">Aucun programme trouvé.</div>';
             return;
+        }
+
+        if (cardsEl) {
+            cardsEl.innerHTML = filtered.map(p => {
+                const liv = (p.livreur || '').replace(/'/g, "\\'");
+                return `
+                <div class="hp-mcard">
+                    <div class="hp-mcard-top">
+                        <span class="hp-mcard-name">🚗 ${p.livreur}</span>
+                        <span class="hp-mcard-date">📅 ${p.date ? new Date(p.date).toLocaleDateString('fr-FR') : ''}</span>
+                    </div>
+                    <div class="hp-mcard-meta">
+                        <span><b>${p.total}</b> RDV</span>
+                        <span class="stat-badge stat-badge--depot">${p.depots} dépôt${p.depots > 1 ? 's' : ''}</span>
+                        <span class="stat-badge stat-badge--recup">${p.recups} récup${p.recups > 1 ? 's' : ''}</span>
+                    </div>
+                    <div class="hp-mcard-foot">
+                        <button class="btn-voir" type="button" onclick="window.app.views.historiqueProgrammes.viewDetails('${p.date}', '${liv}')">👁️ Voir</button>
+                        <button class="btn-print" type="button" title="Imprimer" onclick="window.app.views.historiqueProgrammes.printRoadmap('${p.date}', '${liv}')">🖨️</button>
+                    </div>
+                </div>`;
+            }).join('');
         }
 
         tbody.innerHTML = filtered.map(p => `

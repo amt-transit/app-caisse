@@ -75,6 +75,21 @@ export const AuditLogView = {
                 .al__table td, .al__perf-table td { padding: 12px 15px; border-bottom: 1px solid #f1f5f9; font-size: 13px; color: #334155; }
                 .al__table tr:hover td, .al__perf-table tr:hover td { background: #f8fafc; }
 
+                /* Tablette + pliable + mobile (≤1024px) : ces deux tableaux sont
+                   tres larges (9 colonnes techniques) -> fiches AVEC libelles
+                   (plus lisible qu'un tableau coupe pour un journal d'audit). */
+                @media (max-width: 1024px) {
+                    .al__perf-wrap, .al__table-wrap { overflow-x: visible; border: none; background: transparent; box-shadow: none; }
+                    .al__table thead, .al__perf-table thead { display: none; }
+                    .al__table tr, .al__perf-table tr { display: block; border: 1px solid #e8edf3; border-radius: 11px; margin-bottom: 10px; padding: 5px 12px; background: #fff; box-shadow: 0 1px 2px rgba(15,23,42,.04); }
+                    .al__table td, .al__perf-table td { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 4px 12px; text-align: right; border: none; border-bottom: 1px solid #f4f6f9; padding: 8px 2px; min-width: 0; }
+                    .al__table td:last-child, .al__perf-table td:last-child { border-bottom: none; }
+                    .al__table td::before, .al__perf-table td::before { content: attr(data-label); font-weight: 700; color: #64748b; font-size: 10px; text-transform: uppercase; letter-spacing: .03em; text-align: left; flex-shrink: 0; }
+                    .al__table td > *, .al__perf-table td > * { min-width: 0; overflow-wrap: anywhere; }
+                    .al__td-desc, .al__td-id, .al__td-ref, .al__td-ip { white-space: normal !important; text-align: right; overflow-wrap: anywhere; word-break: break-word; }
+                    .al__pagination { flex-wrap: wrap; justify-content: center; gap: 8px; padding: 12px; }
+                }
+
                 .al__rank { width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; background: #f1f5f9; border-radius: 50%; font-size: 11px; font-weight: bold; color: #64748b; }
                 .al__rank--gold { background: #fef3c7; color: #d97706; }
                 .al__rank--silver { background: #f1f5f9; color: #475569; }
@@ -184,14 +199,14 @@ export const AuditLogView = {
                                 <tr v-if="loading"><td colspan="8" style="text-align: center; padding: 20px;"><i class="fas fa-spinner fa-spin"></i> Chargement...</td></tr>
                                 <tr v-else-if="agentPerformance.length === 0"><td colspan="8" style="text-align: center; padding: 20px; color: #64748b;">Aucune activité récente.</td></tr>
                                 <tr v-else v-for="(agent, idx) in agentPerformance" :key="agent.name">
-                                    <td><span class="al__rank" :class="getRankClass(idx)">{{ idx + 1 }}</span></td>
-                                    <td class="al__perf-name">{{ agent.name }}</td>
-                                    <td><strong>{{ agent.total }}</strong></td>
-                                    <td><span class="al__mini-badge al__mini-badge--green">{{ agent.creates }}</span></td>
-                                    <td><span class="al__mini-badge al__mini-badge--blue">{{ agent.updates }}</span></td>
-                                    <td><span class="al__mini-badge al__mini-badge--red">{{ agent.deletes }}</span></td>
-                                    <td><span class="al__mini-badge al__mini-badge--purple">{{ agent.logins }}</span></td>
-                                    <td class="al__td-date">{{ formatDate(agent.lastAction) }}</td>
+                                    <td data-label="#"><span class="al__rank" :class="getRankClass(idx)">{{ idx + 1 }}</span></td>
+                                    <td data-label="Agent" class="al__perf-name">{{ agent.name }}</td>
+                                    <td data-label="Total"><strong>{{ agent.total }}</strong></td>
+                                    <td data-label="Créations"><span class="al__mini-badge al__mini-badge--green">{{ agent.creates }}</span></td>
+                                    <td data-label="Modifications"><span class="al__mini-badge al__mini-badge--blue">{{ agent.updates }}</span></td>
+                                    <td data-label="Suppressions"><span class="al__mini-badge al__mini-badge--red">{{ agent.deletes }}</span></td>
+                                    <td data-label="Connexions"><span class="al__mini-badge al__mini-badge--purple">{{ agent.logins }}</span></td>
+                                    <td data-label="Dernière action" class="al__td-date">{{ formatDate(agent.lastAction) }}</td>
                                 </tr>
                             </tbody>
                         </table>
@@ -229,15 +244,15 @@ export const AuditLogView = {
                             <tr v-if="loadingLogs"><td colspan="9" style="text-align: center; padding: 40px;"><i class="fas fa-spinner fa-spin"></i> Chargement...</td></tr>
                             <tr v-else-if="paginatedLogs.length === 0"><td colspan="9" style="text-align: center; padding: 40px; color: #64748b;">Aucun log trouvé pour ces filtres.</td></tr>
                             <tr v-else v-for="log in paginatedLogs" :key="log.id">
-                                <td class="al__td-date">{{ formatDateTime(log.date) }}</td>
-                                <td><span class="al__action-badge" :style="getActionStyle(log.action)">{{ getActionIcon(log.action) }} {{ log.action || 'UNKNOWN' }}</span></td>
-                                <td class="al__td-desc" :title="log.details">{{ log.details || log.action + ' — ' + (log.entity || 'inconnu') }}</td>
-                                <td><div class="al__user-cell"><span class="al__user-name">{{ log.user || '-' }}</span><span v-if="log.userId" class="al__user-id">#{{ log.userId.substring(0,4).toUpperCase() }}</span></div></td>
-                                <td><span class="al__entity-tag">{{ log.entity || '-' }}</span></td>
-                                <td class="al__td-id">{{ log.refId || '—' }}</td>
-                                <td class="al__td-ref">{{ log.docRef || '—' }}</td>
-                                <td class="al__td-ip">{{ log.ip || '—' }}</td>
-                                <td><span class="al__status-dot" :class="getStatusClass(log.status)">{{ log.status || '200' }}</span></td>
+                                <td data-label="Date / Heure" class="al__td-date">{{ formatDateTime(log.date) }}</td>
+                                <td data-label="Action"><span class="al__action-badge" :style="getActionStyle(log.action)">{{ getActionIcon(log.action) }} {{ log.action || 'UNKNOWN' }}</span></td>
+                                <td data-label="Description" class="al__td-desc" :title="log.details">{{ log.details || log.action + ' — ' + (log.entity || 'inconnu') }}</td>
+                                <td data-label="Utilisateur"><div class="al__user-cell"><span class="al__user-name">{{ log.user || '-' }}</span><span v-if="log.userId" class="al__user-id">#{{ log.userId.substring(0,4).toUpperCase() }}</span></div></td>
+                                <td data-label="Entité"><span class="al__entity-tag">{{ log.entity || '-' }}</span></td>
+                                <td data-label="ID" class="al__td-id">{{ log.refId || '—' }}</td>
+                                <td data-label="Référence" class="al__td-ref">{{ log.docRef || '—' }}</td>
+                                <td data-label="IP" class="al__td-ip">{{ log.ip || '—' }}</td>
+                                <td data-label="Status"><span class="al__status-dot" :class="getStatusClass(log.status)">{{ log.status || '200' }}</span></td>
                             </tr>
                         </tbody>
                     </table>

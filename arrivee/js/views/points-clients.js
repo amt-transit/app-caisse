@@ -10,7 +10,20 @@ export const PointsView = {
         this.app = app;
         
         container.innerHTML = `
-            <div class="dashboard-container">
+            <style>
+                /* Fiches (tablette + pliable + mobile ≤1024px) : les tableaux (Agent /
+                   encaissements / dépenses / solde, et la modale) coupent sur petit
+                   écran -> fiches sans libellés. */
+                @media (max-width: 1024px) {
+                    .pts-scope .table thead { display: none; }
+                    .pts-scope .table, .pts-scope .table tbody, .pts-scope .table tr { display: block; width: 100%; }
+                    .pts-scope .table td { box-sizing: border-box; }
+                    .pts-scope .table tbody tr { border: 1px solid #e8edf3; border-radius: 11px; margin-bottom: 10px; padding: 9px 13px; background: #fff; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; box-shadow: 0 1px 2px rgba(15,23,42,.04); }
+                    .pts-scope .table tbody td { border: none !important; padding: 0 !important; width: auto; font-size: 12.5px; color: #475569; }
+                    .pts-scope .table tbody td:first-child { width: 100%; font-weight: 700; color: #0f172a; }
+                }
+            </style>
+            <div class="dashboard-container pts-scope">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 10px;"><h2 style="margin: 0; color: #1e293b;">⭐ Points & Activité Utilisateurs</h2></div>
                 <div style="background: white; padding: 20px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
                     <div class="history-controls" style="display: flex; gap: 15px; margin-bottom: 20px; flex-wrap: wrap; align-items: flex-end;">

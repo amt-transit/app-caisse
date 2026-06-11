@@ -250,12 +250,15 @@
             box-shadow: 0 1px 2px rgba(0,0,0,0.05);
         }
         @media (max-width: 768px) {
-            .container-gauge-wrapper { 
-                position: fixed; bottom: 85px; left: 16px; z-index: 980; margin: 0;
-                padding: 6px 12px; border-radius: 20px; box-shadow: 0 4px 15px rgba(0,0,0,0.15);
-                background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(5px);
-                border: 1px solid #cbd5e1; gap: 8px;
+            /* Jauge déplacée DANS LE FLUX (script en bas de page) : bandeau fin
+               pleine largeur, juste au-dessus du contenu. Ne recouvre rien. */
+            .container-gauge-wrapper.gauge-inflow {
+                position: static; width: auto; margin: 0; border-radius: 0;
+                display: flex; align-items: center; justify-content: center; gap: 10px;
+                padding: 7px 14px; background: #fff;
+                border: none; border-bottom: 1px solid #e2e8f0; box-shadow: none;
             }
+            .container-gauge-wrapper.gauge-inflow > div:last-child { width: auto !important; flex: 1; max-width: 340px; }
         }
     </style>
 </head>
@@ -513,6 +516,39 @@
     <button class="fab-btn" id="fabBtn" onclick="window.app.renderPage('index')" title="Saisie Rapide"><i class="fas fa-plus"></i></button>
 
     <!-- Scripts partagés et Cœur de l'application (Maintenant à la racine) -->
+    <!-- Jauge conteneur : sur mobile/tablette (≤768px) on la SORT de la barre du
+         haut pour la placer DANS LE FLUX, juste au-dessus du contenu (bandeau
+         pleine largeur). Ainsi elle ne peut JAMAIS recouvrir la barre, le
+         hamburger ou la caméra. Sur ordinateur elle reste dans la barre. -->
+    <script>
+    (function () {
+        var origParent = null, origNext = null;
+        var mq = window.matchMedia('(max-width: 768px)');
+        function place() {
+            var g = document.getElementById('topBarGauge');
+            var cc = document.getElementById('contentContainer');
+            if (!g || !cc) return;
+            if (!origParent) { origParent = g.parentElement; origNext = g.nextSibling; }
+            if (mq.matches) {
+                if (!(g.parentElement === cc.parentElement && g.nextSibling === cc)) {
+                    cc.parentElement.insertBefore(g, cc);
+                }
+                g.classList.add('gauge-inflow');
+            } else {
+                g.classList.remove('gauge-inflow');
+                if (origParent && g.parentElement !== origParent) origParent.insertBefore(g, origNext);
+            }
+        }
+        if (mq.addEventListener) mq.addEventListener('change', place); else if (mq.addListener) mq.addListener(place);
+        window.addEventListener('resize', place);
+        window.addEventListener('load', place);
+        var tries = 0;
+        var iv = setInterval(function () {
+            if (document.getElementById('topBarGauge') && document.getElementById('contentContainer')) { place(); clearInterval(iv); }
+            else if (++tries > 80) clearInterval(iv);
+        }, 100);
+    })();
+    </script>
     <script src="utils.js"></script>
     <script type="module" src="auth-guard.js"></script>
     <script type="module" src="app.js"></script>

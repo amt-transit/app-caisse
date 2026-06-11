@@ -109,6 +109,32 @@ export const ClientsView = {
                 @media(max-width: 768px){ .cd-tables-row { grid-template-columns: 1fr; } }
                 .cd-table-card { background: white; border-radius: 16px; border: 1px solid #e2e8f0; box-shadow: 0 2px 4px rgba(0,0,0,0.02); padding: 20px; overflow: hidden;}
                 .cd-table-card__title { font-size: 16px; font-weight: 800; color: #1e293b; margin: 0 0 15px 0; display: flex; align-items: center; gap: 8px;}
+
+                /* ── FICHES CLIENTS (tablette + pliable + mobile) ───────────────
+                   Le tableau a 8 colonnes : illisible / coupe en dessous de
+                   1024px. On le remplace par des fiches compactes SANS libelles
+                   (on distingue par le format : nom en gras, CA en avant, meta
+                   grise, badges de couleur). Accent gauche colore par segment. */
+                .cl-cards { display: none; }
+                .cl-mob-card { position: relative; background: #fff; border: 1px solid #e8edf3; border-left: 4px solid #cbd5e1; border-radius: 13px; padding: 12px 14px 12px 15px; cursor: pointer; box-shadow: 0 1px 2px rgba(15,23,42,0.04); transition: transform .12s ease, box-shadow .12s ease, border-color .12s ease; -webkit-tap-highlight-color: transparent; }
+                .cl-mob-card:active { transform: scale(0.988); box-shadow: 0 1px 1px rgba(15,23,42,0.05); }
+                .cl-mob-card.is-regulier { border-left-color: #7e22ce; }
+                .cl-mob-card.is-habituel { border-left-color: #1A3553; }
+                .cl-mob-card.is-dormant  { border-left-color: #cbd5e1; }
+                .cl-mc-top { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+                .cl-mc-name { font-size: 15px; font-weight: 800; color: #0f172a; line-height: 1.25; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+                .cl-mc-ca { font-family: 'SFMono-Regular', ui-monospace, Menlo, monospace; font-size: 14.5px; font-weight: 800; color: #1A3553; white-space: nowrap; flex-shrink: 0; }
+                .cl-mc-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 12px; margin-top: 5px; font-size: 12px; color: #64748b; }
+                .cl-mc-meta b { color: #475569; font-weight: 700; }
+                .cl-mc-tags { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin-top: 9px; }
+                .cl-mc-tag { font-size: 11px; font-weight: 700; padding: 3px 9px; border-radius: 20px; letter-spacing: .01em; }
+                .cl-mc-chevron { position: absolute; right: 12px; bottom: 12px; color: #cbd5e1; font-size: 13px; }
+                .cl-mc-parrain { display: inline-flex; align-items: center; gap: 5px; background: #fff7ed; color: #9a3412; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; }
+
+                @media (max-width: 1024px) {
+                    .cl-table-wrap { display: none; }
+                    .cl-cards { display: flex; flex-direction: column; gap: 10px; padding: 12px; }
+                }
             </style>
 
             <!-- VUE LISTE -->
@@ -200,6 +226,8 @@ export const ClientsView = {
                             </tbody>
                         </table>
                     </div>
+                    <!-- Version fiches (tablette + pliable + mobile, ≤1024px) -->
+                    <div class="cl-cards" id="clCardsBody"></div>
                     <div id="clPagination" style="display:flex; justify-content:center; align-items:center; gap:12px; padding:14px 0; flex-wrap:wrap;"></div>
                 </div>
             </div>
@@ -572,8 +600,10 @@ export const ClientsView = {
         const pageClients = this.filteredClients.slice(_cStart, _cStart + PAGE_SIZE);
         if (listCount) listCount.textContent = `${this.filteredClients.length} client(s)`;
 
+        const cardsBody = document.getElementById('clCardsBody');
         if (pageClients.length === 0) {
             tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; padding: 20px; color: #64748b;">Aucun client trouvé.</td></tr>';
+            if (cardsBody) cardsBody.innerHTML = '<div style="text-align:center; padding:24px; color:#64748b;">Aucun client trouvé.</div>';
             const emptyPag = document.getElementById('clPagination');
             if (emptyPag) emptyPag.innerHTML = '';
             return;
@@ -595,6 +625,36 @@ export const ClientsView = {
             </tr>
         `;
         }).join('');
+
+        // Fiches compactes (tablette + pliable + mobile) — mêmes données, sans
+        // libellés : nom en gras, CA mis en avant, méta grise, badges colorés.
+        if (cardsBody) {
+            cardsBody.innerHTML = pageClients.map(c => {
+                const par = this.getParrainForPhone(c.tel);
+                const parrain = par ? `<span class="cl-mc-parrain"><i class="fas fa-handshake" style="font-size:10px;"></i> ${par.prenom} ${par.nom}</span>` : '';
+                const segCls = c.segment === 'regulier' ? 'is-regulier' : (c.segment === 'dormant' ? 'is-dormant' : 'is-habituel');
+                const segStyle = c.segment === 'regulier' ? 'background:#f3e8ff;color:#7e22ce;' : 'background:#e0f2fe;color:#0369a1;';
+                return `
+                <div class="cl-mob-card ${segCls}" onclick="window.app.views.clients.showDetail('${c.id}')">
+                    <div class="cl-mc-top">
+                        <span class="cl-mc-name">${c.nom}</span>
+                        <span class="cl-mc-ca">${this.formatMoneyLocal(c.ca)}</span>
+                    </div>
+                    <div class="cl-mc-meta">
+                        <span>📞 ${c.tel || '—'}</span>
+                        <span>📅 ${c.date || '—'}</span>
+                        <span><b>${c.factures}</b> exp.</span>
+                    </div>
+                    <div class="cl-mc-tags">
+                        <span class="cl-mc-tag" style="background:#dcfce7;color:#166534;">${c.risque}</span>
+                        <span class="cl-mc-tag" style="${segStyle}">${c.segment}</span>
+                        ${parrain}
+                    </div>
+                    <i class="fas fa-chevron-right cl-mc-chevron"></i>
+                </div>`;
+            }).join('');
+        }
+
         this.renderClientsPagination(totalPages);
     },
 
