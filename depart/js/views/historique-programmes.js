@@ -347,6 +347,7 @@ export const HistoriqueProgrammesView = {
             let acc = r.adresse || '';
             if (r.etage) acc += `\nEtage/Bat. : ${r.etage}`;
             if (r.acces && r.acces !== 'Aucun') acc += `\nAcces : ${r.acces}${r.codeAcces ? ' (' + r.codeAcces + ')' : ''}`;
+            if (r.escaleAdresse) acc += `\n>> ESCALE (en chemin) : ${r.escaleAdresse}${r.escaleContact ? ' - ' + r.escaleContact : ''}`;
             return [
                 (i + 1).toString(),
                 r.rdvType === 'DEPOT' ? 'DEPOT' : 'RECUP',

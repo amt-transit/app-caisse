@@ -271,7 +271,7 @@ export const TousLesRdvView = {
                                 <td data-label="Date & Heure"><strong>{{ formatDate(rdv.date) }}</strong><br><span style="color:#64748b; font-size:11px;">{{ rdv.time || 'Heure à définir' }}</span></td>
                                 <td data-label="Client" style="font-weight: 600; color: #0f172a;">{{ rdv.client }}</td>
                                 <td data-label="Téléphone" style="font-weight: bold;">{{ rdv.tel || '-' }}</td>
-                                <td data-label="Adresse / Notes"><div style="max-width: 200px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" :title="rdv.adresse + '\\n' + rdv.notes">{{ rdv.adresse || '-' }}<br><span style="color:#94a3b8; font-size:10px;">{{ rdv.notes || '' }}</span></div></td>
+                                <td data-label="Adresse / Notes"><div style="max-width: 200px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" :title="rdv.adresse + '\\n' + rdv.notes">{{ rdv.adresse || '-' }}<br><span style="color:#94a3b8; font-size:10px;">{{ rdv.notes || '' }}</span></div><div v-if="rdv.escaleAdresse" style="margin-top:5px; font-size:11px; color:#b45309; font-weight:700; white-space:normal; line-height:1.3;">🛑 Escale : {{ rdv.escaleAdresse }}<span v-if="rdv.escaleContact" style="font-weight:600;"> · {{ rdv.escaleContact }}</span></div></td>
                                 <td data-label="Statut"><span :class="['type-badge', getStatusClass(rdv.status)]">{{ getStatusText(rdv.status) }}</span></td>
                                 <td data-label="Actions" class="td-actions">
                                     <template v-if="rdv.status === 'en_attente'">
@@ -380,6 +380,14 @@ export const TousLesRdvView = {
                                         <label class="em-field">
                                             <span class="em-field__label">Téléphone de contact</span>
                                             <input type="text" v-model="editForm.tel" class="em-field__input" placeholder="Numéro à appeler">
+                                        </label>
+                                        <label class="em-field">
+                                            <span class="em-field__label">🛑 Escale — adresse (récupération en chemin, facultatif)</span>
+                                            <input type="text" v-model="editForm.escaleAdresse" class="em-field__input" placeholder="Adresse de l'escale (avant l'adresse du RDV)">
+                                        </label>
+                                        <label class="em-field">
+                                            <span class="em-field__label">🛑 Escale — contact sur place (facultatif)</span>
+                                            <input type="text" v-model="editForm.escaleContact" class="em-field__input" placeholder="Nom / téléphone à l'escale">
                                         </label>
                                         <label class="em-field">
                                             <span class="em-field__label">Description / Instructions</span>
@@ -543,6 +551,8 @@ export const TousLesRdvView = {
                         date: editForm.date,
                         time: editForm.time,
                         adresse: editForm.adresse,
+                        escaleAdresse: editForm.escaleAdresse || '',
+                        escaleContact: editForm.escaleContact || '',
                         etage: editForm.etage || '',
                         acces: editForm.acces || '',
                         codeAcces: editForm.codeAcces || '',

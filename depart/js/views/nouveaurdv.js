@@ -275,6 +275,11 @@ export const NouveauRdvView = {
                                     <ul id="rdvAdresseSuggestions" class="autocomplete-suggestions autocomplete-up"></ul>
                                     </div>
                                 </div>
+                                <div class="form-field form-field--full" style="grid-column: 1 / -1;">
+                                    <label class="label">🛑 Escale — récupérer un colis en chemin (facultatif)</label>
+                                    <input id="rdvEscaleAdresse" class="control" placeholder="Adresse de l'escale (avant l'adresse du RDV)" autocomplete="off" style="margin-bottom:8px;">
+                                    <input id="rdvEscaleContact" class="control" placeholder="Contact sur place (nom / téléphone)" autocomplete="off">
+                                </div>
                                 <div class="form-field">
                                     <label class="label">Accès au bâtiment *</label>
                                     <select id="rdvAcces" class="control" onchange="window.app.views.nouveauRdv.toggleAccessCode()">
@@ -727,10 +732,14 @@ export const NouveauRdvView = {
         btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Enregistrement...';
         btn.disabled = true;
 
+        const _escAdr = document.getElementById('rdvEscaleAdresse');
+        const _escCt = document.getElementById('rdvEscaleContact');
         const rdvData = {
             client: clientName,
             tel: clientTel,
             adresse: clientAdresse,
+            escaleAdresse: _escAdr ? _escAdr.value.trim() : '',
+            escaleContact: _escCt ? _escCt.value.trim() : '',
             etage: etage,
             acces: acces,
             codeAcces: codeAcces,
