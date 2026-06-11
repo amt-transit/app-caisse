@@ -260,6 +260,7 @@ export const AuditLogView = {
                         <button class="al__page-btn" @click="changePage(-1)" :disabled="currentPage === 1">← Précédent</button>
                         <span class="al__page-info">Page {{ currentPage }} / {{ totalPages }} · {{ filteredLogs.length }} résultat(s)</span>
                         <button class="al__page-btn" @click="changePage(1)" :disabled="currentPage === totalPages">Suivant →</button>
+                        <button class="al__page-btn" type="button" v-if="logs.length >= serverLimit" @click="loadMore" style="border-color:var(--primary-color,#1A3553); color:var(--primary-color,#1A3553); font-weight:700;">⤓ Charger plus d'historique</button>
                     </div>
                 </div>
             </div>
@@ -281,6 +282,8 @@ export const AuditLogView = {
                 const loadingLogs = ref(true);
                 const autoRefresh = ref(true);
                 const currentPage = ref(1);
+                const serverLimit = ref(300);   // chargement initial allégé + « Charger plus »
+                const LOAD_STEP = 300;
                 const itemsPerPage = 50;
                 
                 // Filters
@@ -505,7 +508,10 @@ export const AuditLogView = {
                         currentPage.value = newPage;
                     }
                 };
-                
+
+                // Charge un paquet supplémentaire depuis le serveur (à la demande).
+                const loadMore = () => { serverLimit.value += LOAD_STEP; loadData(); };
+
                 const loadData = () => {
                     if (unsub) {
                         unsub();
@@ -517,7 +523,7 @@ export const AuditLogView = {
                         collection(db, "audit_logs"), 
                         where("agency", "==", activeAgency),
                         orderBy("date", "desc"),
-                        limit(300)
+                        limit(serverLimit.value)
                     );
 
                     loading.value = true;
@@ -565,7 +571,8 @@ export const AuditLogView = {
                     totalPages, paginatedLogs,
                     formatMoney, formatDate, formatDateTime, formatShortDay,
                     getBarHeight7, getBarHeightHour, getRankClass, getActionStyle, getActionIcon, getStatusClass,
-                    applyFilters, resetFilters, changePage, loadData, toggleAutoRefresh
+                    applyFilters, resetFilters, changePage, loadData, toggleAutoRefresh,
+                    serverLimit, loadMore
                 };
             }
         });
