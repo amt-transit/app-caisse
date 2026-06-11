@@ -19,79 +19,152 @@ export const ScanContainerView = {
 
         const html = `
             <style>
-                .sw-page { max-width: 800px; margin: 0 auto; animation: fadeIn 0.3s ease; }
-                
-                /* Header & KPIs */
-                .sm__header { border-radius: 16px; padding: 20px; margin-bottom: 20px; color: white; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); background: linear-gradient(135deg, rgb(245, 158, 11) 0%, rgb(217, 119, 6) 100%); }
-                .sm__header-inner { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px; }
-                .sm__header-info { display: flex; align-items: center; gap: 15px; }
-                .sm__header-icon { font-size: 28px; background: rgba(255,255,255,0.2); width: 50px; height: 50px; display: flex; align-items: center; justify-content: center; border-radius: 12px; }
-                .sm__header-title { margin: 0; font-size: 20px; font-weight: 800; }
-                .sm__header-desc { margin: 4px 0 0 0; font-size: 13px; opacity: 0.9; }
-                .sm__header-actions { display: flex; gap: 10px; }
-                .sm__btn-sound, .sm__btn-clear { background: rgba(255,255,255,0.2); border: none; width: 40px; height: 40px; border-radius: 10px; font-size: 18px; cursor: pointer; transition: 0.2s; color: white; display: flex; align-items: center; justify-content: center; }
-                .sm__btn-sound:hover, .sm__btn-clear:hover { background: rgba(255,255,255,0.3); transform: translateY(-2px); }
-                
-                .sm__kpi-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; margin-bottom: 25px; }
-                @media (max-width: 640px) { .sm__kpi-row { grid-template-columns: repeat(2, 1fr); } }
-                .sm__kpi { background: white; padding: 15px; border-radius: 12px; text-align: center; border: 1px solid #e2e8f0; box-shadow: 0 2px 4px rgba(0,0,0,0.02); }
-                .sm__kpi--blue { border-bottom: 4px solid #3b82f6; }
-                .sm__kpi--green { border-bottom: 4px solid #10b981; }
-                .sm__kpi--orange { border-bottom: 4px solid #f59e0b; }
-                .sm__kpi--red { border-bottom: 4px solid #ef4444; }
-                .sm__kpi-val { font-size: 24px; font-weight: 800; color: #0f172a; margin-bottom: 4px; transition: 0.3s; }
-                .sm__kpi-lbl { font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase; }
+                /* ====== COCKPIT DE SCAN — panneau sombre, camera héroïque ======
+                   Accent thématique par page via --acc (ici : or AMT pour le
+                   chargement conteneur). Charte AMT, lueurs, télémétrie mono. */
+                .sw-page {
+                    --acc: #F6B73C; --acc2: #FFD46A;
+                    --ok: #34d399; --warn: #fbbf24; --err: #fb7185; --blue: #5aa2ff;
+                    --ink: #eef4ff; --muted: #93a7c4;
+                    --surf: rgba(255,255,255,.05); --bd: rgba(255,255,255,.10);
+                    max-width: 860px; margin: 0 auto; position: relative;
+                    padding: 18px 16px 20px; border-radius: 26px; overflow: hidden;
+                    color: var(--ink); font-family: 'Jost','Comfortaa',system-ui,sans-serif;
+                    background:
+                        radial-gradient(120% 75% at 50% -8%, rgba(246,183,60,.16), transparent 60%),
+                        linear-gradient(180deg, #102640 0%, #0b1828 55%, #081019 100%);
+                    border: 1px solid rgba(255,255,255,.07);
+                    box-shadow: 0 34px 70px -34px rgba(3,10,22,.85), inset 0 1px 0 rgba(255,255,255,.05);
+                    animation: fadeIn .35s ease;
+                }
+                .sw-page::before { content:''; position:absolute; inset:0; pointer-events:none; z-index:0;
+                    background-image: repeating-linear-gradient(0deg, rgba(255,255,255,.016) 0 1px, transparent 1px 3px);
+                    mix-blend-mode: overlay; opacity:.6; }
+                .sw-page > * { position: relative; z-index: 1; }
 
-                /* Conteneur selector */
-                .container-selector { background: white; border-radius: 16px; padding: 20px; border: 1px solid #e2e8f0; margin-bottom: 20px; display: flex; flex-direction: column; gap: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.02); }
-                .container-selector label { font-weight: 700; color: #1e293b; font-size: 14px; }
-                .container-select-input { width: 100%; padding: 14px 16px; border: 2px solid #cbd5e1; border-radius: 12px; font-size: 16px; font-weight: bold; color: #0f172a; outline: none; transition: 0.2s; background: #f8fafc; }
-                .container-select-input:focus { border-color: #f59e0b; background: white; box-shadow: 0 0 0 3px rgba(245,158,11,0.1); }
+                /* En-tête = barre de commande */
+                .sm__header { position:relative; border-radius:18px; padding:15px 17px; margin-bottom:15px; overflow:hidden;
+                    background: linear-gradient(120deg, rgba(246,183,60,.18), rgba(246,183,60,.03));
+                    border:1px solid rgba(246,183,60,.30);
+                    box-shadow: inset 0 1px 0 rgba(255,255,255,.06), 0 14px 34px -22px rgba(246,183,60,.6); }
+                .sm__header::after { content:''; position:absolute; right:-50px; top:-70px; width:200px; height:200px;
+                    background: radial-gradient(circle, rgba(246,183,60,.40), transparent 70%); }
+                .sm__header-inner { display:flex; justify-content:space-between; align-items:center; gap:14px; flex-wrap:wrap; position:relative; }
+                .sm__header-info { display:flex; align-items:center; gap:14px; }
+                .sm__header-icon { font-size:25px; width:52px; height:52px; border-radius:15px; flex-shrink:0;
+                    background: linear-gradient(135deg, var(--acc), var(--acc2)); color:#241a04;
+                    display:flex; align-items:center; justify-content:center;
+                    box-shadow: 0 10px 22px -7px rgba(246,183,60,.7), inset 0 1px 0 rgba(255,255,255,.6); }
+                .sm__header-title { margin:0; font-family:'Comfortaa','Jost',sans-serif; font-size:21px; font-weight:800; letter-spacing:.2px; color:#fff; }
+                .sm__header-desc { margin:3px 0 0; font-size:12.5px; color:var(--muted); }
+                .sm__header-actions { display:flex; gap:8px; }
+                .sm__btn-sound, .sm__btn-clear { width:42px; height:42px; border-radius:13px; border:1px solid var(--bd);
+                    background:var(--surf); color:var(--ink); font-size:17px; cursor:pointer; transition:.15s;
+                    display:flex; align-items:center; justify-content:center; }
+                .sm__btn-sound:hover, .sm__btn-clear:hover { background:rgba(255,255,255,.12); transform:translateY(-2px); }
 
-                /* Camera viewfinder */
-                .viewfinder-wrap { position: relative; border-radius: 16px; overflow: hidden; background: #000; aspect-ratio: 1/1; max-height: 400px; width: 100%; margin-bottom: 20px; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.2); }
-                #sw-video-preview, #sw-reader { width: 100%; height: 100%; object-fit: cover; display: block; }
-                #sw-reader video { object-fit: cover !important; width: 100% !important; height: 100% !important; }
-                
-                .viewfinder-overlay { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; pointer-events: none; }
-                .viewfinder-box { width: 65%; aspect-ratio: 1; border: 3px solid rgba(245,158,11,0.85); border-radius: 16px; box-shadow: 0 0 0 9999px rgba(15,23,42,0.6); position: relative; }
-                .viewfinder-box::before, .viewfinder-box::after { content: ''; position: absolute; width: 30px; height: 30px; border-color: #f59e0b; border-style: solid; }
-                .viewfinder-box::before { top: -3px; left: -3px; border-width: 4px 0 0 4px; border-radius: 8px 0 0 0; }
-                .viewfinder-box::after { bottom: -3px; right: -3px; border-width: 0 4px 4px 0; border-radius: 0 0 8px 0; }
-                .viewfinder-box { transition: border-color .1s, box-shadow .1s; }
-                .viewfinder-box.flash-ok { border-color:#10b981; box-shadow:0 0 0 9999px rgba(16,185,129,0.30); }
-                .viewfinder-box.flash-ok::before, .viewfinder-box.flash-ok::after { border-color:#10b981; }
-                .viewfinder-box.flash-warn { border-color:#f59e0b; }
-                .viewfinder-box.flash-err { border-color:#ef4444; box-shadow:0 0 0 9999px rgba(239,68,68,0.30); }
-                .viewfinder-box.flash-err::before, .viewfinder-box.flash-err::after { border-color:#ef4444; }
-                
-                .scan-line { position: absolute; top: 0; left: 0; right: 0; height: 2px; background: linear-gradient(90deg, transparent, #f59e0b, transparent); animation: scan-anim 2s ease-in-out infinite; border-radius: 1px; box-shadow: 0 0 8px #f59e0b; }
-                @keyframes scan-anim { 0% { top: 5%; opacity: 1; } 50% { top: 90%; opacity: 0.7; } 100% { top: 5%; opacity: 1; } }
+                /* Télémétrie (KPIs) */
+                .sm__kpi-row { display:grid; grid-template-columns:repeat(4,1fr); gap:9px; margin-bottom:15px; }
+                .sm__kpi { position:relative; background:var(--surf); border:1px solid var(--bd); border-radius:15px;
+                    padding:13px 6px 11px; text-align:center; overflow:hidden; box-shadow: inset 0 1px 0 rgba(255,255,255,.04); }
+                .sm__kpi::before { content:''; position:absolute; top:0; left:16%; right:16%; height:2px; border-radius:2px;
+                    background:var(--k,#5aa2ff); box-shadow:0 0 12px var(--k,#5aa2ff); }
+                .sm__kpi--blue { --k:var(--blue); } .sm__kpi--green { --k:var(--ok); }
+                .sm__kpi--orange { --k:var(--warn); } .sm__kpi--red { --k:var(--err); }
+                .sm__kpi-val { font-family:ui-monospace,'SFMono-Regular',Menlo,monospace; font-size:25px; font-weight:800; color:#fff; line-height:1; text-shadow:0 0 18px rgba(255,255,255,.14); }
+                .sm__kpi-lbl { margin-top:6px; font-size:9px; font-weight:700; letter-spacing:.07em; text-transform:uppercase; color:var(--muted); }
 
-                .scan-status { display: flex; align-items: center; gap: 10px; padding: 12px 16px; background: white; border-radius: 12px; border: 1px solid #e2e8f0; font-size: 14px; font-weight: 600; margin-bottom: 20px; color: #1e293b; }
-                .scan-dot { width: 10px; height: 10px; border-radius: 50%; background: #f59e0b; animation: blink 1.2s ease-in-out infinite; flex-shrink: 0; }
-                @keyframes blink { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
+                /* Sélecteur conteneur */
+                .container-selector { background:var(--surf); border:1px solid var(--bd); border-radius:15px; padding:14px 16px; margin-bottom:14px; display:flex; flex-direction:column; gap:8px; }
+                .container-selector label { font-size:11px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; color:var(--muted); }
+                .container-select-input { width:100%; padding:13px 14px; border-radius:12px; border:1px solid var(--bd);
+                    background:rgba(0,0,0,.28); color:#fff; font-size:15px; font-weight:700; outline:none; transition:.15s; }
+                .container-select-input:focus { border-color:var(--acc); box-shadow:0 0 0 3px rgba(246,183,60,.18); }
+                .container-select-input option { color:#0f172a; }
 
-                .manual-row { display: flex; gap: 10px; margin-bottom: 25px; }
-                .manual-input { flex: 1; padding: 14px 16px; background: white; border: 1px solid #cbd5e1; border-radius: 12px; font-size: 15px; font-weight: 600; outline: none; text-transform: uppercase; transition: 0.2s; }
-                .manual-input:focus { border-color: #f59e0b; box-shadow: 0 0 0 3px rgba(245,158,11,0.1); }
-                .btn-search { padding: 14px 20px; background: #f59e0b; border: none; border-radius: 12px; color: white; font-weight: bold; cursor: pointer; transition: 0.2s; }
-                .btn-search:hover { background: #d97706; }
+                /* Viseur caméra — le héros */
+                .viewfinder-wrap { position:relative; border-radius:20px; overflow:hidden; background:#05080d; aspect-ratio:4/3; max-height:420px; width:100%; margin-bottom:0;
+                    border:1px solid rgba(255,255,255,.09);
+                    box-shadow: 0 26px 54px -24px rgba(0,0,0,.9), inset 0 0 70px rgba(0,0,0,.65); }
+                .viewfinder-wrap::after { content:''; position:absolute; inset:0; pointer-events:none; border-radius:20px;
+                    box-shadow: inset 0 0 0 1px rgba(246,183,60,.18), inset 0 0 38px rgba(246,183,60,.10);
+                    animation: vf-breathe 3.4s ease-in-out infinite; }
+                @keyframes vf-breathe { 0%,100% { opacity:.55; } 50% { opacity:1; } }
+                #sw-video-preview, #sw-reader { width:100%; height:100%; object-fit:cover; display:block; }
+                #sw-reader video { object-fit:cover !important; width:100% !important; height:100% !important; }
 
-                .recent-scans { background: white; border-radius: 16px; border: 1px solid #e2e8f0; overflow: hidden; }
-                .recent-scans-header { padding: 15px 20px; background: #f8fafc; border-bottom: 1px solid #e2e8f0; font-weight: 700; color: #1e293b; display: flex; justify-content: space-between; align-items: center; }
-                .recent-count { background: #e2e8f0; color: #475569; padding: 2px 8px; border-radius: 10px; font-size: 12px; }
-                .scan-item { display: flex; justify-content: space-between; align-items: center; padding: 15px 20px; border-bottom: 1px solid #f1f5f9; }
-                .scan-item:last-child { border-bottom: none; }
-                .scan-item-info { display: flex; flex-direction: column; gap: 4px; flex: 1; }
-                .scan-item-ref { font-weight: 800; color: #0f172a; font-family: monospace; font-size: 15px; }
-                .scan-item-client { font-size: 12px; color: #64748b; }
-                .scan-item-status { padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 700; white-space: nowrap; }
-                .status-ok { background: #dcfce7; color: #166534; }
-                .status-warn { background: #ffedd5; color: #c2410c; }
-                .status-err { background: #fee2e2; color: #991b1b; }
-                .btn-remove-scan { background: none; border: none; font-size: 16px; cursor: pointer; padding: 5px; opacity: 0.6; transition: 0.2s; border-radius: 6px; }
-                .btn-remove-scan:hover { opacity: 1; background: #f1f5f9; }
+                .viewfinder-overlay { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; pointer-events:none; }
+                .viewfinder-box { width:62%; aspect-ratio:1; border-radius:18px; position:relative; transition:border-color .12s, box-shadow .12s;
+                    border:2px solid rgba(246,183,60,.55); box-shadow:0 0 0 9999px rgba(5,11,20,.55), inset 0 0 26px rgba(246,183,60,.18); }
+                .viewfinder-box::before, .viewfinder-box::after { content:''; position:absolute; width:32px; height:32px; border-color:var(--acc); border-style:solid; filter:drop-shadow(0 0 6px rgba(246,183,60,.8)); }
+                .viewfinder-box::before { top:-2px; left:-2px; border-width:4px 0 0 4px; border-radius:10px 0 0 0; }
+                .viewfinder-box::after { bottom:-2px; right:-2px; border-width:0 4px 4px 0; border-radius:0 0 10px 0; }
+                .viewfinder-box.flash-ok { border-color:var(--ok); box-shadow:0 0 0 9999px rgba(16,185,129,.34), inset 0 0 40px rgba(16,185,129,.4); }
+                .viewfinder-box.flash-ok::before, .viewfinder-box.flash-ok::after { border-color:var(--ok); }
+                .viewfinder-box.flash-warn { border-color:var(--warn); box-shadow:0 0 0 9999px rgba(251,191,36,.30), inset 0 0 36px rgba(251,191,36,.35); }
+                .viewfinder-box.flash-warn::before, .viewfinder-box.flash-warn::after { border-color:var(--warn); }
+                .viewfinder-box.flash-err { border-color:var(--err); box-shadow:0 0 0 9999px rgba(251,113,133,.34), inset 0 0 40px rgba(251,113,133,.4); }
+                .viewfinder-box.flash-err::before, .viewfinder-box.flash-err::after { border-color:var(--err); }
+
+                .scan-line { position:absolute; left:6%; right:6%; top:0; height:2px; border-radius:2px;
+                    background:linear-gradient(90deg, transparent, var(--acc), transparent);
+                    box-shadow:0 0 14px var(--acc), 0 0 4px #fff; animation: scan-anim 2.2s cubic-bezier(.45,0,.55,1) infinite; }
+                @keyframes scan-anim { 0% { top:6%; opacity:.2; } 12% { opacity:1; } 50% { top:92%; opacity:1; } 88% { opacity:1; } 100% { top:6%; opacity:.2; } }
+
+                /* Pastille statut flottante (HUD) chevauchant le viseur */
+                .scan-status { position:relative; z-index:3; margin:-34px auto 14px; width:max-content; max-width:92%;
+                    display:flex; align-items:center; gap:9px; padding:9px 16px; border-radius:999px;
+                    background:rgba(8,16,28,.82); -webkit-backdrop-filter:blur(9px); backdrop-filter:blur(9px);
+                    border:1px solid var(--bd); color:var(--ink); font-size:12.5px; font-weight:600;
+                    box-shadow:0 14px 30px -14px rgba(0,0,0,.85); }
+                .scan-dot { width:9px; height:9px; border-radius:50%; background:var(--acc); box-shadow:0 0 12px var(--acc); animation:blink 1.2s ease-in-out infinite; flex-shrink:0; }
+                @keyframes blink { 0%,100% { opacity:1; transform:scale(1); } 50% { opacity:.35; transform:scale(.8); } }
+
+                .manual-row { display:flex; gap:9px; margin-bottom:18px; }
+                .manual-input { flex:1; min-width:0; padding:14px 16px; border-radius:13px; border:1px solid var(--bd);
+                    background:rgba(0,0,0,.28); color:#fff; font-size:15px; font-weight:600; letter-spacing:.06em; text-transform:uppercase; outline:none; transition:.15s; }
+                .manual-input::placeholder { color:#5f7da3; text-transform:none; letter-spacing:0; }
+                .manual-input:focus { border-color:var(--acc); box-shadow:0 0 0 3px rgba(246,183,60,.18); }
+                .btn-search { padding:0 22px; border:none; border-radius:13px; font-weight:800; cursor:pointer; color:#241a04;
+                    background:linear-gradient(135deg, var(--acc), var(--acc2)); box-shadow:0 12px 24px -10px rgba(246,183,60,.7); transition:.15s; }
+                .btn-search:hover { transform:translateY(-2px); filter:brightness(1.06); }
+                .btn-search:active { transform:translateY(0); }
+
+                .recent-scans { background:var(--surf); border:1px solid var(--bd); border-radius:17px; overflow:hidden; }
+                .recent-scans-header { padding:13px 16px; background:rgba(255,255,255,.03); border-bottom:1px solid var(--bd); font-weight:700; font-size:13px; color:var(--ink); display:flex; justify-content:space-between; align-items:center; }
+                .recent-count { font-family:ui-monospace,Menlo,monospace; background:var(--acc); color:#241a04; padding:2px 10px; border-radius:999px; font-size:12px; font-weight:800; }
+                .scan-item { display:flex; justify-content:space-between; align-items:center; gap:10px; padding:12px 16px 12px 18px; border-bottom:1px solid rgba(255,255,255,.05); position:relative; }
+                .scan-item:last-child { border-bottom:none; }
+                .scan-item::before { content:''; position:absolute; left:0; top:9px; bottom:9px; width:3px; border-radius:0 3px 3px 0; background:transparent; }
+                .scan-item:has(.status-ok)::before { background:var(--ok); box-shadow:0 0 10px var(--ok); }
+                .scan-item:has(.status-warn)::before { background:var(--warn); box-shadow:0 0 10px var(--warn); }
+                .scan-item:has(.status-err)::before { background:var(--err); box-shadow:0 0 10px var(--err); }
+                .scan-item-info { display:flex; flex-direction:column; gap:3px; flex:1; min-width:0; }
+                .scan-item-ref { font-family:ui-monospace,Menlo,monospace; font-weight:800; color:#fff; font-size:14px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+                .scan-item-client { font-size:11.5px; color:var(--muted); }
+                .scan-item-status { padding:4px 11px; border-radius:999px; font-size:10.5px; font-weight:800; letter-spacing:.02em; white-space:nowrap; }
+                .status-ok { background:rgba(52,211,153,.16); color:#6ee7b7; border:1px solid rgba(52,211,153,.32); }
+                .status-warn { background:rgba(251,191,36,.16); color:#fcd34d; border:1px solid rgba(251,191,36,.32); }
+                .status-err { background:rgba(251,113,133,.16); color:#fda4af; border:1px solid rgba(251,113,133,.32); }
+                .btn-remove-scan { background:none; border:none; color:var(--muted); font-size:15px; cursor:pointer; padding:4px 7px; border-radius:9px; transition:.15s; }
+                .btn-remove-scan:hover { color:#fff; background:rgba(255,255,255,.10); }
+
+                /* Mobile/tablette : on retranche la description et on compacte le
+                   haut pour que le VISEUR soit visible des l'ouverture de la page. */
+                @media (max-width: 768px) {
+                    .sw-page { padding:14px 12px 18px; }
+                    .sm__header-desc { display:none; }
+                    .sm__header { padding:12px 15px; margin-bottom:12px; }
+                    .sm__header-icon { width:46px; height:46px; font-size:23px; border-radius:13px; }
+                    .sm__header-title { font-size:19px; }
+                    .container-selector { padding:11px 14px; margin-bottom:12px; }
+                    .viewfinder-wrap { aspect-ratio:5/4; }
+                    .sm__kpi-row { gap:7px; margin:14px 0; }
+                }
+                @media (max-width: 380px) {
+                    .sm__kpi-val { font-size:21px; }
+                    .sm__header-title { font-size:18px; }
+                }
             </style>
 
             <div id="vue-scan-container-app" class="sw-page" v-cloak>
@@ -111,25 +184,6 @@ export const ScanContainerView = {
                     </div>
                 </div>
                 
-                <div class="sm__kpi-row">
-                    <div class="sm__kpi sm__kpi--blue">
-                        <div class="sm__kpi-val">{{ stats.total }}</div>
-                        <div class="sm__kpi-lbl">Total</div>
-                    </div>
-                    <div class="sm__kpi sm__kpi--green">
-                        <div class="sm__kpi-val">{{ stats.success }}</div>
-                        <div class="sm__kpi-lbl">Succès</div>
-                    </div>
-                    <div class="sm__kpi sm__kpi--orange">
-                        <div class="sm__kpi-val">{{ stats.duplicate }}</div>
-                        <div class="sm__kpi-lbl">Déjà traité</div>
-                    </div>
-                    <div class="sm__kpi sm__kpi--red">
-                        <div class="sm__kpi-val">{{ stats.error }}</div>
-                        <div class="sm__kpi-lbl">Erreurs</div>
-                    </div>
-                </div>
-
                 <div class="container-selector">
                     <label>Sélectionnez le conteneur cible :</label>
                     <select v-model="selectedContainerId" class="container-select-input">
@@ -154,6 +208,25 @@ export const ScanContainerView = {
                 <div class="manual-row">
                     <input type="text" class="manual-input" v-model="manualRef" placeholder="Saisir la référence manuellement..." @keyup.enter="processManualScan">
                     <button class="btn-search" type="button" @click="processManualScan">Charger</button>
+                </div>
+
+                <div class="sm__kpi-row">
+                    <div class="sm__kpi sm__kpi--blue">
+                        <div class="sm__kpi-val">{{ stats.total }}</div>
+                        <div class="sm__kpi-lbl">Total</div>
+                    </div>
+                    <div class="sm__kpi sm__kpi--green">
+                        <div class="sm__kpi-val">{{ stats.success }}</div>
+                        <div class="sm__kpi-lbl">Succès</div>
+                    </div>
+                    <div class="sm__kpi sm__kpi--orange">
+                        <div class="sm__kpi-val">{{ stats.duplicate }}</div>
+                        <div class="sm__kpi-lbl">Déjà traité</div>
+                    </div>
+                    <div class="sm__kpi sm__kpi--red">
+                        <div class="sm__kpi-val">{{ stats.error }}</div>
+                        <div class="sm__kpi-lbl">Erreurs</div>
+                    </div>
                 </div>
 
                 <div class="recent-scans">

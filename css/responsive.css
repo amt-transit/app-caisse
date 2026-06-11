@@ -221,6 +221,10 @@
     .mobile-toggle { display: none; }
 }
 
+/* Pages de scan (cockpit) : on masque le bouton flottant + (il chevauchait la
+   caméra et n'a aucune action utile sur ces écrans). */
+body:has(.sw-page) .fab-btn { display: none !important; }
+
 /* ============================================
     DESKTOP : Cacher éléments purement mobile
 ============================================ */
