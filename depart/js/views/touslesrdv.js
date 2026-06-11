@@ -37,6 +37,15 @@ export const TousLesRdvView = {
                 .kpi-card__label { font-size: 12px; font-weight: 600; color: #64748b; text-transform: uppercase; }
                 .kpi-card__bar { width: 100%; height: 6px; background: #e2e8f0; border-radius: 3px; margin-top: 8px; overflow: hidden; }
                 .kpi-card__bar-fill { height: 100%; background: #4f46e5; border-radius: 3px; transition: width 0.3s ease; }
+                /* Mobile/pliable : cartes KPI sur 2 colonnes (au lieu d'empilées). */
+                @media (max-width: 768px) {
+                    .kpi-grid { grid-template-columns: 1fr 1fr !important; gap: 10px; }
+                    .kpi-card { padding: 13px 14px; gap: 10px; min-width: 0; }
+                    .kpi-card > div { min-width: 0; }
+                    .kpi-card__icon { width: 40px; height: 40px; font-size: 21px; flex-shrink: 0; }
+                    .kpi-card__value { font-size: 20px; }
+                    .kpi-card__label { font-size: 10px; white-space: normal; overflow-wrap: break-word; line-height: 1.25; }
+                }
                 
                 .rdv-filters { display: flex; flex-wrap: wrap; gap: 15px; background: white; padding: 20px; border-radius: 16px; border: 1px solid #e2e8f0; margin-bottom: 24px; }
                 .filter-group { flex: 1; min-width: 150px; display: flex; flex-direction: column; gap: 6px; }

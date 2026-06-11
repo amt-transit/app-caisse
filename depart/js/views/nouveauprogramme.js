@@ -125,6 +125,15 @@ export const NouveauProgrammeView = {
                 .kpi-card--green .kpi-card__icon { background: #f0fdf4; color: #16a34a; }
                 .kpi-card__value { font-size: 26px; font-weight: 800; color: var(--amt-blue); line-height: 1; margin-bottom: 4px; font-family: 'Comfortaa','Jost',sans-serif; }
                 .kpi-card__label { font-size: 11.5px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.4px; }
+                /* Mobile/pliable : cartes KPI sur 2 colonnes (au lieu d'empilées). */
+                @media (max-width: 768px) {
+                    .kpi-grid { grid-template-columns: 1fr 1fr !important; gap: 10px; }
+                    .kpi-card { padding: 13px 14px; gap: 10px; min-width: 0; }
+                    .kpi-card > div { min-width: 0; }
+                    .kpi-card__icon { width: 40px; height: 40px; font-size: 21px; flex-shrink: 0; }
+                    .kpi-card__value { font-size: 22px; }
+                    .kpi-card__label { font-size: 10px; white-space: normal; overflow-wrap: break-word; line-height: 1.25; }
+                }
 
                 .prog-filters { display: flex; flex-wrap: wrap; gap: 12px; background: white; padding: 15px; border-radius: 12px; border: 1px solid #e2e8f0; margin-bottom: 20px; }
                 .filter-group { flex: 1; min-width: 150px; display: flex; flex-direction: column; gap: 6px; }
