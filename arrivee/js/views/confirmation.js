@@ -303,7 +303,10 @@ export const ConfirmationView = {
     
         function loadSessions() {
             const activeAgency = sessionStorage.getItem('currentActiveAgency') || 'abidjan';
-            const qLogs = query(collection(db, "audit_logs"), where("action", "==", "VALIDATION_JOURNEE"), orderBy("date", "desc"));
+            // Borné aux 200 sessions les plus récentes : les anciennes sont
+            // ARCHIVÉES (donc ignorées à l'affichage) -> aucun élément visible perdu,
+            // mais chargement bien plus rapide (au lieu de TOUT l'historique).
+            const qLogs = query(collection(db, "audit_logs"), where("action", "==", "VALIDATION_JOURNEE"), orderBy("date", "desc"), limit(200));
             onSnapshot(qLogs, snapshot => {
                 sessionsListPendingEl.innerHTML = '';
                 sessionsListValidatedEl.innerHTML = '';
