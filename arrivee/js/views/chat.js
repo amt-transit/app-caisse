@@ -109,7 +109,7 @@ export const ChatView = {
             this.clientsList = [...new Set(clientsSnap.docs.map(d => d.data().nom).filter(Boolean))];
             
             // Récupère les références récentes
-            const livSnap = await getDocs(query(collection(db, getCollectionName("livraisons")), orderBy("dateAjout", "desc"), limit(2000)));
+            const livSnap = await getDocs(query(collection(db, getCollectionName("livraisons")), orderBy("dateAjout", "desc"), limit(500)));
             this.refsList = [...new Set(livSnap.docs.map(d => d.data().ref).filter(Boolean))];
         } catch(e) {
             console.warn("Erreur chargement données de saisie intelligente :", e);

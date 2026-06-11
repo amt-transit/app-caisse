@@ -127,7 +127,8 @@ export const ScanHistoryView = {
         if (this.unsub) this.unsub();
         
         const activeAgency = sessionStorage.getItem('currentActiveAgency') || 'abidjan';
-        const q = query(collection(db, "scan_logs"), where("agency", "==", activeAgency), orderBy("date", "desc"), limit(1000));
+        // Chargement initial allégé (300 scans récents) pour une ouverture rapide.
+        const q = query(collection(db, "scan_logs"), where("agency", "==", activeAgency), orderBy("date", "desc"), limit(300));
 
         this.unsub = onSnapshot(q, (snapshot) => {
             // Isolation Maritime/Aerien : on ne garde que les scans du mode

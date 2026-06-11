@@ -299,7 +299,7 @@ export const HistoryView = {
                  if (!isFiltering) {
                     constraints.push(where("isDeleted", "!=", true), orderBy("isDeleted"), orderBy("date", "desc"));
                  } else {
-                    constraints.push(where("isDeleted", "!=", true), orderBy("isDeleted"), orderBy("date", "desc"), limit(500));
+                    constraints.push(where("isDeleted", "!=", true), orderBy("isDeleted"), orderBy("date", "desc"), limit(300));
                  }
              }
             

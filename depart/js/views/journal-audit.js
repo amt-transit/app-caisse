@@ -517,9 +517,9 @@ export const AuditLogView = {
                         collection(db, "audit_logs"), 
                         where("agency", "==", activeAgency),
                         orderBy("date", "desc"),
-                        limit(2000)
+                        limit(300)
                     );
-                    
+
                     loading.value = true;
                     loadingLogs.value = true;
                     

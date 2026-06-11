@@ -8,6 +8,8 @@ export const AuditLogView = {
     autoRefresh: true,
     currentPage: 1,
     itemsPerPage: 50,
+    serverLimit: 300,   // chargement initial allégé (au lieu de 2000) -> ouverture rapide
+    LOAD_STEP: 300,     // « Charger plus » ajoute ce nombre
     usersList: new Set(),
 
     render(app, container) {
@@ -206,6 +208,7 @@ export const AuditLogView = {
                         <button class="al__page-btn" id="alPrevPage" onclick="window.app.views.auditLog.changePage(-1)">← Précédent</button>
                         <span class="al__page-info" id="alPageInfo">Page 1 / 1</span>
                         <button class="al__page-btn" id="alNextPage" onclick="window.app.views.auditLog.changePage(1)">Suivant →</button>
+                        <button class="al__page-btn" id="alLoadMore" type="button" style="display:none; border-color:var(--primary-color,#1A3553); color:var(--primary-color,#1A3553); font-weight:700;" onclick="window.app.views.auditLog.loadMore()">⤓ Charger plus d'historique</button>
                     </div>
                 </div>
             </div>
@@ -235,11 +238,11 @@ export const AuditLogView = {
             collection(db, "audit_logs"), 
             where("agency", "==", activeAgency),
             orderBy("date", "desc"),
-            limit(2000)
+            limit(this.serverLimit)
         );
 
         this.unsub = onSnapshot(q, (snapshot) => {
-            if (!this.autoRefresh && this.logs.length > 0) return; 
+            if (!this.autoRefresh && this.logs.length > 0) return;
             
             this.logs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
             this.processData();
@@ -482,6 +485,15 @@ export const AuditLogView = {
         this.renderLogTable();
     },
 
+    // Charge un paquet supplémentaire depuis le serveur (au lieu de tout charger
+    // d'un coup au démarrage) -> ouverture rapide, historique complet à la demande.
+    loadMore() {
+        this.serverLimit += this.LOAD_STEP;
+        const btn = document.getElementById('alLoadMore');
+        if (btn) { btn.disabled = true; btn.textContent = '⏳ Chargement…'; }
+        this.loadData();
+    },
+
     renderLogTable() {
         const tbody = document.getElementById('alLogTableBody');
         if (!tbody) return;
@@ -496,6 +508,15 @@ export const AuditLogView = {
         
         const nextBtn = document.getElementById('alNextPage');
         if (nextBtn) nextBtn.disabled = this.currentPage === maxPage;
+
+        // Bouton « Charger plus » : visible seulement si on a atteint la limite
+        // serveur (donc il existe probablement des logs plus anciens à charger).
+        const loadMoreBtn = document.getElementById('alLoadMore');
+        if (loadMoreBtn) {
+            loadMoreBtn.style.display = (this.logs.length >= this.serverLimit) ? '' : 'none';
+            loadMoreBtn.disabled = false;
+            loadMoreBtn.textContent = "⤓ Charger plus d'historique";
+        }
 
         if (this.filteredLogs.length === 0) {
             tbody.innerHTML = '<tr><td colspan="9" style="text-align: center; padding: 40px; color: #64748b;">Aucun log trouvé pour ces filtres.</td></tr>';
