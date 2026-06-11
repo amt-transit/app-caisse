@@ -16,8 +16,8 @@ export const VoitureView = {
                     .vt-scope .table thead { display: none; }
                     .vt-scope .table, .vt-scope .table tbody, .vt-scope .table tr { display: block; width: 100%; }
                     .vt-scope .table td { box-sizing: border-box; }
-                    .vt-scope .table tbody tr { border: 1px solid #e8edf3; border-radius: 11px; margin-bottom: 10px; padding: 9px 13px; background: #fff; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; box-shadow: 0 1px 2px rgba(15,23,42,.04); }
-                    .vt-scope .table tbody td { border: none !important; padding: 0 !important; width: auto; font-size: 12.5px; color: #475569; }
+                    .vt-scope .table tbody tr { box-sizing: border-box; border: 1px solid #e8edf3; border-radius: 11px; margin-bottom: 10px; padding: 9px 13px; background: #fff; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; box-shadow: 0 1px 2px rgba(15,23,42,.04); }
+                    .vt-scope .table tbody td { border: none !important; padding: 0 !important; width: auto; max-width: 100%; font-size: 12.5px; color: #475569; white-space: normal !important; overflow-wrap: anywhere; word-break: break-word; }
                     .vt-scope .table tbody td:nth-child(1) { width: 100%; color: #94a3b8; font-size: 11px; }
                     .vt-scope .table tbody td:nth-child(5) { width: 100%; color: #334155; }
                     .vt-scope .table tbody td:last-child { margin-left: auto; }

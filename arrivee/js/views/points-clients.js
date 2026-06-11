@@ -18,8 +18,8 @@ export const PointsView = {
                     .pts-scope .table thead { display: none; }
                     .pts-scope .table, .pts-scope .table tbody, .pts-scope .table tr { display: block; width: 100%; }
                     .pts-scope .table td { box-sizing: border-box; }
-                    .pts-scope .table tbody tr { border: 1px solid #e8edf3; border-radius: 11px; margin-bottom: 10px; padding: 9px 13px; background: #fff; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; box-shadow: 0 1px 2px rgba(15,23,42,.04); }
-                    .pts-scope .table tbody td { border: none !important; padding: 0 !important; width: auto; font-size: 12.5px; color: #475569; }
+                    .pts-scope .table tbody tr { box-sizing: border-box; border: 1px solid #e8edf3; border-radius: 11px; margin-bottom: 10px; padding: 9px 13px; background: #fff; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; box-shadow: 0 1px 2px rgba(15,23,42,.04); }
+                    .pts-scope .table tbody td { border: none !important; padding: 0 !important; width: auto; max-width: 100%; font-size: 12.5px; color: #475569; white-space: normal !important; overflow-wrap: anywhere; word-break: break-word; }
                     .pts-scope .table tbody td:first-child { width: 100%; font-weight: 700; color: #0f172a; }
                 }
             </style>
