@@ -36,6 +36,14 @@ export const CalendrierRdvView = {
 
                 /* KPIs */
                 .rdvc-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 24px; }
+                @media (max-width: 768px) {
+                    .rdvc-kpis { grid-template-columns: 1fr 1fr !important; gap: 10px; }
+                    .rdvc-kpis .kpi { padding: 13px 14px; gap: 10px; min-width: 0; }
+                    .rdvc-kpis .kpi > div { min-width: 0; }
+                    .rdvc-kpis .kpi__icon { width: 40px; height: 40px; font-size: 18px; flex-shrink: 0; }
+                    .rdvc-kpis .kpi__value { font-size: 22px; }
+                    .rdvc-kpis .kpi__label { font-size: 10px; white-space: normal; overflow-wrap: break-word; line-height: 1.25; }
+                }
                 .kpi { display: flex; align-items: center; gap: 15px; padding: 20px; border-radius: 16px; background: white; border: 1px solid #e2e8f0; box-shadow: 0 2px 4px rgba(0,0,0,0.02); transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.3s; }
                 .kpi:hover { transform: translateY(-3px); box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1); }
                 .kpi__icon { width: 48px; height: 48px; display: flex; align-items: center; justify-content: center; border-radius: 12px; font-size: 20px; }

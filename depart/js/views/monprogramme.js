@@ -21,6 +21,14 @@ export const MonProgrammeView = {
                 .prog-header__subtitle { margin: 4px 0 0 0; font-size: 13px; color: var(--muted); }
                 
                 .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 24px; }
+                @media (max-width: 768px) {
+                    .kpi-grid { grid-template-columns: 1fr 1fr !important; gap: 10px; }
+                    .kpi-card { padding: 13px 14px; gap: 10px; min-width: 0; }
+                    .kpi-card > div { min-width: 0; }
+                    .kpi-card__icon { width: 40px; height: 40px; font-size: 21px; flex-shrink: 0; }
+                    .kpi-card__value { font-size: 22px; }
+                    .kpi-card__label { font-size: 10px; white-space: normal; overflow-wrap: break-word; line-height: 1.25; }
+                }
                 .kpi-card { background: white; border-radius: 16px; padding: 20px; display: flex; align-items: center; gap: 15px; border: 1px solid var(--line); box-shadow: 0 2px 4px rgba(0,0,0,0.02); transition: border-color 0.2s; }
                 .kpi-card:hover { border-color: var(--amt-gold); }
                 .kpi-card__icon { font-size: 28px; width: 50px; height: 50px; display: flex; align-items: center; justify-content: center; border-radius: 12px; }
