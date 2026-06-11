@@ -102,6 +102,33 @@ export const ChauffeursListView = {
                 .pill--blue { background: #e9eef5; color: var(--amt-blue); }
                 .pill--amber { background: #fff4e0; color: #b9790c; }
                 .pill--green { background: #f0fdf4; color: #16a34a; }
+
+                /* Raccourcis de dates */
+                .cf-presets { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+                .cf-preset { padding: 6px 12px; border: 1px solid #cbd5e1; border-radius: 999px; background: #fff; color: #475569; font-size: 12px; font-weight: 700; cursor: pointer; transition: .15s; }
+                .cf-preset:hover { border-color: var(--amt-blue); color: var(--amt-blue); }
+                .cf-preset.is-active { background: var(--amt-blue); color: #fff; border-color: var(--amt-blue); }
+
+                /* === Fiches CHAUFFEURS compactes (tablette/pliable/mobile ≤1024px) === */
+                @media (max-width: 1024px) {
+                    .chauffeurs-table thead { display: none; }
+                    .chauffeurs-table, .chauffeurs-table tbody { display: block; width: 100%; }
+                    .chauffeurs-table tbody tr { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; padding: 13px 15px !important; border: 1px solid #e8edf3; border-radius: 13px; margin-bottom: 11px; background: #fff; box-shadow: 0 1px 2px rgba(15,23,42,.04); }
+                    .chauffeurs-table tbody td { display: inline-flex; align-items: center; width: auto !important; border: none !important; padding: 0 !important; text-align: left !important; }
+                    .chauffeurs-table tbody td::before { display: none !important; }
+                    .chauffeurs-table td:nth-child(1) { order: 0; width: 100% !important; }
+                    .chauffeurs-table td:nth-child(2) { order: 1; }
+                    .chauffeurs-table td:nth-child(3) { order: 2; width: 100% !important; }
+                    .chauffeurs-table td:nth-child(3) .perf-cell { width: 100%; }
+                    .chauffeurs-table td:nth-child(4), .chauffeurs-table td:nth-child(5) { order: 3; width: calc(50% - 7px) !important; margin-top: 4px; padding-top: 9px !important; border-top: 1px solid #f1f5f9 !important; }
+                    .chauffeurs-table td:nth-child(5) { justify-content: flex-end; }
+                }
+                /* Filtre compact : Du/Au côte à côte, chauffeur pleine largeur. */
+                @media (max-width: 768px) {
+                    .chauffeurs-filters { gap: 10px; padding: 14px; }
+                    .chauffeurs-filters .filter-group { flex: 1 1 calc(50% - 6px); min-width: 0; }
+                    .chauffeurs-filters .cf-driver-group { flex-basis: 100%; }
+                }
             </style>
             <div class="chauffeurs-page">
                 <div class="chauffeurs-header">
@@ -120,6 +147,15 @@ export const ChauffeursListView = {
                 </div>
 
                 <div class="chauffeurs-filters">
+                    <div class="filter-group" style="flex-basis:100%;">
+                        <label class="filter-label"><span class="filter-icon">⚡</span> Période rapide</label>
+                        <div class="cf-presets">
+                            <button type="button" class="cf-preset" onclick="window.app.views.chauffeursList.setDatePreset('today', this)">Aujourd'hui</button>
+                            <button type="button" class="cf-preset" onclick="window.app.views.chauffeursList.setDatePreset('7d', this)">7 jours</button>
+                            <button type="button" class="cf-preset is-active" onclick="window.app.views.chauffeursList.setDatePreset('month', this)">Ce mois</button>
+                            <button type="button" class="cf-preset" onclick="window.app.views.chauffeursList.setDatePreset('all', this)">Tout</button>
+                        </div>
+                    </div>
                     <div class="filter-group">
                         <label class="filter-label"><span class="filter-icon">📅</span> Du</label>
                         <input id="cfStartDate" class="filter-input" type="date" value="${firstDay}">
@@ -128,7 +164,7 @@ export const ChauffeursListView = {
                         <label class="filter-label"><span class="filter-icon">📅</span> Au</label>
                         <input id="cfEndDate" class="filter-input" type="date" value="${currentDate}">
                     </div>
-                    <div class="filter-group" style="flex: 1.5;">
+                    <div class="filter-group cf-driver-group" style="flex: 1.5;">
                         <label class="filter-label"><span class="filter-icon">👤</span> Chauffeur</label>
                         <select id="cfDriverSelect" class="filter-select">
                             <option value="">Tous les chauffeurs</option>
@@ -172,11 +208,29 @@ export const ChauffeursListView = {
         document.getElementById('contentContainer').innerHTML = html;
 
         // Écouteurs de filtres
-        document.getElementById('cfStartDate').addEventListener('change', () => this.renderTable());
-        document.getElementById('cfEndDate').addEventListener('change', () => this.renderTable());
+        const _clearPreset = () => document.querySelectorAll('.cf-preset').forEach(b => b.classList.remove('is-active'));
+        document.getElementById('cfStartDate').addEventListener('change', () => { _clearPreset(); this.renderTable(); });
+        document.getElementById('cfEndDate').addEventListener('change', () => { _clearPreset(); this.renderTable(); });
         document.getElementById('cfDriverSelect').addEventListener('change', () => this.renderTable());
 
         this.loadData();
+    },
+
+    // Raccourcis de période : règle les dates Du/Au puis recharge le tableau.
+    setDatePreset(preset, btn) {
+        const fmt = (d) => d.toISOString().slice(0, 10);
+        const today = new Date();
+        let start, end = fmt(today);
+        if (preset === 'today') start = fmt(today);
+        else if (preset === '7d') { const d = new Date(today); d.setDate(d.getDate() - 6); start = fmt(d); }
+        else if (preset === 'month') start = fmt(new Date(today.getFullYear(), today.getMonth(), 1));
+        else start = '2020-01-01'; // « Tout »
+        const s = document.getElementById('cfStartDate'), e = document.getElementById('cfEndDate');
+        if (s) s.value = start;
+        if (e) e.value = end;
+        document.querySelectorAll('.cf-preset').forEach(b => b.classList.remove('is-active'));
+        if (btn) btn.classList.add('is-active');
+        this.renderTable();
     },
 
     async loadData() {
