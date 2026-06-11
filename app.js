@@ -730,6 +730,16 @@ export const app = {
         document.querySelectorAll('.sidebar-item').forEach(item => {
             item.addEventListener('click', () => { if (window.innerWidth <= 1024) closeSidebar(); });
         });
+
+        // Filet de sécurité : un clic n'importe où HORS du menu (et hors du bouton
+        // hamburger) ferme le menu — même si l'overlay ne capte pas le clic.
+        document.addEventListener('click', (e) => {
+            if (window.innerWidth > 1024) return;
+            if (!sidebar || !sidebar.classList.contains('open')) return;
+            if (sidebar.contains(e.target)) return;
+            if (e.target.closest && e.target.closest('#mobileToggle, .mobile-toggle, .hamburger-btn, #bnav-more')) return;
+            closeSidebar();
+        });
     },
 
     initGlobalEvents() {

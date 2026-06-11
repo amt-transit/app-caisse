@@ -11,6 +11,24 @@
     .stats-grid { grid-template-columns: repeat(2, 1fr); }
 }
 
+/* TABLETTE + mobile : tableaux -> FICHES (sinon, sur tablette, les colonnes et les
+   BOUTONS D'ACTION debordent et sont coupes). Format fiches deja valide. */
+@media (max-width: 1024px) {
+    .table-as-cards thead, .data-table thead, .factures-table thead, .reg-table thead, .daily-table thead, .chauffeurs-table thead, .am__table thead, .rdv-table thead { display: none; }
+    .table-as-cards tbody tr, .data-table tr, .factures-table tr, .reg-table tr, .daily-table tr, .chauffeurs-table tr, .am__table tr, .rdv-table tr {
+        display: block; background: white !important; border-radius: 12px; border: 1px solid #e2e8f0; margin-bottom: 15px; padding: 10px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);
+    }
+    .table-as-cards tbody td, .data-table td, .factures-table td, .reg-table td, .daily-table td, .chauffeurs-table td, .am__table td, .rdv-table td {
+        display: flex; justify-content: space-between; align-items: center; text-align: right; border: none; padding: 10px 5px !important; border-bottom: 1px solid #f1f5f9 !important; font-size: 12px;
+    }
+    .table-as-cards tbody td:last-child, .data-table td:last-child, .factures-table td:last-child, .reg-table td:last-child, .daily-table td:last-child, .chauffeurs-table td:last-child, .am__table td:last-child, .rdv-table td:last-child { border-bottom: none !important; }
+    .table-as-cards tbody td::before, .data-table td::before, .factures-table td::before, .reg-table td::before, .daily-table td::before, .chauffeurs-table td::before, .am__table td::before, .rdv-table td::before {
+        content: attr(data-label); font-weight: 600; color: #64748b; font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; text-align: left; padding-right: 10px; flex-shrink: 0;
+    }
+    .row-actions, .td-actions { width: 100%; justify-content: flex-end; flex-wrap: wrap; max-width: 100% !important; margin-top: 5px; }
+    .search-filter { min-width: 0; width: 100%; }
+}
+
 /* ============================================
     OVERLAY SIDEBAR MOBILE
 ============================================ */
