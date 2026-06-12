@@ -1,0 +1,25 @@
+# EAS archive le dépôt git parent (les apps mobiles sont des sous-dossiers).
+# On exclut node_modules (~3,5 Go, réinstallé sur le cloud) ET tous les
+# artefacts de build locaux (android/app/build/, .gradle, .apk...) qui pesaient
+# ~344 Mo et faisaient échouer l'upload. Tout est régénéré côté cloud.
+node_modules/
+**/node_modules/
+.git/
+pw-verif/
+.expo/
+**/.expo/
+# Tous les dossiers de build / caches (régénérés sur le cloud)
+**/build/
+**/.gradle/
+**/.cxx/
+dist/
+web-build/
+**/ios/build/
+**/ios/Pods/
+# Fichiers volumineux inutiles au build
+**/*.apk
+**/*.aab
+PLAN-TRACKING.pdf
+PLAN-TRACKING.html
+*.log
+.DS_Store

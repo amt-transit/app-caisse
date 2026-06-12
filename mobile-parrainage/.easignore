@@ -1,0 +1,14 @@
+# Exclut les fichiers inutiles à l'upload EAS (réinstallés/régénérés sur le cloud).
+# Sans ça, node_modules (~600 Mo) est envoyé -> upload très long et fragile.
+node_modules/
+.expo/
+.git/
+dist/
+web-build/
+android/build/
+android/app/build/
+android/.gradle/
+ios/build/
+ios/Pods/
+*.log
+.DS_Store
