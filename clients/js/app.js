@@ -1026,15 +1026,13 @@ const VIEWS = {
       <button class="btn btn--ghost" data-go="requests" style="text-align:left;margin:0 0 6px;">← Retour</button>
 
       <div class="rf-card">
-        <div class="rf-card__head"><span class="rf-ic">📦</span> Nouvelle demande</div>
         <div class="rf-card__body">
+          <div class="rf-field rf-field--full" style="margin-bottom:12px;">
+            <div style="display:flex;align-items:center;justify-content:center;gap:8px;padding:13px;border:1.5px solid ${isRecup ? '#FDC615' : '#1A3553'};background:${isRecup ? '#fff7e6' : '#eef4fb'};border-radius:12px;font-weight:800;font-size:16px;color:${isRecup ? '#92600a' : '#1A3553'};">${isRecup ? '🔄 Récupération' : '📦 Dépôt'}</div>
+          </div>
           <div class="rf-id">
             <div class="rf-id__av">${initials}</div>
             <div><div class="rf-id__name">${clientSelfName || 'Expéditeur'}</div><div class="rf-id__sub">📞 ${myPhone}</div></div>
-          </div>
-          <div class="rf-field rf-field--full">
-            <span class="rf-label">Type de demande</span>
-            <div class="rf-type">${opt('depot', '📦', 'Dépôt')}${opt('recup', '🔄', 'Récupération')}</div>
           </div>
         </div>
       </div>

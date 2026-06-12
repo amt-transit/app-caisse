@@ -88,10 +88,9 @@ export default function RequestsScreen({ selfName, selfAddress, selfPhone }) {
       <ScrollView contentContainerStyle={{ padding: 16 }} keyboardShouldPersistTaps="handled">
         <TouchableOpacity onPress={() => setTab('list')}><Text style={s.back}>{t('← Mes demandes')}</Text></TouchableOpacity>
         <Card>
-          <SectionTitle>{editId ? t('Modifier la demande') : t('Nouvelle demande')}</SectionTitle>
-          <View style={s.chips}>
-            <Pick active={f.type === 'depot'} label={t('📦 Dépôt')} onPress={() => set('type', 'depot')} />
-            <Pick active={f.type === 'recup'} label={t('🔄 Récupération')} onPress={() => set('type', 'recup')} />
+          <SectionTitle>{editId ? t('Modifier la demande') : (isRecup ? t('Nouvelle récupération') : t('Nouveau dépôt'))}</SectionTitle>
+          <View style={[s.modeBanner, isRecup && s.modeBannerRecup]}>
+            <Text style={[s.modeBannerTxt, isRecup && s.modeBannerTxtRecup]}>{isRecup ? t('🔄 Récupération') : t('📦 Dépôt')}</Text>
           </View>
 
           <L>{t('Nom complet')}</L>
@@ -197,6 +196,10 @@ const s = StyleSheet.create({
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 4 },
   pick: { flexGrow: 1, flexBasis: 0, paddingVertical: 11, paddingHorizontal: 8, borderRadius: 12, borderWidth: 1.5, borderColor: colors.line, alignItems: 'center', backgroundColor: '#fff' },
   pickOn: { borderColor: colors.blue, backgroundColor: '#eef4fb' },
+  modeBanner: { alignItems: 'center', justifyContent: 'center', backgroundColor: '#eef4fb', borderWidth: 1.5, borderColor: colors.blue, borderRadius: 12, paddingVertical: 12, marginTop: 2, marginBottom: 8 },
+  modeBannerRecup: { backgroundColor: '#fff7e6', borderColor: colors.gold || '#FDC615' },
+  modeBannerTxt: { color: colors.blue, fontWeight: '800', fontSize: 15 },
+  modeBannerTxtRecup: { color: '#92600a' },
   pickTxt: { color: colors.muted, fontWeight: '700', fontSize: 13 },
   type: { fontWeight: '800', color: colors.blue, fontSize: 14 },
   det: { fontSize: 13, color: colors.muted, marginTop: 6 },
