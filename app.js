@@ -23,6 +23,7 @@ import { DashboardView as ParisDashboardView } from './depart/js/views/tableau-d
 import { NouvelleFactureView } from './depart/js/views/nouvellefacture.js';
 import { FactureAerienView } from './depart/js/views/facture-aerien.js';
 import { ProductsListView } from './depart/js/views/liste-produits.js';
+import { StoredProductsView } from './depart/js/views/produits-stockes.js';
 import { NouveauDevisView } from './depart/js/views/nouveaudevis.js';
 import { NouveauRdvView } from './depart/js/views/nouveaurdv.js';
 import { TousLesRdvView } from './depart/js/views/touslesrdv.js';
@@ -888,7 +889,7 @@ export const app = {
             'livraison': 'LIVRAISON', 'voiture': 'Gestion Véhicules', 'magasinage': 'Magasinage', 'points': 'Points Utilisateurs', 'reception-colis': 'Réception Colis', 'suivi-conteneurs': 'Suivi Conteneurs',
             'admin-panel': 'Gestion des agents', 'salaire': 'Salaire & RH', 'comptejb': 'Livre de Caisse JB', 
             'settings-agency': 'Paramètres Agence', 'settings-company': 'Paramètres Entreprise', 'settings-software': 'Paramètres logiciel', 'settings-design': 'Apparence & Menus', 'settings-sms': 'Configuration SMS', 'settings-notifications': 'Configuration notifications', 'settings-menus': 'Gestion menus', 'settings-agents': 'Gestion des agents', 'settings-agencies': 'Gestion des agences', 'settings-roles': 'Rôles & Permissions', 'settings-appointments': 'Paramètres RDV', 'settings-profile': 'Mon profil',
-            'stock-list': 'Stock produits',
+            'stock-list': 'Produits stockés',
             'balance-monthly': 'Bilan Comparatif', 'balance-12m': 'Direction 12 mois',
             'stats-boat': 'Stats bateau', 'stats-monthly': 'Stats par mois', 'stats-yearly': 'Stats par année',
             'config-invoice': 'Choix facture', 'config-label': 'Choix étiquette', 'config-container': 'Conteneur Actif', 'config-objectives': 'Objectifs', 'config-charges': 'Charges',
@@ -994,7 +995,7 @@ export const app = {
             // Inline renderers de Paris conservés
             'clients-app': () => this.renderClientsApp(),
             'clients-analytics': () => this.renderClientsAnalytics(),
-            'stock-list': () => ProductsListView.render(this), // vrai catalogue produits (base)
+            'stock-list': () => StoredProductsView.render(this), // produits stockés (contenants à déposer + prix) — collection dédiée stored_products
             'config-objectives': () => this.renderConfigObjectives(),
             'config-charges': () => this.renderConfigCharges(),
             'settings-sms': () => this.renderSettingsSms(),

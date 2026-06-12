@@ -932,6 +932,26 @@ exports.getMyInvoiceDetail = onCall({ region: REGION, invoker: "public" }, async
 //  Admin SDK -> aucune règle Firestore à modifier. Le traitement côté staff
 //  (validation) sera branché plus tard ; ici on gère la création + le suivi.
 // ===========================================================================
+// --- Produits stockés / articles au dépôt (helpers serveur) ----------------
+// Nom de collection « produits stockés » pour une agence (miroir du client ;
+// stored_products n'est PAS scindé maritime/aérien).
+function storedProductsCollName(agency) {
+    if (!agency || agency === "paris" || agency === "abidjan" || agency === "all") return "stored_products";
+    if (agency.includes("_")) return "stored_products_" + agency.split("_")[1]; // abidjan_chine -> _chine
+    return "stored_products_" + agency; // chine -> _chine
+}
+// Normalise les articles choisis au dépôt -> liste propre + total (price*qty).
+function parseDepositItems(raw) {
+    const c = (s, max) => String(s == null ? "" : s).trim().slice(0, max || 200);
+    const items = Array.isArray(raw) ? raw.slice(0, 50).map((it) => ({
+        id: c(it && it.id, 60), desc: c(it && it.desc, 120),
+        price: Number(it && it.price) || 0,
+        qty: Math.max(0, Math.min(9999, parseInt(it && it.qty, 10) || 0)),
+    })).filter((it) => it.desc && it.qty > 0) : [];
+    const total = items.reduce((s, it) => s + it.price * it.qty, 0);
+    return { items, total };
+}
+
 exports.createClientRequest = onCall({ region: REGION, invoker: "public" }, async (request) => {
     const auth = request.auth;
     const phone = auth && auth.token && auth.token.phone_number;
@@ -950,6 +970,8 @@ exports.createClientRequest = onCall({ region: REGION, invoker: "public" }, asyn
     const acces = clean(data.acces, 60);
     const codeAcces = clean(data.codeAcces, 120);
     const contactTel = clean(data.contactTel, 40); // téléphone de contact sur place
+    // Articles choisis (dépôt uniquement) : contenants à déposer + quantités + total.
+    const { items: depotItems, total: depotItemsTotal } = (type === "depot") ? parseDepositItems(data.items) : { items: [], total: 0 };
     if (!address && !commune) throw new HttpsError("invalid-argument", "Adresse requise.");
 
     const digits = String(phone).replace(/\D/g, "");
@@ -999,6 +1021,7 @@ exports.createClientRequest = onCall({ region: REGION, invoker: "public" }, asyn
         phoneTail: tail,
         fullName, address, commune, wantedDate, wantedTime, description,
         etage, acces, codeAcces, contactTel,
+        items: depotItems, itemsTotal: depotItemsTotal,
         // Le créneau souhaité par le client sert de proposition par défaut au staff.
         staffTime: wantedTime || "",
         // La date souhaitée sert aussi de proposition par défaut (le client a
@@ -1023,6 +1046,45 @@ exports.createClientRequest = onCall({ region: REGION, invoker: "public" }, asyn
     } catch (e) { /* non bloquant */ }
 
     return { id: ref.id, ok: true, agency };
+});
+
+// Catalogue des CONTENANTS à déposer (produits stockés) pour le DÉPÔT client.
+// Renvoie les articles de l'agence de DÉPART du client (même déduction que
+// createClientRequest). Lecture sécurisée : le client n'accède pas à la base.
+exports.getDepositCatalog = onCall({ region: REGION, invoker: "public" }, async (request) => {
+    const auth = request.auth;
+    const phone = auth && auth.token && auth.token.phone_number;
+    if (!phone) throw new HttpsError("unauthenticated", "Connexion par téléphone requise.");
+    const digits = String(phone).replace(/\D/g, "");
+    const tail = digits.length >= 9 ? digits.slice(-9) : digits;
+    const db = admin.firestore();
+    let attached = new Map();
+    try { attached = await clientAgenciesFor(db, tail); } catch (e) {}
+    const requested = String((request.data || {}).agency || "").trim();
+    // Agences de DÉPART du client (où il est expéditeur). On AGRÈGE leurs
+    // catalogues : robuste si le client est rattaché à plusieurs agences — ou si
+    // la déduction en ajoute une à tort —, car la bonne agence reste incluse.
+    let depAgencies = [...attached.entries()].filter(([, r]) => r === "exp" || r === "both").map(([a]) => a);
+    if (requested && !depAgencies.includes(requested)) depAgencies.unshift(requested);
+    if (!depAgencies.length) depAgencies = attached.size ? [...attached.keys()] : [digits.startsWith("33") ? "paris" : "abidjan"];
+
+    const items = [];
+    const seen = new Set();
+    for (const ag of depAgencies) {
+        try {
+            const want = ag === "all" ? ["all"] : [ag, "all"];
+            const snap = await db.collection(storedProductsCollName(ag)).where("agency", "in", want).get();
+            snap.docs.forEach((d) => {
+                if (seen.has(d.id)) return;
+                seen.add(d.id);
+                const x = d.data() || {};
+                if (x.desc) items.push({ id: d.id, desc: x.desc, price: Number(x.price) || 0, dim: x.dim || "" });
+            });
+        } catch (e) { /* agence sans catalogue : on ignore */ }
+    }
+    items.sort((a, b) => a.desc.localeCompare(b.desc));
+    const attachedDbg = [...attached.entries()].map(([a, r]) => `${a}:${r}`);
+    return { agency: depAgencies[0], agencies: depAgencies, attached: attachedDbg, items };
 });
 
 // Disponibilités RDV pour un mois (app client) : places restantes par jour,
@@ -1765,6 +1827,7 @@ exports.getMyRequests = onCall({ region: REGION, invoker: "public" }, async (req
             fullName: x.fullName || "", address: x.address || "", commune: x.commune || "",
             wantedDate: x.wantedDate || "", wantedTime: x.wantedTime || "", description: x.description || "",
             etage: x.etage || "", acces: x.acces || "", codeAcces: x.codeAcces || "", contactTel: x.contactTel || "",
+            items: x.items || [], itemsTotal: x.itemsTotal || 0,
             createdAt: x.createdAt || "",
             // Proposition du staff (visible par le client quand status === 'modifiee').
             staffDate: x.staffDate || "", staffTime: x.staffTime || "", staffNote: x.staffNote || "",
@@ -1829,6 +1892,7 @@ exports.updateClientRequest = onCall({ region: REGION, invoker: "public" }, asyn
     if (r.status === "traitee") throw new HttpsError("failed-precondition", "Le rendez-vous est déjà fixé. Contactez l'agence.");
 
     const clean = (s, max) => String(s == null ? "" : s).trim().slice(0, max || 200);
+    const _parsedItems = (data.type === "recup") ? { items: [], total: 0 } : parseDepositItems(data.items);
     const upd = {
         type: (data.type === "recup") ? "recup" : "depot",
         fullName: clean(data.fullName, 120),
@@ -1841,6 +1905,7 @@ exports.updateClientRequest = onCall({ region: REGION, invoker: "public" }, asyn
         acces: clean(data.acces, 60),
         codeAcces: clean(data.codeAcces, 120),
         contactTel: clean(data.contactTel, 40),
+        items: _parsedItems.items, itemsTotal: _parsedItems.total,
         // La modification client remet la demande dans la file (sauf si refusée/annulée).
         status: "en_attente",
         // La date choisie sert de proposition par défaut au staff.

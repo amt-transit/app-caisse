@@ -43,6 +43,11 @@ let requestsSubtab = 'tous'; // 'tous' | 'depot' | 'recup'
 let requestFormType = 'depot'; // type en cours de saisie
 let requestFormSlot = 'Matin (10H-12H)'; // créneau souhaité par le client
 let requestDraft = {};  // brouillon des champs (conservé quand on change type/créneau)
+let depositCatalog = null;     // [{id,desc,price,dim}] contenants à déposer (chargé à la demande)
+let depositCatalogLoaded = false;
+let depositCatalogAgency = ''; // agence détectée par getDepositCatalog (diagnostic)
+let depositAttached = '';      // rattachement agence:rôle (diagnostic)
+let depositQty = {};           // id article -> quantité choisie (dépôt)
 let calMonth = null;    // 1er du mois affiché par le calendrier
 let calAvail = {};      // { 'YYYY-MM-DD': placesRestantes (-1 = jour off) }
 let calSelected = '';   // date choisie 'YYYY-MM-DD'
@@ -388,6 +393,10 @@ document.addEventListener('click', (e) => {
   if (rtype) { keepFormDraft(); requestFormType = rtype.dataset.reqtype; renderView('requestForm'); return; }
   const rslot = e.target.closest('[data-reqslot]');
   if (rslot) { keepFormDraft(); requestFormSlot = rslot.dataset.reqslot; renderView('requestForm'); return; }
+  const iplus = e.target.closest('[data-itemplus]');
+  if (iplus) { keepFormDraft(); const id = iplus.dataset.itemplus; depositQty[id] = (depositQty[id] || 0) + 1; renderView('requestForm'); return; }
+  const iminus = e.target.closest('[data-itemminus]');
+  if (iminus) { keepFormDraft(); const id = iminus.dataset.itemminus; depositQty[id] = Math.max(0, (depositQty[id] || 0) - 1); renderView('requestForm'); return; }
   const cnav = e.target.closest('[data-calnav]');
   if (cnav) { calNav(parseInt(cnav.dataset.calnav, 10)); return; }
   const cpick = e.target.closest('[data-calpick]');
@@ -454,10 +463,30 @@ function openRequestForm(type) {
   requestFormType = (type === 'recup') ? 'recup' : 'depot';
   requestFormSlot = 'Matin (10H-12H)';
   requestDraft = {}; // nouveau formulaire : brouillon vierge
+  depositQty = {};   // sélection d'articles vierge
   calSelected = '';
   calMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
   calAvail = {};
+  if (requestFormType === 'depot') loadDepositCatalog();
   renderView('requestForm');
+}
+
+// Catalogue des contenants à déposer (produits stockés) via la fonction Cloud.
+async function loadDepositCatalog() {
+  if (depositCatalogLoaded) return;
+  try {
+    const u = auth.currentUser;
+    if (u) { try { await u.getIdToken(true); } catch (_) {} }
+    const res = await httpsCallable(functions, 'getDepositCatalog')({});
+    depositCatalog = ((res && res.data && res.data.items) || []);
+    depositCatalogAgency = ((res && res.data && res.data.agency) || '');
+    depositAttached = (((res && res.data && res.data.attached) || []).join(', ')) || '(aucun)';
+  } catch (e) {
+    console.warn('getDepositCatalog:', e && e.code, e && e.message);
+    depositCatalog = [];
+  }
+  depositCatalogLoaded = true;
+  if (currentView === 'requestForm') renderView('requestForm');
 }
 
 // Monté après le rendu du formulaire : calendrier des dispos + saisie adresse.
@@ -573,6 +602,11 @@ async function submitRequest() {
     contactTel: ($('#reqTel')?.value || '').trim(),
     description: ($('#reqDesc')?.value || '').trim(),
   };
+  if (requestFormType === 'depot' && Array.isArray(depositCatalog)) {
+    payload.items = depositCatalog
+      .map((it) => ({ id: it.id, desc: it.desc, price: Number(it.price) || 0, qty: depositQty[it.id] || 0 }))
+      .filter((it) => it.qty > 0);
+  }
   if (!calSelected) { err('Choisissez une date disponible sur le calendrier.'); return; }
   if (!payload.fullName) { err('Indiquez votre nom.'); return; }
   if (!payload.contactTel) { err('Indiquez un téléphone de contact.'); return; }
@@ -585,6 +619,7 @@ async function submitRequest() {
     if (u) { try { await u.getIdToken(true); } catch (_) {} }
     await httpsCallable(functions, 'createClientRequest')(payload);
     requestDraft = {};               // brouillon consommé
+    depositQty = {};                 // sélection d'articles consommée
     requestsLoaded = false;          // forcer le rechargement de la liste
     requestsSubtab = payload.type;   // afficher l'onglet correspondant
     renderView('requests');
@@ -1022,6 +1057,36 @@ const VIEWS = {
     const vCode = esc(requestDraft.codeAcces ?? '');
     const vDesc = String(requestDraft.description ?? '').replace(/</g, '&lt;');
     const needCode = (requestDraft.acces === 'Interphone' || requestDraft.acces === 'Code');
+    const fmtEuro = (n) => (Number(n) || 0).toLocaleString('fr-FR') + ' €';
+    let pickerHtml = '';
+    if (!isRecup) {
+      if (!depositCatalogLoaded) {
+        pickerHtml = `<div class="placeholder" style="padding:6px;">⏳ Chargement des contenants…</div>`;
+      } else if (!depositCatalog || !depositCatalog.length) {
+        pickerHtml = `<div class="inv__sub">Aucun contenant proposé pour le moment. Précisez-le dans le commentaire ci-dessous si besoin.</div>`;
+      } else {
+        let total = 0;
+        const rows = depositCatalog.map((it) => {
+          const q = depositQty[it.id] || 0;
+          total += q * (Number(it.price) || 0);
+          return `<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 0;border-bottom:1px solid #eef2f7;">
+              <div style="min-width:0;">
+                <div style="font-weight:700;color:#1A3553;">${esc(it.desc)}</div>
+                <div class="inv__sub">${esc(it.dim || '')}${it.dim ? ' · ' : ''}${fmtEuro(it.price)}</div>
+              </div>
+              <div style="display:flex;align-items:center;gap:10px;flex:none;">
+                <button type="button" class="btn btn--ghost" style="width:36px;height:36px;padding:0;border-radius:8px;font-size:20px;line-height:1;" data-itemminus="${it.id}">−</button>
+                <span style="min-width:22px;text-align:center;font-weight:800;">${q}</span>
+                <button type="button" class="btn btn--primary" style="width:36px;height:36px;padding:0;border-radius:8px;font-size:20px;line-height:1;" data-itemplus="${it.id}">+</button>
+              </div>
+            </div>`;
+        }).join('');
+        pickerHtml = `${rows}
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-top:12px;font-weight:800;color:#1A3553;font-size:16px;">
+            <span>Total contenants</span><span>${fmtEuro(total)}</span>
+          </div>`;
+      }
+    }
     return `
       <button class="btn btn--ghost" data-go="requests" style="text-align:left;margin:0 0 6px;">← Retour</button>
 
@@ -1050,6 +1115,11 @@ const VIEWS = {
           <div class="cal-foot" id="calFoot"><span>Sélectionnez une date verte</span></div>
         </div>
       </div>
+
+      ${isRecup ? '' : `<div class="rf-card">
+        <div class="rf-card__head"><span class="rf-ic">📦</span> Contenants à déposer <span style="font-weight:400;color:#94a3b8;font-size:13px;">(optionnel)</span></div>
+        <div class="rf-card__body">${pickerHtml}</div>
+      </div>`}
 
       <div class="rf-card">
         <div class="rf-card__head"><span class="rf-ic">📋</span> Détails</div>

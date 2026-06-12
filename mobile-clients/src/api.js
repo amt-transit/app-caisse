@@ -40,6 +40,7 @@ export const api = {
   saveMyPushToken: (token) => call('saveMyPushToken', { token }),
   registerClientLead: () => call('registerClientLead'),
   // Dépôt / récup
+  getDepositCatalog: () => call('getDepositCatalog'),
   getMyRequests: () => call('getMyRequests'),
   createClientRequest: (data) => call('createClientRequest', data),
   respondClientRequest: (id, action) => call('respondClientRequest', { id, action }),

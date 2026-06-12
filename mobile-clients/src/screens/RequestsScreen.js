@@ -15,6 +15,7 @@ const STATUS = {
   confirmee: ['Confirmée', 'paid'], traitee: ['RDV fixé', 'paid'], refusee: ['Refusée', 'bad'], annulee: ['Annulée', 'bad'],
 };
 const ACCES = ['Interphone', 'Code / Digicode', 'Aucun / Accès libre'];
+const eur = (n) => String(Math.round(Number(n) || 0)) + ' €';
 
 export default function RequestsScreen({ selfName, selfAddress, selfPhone }) {
   const { t } = useLang();
@@ -23,6 +24,8 @@ export default function RequestsScreen({ selfName, selfAddress, selfPhone }) {
   const [loading, setLoading] = useState(true);
   const [requests, setRequests] = useState([]);
   const [sending, setSending] = useState(false);
+  const [catalog, setCatalog] = useState(null); // contenants à déposer (null = en cours de chargement)
+  const [qty, setQty] = useState({});           // id article -> quantité choisie
   // champs du formulaire
   const [f, setF] = useState({});
   const set = (k, v) => setF(prev => ({ ...prev, [k]: v }));
@@ -33,7 +36,11 @@ export default function RequestsScreen({ selfName, selfAddress, selfPhone }) {
     catch (e) { setRequests([]); }
     finally { setLoading(false); }
   };
-  useEffect(() => { load(); }, []);
+  const loadCatalog = async () => {
+    try { const r = await api.getDepositCatalog(); setCatalog(r.items || []); }
+    catch (e) { setCatalog([]); }
+  };
+  useEffect(() => { load(); loadCatalog(); }, []);
 
   // Ouvre le formulaire en CRÉATION (type donné) ou en MODIFICATION (req).
   const openForm = (type, req) => {
@@ -49,6 +56,7 @@ export default function RequestsScreen({ selfName, selfAddress, selfPhone }) {
       setEditId(null);
       setF({ type, fullName: selfName || '', commune: '', address: selfAddress || '', date: '', slot: 'Matin (10H-12H)', desc: '', etage: '', contactTel: selfPhone || '', acces: '', codeAcces: '' });
     }
+    setQty(req && Array.isArray(req.items) ? Object.fromEntries(req.items.map(it => [it.id, it.qty])) : {});
     setTab('form');
   };
 
@@ -57,11 +65,15 @@ export default function RequestsScreen({ selfName, selfAddress, selfPhone }) {
     if (!String(f.contactTel || '').trim()) { Alert.alert(tr('Téléphone requis'), tr('Indiquez un téléphone de contact.')); return; }
     if (!String(f.acces || '').trim()) { Alert.alert(tr('Accès requis'), tr("Précisez l'accès au bâtiment.")); return; }
     setSending(true);
+    const depositItems = (catalog || [])
+      .map((it) => ({ id: it.id, desc: it.desc, price: Number(it.price) || 0, qty: qty[it.id] || 0 }))
+      .filter((it) => it.qty > 0);
     const payload = {
       type: f.type, fullName: (f.fullName || '').trim(), commune: (f.commune || '').trim(),
       address: (f.address || '').trim(), date: (f.date || '').trim(), time: f.slot,
       description: (f.desc || '').trim(), etage: (f.etage || '').trim(), contactTel: (f.contactTel || '').trim(),
       acces: f.acces, codeAcces: (f.codeAcces || '').trim(),
+      items: depositItems,
     };
     try {
       if (editId) await api.updateClientRequest({ id: editId, ...payload });
@@ -125,6 +137,40 @@ export default function RequestsScreen({ selfName, selfAddress, selfPhone }) {
             <Pick active={(f.slot || '').startsWith('Matin')} label={t('Matin (10H-12H)')} onPress={() => set('slot', 'Matin (10H-12H)')} />
             <Pick active={(f.slot || '').startsWith('Après')} label={t('Après-midi (12H-18H)')} onPress={() => set('slot', 'Après-midi (12H-18H)')} />
           </View>
+
+          {!isRecup && (
+            <>
+              <L>{t('Contenants à déposer')} <Text style={{ fontWeight: '400', color: colors.muted }}>{t('(optionnel)')}</Text></L>
+              {catalog === null ? (
+                <Text style={s.muted}>{t('Chargement…')}</Text>
+              ) : catalog.length === 0 ? (
+                <Text style={s.muted}>{t('Aucun contenant proposé pour le moment.')}</Text>
+              ) : (
+                <View style={s.catalog}>
+                  {catalog.map((it) => {
+                    const q = qty[it.id] || 0;
+                    return (
+                      <View key={it.id} style={s.catRow}>
+                        <View style={{ flex: 1, minWidth: 0, paddingRight: 8 }}>
+                          <Text style={s.catName} numberOfLines={1}>{it.desc}</Text>
+                          <Text style={s.catSub}>{(it.dim ? it.dim + ' · ' : '') + eur(it.price)}</Text>
+                        </View>
+                        <View style={s.stepper}>
+                          <TouchableOpacity style={s.stepBtn} onPress={() => setQty(p => ({ ...p, [it.id]: Math.max(0, (p[it.id] || 0) - 1) }))}><Text style={s.stepTxt}>−</Text></TouchableOpacity>
+                          <Text style={s.qtyTxt}>{q}</Text>
+                          <TouchableOpacity style={[s.stepBtn, s.stepPlus]} onPress={() => setQty(p => ({ ...p, [it.id]: (p[it.id] || 0) + 1 }))}><Text style={[s.stepTxt, { color: '#fff' }]}>+</Text></TouchableOpacity>
+                        </View>
+                      </View>
+                    );
+                  })}
+                  <View style={s.totalRow}>
+                    <Text style={s.totalLbl}>{t('Total contenants')}</Text>
+                    <Text style={s.totalVal}>{eur(catalog.reduce((sum, it) => sum + (qty[it.id] || 0) * (Number(it.price) || 0), 0))}</Text>
+                  </View>
+                </View>
+              )}
+            </>
+          )}
 
           <L>{t('Description du colis')}</L>
           <TextInput style={[s.in, { height: 70 }]} value={f.desc} onChangeText={(v) => set('desc', v)} placeholder={t('Ex : 2 cartons, 1 valise…')} placeholderTextColor={colors.muted} multiline />
@@ -207,4 +253,16 @@ const s = StyleSheet.create({
   proposeT: { fontWeight: '700', color: colors.blue, fontSize: 13 },
   edit: { color: colors.blue, fontWeight: '700', fontSize: 13 },
   cancel: { color: colors.red, fontWeight: '600', fontSize: 13 },
+  catalog: { borderWidth: 1, borderColor: colors.line, borderRadius: 12, paddingHorizontal: 6, marginBottom: 4 },
+  catRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 9, paddingHorizontal: 4, borderBottomWidth: 1, borderBottomColor: '#eef2f7' },
+  catName: { fontWeight: '700', color: colors.blue, fontSize: 14 },
+  catSub: { color: colors.muted, fontSize: 12.5, marginTop: 2 },
+  stepper: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  stepBtn: { width: 34, height: 34, borderRadius: 8, borderWidth: 1.5, borderColor: colors.line, alignItems: 'center', justifyContent: 'center', backgroundColor: '#fff' },
+  stepPlus: { backgroundColor: colors.blue, borderColor: colors.blue },
+  stepTxt: { fontSize: 20, fontWeight: '800', color: colors.blue, lineHeight: 22 },
+  qtyTxt: { minWidth: 22, textAlign: 'center', fontWeight: '800', fontSize: 15, color: colors.ink },
+  totalRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 11, paddingHorizontal: 4 },
+  totalLbl: { fontWeight: '800', color: colors.blue, fontSize: 14 },
+  totalVal: { fontWeight: '800', color: colors.blue, fontSize: 16 },
 });

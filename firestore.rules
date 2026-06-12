@@ -363,8 +363,8 @@ service cloud.firestore {
         
         // 4.4. Ce sont des collections partagées par tout le système logistique
         collectionName in [
-          'clients', 'products', 'settings', 'agencies_config', 'containers', 
-          'boats', 'prospects', 'appointments', 'agents', 'quote_requests', 
+          'clients', 'products', 'stored_products', 'settings', 'agencies_config', 'containers',
+          'boats', 'prospects', 'appointments', 'agents', 'quote_requests',
           'quotes', 'internal_chat', 'scan_logs', 'livraisons_archives'
         ]
       );
