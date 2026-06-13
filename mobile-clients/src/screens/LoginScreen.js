@@ -15,9 +15,9 @@ const LS = { registered: 'amtc_registered', phone: 'amtc_phone', pin: 'amtc_pin'
 const pinHash = (s) => 'amtc:' + s;
 // Indicatifs proposés : on cycle dessus en tapant sur le drapeau.
 const DIALS = [
-  { code: '+225', label: '🇨🇮 +225' },
-  { code: '+33', label: '🇫🇷 +33' },
-  { code: '+86', label: '🇨🇳 +86' },
+  { code: '+225', label: '🇨🇮 +225', sample: '07 12 34 56 78' },
+  { code: '+33', label: '🇫🇷 +33', sample: '06 12 34 56 78' },
+  { code: '+86', label: '🇨🇳 +86', sample: '138 0013 8000' },
 ];
 
 export default function LoginScreen({ onAuthed }) {
@@ -50,9 +50,13 @@ export default function LoginScreen({ onAuthed }) {
       const hasPin = await AsyncStorage.getItem(LS.pin);
       if (ph) setSavedPhone(ph);
       if (initial) {
-        // Décision initiale : session restaurée -> PIN (ou création) ; sinon SMS.
+        // Décision initiale : si un PIN a DÉJÀ été enregistré (reg='1' + pin), on
+        // montre l'écran PIN — MÊME si la session Firebase n'est pas encore
+        // restaurée (restauration asynchrone). reg='1' n'est effacé QUE lors d'une
+        // déconnexion totale / PIN oublié / réinstallation -> dans ces cas on
+        // retombe bien sur le SMS. Évite le « SMS au lieu du PIN » à la réouverture.
         initial = false;
-        setStep(user ? (reg === '1' && hasPin ? 'pin' : 'setpin') : 'phone');
+        setStep((reg === '1' && hasPin) ? 'pin' : (user ? 'setpin' : 'phone'));
       } else if (user && (stepRef.current === 'code' || stepRef.current === 'phone')) {
         // Connexion survenue pendant le flux SMS -> on enchaîne (pas de fausse erreur).
         setErr('');
@@ -62,7 +66,13 @@ export default function LoginScreen({ onAuthed }) {
     };
     const unsub = auth.onAuthStateChanged((user) => { handle(user); });
     // Filet de sécurité : si onAuthStateChanged tarde (>4s), on décide quand même.
-    const safety = setTimeout(() => { if (initial) { initial = false; setStep(auth.currentUser ? 'setpin' : 'phone'); } }, 4000);
+    const safety = setTimeout(async () => {
+      if (!initial) return;
+      initial = false;
+      const reg = await AsyncStorage.getItem(LS.registered);
+      const hasPin = await AsyncStorage.getItem(LS.pin);
+      setStep((reg === '1' && hasPin) ? 'pin' : (auth.currentUser ? 'setpin' : 'phone'));
+    }, 4000);
     return () => { clearTimeout(safety); unsub(); };
   }, []);
 
@@ -79,13 +89,15 @@ export default function LoginScreen({ onAuthed }) {
     setDial(DIALS[(i + 1) % DIALS.length].code);
   };
   const dialLabel = (DIALS.find((d) => d.code === dial) || DIALS[0]).label;
+  const dialSample = (DIALS.find((d) => d.code === dial) || DIALS[0]).sample;
 
   const fail = (m) => { setErr(m); setBusy(false); };
 
   // Étape 1 : envoi du code SMS.
   const sendCode = async () => {
     setErr('');
-    const digits = (num || '').replace(/[^0-9]/g, '');
+    let digits = (num || '').replace(/[^0-9]/g, '');
+    if (dial === '+33' && digits.startsWith('0')) digits = digits.slice(1); // France : on retire le 0 initial
     if (digits.length < 6) return fail('Numéro invalide.');
     const e164 = dial + digits;
     setBusy(true);
@@ -154,13 +166,22 @@ export default function LoginScreen({ onAuthed }) {
     finish();
   };
 
-  // Étape 4 : déverrouillage par PIN (session Firebase déjà active).
+  // Étape 4 : déverrouillage par PIN. La session native est normalement déjà
+  // restaurée ici ; si elle a été perdue (rare : réinstallation/expiration), on
+  // bascule proprement vers le SMS (numéro pré-rempli) au lieu d'entrer dans une
+  // app sans jeton valide.
   const unlock = async () => {
     setErr('');
     const p = (pinIn || '').replace(/\D/g, '');
     const stored = await AsyncStorage.getItem(LS.pin);
     if (pinHash(p) !== stored) return fail('Code PIN incorrect.');
-    finish();
+    if (auth.currentUser) { finish(); return; }
+    const ph = (await AsyncStorage.getItem(LS.phone)) || '';
+    const d = DIALS.find((x) => ph.startsWith(x.code));
+    if (d) { setDial(d.code); setNum(ph.slice(d.code.length)); }
+    setPinIn('');
+    setErr('Session expirée — recevez un SMS pour vous reconnecter.');
+    setStep('phone');
   };
 
   const forgotPin = async () => {
@@ -193,7 +214,7 @@ export default function LoginScreen({ onAuthed }) {
                     <Text style={st.ccTxt}>{dialLabel}</Text>
                   </TouchableOpacity>
                 </View>
-                <TextInput style={st.numInput} keyboardType="number-pad" placeholder="07 48 52 88 24"
+                <TextInput style={st.numInput} keyboardType="number-pad" placeholder={dialSample}
                   value={num} onChangeText={setNum} placeholderTextColor={colors.muted} />
               </View>
               <Btn label={t('Recevoir le code par SMS')} onPress={sendCode} busy={busy} />

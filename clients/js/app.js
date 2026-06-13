@@ -135,6 +135,17 @@ function buildE164() {
   if (cc === '+33' && num.startsWith('0')) num = num.slice(1); // France : on retire le 0
   return cc + num;
 }
+
+// Exemple de numéro (placeholder) adapté à l'indicatif choisi — numéros fictifs.
+const PHONE_SAMPLES = { '+33': '6 12 34 56 78', '+225': '07 12 34 56 78' };
+(function initDialSample() {
+  const sel = document.getElementById('dialCode');
+  const inp = document.getElementById('phoneInput');
+  if (!sel || !inp) return;
+  const apply = () => { inp.placeholder = PHONE_SAMPLES[sel.value] || '6 12 34 56 78'; };
+  sel.addEventListener('change', apply);
+  apply();
+})();
 function smsError(e) {
   const code = (e && e.code) || '';
   if (code.includes('invalid-phone-number')) return 'Numéro invalide.';
@@ -206,8 +217,11 @@ $('#btnForgotPin').addEventListener('click', async () => {
 
 // Démarrage : on s'aligne sur la session Firebase + le PIN enregistré.
 onAuthStateChanged(auth, (user) => {
-  if (user && localStorage.getItem(LS.registered) === '1') {
-    const ph = localStorage.getItem(LS.phone) || user.phoneNumber || '';
+  // On montre l'écran PIN dès qu'un PIN a été enregistré (reg='1' + pin), MÊME si
+  // la session n'est pas encore restaurée. La validation du PIN (btnVerifyPin)
+  // bascule proprement vers le SMS si la session est réellement absente (ligne ~197).
+  if (localStorage.getItem(LS.registered) === '1' && localStorage.getItem(LS.pin)) {
+    const ph = localStorage.getItem(LS.phone) || (user && user.phoneNumber) || '';
     $('#pinWelcome').textContent = ph ? `Bon retour 👋  (${ph})` : 'Bon retour 👋';
     showStep('pin');
   } else if (user) {
@@ -1729,6 +1743,7 @@ document.addEventListener('click', async (e) => {
     try { await signOut(auth); } catch (_) {}
     localStorage.removeItem(LS.registered);
     localStorage.removeItem(LS.pin);
+    localStorage.removeItem(LS.phone); // changer de compte : pas de pré-remplissage du n° suivant
     // Réinitialise l'état local pour ne rien laisser fuiter à la prochaine session.
     INVOICES = []; PARCELS = []; NOTIFS = []; REQUESTS = []; chatMessages = []; chatConversations = [];
     invoicesLoaded = false; notifsLoaded = false; requestsLoaded = false; chatLoaded = false;

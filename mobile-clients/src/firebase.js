@@ -10,3 +10,11 @@
 import authModule from '@react-native-firebase/auth';
 
 export const auth = authModule();
+
+// Promesse résolue à la 1re émission de onAuthStateChanged = session native
+// RESTAURÉE (ou confirmée absente). À attendre AVANT tout appel API, pour ne pas
+// envoyer de requête sans jeton pendant la restauration asynchrone (sinon
+// « unauthenticated » les 2-4 s suivant l'ouverture).
+export const authReady = new Promise((resolve) => {
+  const unsub = auth.onAuthStateChanged((u) => { unsub(); resolve(u || null); });
+});

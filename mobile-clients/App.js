@@ -121,7 +121,9 @@ function AppInner() {
   // par SMS la prochaine fois. À réserver à « changer de compte ».
   const logout = async () => {
     try { await auth.signOut(); } catch (_) {}
-    await AsyncStorage.multiRemove(['amtc_registered', 'amtc_pin']);
+    // Déconnexion TOTALE (changer de compte) : on efface aussi le numéro mémorisé
+    // pour qu'il ne se pré-remplisse pas pour un autre client. (lock() le garde.)
+    await AsyncStorage.multiRemove(['amtc_registered', 'amtc_pin', 'amtc_phone']);
     await clearCache();
     cacheLoaded.current = false;
     setData(null); setTab('home'); setAuthed(false);

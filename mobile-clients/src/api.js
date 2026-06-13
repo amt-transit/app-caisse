@@ -1,7 +1,7 @@
 // Appels aux Cloud Functions (mêmes que la PWA /clients/). Aucun accès
 // Firestore direct côté client. On rafraîchit le jeton avant chaque appel
 // pour éviter les "unauthenticated" après une longue inactivité.
-import { auth } from './firebase';
+import { auth, authReady } from './firebase';
 
 // On appelle les Cloud Functions (onCall v2) directement en HTTPS, avec le jeton
 // d'identité de l'utilisateur (fourni par @react-native-firebase/auth, qui marche).
@@ -11,6 +11,7 @@ import { auth } from './firebase';
 const FUNCTIONS_BASE = 'https://us-central1-caisse-amt-perso.cloudfunctions.net';
 
 async function call(name, payload) {
+  await authReady;                 // attendre la restauration de la session native
   const u = auth.currentUser;
   let token = null;
   if (u) { try { token = await u.getIdToken(); } catch (_) {} }
