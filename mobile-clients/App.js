@@ -8,6 +8,7 @@ import { useFonts } from 'expo-font';
 import { APP_FONTS } from './src/fonts'; // charge + applique Comfortaa/Jost partout
 import { StatusBar } from 'expo-status-bar';
 import { LinearGradient } from 'expo-linear-gradient';
+import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { auth } from './src/firebase';
 import { api } from './src/api';
@@ -56,6 +57,7 @@ const TITLES = {
 
 function AppInner() {
   const { t } = useLang();
+  const insets = useSafeAreaInsets(); // marges système réelles (bord à bord Android 15 / SDK 54)
   // Toujours démarrer NON authentifié : l'écran de login est le SEUL gardien (il
   // décide PIN si une session native est déjà restaurée, sinon SMS). Évite
   // d'atterrir direct sur l'Accueil en SAUTANT le code PIN.
@@ -156,7 +158,7 @@ function AppInner() {
   return (
     <View style={s.root}>
       <StatusBar style="light" />
-      <LinearGradient colors={['#21426A', '#16293F']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={s.header}>
+      <LinearGradient colors={['#21426A', '#16293F']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[s.header, { paddingTop: insets.top + 12 }]}>
         <TouchableOpacity onPress={() => setMenuOpen(true)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
           <Text style={s.burger}>☰</Text>
         </TouchableOpacity>
@@ -170,7 +172,7 @@ function AppInner() {
       <View style={{ flex: 1 }}>
         {pane('home', <HomeScreen data={data} loading={loading} onRefresh={() => load(false)} onOpenInvoice={setOpenInvoice} onNavigate={go} isSender={isSender} />)}
         {pane('tracking', <TrackingScreen data={data} loading={loading} onRefresh={() => load(false)} active={tab === 'tracking'} />)}
-        {pane('requests', <RequestsScreen selfName={selfName} selfAddress={profile.address || ''} selfPhone={phone} />)}
+        {pane('requests', <RequestsScreen selfName={selfName} selfAddress={profile.address || ''} selfPhone={phone} active={tab === 'requests'} />)}
         {pane('quotes', <QuoteScreen agencies={(data && data.agencies) || []} />)}
         {pane('chat', <ChatScreen selfName={selfName} active={tab === 'chat'} />)}
         {pane('profile', <ProfileScreen data={data} phone={phone} onLock={lock} onLogout={logout} onProfileSaved={onProfileSaved} />)}
@@ -181,7 +183,7 @@ function AppInner() {
         {pane('contacts', <ContactsScreen />)}
       </View>
 
-      <View style={s.tabbar}>
+      <View style={[s.tabbar, { paddingBottom: insets.bottom + 8 }]}>
         {BOTTOM_TABS.map(tt => (
           <TouchableOpacity key={tt.key} style={s.tab} onPress={() => setTab(tt.key)} activeOpacity={0.7}>
             <Text style={[s.tabIc, tab === tt.key && { opacity: 1 }]}>{tt.icon}</Text>
@@ -223,9 +225,11 @@ export default function App() {
   const [fontsLoaded] = useFonts(APP_FONTS);
   if (!fontsLoaded) return null; // l'écran de démarrage (splash) reste affiché
   return (
-    <LangProvider>
-      <AppInner />
-    </LangProvider>
+    <SafeAreaProvider>
+      <LangProvider>
+        <AppInner />
+      </LangProvider>
+    </SafeAreaProvider>
   );
 }
 

@@ -37,7 +37,7 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#1A3553"
       },
-      "versionCode": 4
+      "versionCode": 10
     },
     "plugins": [
       "expo-asset",

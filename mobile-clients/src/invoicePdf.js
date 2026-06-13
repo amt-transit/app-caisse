@@ -4,7 +4,7 @@
 import { Platform } from 'react-native';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy'; // SDK 54 : ancienne API (readAsStringAsync, SAF…) sous /legacy
 import qrcode from 'qrcode-generator';
 
 // Site public (origine des liens de vérification, comme côté staff).

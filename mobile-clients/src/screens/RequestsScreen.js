@@ -17,7 +17,7 @@ const STATUS = {
 const ACCES = ['Interphone', 'Code / Digicode', 'Aucun / Accès libre'];
 const eur = (n) => String(Math.round(Number(n) || 0)) + ' €';
 
-export default function RequestsScreen({ selfName, selfAddress, selfPhone }) {
+export default function RequestsScreen({ selfName, selfAddress, selfPhone, active }) {
   const { t } = useLang();
   const [tab, setTab] = useState('list'); // list | form
   const [editId, setEditId] = useState(null); // id si modification, sinon création
@@ -40,7 +40,10 @@ export default function RequestsScreen({ selfName, selfAddress, selfPhone }) {
     try { const r = await api.getDepositCatalog(); setCatalog(r.items || []); }
     catch (e) { setCatalog([]); }
   };
-  useEffect(() => { load(); loadCatalog(); }, []);
+  useEffect(() => { loadCatalog(); }, []);
+  // Recharge la liste à chaque ouverture de l'onglet -> statut à jour (une demande
+  // traitée/acceptée n'affiche plus « Modifier »).
+  useEffect(() => { if (active) load(); }, [active]);
 
   // Ouvre le formulaire en CRÉATION (type donné) ou en MODIFICATION (req).
   const openForm = (type, req) => {

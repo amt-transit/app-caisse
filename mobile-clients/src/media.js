@@ -2,7 +2,7 @@
 // upload d'un fichier (audio) vers Firebase Storage (dossier client_chat/).
 import * as ImagePicker from 'expo-image-picker';
 import * as ImageManipulator from 'expo-image-manipulator';
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy'; // SDK 54 : ancienne API (uploadAsync…) déplacée sous /legacy
 import { auth } from './firebase';
 
 // Bucket Firebase Storage (cf. config). Upload via l'API REST -> pas besoin du
