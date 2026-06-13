@@ -202,9 +202,19 @@ $('#btnSavePin').addEventListener('click', () => {
 });
 
 // Étape 4 -> déverrouiller par PIN (la session Firebase persiste déjà)
-$('#btnPin').addEventListener('click', () => {
+$('#btnPin').addEventListener('click', async () => {
   const p = ($('#pinInput').value || '').replace(/[^0-9]/g, '');
   if (pinHash(p) !== localStorage.getItem(LS.pin)) { authError('Code PIN incorrect.'); return; }
+  // La session Firebase peut encore être en cours de restauration : on l'attend
+  // (jusqu'à 5 s) avant de conclure qu'elle est perdue (sinon SMS à tort).
+  if (!auth.currentUser) {
+    await new Promise((resolve) => {
+      let done = false;
+      const end = () => { if (!done) { done = true; resolve(); } };
+      const unsub = onAuthStateChanged(auth, (u) => { if (u) { unsub(); end(); } });
+      setTimeout(() => { unsub(); end(); }, 5000);
+    });
+  }
   if (!auth.currentUser) { authError('Session expirée — reconnexion par SMS.'); showStep('phone'); return; }
   enterApp();
 });
