@@ -175,7 +175,21 @@ export default function LoginScreen({ onAuthed }) {
     const p = (pinIn || '').replace(/\D/g, '');
     const stored = await AsyncStorage.getItem(LS.pin);
     if (pinHash(p) !== stored) return fail('Code PIN incorrect.');
+    // La session native peut être ENCORE en cours de restauration (asynchrone)
+    // au moment où on saisit le PIN : on l'attend (jusqu'à 5 s) avant de conclure
+    // qu'elle est perdue. Sinon on basculerait vers le SMS à tort.
+    if (!auth.currentUser) {
+      setBusy(true);
+      await new Promise((resolve) => {
+        let done = false;
+        const end = () => { if (!done) { done = true; resolve(); } };
+        const unsub = auth.onAuthStateChanged((u) => { if (u) { try { unsub(); } catch (_) {} end(); } });
+        setTimeout(() => { try { unsub(); } catch (_) {} end(); }, 5000);
+      });
+      setBusy(false);
+    }
     if (auth.currentUser) { finish(); return; }
+    // Session RÉELLEMENT absente (rare : réinstallation) -> repli SMS, n° pré-rempli.
     const ph = (await AsyncStorage.getItem(LS.phone)) || '';
     const d = DIALS.find((x) => ph.startsWith(x.code));
     if (d) { setDial(d.code); setNum(ph.slice(d.code.length)); }
