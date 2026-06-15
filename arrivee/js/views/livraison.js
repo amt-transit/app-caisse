@@ -5072,23 +5072,32 @@ export const LivraisonView = {
        function initScanHistoryModal() {
            const scanModalHTML = `
            <div id="scanHistoryModal" class="modal amt-modal">
-               <div class="modal-content" style="max-width: 500px; padding: 25px;">
-                   <span class="close-modal" id="closeScanHistoryModal" style="float:right; cursor:pointer; font-size:24px;">&times;</span>
+               <style>
+                   #scanHistoryModal .modal-content { width:94%; max-width:560px; padding:0; overflow:hidden; max-height:88vh; display:flex; flex-direction:column; border-radius:18px; }
+                   #scanHistoryModal .modal-header { position:static; margin:0; border-radius:18px 18px 0 0; padding:15px 20px; font-size:17px; flex:none; }
+                   #scanHistoryModal .sh-body { padding:16px 18px 18px; overflow-y:auto; }
+                   #scanHistoryModal table.table th, #scanHistoryModal table.table td { padding:7px 9px; font-size:12.5px; vertical-align:top; }
+                   @media (max-width:560px){ #scanHistoryModal table.table th, #scanHistoryModal table.table td { padding:6px 7px; font-size:11.5px; } #scanHistoryModal .sh-body { padding:12px 12px 14px; } }
+               </style>
+               <div class="modal-content">
+                   <span class="close-modal" id="closeScanHistoryModal" style="cursor:pointer; font-size:24px;">&times;</span>
                    <h2 class="modal-header">Suivi par colis</h2>
-                   <p id="scanHistorySubtitle" style="color:#64748b; font-size:14px; margin-bottom:15px;"></p>
-                   <div style="max-height: 360px; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 8px;">
-                       <table class="table" style="margin: 0; width: 100%;">
-                           <thead style="position: sticky; top: 0; background: #f8fafc; z-index: 1;">
-                               <tr>
-                                   <th style="text-align: left; padding: 8px;">Sous-colis</th>
-                                   <th style="text-align: left; padding: 8px;">Nature</th>
-                                   <th style="text-align: left; padding: 8px;">Statut</th>
-                                   <th style="text-align: right; padding: 8px;">Dernière action</th>
-                               </tr>
-                           </thead>
-                           <tbody id="scanHistoryBody">
-                           </tbody>
-                       </table>
+                   <div class="sh-body">
+                       <p id="scanHistorySubtitle" style="color:#64748b; font-size:13px; margin:0 0 14px;"></p>
+                       <div style="border: 1px solid #e2e8f0; border-radius: 8px; overflow:auto;">
+                           <table class="table" style="margin: 0; width: 100%;">
+                               <thead style="position: sticky; top: 0; background: #f8fafc; z-index: 1;">
+                                   <tr>
+                                       <th style="text-align: left;">Sous-colis</th>
+                                       <th style="text-align: left;">Nature</th>
+                                       <th style="text-align: left;">Statut</th>
+                                       <th style="text-align: right;">Dernière action</th>
+                                   </tr>
+                               </thead>
+                               <tbody id="scanHistoryBody">
+                               </tbody>
+                           </table>
+                       </div>
                    </div>
                </div>
            </div>
