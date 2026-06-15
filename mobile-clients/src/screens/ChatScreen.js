@@ -1,15 +1,19 @@
 // Onglet CHAT : conversations par agence. Messages texte + PHOTO (base64) +
 // VOCAL (uploadé sur Storage, URL stockée). Lecteur audio intégré.
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, ScrollView, TextInput, TouchableOpacity, StyleSheet, KeyboardAvoidingView, Platform, Image, Alert } from 'react-native';
+import { View, Text, ScrollView, TextInput, TouchableOpacity, StyleSheet, KeyboardAvoidingView, Platform, Image, Alert, Modal } from 'react-native';
 import { Audio } from 'expo-av';
 import { Card, Empty, Loading } from '../components/ui';
+import ChatBackground from '../components/ChatBackground';
 import { colors } from '../theme';
 import { api } from '../api';
 import { pickChatImage, takeChatPhoto, uploadChatAudio } from '../media';
 import { useLang, tr } from '../i18n';
 
 const fdt = (d) => { try { return new Date(d).toLocaleString('fr-FR'); } catch (e) { return ''; } };
+const sameDay = (a, b) => { try { return new Date(a).toDateString() === new Date(b).toDateString(); } catch (e) { return false; } };
+const dayLabel = (d) => { try { const dt = new Date(d), t = new Date(), y = new Date(); y.setDate(t.getDate() - 1); if (sameDay(dt, t)) return "Aujourd'hui"; if (sameDay(dt, y)) return 'Hier'; return dt.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' }); } catch (e) { return ''; } };
+const timeOnly = (d) => { try { return new Date(d).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }); } catch (e) { return ''; } };
 
 export default function ChatScreen({ selfName, active }) {
   const { t } = useLang();
@@ -21,6 +25,7 @@ export default function ChatScreen({ selfName, active }) {
   const [sending, setSending] = useState(false);
   const [recording, setRecording] = useState(null);   // objet Audio.Recording en cours
   const [playingId, setPlayingId] = useState(null);
+  const [viewerImg, setViewerImg] = useState(null); // photo en plein écran
   const scrollRef = useRef(null);
   const soundRef = useRef(null);
 
@@ -158,30 +163,42 @@ export default function ChatScreen({ selfName, active }) {
         {convs.length > 1 && <TouchableOpacity onPress={() => setAgency(null)}><Text style={s.back}>‹</Text></TouchableOpacity>}
         <Text style={s.cHeadT}>{conv.name}</Text>
       </View>
-      <ScrollView ref={scrollRef} contentContainerStyle={{ padding: 14 }} onContentSizeChange={() => scrollRef.current?.scrollToEnd({ animated: false })}>
-        {msgs.length === 0 ? <Text style={s.startTxt}>{t('Démarrez la conversation avec')} {conv.name}.</Text> :
-          msgs.map((m, i) => {
-            const mine = m.sender === 'client';
-            return (
-              <View key={i} style={{ marginBottom: 8 }}>
-                <View style={[s.bubbleRow, { marginBottom: 0 }, mine && { justifyContent: 'flex-end' }]}>
-                  <View style={[s.bubble, mine ? s.bubbleMe : s.bubbleOther]}>
-                    <Text style={[s.bMeta, mine && { color: 'rgba(255,255,255,0.7)' }]}>{mine ? t('Vous') : (m.senderName || conv.name)} · {fdt(m.createdAt)}</Text>
-                    {!!m.text && <Text style={[s.bTxt, mine && { color: '#fff' }]}>{m.text}</Text>}
-                    {!!m.imageUrl && <Image source={{ uri: m.imageUrl }} style={s.img} resizeMode="cover" />}
-                    {!!m.audioUrl && (
-                      <TouchableOpacity style={[s.audio, mine ? s.audioMe : s.audioOther]} onPress={() => playAudio(m.id || i, m.audioUrl)}>
-                        <Text style={{ fontSize: 18 }}>{playingId === (m.id || i) ? '⏸️' : '▶️'}</Text>
-                        <Text style={[s.audioTxt, mine && { color: '#fff' }]}>{t('Message vocal')}</Text>
-                      </TouchableOpacity>
-                    )}
+      <View style={{ flex: 1 }}>
+        <ChatBackground />
+        <ScrollView ref={scrollRef} style={{ backgroundColor: 'transparent' }} contentContainerStyle={{ padding: 12 }} onContentSizeChange={() => scrollRef.current?.scrollToEnd({ animated: false })}>
+          {msgs.length === 0 ? <Text style={s.startTxt}>{t('Démarrez la conversation avec')} {conv.name}.</Text> :
+            msgs.map((m, i) => {
+              const mine = m.sender === 'client';
+              const prev = msgs[i - 1];
+              const dayChanged = !prev || !sameDay(prev.createdAt, m.createdAt);
+              const tight = prev && prev.sender === m.sender && !dayChanged; // même expéditeur consécutif
+              return (
+                <View key={i}>
+                  {dayChanged && <View style={s.daySep}><Text style={s.daySepTxt}>{dayLabel(m.createdAt)}</Text></View>}
+                  <View style={[s.bubbleRow, { marginTop: tight ? 2 : 8, marginBottom: 0 }, mine && { justifyContent: 'flex-end' }]}>
+                    <View style={[s.bubble, mine ? s.bubbleMe : s.bubbleOther]}>
+                      {!tight && !mine && <Text style={s.bName}>{m.senderName || conv.name}</Text>}
+                      {!!m.text && <Text style={[s.bTxt, mine && { color: '#fff' }]}>{m.text}</Text>}
+                      {!!m.imageUrl && (
+                        <TouchableOpacity activeOpacity={0.9} onPress={() => setViewerImg(m.imageUrl)}>
+                          <Image source={{ uri: m.imageUrl }} style={s.img} resizeMode="cover" />
+                        </TouchableOpacity>
+                      )}
+                      {!!m.audioUrl && (
+                        <TouchableOpacity style={[s.audio, mine ? s.audioMe : s.audioOther]} onPress={() => playAudio(m.id || i, m.audioUrl)}>
+                          <Text style={{ fontSize: 18 }}>{playingId === (m.id || i) ? '⏸️' : '▶️'}</Text>
+                          <Text style={[s.audioTxt, mine && { color: '#fff' }]}>{t('Message vocal')}</Text>
+                        </TouchableOpacity>
+                      )}
+                      <Text style={[s.bTime, mine && { color: 'rgba(255,255,255,0.7)' }]}>{timeOnly(m.createdAt)}</Text>
+                    </View>
                   </View>
+                  {i === lastSeenIdx && <Text style={s.seen}>{t('Vu ✓✓')}</Text>}
                 </View>
-                {i === lastSeenIdx && <Text style={s.seen}>{t('Vu ✓✓')}</Text>}
-              </View>
-            );
-          })}
-      </ScrollView>
+              );
+            })}
+        </ScrollView>
+      </View>
 
       {recording ? (
         <View style={s.recBar}>
@@ -198,6 +215,13 @@ export default function ChatScreen({ selfName, active }) {
           <TouchableOpacity style={[s.sendBtn, sending && { opacity: 0.6 }]} onPress={sendText} disabled={sending}><Text style={s.sendTxt}>➤</Text></TouchableOpacity>
         </View>
       )}
+
+      <Modal visible={!!viewerImg} transparent animationType="fade" onRequestClose={() => setViewerImg(null)}>
+        <TouchableOpacity style={s.viewerBg} activeOpacity={1} onPress={() => setViewerImg(null)}>
+          {!!viewerImg && <Image source={{ uri: viewerImg }} style={s.viewerImg} resizeMode="contain" />}
+          <TouchableOpacity style={s.viewerClose} onPress={() => setViewerImg(null)}><Text style={s.viewerCloseTxt}>✕</Text></TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
     </KeyboardAvoidingView>
   );
 }
@@ -221,6 +245,14 @@ const s = StyleSheet.create({
   bMeta: { fontSize: 10, color: colors.muted, marginBottom: 2 },
   seen: { fontSize: 10, color: colors.blue, fontWeight: '700', textAlign: 'right', marginTop: 2, marginRight: 4 },
   bTxt: { fontSize: 14, color: colors.ink, lineHeight: 19 },
+  daySep: { alignSelf: 'center', backgroundColor: '#fff', borderRadius: 13, paddingHorizontal: 12, paddingVertical: 4, marginVertical: 8, shadowColor: '#000', shadowOpacity: 0.12, shadowRadius: 2, shadowOffset: { width: 0, height: 1 }, elevation: 1 },
+  daySepTxt: { fontSize: 11, fontWeight: '600', color: '#54656f' },
+  bName: { fontSize: 11, fontWeight: '800', color: colors.blue, marginBottom: 2 },
+  bTime: { fontSize: 10, color: colors.muted, alignSelf: 'flex-end', marginTop: 2 },
+  viewerBg: { flex: 1, backgroundColor: 'rgba(8,15,26,0.95)', alignItems: 'center', justifyContent: 'center' },
+  viewerImg: { width: '92%', height: '80%' },
+  viewerClose: { position: 'absolute', top: 44, right: 20, width: 42, height: 42, borderRadius: 21, backgroundColor: 'rgba(255,255,255,0.16)', alignItems: 'center', justifyContent: 'center' },
+  viewerCloseTxt: { color: '#fff', fontSize: 20, fontWeight: '700' },
   img: { width: 200, height: 200, borderRadius: 10, marginTop: 6 },
   audio: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 6, paddingVertical: 6, paddingHorizontal: 10, borderRadius: 20 },
   audioMe: { backgroundColor: 'rgba(255,255,255,0.18)' },

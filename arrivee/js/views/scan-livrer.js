@@ -742,7 +742,7 @@ export const ScanLivrerView = {
                 </div>
             ` + this.capturedPhotos.map((p, i) => `
                 <div style="position:relative; flex-shrink:0;">
-                    <img src="${p.previewUrl}" class="photo-thumb">
+                    <img src="${p.previewUrl}" class="photo-thumb" onclick="window.app.views.scanLivrer.openPhotoViewer(${i})">
                     <button onclick="window.app.views.scanLivrer.deletePhoto(${i})" style="position:absolute; top:-5px; right:-5px; background:#ef4444; color:white; border:none; border-radius:50%; width:20px; height:20px; font-size:10px; cursor:pointer; display:flex; align-items:center; justify-content:center; box-shadow:0 2px 4px rgba(0,0,0,0.2);">✕</button>
                 </div>
             `).join('');
@@ -752,6 +752,58 @@ export const ScanLivrerView = {
     deletePhoto(index) {
         this.capturedPhotos.splice(index, 1);
         this.updateSessionUI();
+    },
+
+    // Visionneuse photo plein écran « façon WhatsApp » : navigation, swipe, compteur, suppression.
+    openPhotoViewer(index) {
+        if (!this.capturedPhotos[index]) return;
+        this._viewerIdx = index;
+        let ov = document.getElementById('photoViewerOverlay');
+        if (!ov) {
+            ov = document.createElement('div');
+            ov.id = 'photoViewerOverlay';
+            ov.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(8,15,26,.95);display:flex;align-items:center;justify-content:center;flex-direction:column;-webkit-tap-highlight-color:transparent;';
+            ov.onclick = (e) => { if (e.target === ov) this.closePhotoViewer(); };
+            // Swipe (mobile)
+            let sx = 0;
+            ov.addEventListener('touchstart', (e) => { sx = e.changedTouches[0].clientX; }, { passive: true });
+            ov.addEventListener('touchend', (e) => { const dx = e.changedTouches[0].clientX - sx; if (Math.abs(dx) > 45) this.viewerNav(dx < 0 ? 1 : -1); }, { passive: true });
+            document.body.appendChild(ov);
+        }
+        this._renderViewer();
+        ov.style.display = 'flex';
+    },
+    _renderViewer() {
+        const ov = document.getElementById('photoViewerOverlay');
+        if (!ov) return;
+        const n = this.capturedPhotos.length;
+        const i = this._viewerIdx;
+        const p = this.capturedPhotos[i];
+        if (!p) { this.closePhotoViewer(); return; }
+        const nav = (dir, sym, side) => n > 1 ? `<button onclick="event.stopPropagation();window.app.views.scanLivrer.viewerNav(${dir})" style="position:absolute;${side}:14px;top:50%;transform:translateY(-50%);background:rgba(255,255,255,.14);color:#fff;border:none;width:46px;height:46px;border-radius:50%;font-size:24px;line-height:1;cursor:pointer;">${sym}</button>` : '';
+        ov.innerHTML = `
+            <button onclick="window.app.views.scanLivrer.closePhotoViewer()" style="position:absolute;top:16px;right:18px;background:rgba(255,255,255,.14);color:#fff;border:none;width:42px;height:42px;border-radius:50%;font-size:20px;cursor:pointer;">✕</button>
+            <div style="position:absolute;top:22px;left:0;right:0;text-align:center;color:#fff;font-size:14px;font-weight:600;opacity:.85;">${i + 1} / ${n}</div>
+            ${nav(-1, '‹', 'left')}
+            <img src="${p.previewUrl}" style="max-width:92vw;max-height:80vh;border-radius:10px;box-shadow:0 12px 50px rgba(0,0,0,.55);">
+            ${nav(1, '›', 'right')}
+            <button onclick="window.app.views.scanLivrer.deletePhotoFromViewer()" style="margin-top:18px;background:rgba(229,31,33,.92);color:#fff;border:none;padding:9px 18px;border-radius:22px;font-size:13px;font-weight:700;cursor:pointer;">🗑️ Supprimer cette photo</button>`;
+    },
+    viewerNav(dir) {
+        const n = this.capturedPhotos.length;
+        if (!n) return;
+        this._viewerIdx = (this._viewerIdx + dir + n) % n;
+        this._renderViewer();
+    },
+    deletePhotoFromViewer() {
+        this.deletePhoto(this._viewerIdx);
+        if (this.capturedPhotos.length === 0) { this.closePhotoViewer(); return; }
+        if (this._viewerIdx >= this.capturedPhotos.length) this._viewerIdx = this.capturedPhotos.length - 1;
+        this._renderViewer();
+    },
+    closePhotoViewer() {
+        const ov = document.getElementById('photoViewerOverlay');
+        if (ov) ov.style.display = 'none';
     },
 
     async sendToWhatsApp() {
