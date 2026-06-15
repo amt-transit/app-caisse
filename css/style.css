@@ -651,8 +651,10 @@ body { min-height: 100vh; overflow-y: auto; overflow-x: hidden; }
 .modal-header {
     display: flex; justify-content: space-between; align-items: center; color: var(--text-main); font-weight: 700; font-size: 18px;
     border-bottom: 1px solid var(--glass-border);
-    position: sticky;
-    top: 0;
+    /* position: static (et non sticky) : avec la marge negative -25px + le padding
+       du modal-content, le sticky decalait l'en-tete de 25px au scroll/focus et
+       masquait la 1re ligne de contenu. En static, l'en-tete reste en haut sans decalage. */
+    position: static;
     background-color: #fff;
     z-index: 110;
     margin: -25px -25px 15px -25px;
