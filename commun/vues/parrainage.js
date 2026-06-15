@@ -769,7 +769,7 @@ export const ParrainageView = {
                             <template v-if="mobileAccessInfo.error">⚠️ {{ mobileAccessInfo.error }}</template>
                             <template v-else>
                                 ✅ <b>Accès mobile prêt.</b> À transmettre au partenaire (affiché une seule fois) :<br>
-                                📧 Email : <b>{{ mobileAccessInfo.email }}</b><br>
+                                📱 Identifiant (numéro) : <b>{{ mobileAccessInfo.phone }}</b><br>
                                 <span v-if="mobileAccessInfo.password">🔑 Mot de passe : <b style="font-family:monospace;">{{ mobileAccessInfo.password }}</b></span>
                                 <span v-else>🔑 Mot de passe : (inchangé / déjà défini)</span>
                             </template>
@@ -1326,8 +1326,8 @@ export const ParrainageView = {
                 const createMobileAccess = async () => {
                     const p = partnerDetail.value;
                     if (!p || !p.id) return;
-                    if (!p.email || !String(p.email).trim()) {
-                        globalApp.showToast("Ajoutez d'abord un email à ce partenaire (bouton Modifier).", "error");
+                    if (!p.telephone || !String(p.telephone).trim()) {
+                        globalApp.showToast("Ajoutez d'abord un numéro de téléphone à ce partenaire (bouton Modifier).", "error");
                         return;
                     }
                     const label = `${p.prenom || ''} ${p.nom || ''}`.trim();
@@ -1371,7 +1371,7 @@ export const ParrainageView = {
                             throw e2;
                         }
                         const d = (json && json.result) || {};
-                        mobileAccessInfo.value = { email: d.email, password: d.password, generated: d.generated };
+                        mobileAccessInfo.value = { phone: d.phone || p.telephone, email: d.email, password: d.password, generated: d.generated };
                         globalApp.showToast("Accès mobile créé ✔", "success");
                     } catch (e) {
                         const code = (e && e.code) ? e.code : 'inconnu';

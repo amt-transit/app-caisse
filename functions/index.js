@@ -2140,15 +2140,18 @@ exports.provisionDemarcheurAuth = onCall({ region: REGION, invoker: "public" }, 
     }
     const dem = demSnap.data();
 
-    // SÉCURITÉ : on n'utilise QUE l'email de la fiche démarcheur — JAMAIS
-    // data.email fourni par l'appelant (réduit la surface d'attaque).
-    const email = ((dem.email) || "").trim().toLowerCase();
-    if (!email) {
+    // IDENTIFIANT = NUMÉRO DE TÉLÉPHONE (beaucoup de parrains n'ont pas d'email).
+    // On dérive un e-mail technique INVISIBLE depuis le téléphone de la fiche
+    // (jamais une valeur fournie par l'appelant). Le partenaire se connecte
+    // ensuite avec son NUMÉRO + mot de passe (mécanique identique au login agents).
+    const phoneDigits = String((dem.telephone) || "").replace(/\D/g, "");
+    if (!phoneDigits || phoneDigits.length < 6) {
         throw new HttpsError(
             "invalid-argument",
-            "Email requis sur la fiche démarcheur (renseignez-le d'abord)."
+            "Téléphone requis sur la fiche démarcheur (renseignez-le d'abord)."
         );
     }
+    const email = `${phoneDigits}@parrainage.amt.com`;
 
     // Mot de passe : fourni par l'admin, sinon généré et renvoyé pour transmission.
     let password = (data && data.password) || "";
@@ -2266,6 +2269,7 @@ exports.provisionDemarcheurAuth = onCall({ region: REGION, invoker: "public" }, 
         return {
             uid,
             email,
+            phone: (dem.telephone || ""),   // identifiant affiché à l'admin (= le numéro)
             generated,
             password: generated ? password : undefined,
         };

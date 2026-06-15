@@ -19,7 +19,7 @@ import { colors, spacing, radius, font, grad, shadow } from '../theme';
 
 export default function LoginScreen() {
   const { login } = useAuth();
-  const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
   const [show, setShow] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -27,21 +27,21 @@ export default function LoginScreen() {
   const [focus, setFocus] = useState('');
 
   const onSubmit = async () => {
-    if (!email.trim() || !password) {
-      setError('Renseignez votre email et votre mot de passe.');
+    if (!phone.trim() || !password) {
+      setError('Renseignez votre numéro et votre mot de passe.');
       return;
     }
     setError('');
     setBusy(true);
     try {
-      await login(email, password);
+      await login(phone, password);
     } catch (e) {
       const code = e && e.code ? e.code : '';
       setError(
         code.includes('invalid-credential') ||
           code.includes('wrong-password') ||
           code.includes('user-not-found')
-          ? 'Email ou mot de passe incorrect.'
+          ? 'Numéro ou mot de passe incorrect.'
           : 'Connexion impossible. Réessayez plus tard.'
       );
     } finally {
@@ -80,17 +80,17 @@ export default function LoginScreen() {
             <Text style={styles.cardTitle}>Connexion</Text>
             <Text style={styles.cardSub}>Accédez à vos commissions et à vos filleuls</Text>
 
-            <View style={[styles.field, focus === 'email' && styles.fieldActive]}>
-              <Ionicons name="mail-outline" size={18} color={focus === 'email' ? colors.gold : colors.textDim} />
+            <View style={[styles.field, focus === 'phone' && styles.fieldActive]}>
+              <Ionicons name="call-outline" size={18} color={focus === 'phone' ? colors.gold : colors.textDim} />
               <TextInput
                 style={styles.input}
-                placeholder="Email"
+                placeholder="Numéro de téléphone"
                 placeholderTextColor={colors.textFaint}
                 autoCapitalize="none"
-                keyboardType="email-address"
-                value={email}
-                onChangeText={setEmail}
-                onFocus={() => setFocus('email')}
+                keyboardType="phone-pad"
+                value={phone}
+                onChangeText={setPhone}
+                onFocus={() => setFocus('phone')}
                 onBlur={() => setFocus('')}
                 editable={!busy}
               />

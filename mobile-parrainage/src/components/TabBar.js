@@ -4,6 +4,7 @@
 // profit d'une vraie zone tactile mise en valeur. Plus chaleureux, plus clair.
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from './Icon';
 import { colors, spacing, radius, font } from '../theme';
 
@@ -16,8 +17,9 @@ export const TABS = [
 ];
 
 export default function TabBar({ active, onChange }) {
+  const insets = useSafeAreaInsets(); // marge système basse (bord à bord Android 15)
   return (
-    <View style={styles.bar}>
+    <View style={[styles.bar, { paddingBottom: insets.bottom + 10 }]}>
       {TABS.map((t) => {
         const on = active === t.key;
         return (

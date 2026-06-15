@@ -10,6 +10,7 @@ import { requestPushPermissionManually } from '../notifications';
 import Background from '../components/Background';
 import LogoMark from '../components/LogoMark';
 import TabBar from '../components/TabBar';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { RouteChip } from '../components/RouteSwitcher';
 import { colors, spacing, radius, font, grad, shadow } from '../theme';
 
@@ -23,6 +24,7 @@ const LOGO = require('../../assets/logo.png');
 
 export default function MainApp() {
   const { user, logout } = useAuth();
+  const insets = useSafeAreaInsets(); // marges système (bord à bord Android 15)
   const data = useDemarcheur();
   // À la connexion : on arrive sur « Accueil » (1er onglet).
   const [tab, setTab] = useState('dashboard');
@@ -166,7 +168,7 @@ export default function MainApp() {
 
   return (
     <Background>
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: insets.top + 14 }]}>
         <View style={styles.logoRing}>
           <Image source={LOGO} style={styles.headerLogo} />
         </View>

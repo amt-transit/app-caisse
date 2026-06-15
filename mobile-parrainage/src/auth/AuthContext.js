@@ -22,9 +22,15 @@ export function AuthProvider({ children }) {
     return unsub;
   }, []);
 
-  const login = async (email, password) => {
+  // L'identifiant est le NUMÉRO de téléphone (beaucoup de parrains n'ont pas
+  // d'email). On le transforme en e-mail technique invisible, avec EXACTEMENT
+  // les mêmes règles que la génération du compte côté serveur
+  // (provisionDemarcheurAuth) : chiffres uniquement + @parrainage.amt.com.
+  const login = async (phone, password) => {
+    const digits = String(phone || '').replace(/\D/g, '');
+    const technicalEmail = `${digits}@parrainage.amt.com`;
     // signInWithEmailAndPassword lève en cas d'échec : l'écran gère le message.
-    await signInWithEmailAndPassword(auth, email.trim(), password);
+    await signInWithEmailAndPassword(auth, technicalEmail, password);
   };
 
   const logout = () => signOut(auth);

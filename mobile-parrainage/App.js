@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { View, ActivityIndicator, Text, StyleSheet } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { useFonts } from 'expo-font';
 import {
   Comfortaa_400Regular,
@@ -67,10 +68,12 @@ export default function App() {
   const ready = fontsLoaded || !!fontError || timedOut;
 
   return (
-    <AuthProvider>
-      <StatusBar style="light" />
-      {ready ? <Gate /> : <SplashNoFont />}
-    </AuthProvider>
+    <SafeAreaProvider>
+      <AuthProvider>
+        <StatusBar style="light" />
+        {ready ? <Gate /> : <SplashNoFont />}
+      </AuthProvider>
+    </SafeAreaProvider>
   );
 }
 
