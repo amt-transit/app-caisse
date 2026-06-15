@@ -24,7 +24,7 @@ export const ChatView = {
                 .chat-header__title { margin: 0; font-size: 18px; font-weight: 800; color: #0f172a; }
                 .chat-header__subtitle { margin: 2px 0 0 0; font-size: 12px; color: #64748b; }
                 
-                .chat-messages { flex: 1; background: #f8fafc; border-left: 1px solid #e2e8f0; border-right: 1px solid #e2e8f0; padding: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 15px; }
+                .chat-messages { flex: 1; background: #EEF3F8 url('commun/chat-bg.svg') repeat; background-size: 300px; border-left: 1px solid #e2e8f0; border-right: 1px solid #e2e8f0; padding: 16px; overflow-y: auto; display: flex; flex-direction: column; gap: 5px; }
                 
                 .chat-msg { display: flex; flex-direction: column; max-width: 75%; }
                 .chat-msg--me { align-self: flex-end; align-items: flex-end; }
@@ -36,13 +36,13 @@ export const ChatView = {
                 .agency-abidjan { background: #fce7f3; color: #be185d; border: 1px solid #fbcfe8; }
                 
                 .chat-msg__bubble { padding: 12px 16px; border-radius: 16px; font-size: 14px; line-height: 1.5; color: #1e293b; position: relative; word-wrap: break-word; box-shadow: 0 1px 2px rgba(0,0,0,0.02); }
-                .chat-msg--me .chat-msg__bubble { background: #3b82f6; color: white; border-bottom-right-radius: 4px; }
+                .chat-msg--me .chat-msg__bubble { background: #1A3553; color: white; border-bottom-right-radius: 4px; }
                 .chat-msg--other .chat-msg__bubble { background: white; border: 1px solid #e2e8f0; border-bottom-left-radius: 4px; }
                 
                 .chat-input-area { background: white; padding: 20px; border-radius: 0 0 16px 16px; border: 1px solid #e2e8f0; display: flex; gap: 10px; align-items: flex-end; box-shadow: 0 -4px 6px -1px rgba(0,0,0,0.02); flex-shrink: 0; }
                 .chat-input { flex: 1; padding: 14px 16px; border: 1px solid #cbd5e1; border-radius: 12px; font-size: 14px; outline: none; transition: 0.2s; font-family: inherit; resize: none; max-height: 120px; }
-                .chat-input:focus { border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59,130,246,0.1); }
-                .chat-send-btn { background: #3b82f6; color: white; border: none; width: 50px; height: 50px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 18px; cursor: pointer; transition: 0.2s; flex-shrink: 0; }
+                .chat-input:focus { border-color: #1A3553; box-shadow: 0 0 0 3px rgba(59,130,246,0.1); }
+                .chat-send-btn { background: #1A3553; color: white; border: none; width: 50px; height: 50px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 18px; cursor: pointer; transition: 0.2s; flex-shrink: 0; }
                 .chat-send-btn:hover { background: #2563eb; transform: translateY(-2px); }
                 .chat-send-btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
                 
@@ -50,7 +50,7 @@ export const ChatView = {
                 .chat-attach-btn:hover { background: #e2e8f0; color: #334155; }
                 .chat-img-preview { max-width: 100%; max-height: 250px; border-radius: 8px; margin-top: 8px; cursor: pointer; border: 1px solid rgba(0,0,0,0.1); display: block; }
                 .chat-msg--me .chat-ref-link { color: #fff; text-decoration: underline; font-weight: 800; }
-                .chat-msg--other .chat-ref-link { color: #3b82f6; text-decoration: underline; font-weight: 800; }
+                .chat-msg--other .chat-ref-link { color: #1A3553; text-decoration: underline; font-weight: 800; }
 
                 .chat-suggestions { position: absolute; bottom: 100%; left: 0; width: 100%; max-height: 200px; overflow-y: auto; background: white; border: 1px solid #cbd5e1; border-radius: 12px; box-shadow: 0 -4px 15px rgba(0,0,0,0.1); margin-bottom: 10px; display: none; z-index: 100; list-style: none; padding: 0; }
                 .chat-suggestions li { padding: 10px 15px; cursor: pointer; border-bottom: 1px solid #f1f5f9; font-size: 13px; color: #1e293b; transition: 0.2s; display: flex; align-items: center; }
@@ -204,7 +204,7 @@ export const ChatView = {
                     <p style="margin:5px 0;"><b>Conteneur :</b> <span style="background:#f1f5f9; padding:2px 6px; border-radius:6px; font-weight:600;">${data.conteneur || 'Non assigné'}</span></p>
                     <p style="margin:5px 0;"><b>Expéditeur :</b> ${data.expediteur || 'Inconnu'}</p>
                     <p style="margin:5px 0;"><b>Destinataire :</b> ${data.destinataire || 'Inconnu'}</p>
-                    <p style="margin:5px 0;"><b>Téléphone :</b> <a href="tel:${data.numero}" style="color:#3b82f6; text-decoration:none;">${data.numero || 'Non renseigné'}</a></p>
+                    <p style="margin:5px 0;"><b>Téléphone :</b> <a href="tel:${data.numero}" style="color:#1A3553; text-decoration:none;">${data.numero || 'Non renseigné'}</a></p>
                     <p style="margin:5px 0;"><b>Lieu :</b> ${data.lieuLivraison || '-'}</p>
                     <p style="margin:5px 0;"><b>Statut actuel :</b> <span style="background:#e2e8f0; padding:2px 8px; border-radius:12px; font-weight:bold; font-size:12px;">${statutTexte}</span></p>
                 </div>
@@ -289,7 +289,7 @@ export const ChatView = {
                 this.selectedSuggestionIndex = -1;
                 suggBox.innerHTML = matches.map((m, i) => `
                     <li data-index="${i}" onclick="window.app.views.chat.selectSuggestion(${i})" onmouseenter="window.app.views.chat.highlightSuggestion(${i})">
-                        <span style="font-size: 10px; color: #fff; background: ${m.type === 'Réf' ? '#3b82f6' : '#10b981'}; padding: 2px 6px; border-radius: 4px; margin-right: 8px;">${m.type}</span>
+                        <span style="font-size: 10px; color: #fff; background: ${m.type === 'Réf' ? '#1A3553' : '#10b981'}; padding: 2px 6px; border-radius: 4px; margin-right: 8px;">${m.type}</span>
                         <b>${m.val}</b>
                     </li>
                 `).join('');

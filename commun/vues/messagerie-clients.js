@@ -33,14 +33,14 @@ export const ChatClientsView = {
         .cc-conv__last{font-size:12px;color:#94a3b8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:170px;}
         .cc-badge{background:#ef4444;color:#fff;border-radius:10px;font-size:11px;font-weight:700;padding:1px 7px;}
         .cc-panel{background:#fff;border:1px solid #e2e8f0;border-radius:14px;display:flex;flex-direction:column;height:70vh;}
-        .cc-msgs{flex:1;padding:18px;overflow-y:auto;display:flex;flex-direction:column;gap:10px;background:#f8fafc;}
+        .cc-msgs{flex:1;padding:16px;overflow-y:auto;display:flex;flex-direction:column;gap:4px;background:#EEF3F8 url('commun/chat-bg.svg') repeat;background-size:300px;}
         .cc-msg{max-width:75%;padding:10px 14px;border-radius:14px;font-size:14px;line-height:1.45;}
         .cc-msg--client{align-self:flex-start;background:#fff;border:1px solid #e2e8f0;border-bottom-left-radius:4px;}
-        .cc-msg--staff{align-self:flex-end;background:#3b82f6;color:#fff;border-bottom-right-radius:4px;}
+        .cc-msg--staff{align-self:flex-end;background:#1A3553;color:#fff;border-bottom-right-radius:4px;}
         .cc-msg__meta{font-size:10px;opacity:.7;margin-bottom:3px;}
         .cc-input{display:flex;gap:10px;padding:14px;border-top:1px solid #e2e8f0;}
         .cc-input textarea{flex:1;border:1px solid #cbd5e1;border-radius:10px;padding:11px;font-family:inherit;font-size:14px;resize:none;outline:none;}
-        .cc-send{background:#3b82f6;color:#fff;border:none;border-radius:10px;padding:0 18px;font-weight:700;cursor:pointer;}
+        .cc-send{background:#1A3553;color:#fff;border:none;border-radius:10px;padding:0 18px;font-weight:700;cursor:pointer;}
         .cc-empty{padding:40px;text-align:center;color:#64748b;}
       </style>
       <div class="cc-page">
@@ -170,7 +170,7 @@ export const ChatClientsView = {
     const bubbles = conv.map((m, idx) => {
       const img = m.imageUrl ? `<img src="${m.imageUrl}" onclick="window.open(this.src,'_blank')" style="max-width:100%;max-height:240px;border-radius:8px;margin-top:${m.text ? '6px' : '0'};cursor:pointer;display:block;">` : '';
       const audio = m.audioUrl ? `<audio controls src="${m.audioUrl}" style="margin-top:6px;max-width:240px;height:38px;display:block;"></audio>` : '';
-      const seen = idx === lastSeenStaff ? `<div style="align-self:flex-end;font-size:10px;color:#3b82f6;font-weight:700;margin:2px 2px 0;">Vu ✓✓</div>` : '';
+      const seen = idx === lastSeenStaff ? `<div style="align-self:flex-end;font-size:10px;color:#1A3553;font-weight:700;margin:2px 2px 0;">Vu ✓✓</div>` : '';
       return `
       <div class="cc-msg cc-msg--${m.sender === 'staff' ? 'staff' : 'client'}">
         <div class="cc-msg__meta">${m.sender === 'staff' ? (m.senderName || 'Agence') : clientNm} · ${fdate(m.createdAt)}</div>
