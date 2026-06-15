@@ -248,3 +248,32 @@ body:has(.sw-page) .fab-btn { display: none !important; }
   .sw-page .sm__kpi-val { font-size: 18px !important; }
   .sw-page .sm__kpi-lbl { font-size: 8px !important; margin-top: 3px !important; }
 }
+
+/* ============================================
+   MOBILE (≤640px) — En-têtes & filtres compacts (GLOBAL, toutes les pages)
+   - Masque les sous-titres descriptifs des en-têtes de page (ex. « Gestion des
+     factures et colis envoyés ») : inutiles sur téléphone, ils prennent de la
+     hauteur. On GARDE .cd-header__subtitle (tél + adresse du client dans sa fiche).
+   - Resserre les zones de filtre partageant les classes génériques
+     .filter-group / .filter-input / .filter-select : 2 colonnes au lieu d'un
+     empilement vertical, libellés et champs réduits.
+============================================ */
+@media (max-width: 640px) {
+    /* Sous-titres de page → masqués (sauf la fiche détail client) */
+    [class$="-header__subtitle"]:not(.cd-header__subtitle),
+    .am__subtitle, .al__subtitle, .ci-subtitle { display: none !important; }
+
+    /* Filtres génériques : 2 colonnes, champs compacts */
+    .filter-group { flex: 1 1 calc(50% - 6px) !important; min-width: 0 !important; }
+    .filter-group--wide { flex: 1 1 100% !important; } /* la recherche reste pleine largeur */
+    .filter-label { font-size: 10px !important; margin-bottom: 3px !important; }
+    .filter-input, .filter-select { padding: 8px 10px !important; font-size: 13px !important; border-radius: 8px !important; }
+
+    /* Conteneurs de filtres connus : padding et marges réduits */
+    .factures-filters, .cl-filters-card, .arr-filters, .al__filters, .sh-filters,
+    .filters-section, .departures-filters, .history-filters, .chauffeurs-filters,
+    .prog-filters, .rdv-filters {
+        padding: 12px !important; gap: 8px 10px !important; margin-bottom: 14px !important;
+    }
+    .filters-grid { gap: 8px 10px !important; } /* rangée interne (scan-historique départ) */
+}
