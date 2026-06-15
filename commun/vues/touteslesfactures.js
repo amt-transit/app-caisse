@@ -136,6 +136,21 @@ export const ToutesLesFacturesView = {
                 .colis-delivered { background: #dcfce7; color: #166534; }
                 .colis-pending { background: #f1f5f9; color: #475569; }
                 .muted { color: #64748b; font-size: 13px; padding: 20px; font-style: italic; text-align: center; }
+
+                /* ── Téléphone : en-tête + filtres compacts ───────────────────── */
+                @media (max-width: 640px) {
+                    .factures-header { margin-bottom: 12px; }
+                    .factures-header__content { padding: 12px 14px; gap: 12px; }
+                    .factures-header__icon { width: 42px; height: 42px; font-size: 24px; border-radius: 11px; }
+                    .factures-header__title { font-size: 18px; }
+                    .factures-header__subtitle { display: none; } /* explication inutile sur mobile */
+
+                    .factures-filters { padding: 12px; gap: 8px 10px; margin-bottom: 14px; }
+                    .factures-filters .filter-group { flex: 1 1 calc(50% - 5px); min-width: 0; } /* 2 colonnes */
+                    .factures-filters .filter-group--wide { flex: 1 1 100%; }                    /* recherche pleine largeur */
+                    .filter-label { font-size: 10px; margin-bottom: 3px; }
+                    .filter-input, .filter-select { padding: 8px 10px; font-size: 13px; border-radius: 8px; }
+                }
             </style>
             <div class="page" style="max-width: 1400px; margin: 0 auto; animation: fadeIn 0.3s ease;">
                 <!-- En-tête -->
