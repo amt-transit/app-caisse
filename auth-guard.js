@@ -347,9 +347,21 @@ onAuthStateChanged(auth, async (user) => {
         // avec le défaut d'app.js (loadMenuConfig).
         const APP_DEFAULT_AGENCY = 'paris';
         let currentActiveAgency = sessionStorage.getItem('currentActiveAgency');
-        const desiredAgency = userData.agency === 'all'
-            ? (currentActiveAgency || localStorage.getItem('amt_lastAgency') || 'abidjan')
-            : (userData.agency || 'abidjan');
+        // MULTI-AGENCES : liste des agences autorisees de l'utilisateur.
+        // 'all'/super_admin => acces global (toutes). Sinon le tableau `agencies`
+        // (repli sur le scalaire `agency`). canSwitch = dispose-t-il d'un selecteur ?
+        const userAgenciesList = (Array.isArray(userData.agencies) && userData.agencies.length) ? userData.agencies : (userData.agency ? [userData.agency] : []);
+        const isGlobalUser = (userData.agency === 'all') || (userAgenciesList.indexOf('all') !== -1) || userRole === 'super_admin';
+        const canSwitch = isGlobalUser || userAgenciesList.length > 1;
+        let desiredAgency;
+        if (isGlobalUser) {
+            desiredAgency = currentActiveAgency || localStorage.getItem('amt_lastAgency') || 'abidjan';
+        } else if (userAgenciesList.length > 1) {
+            // garde l'agence courante si elle est autorisee, sinon la 1re de sa liste
+            desiredAgency = (currentActiveAgency && userAgenciesList.indexOf(currentActiveAgency) !== -1) ? currentActiveAgency : userAgenciesList[0];
+        } else {
+            desiredAgency = userData.agency || 'abidjan';
+        }
         const renderedAgency = currentActiveAgency || APP_DEFAULT_AGENCY;
         sessionStorage.setItem('currentActiveAgency', desiredAgency);
         // Mémorise l'agence effective pour le PROCHAIN boot (anti-flash) + pour
@@ -631,7 +643,7 @@ onAuthStateChanged(auth, async (user) => {
         document.body.classList.add('agency-' + currentActiveAgency);
 
         // --- INJECTION DU SÉLECTEUR D'AGENCE (Pour les comptes Globaux) ---
-        if (userData.agency === 'all' || userRole === 'super_admin') {
+        if (canSwitch) {
             document.querySelectorAll('#agencySwitcherContainer').forEach(container => {
                 container.style.display = 'block';
             });
@@ -748,7 +760,9 @@ onAuthStateChanged(auth, async (user) => {
                 if (existing) existing.remove();
 
                 const current = sessionStorage.getItem('currentActiveAgency') || 'abidjan';
-                const all = Object.values(AGENCIES || {});
+                // Multi-agences : un agent non-global ne voit QUE ses agences autorisees.
+                const all = isGlobalUser ? Object.values(AGENCIES || {})
+                    : Object.values(AGENCIES || {}).filter(a => userAgenciesList.indexOf(a.id) !== -1);
                 const departures = all.filter((a) => a.type === 'departure');
                 const arrivals = all.filter((a) => a.type === 'arrival');
 
@@ -959,7 +973,7 @@ onAuthStateChanged(auth, async (user) => {
         const navParis = document.getElementById('nav-paris');
 
         if (navParis) {
-            if (userRole === 'super_admin' || userRole === 'admin' || userData.agency === 'all' || userData.agency === 'paris') {
+            if (userRole === 'admin' || isGlobalUser || userAgenciesList.indexOf('paris') !== -1) {
                 navParis.style.display = 'inline-flex';
             } else {
                 navParis.style.display = 'none';

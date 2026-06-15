@@ -29,6 +29,14 @@ service cloud.firestore {
       return isAuthenticated() && (isSuperAdmin() || getUserData().agency == 'all');
     }
 
+    // Multi-agences : un agent peut avoir accès à PLUSIEURS agences via le champ
+    // `agencies` (tableau). Repli sur le champ scalaire `agency` (mono-agence).
+    function userAgencies() {
+      return ('agencies' in getUserData() && getUserData().agencies is list && getUserData().agencies.size() > 0)
+        ? getUserData().agencies
+        : [getUserData().agency];
+    }
+
     // Démarcheur (parrain/filleul) : identifié par custom claims posés par la
     // Cloud Function provisionDemarcheurAuth. N'A AUCUN accès staff (les règles
     // staff lisent le rôle dans /users, pas le token).
@@ -92,48 +100,48 @@ service cloud.firestore {
     // =====================================================================
     
     match /transactions/{document=**} {
-      allow read, write: if isAuthenticated() && (hasGlobalAccess() || getUserData().agency in ['paris', 'abidjan']);
+      allow read, write: if isAuthenticated() && (hasGlobalAccess() || userAgencies().hasAny(['paris', 'abidjan']));
     }
     match /livraisons/{document=**} {
-      allow read, write: if isAuthenticated() && (hasGlobalAccess() || getUserData().agency in ['paris', 'abidjan']);
+      allow read, write: if isAuthenticated() && (hasGlobalAccess() || userAgencies().hasAny(['paris', 'abidjan']));
     }
     match /expenses/{document=**} {
-      allow read, write: if isAuthenticated() && (hasGlobalAccess() || getUserData().agency in ['paris', 'abidjan']);
+      allow read, write: if isAuthenticated() && (hasGlobalAccess() || userAgencies().hasAny(['paris', 'abidjan']));
     }
     match /bank_movements/{document=**} {
-      allow read, write: if isAuthenticated() && (hasGlobalAccess() || getUserData().agency in ['paris', 'abidjan']);
+      allow read, write: if isAuthenticated() && (hasGlobalAccess() || userAgencies().hasAny(['paris', 'abidjan']));
     }
     // Caisse Euros : especes en EUR (separees de la caisse CFA). Meme acces que la banque.
     match /caisse_euros/{document=**} {
-      allow read, write: if isAuthenticated() && (hasGlobalAccess() || getUserData().agency in ['paris', 'abidjan']);
+      allow read, write: if isAuthenticated() && (hasGlobalAccess() || userAgencies().hasAny(['paris', 'abidjan']));
     }
     // Demandes client (dépôt / récupération) émises depuis l'app AMT Clients.
     // Création/lecture côté client passent par des Cloud Functions (Admin SDK),
     // donc PAS besoin d'autoriser le client ici. Cette règle ouvre l'accès au
     // PERSONNEL (paris/abidjan + global) pour consulter et traiter les demandes.
     match /client_requests/{document=**} {
-      allow read, write: if isAuthenticated() && (hasGlobalAccess() || getUserData().agency in ['paris', 'abidjan']);
+      allow read, write: if isAuthenticated() && (hasGlobalAccess() || userAgencies().hasAny(['paris', 'abidjan']));
     }
 
     // Notifications de l'app AMT Clients (cloche 🔔). Créées/lues par les Cloud
     // Functions (Admin SDK) côté client ; côté STAFF, lecture seule autorisée
     // pour diagnostic. Aucun accès en écriture direct n'est nécessaire ici.
     match /client_notifications/{document=**} {
-      allow read: if isAuthenticated() && (hasGlobalAccess() || getUserData().agency in ['paris', 'abidjan']);
+      allow read: if isAuthenticated() && (hasGlobalAccess() || userAgencies().hasAny(['paris', 'abidjan']));
     }
 
     // Messagerie client (app AMT Clients). Le client crée/lit ses messages via
     // Cloud Functions (Admin SDK). Côté STAFF : lecture + écriture (répondre)
     // pour le personnel paris/abidjan + accès global.
     match /client_messages/{document=**} {
-      allow read, write: if isAuthenticated() && (hasGlobalAccess() || getUserData().agency in ['paris', 'abidjan']);
+      allow read, write: if isAuthenticated() && (hasGlobalAccess() || userAgencies().hasAny(['paris', 'abidjan']));
     }
 
     // Fiches profil client (app AMT Clients) : nom/prénom/photo/langue. Le
     // client écrit via Cloud Function (Admin SDK) ; le STAFF lit (ex. afficher
     // le nom/photo dans la Messagerie clients).
     match /client_profiles/{document=**} {
-      allow read: if isAuthenticated() && (hasGlobalAccess() || getUserData().agency in ['paris', 'abidjan']);
+      allow read: if isAuthenticated() && (hasGlobalAccess() || userAgencies().hasAny(['paris', 'abidjan']));
     }
 
     // Clients potentiels (nouveaux comptes créés sur l'app Client). Créés par
@@ -158,10 +166,10 @@ service cloud.firestore {
     // la page -> un agent recevait permission-denied. L'affichage du bouton
     // d'enregistrement reste géré finement côté UI (permission manage_fleet).
     match /fleet_vehicles/{document=**} {
-      allow read, write: if isAuthenticated() && (hasGlobalAccess() || getUserData().agency in ['paris', 'abidjan']);
+      allow read, write: if isAuthenticated() && (hasGlobalAccess() || userAgencies().hasAny(['paris', 'abidjan']));
     }
     match /fleet_transactions/{document=**} {
-      allow read, write: if isAuthenticated() && (hasGlobalAccess() || getUserData().agency in ['paris', 'abidjan']);
+      allow read, write: if isAuthenticated() && (hasGlobalAccess() || userAgencies().hasAny(['paris', 'abidjan']));
     }
 
     // -------------------------------------------------------------------
@@ -172,37 +180,37 @@ service cloud.firestore {
     // Mêmes droits que les tables de base. (Les routes SaaS sont déjà
     // couvertes par la règle 4 via le suffixe de route, ex. transactions_chine_aerien.)
     match /transactions_aerien/{document=**} {
-      allow read, write: if isAuthenticated() && (hasGlobalAccess() || getUserData().agency in ['paris', 'abidjan']);
+      allow read, write: if isAuthenticated() && (hasGlobalAccess() || userAgencies().hasAny(['paris', 'abidjan']));
     }
     match /livraisons_aerien/{document=**} {
-      allow read, write: if isAuthenticated() && (hasGlobalAccess() || getUserData().agency in ['paris', 'abidjan']);
+      allow read, write: if isAuthenticated() && (hasGlobalAccess() || userAgencies().hasAny(['paris', 'abidjan']));
     }
     match /livraisons_archives_aerien/{document=**} {
-      allow read, write: if isAuthenticated() && (hasGlobalAccess() || getUserData().agency in ['paris', 'abidjan']);
+      allow read, write: if isAuthenticated() && (hasGlobalAccess() || userAgencies().hasAny(['paris', 'abidjan']));
     }
     match /expenses_aerien/{document=**} {
-      allow read, write: if isAuthenticated() && (hasGlobalAccess() || getUserData().agency in ['paris', 'abidjan']);
+      allow read, write: if isAuthenticated() && (hasGlobalAccess() || userAgencies().hasAny(['paris', 'abidjan']));
     }
     match /clients_aerien/{document=**} {
-      allow read, write: if isAuthenticated() && (hasGlobalAccess() || getUserData().agency in ['paris', 'abidjan']);
+      allow read, write: if isAuthenticated() && (hasGlobalAccess() || userAgencies().hasAny(['paris', 'abidjan']));
     }
     match /products_aerien/{document=**} {
-      allow read, write: if isAuthenticated() && (hasGlobalAccess() || getUserData().agency in ['paris', 'abidjan']);
+      allow read, write: if isAuthenticated() && (hasGlobalAccess() || userAgencies().hasAny(['paris', 'abidjan']));
     }
     match /containers_aerien/{document=**} {
-      allow read, write: if isAuthenticated() && (hasGlobalAccess() || getUserData().agency in ['paris', 'abidjan']);
+      allow read, write: if isAuthenticated() && (hasGlobalAccess() || userAgencies().hasAny(['paris', 'abidjan']));
     }
     match /appointments_aerien/{document=**} {
-      allow read, write: if isAuthenticated() && (hasGlobalAccess() || getUserData().agency in ['paris', 'abidjan']);
+      allow read, write: if isAuthenticated() && (hasGlobalAccess() || userAgencies().hasAny(['paris', 'abidjan']));
     }
     match /quotes_aerien/{document=**} {
-      allow read, write: if isAuthenticated() && (hasGlobalAccess() || getUserData().agency in ['paris', 'abidjan']);
+      allow read, write: if isAuthenticated() && (hasGlobalAccess() || userAgencies().hasAny(['paris', 'abidjan']));
     }
     match /quote_requests_aerien/{document=**} {
-      allow read, write: if isAuthenticated() && (hasGlobalAccess() || getUserData().agency in ['paris', 'abidjan']);
+      allow read, write: if isAuthenticated() && (hasGlobalAccess() || userAgencies().hasAny(['paris', 'abidjan']));
     }
     match /boats_aerien/{document=**} {
-      allow read, write: if isAuthenticated() && (hasGlobalAccess() || getUserData().agency in ['paris', 'abidjan']);
+      allow read, write: if isAuthenticated() && (hasGlobalAccess() || userAgencies().hasAny(['paris', 'abidjan']));
     }
 
     // =====================================================================
@@ -222,7 +230,7 @@ service cloud.firestore {
                        id in myDemarcheurIds() ||
                        resource.data.parrainId in myDemarcheurIds()
                      ))
-                  || (isAuthenticated() && (hasGlobalAccess() || getUserData().agency in ['paris', 'abidjan']));
+                  || (isAuthenticated() && (hasGlobalAccess() || userAgencies().hasAny(['paris', 'abidjan'])));
       // Le démarcheur peut écrire UNIQUEMENT le token push sur SA fiche.
       // On verrouille à 3 champs précis pour empêcher toute escalade
       // (impossibilité de modifier solde / nom / parrainId / etc.).
@@ -246,7 +254,7 @@ service cloud.firestore {
       // Démarcheur : ses propres affiliations. Personnel staff : lecture pour le
       // badge "Parrain" sur la page Factures (condition démarcheur en premier).
       allow read: if (isDemarcheur() && resource.data.demarcheurId in myDemarcheurIds())
-                  || (isAuthenticated() && (hasGlobalAccess() || getUserData().agency in ['paris', 'abidjan']));
+                  || (isAuthenticated() && (hasGlobalAccess() || userAgencies().hasAny(['paris', 'abidjan'])));
     }
 
     match /retrait_demandes/{id} {
@@ -360,7 +368,12 @@ service cloud.firestore {
         
         // 4.3. C'est l'agent de réception de la route (abidjan_chine a le droit de voir les tables de la chine)
         collectionName.matches('.*_' + getUserData().agency.replace('abidjan_', '') + '.*') ||
-        
+
+        // 4.3 bis. MULTI-AGENCES : la collection contient une route autorisee de l'agent
+        // (ex: agences ['paris','chine'] -> transactions_chine). split('_') extrait les
+        // jetons du nom, hasAny verifie qu'au moins un = une agence autorisee de l'agent.
+        collectionName.split('_').hasAny(userAgencies()) ||
+
         // 4.4. Ce sont des collections partagées par tout le système logistique
         collectionName in [
           'clients', 'products', 'stored_products', 'settings', 'agencies_config', 'containers',

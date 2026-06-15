@@ -19,9 +19,12 @@ export const SettingsAgentsView = {
         window.app.views = window.app.views || {};
         window.app.views.settingsAgents = this;
 
-        const agencyOptionsHtml = Object.values(AGENCIES).map(a => 
-            `<option value="${a.id}">${a.name} ${a.flag}</option>`
-        ).join('') + '<option value="all">Global (Accès Total) 🌍</option>';
+        const agencyChecksHtml = Object.values(AGENCIES).map(a =>
+            `<label style="display:flex;align-items:center;gap:7px;padding:8px 10px;border:1px solid #e2e8f0;border-radius:8px;cursor:pointer;font-size:13px;background:#fff;">
+                <input type="checkbox" class="agent-agency-cb" value="${a.id}" style="width:16px;height:16px;flex:none;">
+                <span>${a.name} ${a.flag || ''}</span>
+            </label>`
+        ).join('');
 
         const html = `
             <style>
@@ -221,19 +224,23 @@ export const SettingsAgentsView = {
 
                     <div class="ag-section-title"><span>📍</span> Affectation</div>
 
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 15px;">
-                        <div class="form-group">
-                            <label style="font-weight: 600; color: #1e293b; margin-bottom: 6px; display: block;">Rôle *</label>
-                            <select id="agentRole" style="width: 100%; padding: 12px; border: 1px solid #cbd5e1; border-radius: 8px;">
-                            <!-- Les rôles sont chargés dynamiquement depuis Firebase -->
-                            </select>
+                    <div class="form-group" style="margin-bottom: 15px;">
+                        <label style="font-weight: 600; color: #1e293b; margin-bottom: 6px; display: block;">Rôle *</label>
+                        <select id="agentRole" style="width: 100%; padding: 12px; border: 1px solid #cbd5e1; border-radius: 8px;">
+                        <!-- Les rôles sont chargés dynamiquement depuis Firebase -->
+                        </select>
+                    </div>
+
+                    <div class="form-group" style="margin-bottom: 15px;">
+                        <label style="font-weight: 600; color: #1e293b; margin-bottom: 6px; display: block;">Agence(s) / Route(s) *</label>
+                        <label style="display:flex;align-items:center;gap:8px;padding:9px 11px;border:1.5px solid #F2A312;border-radius:8px;cursor:pointer;font-weight:700;color:#1A3553;margin-bottom:9px;background:#FFF8EC;">
+                            <input type="checkbox" id="agentAgencyAll" style="width:17px;height:17px;flex:none;" onchange="(function(c){var g=document.getElementById('agentAgenciesGrid');g.style.opacity=c.checked?'0.4':'1';g.querySelectorAll('.agent-agency-cb').forEach(function(cb){cb.disabled=c.checked;if(c.checked)cb.checked=false;});})(this)">
+                            <span>🌍 Global (accès à TOUTES les agences)</span>
+                        </label>
+                        <div id="agentAgenciesGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px;">
+                            ${agencyChecksHtml}
                         </div>
-                        <div class="form-group">
-                            <label style="font-weight: 600; color: #1e293b; margin-bottom: 6px; display: block;">Agence / Route *</label>
-                            <select id="agentAgency" style="width: 100%; padding: 12px; border: 1px solid #cbd5e1; border-radius: 8px;">
-                            ${agencyOptionsHtml}
-                            </select>
-                        </div>
+                        <div style="font-size:11px;color:#64748b;margin-top:7px;">Cochez une ou plusieurs agences. « Global » donne accès à tout (et désactive les autres).</div>
                     </div>
 
                     <div class="form-group" style="margin-bottom: 25px;">
@@ -402,7 +409,9 @@ export const SettingsAgentsView = {
             cards.innerHTML = this.filteredAgents.map(a => {
                 const isActive = a.active !== false;
                 const name = a.displayName || a.email || 'Sans nom';
-            const agency = AGENCIES[a.agency] ? AGENCIES[a.agency].name : (a.agency === 'all' ? 'GLOBAL' : (a.agency || 'N/A'));
+            const _agList = (Array.isArray(a.agencies) && a.agencies.length) ? a.agencies : [a.agency];
+            const agency = (a.agency === 'all' || _agList.indexOf('all') !== -1) ? 'GLOBAL'
+                : _agList.map(id => AGENCIES[id] ? ((AGENCIES[id].flag || '') + ' ' + AGENCIES[id].name) : (id || 'N/A')).join(' · ');
                 const isOnline = isUserOnline(a);
                 
                 // Affichage direct si c'est l'utilisateur connecté (évite le délai serveur)
@@ -446,7 +455,9 @@ export const SettingsAgentsView = {
             tbody.innerHTML = this.filteredAgents.map(a => {
                 const isActive = a.active !== false; // Actif par défaut
                 const name = a.displayName || a.email || 'Sans nom';
-            const agency = AGENCIES[a.agency] ? AGENCIES[a.agency].name : (a.agency === 'all' ? 'GLOBAL' : (a.agency || 'N/A'));
+            const _agList = (Array.isArray(a.agencies) && a.agencies.length) ? a.agencies : [a.agency];
+            const agency = (a.agency === 'all' || _agList.indexOf('all') !== -1) ? 'GLOBAL'
+                : _agList.map(id => AGENCIES[id] ? ((AGENCIES[id].flag || '') + ' ' + AGENCIES[id].name) : (id || 'N/A')).join(' · ');
                 
                 // Affichage direct si c'est l'utilisateur connecté
                 const auth = getAuth();
@@ -516,7 +527,18 @@ export const SettingsAgentsView = {
             document.getElementById('agentPassword').value = agent.password || '';
             document.getElementById('agentInitials').value = agent.initials || '';
             document.getElementById('agentRole').value = agent.role || 'agent';
-            document.getElementById('agentAgency').value = agent.agency || 'paris';
+            // Multi-agences : coche les cases selon agent.agencies (repli sur [agent.agency]).
+            (function(){
+                var list = Array.isArray(agent.agencies) && agent.agencies.length ? agent.agencies : [agent.agency];
+                var isAll = (agent.agency === 'all') || list.indexOf('all') !== -1;
+                document.getElementById('agentAgencyAll').checked = isAll;
+                var grid = document.getElementById('agentAgenciesGrid');
+                grid.style.opacity = isAll ? '0.4' : '1';
+                grid.querySelectorAll('.agent-agency-cb').forEach(function(cb){
+                    cb.disabled = isAll;
+                    cb.checked = !isAll && list.indexOf(cb.value) !== -1;
+                });
+            })();
             this.setAllowedMode(agent.allowedMode || 'both');
         } else {
             preview.style.backgroundImage = '';
@@ -527,7 +549,8 @@ export const SettingsAgentsView = {
             document.getElementById('agentPassword').value = '';
             document.getElementById('agentInitials').value = '';
             document.getElementById('agentRole').value = 'agent';
-            document.getElementById('agentAgency').value = 'paris';
+            document.getElementById('agentAgencyAll').checked = false;
+            (function(){ var grid = document.getElementById('agentAgenciesGrid'); grid.style.opacity = '1'; grid.querySelectorAll('.agent-agency-cb').forEach(function(cb){ cb.disabled = false; cb.checked = false; }); })();
             this.setAllowedMode('both');
         }
         
@@ -611,11 +634,18 @@ export const SettingsAgentsView = {
         const password = document.getElementById('agentPassword').value.trim();
         const initials = document.getElementById('agentInitials').value.trim().toUpperCase();
         const role = document.getElementById('agentRole').value;
-        const agency = document.getElementById('agentAgency').value;
+        // Multi-agences : lecture des cases cochees (ou 'all' = Global, qui exclut les autres).
+        const allChecked = document.getElementById('agentAgencyAll').checked;
+        const selectedAgencies = allChecked ? ['all']
+            : Array.from(document.querySelectorAll('#agentAgenciesGrid .agent-agency-cb:checked')).map(cb => cb.value);
+        const primaryAgency = allChecked ? 'all' : (selectedAgencies[0] || '');
         const allowedMode = document.getElementById('agentAllowedMode')?.value || 'both';
 
         if (!name || !rawUsername || !password) {
             return this.app.showToast("Veuillez remplir le nom, l'identifiant et le mot de passe.", "error");
+        }
+        if (selectedAgencies.length === 0) {
+            return this.app.showToast("Sélectionnez au moins une agence (ou « Global »).", "error");
         }
 
         // INITIALE OBLIGATOIRE — exactement 2 LETTRES (préfixe de la référence
@@ -628,15 +658,16 @@ export const SettingsAgentsView = {
         // L'initiale est un PRÉFIXE de la RÉFÉRENCE des colis (ex. « J-003-AER1 »).
         // Deux agents de la MÊME agence avec la même initiale peuvent produire des
         // références identiques (collision, surtout en saisie simultanée). On bloque.
-        if (initials) {
-            const clash = (this.agents || []).find(a =>
-                a.id !== id &&
-                String(a.agency || '') === String(agency) &&
-                String(a.initials || '').trim().toUpperCase() === initials
-            );
+        if (initials && !allChecked) {
+            const clash = (this.agents || []).find(a => {
+                if (a.id === id) return false;
+                if (String(a.initials || '').trim().toUpperCase() !== initials) return false;
+                const aSet = (Array.isArray(a.agencies) && a.agencies.length) ? a.agencies : [a.agency];
+                return aSet.some(ag => selectedAgencies.indexOf(ag) !== -1); // partage au moins une agence
+            });
             if (clash) {
                 return this.app.showToast(
-                    `L'initiale « ${initials} » est déjà utilisée par ${clash.displayName || clash.email || 'un autre agent'} sur cette agence. Choisissez-en une autre — sinon les références de colis entreraient en conflit.`,
+                    `L'initiale « ${initials} » est déjà utilisée par ${clash.displayName || clash.email || 'un autre agent'} sur une agence commune. Choisissez-en une autre — sinon les références de colis entreraient en conflit.`,
                     "error"
                 );
             }
@@ -668,7 +699,8 @@ export const SettingsAgentsView = {
                 password: password,
                 initials: initials,
                 role: role,
-                agency: agency,
+                agency: primaryAgency,        // agence principale (compat + defaut de bascule)
+                agencies: selectedAgencies,   // liste des agences autorisees (multi-agences)
                 allowedMode: allowedMode,
                 updatedAt: new Date().toISOString()
             };
