@@ -15,6 +15,21 @@ export const DashboardView = {
         const html = `
             <style>
                 [v-cloak] { display: none; }
+                .dash-month-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+                .dash-month-select {
+                    font-size: 13px; font-weight: 700; color: #1A3553;
+                    background: #fff; border: 1.5px solid #e2e8f0; border-radius: 10px;
+                    padding: 6px 30px 6px 12px; cursor: pointer; text-transform: capitalize;
+                    box-shadow: 0 1px 2px rgba(11,37,64,0.06);
+                    appearance: none; -webkit-appearance: none;
+                    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%231A3553' stroke-width='3'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+                    background-repeat: no-repeat; background-position: right 10px center;
+                }
+                .dash-month-select:focus { outline: none; border-color: #1A3553; }
+                @media (max-width: 640px) {
+                    .dash-month-head { gap: 8px; }
+                    .dash-month-select { font-size: 12px; padding: 5px 26px 5px 10px; }
+                }
             </style>
             <div id="vue-dashboard" v-cloak>
                 <div class="amt-section-label">🚀 Accès rapide</div>
@@ -41,7 +56,12 @@ export const DashboardView = {
                     </button>
                 </div>
 
-                <div class="amt-section-label">📊 Indicateurs du mois ({{ currentMonthLabel }})</div>
+                <div class="amt-section-label dash-month-head">
+                    <span>📊 Indicateurs du mois</span>
+                    <select v-model="selectedMonth" class="dash-month-select" title="Choisir le mois affiché">
+                        <option v-for="m in availableMonths" :key="m.value" :value="m.value">{{ m.label }}</option>
+                    </select>
+                </div>
                 <div class="amt-kpi-grid">
                     <div class="amt-kpi amt-kpi-deep" @click="renderPage('invoices-list')">
                         <div class="amt-kpi-title">Chiffre d'affaires facturé</div>
@@ -68,7 +88,7 @@ export const DashboardView = {
                 <div class="dash-2col" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 25px; margin-bottom: 30px;">
                     <div style="background: white; border-radius: 16px; padding: 20px; border: 1px solid #e2e8f0; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);">
                         <h3 style="margin: 0 0 20px; font-size: 16px;">📈 Évolution Facturation (Général)</h3>
-                        <div style="position: relative; height: 250px; width: 100%;">
+                        <div class="dash-chart-box" style="position: relative; height: 250px; width: 100%;">
                             <canvas id="vueRevenueChart"></canvas>
                         </div>
                     </div>
@@ -85,7 +105,7 @@ export const DashboardView = {
                     </div>
                 </div>
 
-                <h3 style="margin: 0 0 20px 0; color: #0f172a; font-size: 20px; font-weight: 800;">🏆 Meilleurs agents (Mois en cours)</h3>
+                <h3 style="margin: 0 0 20px 0; color: #0f172a; font-size: 20px; font-weight: 800;">🏆 Meilleurs agents (mois sélectionné)</h3>
                 <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 15px; margin-bottom: 30px;">
                     <div v-if="topAgents.length === 0" style="grid-column: 1/-1; color:#94a3b8;">Pas de données pour le moment.</div>
                     <div v-for="(agent, i) in topAgents" :key="agent.name" style="background: white; padding: 15px; border-radius: 12px; border: 1px solid #e2e8f0; display: flex; align-items: center; gap: 15px; box-shadow: 0 2px 4px rgba(0,0,0,0.02);">
@@ -117,15 +137,47 @@ export const DashboardView = {
                 const TAUX = isEurAgency() ? CONSTANTS.TAUX_CONVERSION : 1;
                 const now = new Date();
                 const currentMonth = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
-                const currentMonthLabel = now.toLocaleDateString('fr-FR', {month:'long'});
 
-                const monthCA = ref(0);
-                const topInvoices = ref([]);
-                const topAgents = ref([]);
+                // Mois affiché par les indicateurs (modifiable via le sélecteur). Défaut = mois courant.
+                const selectedMonth = ref(currentMonth);
+
+                const allTx = ref([]);          // toutes les transactions du mode courant (avec date + montant)
+                const usersPhotos = ref({});    // login/displayName -> photoURL (pour le top agents)
+                const monthlyData = ref({});    // {AAAA-MM: CA} pour le graphique d'évolution
                 const pendingAppointments = ref(0);
                 const activePrograms = ref(0);
                 const activeContainers = ref(0);
-                const monthlyData = ref({});
+
+                // --- KPI recalculés pour le MOIS SÉLECTIONNÉ ---
+                const txOfMonth = computed(() =>
+                    allTx.value.filter(t => t.date && t.date.startsWith(selectedMonth.value))
+                );
+                const monthCA = computed(() =>
+                    txOfMonth.value.reduce((s, t) => s + (t.amountEur || 0), 0)
+                );
+                const topInvoices = computed(() =>
+                    txOfMonth.value.slice().sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 5)
+                );
+                const topAgents = computed(() => {
+                    const stats = {};
+                    txOfMonth.value.forEach(t => {
+                        if (t.saisiPar) stats[t.saisiPar] = (stats[t.saisiPar] || 0) + (t.amountEur || 0);
+                    });
+                    return Object.entries(stats)
+                        .sort((a, b) => b[1] - a[1])
+                        .slice(0, 3)
+                        .map(([name, amount]) => ({ name, amount, photo: usersPhotos.value[name] }));
+                });
+
+                // Liste du sélecteur : mois courant + tous ceux qui ont des données, récents d'abord
+                const availableMonths = computed(() => {
+                    const set = new Set(Object.keys(monthlyData.value));
+                    set.add(currentMonth);
+                    return Array.from(set).sort().reverse().map(m => ({
+                        value: m,
+                        label: new Date(m + '-01').toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' })
+                    }));
+                });
 
                 let unsubs = [];
 
@@ -170,55 +222,37 @@ export const DashboardView = {
                     // 1. Transactions & Agents
                     const qTrans = query(collection(db, getCollectionName("transactions")), where("agency", "==", activeAgency), where("isDeleted", "==", false));
                     unsubs.push(onSnapshot(qTrans, async snapTrans => {
-                        let mCA = 0;
-                        const recent = [];
-                        const agentStats = {};
+                        const list = [];
                         const mData = {};
 
                         snapTrans.forEach(doc => {
                             const t = doc.data();
                             if (!matchesShippingMode(t)) return; // dissocie maritime / aérien
-                            const valCFA = t.prix || 0;
-                            const valEUR = valCFA / TAUX;
+                            const valEUR = (t.prix || 0) / TAUX;
 
                             if (t.date && t.date.length >= 7) {
                                 const m = t.date.substring(0, 7);
-                                if (!mData[m]) mData[m] = 0;
-                                mData[m] += valEUR;
+                                mData[m] = (mData[m] || 0) + valEUR;
                             }
 
-                            if (t.date && t.date.startsWith(currentMonth)) {
-                                mCA += valEUR;
-                                const payeEur = ((parseFloat(t.montantParis) || 0) + (parseFloat(t.montantAbidjan) || 0)) / TAUX;
-                                recent.push({ id: doc.id, ...t, amountEur: valEUR, payeEur: payeEur });
-                                
-                                if (t.saisiPar) {
-                                    if (!agentStats[t.saisiPar]) agentStats[t.saisiPar] = 0;
-                                    agentStats[t.saisiPar] += valEUR;
-                                }
-                            }
+                            const payeEur = ((parseFloat(t.montantParis) || 0) + (parseFloat(t.montantAbidjan) || 0)) / TAUX;
+                            list.push({ id: doc.id, ...t, amountEur: valEUR, payeEur });
                         });
 
-                        recent.sort((a, b) => new Date(b.date) - new Date(a.date));
-                        topInvoices.value = recent.slice(0, 5);
-                        monthCA.value = mCA;
+                        allTx.value = list;
                         monthlyData.value = mData;
 
-                        // Load photos
+                        // Photos des agents (pour le classement "meilleurs agents")
                         const { getDocs } = await import("https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js");
                         const snapUsers = await getDocs(collection(db, "users"));
-                        const usersPhotos = {};
+                        const photos = {};
                         snapUsers.forEach(doc => {
                             const u = doc.data();
-                            if (u.displayName) usersPhotos[u.displayName] = u.photoURL;
-                            if (u.email) usersPhotos[u.email.split('@')[0]] = u.photoURL;
+                            if (u.displayName) photos[u.displayName] = u.photoURL;
+                            if (u.email) photos[u.email.split('@')[0]] = u.photoURL;
                         });
+                        usersPhotos.value = photos;
 
-                        topAgents.value = Object.entries(agentStats)
-                            .sort((a, b) => b[1] - a[1])
-                            .slice(0, 3)
-                            .map(([name, amount]) => ({ name, amount, photo: usersPhotos[name] }));
-                            
                         initChart();
                     }));
 
@@ -243,7 +277,7 @@ export const DashboardView = {
 
                 return {
                     checkAccess, renderPage, formatMoney,
-                    currentMonthLabel, monthCA, topInvoices, topAgents,
+                    selectedMonth, availableMonths, monthCA, topInvoices, topAgents,
                     pendingAppointments, activePrograms, activeContainers
                 };
             }

@@ -1019,6 +1019,8 @@ body.login-page {
        largeur (la grille minmax(400px) débordait en scroll horizontal). */
     .dash-2col { grid-template-columns: 1fr !important; gap: 14px !important; }
     .dash-2col > div { padding: 16px !important; }
+    /* Graphique d'évolution : plus bas sur mobile pour voir les factures sans trop défiler */
+    .dash-chart-box { height: 175px !important; }
 
     /* Utilitaire générique : grille à colonnes -> 1 colonne sur mobile
        (sans toucher au padding des enfants). */
@@ -2383,7 +2385,20 @@ tr.clickable-row:hover { background: #f1f5f9 !important; }
 }
 .amt-kpi.amt-span-2 { grid-column: span 2; }
 @media (max-width: 640px) {
-    .amt-kpi.amt-span-2 { grid-column: span 1; }
+    /* Téléphone : 2 colonnes au lieu d'une seule, cartes plus compactes */
+    .amt-kpi-grid {
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+    }
+    .amt-kpi {
+        padding: 13px 14px;
+        min-height: 88px;
+        border-radius: 13px;
+    }
+    .amt-kpi-title { font-size: 11px; margin-bottom: 6px; }
+    .amt-kpi-value { font-size: 21px; letter-spacing: -0.5px; }
+    .amt-kpi-mark  { font-size: 56px; right: -8px; bottom: -12px; }
+    .amt-kpi.amt-span-2 { grid-column: span 2; }
 }
 
 /* ─── Boutons : style B "Soleil chaleureux" (or marigold) ───────────────── */
