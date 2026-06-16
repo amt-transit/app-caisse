@@ -1,5 +1,5 @@
 import { db } from '../../../commun/firebase-config.js';
-import { collection, doc, getDoc, getDocs, addDoc, setDoc, updateDoc, deleteDoc, query, where, orderBy, limit, onSnapshot, writeBatch, deleteField, arrayUnion } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
+import { collection, doc, getDoc, getDocs, addDoc, setDoc, updateDoc, deleteDoc, query, where, orderBy, limit, startAfter, onSnapshot, writeBatch, deleteField, arrayUnion } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 import { getCollectionName, getConfigSourceAgency } from '../../../commun/agencies-config.js';
 import { matchesShippingMode, getShippingMode } from '../../../commun/shipping-mode.js';
 import { calculateStorageFee } from '../../../commun/services/storageFee.js';
@@ -623,10 +623,15 @@ export const LivraisonView = {
         let archivedDeliveries = [];
         let filteredDeliveries = [];
         let pendingImport = [];
-        // Pagination des Archives (la liste peut être très longue)
+        // Pagination des Archives par LOTS depuis la base (prévient une liste énorme :
+        // on ne charge que ce qui est consulté, par tranches de 50, avec curseur).
         const ARCHIVE_PAGE_SIZE = 50;
         let archivePage = 1;
-        let archiveFiltered = [];
+        let archiveLoaded = [];      // archives chargées (cumulées par lots)
+        let archiveCursor = null;    // dernier docSnapshot (pour startAfter)
+        let archiveHasMore = true;   // reste-t-il des lots à charger ?
+        let archiveLoading = false;
+        let archiveSearchTerm = '';
         let currentContainerName = localStorage.getItem(CONSTANTS.STORAGE_KEYS.CONTAINER_NAME) || 'Aucun';
         let currentTab = 'EN_COURS';
         // Mode d'affichage de l'onglet « En cours » : fiches (par défaut) ou liste (tableau).
@@ -1797,8 +1802,10 @@ export const LivraisonView = {
                
                const [transSnapshots, archiveSnapshots] = await Promise.all([Promise.all(transPromises), Promise.all(archivePromises)]);
                
-               transSnapshots.forEach(snap => snap.forEach(doc => existingTransRefs.add(doc.data().reference)));
-               archiveSnapshots.forEach(snap => snap.forEach(doc => archivedItemsMap.set(doc.data().ref.toUpperCase(), { id: doc.id, data: doc.data() })));
+               // Références normalisées en MAJUSCULES : un colis déjà payé/archivé
+               // est reconnu même si la casse diffère -> aucun doublon de transaction.
+               transSnapshots.forEach(snap => snap.forEach(doc => existingTransRefs.add(String(doc.data().reference || '').toUpperCase())));
+               archiveSnapshots.forEach(snap => snap.forEach(doc => archivedItemsMap.set(String(doc.data().ref || '').toUpperCase(), { id: doc.id, data: doc.data() })));
            }
 
            // Pré-chargement clients ALLÉGÉ (ne JAMAIS figer l'import) : on NE lit PAS
@@ -2023,7 +2030,7 @@ export const LivraisonView = {
                // --- TRANSFERT VERS RÉCEPTION ABIDJAN (TRANSACTIONS) ---
                if (containerStatus === 'EN_COURS') {
                    // OPTIMISATION : Utilisation du cache pré-chargé (Instantané)
-                   const transExists = existingTransRefs.has(importItem.ref);
+                   const transExists = existingTransRefs.has(String(importItem.ref || '').toUpperCase());
                    
                    if (!transExists) {
                        // LOGIQUE FINANCIÈRE AVANCÉE (Comme Arrivages)
@@ -3740,14 +3747,45 @@ export const LivraisonView = {
        
        function openArchivesModal() {
            document.getElementById('archivesModal').classList.add('active');
-           document.getElementById('archivesBody').innerHTML = '<tr><td colspan="7">Chargement...</td></tr>';
-           
-           getDocs(query(collection(db, CONSTANTS.ARCHIVE_COLLECTION), orderBy('dateArchivage', 'desc')))
-               .then(snapshot => {
-                   archivedDeliveries = [];
-                   snapshot.forEach(docSnap => archivedDeliveries.push({ id: docSnap.id, ...docSnap.data() }));
-                   renderArchivesTable(archivedDeliveries);
-               });
+           document.getElementById('archivesBody').innerHTML = '<tr><td colspan="6">Chargement...</td></tr>';
+           // Réinitialise l'état de pagination et charge le 1er lot.
+           archiveLoaded = [];
+           archiveCursor = null;
+           archiveHasMore = true;
+           archivePage = 1;
+           archiveSearchTerm = '';
+           const searchInput = document.getElementById('archiveSearch');
+           if (searchInput) searchInput.value = '';
+           loadArchiveBatch().then(() => renderArchivePage());
+       }
+
+       // Charge UN lot d'archives (50) depuis la base, à la suite du curseur courant.
+       async function loadArchiveBatch() {
+           if (archiveLoading || !archiveHasMore) return;
+           archiveLoading = true;
+           try {
+               const base = collection(db, CONSTANTS.ARCHIVE_COLLECTION);
+               const q = archiveCursor
+                   ? query(base, orderBy('dateArchivage', 'desc'), startAfter(archiveCursor), limit(ARCHIVE_PAGE_SIZE))
+                   : query(base, orderBy('dateArchivage', 'desc'), limit(ARCHIVE_PAGE_SIZE));
+               const snap = await getDocs(q);
+               snap.forEach(docSnap => archiveLoaded.push({ id: docSnap.id, ...docSnap.data() }));
+               if (snap.docs.length) archiveCursor = snap.docs[snap.docs.length - 1];
+               archiveHasMore = snap.docs.length === ARCHIVE_PAGE_SIZE;
+               archivedDeliveries = archiveLoaded; // compat (export / autres usages)
+           } catch (e) {
+               console.error('Archives (lot) :', e);
+               showToast('Erreur de chargement des archives', 'error');
+               archiveHasMore = false;
+           } finally {
+               archiveLoading = false;
+           }
+       }
+
+       // Charge TOUS les lots restants (pour recherche complète / export).
+       async function loadAllArchives() {
+           let guard = 0;
+           while (archiveHasMore && guard++ < 1000) { await loadArchiveBatch(); }
        }
        
        function closeArchivesModal() {
@@ -3755,25 +3793,23 @@ export const LivraisonView = {
        }
        
        function searchArchives() {
-           const query = document.getElementById('archiveSearch').value.toLowerCase();
-           const filtered = archivedDeliveries.filter(d => 
-               `${d.ref} ${d.conteneur} ${d.destinataire} ${d.livreur}`.toLowerCase().includes(query)
-           );
-           renderArchivesTable(filtered);
+           archiveSearchTerm = (document.getElementById('archiveSearch').value || '').toLowerCase().trim();
+           archivePage = 1;
+           renderArchivePage();
        }
        
-       function exportArchivesToExcel() {
-           if (archivedDeliveries.length === 0) {
+       async function exportArchivesToExcel() {
+           // L'export doit porter sur TOUTES les archives : on charge les lots restants.
+           if (archiveHasMore) {
+               showToast("Chargement de toutes les archives pour l'export…", 'info');
+               await loadAllArchives();
+           }
+           const filtered = currentArchiveData();
+           if (filtered.length === 0) {
                showToast('Aucune archive à exporter', 'error');
                return;
            }
-           
-           // Récupérer la recherche actuelle pour n'exporter que ce qui est affiché
-           const query = document.getElementById('archiveSearch').value.toLowerCase();
-           const filtered = archivedDeliveries.filter(d => 
-               `${d.ref} ${d.conteneur} ${d.destinataire} ${d.livreur}`.toLowerCase().includes(query)
-           );
-       
+
            const data = filtered.map(d => ({
                'DATE ARCHIVAGE': d.dateArchivage ? new Date(d.dateArchivage).toLocaleDateString('fr-FR') : '',
                'CONTENEUR': d.conteneur || '',
@@ -3811,25 +3847,26 @@ export const LivraisonView = {
            }
        }
        
-       function renderArchivesTable(data) {
-           // Tri par date d'archivage décroissante (plus récent en haut), puis page 1.
-           archiveFiltered = (data || []).slice().sort((a, b) => new Date(b.dateArchivage) - new Date(a.dateArchivage));
-           archivePage = 1;
-           renderArchivePage();
+       // Données d'archives à afficher = lots chargés (triés), filtrés par la recherche.
+       function currentArchiveData() {
+           const sorted = archiveLoaded.slice().sort((a, b) => new Date(b.dateArchivage) - new Date(a.dateArchivage));
+           if (!archiveSearchTerm) return sorted;
+           return sorted.filter(d => `${d.ref || ''} ${d.conteneur || ''} ${d.destinataire || ''} ${d.livreur || ''}`.toLowerCase().includes(archiveSearchTerm));
        }
 
        function renderArchivePage() {
            const tbody = document.getElementById('archivesBody');
            if (!tbody) return;
-           const total = archiveFiltered.length;
-           const pages = Math.max(1, Math.ceil(total / ARCHIVE_PAGE_SIZE));
+           const data = currentArchiveData();
+           const loadedTotal = data.length;
+           const pages = Math.max(1, Math.ceil(loadedTotal / ARCHIVE_PAGE_SIZE));
            if (archivePage > pages) archivePage = pages;
            if (archivePage < 1) archivePage = 1;
            const start = (archivePage - 1) * ARCHIVE_PAGE_SIZE;
-           const slice = archiveFiltered.slice(start, start + ARCHIVE_PAGE_SIZE);
+           const slice = data.slice(start, start + ARCHIVE_PAGE_SIZE);
 
-           if (total === 0) {
-               tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:20px; color:#64748b;">Aucune archive.</td></tr>';
+           if (loadedTotal === 0) {
+               tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; padding:20px; color:#64748b;">${archiveSearchTerm ? 'Aucun résultat dans les archives chargées.' : 'Aucune archive.'}</td></tr>`;
            } else {
                tbody.innerHTML = slice.map(d => `
                <tr>
@@ -3846,22 +3883,47 @@ export const LivraisonView = {
            }
 
            const pag = document.getElementById('archivesPagination');
-           if (pag) {
-               if (total <= ARCHIVE_PAGE_SIZE) {
-                   pag.innerHTML = total ? `<span style="color:#64748b; font-size:13px;">${total} archive(s)</span>` : '';
-               } else {
-                   const from = start + 1, to = Math.min(start + ARCHIVE_PAGE_SIZE, total);
-                   pag.innerHTML = `
-                       <button class="btn btn-small" ${archivePage <= 1 ? 'disabled' : ''} onclick="goArchivePage(-1)">← Précédent</button>
-                       <span style="font-size:13px; color:#475569; font-weight:600;">${from}–${to} sur ${total} (page ${archivePage}/${pages})</span>
-                       <button class="btn btn-small" ${archivePage >= pages ? 'disabled' : ''} onclick="goArchivePage(1)">Suivant →</button>
-                   `;
-               }
+           if (!pag) return;
+           const canPrev = archivePage > 1;
+           // « Suivant » actif s'il reste des pages déjà chargées, ou des lots à charger (hors recherche).
+           const canNext = (archivePage < pages) || (archiveHasMore && !archiveSearchTerm);
+           const from = loadedTotal ? start + 1 : 0;
+           const to = Math.min(start + ARCHIVE_PAGE_SIZE, loadedTotal);
+           const moreMark = archiveHasMore ? '+' : '';
+           let html = `
+               <button class="btn btn-small" ${canPrev ? '' : 'disabled'} onclick="goArchivePage(-1)">← Précédent</button>
+               <span style="font-size:13px; color:#475569; font-weight:600;">${from}–${to} sur ${loadedTotal}${moreMark} chargée(s)</span>
+               <button class="btn btn-small" ${canNext ? '' : 'disabled'} onclick="goArchivePage(1)">Suivant →</button>`;
+           // En recherche, s'il reste des lots non chargés, proposer de chercher dans TOUT.
+           if (archiveSearchTerm && archiveHasMore) {
+               html += `<button class="btn btn-small btn-outline" style="margin-left:8px;" onclick="loadAllArchivesAndRender()">🔎 Chercher dans toutes les archives</button>`;
            }
+           pag.innerHTML = html;
        }
 
-       function goArchivePage(delta) {
-           archivePage += delta;
+       async function goArchivePage(delta) {
+           if (delta > 0) {
+               let data = currentArchiveData();
+               let pages = Math.max(1, Math.ceil(data.length / ARCHIVE_PAGE_SIZE));
+               // Sur la dernière page chargée et il reste des lots -> on charge la suite.
+               if (archivePage >= pages && archiveHasMore && !archiveSearchTerm) {
+                   const pag = document.getElementById('archivesPagination');
+                   if (pag) pag.innerHTML = '<span style="font-size:13px; color:#64748b;">Chargement…</span>';
+                   await loadArchiveBatch();
+                   data = currentArchiveData();
+                   pages = Math.max(1, Math.ceil(data.length / ARCHIVE_PAGE_SIZE));
+               }
+               if (archivePage < pages) archivePage++;
+           } else if (archivePage > 1) {
+               archivePage--;
+           }
+           renderArchivePage();
+       }
+
+       async function loadAllArchivesAndRender() {
+           const pag = document.getElementById('archivesPagination');
+           if (pag) pag.innerHTML = '<span style="font-size:13px; color:#64748b;">Chargement de toutes les archives…</span>';
+           await loadAllArchives();
            renderArchivePage();
        }
        
@@ -4889,7 +4951,7 @@ export const LivraisonView = {
            switchTab, setActiveContainer, importExcel, openProgramModal, openAssignContainerModal,
            openBulkStatusModal, forceSyncTransactions, deleteSelectedDeliveries, exportToExcel,
            showAddModal, archiveCompletedDeliveries, openArchivesModal, closeArchivesModal,
-           searchArchives, restoreFromArchive, goArchivePage, filterDeliveries, sortTable, updateDeliveryLocation,
+           searchArchives, restoreFromArchive, goArchivePage, loadAllArchivesAndRender, filterDeliveries, sortTable, updateDeliveryLocation,
            updateDeliveryRecipient, updateDeliveryExpediteur, updateDeliveryPhone, updateDeliveryAmount, updateDeliveryQuantity,
            updateDeliveryInfo, updateDeliveryDescription, toggleClientNotified, markAsDelivered, markAsPending, deleteDelivery,
            openAbandonModal, closeAbandonModal, confirmAbandonment, generateAbandonmentPDFFromId,
