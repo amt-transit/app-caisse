@@ -1736,6 +1736,26 @@ export const ToutesLesFacturesView = {
                 if (typeof it.parfum !== 'boolean') it.parfum = false;
                 if (it.pu == null) it.pu = '';
             });
+
+            // MODIFIER = RE-TARIFER : on applique les tarifs aérien ACTUELS
+            // (config Gestion des agences), pas ceux figés sur l'ancienne facture.
+            // Lus depuis settings/invoice_config_<dép>. Repli 13/15.
+            this._editKgStd = 13;
+            this._editKgParfum = 15;
+            try {
+                const { getDoc, doc: fsDoc } = await import("https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js");
+                const cfgAg = getConfigSourceAgency();
+                const cfgSnap = await getDoc(fsDoc(db, 'settings', `invoice_config_${cfgAg}`));
+                if (cfgSnap.exists()) {
+                    const c = cfgSnap.data();
+                    if (typeof c.kgStdEur === 'number') this._editKgStd = c.kgStdEur;
+                    if (typeof c.kgParfumEur === 'number') this._editKgParfum = c.kgParfumEur;
+                }
+            } catch (e) { console.warn('Tarifs aérien (édition) :', e && e.message); }
+
+            // Recalcule le total de chaque ligne « poids » au tarif actuel
+            // (les items stockés ont souvent total=0 en mode poids).
+            this.editItems.forEach(it => { it.total = this._lineTotalEurEdit(it); });
         }
 
         // Modèle CHINE maritime : recalcule le total de chaque ligne au CBM
@@ -2037,7 +2057,7 @@ export const ToutesLesFacturesView = {
                             <input type="number" class="edit-item-haut" data-id="${item.id}" value="${item.haut}" min="0" placeholder="H" title="Hauteur (cm)" style="width:33%; padding:6px; border:1px solid #cbd5e1; border-radius:6px; box-sizing:border-box; text-align:center; font-size:12px;">
                         </div>
                         <label style="display:flex; align-items:center; gap:5px; margin-top:4px; font-size:11px; color:#475569; cursor:pointer;">
-                            <input type="checkbox" class="edit-item-parfum" data-id="${item.id}" ${item.parfum ? 'checked' : ''} style="width:auto; margin:0;"> Parfum / Alcool (15 €/kg)
+                            <input type="checkbox" class="edit-item-parfum" data-id="${item.id}" ${item.parfum ? 'checked' : ''} style="width:auto; margin:0;"> Parfum / Alcool (${this._editKgParfum || 15} €/kg)
                         </label>
                         ${showVolHint ? `<div style="font-size:10px; color:#c2410c; margin-top:2px; text-align:right;">poids volume : ${billedKg.toFixed(1)} kg</div>` : ''}
                         ` : ''}
@@ -2151,7 +2171,8 @@ export const ToutesLesFacturesView = {
     _lineTotalEurEdit(item) {
         const qty = parseFloat(item.qty) || 0;
         if (item.mode === 'poids') {
-            const rate = (typeof item.tarifKgEur === 'number' && item.tarifKgEur > 0) ? item.tarifKgEur : (item.parfum ? 15 : 13);
+            // Édition = re-tarification au tarif ACTUEL (chargé dans editInvoice).
+            const rate = item.parfum ? (this._editKgParfum || 15) : (this._editKgStd || 13);
             return this._lineBilledKgEdit(item) * qty * rate;
         }
         return (parseFloat(item.pu) || 0) * qty;
@@ -2299,6 +2320,16 @@ export const ToutesLesFacturesView = {
                 this.app.showToast(`Modèle Chine : le VOLUME (CBM) est obligatoire sur CHAQUE ligne. ${sansVol.length} ligne(s) sans volume — complétez-les.`, "error");
                 return;
             }
+        }
+
+        // Aérien : on FIGE sur la facture le tarif appliqué (tarifKgEur) et on
+        // recalcule chaque total de ligne au tarif ACTUEL (même si l'utilisateur
+        // n'a touché à rien) — sinon les anciens totaux (souvent 0) seraient gardés.
+        if (this.isEditAerien) {
+            this.editItems.forEach(it => {
+                if (it.mode === 'poids') it.tarifKgEur = it.parfum ? (this._editKgParfum || 15) : (this._editKgStd || 13);
+                it.total = this._lineTotalEurEdit(it);
+            });
         }
 
         const newPrixCfa = this.editItems.reduce((sum, item) => sum + (isEur ? Math.round(item.total * TAUX) : item.total), 0);
