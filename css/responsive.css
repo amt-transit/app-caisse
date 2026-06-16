@@ -276,4 +276,27 @@ body:has(.sw-page) .fab-btn { display: none !important; }
         padding: 12px !important; gap: 8px 10px !important; margin-bottom: 14px !important;
     }
     .filters-grid { gap: 8px 10px !important; } /* rangée interne (scan-historique départ) */
+
+    /* ── Barres de filtre/outils « bespoke » (autres que .filter-group) ──────
+       Journal d'audit, Scan-historique (Arrivée), Prospection, Réception colis,
+       Suivi conteneurs, Parrainage. Elles ont des largeurs mini (140–250px) qui
+       débordent sur téléphone : on les enlève, la recherche passe pleine largeur
+       et les listes déroulantes se partagent la rangée (2 colonnes). */
+    .al__filters, .sh-filters, .filter-bar, .toolbar { padding: 12px !important; margin-bottom: 14px !important; }
+    .al__filter-row, .sh-filters, .filter-bar, .rc-toolbar, .sc-toolbar,
+    .toolbar, .toolbar__left { gap: 8px 10px !important; flex-wrap: wrap !important; }
+    .filter-fields { gap: 6px 10px !important; }
+
+    /* Champs de recherche (texte) → pleine largeur */
+    .toolbar__search, .al__input, .sh-input,
+    .rc-toolbar input, .sc-toolbar input, .filter-bar input {
+        min-width: 0 !important; flex: 1 1 100% !important;
+        font-size: 13px !important; padding: 9px 11px !important;
+    }
+    /* Listes déroulantes → 2 colonnes */
+    .toolbar__select, .al__select, .sh-select,
+    .rc-toolbar select, .sc-toolbar select, .filter-bar select {
+        min-width: 0 !important; flex: 1 1 calc(50% - 5px) !important;
+        font-size: 13px !important; padding: 9px 11px !important;
+    }
 }
