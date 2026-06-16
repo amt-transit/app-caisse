@@ -315,7 +315,7 @@ export const LivraisonView = {
                                 N° Conteneur (Lot)
                                 <span id="importConteneurRequired" style="color:#ef4444; display:none;"> *obligatoire pour EN COURS</span>
                             </label>
-                            <input type="text" id="importConteneur" placeholder="Ex: E14">
+                            <input type="text" id="importConteneur" placeholder="Ex: E14" style="text-transform:uppercase;">
                         </div>
                         <div class="form-group full-width" style="background:#fff7ed;border:1px solid #fdba74;border-radius:8px;padding:10px;">
                             <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:600;color:#9a3412;margin:0;">
@@ -385,7 +385,7 @@ export const LivraisonView = {
                     <div class="lvmm-body">
                         <p class="lvmm-sub">Pour <strong id="assignSelectedCount">0</strong> colis sélectionné(s)</p>
                         <div class="lvmm-field"><label>Nouvelle position</label><select id="assignContainerStatus"><option value="">— Ne pas changer —</option><option value="PARIS">🇫🇷 Stock Paris</option><option value="A_VENIR">🚢 En transit</option><option value="EN_COURS">📦 Arrivé</option></select></div>
-                        <div class="lvmm-field"><label>N° de conteneur</label><input type="text" id="assignConteneurInput" placeholder="Ex : E9"></div>
+                        <div class="lvmm-field"><label>N° de conteneur</label><input type="text" id="assignConteneurInput" placeholder="Ex : E9" style="text-transform:uppercase;"></div>
                     </div>
                     <div class="lvmm-foot">
                         <button class="lvmm-btn lvmm-cancel" onclick="closeAssignContainerModal()">Annuler</button>
@@ -967,7 +967,9 @@ export const LivraisonView = {
                 };
 
                 const relevantDeliveries = deliveries.filter(d => d.containerStatus === currentTab);
-                const containers = [...new Set(relevantDeliveries.map(d => d.conteneur ? d.conteneur.trim() : '').filter(c => c))].sort();
+                // Noms de conteneurs normalisés en MAJUSCULES : « e19 » et « E19 »
+                // ne doivent former qu'une seule entrée (insensible à la casse).
+                const containers = [...new Set(relevantDeliveries.map(d => d.conteneur ? d.conteneur.trim().toUpperCase() : '').filter(c => c))].sort();
                 const sansConteneurCount = relevantDeliveries.filter(d => !d.conteneur || d.conteneur.trim() === '').length;
 
                 if (currentContainerName !== 'Aucun' && currentContainerName !== 'SANS_CONTENEUR' && !containers.includes(currentContainerName)) {
@@ -996,7 +998,7 @@ export const LivraisonView = {
         function setActiveContainer() {
             const input = document.getElementById('activeContainerInput');
             if(!input) return;
-            const newVal = input.value.trim();
+            const newVal = input.value.trim().toUpperCase(); // conteneurs toujours en MAJUSCULES
             if (newVal) {
                 currentContainerName = newVal;
                 if (currentTab === 'EN_COURS' || currentTab === 'A_VENIR') {
@@ -1612,7 +1614,7 @@ export const LivraisonView = {
        }
        
        async function confirmImport() {
-           const conteneur = document.getElementById('importConteneur').value;
+           const conteneur = (document.getElementById('importConteneur').value || '').trim().toUpperCase();
            let containerStatus = document.getElementById('importContainerStatus').value;
        
            // SÉCURITÉ : Forcer la destination selon l'onglet actif. 
@@ -3467,7 +3469,7 @@ export const LivraisonView = {
        }
        
        async function confirmAssignContainer() {
-           const newConteneur = document.getElementById('assignConteneurInput').value;
+           const newConteneur = (document.getElementById('assignConteneurInput').value || '').trim().toUpperCase(); // conteneurs en MAJUSCULES
            const newStatus = document.getElementById('assignContainerStatus').value;
        
            const becomingEnCours = [];
@@ -3949,7 +3951,7 @@ export const LivraisonView = {
                        // plusieurs fois) : le champ est alors concaténé "E17-18 / E18".
                        // On filtre par APPARTENANCE (et non égalité stricte) pour qu'un
                        // colis "E17-18 / E18" apparaisse aussi bien sous "E18" que "E17-18".
-                       matchContainer = !!d.conteneur && d.conteneur.split('/').map(c => c.trim()).includes(currentContainerName.trim());
+                       matchContainer = !!d.conteneur && d.conteneur.split('/').map(c => c.trim().toUpperCase()).includes(currentContainerName.trim().toUpperCase());
                    } else if (currentContainerName === 'SANS_CONTENEUR') {
                        // NOUVEAU : Filtre pour retrouver les colis sans conteneur
                        matchContainer = (!d.conteneur || d.conteneur.trim() === '');
