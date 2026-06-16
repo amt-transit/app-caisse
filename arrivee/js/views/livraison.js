@@ -1442,13 +1442,15 @@ export const LivraisonView = {
                            if (parentItem) {
                                // Si on trouve le colis dans "À Venir", on copie toutes ses informations vers le scan
                                // FIX : On privilégie les données du fichier importé (item) si elles existent, sinon on prend le parent
-                               item.expediteur = item.expediteur || parentItem.expediteur;
-                               item.destinataire = item.destinataire || parentItem.destinataire;
-                               item.lieuLivraison = item.lieuLivraison || parentItem.lieuLivraison;
-                               item.commune = item.commune || parentItem.commune;
+                               // `|| ''` final : un parent sans ce champ ne doit PAS
+                               // remettre le champ à undefined (sinon .substring/.toLowerCase plantent).
+                               item.expediteur = item.expediteur || parentItem.expediteur || '';
+                               item.destinataire = item.destinataire || parentItem.destinataire || '';
+                               item.lieuLivraison = item.lieuLivraison || parentItem.lieuLivraison || '';
+                               item.commune = item.commune || parentItem.commune || '';
                                // Pour le montant, on garde la valeur importée (même 0) si elle existe
-                               item.montant = (item.montant && item.montant.trim() !== '') ? item.montant : parentItem.montant;
-                               item.numero = item.numero || parentItem.numero;
+                               item.montant = (item.montant && item.montant.trim() !== '') ? item.montant : (parentItem.montant || '');
+                               item.numero = item.numero || parentItem.numero || '';
                                // Nouveau format : propage aussi le n°/adresse expéditeur depuis le parent
                                // (même logique que le lieu de livraison), s'ils manquent sur l'import.
                                item.telExpediteur = item.telExpediteur || parentItem.telExpediteur || '';
@@ -1591,11 +1593,11 @@ export const LivraisonView = {
        
                return `
                <tr class="${rowClass}">
-                   <td>${d.ref}</td>
+                   <td>${d.ref || ''}</td>
                    <td style="font-weight:bold; text-align:center;">${d.quantite || 1}</td>
-                   <td>${d.expediteur.substring(0, 30)}</td>
-                   <td><span class="commune-badge badge-${d.commune.toLowerCase().replace(/[éè]/g, 'e').replace('-', '')}">${d.commune}</span></td>
-                   <td>${d.lieuLivraison.substring(0, 40)}...</td>
+                   <td>${(d.expediteur || '').substring(0, 30)}</td>
+                   <td><span class="commune-badge badge-${(d.commune || 'autre').toLowerCase().replace(/[éè]/g, 'e').replace('-', '')}">${d.commune || '—'}</span></td>
+                   <td>${(d.lieuLivraison || '').substring(0, 40)}${(d.lieuLivraison || '').length > 40 ? '...' : ''}</td>
                    <td>${duplicateInfo}</td>
                </tr>
            `}).join('');
@@ -5636,7 +5638,7 @@ export const LivraisonView = {
        }        
         function cleanString(str) { return str ? String(str).trim() : ''; }
         function detectCommune(lieu) {
-            const l = lieu.toUpperCase();
+            const l = (lieu || '').toUpperCase();
             for (const [commune, keywords] of Object.entries(CONSTANTS.COMMUNES)) {
                 if (keywords.some(k => l.includes(k))) return commune;
             }
