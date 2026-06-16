@@ -2598,8 +2598,9 @@ td .lv-ghost:focus { position: absolute; left: 0; top: -1px; min-width: 220px; z
     background: #f59e0b; color: #1e293b; border: 0; padding: 5px 12px;
     border-radius: 7px; font-weight: 700; cursor: pointer; font-family: inherit;
 }
-/* Champ éditable empilé dans une fiche (mobile) */
-.lv-c-field { display: flex; align-items: center; gap: 8px; margin-top: 4px; }
-.lv-c-field .lv-c-lbl { font-size: 11px; color: #64748b; min-width: 78px; flex-shrink: 0; }
-.lv-c-field .lv-ghost { font-size: 13px; }
+/* Champs éditables (fantôme) empilés dans une fiche */
+.lv-c-fields { margin: 6px 0; }
+.lv-c-field { display: flex; align-items: center; gap: 6px; margin-top: 3px; }
+.lv-c-field .lv-c-lbl { font-size: 14px; min-width: 20px; text-align: center; flex-shrink: 0; }
+.lv-c-field .lv-ghost { font-size: 13px; flex: 1; min-width: 0; }
 

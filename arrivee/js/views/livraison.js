@@ -2816,16 +2816,28 @@ export const LivraisonView = {
                // d'actions (elles viseraient la mauvaise collection).
                const archived = !!d._archived;
                // Éléments communs à tous les onglets
-               const editBtn = (!isViewer && !archived) ? `<button class="lv-a lv-a-edit" onclick="lvToggleCardEdit('${d.id}')" title="Modifier les infos">✏️</button>` : '';
+               // Édition fantôme : plus de bouton ✏️ ni de panneau — les champs sont
+               // directement éditables dans la carte (voir fieldsHtml plus bas).
+               const editBtn = '';
                const moreMenu = archived ? '' : buildActionMenu(d, phone, destName);
-               const editPanel = (!isViewer && !archived) ? `
-                   <div class="lv-edit" id="lvedit-${d.id}" style="display:none">
-                       <label>Expéditeur<input type="text" value="${lvEsc(d.expediteur||'')}" onchange="updateDeliveryExpediteur('${d.id}', this.value)"></label>
-                       <label>Destinataire<input type="text" value="${lvEsc(destName)}" onchange="updateDeliveryRecipient('${d.id}', this.value)"></label>
-                       <label>Téléphone<input type="text" value="${lvEsc(phone)}" onchange="updateDeliveryPhone('${d.id}', this.value)"></label>
-                       <label>Lieu de livraison<input type="text" value="${lvEsc(d.lieuLivraison||'')}" onchange="updateDeliveryLocation('${d.id}', this.value)"></label>
-                       <label>Info<input type="text" value="${lvEsc(d.info||'')}" onchange="updateDeliveryInfo('${d.id}', this.value)"></label>
-                   </div>` : '';
+               // Un champ « fantôme » de carte (libellé emoji + champ éditable sur place).
+               const lvCardField = (emoji, label, val, onchange, field) =>
+                   `<div class="lv-c-field" title="${label}"><span class="lv-c-lbl">${emoji}</span>` +
+                   `<input type="text" class="editable-cell lv-ghost ${String(val||'').trim()===''?'lv-empty':''}" data-id="${d.id}" data-field="${field}" ` +
+                   `value="${lvEsc(val||'')}" placeholder="${label} à compléter" ` +
+                   `onfocus="lvGhostFocus(this)" onkeydown="lvGhostKey(event,this)" oninput="lvGhostInput(this)" onblur="lvGhostBlur(this)" onchange="${onchange}"></div>`;
+               // Bloc des champs : éditable si non-spectateur et non-archivé ; sinon lecture seule.
+               const fieldsHtml = (!isViewer && !archived) ? `<div class="lv-c-fields">
+                       ${lvCardField('👤', 'Destinataire', destName, `updateDeliveryRecipient('${d.id}', this.value)`, 'dest')}
+                       ${lvCardField('📞', 'Numéro', phone, `updateDeliveryPhone('${d.id}', this.value)`, 'num')}
+                       ${lvCardField('📍', 'Lieu', d.lieuLivraison || '', `updateDeliveryLocation('${d.id}', this.value)`, 'lieu')}
+                       ${lvCardField('📤', 'Expéditeur', d.expediteur || '', `updateDeliveryExpediteur('${d.id}', this.value)`, 'exp')}
+                       ${lvCardField('📝', 'Description', d.description || '', `updateDeliveryDescription('${d.id}', this.value)`, 'desc')}
+                       ${lvCardField('ℹ️', 'Info', d.info || '', `updateDeliveryInfo('${d.id}', this.value)`, 'info')}
+                   </div>` : `
+                   <div class="lv-c-name">${lvEsc(destName)}</div>
+                   <div class="lv-c-meta">📍 ${lvEsc(d.lieuLivraison || d.commune || '—')}${d.expediteur ? ` · 👤 ${lvEsc(d.expediteur)}` : ''}</div>
+                   ${d.description ? `<div class="lv-c-desc">${lvEsc(d.description)}</div>` : ''}`;
 
                let cardCls = 's-attente', arrBadge = '', badgesHtml = '', moneyHtml = '', actionsHtml = '';
 
@@ -2897,12 +2909,9 @@ export const LivraisonView = {
                        </div>
                        <span class="lv-c-cont">${lvEsc(d.conteneur||'-')}</span>
                    </div>
-                   <div class="lv-c-name">${lvEsc(destName)}</div>
-                   <div class="lv-c-meta">${metaParts.join(' · ')}</div>
-                   ${d.description?`<div class="lv-c-desc">${lvEsc(d.description)}</div>`:''}
+                   ${fieldsHtml}
                    ${moneyHtml}
                    <div class="lv-badges">${badgesHtml}</div>
-                   ${editPanel}
                    <div class="lv-acts">${actionsHtml}</div>
                </div>`;
            }).join('') + (_lvPg.totalPages > 1 ? `<div class="lv-cards-more" style="text-align:center; padding:14px 0;">${lvPagerHTML(_lvPg.totalPages)}</div>` : '');
