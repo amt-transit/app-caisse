@@ -2897,9 +2897,6 @@ export const LivraisonView = {
                    actionsHtml = `${editBtn}<span class="lv-more-slot">${moreMenu}</span>`;
                }
 
-               const metaParts = [`📍 ${lvEsc(d.lieuLivraison || d.commune || '—')}`];
-               if (d.expediteur) metaParts.push(`👤 ${lvEsc(d.expediteur)}`);
-
                return `
                <div class="lv-card ${cardCls}">
                    <div class="lv-c-top">
