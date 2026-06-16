@@ -55,8 +55,21 @@ export const DemandesClientView = {
         .dc-edit label { font-size:12px; font-weight:600; color:#475569; display:block; margin-bottom:4px; }
         .dc-edit input, .dc-edit textarea, .dc-edit select { width:100%; box-sizing:border-box; padding:9px 11px; border:1px solid #cbd5e1; border-radius:8px; font-size:13px; font-family:inherit; }
         .dc-edit .full { grid-column:1 / -1; }
-        @media (max-width:640px){ .dc-edit { grid-template-columns:1fr; } }
         .dc-empty { background:#fff; border:1px solid #e2e8f0; border-radius:14px; padding:40px; text-align:center; color:#64748b; }
+        @media (max-width:640px){
+          .dc-edit { grid-template-columns:1fr; }
+          /* Téléphone : en-tête + cartes plus compacts */
+          .dc-header { padding:13px 15px; gap:12px; margin-bottom:14px; }
+          .dc-header__icon { width:44px; height:44px; font-size:22px; border-radius:12px; }
+          .dc-header__title { font-size:18px; }
+          .dc-header__sub { display:none; }
+          .dc-card { padding:12px 14px; margin-bottom:10px; }
+          .dc-row { font-size:12.5px; margin-top:4px; }
+          .dc-actions { gap:6px; margin-top:10px; }
+          .dc-btn { padding:7px 11px; font-size:12px; }
+          .dc-tab { padding:6px 11px; font-size:12px; }
+          .dc-tabs { gap:6px; margin-bottom:12px; }
+        }
       </style>
       <div class="dc-page">
         <div class="dc-header">

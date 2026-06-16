@@ -52,7 +52,7 @@ export const NouvelleFactureView = {
                         </div>
                         <div>
                             <h2 style="margin: 0; color: #0f172a; font-size: 22px;">{{ form.type === 'DEVIS' ? 'Nouveau Devis' : 'Nouvelle Facture / Envoi' }}</h2>
-                            <p style="margin: 0; color: #64748b; font-size: 13px;">{{ form.type === 'DEVIS' ? 'Créer un devis (sans encaissement)' : 'Créer une nouvelle expédition depuis Paris' }}</p>
+                            <p class="hide-on-mobile" style="margin: 0; color: #64748b; font-size: 13px;">{{ form.type === 'DEVIS' ? 'Créer un devis (sans encaissement)' : 'Créer une nouvelle expédition depuis Paris' }}</p>
                         </div>
                     </div>
                     <div id="nfActiveContainerBadge" style="padding: 10px 20px; background: #e0f2fe; color: #0369a1; border: 2px solid #bae6fd; border-radius: 12px; font-weight: 900; font-size: 20px; box-shadow: 0 2px 4px rgba(3,105,161,0.1); display: flex; align-items: center; gap: 10px;" title="Conteneur Actif">

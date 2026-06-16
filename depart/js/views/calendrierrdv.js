@@ -43,6 +43,13 @@ export const CalendrierRdvView = {
                     .rdvc-kpis .kpi__icon { width: 40px; height: 40px; font-size: 18px; flex-shrink: 0; }
                     .rdvc-kpis .kpi__value { font-size: 22px; }
                     .rdvc-kpis .kpi__label { font-size: 10px; white-space: normal; overflow-wrap: break-word; line-height: 1.25; }
+                    /* En-tête compact + sous-titre masqué + calendrier plus large */
+                    .rdvc-hero { padding: 13px 15px; gap: 12px; margin-bottom: 14px; }
+                    .rdvc-hero__icon { width: 44px; height: 44px; font-size: 20px; }
+                    .rdvc-hero__title { font-size: 18px; }
+                    .rdvc-hero__sub { display: none; }
+                    .rdvc-card { padding: 12px; }
+                    .rdvc-grid { gap: 4px; }
                 }
                 .kpi { display: flex; align-items: center; gap: 15px; padding: 20px; border-radius: 16px; background: white; border: 1px solid #e2e8f0; box-shadow: 0 2px 4px rgba(0,0,0,0.02); transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.3s; }
                 .kpi:hover { transform: translateY(-3px); box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1); }
