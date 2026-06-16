@@ -2690,9 +2690,16 @@ export const LivraisonView = {
                }
        
                // FONCTIONS D'AFFICHAGE (Input vs Texte pour Spectateur)
-               const renderInput = (val, type, onchange, style = "") => {
+               // field/id fournis -> rendu « fantôme » (édition inline : style texte,
+               // surlignage si vide, focus/Échap/auto-save). Sans field -> rendu classique
+               // (ex. Montant, hors périmètre de l'édition fantôme).
+               const renderInput = (val, type, onchange, style = "", field = "", id = "") => {
                    if (isViewer) return `<span style="${style}; display:block; padding:5px;">${val}</span>`;
-                   return `<input type="${type}" class="editable-cell" value="${val}" onchange="${onchange}" style="${style}">`;
+                   if (!field) {
+                       return `<input type="${type}" class="editable-cell" value="${val}" onchange="${onchange}" style="${style}">`;
+                   }
+                   const emptyCls = String(val).trim() === '' ? ' lv-empty' : '';
+                   return `<input type="${type}" class="editable-cell lv-ghost${emptyCls}" data-id="${id}" data-field="${field}" value="${val}" placeholder="à compléter" onfocus="lvGhostFocus(this)" onkeydown="lvGhostKey(event,this)" oninput="lvGhostMarkEmpty(this)" onblur="lvAfterBlur()" onchange="${onchange}" style="${style}">`;
                };
                
                // --- NOUVEAU : ENCAISSEMENT DIRECT ---
@@ -2716,13 +2723,13 @@ export const LivraisonView = {
                            <td>${d.dateAjout ? new Date(d.dateAjout).toLocaleDateString('fr-FR') : '-'}</td>
                            <td>${d.conteneur || '-'}</td>
                            <td class="ref"><a href="#" onclick="event.preventDefault(); showScanHistory('${d.id}');" style="color: #2563eb; text-decoration: underline; font-weight: bold;">${d.ref}</a>${lvStageBadge(d)}</td>
-                           <td style="text-align:center;">${renderInput(d.quantite || 1, "number", `updateDeliveryQuantity('${d.id}', this.value)`, "width: 50px; text-align:center; font-weight:bold;")}</td>
+                           <td style="text-align:center;">${renderInput(d.quantite || 1, "number", `updateDeliveryQuantity('${d.id}', this.value)`, "width: 50px; text-align:center; font-weight:bold;", "qte", d.id)}</td>
                            <td class="montant">${renderInput(displayMontant, "text", `updateDeliveryAmount('${d.id}', this.value)`, montantStyle)}</td>
-                           <td>${d.expediteur || ''}</td>
-                           <td>${renderInput((d.lieuLivraison || '').replace(/"/g, '&quot;'), "text", `updateDeliveryLocation('${d.id}', this.value)`, "")}</td>
-                           <td>${renderInput(displayDestinataire.replace(/"/g, '&quot;'), "text", `updateDeliveryRecipient('${d.id}', this.value)`, "")}</td>
-                           <td>${renderInput(displayPhone, "text", `updateDeliveryPhone('${d.id}', this.value)`, "font-weight:bold; color:#0d47a1; width:100%;")}</td>
-                           <td>${renderInput((d.description || '').replace(/"/g, '&quot;'), "text", `updateDeliveryDescription('${d.id}', this.value)`, "")}</td>
+                           <td>${renderInput((d.expediteur || '').replace(/"/g, '&quot;'), "text", `updateDeliveryExpediteur('${d.id}', this.value)`, "", "exp", d.id)}</td>
+                           <td>${renderInput((d.lieuLivraison || '').replace(/"/g, '&quot;'), "text", `updateDeliveryLocation('${d.id}', this.value)`, "", "lieu", d.id)}</td>
+                           <td>${renderInput(displayDestinataire.replace(/"/g, '&quot;'), "text", `updateDeliveryRecipient('${d.id}', this.value)`, "", "dest", d.id)}</td>
+                           <td>${renderInput(displayPhone, "text", `updateDeliveryPhone('${d.id}', this.value)`, "font-weight:bold; color:#0d47a1; width:100%;", "num", d.id)}</td>
+                           <td>${renderInput((d.description || '').replace(/"/g, '&quot;'), "text", `updateDeliveryDescription('${d.id}', this.value)`, "", "desc", d.id)}</td>
                            <td>${actionCellHTML}</td>
                        </tr>
                    `;
@@ -2734,7 +2741,7 @@ export const LivraisonView = {
                        <td>${d.conteneur || '-'}</td>
                        <td class="ref">${transitIndicator}<a href="#" onclick="event.preventDefault(); showScanHistory('${d.id}');" style="color: #2563eb; text-decoration: underline; font-weight: bold;">${d.ref}</a>${lvStageBadge(d)}</td>
                        <td style="text-align:center;">
-                           ${renderInput(d.quantite || 1, "number", `updateDeliveryQuantity('${d.id}', this.value)`, "width: 50px; text-align:center; font-weight:bold;")}
+                           ${renderInput(d.quantite || 1, "number", `updateDeliveryQuantity('${d.id}', this.value)`, "width: 50px; text-align:center; font-weight:bold;", "qte", d.id)}
                            ${partielBadge}
                            ${d.historiquePartiel && d.historiquePartiel.length > 0 ? 
                                `<span style="cursor:help; font-size:1.2em; margin-left:5px;" title="Historique partiel:\n${d.historiquePartiel.map(h => `- ${new Date(h.date).toLocaleDateString()} : ${h.quantiteLivree} livré(s) par ${h.livreur}`).join('\n')}">📦</span>` 
@@ -2744,12 +2751,12 @@ export const LivraisonView = {
                            ${montantHTML}
                            ${magasinageBadge}
                        </td>
-                       <td>${d.expediteur || ''}</td>
-                       <td>${renderInput((d.lieuLivraison || '').replace(/"/g, '&quot;'), "text", `updateDeliveryLocation('${d.id}', this.value)`, "")}</td>
-                       <td>${renderInput(displayDestinataire.replace(/"/g, '&quot;'), "text", `updateDeliveryRecipient('${d.id}', this.value)`, "")}</td>
-                       <td>${renderInput(displayPhone, "text", `updateDeliveryPhone('${d.id}', this.value)`, "font-weight:bold; color:#0d47a1; width:100%;")}</td>
-                       <td>${renderInput((d.description || '').replace(/"/g, '&quot;'), "text", `updateDeliveryDescription('${d.id}', this.value)`, "")}</td>
-                       <td>${renderInput((d.info || '').replace(/"/g, '&quot;'), "text", `updateDeliveryInfo('${d.id}', this.value)`, "")}</td>
+                       <td>${renderInput((d.expediteur || '').replace(/"/g, '&quot;'), "text", `updateDeliveryExpediteur('${d.id}', this.value)`, "", "exp", d.id)}</td>
+                       <td>${renderInput((d.lieuLivraison || '').replace(/"/g, '&quot;'), "text", `updateDeliveryLocation('${d.id}', this.value)`, "", "lieu", d.id)}</td>
+                       <td>${renderInput(displayDestinataire.replace(/"/g, '&quot;'), "text", `updateDeliveryRecipient('${d.id}', this.value)`, "", "dest", d.id)}</td>
+                       <td>${renderInput(displayPhone, "text", `updateDeliveryPhone('${d.id}', this.value)`, "font-weight:bold; color:#0d47a1; width:100%;", "num", d.id)}</td>
+                       <td>${renderInput((d.description || '').replace(/"/g, '&quot;'), "text", `updateDeliveryDescription('${d.id}', this.value)`, "", "desc", d.id)}</td>
+                       <td>${renderInput((d.info || '').replace(/"/g, '&quot;'), "text", `updateDeliveryInfo('${d.id}', this.value)`, "", "info", d.id)}</td>
                        ${notifiedCell}
                        <td>
                            <strong>${d.livreur || '-'}</strong><br>
@@ -3008,7 +3015,7 @@ export const LivraisonView = {
                            </td>
                            <td class="ref">${d.ref}</td>
                            <td class="montant">${d.montant}</td>
-                           <td>${d.expediteur || ''}</td>
+                           <td>${renderInput((d.expediteur || '').replace(/"/g, '&quot;'), "text", `updateDeliveryExpediteur('${d.id}', this.value)`, "", "exp", d.id)}</td>
                            <td style="display: flex; align-items: center; gap: 5px;">
                                <input type="text" class="editable-cell" value="${(d.lieuLivraison || '').replace(/"/g, '&quot;')}" list="sharedLocationsList" onchange="updateDeliveryLocation('${d.id}', this.value)">
                                <a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent((d.lieuLivraison || '') + ' ' + d.commune + ' Abidjan')}" target="_blank" title="Voir sur la carte" style="text-decoration: none; font-size: 1.2em;">
