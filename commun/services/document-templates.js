@@ -342,7 +342,9 @@ export function createDocumentTemplates({ showToast, calculateMagasinageFee }) {
         const _eur = (v) => new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(v || 0).replace(/[  ]/g, ' ');
         // Colis « A la valeur » : poids masque sur la facture client.
         const _aBilledKg = (it) => { if (it.mode !== 'poids') return 0; const real = parseFloat(it.poids) || 0; const vol = ((parseFloat(it.lng)||0)*(parseFloat(it.lrg)||0)*(parseFloat(it.haut)||0))/5000; return Math.max(real, vol); };
-        const _aLineEur = (it) => { const q = parseFloat(it.qty)||0; return (it.mode === 'poids') ? _aBilledKg(it)*q*(it.parfum?15:13) : (parseFloat(it.pu)||0)*q; };
+        // Tarif au kg ENREGISTRÉ sur la ligne à la création (repli 13/15 pour les anciennes factures).
+        const _aRate = (it) => (typeof it.tarifKgEur === 'number' && it.tarifKgEur > 0) ? it.tarifKgEur : (it.parfum ? 15 : 13);
+        const _aLineEur = (it) => { const q = parseFloat(it.qty)||0; return (it.mode === 'poids') ? _aBilledKg(it)*q*_aRate(it) : (parseFloat(it.pu)||0)*q; };
         let aerienColumns = null, aerienRows = null;
         if (isAerienDoc && transData && transData.items && Array.isArray(transData.items)) {
             aerienColumns = ["Description / Nature", "Qté", "Mode", "Poids", "Tarif / P.U", "Total"];
@@ -357,7 +359,7 @@ export function createDocumentTemplates({ showToast, calculateMagasinageFee }) {
                     String(item.qty),
                     isP ? ('Poids' + (item.parfum ? ' (parfum/alcool)' : '')) : 'Valeur',
                     kg ? kg.toFixed(1) + ' kg' : '-',
-                    isP ? ((item.parfum ? 15 : 13) + ' €/kg') : _eur(item.pu || 0),
+                    isP ? (_aRate(item) + ' €/kg') : _eur(item.pu || 0),
                     _eur(_aLineEur(item))
                 ]);
             });

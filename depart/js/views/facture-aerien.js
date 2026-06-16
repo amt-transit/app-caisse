@@ -103,7 +103,7 @@ export const FactureAerienView = {
                         <div class="form-group" style="grid-column: 1 / -1;">
                             <label>Tarification</label>
                             <div style="font-size:12px; color:#64748b; padding:10px; background:#f8fafc; border:1px dashed #cbd5e1; border-radius:8px;">
-                                Le mode se choisit <b>par colis</b> dans la liste ci-dessous : « À la valeur » (prix saisi à la main) ou « Poids / volume » (13 €/kg, 15 €/kg parfum/alcool, sur le plus grand du poids réel ou du poids volume). Le <b>poids</b> est à renseigner pour chaque colis, même à la valeur.
+                                Le mode se choisit <b>par colis</b> dans la liste ci-dessous : « À la valeur » (prix saisi à la main) ou « Poids / volume » ({{ tarifs.kgStdEur }} €/kg, {{ tarifs.kgParfumEur }} €/kg parfum/alcool, sur le plus grand du poids réel ou du poids volume). Le <b>poids</b> est à renseigner pour chaque colis, même à la valeur.
                             </div>
                         </div>
                     </div>
@@ -231,7 +231,7 @@ export const FactureAerienView = {
                                             <input type="number" min="0" v-model.number="item.haut" @input="updateItem(item, 'dim')" placeholder="H" title="Hauteur (cm)" style="width:33%; padding:6px; border:1px solid #cbd5e1; border-radius:6px; box-sizing:border-box; text-align:center; font-size:12px;">
                                         </div>
                                         <label style="display:flex; align-items:center; gap:5px; margin-top:4px; font-size:11px; color:#475569; cursor:pointer;">
-                                            <input type="checkbox" v-model="item.parfum" @change="updateItem(item, 'parfum')" style="width:auto; margin:0;"> Parfum / Alcool (15 €/kg)
+                                            <input type="checkbox" v-model="item.parfum" @change="updateItem(item, 'parfum')" style="width:auto; margin:0;"> Parfum / Alcool ({{ tarifs.kgParfumEur }} €/kg)
                                         </label>
                                         <div v-if="lineBilledKg(item) > (parseFloat(item.poids) || 0)" style="font-size:10px; color:#c2410c; margin-top:2px; text-align:right;">poids volume : {{ lineBilledKg(item).toFixed(1) }} kg</div>
                                     </template>
@@ -934,6 +934,13 @@ initVue(globalApp) {
                     globalApp.showToast("Veuillez remplir l'Expéditeur, le Destinataire, l'Agence destination et au moins une Description d'article.", "error");
                     return;
                 }
+
+                // Mémorise le tarif au kg appliqué sur chaque ligne « poids » (issu de
+                // la config du moment). Ainsi le descriptif et les PDF afficheront le
+                // BON tarif plus tard, même si la config change ensuite.
+                items.value.forEach(it => {
+                    if (it.mode === 'poids') it.tarifKgEur = it.parfum ? tarifs.kgParfumEur : tarifs.kgStdEur;
+                });
 
                 // Validation du Nombre de colis expedies (Paris aerien) :
                 //  - vide -> on utilise la somme des quantites (cas normal)

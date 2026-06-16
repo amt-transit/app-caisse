@@ -859,7 +859,11 @@ export const ToutesLesFacturesView = {
         // Transformation de la description en lignes pour le tableau.
         // AÉRIEN : modèle propre (mode par colis, poids/volume, parfum/alcool).
         const isAerienInv = invoice.modeExpedition === 'aerien';
-        const A_STD = 13, A_PARFUM = 15; // €/kg
+        const A_STD = 13, A_PARFUM = 15; // €/kg (repli si la facture n'a pas de tarif enregistré)
+        // Tarif au kg réellement appliqué : celui ENREGISTRÉ sur la ligne à la
+        // création (tarifKgEur, issu de la config au moment de la facture) ;
+        // sinon repli sur l'ancien défaut 13/15.
+        const aRate = (it) => (typeof it.tarifKgEur === 'number' && it.tarifKgEur > 0) ? it.tarifKgEur : (it.parfum ? A_PARFUM : A_STD);
         const aBilledKg = (it) => {
             // Colis facture « A la valeur » : on masque le poids sur la facture
             // client (evite la confusion entre poids note et tarification).
@@ -870,7 +874,7 @@ export const ToutesLesFacturesView = {
         };
         const aLineEur = (it) => {
             const qty = parseFloat(it.qty) || 0;
-            if (it.mode === 'poids') return aBilledKg(it) * qty * (it.parfum ? A_PARFUM : A_STD);
+            if (it.mode === 'poids') return aBilledKg(it) * qty * aRate(it);
             return (parseFloat(it.pu) || 0) * qty;
         };
         const aMoney = (eur) => this.formatMoneyLocal(isEur ? eur : eur * TAUX);
@@ -886,7 +890,7 @@ export const ToutesLesFacturesView = {
                 const kg = aBilledKg(item);
                 totalPoids += kg * (parseFloat(item.qty) || 0);
                 const modeLbl = isPoids ? ('Poids/volume' + (item.parfum ? ' · parfum/alcool' : '')) : 'À la valeur';
-                const tarifLbl = isPoids ? ((item.parfum ? A_PARFUM : A_STD) + ' €/kg') : aMoney(parseFloat(item.pu) || 0);
+                const tarifLbl = isPoids ? (aRate(item) + ' €/kg') : aMoney(parseFloat(item.pu) || 0);
                 return `<tr>
                     <td class="modal-table__desc">${item.desc || '-'}</td>
                     <td style="text-align:right; font-weight:bold;">${item.qty}</td>
@@ -2147,7 +2151,7 @@ export const ToutesLesFacturesView = {
     _lineTotalEurEdit(item) {
         const qty = parseFloat(item.qty) || 0;
         if (item.mode === 'poids') {
-            const rate = item.parfum ? 15 : 13;
+            const rate = (typeof item.tarifKgEur === 'number' && item.tarifKgEur > 0) ? item.tarifKgEur : (item.parfum ? 15 : 13);
             return this._lineBilledKgEdit(item) * qty * rate;
         }
         return (parseFloat(item.pu) || 0) * qty;
@@ -2741,7 +2745,8 @@ export const ToutesLesFacturesView = {
         // Colis « A la valeur » : poids masque sur la facture/BL client.
         const _aBilledKg = (it) => { if (it.mode !== 'poids') return 0; const real = parseFloat(it.poids) || 0; const vol = ((parseFloat(it.lng)||0)*(parseFloat(it.lrg)||0)*(parseFloat(it.haut)||0))/5000; return Math.max(real, vol); };
         const _aMoney = (eur) => this.formatMoneyLocal(isEur ? eur : eur * TAUX);
-        const _aLineEur = (it) => { const q = parseFloat(it.qty)||0; return (it.mode === 'poids') ? _aBilledKg(it)*q*(it.parfum?15:13) : (parseFloat(it.pu)||0)*q; };
+        const _aRate = (it) => (typeof it.tarifKgEur === 'number' && it.tarifKgEur > 0) ? it.tarifKgEur : (it.parfum?15:13);
+        const _aLineEur = (it) => { const q = parseFloat(it.qty)||0; return (it.mode === 'poids') ? _aBilledKg(it)*q*_aRate(it) : (parseFloat(it.pu)||0)*q; };
 
         let tableColumn, columnStyles;
         const tableRows = [];
@@ -2751,7 +2756,7 @@ export const ToutesLesFacturesView = {
             let _tk = 0;
             invoice.items.forEach(item => {
                 const isP = item.mode === 'poids'; const kg = _aBilledKg(item); _tk += kg * (parseFloat(item.qty)||0);
-                tableRows.push([ item.desc, item.qty.toString(), isP ? ('Poids'+(item.parfum?' (parfum/alcool)':'')) : 'Valeur', kg?kg.toFixed(1)+' kg':'-', isP ? ((item.parfum?15:13)+' €/kg') : _aMoney(parseFloat(item.pu)||0), _aMoney(_aLineEur(item)) ]);
+                tableRows.push([ item.desc, item.qty.toString(), isP ? ('Poids'+(item.parfum?' (parfum/alcool)':'')) : 'Valeur', kg?kg.toFixed(1)+' kg':'-', isP ? (_aRate(item)+' €/kg') : _aMoney(parseFloat(item.pu)||0), _aMoney(_aLineEur(item)) ]);
             });
             tableRows.push(['Poids total facturé', '', '', _tk.toFixed(1)+' kg', '', '']);
             columnStyles = { 1: { halign: 'center' }, 3: { halign: 'right' }, 4: { halign: 'right' }, 5: { halign: 'right' } };
