@@ -964,7 +964,6 @@ export const DashboardView = {
                     <td>${formatCFA(c.paris)}</td>
                     <td>${formatCFA(c.abidjan)}</td>
                     <td style="font-weight:bold">${formatCFA(percu)}</td>
-                    <td>${formatCFA(c.dep)}</td>
                     <td class="${c.reste < 0 ? 'reste-negatif' : 'reste-positif'}">${formatCFA(c.reste)} <span style="font-size:0.8em">(${pctReste}%)</span></td>
                     <td>${formatCFA(c.dep)}</td>
                     <td class="${benef < 0 ? 'reste-negatif' : 'reste-positif'}"><b>${formatCFA(benef)}</b> <span style="font-size:0.8em; font-weight:normal;">(${pctBenef}%)</span></td>
