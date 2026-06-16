@@ -2361,6 +2361,14 @@ export const LivraisonView = {
        
        // Affichage tableau
        function renderTable() {
+           // Édition fantôme : ne PAS écraser un champ en cours de saisie (un refresh
+           // temps réel le détruirait). On reporte le rendu jusqu'à la sortie du champ
+           // (lvGhostBlur → lvAfterBlur rejoue filterDeliveries()).
+           const _ae = document.activeElement;
+           if (_ae && _ae.classList && _ae.classList.contains('lv-ghost')) {
+               window._lvPendingRender = true;
+               return;
+           }
            const tbody = document.getElementById('deliveriesBody');
            const theadRow = document.querySelector('#deliveriesTable thead tr');
 
@@ -2699,7 +2707,7 @@ export const LivraisonView = {
                        return `<input type="${type}" class="editable-cell" value="${val}" onchange="${onchange}" style="${style}">`;
                    }
                    const emptyCls = String(val).trim() === '' ? ' lv-empty' : '';
-                   return `<input type="${type}" class="editable-cell lv-ghost${emptyCls}" data-id="${id}" data-field="${field}" value="${val}" placeholder="à compléter" onfocus="lvGhostFocus(this)" onkeydown="lvGhostKey(event,this)" oninput="lvGhostMarkEmpty(this)" onblur="lvAfterBlur()" onchange="${onchange}" style="${style}">`;
+                   return `<span class="lv-ghost-wrap"><input type="${type}" class="editable-cell lv-ghost${emptyCls}" data-id="${id}" data-field="${field}" value="${val}" placeholder="à compléter" onfocus="lvGhostFocus(this)" onkeydown="lvGhostKey(event,this)" oninput="lvGhostInput(this)" onblur="lvGhostBlur(this)" onchange="${onchange}" style="${style}"></span>`;
                };
                
                // --- NOUVEAU : ENCAISSEMENT DIRECT ---
@@ -4274,6 +4282,7 @@ export const LivraisonView = {
            });
            // Propagation vers la fiche client (page Clients + création de facture)
            if (d) syncDestinataireToClients({ nom: d.destinataire, tel: d.numero, adresse: newLocation });
+           if (d && oldLoc !== newLocation) lvUndo('Lieu', oldLoc, (v) => updateDeliveryLocation(id, v));
        
            // PROPAGATION : Mettre à jour tous les colis du même destinataire (tous onglets confondus)
            const currentItem = deliveries.find(d => d.id === id);
@@ -4313,6 +4322,7 @@ export const LivraisonView = {
            // Propagation vers la fiche client (numéro = ancre ; on passe AUSSI
            // l'ancien nom pour retrouver la fiche au renommage au lieu d'en créer une).
            syncDestinataireToClients({ nom: cleanRecip, oldNom: (d ? d.destinataire : ''), tel: d ? d.numero : '', adresse: d ? d.lieuLivraison : '' });
+           if (d && oldRecip !== cleanRecip) lvUndo('Destinataire', oldRecip, (v) => updateDeliveryRecipient(id, v));
        }
 
        // Mise à jour de l'expéditeur en direct
@@ -4323,6 +4333,7 @@ export const LivraisonView = {
            updateDoc(doc(db, CONSTANTS.COLLECTION, id), { expediteur: cleanExp }).then(() => {
                if (d && oldExp !== cleanExp) logLivraisonAudit("MODIF_LIVRAISON", `Colis ${d.ref} : Expéditeur modifié de "${oldExp}" à "${cleanExp}"`, id);
            });
+           if (d && oldExp !== cleanExp) lvUndo('Expéditeur', oldExp, (v) => updateDeliveryExpediteur(id, v));
        }
 
        // Mise à jour du numéro (destinataire) en direct
@@ -4353,6 +4364,7 @@ export const LivraisonView = {
            }
            // Propagation vers la fiche client (le nom sert d'ancre).
            if (d) syncDestinataireToClients({ nom: d.destinataire, tel: cleanPhone, adresse: d.lieuLivraison });
+           if (d && oldPhone !== cleanPhone) lvUndo('Numéro', oldPhone, (v) => updateDeliveryPhone(id, v));
        }
        
        // Mise à jour du montant en direct
@@ -4406,6 +4418,7 @@ export const LivraisonView = {
                console.error("Erreur lors de la mise à jour de la quantité :", error);
                showToast("Erreur de mise à jour de la quantité", "error");
            }
+           lvUndo('Quantité', String(oldQty), (v) => updateDeliveryQuantity(id, v));
        }
        
        // Mise à jour de l'info manuelle en direct
@@ -4416,6 +4429,7 @@ export const LivraisonView = {
            updateDoc(doc(db, CONSTANTS.COLLECTION, id), { info: cleanInfo }).then(() => {
                if (d && oldInfo !== cleanInfo) logLivraisonAudit("MODIF_LIVRAISON", `Colis ${d.ref} : Info modifiée de "${oldInfo}" à "${cleanInfo}"`, id);
            });
+           if (d && oldInfo !== cleanInfo) lvUndo('Info', oldInfo, (v) => updateDeliveryInfo(id, v));
        }
        
        // Mise à jour de la description en direct
@@ -4444,6 +4458,7 @@ export const LivraisonView = {
        
                await batch.commit();
                logLivraisonAudit("MODIF_LIVRAISON", `Colis ${d.ref} : Description modifiée de "${oldDesc}" à "${cleanDesc}"`, id);
+               lvUndo('Description', oldDesc, (v) => updateDeliveryDescription(id, v));
            } catch (error) {
                console.error("Erreur lors de la mise à jour de la description :", error);
                showToast("Erreur de mise à jour", "error");
@@ -5018,7 +5033,7 @@ export const LivraisonView = {
            openBulkStatusModal, forceSyncTransactions, syncContainersOnly, deleteSelectedDeliveries, exportToExcel,
            showAddModal, archiveCompletedDeliveries, openArchivesModal, closeArchivesModal,
            searchArchives, restoreFromArchive, goArchivePage, loadAllArchivesAndRender, filterDeliveries, sortTable, updateDeliveryLocation,
-           lvGhostFocus, lvGhostKey, lvGhostMarkEmpty, lvAfterBlur, lvUndo, lvTick,
+           lvGhostFocus, lvGhostKey, lvGhostMarkEmpty, lvGhostFit, lvGhostInput, lvGhostBlur, lvAfterBlur, lvUndo, lvTick,
            updateDeliveryRecipient, updateDeliveryExpediteur, updateDeliveryPhone, updateDeliveryAmount, updateDeliveryQuantity,
            updateDeliveryInfo, updateDeliveryDescription, toggleClientNotified, markAsDelivered, markAsPending, deleteDelivery,
            openAbandonModal, closeAbandonModal, confirmAbandonment, generateAbandonmentPDFFromId,
@@ -5810,7 +5825,14 @@ export const LivraisonView = {
 
         // ── Édition fantôme : focus, retour ✓, et Annuler ──────────────────────
         // Au focus d'un champ ghost : mémorise la valeur d'origine (pour Annuler/Échap).
-        function lvGhostFocus(input) { input.dataset.lvOld = input.value; }
+        function lvGhostFocus(input) { input.dataset.lvOld = input.value; lvGhostFit(input); }
+        // Élargit le champ actif pour montrer TOUT son contenu (tableau uniquement,
+        // colonnes étroites). La case se déploie au-dessus des voisines.
+        function lvGhostFit(input) {
+            if (!input.closest || !input.closest('td')) return;
+            const w = Math.min(460, Math.max(220, (input.scrollWidth || 0) + 26));
+            input.style.width = w + 'px';
+        }
         // Échap : restaure la valeur d'origine sans enregistrer.
         function lvGhostKey(ev, input) {
             if (ev.key === 'Escape') { input.value = input.dataset.lvOld ?? input.value; input.blur(); }
@@ -5819,6 +5841,10 @@ export const LivraisonView = {
         function lvGhostMarkEmpty(input) {
             input.classList.toggle('lv-empty', String(input.value || '').trim() === '');
         }
+        // oninput : marque vide + ré-ajuste la largeur au contenu.
+        function lvGhostInput(input) { lvGhostMarkEmpty(input); lvGhostFit(input); }
+        // onblur : remet la largeur normale puis rejoue un éventuel refresh différé.
+        function lvGhostBlur(input) { input.style.width = ''; lvAfterBlur(); }
         // Re-rendu différé : si un refresh temps réel a été reporté pendant l'édition,
         // on le rejoue quand le champ perd le focus.
         function lvAfterBlur() {

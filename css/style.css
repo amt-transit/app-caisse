@@ -2570,6 +2570,10 @@ tr.clickable-row:hover { background: #f1f5f9 !important; }
 }
 .lv-ghost:hover { background: #f1f5f9; border-color: #e2e8f0; }
 .lv-ghost:focus { outline: none; background: #eff6ff; border: 2px solid #3b82f6; padding: 3px 5px; }
+/* La case active se DÉPLOIE pour montrer tout son contenu (tableau, colonnes étroites).
+   Elle passe en absolu au-dessus des cases voisines ; la largeur est posée en JS. */
+.lv-ghost-wrap { position: relative; display: block; min-height: 26px; }
+td .lv-ghost:focus { position: absolute; left: 0; top: -1px; min-width: 220px; z-index: 30; box-shadow: 0 8px 20px -8px rgba(0,0,0,.35); }
 /* Champ vide → « à compléter » (repère « ce qui manque ») */
 .lv-ghost.lv-empty {
     background: #fffbeb;
