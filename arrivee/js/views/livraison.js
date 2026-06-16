@@ -1973,37 +1973,17 @@ export const LivraisonView = {
                    operations.push({ type: 'update', ref: docRef, data: updates });
                    updatedCount++;
                } else if (archivedItem && containerStatus === 'EN_COURS') {
-                   // CAS 1.5 : Le colis était archivé, mais de NOUVEAUX cartons arrivent dans ce conteneur !
-                   const docRef = doc(collection(db, CONSTANTS.COLLECTION), archivedItem.id);
+                   // CAS 1.5 : Le colis est ARCHIVÉ (déjà livré). On NE le sort PAS de
+                   // l'archive et on ne touche NI au statut, NI aux montants, NI à la
+                   // quantité : on associe UNIQUEMENT son conteneur (sur l'archive s'il
+                   // manque ; la transaction est mise à jour séparément plus bas) pour
+                   // qu'il quitte « Non Spécifié » au tableau de bord, sans autre effet.
                    const oldData = archivedItem.data;
-                   
-                   const currentScans = oldData.scanHistory ? oldData.scanHistory.map(s => s.scanRef) : [];
-                   const newScans = importItem.scanHistory ? importItem.scanHistory.filter(s => !currentScans.includes(s.scanRef)) : [];
-                   
-                   if (newScans.length > 0) {
-                       // REMPLACEMENT (choix utilisateur) : le conteneur du dernier scan
-                       // remplace l'ancien, pas de concaténation.
-                       const targetCont = conteneur || importItem.conteneur || '';
-                       const combinedConteneur = targetCont || oldData.conteneur;
-       
-                       const restoredData = {
-                           ...oldData,
-                           status: 'PARTIEL', // De retour en attente de livraison pour le reste
-                           containerStatus: 'EN_COURS',
-                           quantite: (parseInt(oldData.quantite) || 0) + newScans.length,
-                           quantiteRestante: newScans.length,
-                           conteneur: combinedConteneur,
-                           scanHistory: [...(oldData.scanHistory || []), ...newScans],
-                           dateAjout: new Date().toISOString()
-                       };
-                       delete restoredData.dateArchivage;
-       
-                       operations.push({ type: 'delete', ref: doc(db, CONSTANTS.ARCHIVE_COLLECTION, archivedItem.id) });
-                       operations.push({ type: 'set', ref: docRef, data: restoredData });
-                       updatedCount++;
-                   } else {
-                       ignoredArchivedCount++;
+                   const targetCont = conteneur || importItem.conteneur || '';
+                   if (targetCont && !String(oldData.conteneur || '').trim()) {
+                       operations.push({ type: 'update', ref: doc(db, CONSTANTS.ARCHIVE_COLLECTION, archivedItem.id), data: { conteneur: targetCont } });
                    }
+                   ignoredArchivedCount++;
                } else {
                    // CAS 2 : La référence n'existe pas -> On crée un nouveau colis
                    const docRef = doc(collection(db, CONSTANTS.COLLECTION));
