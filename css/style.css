@@ -2553,3 +2553,49 @@ tr.clickable-row:hover { background: #f1f5f9 !important; }
     border-left: 4px solid var(--amt-gold);
 }
 
+/* ─── Édition fantôme (inline) — page Livraison ─────────────────────────
+   Un champ éditable ressemble à du texte ; il se révèle au survol, s'entoure
+   de bleu en édition, et ressort en orange quand il est vide. */
+.lv-ghost {
+    border: 1px solid transparent;
+    background: transparent;
+    padding: 4px 6px;
+    border-radius: 6px;
+    font: inherit;
+    color: #1e293b;
+    width: 100%;
+    box-sizing: border-box;
+    transition: background .12s, border-color .12s;
+    cursor: text;
+}
+.lv-ghost:hover { background: #f1f5f9; border-color: #e2e8f0; }
+.lv-ghost:focus { outline: none; background: #eff6ff; border: 2px solid #3b82f6; padding: 3px 5px; }
+/* Champ vide → « à compléter » (repère « ce qui manque ») */
+.lv-ghost.lv-empty {
+    background: #fffbeb;
+    border: 1px dashed #f59e0b;
+    color: #b45309;
+}
+.lv-ghost.lv-empty::placeholder { color: #b45309; opacity: 1; }
+/* Petit ✓ d'enregistrement (ajouté à côté du champ) */
+.lv-saved-tick {
+    color: #16a34a; font-size: 11px; font-weight: 700; margin-left: 6px;
+    opacity: 0; transition: opacity .15s; white-space: nowrap;
+}
+.lv-saved-tick.show { opacity: 1; }
+/* Toast Annuler */
+.lv-undo-toast {
+    position: fixed; left: 50%; bottom: 22px; transform: translateX(-50%);
+    background: #1e293b; color: #fff; padding: 9px 14px; border-radius: 10px;
+    display: flex; align-items: center; gap: 12px; font-size: 13px;
+    box-shadow: 0 10px 25px -8px rgba(0,0,0,.35); z-index: 12000;
+}
+.lv-undo-toast button {
+    background: #f59e0b; color: #1e293b; border: 0; padding: 5px 12px;
+    border-radius: 7px; font-weight: 700; cursor: pointer; font-family: inherit;
+}
+/* Champ éditable empilé dans une fiche (mobile) */
+.lv-c-field { display: flex; align-items: center; gap: 8px; margin-top: 4px; }
+.lv-c-field .lv-c-lbl { font-size: 11px; color: #64748b; min-width: 78px; flex-shrink: 0; }
+.lv-c-field .lv-ghost { font-size: 13px; }
+
