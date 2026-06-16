@@ -448,9 +448,10 @@ export const LivraisonView = {
                         </div>
                     </div>
                     <input type="text" id="archiveSearch" class="search-filter" placeholder="🔍 Rechercher..." oninput="searchArchives()" style="margin-bottom:15px;width:100%">
-                    <div class="preview-table" style="max-height:calc(90vh - 150px)">
+                    <div class="preview-table" style="max-height:calc(90vh - 190px)">
                         <table id="archivesTable"><thead><tr><th>DATE</th><th>REF</th><th>CONTENEUR</th><th>DESTINATAIRE</th><th>LIVREUR</th><th>ACTIONS</th></tr></thead><tbody id="archivesBody"></tbody></table>
                     </div>
+                    <div id="archivesPagination" style="display:flex; justify-content:center; align-items:center; gap:12px; padding:12px 0; flex-wrap:wrap;"></div>
                 </div>
             </div>
             <div id="abandonModal" class="modal amt-modal">
@@ -622,6 +623,10 @@ export const LivraisonView = {
         let archivedDeliveries = [];
         let filteredDeliveries = [];
         let pendingImport = [];
+        // Pagination des Archives (la liste peut être très longue)
+        const ARCHIVE_PAGE_SIZE = 50;
+        let archivePage = 1;
+        let archiveFiltered = [];
         let currentContainerName = localStorage.getItem(CONSTANTS.STORAGE_KEYS.CONTAINER_NAME) || 'Aucun';
         let currentTab = 'EN_COURS';
         // Mode d'affichage de l'onglet « En cours » : fiches (par défaut) ou liste (tableau).
@@ -3807,23 +3812,57 @@ export const LivraisonView = {
        }
        
        function renderArchivesTable(data) {
+           // Tri par date d'archivage décroissante (plus récent en haut), puis page 1.
+           archiveFiltered = (data || []).slice().sort((a, b) => new Date(b.dateArchivage) - new Date(a.dateArchivage));
+           archivePage = 1;
+           renderArchivePage();
+       }
+
+       function renderArchivePage() {
            const tbody = document.getElementById('archivesBody');
-           // Tri par date d'archivage décroissante (plus récent en haut)
-           data.sort((a, b) => new Date(b.dateArchivage) - new Date(a.dateArchivage));
-           
-           tbody.innerHTML = data.map(d => `
+           if (!tbody) return;
+           const total = archiveFiltered.length;
+           const pages = Math.max(1, Math.ceil(total / ARCHIVE_PAGE_SIZE));
+           if (archivePage > pages) archivePage = pages;
+           if (archivePage < 1) archivePage = 1;
+           const start = (archivePage - 1) * ARCHIVE_PAGE_SIZE;
+           const slice = archiveFiltered.slice(start, start + ARCHIVE_PAGE_SIZE);
+
+           if (total === 0) {
+               tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:20px; color:#64748b;">Aucune archive.</td></tr>';
+           } else {
+               tbody.innerHTML = slice.map(d => `
                <tr>
-                   <td>${new Date(d.dateArchivage).toLocaleDateString()}</td>
-                   <td class="ref">${d.ref}</td>
+                   <td>${d.dateArchivage ? new Date(d.dateArchivage).toLocaleDateString('fr-FR') : '-'}</td>
+                   <td class="ref">${d.ref || ''}</td>
                    <td>${d.conteneur || '-'}</td>
-                   <td>${d.destinataire}</td>
+                   <td>${d.destinataire || '-'}</td>
                    <td>${d.livreur || '-'}</td>
-                   <td>${d.dateProgramme || '-'}</td>
                    <td>
                        <button class="btn btn-warning btn-small" onclick="restoreFromArchive('${d.id}')">♻️ Restaurer</button>
                    </td>
                </tr>
            `).join('');
+           }
+
+           const pag = document.getElementById('archivesPagination');
+           if (pag) {
+               if (total <= ARCHIVE_PAGE_SIZE) {
+                   pag.innerHTML = total ? `<span style="color:#64748b; font-size:13px;">${total} archive(s)</span>` : '';
+               } else {
+                   const from = start + 1, to = Math.min(start + ARCHIVE_PAGE_SIZE, total);
+                   pag.innerHTML = `
+                       <button class="btn btn-small" ${archivePage <= 1 ? 'disabled' : ''} onclick="goArchivePage(-1)">← Précédent</button>
+                       <span style="font-size:13px; color:#475569; font-weight:600;">${from}–${to} sur ${total} (page ${archivePage}/${pages})</span>
+                       <button class="btn btn-small" ${archivePage >= pages ? 'disabled' : ''} onclick="goArchivePage(1)">Suivant →</button>
+                   `;
+               }
+           }
+       }
+
+       function goArchivePage(delta) {
+           archivePage += delta;
+           renderArchivePage();
        }
        
        // Filtres
@@ -4850,7 +4889,7 @@ export const LivraisonView = {
            switchTab, setActiveContainer, importExcel, openProgramModal, openAssignContainerModal,
            openBulkStatusModal, forceSyncTransactions, deleteSelectedDeliveries, exportToExcel,
            showAddModal, archiveCompletedDeliveries, openArchivesModal, closeArchivesModal,
-           searchArchives, restoreFromArchive, filterDeliveries, sortTable, updateDeliveryLocation,
+           searchArchives, restoreFromArchive, goArchivePage, filterDeliveries, sortTable, updateDeliveryLocation,
            updateDeliveryRecipient, updateDeliveryExpediteur, updateDeliveryPhone, updateDeliveryAmount, updateDeliveryQuantity,
            updateDeliveryInfo, updateDeliveryDescription, toggleClientNotified, markAsDelivered, markAsPending, deleteDelivery,
            openAbandonModal, closeAbandonModal, confirmAbandonment, generateAbandonmentPDFFromId,
@@ -5687,6 +5726,7 @@ export const LivraisonView = {
             closeArchivesModal: typeof closeArchivesModal !== 'undefined' ? closeArchivesModal : null,
             searchArchives: typeof searchArchives !== 'undefined' ? searchArchives : null,
             restoreFromArchive: typeof restoreFromArchive !== 'undefined' ? restoreFromArchive : null,
+            goArchivePage: typeof goArchivePage !== 'undefined' ? goArchivePage : null,
             filterDeliveries, sortTable: typeof sortTable !== 'undefined' ? sortTable : null,
             updateDeliveryLocation: typeof updateDeliveryLocation !== 'undefined' ? updateDeliveryLocation : null,
             updateDeliveryRecipient: typeof updateDeliveryRecipient !== 'undefined' ? updateDeliveryRecipient : null,
