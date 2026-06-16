@@ -303,9 +303,14 @@ body:has(.sw-page) .fab-btn { display: none !important; }
     /* ── Cartes KPI (.stats-grid / .kpi-grid) : 2 colonnes compactes sur tél. ─
        Plusieurs pages forcent en inline `auto-fit minmax(180px)` (→ 1 colonne
        sur mobile). On rétablit 2 colonnes, comme le tableau de bord. */
-    .stats-grid, .kpi-grid, .kpi-grid--3 { grid-template-columns: 1fr 1fr !important; gap: 10px !important; }
+    .stats-grid, .kpi-grid, .kpi-grid--3, .am__kpi-row { grid-template-columns: 1fr 1fr !important; gap: 10px !important; }
     .stats-grid .stat-card { padding: 13px 14px !important; gap: 10px !important; }
     .kpi-grid .kpi-card { padding: 13px 14px !important; }
     .kpi-grid .kpi-card__header { margin-bottom: 8px !important; }
     .kpi-grid .kpi-card__value { font-size: 19px !important; margin-bottom: 7px !important; }
+    .am__kpi-row .am__kpi { padding: 13px 14px !important; gap: 10px !important; }
+    .am__kpi-row .am__kpi-icon { width: 42px !important; height: 42px !important; font-size: 22px !important; }
+    /* Salaire (et autres finances) : .totals-container est en FLEX → on agit sur les enfants */
+    .totals-container { gap: 10px !important; }
+    .totals-container .total-card { flex: 1 1 calc(50% - 5px) !important; min-width: 0 !important; }
 }
