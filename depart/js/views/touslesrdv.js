@@ -143,9 +143,6 @@ export const TousLesRdvView = {
             <div id="vue-rdv-app" class="rdv-page" v-cloak>
                 <!-- Header Pending -->
                 <template v-if="isPendingMode">
-                    <div class="page__header" style="margin-bottom: 20px;">
-                        <h1 class="page__title" style="margin: 0; font-size: 24px; font-weight: 800; color: #0f172a;">RDV à valider</h1>
-                    </div>
                     <div class="rdv-header">
                         <div class="rdv-header__content" style="flex: 1; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap;">
                             <div class="rdv-header__info">

@@ -299,4 +299,10 @@ body:has(.sw-page) .fab-btn { display: none !important; }
         min-width: 0 !important; flex: 1 1 calc(50% - 5px) !important;
         font-size: 13px !important; padding: 9px 11px !important;
     }
+
+    /* ── Cartes KPI (.stats-grid) : 2 colonnes compactes sur téléphone ──────
+       Plusieurs pages forcent en inline `auto-fit minmax(180px)` (→ 1 colonne
+       sur mobile). On rétablit 2 colonnes, comme le tableau de bord. */
+    .stats-grid { grid-template-columns: 1fr 1fr !important; gap: 10px !important; }
+    .stats-grid .stat-card { padding: 13px 14px !important; gap: 10px !important; }
 }

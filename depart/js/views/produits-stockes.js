@@ -15,7 +15,21 @@ export const StoredProductsView = {
 
     render(app) {
         const html = `
-            <style>[v-cloak] { display: none; }</style>
+            <style>
+                [v-cloak] { display: none; }
+                @media (max-width: 768px) {
+                    /* Articles stockés : chaque entrée tient sur UNE seule ligne (pas une fiche) */
+                    #vue-stored-app .data-table tr.compact-row { display:block; background:transparent !important; border:none !important; border-radius:0 !important; margin:0 !important; padding:0 !important; box-shadow:none !important; }
+                    #vue-stored-app .data-table tr.compact-row td { display:block !important; padding:0 !important; border:none !important; }
+                    #vue-stored-app .data-table tr.compact-row td::before { display:none !important; }
+                    #vue-stored-app .prod-line { display:flex; align-items:center; gap:8px; padding:10px 12px; border-bottom:1px solid #f1f5f9; cursor:pointer; }
+                    #vue-stored-app .prod-line:active { background:#f8fafc; }
+                    #vue-stored-app .prod-line__name { flex:1; min-width:0; font-weight:600; color:#1e293b; font-size:13px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+                    #vue-stored-app .prod-line__dim { font-weight:400; color:#94a3b8; font-size:11px; }
+                    #vue-stored-app .prod-line__price { font-weight:800; color:#0f172a; font-size:13.5px; flex-shrink:0; }
+                    #vue-stored-app .prod-line__edit { flex-shrink:0; width:30px; height:30px; border:1px solid #e2e8f0; border-radius:8px; background:#fff; color:#3b82f6; cursor:pointer; }
+                }
+            </style>
             <div id="vue-stored-app" style="max-width: 1100px; margin: 0 auto; animation: fadeIn 0.3s ease-in-out;" v-cloak>
 
                 <!-- EN-TÊTE -->
@@ -24,7 +38,7 @@ export const StoredProductsView = {
                         <div style="background: #ecfdf5; color: #059669; width: 50px; height: 50px; display: flex; align-items: center; justify-content: center; border-radius: 12px; font-size: 24px;">🗄️</div>
                         <div>
                             <h2 style="margin: 0; color: #0f172a; font-size: 22px; font-weight: 800;">Produits stockés</h2>
-                            <p style="margin: 4px 0 0 0; color: #64748b; font-size: 13px;">Contenants à proposer et déposer chez le client (carton, barrique…) et leur prix</p>
+                            <p class="hide-on-mobile" style="margin: 4px 0 0 0; color: #64748b; font-size: 13px;">Contenants à proposer et déposer chez le client (carton, barrique…) et leur prix</p>
                         </div>
                     </div>
                     <div style="display: flex; gap: 10px;">
@@ -78,19 +92,10 @@ export const StoredProductsView = {
                                 <template v-else-if="isMobile">
                                     <tr v-for="p in filtered" :key="p.id" class="compact-row">
                                         <td colspan="4">
-                                            <div class="compact-mob-card">
-                                                <div class="cmc-header">
-                                                    <div class="cmc-ref-group"><span class="cmc-ref">{{ p.desc }}</span></div>
-                                                </div>
-                                                <div class="cmc-body">
-                                                    <div class="cmc-route">{{ p.dim ? '📏 ' + p.dim : '—' }}</div>
-                                                </div>
-                                                <div class="cmc-footer">
-                                                    <div class="cmc-finance"><div class="cmc-amount">{{ formatMoney(p.price) }}</div></div>
-                                                    <div class="cmc-actions">
-                                                        <button class="cmc-btn cmc-btn-edit" @click="openEditModal(p)" title="Modifier"><i class="fas fa-edit"></i></button>
-                                                    </div>
-                                                </div>
+                                            <div class="prod-line" @click="openEditModal(p)">
+                                                <span class="prod-line__name">{{ p.desc }}<span v-if="p.dim" class="prod-line__dim"> · {{ p.dim }}</span></span>
+                                                <span class="prod-line__price">{{ formatMoney(p.price) }}</span>
+                                                <button class="prod-line__edit" @click.stop="openEditModal(p)" title="Modifier"><i class="fas fa-edit"></i></button>
                                             </div>
                                         </td>
                                     </tr>
