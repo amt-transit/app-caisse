@@ -241,6 +241,25 @@ export const ToutesLesFacturesView = {
         this.loadData();
         this.loadContainers();
         this.loadAutocompleteData();
+        this.loadAerTarifs();
+    },
+
+    // Tarifs aérien ACTUELS (settings/invoice_config_<dép>) : servent de REPLI
+    // pour l'affichage/PDF des factures qui n'ont pas de tarif enregistré
+    // (anciennes factures), pour qu'elles reflètent quand même la config.
+    async loadAerTarifs() {
+        this._aerStd = 13;
+        this._aerParfum = 15;
+        try {
+            const { getDoc, doc: fsDoc } = await import("https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js");
+            const cfgAg = getConfigSourceAgency();
+            const snap = await getDoc(fsDoc(db, 'settings', `invoice_config_${cfgAg}`));
+            if (snap.exists()) {
+                const c = snap.data();
+                if (typeof c.kgStdEur === 'number') this._aerStd = c.kgStdEur;
+                if (typeof c.kgParfumEur === 'number') this._aerParfum = c.kgParfumEur;
+            }
+        } catch (e) { /* repli 13/15 */ }
     },
 
     async loadAutocompleteData() {
@@ -859,10 +878,11 @@ export const ToutesLesFacturesView = {
         // Transformation de la description en lignes pour le tableau.
         // AÉRIEN : modèle propre (mode par colis, poids/volume, parfum/alcool).
         const isAerienInv = invoice.modeExpedition === 'aerien';
-        const A_STD = 13, A_PARFUM = 15; // €/kg (repli si la facture n'a pas de tarif enregistré)
+        // Repli = config ACTUELLE (chargée par loadAerTarifs), sinon 13/15.
+        const A_STD = this._aerStd || 13, A_PARFUM = this._aerParfum || 15; // €/kg
         // Tarif au kg réellement appliqué : celui ENREGISTRÉ sur la ligne à la
         // création (tarifKgEur, issu de la config au moment de la facture) ;
-        // sinon repli sur l'ancien défaut 13/15.
+        // sinon repli sur le tarif configuré actuel.
         const aRate = (it) => (typeof it.tarifKgEur === 'number' && it.tarifKgEur > 0) ? it.tarifKgEur : (it.parfum ? A_PARFUM : A_STD);
         const aBilledKg = (it) => {
             // Colis facture « A la valeur » : on masque le poids sur la facture
@@ -2776,7 +2796,7 @@ export const ToutesLesFacturesView = {
         // Colis « A la valeur » : poids masque sur la facture/BL client.
         const _aBilledKg = (it) => { if (it.mode !== 'poids') return 0; const real = parseFloat(it.poids) || 0; const vol = ((parseFloat(it.lng)||0)*(parseFloat(it.lrg)||0)*(parseFloat(it.haut)||0))/5000; return Math.max(real, vol); };
         const _aMoney = (eur) => this.formatMoneyLocal(isEur ? eur : eur * TAUX);
-        const _aRate = (it) => (typeof it.tarifKgEur === 'number' && it.tarifKgEur > 0) ? it.tarifKgEur : (it.parfum?15:13);
+        const _aRate = (it) => (typeof it.tarifKgEur === 'number' && it.tarifKgEur > 0) ? it.tarifKgEur : (it.parfum ? (this._aerParfum||15) : (this._aerStd||13));
         const _aLineEur = (it) => { const q = parseFloat(it.qty)||0; return (it.mode === 'poids') ? _aBilledKg(it)*q*_aRate(it) : (parseFloat(it.pu)||0)*q; };
 
         let tableColumn, columnStyles;
