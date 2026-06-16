@@ -104,7 +104,7 @@ export const DashboardView = {
                         <div class="card-watermark">📉</div>
                     </div>
                     <div class="total-card" id="card-benefice" onclick="app.renderPage('audit')" style="cursor: pointer;">
-                        <h3>Bénéfice Total</h3>
+                        <h3>Bénéfice encaissé</h3>
                         <p id="grandTotalBenefice">0 CFA</p>
                         <div class="card-watermark">🏆</div>
                     </div>
@@ -226,7 +226,7 @@ export const DashboardView = {
                     <table id="containerSummaryTable" class="table">
                         <thead>
                             <tr>
-                                <th>Mois</th><th>Nb. Conteneurs</th><th>Chiffre d'Affaires (CA)</th><th>Total Dépenses (%)</th><th>BÉNÉFICE Total (%)</th>
+                                <th>Mois</th><th>Nb. Conteneurs</th><th>Chiffre d'Affaires (CA)</th><th>Total Dépenses (%)</th><th>Marge facturée (%)</th><th>Bénéfice réel (%)</th>
                             </tr>
                         </thead>
                         <tbody id="containerSummaryTableBody"></tbody>
@@ -392,7 +392,8 @@ export const DashboardView = {
                                 <div style="text-align:center;"><div style="font-size:11px; color:#64748b; text-transform:uppercase;">Total Paris</div><div id="topTotalPayePar" style="font-weight:bold; font-size:1.2em; color:#2563eb;">0</div></div>
                                 <div style="text-align:center;"><div style="font-size:11px; color:#64748b; text-transform:uppercase;">Total Reste</div><div id="topTotalReste" style="font-weight:bold; font-size:1.2em;">0</div></div>
                                 <div style="text-align:center;"><div style="font-size:11px; color:#64748b; text-transform:uppercase;">Dépenses</div><div id="topTotalDep" style="font-weight:bold; font-size:1.2em; color:#ef4444;">0</div></div>
-                                <div style="text-align:center;"><div style="font-size:11px; color:#64748b; text-transform:uppercase;">Bénéfice</div><div id="topTotalBen" style="font-weight:bold; font-size:1.2em; color:#10b981;">0</div></div>
+                                <div style="text-align:center;"><div style="font-size:11px; color:#64748b; text-transform:uppercase;">Marge facturée</div><div id="topTotalBen" style="font-weight:bold; font-size:1.2em; color:#10b981;">0</div></div>
+                                <div style="text-align:center;"><div style="font-size:11px; color:#64748b; text-transform:uppercase;">Bénéfice réel</div><div id="topTotalBenReel" style="font-weight:bold; font-size:1.2em; color:#10b981;">0</div></div>
                             </div>
                         </div>
                     </div>
@@ -431,7 +432,7 @@ export const DashboardView = {
                             <thead>
                                 <tr>
                                     <th>Conteneur</th><th>Op.</th><th>Non Payés</th><th>CA</th><th>Paris</th><th>Abidjan</th>
-                                    <th>Perçu</th><th>Reste</th><th>Dépenses</th><th>BÉNÉFICE</th>
+                                    <th>Perçu</th><th>Reste</th><th>Dépenses</th><th>Marge facturée</th><th>Bénéfice réel</th>
                                 </tr>
                             </thead>
                             <tbody id="modalMonthBody"></tbody>
@@ -832,7 +833,7 @@ export const DashboardView = {
 
         function renderContainerSummary(transactions, expenses, allCleanTransactions) {
             if (!containerSummaryBody) return;
-            containerSummaryBody.innerHTML = '<tr><td colspan="5">Calcul en cours...</td></tr>';
+            containerSummaryBody.innerHTML = '<tr><td colspan="6">Calcul en cours...</td></tr>';
 
             const containerOrigins = {};
             if (allCleanTransactions) {
@@ -865,7 +866,7 @@ export const DashboardView = {
                 const mKey = getMonthKey(refDate);
                 const mLabel = getMonthLabel(refDate);
 
-                if (!months[mKey]) months[mKey] = { key: mKey, label: mLabel, containers: {}, stats: { ca: 0, dep: 0, count: 0 } };
+                if (!months[mKey]) months[mKey] = { key: mKey, label: mLabel, containers: {}, stats: { ca: 0, dep: 0, count: 0, percu: 0 } };
                 if (!months[mKey].containers[cName]) {
                     months[mKey].containers[cName] = { name: cName, ca: 0, paris: 0, abidjan: 0, reste: 0, count: 0, unpaid: 0, dep: 0 };
                 }
@@ -879,6 +880,7 @@ export const DashboardView = {
                 if ((t.reste || 0) < -1) c.unpaid++;
 
                 months[mKey].stats.ca += (t.prix || 0);
+                months[mKey].stats.percu += (t.montantParis || 0) + (t.montantAbidjan || 0);
             });
 
             expenses.forEach(e => {
@@ -894,7 +896,7 @@ export const DashboardView = {
                     const mKey = getMonthKey(refDate);
                     const mLabel = getMonthLabel(refDate);
 
-                    if (!months[mKey]) months[mKey] = { key: mKey, label: mLabel, containers: {}, stats: { ca: 0, dep: 0, count: 0 } };
+                    if (!months[mKey]) months[mKey] = { key: mKey, label: mLabel, containers: {}, stats: { ca: 0, dep: 0, count: 0, percu: 0 } };
                     if (!months[mKey].containers[cName]) {
                         months[mKey].containers[cName] = { name: cName, ca: 0, paris: 0, abidjan: 0, reste: 0, count: 0, unpaid: 0, dep: 0 };
                     }
@@ -907,26 +909,29 @@ export const DashboardView = {
             const sortedMonths = Object.values(months).sort((a, b) => b.key.localeCompare(a.key));
             
             containerSummaryBody.innerHTML = '';
-            if (sortedMonths.length === 0) { containerSummaryBody.innerHTML = '<tr><td colspan="5">Aucune donnée.</td></tr>'; return; }
+            if (sortedMonths.length === 0) { containerSummaryBody.innerHTML = '<tr><td colspan="6">Aucune donnée.</td></tr>'; return; }
 
             sortedMonths.forEach(m => {
-                const benef = m.stats.ca - m.stats.dep;
+                const benef = m.stats.ca - m.stats.dep;            // Marge facturée (compte les impayés)
+                const benefReel = (m.stats.percu || 0) - m.stats.dep; // Bénéfice réel (encaissé − dépenses)
                 const nbConteneurs = Object.keys(m.containers).length;
-                
+
                 const pctDep = m.stats.ca ? Math.round((m.stats.dep / m.stats.ca) * 100) : 0;
                 const pctBen = m.stats.ca ? Math.round((benef / m.stats.ca) * 100) : 0;
+                const pctBenReel = m.stats.ca ? Math.round((benefReel / m.stats.ca) * 100) : 0;
 
                 const tr = document.createElement('tr');
                 tr.style.cursor = 'pointer';
                 tr.onclick = () => window.openMonthDetails(m.key);
                 tr.title = "Cliquez pour voir les détails du mois";
-                
+
                 tr.innerHTML = `
                     <td><b>${m.label}</b></td>
                     <td><span class="tag" style="background:#64748b;">${nbConteneurs} Conteneurs</span></td>
                     <td>${formatCFA(m.stats.ca)}</td>
                     <td style="color:#ef4444;">${formatCFA(m.stats.dep)} <span style="font-size:0.8em">(${pctDep}%)</span></td>
                     <td style="font-weight:bold; color:${benef >= 0 ? '#10b981' : '#ef4444'}">${formatCFA(benef)} <span style="font-size:0.8em">(${pctBen}%)</span></td>
+                    <td style="font-weight:bold; color:${benefReel >= 0 ? '#10b981' : '#ef4444'}">${formatCFA(benefReel)} <span style="font-size:0.8em">(${pctBenReel}%)</span></td>
                 `;
                 containerSummaryBody.appendChild(tr);
             });
@@ -946,11 +951,13 @@ export const DashboardView = {
             tbody.innerHTML = '';
             
             Object.values(m.containers).sort((a, b) => a.name.localeCompare(b.name)).forEach(c => {
-                const benef = c.ca - c.dep;
+                const benef = c.ca - c.dep;            // Marge facturée (compte les impayés)
                 const percu = c.paris + c.abidjan;
-                
+                const benefReel = percu - c.dep;       // Bénéfice réel (encaissé − dépenses)
+
                 const pctReste = c.ca ? Math.round((c.reste / c.ca) * 100) : 0;
                 const pctBenef = c.ca ? Math.round((benef / c.ca) * 100) : 0;
+                const pctBenefReel = c.ca ? Math.round((benefReel / c.ca) * 100) : 0;
                 
                 const tr = document.createElement('tr');
                 tr.style.cursor = 'pointer';
@@ -967,6 +974,7 @@ export const DashboardView = {
                     <td class="${c.reste < 0 ? 'reste-negatif' : 'reste-positif'}">${formatCFA(c.reste)} <span style="font-size:0.8em">(${pctReste}%)</span></td>
                     <td>${formatCFA(c.dep)}</td>
                     <td class="${benef < 0 ? 'reste-negatif' : 'reste-positif'}"><b>${formatCFA(benef)}</b> <span style="font-size:0.8em; font-weight:normal;">(${pctBenef}%)</span></td>
+                    <td class="${benefReel < 0 ? 'reste-negatif' : 'reste-positif'}"><b>${formatCFA(benefReel)}</b> <span style="font-size:0.8em; font-weight:normal;">(${pctBenefReel}%)</span></td>
                 `;
                 tbody.appendChild(tr);
             });
@@ -1200,7 +1208,7 @@ export const DashboardView = {
                         data: {
                             labels: sortedContainers.map(c => c.name),
                             datasets: [{
-                                label: 'Marge Bénéficiaire',
+                                label: 'Marge facturée (CA − dépenses)',
                                 data: sortedContainers.map(c => c.profit),
                                 backgroundColor: sortedContainers.map(c => c.profit >= 0 ? '#10b981' : '#ef4444')
                             }]
@@ -1409,7 +1417,8 @@ export const DashboardView = {
             });
 
             const totalDep = cleanExp.reduce((sum, e) => sum + (e.montant || 0), 0);
-            const benefice = totalPrix - totalDep;
+            const benefice = totalPrix - totalDep;                 // Marge facturée
+            const beneficeReel = (totalAbj + totalPar) - totalDep; // Bénéfice réel (encaissé − dépenses)
 
             const pctAbjTotal = totalPrix ? Math.round((totalAbj / totalPrix) * 100) : 0;
             const pctParTotal = totalPrix ? Math.round((totalPar / totalPrix) * 100) : 0;
@@ -1422,6 +1431,11 @@ export const DashboardView = {
             document.getElementById('topTotalDep').textContent = formatCFA(totalDep);
             document.getElementById('topTotalBen').textContent = formatCFA(benefice);
             document.getElementById('topTotalBen').style.color = benefice >= 0 ? '#10b981' : '#ef4444';
+            const benReelEl = document.getElementById('topTotalBenReel');
+            if (benReelEl) {
+                benReelEl.textContent = formatCFA(beneficeReel);
+                benReelEl.style.color = beneficeReel >= 0 ? '#10b981' : '#ef4444';
+            }
 
             const btnExcel = document.getElementById('downloadContainerExcelBtn');
             if(btnExcel) {
