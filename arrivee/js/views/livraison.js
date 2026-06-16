@@ -5011,6 +5011,7 @@ export const LivraisonView = {
            openBulkStatusModal, forceSyncTransactions, syncContainersOnly, deleteSelectedDeliveries, exportToExcel,
            showAddModal, archiveCompletedDeliveries, openArchivesModal, closeArchivesModal,
            searchArchives, restoreFromArchive, goArchivePage, loadAllArchivesAndRender, filterDeliveries, sortTable, updateDeliveryLocation,
+           lvGhostFocus, lvGhostKey, lvGhostMarkEmpty, lvAfterBlur, lvUndo, lvTick,
            updateDeliveryRecipient, updateDeliveryExpediteur, updateDeliveryPhone, updateDeliveryAmount, updateDeliveryQuantity,
            updateDeliveryInfo, updateDeliveryDescription, toggleClientNotified, markAsDelivered, markAsPending, deleteDelivery,
            openAbandonModal, closeAbandonModal, confirmAbandonment, generateAbandonmentPDFFromId,
@@ -5799,6 +5800,44 @@ export const LivraisonView = {
            });
        }        
         function cleanString(str) { return str ? String(str).trim() : ''; }
+
+        // ── Édition fantôme : focus, retour ✓, et Annuler ──────────────────────
+        // Au focus d'un champ ghost : mémorise la valeur d'origine (pour Annuler/Échap).
+        function lvGhostFocus(input) { input.dataset.lvOld = input.value; }
+        // Échap : restaure la valeur d'origine sans enregistrer.
+        function lvGhostKey(ev, input) {
+            if (ev.key === 'Escape') { input.value = input.dataset.lvOld ?? input.value; input.blur(); }
+        }
+        // Met à jour la classe « vide » d'un champ pendant la frappe.
+        function lvGhostMarkEmpty(input) {
+            input.classList.toggle('lv-empty', String(input.value || '').trim() === '');
+        }
+        // Re-rendu différé : si un refresh temps réel a été reporté pendant l'édition,
+        // on le rejoue quand le champ perd le focus.
+        function lvAfterBlur() {
+            if (window._lvPendingRender) { window._lvPendingRender = false; filterDeliveries(); }
+        }
+        let _lvUndoTimer = null;
+        // Toast « Annuler » qui rappelle restoreFn(oldValue) si cliqué (5 s).
+        function lvUndo(label, oldValue, restoreFn) {
+            const prev = document.querySelector('.lv-undo-toast');
+            if (prev) prev.remove();
+            if (_lvUndoTimer) clearTimeout(_lvUndoTimer);
+            const el = document.createElement('div');
+            el.className = 'lv-undo-toast';
+            el.innerHTML = `<span>${label} modifié</span><button>↶ Annuler</button>`;
+            el.querySelector('button').onclick = () => { restoreFn(oldValue); el.remove(); };
+            document.body.appendChild(el);
+            _lvUndoTimer = setTimeout(() => el.remove(), 5000);
+        }
+        // Affiche brièvement le ✓ à côté d'un champ (par id de colis + nom de champ).
+        function lvTick(id, field) {
+            const tick = document.querySelector(`.lv-saved-tick[data-id="${id}"][data-field="${field}"]`);
+            if (!tick) return;
+            tick.classList.add('show');
+            setTimeout(() => tick.classList.remove('show'), 1500);
+        }
+
         function detectCommune(lieu) {
             const l = (lieu || '').toUpperCase();
             for (const [commune, keywords] of Object.entries(CONSTANTS.COMMUNES)) {
