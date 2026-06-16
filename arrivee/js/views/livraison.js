@@ -1788,7 +1788,7 @@ export const LivraisonView = {
            
            // --- OPTIMISATION ---
            // Pré-charger l'existence des transactions pour éviter 1 requête Firestore par ligne
-           const existingTransRefs = new Set();
+           const existingTransByRef = new Map(); // ref(MAJ) -> { id, conteneur } (pour associer le conteneur manquant)
            const archivedItemsMap = new Map();
            if (containerStatus === 'EN_COURS' && finalImportList.length > 0) {
                if (progressModal) document.getElementById('importProgressText').textContent = 'Vérification des transactions existantes...';
@@ -1804,7 +1804,7 @@ export const LivraisonView = {
                
                // Références normalisées en MAJUSCULES : un colis déjà payé/archivé
                // est reconnu même si la casse diffère -> aucun doublon de transaction.
-               transSnapshots.forEach(snap => snap.forEach(doc => existingTransRefs.add(String(doc.data().reference || '').toUpperCase())));
+               transSnapshots.forEach(snap => snap.forEach(doc => { const dd = doc.data() || {}; existingTransByRef.set(String(dd.reference || '').toUpperCase(), { id: doc.id, conteneur: dd.conteneur || '' }); }));
                archiveSnapshots.forEach(snap => snap.forEach(doc => archivedItemsMap.set(String(doc.data().ref || '').toUpperCase(), { id: doc.id, data: doc.data() })));
            }
 
@@ -2030,8 +2030,16 @@ export const LivraisonView = {
                // --- TRANSFERT VERS RÉCEPTION ABIDJAN (TRANSACTIONS) ---
                if (containerStatus === 'EN_COURS') {
                    // OPTIMISATION : Utilisation du cache pré-chargé (Instantané)
-                   const transExists = existingTransRefs.has(String(importItem.ref || '').toUpperCase());
-                   
+                   const existingTrans = existingTransByRef.get(String(importItem.ref || '').toUpperCase());
+                   const transExists = !!existingTrans;
+
+                   // La transaction existe déjà MAIS sans conteneur -> on l'associe au
+                   // conteneur de l'import (sinon elle reste en « Non Spécifié » au tableau de bord).
+                   if (transExists && conteneur && !(existingTrans.conteneur && String(existingTrans.conteneur).trim())) {
+                       operations.push({ type: 'update', ref: doc(db, getCollectionName('transactions'), existingTrans.id), data: { conteneur } });
+                       existingTrans.conteneur = conteneur; // évite une 2e MAJ pour la même réf dans cet import
+                   }
+
                    if (!transExists) {
                        // LOGIQUE FINANCIÈRE AVANCÉE (Comme Arrivages)
                        
