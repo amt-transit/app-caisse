@@ -69,7 +69,8 @@ export const LivraisonView = {
                     <button class="lv-btn ghost" onclick="lvToggleMore('EN_COURS')"><span>⋯</span><span class="lv-l">Plus</span></button>
                     <div class="lv-more-drop" id="lvDrop-EN_COURS">
                         <div class="lv-mi-sec">Synchronisation</div>
-                        <button class="lv-mi purp" style="color:#8b5cf6" onclick="forceSyncTransactions();lvCloseMore()"><span>🔄</span>Synchro Caisse</button>
+                        <button class="lv-mi" style="color:#0ea5e9" onclick="syncContainersOnly();lvCloseMore()" title="Recopie seulement le conteneur vers la caisse, sans toucher aux montants ni aux statuts"><span>🧭</span>Synchro conteneurs (sans montants)</button>
+                        <button class="lv-mi purp" style="color:#8b5cf6" onclick="forceSyncTransactions();lvCloseMore()"><span>🔄</span>Synchro Caisse (tout)</button>
                         <div class="lv-mi-div"></div>
                         <div class="lv-mi-sec">Sélection</div>
                         <button class="lv-mi red" onclick="deleteSelectedDeliveries();lvCloseMore()"><span>🗑️</span>Supprimer sélection</button>
@@ -3664,7 +3665,8 @@ export const LivraisonView = {
                            if (item.lieuLivraison && t.adresseDestinataire !== item.lieuLivraison) updates.adresseDestinataire = item.lieuLivraison;
                            if (item.numero && t.numero !== item.numero) updates.numero = item.numero;
                            if (item.description && t.description !== item.description) updates.description = item.description;
-                           if (item.conteneur && t.conteneur !== item.conteneur) updates.conteneur = item.conteneur;
+                           const _contMaj = String(item.conteneur || '').trim().toUpperCase();
+                           if (_contMaj && t.conteneur !== _contMaj) updates.conteneur = _contMaj;
        
                            // --- CORRECTION MONTANTS ---
                            const restant = parseFloat((item.montant || '0').replace(/[^\d]/g, '')) || 0;
@@ -3694,6 +3696,75 @@ export const LivraisonView = {
                loadingToast.remove();
            AppModal.success(`✅ Synchronisation terminée !\n${updatedCount} fiches corrigées dans la Caisse.`);
        } catch (e) { console.error(e); loadingToast.remove(); AppModal.error("Erreur : " + e.message); }
+       }
+
+       // SYNCHRO CONTENEURS UNIQUEMENT (sûr) : recopie le conteneur de la livraison
+       // (active OU archivée) vers la transaction, SEULEMENT si la transaction n'a
+       // PAS de conteneur. Ne touche JAMAIS aux montants, statuts, noms, adresses.
+       async function syncContainersOnly() {
+           // 1) Carte référence -> conteneur (MAJUSCULES) depuis les colis ACTIFS.
+           const refToCont = new Map();
+           deliveries.forEach(d => {
+               const ref = String(d.ref || '').trim().toUpperCase();
+               const cont = String(d.conteneur || '').trim().toUpperCase();
+               if (ref && cont) refToCont.set(ref, cont);
+           });
+
+           if (!await AppModal.confirm(
+               "Recopier le CONTENEUR des colis vers la caisse (transactions) ?\n\n" +
+               "⚠️ SEUL le conteneur est mis à jour, et UNIQUEMENT pour les transactions qui n'en ont pas.\n" +
+               "Les MONTANTS, statuts, noms et adresses ne sont PAS touchés.\n\n" +
+               "On inclut aussi les colis ARCHIVÉS (cela peut prendre un moment).",
+               "Synchroniser les conteneurs", false)) return;
+
+           const loadingToast = document.createElement('div');
+           loadingToast.className = 'toast';
+           loadingToast.style.background = "#0ea5e9";
+           loadingToast.textContent = "Préparation…";
+           document.body.appendChild(loadingToast);
+
+           try {
+               // 2) Ajoute les conteneurs des colis ARCHIVÉS (sans écraser un actif).
+               loadingToast.textContent = "Lecture des archives…";
+               const archSnap = await getDocs(query(collection(db, CONSTANTS.ARCHIVE_COLLECTION)));
+               archSnap.forEach(docSnap => {
+                   const a = docSnap.data() || {};
+                   const ref = String(a.ref || '').trim().toUpperCase();
+                   const cont = String(a.conteneur || '').trim().toUpperCase();
+                   if (ref && cont && !refToCont.has(ref)) refToCont.set(ref, cont);
+               });
+
+               const refs = [...refToCont.keys()];
+               if (refs.length === 0) { loadingToast.remove(); showToast('Aucun conteneur à synchroniser.', 'info'); return; }
+
+               // 3) Pour chaque lot de réfs, lit les transactions et remplit le conteneur MANQUANT.
+               let updated = 0, scanned = 0;
+               for (let i = 0; i < refs.length; i += 10) {
+                   const chunk = refs.slice(i, i + 10);
+                   const snap = await getDocs(query(collection(db, getCollectionName('transactions')), where('reference', 'in', chunk)));
+                   const batch = writeBatch(db);
+                   let hasOps = false;
+                   snap.forEach(docSnap => {
+                       scanned++;
+                       const t = docSnap.data() || {};
+                       const cont = refToCont.get(String(t.reference || '').trim().toUpperCase());
+                       const current = String(t.conteneur || '').trim();
+                       if (cont && !current) { // SEULEMENT si vide -> aucun écrasement
+                           batch.update(docSnap.ref, { conteneur: cont });
+                           hasOps = true; updated++;
+                       }
+                   });
+                   if (hasOps) await batch.commit();
+                   loadingToast.textContent = `Synchro conteneurs… ${Math.min(i + 10, refs.length)}/${refs.length} (${updated} corrigés)`;
+               }
+
+               loadingToast.remove();
+               AppModal.success(`✅ Terminé.\n${updated} transaction(s) ont reçu leur conteneur (sur ${scanned} vérifiées).\nAucun montant ni statut modifié.`);
+           } catch (e) {
+               console.error('syncContainersOnly:', e);
+               loadingToast.remove();
+               AppModal.error("Erreur : " + (e && e.message));
+           }
        }
        
        // --- GESTION DES ARCHIVES ---
@@ -4937,7 +5008,7 @@ export const LivraisonView = {
        // Exposition globale pour l'interface HTML
        Object.assign(window, {
            switchTab, setActiveContainer, importExcel, openProgramModal, openAssignContainerModal,
-           openBulkStatusModal, forceSyncTransactions, deleteSelectedDeliveries, exportToExcel,
+           openBulkStatusModal, forceSyncTransactions, syncContainersOnly, deleteSelectedDeliveries, exportToExcel,
            showAddModal, archiveCompletedDeliveries, openArchivesModal, closeArchivesModal,
            searchArchives, restoreFromArchive, goArchivePage, loadAllArchivesAndRender, filterDeliveries, sortTable, updateDeliveryLocation,
            updateDeliveryRecipient, updateDeliveryExpediteur, updateDeliveryPhone, updateDeliveryAmount, updateDeliveryQuantity,
@@ -5768,6 +5839,7 @@ export const LivraisonView = {
             openAssignContainerModal: typeof openAssignContainerModal !== 'undefined' ? openAssignContainerModal : null,
             openBulkStatusModal: typeof openBulkStatusModal !== 'undefined' ? openBulkStatusModal : null,
             forceSyncTransactions: typeof forceSyncTransactions !== 'undefined' ? forceSyncTransactions : null,
+            syncContainersOnly: typeof syncContainersOnly !== 'undefined' ? syncContainersOnly : null,
             deleteSelectedDeliveries: typeof deleteSelectedDeliveries !== 'undefined' ? deleteSelectedDeliveries : null,
             exportToExcel: typeof exportToExcel !== 'undefined' ? exportToExcel : null,
             showAddModal: typeof showAddModal !== 'undefined' ? showAddModal : null,
