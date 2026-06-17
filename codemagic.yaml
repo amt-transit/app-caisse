@@ -1,0 +1,71 @@
+# ───────────────────────────────────────────────────────────────────────────
+# Codemagic — build des applis AMT (Expo / React Native) SANS EAS.
+# Deux workflows : "AMT Clients" et "AMT Parrainage".
+#
+# À FAIRE UNE FOIS dans l'interface Codemagic (https://codemagic.io) :
+#   1. Créer un compte (gratuit) et connecter le dépôt GitHub amt-transit/app-caisse.
+#   2. Code signing → Android : uploader la KEYSTORE de signature.
+#      ⚠️ IMPORTANT : ce doit être la MÊME clé que celle utilisée par EAS jusqu'ici,
+#      sinon Google Play REFUSE la mise à jour (signature différente).
+#      → On l'exporte d'EAS avec :  eas credentials   (plateforme Android → download keystore)
+#      Reference name à donner dans Codemagic :
+#         - "amt_clients_keystore"      (pour l'appli Clients)
+#         - "amt_parrainage_keystore"   (pour l'appli Parrainage)
+#   3. (Optionnel) Pour publier automatiquement sur Play Store : ajouter un
+#      "Google Play service account" dans Codemagic, puis décommenter le bloc "publishing".
+#
+# NB : au PREMIER build, on vérifiera que l'AAB est bien signé en release
+#      (Expo prebuild régénère android/, il faut que la signature soit branchée).
+# ───────────────────────────────────────────────────────────────────────────
+
+workflows:
+
+  clients-android:
+    name: AMT Clients — Android (AAB)
+    max_build_duration: 60
+    instance_type: linux_x2
+    environment:
+      android_signing:
+        - amt_clients_keystore
+      node: 20
+      java: 17
+    scripts:
+      - name: Installer les dépendances
+        script: cd mobile-clients && npm ci
+      - name: Générer le projet natif (Expo prebuild)
+        script: cd mobile-clients && npx expo prebuild --platform android --clean
+      - name: Construire l'AAB de production
+        script: cd mobile-clients/android && ./gradlew bundleRelease --no-daemon
+    artifacts:
+      - mobile-clients/android/app/build/outputs/**/*.aab
+      - mobile-clients/android/app/build/outputs/**/mapping.txt
+    # publishing:
+    #   google_play:
+    #     credentials: $GCLOUD_SERVICE_ACCOUNT_CREDENTIALS
+    #     track: internal          # internal | alpha | beta | production
+    #     submit_as_draft: true
+
+  parrainage-android:
+    name: AMT Parrainage — Android (AAB)
+    max_build_duration: 60
+    instance_type: linux_x2
+    environment:
+      android_signing:
+        - amt_parrainage_keystore
+      node: 20
+      java: 17
+    scripts:
+      - name: Installer les dépendances
+        script: cd mobile-parrainage && npm ci
+      - name: Générer le projet natif (Expo prebuild)
+        script: cd mobile-parrainage && npx expo prebuild --platform android --clean
+      - name: Construire l'AAB de production
+        script: cd mobile-parrainage/android && ./gradlew bundleRelease --no-daemon
+    artifacts:
+      - mobile-parrainage/android/app/build/outputs/**/*.aab
+      - mobile-parrainage/android/app/build/outputs/**/mapping.txt
+    # publishing:
+    #   google_play:
+    #     credentials: $GCLOUD_SERVICE_ACCOUNT_CREDENTIALS
+    #     track: internal
+    #     submit_as_draft: true
